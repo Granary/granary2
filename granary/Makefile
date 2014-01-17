@@ -2,7 +2,11 @@
 
 include ../Makefile.inc
 
-GRANARY_CC_SRC_FILES = $(shell find $(GRANARY_SRC_DIR)/granary -maxdepth 1 -type f -name '*.cc')
+GRANARY_CC_SRC_DIRS = 
+GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary
+GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary/debug
+
+GRANARY_CC_SRC_FILES = $(shell find $(GRANARY_CC_SRC_DIRS) -maxdepth 1 -type f -name '*.cc')
 GRANARY_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.ll))
 
 # Find driver (i.e. encoder/decoder-specific files).
@@ -36,7 +40,7 @@ $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/%.S: $(GRANARY_ARCH_DIR)/%.asm
 
 
 # Compile C++ files to LLVM bitcode.
-$(GRANARY_BIN_DIR)/%.ll: $(GRANARY_SRC_DIR)/%.cc
+$(GRANARY_BIN_DIR)/granary/%.ll: $(GRANARY_SRC_DIR)/granary/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -c $< -o $@

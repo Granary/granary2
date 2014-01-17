@@ -32,7 +32,8 @@
 
 
 // Determine the number of arguments in a variadic macro argument pack.
-// From: http://efesx.com/2010/07/17/variadic-macro-to-count-number-of-arguments/#comment-256
+// From: http://efesx.com/2010/07/17/variadic-macro-to-count-number-of-\
+// arguments/#comment-256
 #define GRANARY_NUM_PARAMS_(_0,_1,_2,_3,_4,_5,_6,_7,N,...) N
 #define GRANARY_NUM_PARAMS(...) \
   GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,7,6,5,4,3,2,1,0)
@@ -86,11 +87,18 @@
 // specific class template.
 #define GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(cls, params) \
   GRANARY_DISALLOW_COPY_TEMPLATE(cls, params); \
-  cls<GRANARY_PARAMS params> &operator=(const cls<GRANARY_PARAMS params> &) = delete; \
-  cls<GRANARY_PARAMS params> &operator=(const cls<GRANARY_PARAMS params> &&) = delete
+  cls<GRANARY_PARAMS params> &operator=( \
+      const cls<GRANARY_PARAMS params> &) = delete; \
+  cls<GRANARY_PARAMS params> &operator=( \
+      const cls<GRANARY_PARAMS params> &&) = delete
 
 
 // Mark a result / variable as being used.
-#define GRANARY_UNUSED(x) (void) x
+#define GRANARY_UNUSED(var) (void) var
+#define GRANARY_USED(var) \
+  do { \
+    GRANARY_INLINE_ASSEMBLY("" :: "m"(var)); \
+    GRANARY_UNUSED(var); \
+  } while (0)
 
 #endif  // GRANARY_BASE_BASE_H_

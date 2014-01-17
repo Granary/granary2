@@ -32,6 +32,9 @@ void DecodedInstruction::Copy(const DecodedInstruction *that) {
   if (instruction.translation == &(that->raw_bytes[0])) {
     instruction.translation = &(raw_bytes[0]);
   }
+  if (instruction.bytes == &(that->raw_bytes[0])) {
+    instruction.bytes = &(raw_bytes[0]);
+  }
 }
 
 }  // namespace driver

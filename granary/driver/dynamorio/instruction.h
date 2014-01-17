@@ -11,6 +11,7 @@ namespace granary {
 namespace driver {
 
 class InstructionDecoder;
+class DynamoRIOHeap;
 
 // Contains all data required to represent a decoded instruction.
 class DecodedInstruction {
@@ -24,15 +25,21 @@ class DecodedInstruction {
 
  private:
   friend class InstructionDecoder;
+  friend class DynamoRIOHeap;
+
+  enum {
+    MAX_NUM_RAW_BYTES = 32,
+    MAX_NUM_OPERANDS = 8
+  };
 
   // Used internally by DynamoRIO. The raw bytes can contain an in-flight,
   // encoded version of this instruction. These bytes can also contain a
   // decoded/copied version of the instruction.
-  unsigned char raw_bytes[32];
+  unsigned char raw_bytes[MAX_NUM_RAW_BYTES];
 
   // The operands referenced by the DynamoRIO `instr_t` structure. There can be
   // up to 8 operands, but most instructions used <= 3.
-  dynamorio::opnd_t operands[8];
+  dynamorio::opnd_t operands[MAX_NUM_OPERANDS];
 
   // The actual DynamoRIO `instr_t` data structure.
   dynamorio::instr_t instruction;

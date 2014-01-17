@@ -107,7 +107,7 @@ endif
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memset=granary_memset"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
-
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5

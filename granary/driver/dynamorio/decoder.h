@@ -12,6 +12,7 @@ namespace granary {
 namespace driver {
 
 class DecodedInstruction;
+class DynamoRIOHeap;
 
 // Manages encoding and decoding of instructions.
 class InstructionDecoder : private dynamorio::dcontext_t {
@@ -31,13 +32,18 @@ class InstructionDecoder : private dynamorio::dcontext_t {
   bool Encode(DecodedInstruction *, CacheProgramCounter);
 
  private:
-  // The current instruction being encoded or decoded.
-  DecodedInstruction *in_flight_instruction;
+  friend class DynamoRIOHeap;
 
   // Internal APIs for encoding and decoding instructions. These APIs directly
   // interact with the DynamoRIO driver.
   AppProgramCounter DecodeInternal(DecodedInstruction *, AppProgramCounter);
   CacheProgramCounter EncodeInternal(DecodedInstruction *, CacheProgramCounter);
+
+  // The current instruction being encoded or decoded.
+  DecodedInstruction *in_flight_instruction;
+  bool allocated_instruction;
+  bool allocated_raw_bytes;
+  unsigned num_allocated_operands;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };
