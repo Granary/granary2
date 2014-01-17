@@ -14,6 +14,15 @@ class DecodedInstruction;
 
 class BasicBlock;
 
+// Declare that there is a strict, single-inheritance class hierarchy that
+// uses virtual inheritance, so that we can apply `DynamicCast` to pointers to
+// these types.
+GRANARY_DECLARE_CLASS_HEIRARCHY(
+    Instruction,
+    LabelInstruction,
+    ControlFlowInstruction);
+
+
 // Represents an abstract instruction.
 class Instruction {
  public:
@@ -22,6 +31,8 @@ class Instruction {
   Instruction *next;
   Instruction *prev;
   BasicBlock *block;
+
+  GRANARY_BASE_CLASS(Instruction)
 
  private:
   driver::DecodedInstruction *instruction;
@@ -35,12 +46,18 @@ class LabelInstruction : public Instruction {
  public:
   virtual ~LabelInstruction(void) = delete;
 
+  GRANARY_DERIVED_CLASS_OF(Instruction, LabelInstruction)
+
+ private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LabelInstruction);
 };
 
 // Represents a decoded control-flow instruction.
 class ControlFlowInstruction : public Instruction {
+ public:
+  GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 
+ private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };
 

@@ -81,7 +81,30 @@ inline ToT UnsafeCast(const FromT v) {
 }
 
 
+#define GRANARY_BASE_CLASS(base_type) \
+  virtual int IdOf(void) const { \
+    return GRANARY_CAT(kIdOf, base_type); \
+  }
 
+
+#define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
+  static inline constexpr bool IsDerivedFrom(const derived_type *) { \
+    return true; \
+  } \
+  static inline bool IsDerivedFrom(const base_type *base) { \
+    return base->IdOf() == GRANARY_CAT(kIdOf, derived_type); \
+  } \
+  GRANARY_BASE_CLASS(derived_type)
+
+
+#define GRANARY_DECLARE_CLASS_ID(class_name) \
+  GRANARY_CAT(kIdOf, class_name)
+
+
+#define GRANARY_DECLARE_CLASS_HEIRARCHY(...) \
+  enum { \
+    GRANARY_APPLY_EACH(GRANARY_DECLARE_CLASS_ID, GRANARY_COMMA, ##__VA_ARGS__) \
+  }
 
 
 // Base type to derived type cast.
@@ -89,7 +112,10 @@ template <
   typename DerivedT,
   typename BaseT
 >
-inline DerivedT *DynamicCast(BaseT *ptr) {
+inline DerivedT *DynamicCast(const BaseT *ptr) {
+  if (DerivedT::IsDerivedFrom(ptr)) {
+    return UnsafeCast<DerivedT *>(ptr);
+  }
   return nullptr;
 }
 

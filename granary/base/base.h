@@ -101,4 +101,65 @@
     GRANARY_UNUSED(var); \
   } while (0)
 
+
+#define GRANARY_COMMA() ,
+
+// Apply a macro `pp` to each of a variable number of arguments. Separate the
+// results of the macro application with `sep`.
+#define GRANARY_APPLY_EACH(pp, sep, ...) \
+  GRANARY_CAT(GRANARY_APPLY_EACH_, GRANARY_NUM_PARAMS(__VA_ARGS__))( \
+      pp, sep, ##__VA_ARGS__)
+
+#define GRANARY_APPLY_EACH_1(pp, sep, a0) \
+  pp(a0)
+
+#define GRANARY_APPLY_EACH_2(pp, sep, a0, a1) \
+  pp(a0) sep() \
+  pp(a1)
+
+#define GRANARY_APPLY_EACH_3(pp, sep, a0, a1, a2) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2)
+
+#define GRANARY_APPLY_EACH_4(pp, sep, a0, a1, a2, a3) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3)
+
+#define GRANARY_APPLY_EACH_5(pp, sep, a0, a1, a2, a3, a4) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3) sep() \
+  pp(a4)
+
+#define GRANARY_APPLY_EACH_6(pp, sep, a0, a1, a2, a3, a4, a5) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3) sep() \
+  pp(a4) sep() \
+  pp(a5)
+
+#define GRANARY_APPLY_EACH_7(pp, sep, a0, a1, a2, a3, a4, a5, a6) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3) sep() \
+  pp(a4) sep() \
+  pp(a5) sep() \
+  pp(a6)
+
+#define GRANARY_APPLY_EACH_8(pp, sep, a0, a1, a2, a3, a4, a5, a6, a7) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3) sep() \
+  pp(a4) sep() \
+  pp(a5) sep() \
+  pp(a6) sep() \
+  pp(a7)
+
 #endif  // GRANARY_BASE_BASE_H_
