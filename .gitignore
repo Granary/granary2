@@ -1,0 +1,24 @@
+# Compiled stuff
+*.o
+*.out
+*.so
+*.a
+*.dylib
+*.ko
+bin
+
+# Debugging and dependencies
+*.trace
+*.d
+
+# Eclipse Junk
+.cproject
+.project
+.settings
+
+# Mac OS stuff
+*.DS_Store
+
+# swp and tmp files
+*.*~
+*.swp
