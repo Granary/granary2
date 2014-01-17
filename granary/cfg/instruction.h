@@ -14,12 +14,10 @@ class DecodedInstruction;
 
 class BasicBlock;
 
-
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     Instruction,
     LabelInstruction,
     ControlFlowInstruction);
-
 
 // Represents an abstract instruction.
 class Instruction {
@@ -33,6 +31,8 @@ class Instruction {
   GRANARY_BASE_CLASS(Instruction)
 
  private:
+  Instruction(void) = delete;
+
   driver::DecodedInstruction *instruction;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
@@ -47,16 +47,44 @@ class LabelInstruction : public Instruction {
   GRANARY_DERIVED_CLASS_OF(Instruction, LabelInstruction)
 
  private:
+  LabelInstruction(void) = delete;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LabelInstruction);
 };
 
-// Represents a decoded control-flow instruction.
+// Represents a control-flow instruction.
 class ControlFlowInstruction : public Instruction {
  public:
   GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 
  private:
+  ControlFlowInstruction(void) = delete;
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
+};
+
+// Represents a control-flow instruction that is local to a basic block, i.e.
+// keeps control within the same basic block.
+class LocalControlFlowInstruction : public ControlFlowInstruction {
+ public:
+  GRANARY_DERIVED_CLASS_OF(Instruction, LocalControlFlowInstruction)
+
+ private:
+  LocalControlFlowInstruction(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(LocalControlFlowInstruction);
+};
+
+// Represents a control-flow instruction that is not local to a basic block,
+// i.e. transfers control to another basic block.
+//
+// Note: A special case is that a non-local control-flow instruction can
+//       redirect control back to the beginning of the basic block.
+class NonLocalControlFlowInstruction : public ControlFlowInstruction {
+ public:
+  GRANARY_DERIVED_CLASS_OF(Instruction, NonLocalControlFlowInstruction)
+
+ private:
+  NonLocalControlFlowInstruction(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(NonLocalControlFlowInstruction);
 };
 
 }  // namespace granary

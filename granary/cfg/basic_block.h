@@ -21,36 +21,30 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     UnknownBasicBlock);
 
 
-class FutureBasicBlock;
+// Forward declarations.
+class BasicBlock;
+class ControlFlowGraph;
+
+
+// Iterator for basic blocks.
+class BasicBlockIterator {
+ public:
+  explicit BasicBlockIterator(const BasicBlock *);
+
+  void Reset(void);
+
+ private:
+  BasicBlockIterator(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockIterator);
+};
 
 
 // Abstract basic block of instructions.
-//
-//
 class BasicBlock {
  public:
   virtual ~BasicBlock(void) = default;
-
-  // Apply a function to every (known) successor of a basic block. Importantly,
-  // the successors of a basic block might underestimate the true number of
-  // successors that are possible.
-  //
-  // Note: It is not meaningful to apply VisitSuccessors to a
-  //       `FutureBasicBlock` or a `UnknownBasicBlock`.
-  template <typename ClosureType>
-  typename RemoveReference<decltype(ClosureType(BasicBlock *))>::Type
-  VisitSuccessors(ClosureType func) {
-
-  }
-
-  // Apply a function to every (known) predecessor of a basic block.
-  // Importantly, the predecessors of a basic block might underestimate the
-  // true number of predecessors that are possible.
-  template <typename ClosureType>
-  typename RemoveReference<decltype(ClosureType(BasicBlock *))>::Type
-  VisitPredecessors(ClosureType func) {
-
-  }
+  virtual bool NextSuccessor(BasicBlockIterator &, BasicBlock *&) = 0;
+  virtual bool NextPredecessor(BasicBlockIterator &, BasicBlock *&) = 0;
 
   GRANARY_BASE_CLASS(BasicBlock)
 
@@ -93,6 +87,9 @@ class InFlightBasicBlock : public BasicBlock {
 class FutureBasicBlock : public BasicBlock {
  public:
   virtual ~FutureBasicBlock(void) = default;
+
+  //
+  void Materialize(ControlFlowGraph &cfg, BasicBlockIterator &blocks);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
 
