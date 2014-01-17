@@ -80,6 +80,19 @@ inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));
 }
 
+
+
+
+
+// Base type to derived type cast.
+template <
+  typename DerivedT,
+  typename BaseT
+>
+inline DerivedT *DynamicCast(BaseT *ptr) {
+  return nullptr;
+}
+
 }  // namespace granary
 
 #endif  // GRANARY_BASE_CAST_H_

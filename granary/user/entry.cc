@@ -15,6 +15,9 @@ static void test(void) {
   decoder.Decode(&instr, UnsafeCast<AppProgramCounter>(&test));
   decoder.Encode(&instr, &(encoded_instr[0]));
   granary_break_on_encode(&(encoded_instr[0]));
+  decoder.Decode(&instr, &(encoded_instr[0]));
+  decoder.Encode(&instr, &(encoded_instr[0]));
+  granary_break_on_encode(&(encoded_instr[0]));
 }
 
 }  // namespace granary
