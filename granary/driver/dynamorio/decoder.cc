@@ -72,7 +72,8 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
 
 CacheProgramCounter InstructionDecoder::EncodeInternal(
     DecodedInstruction *instr, CacheProgramCounter pc) {
-  const AppProgramCounter encoded_pc(pc);
+
+  const CacheProgramCounter encoded_pc(pc);
   dynamorio::instr_t *raw_instr(&(instr->instruction));
 
   in_flight_instruction = instr;

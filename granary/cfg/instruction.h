@@ -14,9 +14,7 @@ class DecodedInstruction;
 
 class BasicBlock;
 
-// Declare that there is a strict, single-inheritance class hierarchy that
-// uses virtual inheritance, so that we can apply `DynamicCast` to pointers to
-// these types.
+
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     Instruction,
     LabelInstruction,

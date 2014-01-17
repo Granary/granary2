@@ -82,6 +82,9 @@ inline ToT UnsafeCast(const FromT v) {
 
 
 #define GRANARY_BASE_CLASS(base_type) \
+  static inline constexpr bool IsDerivedFrom(const base_type *) { \
+    return true; \
+  } \
   virtual int IdOf(void) const { \
     return GRANARY_CAT(kIdOf, base_type); \
   }
@@ -94,7 +97,9 @@ inline ToT UnsafeCast(const FromT v) {
   static inline bool IsDerivedFrom(const base_type *base) { \
     return base->IdOf() == GRANARY_CAT(kIdOf, derived_type); \
   } \
-  GRANARY_BASE_CLASS(derived_type)
+  virtual int IdOf(void) const { \
+    return GRANARY_CAT(kIdOf, derived_type); \
+  }
 
 
 #define GRANARY_DECLARE_CLASS_ID(class_name) \

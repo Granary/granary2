@@ -4,6 +4,15 @@
 #ifndef GRANARY_BASE_BASE_H_
 #define GRANARY_BASE_BASE_H_
 
+
+// For use only when editing text with Eclipse CDT (my version doesn't handle
+// `decltype` or `alignof` well)
+#ifdef GRANARY_ECLIPSE
+# define decltype(...) void
+# define alignof(...) 16
+#endif
+
+
 // Static branch prediction hints.
 #define GRANARY_LIKELY(x) __builtin_expect((x),1)
 #define GRANARY_UNLIKELY(x) __builtin_expect((x),0)
