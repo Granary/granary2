@@ -1823,9 +1823,7 @@ struct _instr_t {
     /* translation target for this instr */
     app_pc  translation;
 
-    IF_GRANARY_ELSE(uint16_t, uint)    opcode;
-    IF_GRANARY(uint16_t granary_policy; )
-    IF_GRANARY(uint8_t granary_flags; )
+    uint    opcode;
 
 #ifdef X64
     /* PR 251479: offset into instr's raw bytes of rip-relative 4-byte displacement */
@@ -1862,10 +1860,11 @@ struct _instr_t {
      */
     void *note;
 
+#ifndef GRANARY
     /* fields for building instructions into instruction lists */
     instr_t   *prev;
     instr_t   *next;
-
+#endif
 } __attribute__((packed)); /* instr_t */
 #endif /* DR_FAST_IR */
 

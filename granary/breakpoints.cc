@@ -7,7 +7,7 @@ extern "C" {
 GRANARY_DISABLE_OPTIMIZER
 extern void granary_break_on_fault(void) {
   GRANARY_INLINE_ASSEMBLY("");
-  GRANARY_USED(*static_cast<void *>(nullptr));
+  GRANARY_UNUSED(*static_cast<void *>(nullptr));
 }
 
 }

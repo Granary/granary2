@@ -41,7 +41,7 @@ GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR)
 GRANARY_COMMON_FLAGS += -DGRANARY_STANDALONE=$(GRANARY_STANDALONE)
 
 # Use C11 and C++11.
-GRANARY_CC_FLAGS += -std=gnu99 -Wno-c11-extensions
+GRANARY_CC_FLAGS += -std=gnu99
 GRANARY_CXX_FLAGS += -std=c++11
 
 ifeq ($(GRANARY_WHERE),kernel)
@@ -82,12 +82,16 @@ GRANARY_COMMON_FLAGS += -fPIC
 
 # Enable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wall -Wextra -Werror -pedantic -pedantic-errors
-GRANARY_COMMON_WARN_FLAGS += -Wno-variadic-macros -Wcast-qual -Wshadow -Wpointer-arith
-GRANARY_COMMON_WARN_FLAGS += -Wconversion -Wuninitialized -Winit-self -Wno-gnu 
+GRANARY_COMMON_WARN_FLAGS += -Wcast-qual -Wshadow -Wpointer-arith
+GRANARY_COMMON_WARN_FLAGS += -Wconversion -Wuninitialized -Winit-self 
 GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings -Wfloat-equal
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
 GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast
+
+# Disable various warnings and errors.
+GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
+GRANARY_COMMON_WARN_FLAGS += -Wno-gnu -Wno-c11-extensions -Wno-long-long
 
 
 # Add the common flags to both the C++ and C compiler flags.

@@ -783,29 +783,6 @@ get_shared_gencode(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
     (USE_SHARED_GENCODE_ALWAYS() || DYNAMO_OPTION(shared_traces) || \
      DYNAMO_OPTION(shared_trace_ibl_routine))
 
-/* returns the thread private code or GLOBAL thread shared code */
-static inline generated_code_t*
-get_emitted_routines_code(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
-{
-    generated_code_t *code;
-    /* This routine exists only because GLOBAL_DCONTEXT is not a real dcontext
-     * structure. Still, useful to wrap all references to private_code. */
-    /* PR 244737: thread-private uses only shared gencode on x64 */
-    /* PR 253431: to distinguish shared x86 gencode from x64 gencode, a dcontext
-     * must be passed in; use get_shared_gencode() for x64 builds */
-    IF_X64(ASSERT(mode != GENCODE_FROM_DCONTEXT || dcontext != GLOBAL_DCONTEXT));
-    if (USE_SHARED_GENCODE_ALWAYS() ||
-        (USE_SHARED_GENCODE() && dcontext == GLOBAL_DCONTEXT)) {
-        code = get_shared_gencode(dcontext _IF_X64(mode));
-    } else {
-        ASSERT(dcontext != GLOBAL_DCONTEXT);
-        /* NOTE thread private code entry points may also refer to shared
-         * routines */
-        code = (generated_code_t *) dcontext->private_code;
-    }
-    return code;
-}
-
 ibl_code_t *get_ibl_routine_code(dcontext_t *dcontext, ibl_branch_type_t branch_type,
                                  uint fragment_flags);
 ibl_code_t *get_ibl_routine_code_ex(dcontext_t *dcontext, ibl_branch_type_t branch_type,

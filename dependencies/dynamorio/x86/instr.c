@@ -384,17 +384,8 @@ opnd_create_instr_ex(instr_t *instr, opnd_size_t size, ushort shift)
 {
     opnd_t opnd IF_GRANARY(= {0});
 #ifdef GRANARY
-    // Make sure that instr operands go to labels or mangled instructions. This
-    // is to encourage better coding practices on Granary developers/maintainers
-    // and instrumentation writers. For example, if two instrumentations are
-    // stacked, and they both operate on the same instruction (e.g. by placing
-    // code before the instruction), and if one does a JMP direct to the
-    // instruction, then the second instrumentation might not behave correctly.
-    // Using labels avoids such problems.
-    enum {
-        DONT_MANGLE = 1 << 0
-    };
-    if(OP_LABEL != instr->opcode && 0 == (DONT_MANGLE & instr->granary_flags)) {
+    // Make sure that instr operands go to labels.
+    if(OP_LABEL != instr->opcode) {
         FAULT;
     }
 #endif
@@ -1727,18 +1718,8 @@ reg_get_size(reg_id_t reg)
 instr_t*
 instr_create(dcontext_t *dcontext)
 {
-#ifdef GRANARY
-    instr_t *instr = dcontext->allocated_instr;
-    if(!instr) {
-        instr = (instr_t*) heap_alloc(
-            dcontext, sizeof(instr_t) HEAPACCT(ACCT_IR));
-    } else {
-        dcontext->allocated_instr = 0;
-    }
-#else
     instr_t *instr = (instr_t*) heap_alloc(
         dcontext, sizeof(instr_t) HEAPACCT(ACCT_IR));
-#endif /* GRANARY */
 
     /* everything initializes to 0, even flags, to indicate
      * an uninitialized instruction */
@@ -1764,8 +1745,10 @@ instr_clone(dcontext_t *dcontext, instr_t *orig)
 {
     instr_t *instr = (instr_t*) heap_alloc(dcontext, sizeof(instr_t) HEAPACCT(ACCT_IR));
     memcpy((void *)instr, (void *)orig, sizeof(instr_t));
+#ifndef GRANARY
     instr->next = NULL;
     instr->prev = NULL;
+#endif
 
     /* PR 214962: clients can see some of our mangling
      * (dr_insert_mbr_instrumentation(), traces), but don't let the flag
@@ -1911,8 +1894,10 @@ instr_reuse(dcontext_t *dcontext, instr_t *instr)
     bool x86_mode = instr_get_x86_mode(instr);
     uint rip_rel_pos = instr_rip_rel_valid(instr) ? instr->rip_rel_pos : 0;
 #endif
+#ifndef GRANARY
     instr_t *next = instr->next;
     instr_t *prev = instr->prev;
+#endif
     if (instr_raw_bits_valid(instr)) {
         if (instr_has_allocated_bits(instr)) {
             /* pretend has no allocated bits to prevent freeing of them */
@@ -1925,8 +1910,10 @@ instr_reuse(dcontext_t *dcontext, instr_t *instr)
     instr_free(dcontext, instr);
     instr_init(dcontext, instr);
     /* now re-add them */
+#ifndef GRANARY
     instr->next = next;
     instr->prev = prev;
+#endif
     if (bits != NULL) {
         instr->bytes = bits;
         instr->length = len;

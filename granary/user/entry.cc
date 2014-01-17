@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/driver/init.h"
+#include "granary/driver/driver.h"
 
 #if GRANARY_STANDALONE
 

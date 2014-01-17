@@ -91,6 +91,6 @@
 
 
 // Mark a result / variable as being used.
-#define GRANARY_USED(x) (void) x
+#define GRANARY_UNUSED(x) (void) x
 
 #endif  // GRANARY_BASE_BASE_H_

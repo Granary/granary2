@@ -346,33 +346,6 @@ instr_get_note(instr_t *instr)
     return instr->note;
 }
 
-INSTR_INLINE
-instr_t*
-instr_get_next(instr_t *instr)
-{
-    return instr->next;
-}
-
-INSTR_INLINE
-instr_t*
-instr_get_prev(instr_t *instr)
-{
-    return instr->prev;
-}
-
-INSTR_INLINE
-void
-instr_set_next(instr_t *instr, instr_t *next)
-{
-    instr->next = next;
-}
-
-INSTR_INLINE
-void
-instr_set_prev(instr_t *instr, instr_t *prev)
-{
-    instr->prev = prev;
-}
 
 #endif /* DR_FAST_IR */
 

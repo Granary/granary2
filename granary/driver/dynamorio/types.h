@@ -101,6 +101,10 @@ extern "C" {
 #endif
 
 
+typedef struct _dcontext_t {
+    bool x86_mode; // true iff x64
+} dcontext_t;
+
 typedef enum {
     ACCT_FRAGMENT=0,
     ACCT_COARSE_LINK,
@@ -243,8 +247,6 @@ struct _trace_t;
 typedef struct _trace_t trace_t;
 struct _linkstub_t;
 typedef struct _linkstub_t linkstub_t;
-struct _dcontext_t;
-typedef struct _dcontext_t dcontext_t;
 struct vm_area_vector_t;
 typedef struct vm_area_vector_t vm_area_vector_t;
 struct _coarse_info_t;
@@ -340,31 +342,30 @@ enum {
 };
 #endif
 typedef struct _dr_instr_label_data_t { ptr_uint_t data[ 4 ]; } dr_instr_label_data_t;
+
 struct _instr_t {
-    uint flags;
-    byte * bytes;
-    uint length;
-    app_pc translation;
-    uint16_t opcode;
-    uint16_t granary_policy; // code cache policy for granary
-    uint8_t granary_flags; // flags, e.g. delay, don't mangle, etc.
-    byte rip_rel_pos;
-    byte num_dsts;
-    byte num_srcs;
+    uint    flags;
+    byte    *bytes;
+    uint    length;
+    app_pc  translation;
+    uint    opcode;
+    byte    rip_rel_pos;
+    byte    num_dsts;
+    byte    num_srcs;
     union {
         struct {
-            opnd_t src0;
-            opnd_t * srcs;
-            opnd_t * dsts;
-        } o;
+            opnd_t    src0;
+            opnd_t    *srcs;
+            opnd_t    *dsts;
+        };
         dr_instr_label_data_t label_data;
-    } u;
-    uint prefixes;
-    uint eflags;
-    void * note;
-    instr_t * prev;
-    instr_t * next;
+    };
+
+    uint    prefixes;
+    uint    eflags;
+    void *note;
 } __attribute__((packed));
+
 typedef enum { DR_FP_STATE , DR_FP_MOVE , DR_FP_CONVERT , DR_FP_MATH , } dr_fp_type_t;
 enum { EFLAGS_CF = 0x00000001 , EFLAGS_PF = 0x00000004 , EFLAGS_AF = 0x00000010 , EFLAGS_ZF = 0x00000040 , EFLAGS_SF = 0x00000080 , EFLAGS_DF = 0x00000400 , EFLAGS_OF = 0x00000800 , };
 enum { RAW_OPCODE_nop = 0x90 , RAW_OPCODE_jmp_short = 0xeb , RAW_OPCODE_call = 0xe8 , RAW_OPCODE_ret = 0xc3 , RAW_OPCODE_jmp = 0xe9 , RAW_OPCODE_push_imm32 = 0x68 , RAW_OPCODE_jcc_short_start = 0x70 , RAW_OPCODE_jcc_short_end = 0x7f , RAW_OPCODE_jcc_byte1 = 0x0f , RAW_OPCODE_jcc_byte2_start = 0x80 , RAW_OPCODE_jcc_byte2_end = 0x8f , RAW_OPCODE_loop_start = 0xe0 , RAW_OPCODE_loop_end = 0xe3 , RAW_OPCODE_lea = 0x8d , RAW_PREFIX_jcc_not_taken = 0x2e , RAW_PREFIX_jcc_taken = 0x3e , RAW_PREFIX_lock = 0xf0 , };
