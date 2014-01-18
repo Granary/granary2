@@ -9,8 +9,7 @@
 #ifndef GRANARY_BASE_CAST_H_
 #define GRANARY_BASE_CAST_H_
 
-#include <stdint.h>
-
+#include "granary/base/base.h"
 #include "granary/base/type_traits.h"
 
 namespace granary {

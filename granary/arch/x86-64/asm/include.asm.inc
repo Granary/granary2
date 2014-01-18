@@ -2,20 +2,18 @@
 #define START_FILE .text
 #define END_FILE
 #define SYMBOL(x) x
-#define DECLARE_FUNC(x) \
-.align 16 @N@\
-.globl SYMBOL(x) @N@\
-.type SYMBOL(x), @function@N@\
 
 #define GLOBAL_LABEL(x) SYMBOL(x)
 
 #define DEFINE_FUNC(x) \
-    DECLARE_FUNC(x) \
-    x:@N@\
+    .align 16 @N@\
+    .globl SYMBOL(x) @N@\
+    .type SYMBOL(x), @function @N@\
+    x: @N@\
     .cfi_startproc
 
 #define END_FUNC(x) \
-    .cfi_endproc
+    .cfi_endproc @N@\
 
 #define HEX(v) $0x ## v
 #define PUSHF pushf

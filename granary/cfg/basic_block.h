@@ -24,17 +24,33 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
 // Forward declarations.
 class BasicBlock;
 class ControlFlowGraph;
-
+class ControlFlowGraphIterator;
+class InstrumentationPolicy;
 
 // Iterator for basic blocks.
+//
+// Note: Basic blocks can only be accessed via a control-flow graph iterator.
+//       Certain operations on control-flow graphs and basic blocks (e.g.
+//       materializing a basic block) need to invalidate any active iterators.
+//       In practice, we can't invalid *all* iterators, however, the explicit
+//       dependency chain between these iterators encourages proper usage.
 class BasicBlockIterator {
  public:
-  explicit BasicBlockIterator(const BasicBlock *);
+  BasicBlockIterator(ControlFlowGraphIterator &iterator_,
+                     const BasicBlock *block_);
 
-  void Reset(void);
+  enum {
+    FIND_FIRST,
+    FIND_NEXT,
+    DONE
+  } state;
 
  private:
   BasicBlockIterator(void) = delete;
+
+  ControlFlowGraphIterator *iterator;
+  const BasicBlock *block;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockIterator);
 };
 
@@ -54,6 +70,8 @@ class BasicBlock {
 
 
 // A basic block that has already been committed to the code cache.
+//
+// Cached basic blocks are treated as being long-lived, in that
 class CachedBasicBlock : public BasicBlock {
  public:
   virtual ~CachedBasicBlock(void) = default;
@@ -65,7 +83,10 @@ class CachedBasicBlock : public BasicBlock {
   // one or two successors: one if there is a fall-through or direct jump to
   // another block, and two if the basic block ends in a conditional jump that
   // falls through to another basic block.
-  BasicBlock *successors[2];
+  std::atomic<BasicBlock *> successors[2];
+
+  // The policy used to instrumenting this basic block.
+  InstrumentationPolicy *policy;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CachedBasicBlock);
 };
@@ -84,12 +105,11 @@ class InFlightBasicBlock : public BasicBlock {
 
 
 // A basic block that has not yet been decoded, and might eventually be decoded.
+//
+// Future basic blocks are curious because they are long-lived like
 class FutureBasicBlock : public BasicBlock {
  public:
   virtual ~FutureBasicBlock(void) = default;
-
-  //
-  void Materialize(ControlFlowGraph &cfg, BasicBlockIterator &blocks);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
 

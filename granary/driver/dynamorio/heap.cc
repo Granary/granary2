@@ -38,7 +38,7 @@ class DynamoRIOHeap {
 
       // Allocate the operands of an instruction.
       } else if (0 == (size % sizeof(dynamorio::opnd_t))) {
-        const unsigned long num_operands(size / sizeof(dynamorio::opnd_t));
+        const size_t num_operands(size / sizeof(dynamorio::opnd_t));
         if (DecodedInstruction::MAX_NUM_OPERANDS <
             (decoder->num_allocated_operands + num_operands)) {
           break;

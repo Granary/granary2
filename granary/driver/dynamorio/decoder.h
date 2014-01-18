@@ -23,8 +23,8 @@ class InstructionDecoder : private dynamorio::dcontext_t {
   // Decode/Encode an instruction, and update the program counter by reference
   // to point to the next logical instruction. Returns `true` if the
   // instruction was successfully decoded/encoded.
-  bool DecodeNext(DecodedInstruction *, AppProgramCounter &);
-  bool EncodeNext(DecodedInstruction *, CacheProgramCounter &);
+  bool DecodeNext(DecodedInstruction *, AppProgramCounter *);
+  bool EncodeNext(DecodedInstruction *, CacheProgramCounter *);
 
   // Decode/Encode an instruction. Returns `true` if the instruction was
   // successfully decoded/encoded.
@@ -43,7 +43,7 @@ class InstructionDecoder : private dynamorio::dcontext_t {
   DecodedInstruction *in_flight_instruction;
   bool allocated_instruction;
   bool allocated_raw_bytes;
-  unsigned num_allocated_operands;
+  size_t num_allocated_operands;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };

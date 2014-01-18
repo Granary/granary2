@@ -6,36 +6,30 @@
 
 namespace granary {
 
-
 template <typename T>
 struct RemoveReference {
   typedef T Type;
 };
-
 
 template <typename T>
 struct RemoveReference<T &> {
   typedef T Type;
 };
 
-
 template <typename T>
 struct RemoveReference<T &&> {
   typedef T Type;
 };
-
 
 template <typename T>
 struct RemovePointer {
   typedef T Type;
 };
 
-
 template <typename T>
 struct RemovePointer<T *> {
   typedef T Type;
 };
-
 
 template <typename T>
 struct IsArray {
@@ -44,14 +38,12 @@ struct IsArray {
   };
 };
 
-
-template <typename T, unsigned kLen>
+template <typename T, unsigned long kLen>
 struct IsArray<T[kLen]> {
   enum {
     RESULT = true
   };
 };
-
 
 template <typename T>
 struct IsArray<T[]> {
@@ -60,22 +52,18 @@ struct IsArray<T[]> {
   };
 };
 
-
 template <const bool Condition, typename TrueType, typename FalseType=void>
 struct EnableIf;
-
 
 template <typename TrueType, typename FalseType>
 struct EnableIf<true, TrueType, FalseType> {
   typedef TrueType Type;
 };
 
-
 template <typename TrueType, typename FalseType>
 struct EnableIf<false, TrueType, FalseType> {
   typedef FalseType Type;
 };
-
 
 template <typename A, typename B>
 struct TypesAreEqual {
@@ -84,14 +72,12 @@ struct TypesAreEqual {
   };
 };
 
-
 template <typename A>
 struct TypesAreEqual<A, A> {
   enum {
     RESULT = true
   };
 };
-
 
 template <typename A>
 struct IsPointer {
@@ -100,14 +86,12 @@ struct IsPointer {
   };
 };
 
-
 template <typename A>
 struct IsPointer<A *> {
   enum {
     RESULT = true
   };
 };
-
 
 template <typename A>
 struct IsPointer<A &> {
@@ -116,14 +100,12 @@ struct IsPointer<A &> {
   };
 };
 
-
 template <typename A>
 struct IsPointer<A &&> {
   enum {
     RESULT = IsPointer<A>::RESULT
   };
 };
-
 
 template <typename A>
 struct IsInteger {
@@ -132,7 +114,6 @@ struct IsInteger {
   };
 };
 
-
 template <typename A>
 struct IsInteger<A &> {
   enum {
@@ -140,14 +121,12 @@ struct IsInteger<A &> {
   };
 };
 
-
 template <typename A>
 struct IsInteger<A &&> {
   enum {
     RESULT = IsInteger<A>::RESULT
   };
 };
-
 
 #define GRANARY_DEFINE_IS_INTEGRAL(type) \
   template <> \
@@ -166,12 +145,10 @@ GRANARY_DEFINE_IS_INTEGRAL(unsigned long);
 GRANARY_DEFINE_IS_INTEGRAL(signed long);
 #undef GRANARY_DEFINE_IS_INTEGRAL
 
-
 template <typename T>
 struct RemoveConst {
   typedef T Type;
 };
-
 
 template <typename T>
 struct RemoveConst<const T> {

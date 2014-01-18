@@ -21,16 +21,16 @@ InstructionDecoder::InstructionDecoder(void)
 // to the next logical instruction. Returns `true` iff the instruction was
 // successfully decoded.
 bool InstructionDecoder::DecodeNext(DecodedInstruction *instr,
-                                    AppProgramCounter &pc) {
-  pc = DecodeInternal(instr, pc);
-  return nullptr != pc;
+                                    AppProgramCounter *pc) {
+  *pc = DecodeInternal(instr, *pc);
+  return nullptr != *pc;
 }
 
 
 bool InstructionDecoder::EncodeNext(DecodedInstruction *instr,
-                                    CacheProgramCounter &pc) {
-  pc = EncodeInternal(instr, pc);
-  return nullptr != pc;
+                                    CacheProgramCounter *pc) {
+  *pc = EncodeInternal(instr, *pc);
+  return nullptr != *pc;
 }
 
 

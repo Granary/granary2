@@ -4,6 +4,9 @@
 #ifndef GRANARY_BASE_BASE_H_
 #define GRANARY_BASE_BASE_H_
 
+#include <stdint.h>
+#include <cstddef>
+#include <atomic>
 
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
@@ -170,5 +173,9 @@
   pp(a5) sep() \
   pp(a6) sep() \
   pp(a7)
+
+
+// Mark a symbol as exported.
+#define GRANARY_EXPORT __attribute__((visibility("default")))
 
 #endif  // GRANARY_BASE_BASE_H_
