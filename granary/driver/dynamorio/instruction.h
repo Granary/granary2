@@ -4,6 +4,7 @@
 #ifndef GRANARY_DRIVER_DYNAMORIO_INSTRUCTION_H_
 #define GRANARY_DRIVER_DYNAMORIO_INSTRUCTION_H_
 
+#include "granary/arch/base.h"
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 #include "granary/driver/dynamorio/types.h"
@@ -26,7 +27,7 @@ class DecodedInstruction {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
     SHARED = true,
-    ALIGNMENT = 1
+    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   });
 
  private:

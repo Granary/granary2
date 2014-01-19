@@ -10,8 +10,8 @@ namespace detail {
 // Defines a list of a basic blocks within a control-flow graph.
 class BasicBlockList {
  public:
-  BasicBlockList *next;
   BasicBlockList *prev;
+  std::unique_ptr<BasicBlockList> next;
   BasicBlock *block;
 
   // Basic block lists are allocated from a global memory pool using the

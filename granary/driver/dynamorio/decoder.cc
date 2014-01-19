@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/base/base.h"
+#include "granary/debug/breakpoint.h"
 
 #include "granary/driver/dynamorio/decoder.h"
 #include "granary/driver/dynamorio/instruction.h"
@@ -46,8 +47,14 @@ bool InstructionDecoder::Encode(DecodedInstruction *instr,
 }
 
 
+// Decode an x86 instruction into a DynamoRIO instruction intermediate
+// representation.
 AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
                                                      AppProgramCounter pc) {
+  if (!pc) {
+    return pc;
+  }
+
   const AppProgramCounter decoded_pc(pc);
   in_flight_instruction = instr;
   instr->Clear();
@@ -56,6 +63,22 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
   pc = dynamorio::decode_raw(this, pc, raw_instr);
   if (pc) {
     dynamorio::decode(this, pc, raw_instr);
+  }
+
+  // Special cases: all of these examples should end a basic block and lead to
+  // detaching. Detaching is handled in Granary by synthesizing a direct-to-
+  // native jump.
+  switch (raw_instr->opcode) {
+    case dynamorio::OP_INVALID:
+    case dynamorio::OP_UNDECODED:
+      granary_break_on_decode(decoded_pc);
+      // fall-through.
+    case dynamorio::OP_ud2a:
+    case dynamorio::OP_ud2b:
+    case dynamorio::OP_int3:
+      return nullptr;
+
+    default: break;
   }
 
   raw_instr->bytes = decoded_pc;
@@ -70,6 +93,8 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
 }
 
 
+// Encode a DynamoRIO instruction intermediate representation into an x86
+// instruction.
 CacheProgramCounter InstructionDecoder::EncodeInternal(
     DecodedInstruction *instr, CacheProgramCounter pc) {
 

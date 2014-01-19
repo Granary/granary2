@@ -20,5 +20,10 @@ void granary_break_on_encode(void *addr) {
   GRANARY_USED(addr);
 }
 
+GRANARY_DISABLE_OPTIMIZER
+void granary_break_on_decode(void *addr) {
+  GRANARY_USED(addr);
+}
+
 }
 

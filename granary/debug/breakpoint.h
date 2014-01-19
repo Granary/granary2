@@ -9,6 +9,7 @@ extern "C" {
 void granary_break_on_fault(void);
 void granary_break_on_unreachable_code(void);
 void granary_break_on_encode(void *);
+void granary_break_on_decode(void *);
 
 }  // extern C
 

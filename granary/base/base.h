@@ -1,12 +1,12 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_BASE_BASE_H_
 #define GRANARY_BASE_BASE_H_
 
-#include <stdint.h>
-#include <cstddef>
 #include <atomic>
+#include <cstddef>
+#include <memory>
+#include <stdint.h>
 
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)

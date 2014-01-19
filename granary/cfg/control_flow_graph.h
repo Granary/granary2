@@ -18,8 +18,10 @@ namespace detail {
 class BasicBlockList;
 }  // namespace detail
 
+
 class ControlFlowGraph {
  public:
+  ControlFlowGraph(void);
 
   // Convert a `FutureBasicBlock` into either a `CachedBasicBlock` (if it has
   // shown up by now in the code cache) or into an `InFlightBasicBlock`.
@@ -31,7 +33,7 @@ class ControlFlowGraph {
                              InstrumentationPolicy *policy);
 
  private:
-  detail::BasicBlockList *block_list_head;
+  std::unique_ptr<detail::BasicBlockList> block_list_head;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);
 };
