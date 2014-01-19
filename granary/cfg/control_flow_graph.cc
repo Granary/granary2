@@ -18,8 +18,7 @@ class BasicBlockList {
   // `new` and `delete` operators.
   GRANARY_DEFINE_NEW_ALLOCATOR(BasicBlockList, {
     SHARED = true,
-    MINIMUM_ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE,
-    KIND = AllocationKind::NOT_EXECUTABLE
+    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   });
 
  private:

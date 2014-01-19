@@ -52,7 +52,7 @@ class DynamoRIOHeap {
 
       break;
     }
-    granary_break_unreachable();
+    granary_break_on_unreachable_code();
     return nullptr;
   }
 };

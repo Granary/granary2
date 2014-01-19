@@ -10,14 +10,15 @@ namespace granary {
 
 static void test(void) {
   driver::InstructionDecoder decoder;
-  driver::DecodedInstruction instr;
+  driver::DecodedInstruction *instr(new driver::DecodedInstruction);
   unsigned char encoded_instr[32] = {0};
-  decoder.Decode(&instr, UnsafeCast<AppProgramCounter>(&test));
-  decoder.Encode(&instr, &(encoded_instr[0]));
+  decoder.Decode(instr, UnsafeCast<AppProgramCounter>(&test));
+  decoder.Encode(instr, &(encoded_instr[0]));
   granary_break_on_encode(&(encoded_instr[0]));
-  decoder.Decode(&instr, &(encoded_instr[0]));
-  decoder.Encode(&instr, &(encoded_instr[0]));
+  decoder.Decode(instr, &(encoded_instr[0]));
+  decoder.Encode(instr, &(encoded_instr[0]));
   granary_break_on_encode(&(encoded_instr[0]));
+  delete instr;
 }
 
 }  // namespace granary

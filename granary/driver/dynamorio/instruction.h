@@ -5,6 +5,7 @@
 #define GRANARY_DRIVER_DYNAMORIO_INSTRUCTION_H_
 
 #include "granary/base/base.h"
+#include "granary/base/new.h"
 #include "granary/driver/dynamorio/types.h"
 
 namespace granary {
@@ -22,6 +23,11 @@ class DecodedInstruction {
 
   void Clear(void);
   void Copy(const DecodedInstruction *);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  });
 
  private:
   friend class InstructionDecoder;

@@ -9,5 +9,5 @@ set language c++
 
 catch throw
 b granary_break_on_fault
-b granary_break_unreachable
+b granary_break_on_unreachable_code
 b granary_break_on_encode

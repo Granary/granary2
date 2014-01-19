@@ -70,6 +70,10 @@
   ((x) + GRANARY_ALIGN_FACTOR(x, align))
 
 
+// Return the maximum or minimum of two values.
+#define GRANARY_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define GRANARY_MAX(a, b) ((a) < (b) ? (b) : (a))
+
 // Disallow copying of a specific class.
 #define GRANARY_DISALLOW_COPY(cls) \
   cls(const cls &) = delete; \
