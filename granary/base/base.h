@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <initializer_list>
 #include <stdint.h>
 
 // For use only when editing text with Eclipse CDT (my version doesn't handle

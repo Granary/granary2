@@ -31,6 +31,11 @@ class InstructionDecoder : private dynamorio::dcontext_t {
   bool Decode(DecodedInstruction *, AppProgramCounter);
   bool Encode(DecodedInstruction *, CacheProgramCounter);
 
+  // Returns true if the instruction can be placed into a basic block. This
+  // requires certain architectural and operating-system specific checks.
+  bool CanAddInstructionToBasicBlock(const DecodedInstruction *) const;
+
+
  private:
   friend class DynamoRIOHeap;
 

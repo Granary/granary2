@@ -2,6 +2,7 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/decoder.h"
+#include "granary/environment.h"
 #include "granary/driver/driver.h"
 
 namespace granary {
@@ -9,24 +10,27 @@ namespace granary {
 // Initialize the instruction encoder with an environment and a control-flow
 // graph. The control-flow graph is modified in place (to add successors and
 // predecessors).
-InstructionDecoder::InstructionDecoder(const Environment *env_,
-                                       const CodeCacheIndex *index_,
-                                       ControlFlowGraph *cfg_)
-    : env(env_),
-      index(index_),
-      cfg(cfg_) {}
+InstructionDecoder::InstructionDecoder(const Environment *env_)
+    : env(env_) {}
 
 
-
-
-BasicBlock *InstructionDecoder::DecodeBasicBlock(const BasicBlockMetaData *meta,
-                                                 AppProgramCounter start_pc) {
+// Decode and return a basic block.
+void InstructionDecoder::DecodeBasicBlock(InFlightBasicBlock *block) {
   driver::InstructionDecoder decoder;
   driver::DecodedInstruction instr;
+  Instruction *reified_instr(nullptr);
 
-  for (AppProgramCounter next_pc(start_pc), decoded_pc(start_pc);
+  for (AppProgramCounter next_pc(block->app_start_pc), decoded_pc(next_pc);
        decoder.DecodeNext(&instr, &next_pc);
        decoded_pc = next_pc) {
+
+    if (decoder.CanAddInstructionToBasicBlock(&instr)) {
+
+
+      env->AnnotateInstruction(reified_instr);
+    } else {
+      break;
+    }
 
     // Handle architecture and operating-system-specific special cases here.
     //

@@ -1,8 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 
-#ifndef GRANARY_DEBUG_BREAKPOINT_H_
-#define GRANARY_DEBUG_BREAKPOINT_H_
+#ifndef GRANARY_BREAKPOINT_H_
+#define GRANARY_BREAKPOINT_H_
 
 extern "C" {
 
@@ -13,4 +13,4 @@ void granary_break_on_decode(void *);
 
 }  // extern C
 
-#endif  // GRANARY_DEBUG_BREAKPOINT_H_
+#endif  // GRANARY_BREAKPOINT_H_

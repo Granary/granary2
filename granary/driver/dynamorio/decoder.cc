@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/base/base.h"
-#include "granary/debug/breakpoint.h"
+#include "granary/breakpoint.h"
 
 #include "granary/driver/dynamorio/decoder.h"
 #include "granary/driver/dynamorio/instruction.h"
@@ -44,6 +44,22 @@ bool InstructionDecoder::Decode(DecodedInstruction *instr,
 bool InstructionDecoder::Encode(DecodedInstruction *instr,
                                 CacheProgramCounter pc) {
   return nullptr != EncodeInternal(instr, pc);
+}
+
+
+// Returns true iff the instruction can be placed into a basic block. This
+// requires certain architectural and operating-system specific checks.
+bool InstructionDecoder::CanAddInstructionToBasicBlock(
+    const DecodedInstruction *instr) const {
+  switch (instr->instruction.opcode) {
+    case dynamorio::OP_sysret:
+    case dynamorio::OP_swapgs:
+    case dynamorio::OP_sysexit:
+    case dynamorio::OP_iret:
+      return false;
+    default:
+      return true;
+  }
 }
 
 

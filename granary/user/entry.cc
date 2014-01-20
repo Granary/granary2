@@ -1,8 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/base/cast.h"
-#include "granary/debug/breakpoint.h"
+#include "granary/breakpoint.h"
 #include "granary/driver/driver.h"
+#include "granary/cfg/control_flow_graph.h"
 
 #if GRANARY_STANDALONE
 
@@ -20,7 +21,8 @@ static void test(void) {
   granary_break_on_encode(&(encoded_instr[0]));
 
 
-  ControlFlowGraph cfg;
+  InFlightBasicBlock *first_block(nullptr);
+  ControlFlowGraph cfg(first_block);
 
   delete instr;
 }

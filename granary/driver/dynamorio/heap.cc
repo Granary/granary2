@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <cstddef>
 
-#include "granary/debug/breakpoint.h"
+#include "granary/breakpoint.h"
 #include "granary/driver/dynamorio/decoder.h"
 #include "granary/driver/dynamorio/instruction.h"
 

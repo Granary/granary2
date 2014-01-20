@@ -11,29 +11,22 @@ namespace granary {
 
 // Forward declarations.
 class Environment;
-class ControlFlowGraph;
 class BasicBlock;
-class BasicBlockMetaData;
-class CodeCacheIndex;
 
-// Manages decoding instructions into basic blocks and adding those basic blocks
-// into the control-flow graph.
+// Manages decoding instructions into basic blocks.
 class InstructionDecoder {
  public:
-  InstructionDecoder(const Environment *env_, const CodeCacheIndex *index_,
-                     ControlFlowGraph *cfg_);
+  explicit InstructionDecoder(const Environment *env_);
 
   // Decode and return a basic block. This might return an `InFlightBasicBlock`
-  // or a `CachedBasicBlock`. This function might query the `index` to find
-  // a `CachedBasicBlock`. For each decoded instruction, this will query the
+  // or a `CachedBasicBlock`. For each decoded instruction, this will query the
   // `env` to check for environment-specific behaviors on each instruction.
-  BasicBlock *DecodeBasicBlock(const BasicBlockMetaData *meta,
-                               AppProgramCounter start_pc);
+  void DecodeBasicBlock(InFlightBasicBlock *block);
 
  private:
+  void DecodeInstructionList();
+
   const Environment * const env;
-  const CodeCacheIndex * const index;
-  ControlFlowGraph * const cfg;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };

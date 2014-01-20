@@ -1,8 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/arch/base.h"
+#include "granary/base/list.h"
 #include "granary/base/new.h"
 #include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/basic_block.h"
 
 namespace granary {
 namespace detail {
@@ -10,21 +12,63 @@ namespace detail {
 // Defines a list of a basic blocks within a control-flow graph.
 class BasicBlockList {
  public:
-  BasicBlockList *prev;
-  std::unique_ptr<BasicBlockList> next;
+  ListHead list;
   BasicBlock *block;
+
+  explicit BasicBlockList(BasicBlock *block_)
+      : block(block_) {}
 
   // Basic block lists are allocated from a global memory pool using the
   // `new` and `delete` operators.
   GRANARY_DEFINE_NEW_ALLOCATOR(BasicBlockList, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = 16
   });
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockList);
 };
 
+// Used to check to make sure an active iterator is not equivalent to the end
+// iterator.
+bool BasicBlockIterator::operator!=(const BasicBlockIterator &that) const {
+  return blocks != that.blocks;
+}
+
+// Move the iterator to the next basic block.
+const BasicBlockIterator &BasicBlockIterator::operator++(void) {
+  blocks = blocks->list.GetNext(blocks);
+  return *this;
+}
+
+// Get a basic block out of the iterator.
+BasicBlock *BasicBlockIterator::operator*(void) {
+  return blocks->block;
+}
+
 }  // namespace detail
+
+// Initialize a CFG starting with an in-flight basic block as the entrypoint.
+ControlFlowGraph::ControlFlowGraph(InFlightBasicBlock *first_block)
+    : blocks(new detail::BasicBlockList(first_block)) {}
+
+// Destroy the CFG.
+ControlFlowGraph::~ControlFlowGraph(void) {
+  for (detail::BasicBlockList *curr(blocks), *next(nullptr); curr; curr = next) {
+    next = curr->list.GetNext(curr);
+
+    if (DynamicCast<InFlightBasicBlock *>(curr->block) ||
+        DynamicCast<UnknownBasicBlock *>(curr->block)) {
+      delete curr->block;
+
+    } else if (auto block = DynamicCast<FutureBasicBlock *>(curr->block)) {
+      // TODO(pag): Check if it's interned.
+      GRANARY_UNUSED(block);
+    }
+
+    delete curr;
+  }
+  blocks = nullptr;
+}
 
 }  // namespace granary

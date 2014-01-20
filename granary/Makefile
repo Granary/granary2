@@ -4,7 +4,7 @@ include ../Makefile.inc
 
 GRANARY_CC_SRC_DIRS = 
 GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary
-GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary/debug
+GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary/cfg
 GRANARY_CC_SRC_DIRS += $(GRANARY_SRC_DIR)/granary/base
 
 GRANARY_CC_SRC_FILES = $(shell find $(GRANARY_CC_SRC_DIRS) -maxdepth 1 -type f -name '*.cc')

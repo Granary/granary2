@@ -114,14 +114,14 @@ class OperatorNewAllocator {
   typedef typename T::OperatorNewProperties Properties;
 
   enum : size_t {
+    MIN_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
+    ALIGNMENT = GRANARY_MAX(MIN_ALIGNMENT, alignof(T)),
     OBJECT_SIZE = sizeof(T),
     MIN_OBJECT_SIZE = GRANARY_MAX(OBJECT_SIZE, sizeof(detail::FreeList *)),
-    ALIGNED_OBJECT_SIZE = GRANARY_ALIGN_TO(
-        MIN_OBJECT_SIZE, static_cast<size_t>(Properties::ALIGNMENT)),
+    ALIGNED_OBJECT_SIZE = GRANARY_ALIGN_TO(MIN_OBJECT_SIZE, ALIGNMENT),
 
     // The first offset in a page is for an object.
-    ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(
-        OBJECT_SIZE, static_cast<size_t>(Properties::ALIGNMENT)),
+    ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(OBJECT_SIZE, ALIGNMENT),
 
     // Figure out the number of allocations that can fit into a one-page slab.
     NUM_ALLOCS_FOR_META_DATA = ALGINED_SLAB_LIST_SIZE / ALIGNED_OBJECT_SIZE,

@@ -113,12 +113,14 @@ inline ToT UnsafeCast(const FromT v) {
 
 // Base type to derived type cast.
 template <
-  typename DerivedT,
-  typename BaseT
+  typename PointerT,
+  typename BaseT,
+  typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
 >
-inline DerivedT *DynamicCast(const BaseT *ptr) {
+inline PointerT DynamicCast(const BaseT *ptr) {
+  typedef typename RemovePointer<PointerT>::Type DerivedT;
   if (DerivedT::IsDerivedFrom(ptr)) {
-    return UnsafeCast<DerivedT *>(ptr);
+    return UnsafeCast<PointerT>(ptr);
   }
   return nullptr;
 }

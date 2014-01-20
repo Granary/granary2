@@ -4,7 +4,7 @@
 #include "granary/base/memory.h"
 #include "granary/base/new.h"
 #include "granary/base/string.h"
-#include "granary/debug/breakpoint.h"
+#include "granary/breakpoint.h"
 
 namespace granary {
 namespace detail {
