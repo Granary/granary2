@@ -67,7 +67,7 @@ CachedBasicBlock::CachedBasicBlock(AppProgramCounter app_start_pc_,
                                    CacheProgramCounter cache_start_pc_,
                                    const BasicBlockMetaData *entry_meta_,
                                    BasicBlockMetaData *meta_,
-                                   const BasicBlock **successors_)
+                                   std::atomic<BasicBlock *> *successors_)
     : InstrumentedBasicBlock(app_start_pc_, entry_meta_, meta_),
       cache_start_pc(cache_start_pc_),
       successors(successors_) {}
@@ -80,8 +80,8 @@ detail::SuccessorBlockFinder CachedBasicBlock::Successors(void) {
 // Return the current successor in the successor array and move the pointer to
 // the next successor in the array.
 BasicBlock *CachedBasicBlock::FindNextSuccessor(void **data) {
-  auto successor(reinterpret_cast<BasicBlock ***>(data));
-  return *((*successor)++);
+  auto successor(reinterpret_cast<std::atomic<BasicBlock *> **>(data));
+  return ((*successor)++)->load();
 }
 
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,

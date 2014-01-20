@@ -19,11 +19,11 @@ namespace granary {
   static void *operator new(std::size_t) { \
     return OperatorNewAllocator<class_name>::Allocate(); \
   } \
-  static void operator delete(void *addr) { \
+  static void operator delete(void *addr, std::size_t) { \
     OperatorNewAllocator<class_name>::Free(addr); \
   } \
   static void *operator new[](std::size_t) = delete; \
-  static void operator delete[](void *) = delete
+  static void operator delete[](void *, std::size_t) = delete
 
 
 namespace detail {
@@ -58,6 +58,7 @@ class SlabAllocator {
  public:
   explicit SlabAllocator(size_t num_allocations_per_slab_,
                          size_t start_offset_,
+                         size_t unaligned_size_,
                          size_t aligned_size_);
 
   void *Allocate(void);
@@ -72,6 +73,7 @@ class SlabAllocator {
   const size_t num_allocations_per_slab;
   const size_t start_offset;
   const size_t aligned_size;
+  const size_t unaligned_size;
   const SlabList slab_list_tail;
 
   // TODO(pag): Padding between the atomic and non-atomic components?
@@ -142,7 +144,8 @@ template <typename T>
 detail::SlabAllocator OperatorNewAllocator<T>::allocator(
     OperatorNewAllocator<T>::NUM_ALLOCS_PER_SLAB,
     OperatorNewAllocator<T>::ALGINED_SLAB_LIST_SIZE,
-    OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE);
+    OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE,
+    OperatorNewAllocator<T>::OBJECT_SIZE);
 
 }  // namespace granary
 

@@ -118,6 +118,9 @@ template <
   typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
 >
 inline PointerT DynamicCast(const BaseT *ptr) {
+  if (!ptr) {
+    return nullptr;
+  }
   typedef typename RemovePointer<PointerT>::Type DerivedT;
   if (DerivedT::IsDerivedFrom(ptr)) {
     return UnsafeCast<PointerT>(ptr);

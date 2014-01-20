@@ -9,11 +9,14 @@
 #include "granary/base/list.h"
 
 namespace granary {
+
+// Forward declarations.
+class BasicBlock;
+class ControlFlowInstruction;
+
 namespace driver {
 class DecodedInstruction;
 }  // namespace driver
-
-class BasicBlock;
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     Instruction,
@@ -90,6 +93,8 @@ class NativeInstruction : public Instruction {
   GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 
  private:
+  friend class ControlFlowInstruction;
+
   std::unique_ptr<driver::DecodedInstruction> instruction;
 };
 
@@ -101,7 +106,13 @@ class ControlFlowInstruction : public NativeInstruction {
 
   GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 
+  // Driver-specific implementations.
   bool IsFunctionCall(void) const;
+  bool IsFunctionReturn(void) const;
+  bool IsInterruptReturn(void) const;
+  bool IsJump(void) const;
+  bool IsConditionalJump(void) const;
+  bool HasIndirectTarget(void) const;
 
  private:
   ControlFlowInstruction(void) = delete;

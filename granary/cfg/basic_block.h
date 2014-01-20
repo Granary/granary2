@@ -155,14 +155,18 @@ class InstrumentedBasicBlock : public BasicBlock {
 
 // A basic block that has already been committed to the code cache.
 //
-// Cached basic blocks are treated as being long-lived, in that
+// Cached basic blocks are treated as being long-lived, in that they cannot be
+// re-instrumented. One subtlety is that, when materializing blocks, if the
+// next block is already cached, then we make a *copy* of it, so that we can
+// modify the successors in place (e.g. to show that an existing basic block
+// loops back to an in-flight basic block).
 class CachedBasicBlock : public InstrumentedBasicBlock {
  public:
   CachedBasicBlock(AppProgramCounter app_start_pc_,
                    CacheProgramCounter cache_start_pc_,
                    const BasicBlockMetaData *entry_meta_,
                    BasicBlockMetaData *meta_,
-                   const BasicBlock **successors_);
+                   std::atomic<BasicBlock *> *successors_);
 
   virtual ~CachedBasicBlock(void) = default;
   virtual detail::SuccessorBlockFinder Successors(void);
@@ -193,7 +197,7 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
   //            inside of (potentially inlined) indirect lookup tables.
 
   // Array of successor basic blocks, ending in a NULL pointer.
-  const BasicBlock **successors;
+  std::atomic<BasicBlock *> *successors;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CachedBasicBlock);
 };

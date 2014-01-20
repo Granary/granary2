@@ -9,6 +9,20 @@
 #include <initializer_list>
 #include <stdint.h>
 
+// Useful for Valgrind-based debugging.
+#ifdef GRANARY_WITH_VALGRIND
+# include <valgrind/valgrind.h>
+# include <valgrind/memcheck.h>
+#else
+# define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
+# define VALGRIND_FREELIKE_BLOCK(addr, rzB)
+# define VALGRIND_CREATE_MEMPOOL(addr, rzB, is_zeroed)
+# define VALGRIND_MEMPOOL_ALLOC(pool, addr, size)
+# define VALGRIND_MEMPOOL_FREE(pool, addr)
+# define VALGRIND_MAKE_MEM_UNDEFINED(addr,size)
+# define VALGRIND_MAKE_MEM_DEFINED(addr,size)
+#endif
+
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
 #ifdef GRANARY_ECLIPSE
@@ -63,7 +77,7 @@
 // Determine how much should be added to a value `x` in order to align `x` to
 // an `align`-byte boundary.
 #define GRANARY_ALIGN_FACTOR(x, align) \
-  (((x) % (align)) ? ((x) - ((x) % (align))) : 0)
+  (((x) % (align)) ? ((align) - ((x) % (align))) : 0)
 
 
 // Align a value `x` to an `align`-byte boundary.

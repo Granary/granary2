@@ -30,15 +30,20 @@ SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
 // checks.
 SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
                              size_t start_offset_,
-                             size_t aligned_size_)
+                             size_t aligned_size_,
+                             size_t unaligned_size_)
     : num_allocations_per_slab(num_allocations_per_slab_),
       start_offset(start_offset_),
       aligned_size(aligned_size_),
+      unaligned_size(unaligned_size_),
       slab_list_tail(nullptr, num_allocations_per_slab_, 0),
       slab_list_head(ATOMIC_VAR_INIT(&slab_list_tail)),
       free_list(ATOMIC_VAR_INIT(nullptr)),
       next_slab_number(ATOMIC_VAR_INIT(1)),
-      next_allocation_number(ATOMIC_VAR_INIT(num_allocations_per_slab_)) {}
+      next_allocation_number(ATOMIC_VAR_INIT(num_allocations_per_slab_)) {
+
+  GRANARY_UNUSED(unaligned_size);
+}
 
 
 // Allocate a new slab of memory for this object. The backing memory of the
@@ -93,7 +98,10 @@ void *SlabAllocator::Allocate(void) {
     const size_t index((allocation_number - slab->min_allocation_number));
     address = UnsafeCast<char *>(slab) + start_offset + (index * aligned_size);
   }
-  return memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
+  VALGRIND_MALLOCLIKE_BLOCK(address, unaligned_size, 0, 0);
+  memset(address, UNINITIALIZED_MEMORY_POISON, unaligned_size);
+  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
+  return address;
 }
 
 
@@ -107,6 +115,8 @@ void SlabAllocator::Free(void *address) {
     next = free_list.load(std::memory_order_relaxed);
     list->next = next;
   } while (!free_list.compare_exchange_strong(next, list));
+
+  VALGRIND_FREELIKE_BLOCK(address, unaligned_size);
 }
 
 
@@ -120,7 +130,9 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     if (!head) {
       return nullptr;
     }
+    VALGRIND_MAKE_MEM_DEFINED(head, sizeof(*head));
     next = head->next;
+    VALGRIND_MAKE_MEM_UNDEFINED(head, sizeof(*head));
   } while (!free_list.compare_exchange_strong(head, next));
   return head;
 }

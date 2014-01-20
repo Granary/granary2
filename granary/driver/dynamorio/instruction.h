@@ -30,6 +30,9 @@ class DecodedInstruction {
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   });
 
+  // The actual DynamoRIO `instr_t` data structure.
+  dynamorio::instr_t instruction;
+
  private:
   friend class InstructionDecoder;
   friend class DynamoRIOHeap;
@@ -47,9 +50,6 @@ class DecodedInstruction {
   // The operands referenced by the DynamoRIO `instr_t` structure. There can be
   // up to 8 operands, but most instructions used <= 3.
   dynamorio::opnd_t operands[MAX_NUM_OPERANDS];
-
-  // The actual DynamoRIO `instr_t` data structure.
-  dynamorio::instr_t instruction;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedInstruction);
 };

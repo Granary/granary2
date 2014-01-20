@@ -6,7 +6,7 @@
 
 namespace granary {
 
-typedef unsigned char *AppProgramCounter;
+typedef const unsigned char *AppProgramCounter;
 typedef unsigned char *CacheProgramCounter;
 
 }  // namespace granary

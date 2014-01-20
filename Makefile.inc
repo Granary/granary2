@@ -12,6 +12,7 @@ GRANARY_WHERE ?= user
 GRANARY_DRIVER ?= dynamorio
 GRANARY_STANDALONE ?= 1
 GRANARY_NAME ?= granary
+GRANARY_WITH_VALGRIND ?= 0
 
 GRANARY_SRC_DIR ?= /home/pag/Code/Granary+
 GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
@@ -46,6 +47,11 @@ GRANARY_CXX_FLAGS += -std=c++11
 
 ifeq ($(GRANARY_WHERE),kernel)
 	GRANARY_STANDALONE := 0
+endif
+
+# Enable valgrind checking of code.
+ifeq ($(GRANARY_WITH_VALGRIND),1)
+	GRANARY_CXX_FLAGS += -DGRANARY_WITH_VALGRIND
 endif
 
 # Enable/disable features based on whether or not this is a debug or release
@@ -94,14 +100,13 @@ GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
 GRANARY_COMMON_WARN_FLAGS += -Wno-gnu -Wno-c11-extensions -Wno-long-long
 
-
 # Add the common flags to both the C++ and C compiler flags.
 GRANARY_CXX_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_CC_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 
-# Mask some of the libc symbols with Granary equivalents.
+# Mask some of the libc and libc++ symbols with Granary equivalents.
 ifeq (0,$(GRANARY_STANDALONE))
 	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 endif
@@ -109,6 +114,12 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memset=granary_memset"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
+
+# Handle global `operator delete(void*)`.
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code"
+
+# Handle global `operator new(unsigned long)`.
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code"
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5

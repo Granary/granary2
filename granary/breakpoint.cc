@@ -16,12 +16,12 @@ void granary_break_on_unreachable_code(void) {
 }
 
 GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_encode(void *addr) {
+void granary_break_on_encode(const void *addr) {
   GRANARY_USED(addr);
 }
 
 GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_decode(void *addr) {
+void granary_break_on_decode(const void *addr) {
   GRANARY_USED(addr);
 }
 

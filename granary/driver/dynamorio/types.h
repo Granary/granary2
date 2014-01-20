@@ -224,7 +224,7 @@ typedef __sigset_t sigset_t;
 
 typedef unsigned char byte;
 typedef signed char sbyte;
-typedef byte * app_pc;
+typedef const byte * app_pc;
 typedef void ( * generic_func_t ) ( );
 typedef unsigned long int uint64;
 typedef long int int64;
@@ -345,7 +345,7 @@ typedef struct _dr_instr_label_data_t { ptr_uint_t data[ 4 ]; } dr_instr_label_d
 
 struct _instr_t {
     uint    flags;
-    byte    *bytes;
+    const byte    *bytes;
     uint    length;
     app_pc  translation;
     uint    opcode;
@@ -407,10 +407,10 @@ enum { TYPE_NONE , TYPE_A , TYPE_C , TYPE_D , TYPE_E , TYPE_G , TYPE_H , TYPE_I 
 enum { OPSZ_NA = DR_REG_INVALID + 1 , OPSZ_FIRST = OPSZ_NA , OPSZ_0 , OPSZ_1 , OPSZ_2 , OPSZ_4 , OPSZ_6 , OPSZ_8 , OPSZ_10 , OPSZ_16 , OPSZ_14 , OPSZ_28 , OPSZ_94 , OPSZ_108 , OPSZ_512 , OPSZ_2_short1 , OPSZ_4_short2 , OPSZ_4_rex8_short2 , OPSZ_4_rex8 , OPSZ_6_irex10_short4 , OPSZ_8_short2 , OPSZ_8_short4 , OPSZ_28_short14 , OPSZ_108_short94 , OPSZ_4x8 , OPSZ_6x10 , OPSZ_4x8_short2 , OPSZ_4x8_short2xi8 , OPSZ_4_short2xi4 , OPSZ_1_reg4 , OPSZ_2_reg4 , OPSZ_4_reg16 , OPSZ_xsave , OPSZ_12 , OPSZ_32 , OPSZ_40 , OPSZ_32_short16 , OPSZ_8_rex16 , OPSZ_8_rex16_short4 , OPSZ_12_rex40_short6 , OPSZ_16_vex32 , OPSZ_LAST , };
 enum { OPSZ_4_of_8 = OPSZ_LAST , OPSZ_4_of_16 , OPSZ_8_of_16 , OPSZ_8_of_16_vex32 , OPSZ_16_of_32 , OPSZ_LAST_ENUM , };
 
-byte * decode_eflags_usage ( dcontext_t * dcontext , byte * pc , uint * usage );
-byte * decode_opcode ( dcontext_t * dcontext , byte * pc , instr_t * instr );
-byte * decode ( dcontext_t * dcontext , byte * pc , instr_t * instr );
-byte * decode_from_copy ( dcontext_t * dcontext , byte * copy_pc , byte * orig_pc , instr_t * instr );
+byte * decode_eflags_usage ( dcontext_t * dcontext , const byte * pc , uint * usage );
+byte * decode_opcode ( dcontext_t * dcontext , const byte * pc , instr_t * instr );
+byte * decode ( dcontext_t * dcontext , const byte * pc , instr_t * instr );
+byte * decode_from_copy ( dcontext_t * dcontext , const byte * copy_pc , const byte * orig_pc , instr_t * instr );
 const instr_info_t * get_next_instr_info ( const instr_info_t * info );
 byte decode_first_opcode_byte ( int opcode );
 typedef enum { DR_DISASM_DR = 0x0 , DR_DISASM_INTEL = 0x1 , DR_DISASM_ATT = 0x2 , DR_DISASM_STRICT_INVALID = 0x4 , } dr_disasm_flags_t;
@@ -729,10 +729,10 @@ typedef unsigned long int uintptr_t;
 typedef long int intmax_t;
 typedef unsigned long int uintmax_t;
 
-int decode_sizeof ( dcontext_t * dcontext , byte * start_pc , int * num_prefixes , uint * rip_rel_pos );
-byte * decode_cti ( dcontext_t * dcontext , byte * pc , instr_t * instr );
-byte * decode_next_pc ( dcontext_t * dcontext , byte * pc );
-byte * decode_raw ( dcontext_t * dcontext , byte * pc , instr_t * instr );
+int decode_sizeof ( dcontext_t * dcontext , const byte * start_pc , int * num_prefixes , uint * rip_rel_pos );
+byte * decode_cti ( dcontext_t * dcontext , const byte * pc , instr_t * instr );
+byte * decode_next_pc ( dcontext_t * dcontext , const byte * pc );
+byte * decode_raw ( dcontext_t * dcontext , const byte * pc , instr_t * instr );
 
 byte * instr_raw_is_rip_rel_lea ( byte * pc , byte * read_end );
 

@@ -19,12 +19,11 @@ static void test(void) {
   decoder.Decode(instr, &(encoded_instr[0]));
   decoder.Encode(instr, &(encoded_instr[0]));
   granary_break_on_encode(&(encoded_instr[0]));
-
+  delete instr;
 
   InFlightBasicBlock *first_block(nullptr);
   ControlFlowGraph cfg(first_block);
-
-  delete instr;
+  GRANARY_UNUSED(cfg);
 }
 
 }  // namespace granary
