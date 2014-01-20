@@ -20,7 +20,6 @@ class DecodedInstruction;
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     Instruction,
-    LabelInstruction,
     AnnotationInstruction,
     NativeInstruction,
     ControlFlowInstruction,
@@ -38,12 +37,13 @@ class Instruction {
   Instruction *Next(void);
   Instruction *Previous(void);
 
-  void InsertBefore(Instruction *);
-  void InsertAfter(Instruction *);
+  // Inserts an instruction before/after the current instruction. Returns an
+  // (unowned) pointer to the inserted instruction.
+  Instruction *InsertBefore(std::unique_ptr<Instruction>);
+  Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
-  // Unlink an instruction from an instruction list. Care must be taken to
-  // ensure that the instruction is deleted.
-  virtual void Unlink(void);
+  // Unlink an instruction from an instruction list.
+  static std::unique_ptr<Instruction> Unlink(Instruction *);
 
  private:
   ListHead list;
@@ -51,18 +51,8 @@ class Instruction {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
 
-// A label instruction is the target of a local control-flow instruction.
-class LabelInstruction : public Instruction {
- public:
-  virtual ~LabelInstruction(void) = default;
-
-  GRANARY_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-
- private:
-  LabelInstruction(void) = delete;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(LabelInstruction);
-};
+// Implemented in `granary/decoder.cc`.
+enum InstructionAnnotation : uint32_t;
 
 // An annotation instruction is an environment-specific and implementation-
 // specific annotations for basic blocks. Some examples would be that some
@@ -72,15 +62,16 @@ class LabelInstruction : public Instruction {
 // Annotation instructions should not be removed by instrumentation.
 class AnnotationInstruction : public Instruction {
  public:
+  AnnotationInstruction(InstructionAnnotation annotation_, void *data_=nullptr);
   virtual ~AnnotationInstruction(void) = default;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
 
-  // Re-implement to disable unlinking from an instruction list.
-  virtual void Unlink(void);
-
  private:
   AnnotationInstruction(void) = delete;
+
+  const InstructionAnnotation annotation;
+  void * const data;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(AnnotationInstruction);
 };
@@ -88,6 +79,7 @@ class AnnotationInstruction : public Instruction {
 // An instruction containing an driver-specific decoded instruction.
 class NativeInstruction : public Instruction {
  public:
+  explicit NativeInstruction(driver::DecodedInstruction *instruction_);
   virtual ~NativeInstruction(void) = default;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
@@ -95,6 +87,11 @@ class NativeInstruction : public Instruction {
  private:
   friend class ControlFlowInstruction;
 
+  NativeInstruction(void) = delete;
+
+  // TODO(pag): In future we could potentially put `driver::DecodedInstruction`
+  //            by value instead of by pointer, but that could potentially
+  //            get ugly.
   std::unique_ptr<driver::DecodedInstruction> instruction;
 };
 
@@ -125,13 +122,13 @@ class ControlFlowInstruction : public NativeInstruction {
 class LocalControlFlowInstruction : public ControlFlowInstruction {
  public:
   LocalControlFlowInstruction(driver::DecodedInstruction *instruction_,
-                              const LabelInstruction *target_);
+                              const AnnotationInstruction *target_);
 
   virtual ~LocalControlFlowInstruction(void) = default;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, LocalControlFlowInstruction)
 
-  LabelInstruction * const target;
+  AnnotationInstruction * const target;
 
  private:
   LocalControlFlowInstruction(void) = delete;

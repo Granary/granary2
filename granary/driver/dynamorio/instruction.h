@@ -24,6 +24,12 @@ class DecodedInstruction {
 
   void Clear(void);
   void Copy(const DecodedInstruction *);
+  bool IsFunctionCall(void) const;
+  bool IsFunctionReturn(void) const;
+  bool IsInterruptReturn(void) const;
+  bool IsJump(void) const;
+  bool IsConditionalJump(void) const;
+  bool HasIndirectTarget(void) const;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
     SHARED = true,

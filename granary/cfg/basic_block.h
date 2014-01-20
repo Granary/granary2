@@ -31,6 +31,8 @@ class CachedBasicBlock;
 class InFlightBasicBlock;
 class BasicBlockMetaData;
 class ControlFlowGraph;
+class AnnotationInstruction;
+class InstructionDecoder;
 
 namespace detail {
 
@@ -59,8 +61,8 @@ class SuccessorBlockIterator {
   void *data;
 };
 
-// A container that is used by range based for loops for getting successor block
-// iterators from a basic block.
+// A container that is used by range based for loops for getting successor
+// block iterators from a basic block.
 class SuccessorBlockFinder {
  public:
   inline ~SuccessorBlockFinder(void) {
@@ -208,10 +210,11 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
  public:
   InFlightBasicBlock(AppProgramCounter app_start_pc_,
                      BasicBlockMetaData *entry_meta_,
-                     BasicBlockMetaData *meta_,
-                     Instruction *instructions_);
+                     BasicBlockMetaData *meta_);
 
+  // TODO(pag): Clean up the memory of the instruction list.
   virtual ~InFlightBasicBlock(void) = default;
+
   virtual detail::SuccessorBlockFinder Successors(void);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
@@ -223,17 +226,18 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   });                                         // often read and written to.
 
  private:
+  friend class InstructionDecoder;
+
   virtual BasicBlock *FindNextSuccessor(void **data);
 
-  Instruction *instructions;
+  AnnotationInstruction *first;
+  AnnotationInstruction *last;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InFlightBasicBlock);
 };
 
 
 // A basic block that has not yet been decoded, and might eventually be decoded.
-//
-// Future basic blocks are curious because they are long-lived like
 class FutureBasicBlock : public InstrumentedBasicBlock {
  public:
   using InstrumentedBasicBlock::InstrumentedBasicBlock;

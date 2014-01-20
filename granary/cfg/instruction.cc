@@ -2,6 +2,7 @@
 
 #include "granary/breakpoint.h"
 #include "granary/cfg/instruction.h"
+#include "granary/driver/instruction.h"
 
 namespace granary {
 
@@ -13,20 +14,33 @@ Instruction *Instruction::Previous(void) {
   return list.GetPrevious(this);
 }
 
-void Instruction::InsertBefore(Instruction *that) {
-  list.SetPrevious(this, that);
+Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
+  Instruction *instr(that.release());
+  list.SetPrevious(this, instr);
+  return instr;
 }
 
-void Instruction::InsertAfter(Instruction *that) {
-  list.SetNext(this, that);
+Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
+  Instruction *instr(that.release());
+  list.SetNext(this, instr);
+  return instr;
 }
 
-void Instruction::Unlink(void) {
-  list.Unlink();
+std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
+  if (GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr))) {
+    granary_break_on_fault();
+  }
+
+  instr->list.Unlink();
+  return std::unique_ptr<Instruction>(instr);
 }
 
-void AnnotationInstruction::Unlink(void) {
-  granary_break_on_fault();
-}
+AnnotationInstruction::AnnotationInstruction(InstructionAnnotation annotation_,
+                                             void *data_)
+    : annotation(annotation_),
+      data(data_) {}
+
+NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
+    : instruction(instruction_) {}
 
 }  // namespace granary

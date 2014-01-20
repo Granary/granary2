@@ -21,8 +21,8 @@ class Environment {
   virtual ~Environment(void);
 
   // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list.
-  virtual void AnnotateInstruction(Instruction *) const = 0;
+  // instruction list. This returns the first
+  virtual Instruction *AnnotateInstruction(Instruction *instr) const = 0;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);

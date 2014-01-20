@@ -128,6 +128,17 @@ inline PointerT DynamicCast(const BaseT *ptr) {
   return nullptr;
 }
 
+// Base type to derived type cast.
+template <
+  typename PointerT,
+  typename BaseT,
+  typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
+>
+inline bool IsA(const BaseT *ptr) {
+  typedef typename RemovePointer<PointerT>::Type DerivedT;
+  return ptr && DerivedT::IsDerivedFrom(ptr);
+}
+
 }  // namespace granary
 
 #endif  // GRANARY_BASE_CAST_H_

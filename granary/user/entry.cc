@@ -2,7 +2,7 @@
 
 #include "granary/base/cast.h"
 #include "granary/breakpoint.h"
-#include "granary/driver/driver.h"
+#include "granary/decoder.h"
 #include "granary/cfg/control_flow_graph.h"
 
 #if GRANARY_STANDALONE
@@ -10,6 +10,9 @@
 namespace granary {
 
 static void test(void) {
+  auto start_pc = UnsafeCast<AppProgramCounter>(&test);
+  InstructionDecoder decoder;
+  InFlightBasicBlock *block(new InFlightBasicBlock(start_pc, nullptr, nullptr));
   driver::InstructionDecoder decoder;
   driver::DecodedInstruction *instr(new driver::DecodedInstruction);
   unsigned char encoded_instr[32] = {0};

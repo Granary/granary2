@@ -13,10 +13,12 @@ namespace detail {
 class BasicBlockList {
  public:
   ListHead list;
-  BasicBlock *block;
+  std::unique_ptr<BasicBlock> block;
 
   explicit BasicBlockList(BasicBlock *block_)
       : block(block_) {}
+
+  ~BasicBlockList(void) = default;
 
   // Basic block lists are allocated from a global memory pool using the
   // `new` and `delete` operators.
@@ -43,7 +45,7 @@ const BasicBlockIterator &BasicBlockIterator::operator++(void) {
 
 // Get a basic block out of the iterator.
 BasicBlock *BasicBlockIterator::operator*(void) {
-  return blocks->block;
+  return blocks->block.get();
 }
 
 }  // namespace detail
@@ -56,16 +58,6 @@ ControlFlowGraph::ControlFlowGraph(InFlightBasicBlock *first_block)
 ControlFlowGraph::~ControlFlowGraph(void) {
   for (detail::BasicBlockList *curr(blocks), *next(nullptr); curr; curr = next) {
     next = curr->list.GetNext(curr);
-
-    if (DynamicCast<InFlightBasicBlock *>(curr->block) ||
-        DynamicCast<UnknownBasicBlock *>(curr->block)) {
-      delete curr->block;
-
-    } else if (auto block = DynamicCast<FutureBasicBlock *>(curr->block)) {
-      // TODO(pag): Check if it's interned.
-      GRANARY_UNUSED(block);
-    }
-
     delete curr;
   }
   blocks = nullptr;

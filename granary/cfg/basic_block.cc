@@ -84,16 +84,17 @@ BasicBlock *CachedBasicBlock::FindNextSuccessor(void **data) {
   return ((*successor)++)->load();
 }
 
+// Initialize an in-flight basic block.
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
                                        BasicBlockMetaData *entry_meta_,
-                                       BasicBlockMetaData *meta_,
-                                       Instruction *instructions_)
+                                       BasicBlockMetaData *meta_)
     : InstrumentedBasicBlock(app_start_pc_, entry_meta_, meta_),
-      instructions(instructions_) {}
+      first(nullptr),
+      last(nullptr) {}
 
 // Return a finder for the successors of a cached basic block.
 detail::SuccessorBlockFinder InFlightBasicBlock::Successors(void) {
-  return detail::SuccessorBlockFinder(this, instructions);
+  return detail::SuccessorBlockFinder(this, first->Next());
 }
 
 // Return the next successor by iterating through the instructions in the

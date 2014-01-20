@@ -12,6 +12,11 @@ namespace granary {
 // Forward declarations.
 class Environment;
 class BasicBlock;
+class Instruction;
+
+namespace driver {
+class DecodedInstruction;
+}  // namespace driver
 
 // Manages decoding instructions into basic blocks.
 class InstructionDecoder {
@@ -24,6 +29,9 @@ class InstructionDecoder {
   void DecodeBasicBlock(InFlightBasicBlock *block);
 
  private:
+  std::unique_ptr<Instruction> DecodeInstruction(
+      const driver::DecodedInstruction *);
+
   void DecodeInstructionList();
 
   const Environment * const env;
