@@ -65,7 +65,7 @@ class BasicBlockFinder {
 class ControlFlowGraph {
  public:
   // Initialize a CFG starting with an in-flight basic block as the entrypoint.
-  explicit ControlFlowGraph(InFlightBasicBlock *first_block);
+  ControlFlowGraph(void);
 
   ~ControlFlowGraph(void);
 
@@ -90,8 +90,6 @@ class ControlFlowGraph {
   }
 
  private:
-  ControlFlowGraph(void) = delete;
-
   detail::BasicBlockList *blocks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);

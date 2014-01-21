@@ -98,9 +98,10 @@ void *SlabAllocator::Allocate(void) {
     const size_t index((allocation_number - slab->min_allocation_number));
     address = UnsafeCast<char *>(slab) + start_offset + (index * aligned_size);
   }
-  VALGRIND_MALLOCLIKE_BLOCK(address, unaligned_size, 0, 0);
+
+  VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
   memset(address, UNINITIALIZED_MEMORY_POISON, unaligned_size);
-  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
+  VALGRIND_MAKE_MEM_UNDEFINED(address, unaligned_size);
   return address;
 }
 

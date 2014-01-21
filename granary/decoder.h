@@ -11,7 +11,7 @@ namespace granary {
 
 // Forward declarations.
 class Environment;
-class BasicBlock;
+class InFlightBasicBlock;
 class Instruction;
 
 namespace driver {
@@ -21,20 +21,16 @@ class DecodedInstruction;
 // Manages decoding instructions into basic blocks.
 class InstructionDecoder {
  public:
-  explicit InstructionDecoder(const Environment *env_);
+  explicit InstructionDecoder(const Environment *env_, ControlFlowGraph *cfg_);
 
-  // Decode and return a basic block. This might return an `InFlightBasicBlock`
-  // or a `CachedBasicBlock`. For each decoded instruction, this will query the
-  // `env` to check for environment-specific behaviors on each instruction.
-  void DecodeBasicBlock(InFlightBasicBlock *block);
+  // Decode a basic block and update the control-flow graph.
+  void DecodeBasicBlock(AppProgramCounter start_pc, BasicBlockMetaData *meta);
 
  private:
-  std::unique_ptr<Instruction> DecodeInstruction(
-      const driver::DecodedInstruction *);
-
-  void DecodeInstructionList();
+  Instruction *DecodeInstruction(const driver::DecodedInstruction *instr);
 
   const Environment * const env;
+  ControlFlowGraph *cfg;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };

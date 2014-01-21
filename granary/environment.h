@@ -18,11 +18,11 @@ class InFlightBasicBlock;
 // instructions as potentially faulting.
 class Environment {
  public:
-  virtual ~Environment(void);
+  Environment(void) = default;
 
   // Annotates the instruction, or adds an annotated instruction into the
   // instruction list. This returns the first
-  virtual Instruction *AnnotateInstruction(Instruction *instr) const = 0;
+  Instruction *AnnotateInstruction(Instruction *instr) const;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);

@@ -24,9 +24,15 @@ class DecodedInstruction {
 
   void Clear(void);
   void Copy(const DecodedInstruction *);
+
+  ProgramCounter BranchTarget(void) const;
+
   bool IsFunctionCall(void) const;
   bool IsFunctionReturn(void) const;
+  bool IsInterruptCall(void) const;
   bool IsInterruptReturn(void) const;
+  bool IsSystemCall(void) const;
+  bool IsSystemReturn(void) const;
   bool IsJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;

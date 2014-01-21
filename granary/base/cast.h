@@ -121,7 +121,8 @@ inline PointerT DynamicCast(const BaseT *ptr) {
   if (!ptr) {
     return nullptr;
   }
-  typedef typename RemovePointer<PointerT>::Type DerivedT;
+  typedef typename RemoveConst<
+      typename RemovePointer<PointerT>::Type>::Type DerivedT;
   if (DerivedT::IsDerivedFrom(ptr)) {
     return UnsafeCast<PointerT>(ptr);
   }
@@ -135,7 +136,8 @@ template <
   typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
 >
 inline bool IsA(const BaseT *ptr) {
-  typedef typename RemovePointer<PointerT>::Type DerivedT;
+  typedef typename RemoveConst<
+      typename RemovePointer<PointerT>::Type>::Type DerivedT;
   return ptr && DerivedT::IsDerivedFrom(ptr);
 }
 

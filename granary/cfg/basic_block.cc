@@ -102,10 +102,10 @@ detail::SuccessorBlockFinder InFlightBasicBlock::Successors(void) {
 BasicBlock *InFlightBasicBlock::FindNextSuccessor(void **data) {
   auto successor(reinterpret_cast<Instruction **>(data));
   auto curr(*successor);
-  NonLocalControlFlowInstruction *instr(nullptr);
+  ControlFlowInstruction *instr(nullptr);
   BasicBlock *block(nullptr);
   for (; curr && !block; curr = curr->Next()) {
-    if ((instr = DynamicCast<NonLocalControlFlowInstruction *>(curr)) &&
+    if ((instr = DynamicCast<ControlFlowInstruction *>(curr)) &&
         !instr->IsFunctionCall()) {
       block = instr->target;
     }
@@ -113,5 +113,10 @@ BasicBlock *InFlightBasicBlock::FindNextSuccessor(void **data) {
   *successor = curr;
   return block;
 }
+
+// Initialize a basic block that might be translated in the future.
+FutureBasicBlock::FutureBasicBlock(AppProgramCounter app_start_pc_,
+                                   BasicBlockMetaData *entry_meta_)
+    : InstrumentedBasicBlock(app_start_pc_, entry_meta_, nullptr) {}
 
 }  // namespace granary

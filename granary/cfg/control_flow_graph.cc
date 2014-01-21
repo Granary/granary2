@@ -51,8 +51,8 @@ BasicBlock *BasicBlockIterator::operator*(void) {
 }  // namespace detail
 
 // Initialize a CFG starting with an in-flight basic block as the entrypoint.
-ControlFlowGraph::ControlFlowGraph(InFlightBasicBlock *first_block)
-    : blocks(new detail::BasicBlockList(first_block)) {}
+ControlFlowGraph::ControlFlowGraph(void)
+    : blocks(nullptr) {}
 
 // Destroy the CFG.
 ControlFlowGraph::~ControlFlowGraph(void) {

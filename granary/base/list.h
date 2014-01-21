@@ -32,8 +32,8 @@ class ListHead {
     }
 
     ListHead *that_list(GetList(this_object, that_object));
-    Chain(that_list, next);
-    Chain(this, that_list);
+    Chain(that_list, that_list->GetFirst());
+    Chain(that_list->GetLast(), that_list);
   }
 
   // Get the object that comes before the object that contains this list head.
@@ -54,14 +54,16 @@ class ListHead {
     }
 
     ListHead *that_list(GetList(this_object, that_object));
-    Chain(prev, that_list);
-    Chain(that_list, this);
+    Chain(prev, that_list->GetFirst());
+    Chain(that_list->GetLast(), this);
   }
 
   // Unlink this list head from the list.
   void Unlink(void);
 
  private:
+  ListHead *GetFirst(void);
+  ListHead *GetLast(void);
   uintptr_t GetListOffset(const void *object) const;
   uintptr_t GetObject(const void *object, const ListHead *other_list) const;
   ListHead *GetList(const void *this_object, const void *that_object) const;

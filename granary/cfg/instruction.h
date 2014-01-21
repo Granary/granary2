@@ -7,6 +7,7 @@
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
 #include "granary/base/list.h"
+#include "granary/base/new.h"
 
 namespace granary {
 
@@ -22,9 +23,8 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     Instruction,
     AnnotationInstruction,
     NativeInstruction,
-    ControlFlowInstruction,
-    LocalControlFlowInstruction,
-    NonLocalControlFlowInstruction);
+    BranchInstruction,
+    ControlFlowInstruction);
 
 // Represents an abstract instruction.
 class Instruction {
@@ -51,8 +51,16 @@ class Instruction {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
 
-// Implemented in `granary/decoder.cc`.
-enum InstructionAnnotation : uint32_t;
+// Built-in annotations.
+enum InstructionAnnotation {
+  BEGIN_BASIC_BLOCK,
+  END_BASIC_BLOCK,
+  BEGIN_MIGHT_FAULT,
+  END_MIGHT_FAULT,
+  BEGIN_DELAY_INTERRUPT,
+  END_DELAY_INTERRUPT,
+  LABEL
+};
 
 // An annotation instruction is an environment-specific and implementation-
 // specific annotations for basic blocks. Some examples would be that some
@@ -67,11 +75,16 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
 
- private:
-  AnnotationInstruction(void) = delete;
-
   const InstructionAnnotation annotation;
   void * const data;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  });
+
+ private:
+  AnnotationInstruction(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(AnnotationInstruction);
 };
@@ -83,6 +96,10 @@ class NativeInstruction : public Instruction {
   virtual ~NativeInstruction(void) = default;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
+  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  });
 
  private:
   friend class ControlFlowInstruction;
@@ -95,45 +112,27 @@ class NativeInstruction : public Instruction {
   std::unique_ptr<driver::DecodedInstruction> instruction;
 };
 
-// Represents a control-flow instruction.
-class ControlFlowInstruction : public NativeInstruction {
- public:
-  virtual ~ControlFlowInstruction(void) = default;
-  explicit ControlFlowInstruction(driver::DecodedInstruction *instruction_);
-
-  GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
-
-  // Driver-specific implementations.
-  bool IsFunctionCall(void) const;
-  bool IsFunctionReturn(void) const;
-  bool IsInterruptReturn(void) const;
-  bool IsJump(void) const;
-  bool IsConditionalJump(void) const;
-  bool HasIndirectTarget(void) const;
-
- private:
-  ControlFlowInstruction(void) = delete;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
-};
-
 // Represents a control-flow instruction that is local to a basic block, i.e.
 // keeps control within the same basic block.
-class LocalControlFlowInstruction : public ControlFlowInstruction {
+class BranchInstruction : public NativeInstruction {
  public:
-  LocalControlFlowInstruction(driver::DecodedInstruction *instruction_,
+  BranchInstruction(driver::DecodedInstruction *instruction_,
                               const AnnotationInstruction *target_);
 
-  virtual ~LocalControlFlowInstruction(void) = default;
-
-  GRANARY_DERIVED_CLASS_OF(Instruction, LocalControlFlowInstruction)
+  virtual ~BranchInstruction(void) = default;
 
   AnnotationInstruction * const target;
 
- private:
-  LocalControlFlowInstruction(void) = delete;
+  GRANARY_DERIVED_CLASS_OF(Instruction, BranchInstruction)
+  GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  });
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(LocalControlFlowInstruction);
+ private:
+  BranchInstruction(void) = delete;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(BranchInstruction);
 };
 
 // Represents a control-flow instruction that is not local to a basic block,
@@ -141,21 +140,36 @@ class LocalControlFlowInstruction : public ControlFlowInstruction {
 //
 // Note: A special case is that a non-local control-flow instruction can
 //       redirect control back to the beginning of the basic block.
-class NonLocalControlFlowInstruction : public ControlFlowInstruction {
+class ControlFlowInstruction : public NativeInstruction {
  public:
-  NonLocalControlFlowInstruction(driver::DecodedInstruction *instruction_,
-                                 BasicBlock *target_);
+  ControlFlowInstruction(driver::DecodedInstruction *instruction_,
+                         BasicBlock *target_);
 
-  virtual ~NonLocalControlFlowInstruction(void) = default;
+  virtual ~ControlFlowInstruction(void) = default;
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, NonLocalControlFlowInstruction)
+  // Driver-specific implementations.
+  bool IsFunctionCall(void) const;
+  bool IsFunctionReturn(void) const;
+  bool IsInterruptCall(void) const;
+  bool IsInterruptReturn(void) const;
+  bool IsSystemCall(void) const;
+  bool IsSystemReturn(void) const;
+  bool IsJump(void) const;
+  bool IsConditionalJump(void) const;
+  bool HasIndirectTarget(void) const;
+
+  GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
+  GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  });
 
   BasicBlock * const target;
 
  private:
-  NonLocalControlFlowInstruction(void) = delete;
+  ControlFlowInstruction(void) = delete;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(NonLocalControlFlowInstruction);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };
 
 }  // namespace granary

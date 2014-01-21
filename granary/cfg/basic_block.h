@@ -24,7 +24,6 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     FutureBasicBlock,
     UnknownBasicBlock);
 
-
 // Forward declarations.
 class BasicBlock;
 class CachedBasicBlock;
@@ -119,15 +118,10 @@ class BasicBlock {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 
-
 // An instrumented basic block, i.e. a basic block that has been instrumented,
 // is in the process of being instrumented, or will (likely) be instrumented.
 class InstrumentedBasicBlock : public BasicBlock {
  public:
-  InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
-                         const BasicBlockMetaData *entry_meta_,
-                         BasicBlockMetaData *meta_);
-
   virtual ~InstrumentedBasicBlock(void) = default;
 
   template <
@@ -143,7 +137,14 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
+ protected:
+  InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
+                         const BasicBlockMetaData *entry_meta_,
+                         BasicBlockMetaData *meta_);
+
  private:
+  InstrumentedBasicBlock(void) = delete;
+
   // The meta-data associated with this basic block. `entry_meta` points to
   // some interned meta-data that is valid on entry to this basic block. The
   // value of `meta` changes over time, based on the logical state of the basic
@@ -152,8 +153,9 @@ class InstrumentedBasicBlock : public BasicBlock {
   // decoded, instrumented, and encoded. Eventually, `meta` is interned.
   const BasicBlockMetaData * const entry_meta;
   BasicBlockMetaData *meta;
-};
 
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBasicBlock);
+};
 
 // A basic block that has already been committed to the code cache.
 //
@@ -191,6 +193,7 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
   const CacheProgramCounter cache_start_pc;
 
  private:
+  CachedBasicBlock(void) = delete;
   virtual BasicBlock *FindNextSuccessor(void **data);
 
   // TODO(pag): Should we store predecessors? Storing predecessors would have
@@ -203,7 +206,6 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CachedBasicBlock);
 };
-
 
 // A basic block that has been decoded but not yet committed to the code cache.
 class InFlightBasicBlock : public InstrumentedBasicBlock {
@@ -218,8 +220,6 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   virtual detail::SuccessorBlockFinder Successors(void);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
-
-  // TODO(pag): Change the allocator to take in an argument to `new`.
   GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE  // Spread these out as they are
@@ -228,6 +228,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
  private:
   friend class InstructionDecoder;
 
+  InFlightBasicBlock(void) = delete;
   virtual BasicBlock *FindNextSuccessor(void **data);
 
   AnnotationInstruction *first;
@@ -236,46 +237,31 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InFlightBasicBlock);
 };
 
-
 // A basic block that has not yet been decoded, and might eventually be decoded.
 class FutureBasicBlock : public InstrumentedBasicBlock {
  public:
-  using InstrumentedBasicBlock::InstrumentedBasicBlock;
+  FutureBasicBlock(AppProgramCounter app_start_pc_,
+                   BasicBlockMetaData *entry_meta_);
   virtual ~FutureBasicBlock(void) = default;
   virtual detail::SuccessorBlockIterator begin(void);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
-
-  // TODO(pag): Change the allocator to take in an argument to `new`.
-  GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(FutureBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1  // Read-only after allocation.
   });
 
  private:
+  FutureBasicBlock(void) = delete;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FutureBasicBlock);
 };
 
-
 // A basic block that has not yet been decoded, and which we don't know about
 // at this time because it's the target of an indirect jump/call.
-class UnknownBasicBlock : public InstrumentedBasicBlock {
- public:
-  using InstrumentedBasicBlock::InstrumentedBasicBlock;
-  virtual ~UnknownBasicBlock(void) = default;
-
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
-
-  // TODO(pag): Change the allocator to take in an argument to `new`.
-  GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
-    SHARED = true,
-    ALIGNMENT = 1  // Read-only after allocation.
-  });
-
- private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(UnknownBasicBlock);
-};
-
+//
+// Has a hidden implementation to prevent instantiation.
+class UnknownBasicBlock;
 
 // A native basic block, i.e. this points to either native code, or some stub
 // code that leads to native code.

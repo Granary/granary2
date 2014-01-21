@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/base/string.h"
+#include "granary/base/types.h"
 #include "granary/cfg/instruction.h"
 #include "granary/driver/dynamorio/instruction.h"
 
@@ -21,11 +22,11 @@ void DecodedInstruction::Copy(const DecodedInstruction *that) {
   memcpy(this, that, sizeof *this);
 
   if (instruction.srcs) {
-    instruction.srcs = &(operands[that->srcs -
+    instruction.srcs = &(operands[that->instruction.srcs -
                                   &(that->operands[0])]);
   }
   if (instruction.dsts) {
-    instruction.dsts = &(operands[that->dsts -
+    instruction.dsts = &(operands[that->instruction.dsts -
                                   &(that->operands[0])]);
   }
   if (instruction.note == &(that->raw_bytes[0])) {
@@ -39,6 +40,10 @@ void DecodedInstruction::Copy(const DecodedInstruction *that) {
   }
 }
 
+ProgramCounter DecodedInstruction::BranchTarget(void) const {
+  return instruction.src0.value.pc;
+}
+
 bool DecodedInstruction::IsFunctionCall(void) const {
   const unsigned op(instruction.opcode);
   return dynamorio::OP_call <= op && op <= dynamorio::OP_call_far_ind;
@@ -49,8 +54,22 @@ bool DecodedInstruction::IsFunctionReturn(void) const {
   return dynamorio::OP_ret == op || dynamorio::OP_ret_far == op;
 }
 
+bool DecodedInstruction::IsInterruptCall(void) const {
+  return dynamorio::OP_int == instruction.opcode;
+}
+
 bool DecodedInstruction::IsInterruptReturn(void) const {
   return dynamorio::OP_iret == instruction.opcode;
+}
+
+bool DecodedInstruction::IsSystemCall(void) const {
+  return dynamorio::OP_syscall == instruction.opcode ||
+         dynamorio::OP_sysenter == instruction.opcode;
+}
+
+bool DecodedInstruction::IsSystemReturn(void) const {
+  return dynamorio::OP_sysret == instruction.opcode ||
+         dynamorio::OP_sysexit == instruction.opcode;
 }
 
 bool DecodedInstruction::IsConditionalJump(void) const {
@@ -67,9 +86,10 @@ bool DecodedInstruction::IsJump(void) const {
 
 bool DecodedInstruction::HasIndirectTarget(void) const {
   const unsigned op(instruction.opcode);
-  return IsFunctionReturn() || IsInterruptReturn() ||
-         dynamorio::OP_call_ind == op || dynamorio::OP_call_far_ind == op ||
-         dynamorio::OP_jmp_ind == op || dynamorio::OP_jmp_far_ind;
+  return IsFunctionReturn() || IsInterruptCall() || IsInterruptReturn() ||
+         IsSystemCall() || IsSystemReturn() || dynamorio::OP_call_ind == op ||
+         dynamorio::OP_call_far_ind == op || dynamorio::OP_jmp_ind == op ||
+         dynamorio::OP_jmp_far_ind;
 }
 
 }  // namespace driver
@@ -82,8 +102,20 @@ bool ControlFlowInstruction::IsFunctionReturn(void) const {
   return instruction->IsFunctionReturn();
 }
 
+bool ControlFlowInstruction::IsInterruptCall(void) const {
+  return instruction->IsInterruptCall();
+}
+
 bool ControlFlowInstruction::IsInterruptReturn(void) const {
   return instruction->IsInterruptReturn();
+}
+
+bool ControlFlowInstruction::IsSystemCall(void) const {
+  return instruction->IsSystemCall();
+}
+
+bool ControlFlowInstruction::IsSystemReturn(void) const {
+  return instruction->IsSystemReturn();
 }
 
 bool ControlFlowInstruction::IsJump(void) const {

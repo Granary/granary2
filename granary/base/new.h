@@ -17,7 +17,10 @@ namespace granary {
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
   static void *operator new(std::size_t) { \
-    return OperatorNewAllocator<class_name>::Allocate(); \
+    void *address(OperatorNewAllocator<class_name>::Allocate()); \
+    VALGRIND_MALLOCLIKE_BLOCK(address, sizeof(class_name), 0, 0); \
+    VALGRIND_MAKE_MEM_UNDEFINED(address, sizeof(class_name)); \
+    return address; \
   } \
   static void operator delete(void *addr, std::size_t) { \
     OperatorNewAllocator<class_name>::Free(addr); \

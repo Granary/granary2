@@ -9,6 +9,9 @@
 #include "granary/driver/dynamorio/types.h"
 
 namespace granary {
+
+class Instruction;
+
 namespace driver {
 
 class DecodedInstruction;
@@ -30,11 +33,6 @@ class InstructionDecoder : private dynamorio::dcontext_t {
   // successfully decoded/encoded.
   bool Decode(DecodedInstruction *, AppProgramCounter);
   bool Encode(DecodedInstruction *, CacheProgramCounter);
-
-  // Returns true if the instruction can be placed into a basic block. This
-  // requires certain architectural and operating-system specific checks.
-  bool CanAddInstructionToBasicBlock(const DecodedInstruction *) const;
-
 
  private:
   friend class DynamoRIOHeap;

@@ -2,7 +2,7 @@
 
 #include "granary/breakpoint.h"
 #include "granary/cfg/instruction.h"
-#include "granary/driver/instruction.h"
+#include "granary/driver/driver.h"
 
 namespace granary {
 

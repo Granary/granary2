@@ -19,6 +19,19 @@ class MetaDataDescription;
 // TODO(pag): Need a structure that can describe the contents of the meta-data.
 // TODO(pag): Need a dummy structure that represents some client meta-data.
 
+enum BasicBlockFlags : uint32_t {
+  // Has this meta-data been committed to longer-term storage?
+  IS_INTERNED           = (1 << 0),
+
+  // If this basic block has a return from procedure instruction in it, then
+  // should that be translated using the identity translation?
+  ENABLE_DIRECT_RETURN  = (1 << 1),
+
+  // Should this basic block be run natively? I.e. should be just run the
+  // app code instead of instrumenting it?
+  RUN_NATIVELY          = (1 << 2)
+};
+
 // Meta-data about a basic block. This structure contains a small amount of
 // information that is useful to Granary's internal operation, and acts as
 // a header to an unknown amount of client/tool-specific meta-data.
@@ -39,7 +52,7 @@ class BasicBlockMetaData {
   // block), we would expect the return address to be transparent or non-
   // transparent, and whether or not an annotation was added to this basic block
   // at decode time.
-  uint32_t flags;
+  BasicBlockFlags flags;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockMetaData);
 };

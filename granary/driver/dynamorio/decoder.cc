@@ -27,41 +27,24 @@ bool InstructionDecoder::DecodeNext(DecodedInstruction *instr,
   return nullptr != *pc;
 }
 
-
+// Encode t an instruction IR at `*pc` and update `pc`.
 bool InstructionDecoder::EncodeNext(DecodedInstruction *instr,
                                     CacheProgramCounter *pc) {
   *pc = EncodeInternal(instr, *pc);
   return nullptr != *pc;
 }
 
-
+// Decode an x86 instruction into an instruction IR.
 bool InstructionDecoder::Decode(DecodedInstruction *instr,
                                 AppProgramCounter pc) {
   return nullptr != DecodeInternal(instr, pc);
 }
 
-
+// Encode an instruction IR into an x86 instruction.
 bool InstructionDecoder::Encode(DecodedInstruction *instr,
                                 CacheProgramCounter pc) {
   return nullptr != EncodeInternal(instr, pc);
 }
-
-
-// Returns true iff the instruction can be placed into a basic block. This
-// requires certain architectural and operating-system specific checks.
-bool InstructionDecoder::CanAddInstructionToBasicBlock(
-    const DecodedInstruction *instr) const {
-  switch (instr->instruction.opcode) {
-    case dynamorio::OP_sysret:
-    case dynamorio::OP_swapgs:
-    case dynamorio::OP_sysexit:
-    case dynamorio::OP_iret:
-      return false;
-    default:
-      return true;
-  }
-}
-
 
 // Decode an x86 instruction into a DynamoRIO instruction intermediate
 // representation.
@@ -107,7 +90,6 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
 
   return pc;
 }
-
 
 // Encode a DynamoRIO instruction intermediate representation into an x86
 // instruction.
