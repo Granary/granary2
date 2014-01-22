@@ -5,6 +5,7 @@
 #define GRANARY_CFG_CONTROL_FLOW_GRAPH_H_
 
 #include "granary/base/base.h"
+#include "granary/base/types.h"
 
 namespace granary {
 
@@ -13,50 +14,42 @@ class BasicBlock;
 class InFlightBasicBlock;
 class FutureBasicBlock;
 class ControlFlowGraph;
+class BasicBlockMetaData;
+class Environment;
+class ControlFlowInstruction;
 
 namespace detail {
 
 class BasicBlockList;
-class BasicBlockFinder;
+class BasicBlockSuccessor;
 
 // An iterator for basic blocks that implements C++11 range-based for loops.
 class BasicBlockIterator {
  public:
-  inline ~BasicBlockIterator(void) { blocks = nullptr; }
+  inline BasicBlockIterator begin(void) const {
+    return *this;
+  }
 
-  bool operator!=(const BasicBlockIterator &) const;
-  const BasicBlockIterator &operator++(void);
-  BasicBlock *operator*(void);
+  inline BasicBlockIterator end(void) const {
+    return BasicBlockIterator(nullptr);
+  }
+
+  inline bool operator!=(const BasicBlockIterator &that) const {
+    return blocks != that.blocks;
+  }
+
+  void operator++(void);
+  BasicBlock *operator*(void) const;
 
  private:
-  friend class BasicBlockFinder;
+  friend class granary::ControlFlowGraph;
 
   BasicBlockIterator(void) = delete;
   inline explicit BasicBlockIterator(BasicBlockList *blocks_)
       : blocks(blocks_) {}
 
   // Pointer into a CFG's block list.
-  BasicBlockList *blocks;
-};
-
-// A container that is used by range based for loops for getting basic block
-// iterators from a control-flow graph.
-class BasicBlockFinder {
- public:
-  inline BasicBlockIterator begin(void) { return BasicBlockIterator(blocks); }
-  inline BasicBlockIterator end(void) const {
-    return BasicBlockIterator(nullptr);
-  }
-
- private:
-  friend class granary::ControlFlowGraph;
-
-  BasicBlockFinder(void) = delete;
-  inline explicit BasicBlockFinder(BasicBlockList *blocks_)
-      : blocks(blocks_) {}
-
-  // Pointer into a CFG's block list.
-  BasicBlockList *blocks;
+  GRANARY_POINTER(BasicBlockList) *blocks;
 };
 
 }  // namespace detail
@@ -64,8 +57,9 @@ class BasicBlockFinder {
 // A control flow graph of basic blocks to instrument.
 class ControlFlowGraph {
  public:
-  // Initialize a CFG starting with an in-flight basic block as the entrypoint.
-  ControlFlowGraph(void);
+  GRANARY_INTERNAL_DEFINITION
+  ControlFlowGraph(Environment *environment_, AppProgramCounter pc,
+                   BasicBlockMetaData *meta=nullptr);
 
   ~ControlFlowGraph(void);
 
@@ -75,21 +69,30 @@ class ControlFlowGraph {
   //                          one might be made.
   //    `NativeBasicBlock`:   If the block jumps to somewhere that should go
   //                          native.
-  //
-  // Note: This resets the `BasicBlockIterator` that was used to find this
-  //       `FutureBasicBlock` (as it must have been found as a successor).
-  void MaterializeBasicBlock(const FutureBasicBlock *block);
+  void Materialize(const detail::BasicBlockSuccessor &target,
+                   const BasicBlockMetaData *meta=nullptr);
+
+  void Materialize(const ControlFlowInstruction *instruction,
+                   const BasicBlockMetaData *meta=nullptr);
 
   // Returns an object that can be used inside of a range-based for loop. For
   // example:
   //
   //    for(auto block : cfg.Blocks())
   //      ...
-  inline detail::BasicBlockFinder Blocks(void) {
-    return detail::BasicBlockFinder(blocks);
+  inline detail::BasicBlockIterator Blocks(void) {
+    return detail::BasicBlockIterator(blocks);
   }
 
+  GRANARY_POINTER(Environment) * const environment;
+
  private:
+
+  GRANARY_INTERNAL_DEFINITION
+  void Materialize(InFlightBasicBlock *block,
+                   detail::BasicBlockList *block_list);
+
+  // List of basic blocks known to this control-flow graph.
   detail::BasicBlockList *blocks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);

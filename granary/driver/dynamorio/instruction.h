@@ -23,7 +23,7 @@ class DecodedInstruction {
   }
 
   void Clear(void);
-  void Copy(const DecodedInstruction *);
+  DecodedInstruction *Copy(void) const;
 
   ProgramCounter BranchTarget(void) const;
 
@@ -40,13 +40,12 @@ class DecodedInstruction {
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
-  });
+  })
 
   // The actual DynamoRIO `instr_t` data structure.
   dynamorio::instr_t instruction;
 
  private:
-  friend class InstructionDecoder;
   friend class DynamoRIOHeap;
 
   enum {

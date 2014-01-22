@@ -1,8 +1,11 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/breakpoint.h"
+#define GRANARY_INTERNAL
+
 #include "granary/cfg/instruction.h"
-#include "granary/driver/driver.h"
+
+#include "granary/breakpoint.h"
+#include "granary/driver.h"
 
 namespace granary {
 
@@ -35,12 +38,25 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   return std::unique_ptr<Instruction>(instr);
 }
 
-AnnotationInstruction::AnnotationInstruction(InstructionAnnotation annotation_,
-                                             void *data_)
-    : annotation(annotation_),
-      data(data_) {}
+Instruction *AnnotationInstruction::InsertBefore(
+    std::unique_ptr<Instruction> that) {
+  if (GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation)) {
+    granary_break_on_fault();
+  }
+  return this->Instruction::InsertBefore(std::move(that));
+}
+
+Instruction *AnnotationInstruction::InsertAfter(
+    std::unique_ptr<Instruction> that) {
+  if (GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation)) {
+    granary_break_on_fault();
+  }
+  return this->Instruction::InsertAfter(std::move(that));
+}
 
 NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
     : instruction(instruction_) {}
+
+NativeInstruction::~NativeInstruction(void) {}
 
 }  // namespace granary

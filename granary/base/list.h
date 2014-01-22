@@ -32,8 +32,8 @@ class ListHead {
     }
 
     ListHead *that_list(GetList(this_object, that_object));
-    Chain(that_list, that_list->GetFirst());
-    Chain(that_list->GetLast(), that_list);
+    Chain(that_list->GetLast(), next);
+    Chain(this, that_list->GetFirst());
   }
 
   // Get the object that comes before the object that contains this list head.

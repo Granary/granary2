@@ -1,8 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 
-#ifndef GRANARY_META_DATA_H_
-#define GRANARY_META_DATA_H_
+#ifndef GRANARY_METADATA_H_
+#define GRANARY_METADATA_H_
+#ifdef GRANARY_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/new.h"
@@ -44,7 +45,7 @@ class BasicBlockMetaData {
 
   void Hash(HashFunction *hasher) const;
 
-  const detail::MetaDataDescription * const description;
+  const GRANARY_POINTER(detail::MetaDataDescription) * const description;
 
  private:
   // Tracks internal flags, including whether or not this meta-data has been
@@ -52,11 +53,12 @@ class BasicBlockMetaData {
   // block), we would expect the return address to be transparent or non-
   // transparent, and whether or not an annotation was added to this basic block
   // at decode time.
-  BasicBlockFlags flags;
+  GRANARY_UINT32(BasicBlockFlags) flags;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockMetaData);
 };
 
 }  // namespace granary
 
-#endif  // GRANARY_META_DATA_H_
+#endif  // GRANARY_INTERNAL
+#endif  // GRANARY_METADATA_H_

@@ -79,37 +79,55 @@ inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));
 }
 
+#ifdef GRANARY_INTERNAL
 
-#define GRANARY_BASE_CLASS(base_type) \
-  static inline constexpr bool IsDerivedFrom(const base_type *) { \
+// Declare that a class is the base class of a single-inheritance class
+// hierarchy.
+# define GRANARY_BASE_CLASS(base_type) \
+  static bool IsDerivedFrom(const base_type *) { \
     return true; \
   } \
   virtual int IdOf(void) const { \
     return GRANARY_CAT(kIdOf, base_type); \
   }
 
-
-#define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
-  static inline constexpr bool IsDerivedFrom(const derived_type *) { \
+// Declare that a class is a derived class of a single-inheritance class
+// hierarchy. The base type is the base class of the entire class hierarchy,
+// not just the base class of the derived type.
+# define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
+  static bool IsDerivedFrom(const derived_type *) { \
     return true; \
   } \
-  static inline bool IsDerivedFrom(const base_type *base) { \
+  static bool IsDerivedFrom(const base_type *base) { \
     return base->IdOf() == GRANARY_CAT(kIdOf, derived_type); \
   } \
   virtual int IdOf(void) const { \
     return GRANARY_CAT(kIdOf, derived_type); \
   }
 
-
-#define GRANARY_DECLARE_CLASS_ID(class_name) \
+// Helper macro for declaring class id enumeration constants.
+# define GRANARY_DECLARE_CLASS_ID(class_name) \
   GRANARY_CAT(kIdOf, class_name)
 
-
-#define GRANARY_DECLARE_CLASS_HEIRARCHY(...) \
-  enum { \
+// Define an enum that assigns unique (within the single-inheritance class
+// hierarchy) numeric IDs for each class within the class hierarchy.
+# define GRANARY_DECLARE_CLASS_HEIRARCHY(...) \
+  enum : int { \
     GRANARY_APPLY_EACH(GRANARY_DECLARE_CLASS_ID, GRANARY_COMMA, ##__VA_ARGS__) \
   }
 
+#else
+# define GRANARY_BASE_CLASS(base_type) \
+  static bool IsDerivedFrom(const base_type *); \
+  virtual int IdOf(void) const;
+
+# define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
+  static bool IsDerivedFrom(const derived_type *); \
+  static bool IsDerivedFrom(const base_type *base); \
+  virtual int IdOf(void) const;
+
+# define GRANARY_DECLARE_CLASS_HEIRARCHY(...)
+#endif  // GRANARY_INTERNAL
 
 // Base type to derived type cast.
 template <

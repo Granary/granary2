@@ -1,12 +1,13 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/base/cast.h"
-#include "granary/driver/driver.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 
 #include "granary/breakpoint.h"
-#include "granary/decoder.h"
+#include "granary/driver.h"
 #include "granary/environment.h"
 
 #if GRANARY_STANDALONE
@@ -14,14 +15,11 @@
 namespace granary {
 
 static void test(void) {
-
-  Environment env;
-  ControlFlowGraph cfg;
-  InstructionDecoder decoder(&env, &cfg);
-
   auto start_pc = UnsafeCast<AppProgramCounter>(&test);
 
-  decoder.DecodeBasicBlock(start_pc, nullptr);
+  Environment env;
+  ControlFlowGraph cfg(&env, start_pc);
+
 }
 
 }  // namespace granary

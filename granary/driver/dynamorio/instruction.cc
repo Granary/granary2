@@ -1,5 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/base/string.h"
 #include "granary/base/types.h"
 #include "granary/cfg/instruction.h"
@@ -14,30 +16,29 @@ void DecodedInstruction::Clear(void) {
 }
 
 // Make a deep copy of a decoded instruction.
-void DecodedInstruction::Copy(const DecodedInstruction *that) {
-  if (this == that) {
-    return;
-  }
-
-  memcpy(this, that, sizeof *this);
+DecodedInstruction *DecodedInstruction::Copy(void) const {
+  DecodedInstruction *that(new DecodedInstruction);
+  memcpy(that, this, sizeof *this);
 
   if (instruction.srcs) {
-    instruction.srcs = &(operands[that->instruction.srcs -
-                                  &(that->operands[0])]);
+    that->instruction.srcs = &(that->operands[instruction.srcs -
+                                              &(operands[0])]);
   }
   if (instruction.dsts) {
-    instruction.dsts = &(operands[that->instruction.dsts -
-                                  &(that->operands[0])]);
+    that->instruction.dsts = &(that->operands[instruction.dsts -
+                                              &(operands[0])]);
   }
-  if (instruction.note == &(that->raw_bytes[0])) {
-    instruction.note = &(raw_bytes[0]);
+  if (instruction.note == &(raw_bytes[0])) {
+    that->instruction.note = &(that->raw_bytes[0]);
   }
-  if (instruction.translation == &(that->raw_bytes[0])) {
-    instruction.translation = &(raw_bytes[0]);
+  if (instruction.translation == &(raw_bytes[0])) {
+    that->instruction.translation = &(that->raw_bytes[0]);
   }
-  if (instruction.bytes == &(that->raw_bytes[0])) {
-    instruction.bytes = &(raw_bytes[0]);
+  if (instruction.bytes == &(raw_bytes[0])) {
+    that->instruction.bytes = &(that->raw_bytes[0]);
   }
+
+  return that;
 }
 
 ProgramCounter DecodedInstruction::BranchTarget(void) const {

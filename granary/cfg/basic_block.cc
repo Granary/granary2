@@ -1,122 +1,80 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
-#include "granary/meta_data.h"
+#include "granary/metadata.h"
 
 namespace granary {
 namespace detail {
 
-SuccessorBlockIterator::~SuccessorBlockIterator(void) {
-  block = nullptr;
-  next_block = nullptr;
-  data = nullptr;
+// Return the next successor by iterating through the instructions in the
+// basic block.
+namespace {
+static Instruction *FindNextSuccessorInstruction(Instruction *instr) {
+  for (Instruction *curr(instr->Next()); curr; curr = curr->Next()) {
+    if (IsA<ControlFlowInstruction *>(curr)) {
+      return curr;
+    }
+  }
+  return nullptr;
+}
+}  // namespace
+
+SuccessorBlockIterator::SuccessorBlockIterator(Instruction *instr_)
+    : cursor(FindNextSuccessorInstruction(instr_)) {}
+
+BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
+  auto cti(DynamicCast<ControlFlowInstruction *>(cursor));
+  return BasicBlockSuccessor(cti, cti->target);
 }
 
-bool SuccessorBlockIterator::operator!=(
-    const SuccessorBlockIterator &that) const {
-  return next_block != that.next_block;
+void SuccessorBlockIterator::operator++(void) {
+  cursor = FindNextSuccessorInstruction(cursor);
 }
 
-BasicBlock *SuccessorBlockIterator::operator*(void) {
-  return next_block;
+void ForwardInstructionIterator::operator++(void) {
+  instr = instr->Next();
 }
 
-const SuccessorBlockIterator &SuccessorBlockIterator::operator++(void) {
-  next_block = block->FindNextSuccessor(&data);
-  return *this;
-}
-
-SuccessorBlockIterator::SuccessorBlockIterator(BasicBlock *block_, void *data_)
-    : block(block_),
-      next_block(nullptr),
-      data(data_) {
-  next_block = block->FindNextSuccessor(&data);
+void BackwardInstructionIterator::operator++(void) {
+  instr = instr->Previous();
 }
 
 }  // namespace detail
 
-// Initialize a basic block.
-BasicBlock::BasicBlock(AppProgramCounter app_start_pc_)
-    : app_start_pc(app_start_pc_) {}
-
-// By default, basic blocks don't know about any of their successors. This
-// default applies to `FutureBasicBlock` as well as `UnknownBasicBlock`
-// instances.
-detail::SuccessorBlockFinder BasicBlock::Successors(void) {
-  return detail::SuccessorBlockFinder(nullptr, nullptr);
-}
-
-// By default, basic blocks don't know about any of their successors. This
-// default applies to `FutureBasicBlock` as well as `UnknownBasicBlock`
-// instances.
-BasicBlock *BasicBlock::FindNextSuccessor(void **) {
-  return nullptr;
-}
-
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(
-    AppProgramCounter app_start_pc_, const BasicBlockMetaData *entry_meta_,
-    BasicBlockMetaData *meta_)
+    AppProgramCounter app_start_pc_, const BasicBlockMetaData *entry_meta_)
     : BasicBlock(app_start_pc_),
-      entry_meta(entry_meta_),
-      meta(meta_) {}
+      entry_meta(entry_meta_) {
+  GRANARY_UNUSED(entry_meta);  // TODO(pag): Use the entry metadata.
+}
 
 // Initialize a cached basic block.
 CachedBasicBlock::CachedBasicBlock(AppProgramCounter app_start_pc_,
                                    CacheProgramCounter cache_start_pc_,
-                                   const BasicBlockMetaData *entry_meta_,
-                                   BasicBlockMetaData *meta_,
-                                   std::atomic<BasicBlock *> *successors_)
-    : InstrumentedBasicBlock(app_start_pc_, entry_meta_, meta_),
-      cache_start_pc(cache_start_pc_),
-      successors(successors_) {}
+                                   const BasicBlockMetaData *entry_meta_)
+    : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
+      cache_start_pc(cache_start_pc_) {}
 
-// Return a finder for the successors of a cached basic block.
-detail::SuccessorBlockFinder CachedBasicBlock::Successors(void) {
-  return detail::SuccessorBlockFinder(this, UnsafeCast<void *>(successors));
-}
-
-// Return the current successor in the successor array and move the pointer to
-// the next successor in the array.
-BasicBlock *CachedBasicBlock::FindNextSuccessor(void **data) {
-  auto successor(reinterpret_cast<std::atomic<BasicBlock *> **>(data));
-  return ((*successor)++)->load();
+// Clean up the memory of an in-flight basic block.
+InFlightBasicBlock::~InFlightBasicBlock(void) {
+  for (Instruction *instr(first), *next(nullptr); instr; instr = next) {
+    next = instr->Next();
+    delete instr;
+  }
 }
 
 // Initialize an in-flight basic block.
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                                       BasicBlockMetaData *entry_meta_,
-                                       BasicBlockMetaData *meta_)
-    : InstrumentedBasicBlock(app_start_pc_, entry_meta_, meta_),
-      first(nullptr),
-      last(nullptr) {}
-
-// Return a finder for the successors of a cached basic block.
-detail::SuccessorBlockFinder InFlightBasicBlock::Successors(void) {
-  return detail::SuccessorBlockFinder(this, first->Next());
+                                       BasicBlockMetaData *entry_meta_)
+    : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
+      meta(entry_meta_->Copy()),
+      first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
+      last(new AnnotationInstruction(END_BASIC_BLOCK)) {
+  first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
-
-// Return the next successor by iterating through the instructions in the
-// basic block.
-BasicBlock *InFlightBasicBlock::FindNextSuccessor(void **data) {
-  auto successor(reinterpret_cast<Instruction **>(data));
-  auto curr(*successor);
-  ControlFlowInstruction *instr(nullptr);
-  BasicBlock *block(nullptr);
-  for (; curr && !block; curr = curr->Next()) {
-    if ((instr = DynamicCast<ControlFlowInstruction *>(curr)) &&
-        !instr->IsFunctionCall()) {
-      block = instr->target;
-    }
-  }
-  *successor = curr;
-  return block;
-}
-
-// Initialize a basic block that might be translated in the future.
-FutureBasicBlock::FutureBasicBlock(AppProgramCounter app_start_pc_,
-                                   BasicBlockMetaData *entry_meta_)
-    : InstrumentedBasicBlock(app_start_pc_, entry_meta_, nullptr) {}
 
 }  // namespace granary

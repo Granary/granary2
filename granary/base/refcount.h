@@ -1,0 +1,37 @@
+/* Copyright 2014 Peter Goodman, all rights reserved. */
+
+
+#ifndef GRANARY_BASE_REFCOUNT_H_
+#define GRANARY_BASE_REFCOUNT_H_
+
+namespace granary {
+
+// Implements intrusive reference counting for an object. The concept here is
+// that some object owns a reference counted object
+class UnownedCountedObject {
+#ifdef GRANARY_INTERNAL
+ public:
+  virtual ~UnownedCountedObject(void) = default;
+  inline UnownedCountedObject(void)
+      : count(1) {}
+
+  inline void Acquire(void) {
+    ++count;
+  }
+
+  inline void Release(void) {
+    --count;
+  }
+
+  inline bool CanRelease(void) const {
+    return 0 >= count;
+  }
+#endif  // GRANARY_INTERNAL
+
+ private:
+  int count;
+};
+
+}  // namespace granary
+
+#endif  // GRANARY_BASE_REFCOUNT_H_

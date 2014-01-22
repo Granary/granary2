@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 // Useful for Valgrind-based debugging.
-#ifdef GRANARY_WITH_VALGRIND
+#if defined(GRANARY_WITH_VALGRIND) && defined(GRANARY_INTERNAL)
 # include <valgrind/valgrind.h>
 # include <valgrind/memcheck.h>
 #else
@@ -28,6 +28,24 @@
 #ifdef GRANARY_ECLIPSE
 # define decltype(...) void
 # define alignof(...) 16
+#endif
+
+
+// Marks some pointers as being internal, and convertible to void for exports.
+#ifdef GRANARY_INTERNAL
+# define GRANARY_MUTABLE mutable
+# define GRANARY_POINTER(type) type
+# define GRANARY_UINT32(type) type
+# define GRANARY_PROTECTED protected
+
+// Not defined if `GRANARY_INTERNAL` isn't defined.
+# define GRANARY_INTERNAL_DEFINITION
+# define GRANARY_EXPORT_HEADER
+#else
+# define GRANARY_MUTABLE
+# define GRANARY_POINTER(type) void
+# define GRANARY_UINT32(type) uint32_t
+# define GRANARY_PROTECTED private
 #endif
 
 
@@ -97,8 +115,8 @@
 
 // Disallow assigning of instances of a specific class.
 #define GRANARY_DISALLOW_ASSIGN(cls) \
-  cls &operator=(const cls &) = delete; \
-  cls &operator=(const cls &&) = delete
+  void operator=(const cls &) = delete; \
+  void operator=(const cls &&) = delete
 
 
 // Disallow copying and assigning of instances of a specific class.
@@ -118,10 +136,8 @@
 // specific class template.
 #define GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(cls, params) \
   GRANARY_DISALLOW_COPY_TEMPLATE(cls, params); \
-  cls<GRANARY_PARAMS params> &operator=( \
-      const cls<GRANARY_PARAMS params> &) = delete; \
-  cls<GRANARY_PARAMS params> &operator=( \
-      const cls<GRANARY_PARAMS params> &&) = delete
+  void operator=(const cls<GRANARY_PARAMS params> &) = delete; \
+  void operator=(const cls<GRANARY_PARAMS params> &&) = delete
 
 
 // Mark a result / variable as being used.

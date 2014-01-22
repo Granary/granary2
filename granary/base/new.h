@@ -2,6 +2,7 @@
 
 #ifndef GRANARY_BASE_NEW_H_
 #define GRANARY_BASE_NEW_H_
+#ifdef GRANARY_INTERNAL
 
 #include <new>
 
@@ -10,8 +11,13 @@
 
 namespace granary {
 
+// Redefines operators `new` and `delete` as deleted.
+# define GRANARY_DISABLE_NEW_ALLOCATOR(class_name) \
+  inline static void *operator new(std::size_t) { return nullptr; } \
+  inline static void operator delete(void *, std::size_t) {}
+
 // Defines a global new allocator for a specific class.
-#define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
+# define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
   friend class OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
@@ -26,7 +32,7 @@ namespace granary {
     OperatorNewAllocator<class_name>::Free(addr); \
   } \
   static void *operator new[](std::size_t) = delete; \
-  static void operator delete[](void *, std::size_t) = delete
+  static void operator delete[](void *, std::size_t) = delete;
 
 
 namespace detail {
@@ -152,4 +158,8 @@ detail::SlabAllocator OperatorNewAllocator<T>::allocator(
 
 }  // namespace granary
 
+#else
+# define GRANARY_DISABLE_NEW_ALLOCATOR(class_name)
+# define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...)
+#endif  // GRANARY_INTERNAL
 #endif  // GRANARY_BASE_NEW_H_

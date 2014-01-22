@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_CFG_INSTRUCTION_H_
 #define GRANARY_CFG_INSTRUCTION_H_
 
@@ -39,15 +38,16 @@ class Instruction {
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
-  Instruction *InsertBefore(std::unique_ptr<Instruction>);
-  Instruction *InsertAfter(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
   // Unlink an instruction from an instruction list.
   static std::unique_ptr<Instruction> Unlink(Instruction *);
 
- private:
+ GRANARY_PROTECTED:
   ListHead list;
 
+ private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
 
@@ -70,18 +70,25 @@ enum InstructionAnnotation {
 // Annotation instructions should not be removed by instrumentation.
 class AnnotationInstruction : public Instruction {
  public:
-  AnnotationInstruction(InstructionAnnotation annotation_, void *data_=nullptr);
   virtual ~AnnotationInstruction(void) = default;
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
+  GRANARY_INTERNAL_DEFINITION
+  inline AnnotationInstruction(InstructionAnnotation annotation_,
+                               void *data_=nullptr)
+      : annotation(annotation_),
+        data(data_) {}
+
+  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
   const InstructionAnnotation annotation;
   void * const data;
 
+  GRANARY_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
-  });
+  })
 
  private:
   AnnotationInstruction(void) = delete;
@@ -92,23 +99,23 @@ class AnnotationInstruction : public Instruction {
 // An instruction containing an driver-specific decoded instruction.
 class NativeInstruction : public Instruction {
  public:
+  virtual ~NativeInstruction(void);
+
+  GRANARY_INTERNAL_DEFINITION
   explicit NativeInstruction(driver::DecodedInstruction *instruction_);
-  virtual ~NativeInstruction(void) = default;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
-  });
+  })
 
  private:
   friend class ControlFlowInstruction;
 
   NativeInstruction(void) = delete;
 
-  // TODO(pag): In future we could potentially put `driver::DecodedInstruction`
-  //            by value instead of by pointer, but that could potentially
-  //            get ugly.
+  GRANARY_INTERNAL_DEFINITION
   std::unique_ptr<driver::DecodedInstruction> instruction;
 };
 
@@ -116,18 +123,21 @@ class NativeInstruction : public Instruction {
 // keeps control within the same basic block.
 class BranchInstruction : public NativeInstruction {
  public:
-  BranchInstruction(driver::DecodedInstruction *instruction_,
-                              const AnnotationInstruction *target_);
-
   virtual ~BranchInstruction(void) = default;
 
-  AnnotationInstruction * const target;
+  GRANARY_INTERNAL_DEFINITION
+  inline BranchInstruction(driver::DecodedInstruction *instruction_,
+                           const AnnotationInstruction *target_)
+      : NativeInstruction(instruction_),
+        target(target_) {}
+
+  const AnnotationInstruction * const target;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
     SHARED = true,
     ALIGNMENT = 1
-  });
+  })
 
  private:
   BranchInstruction(void) = delete;
@@ -142,10 +152,13 @@ class BranchInstruction : public NativeInstruction {
 //       redirect control back to the beginning of the basic block.
 class ControlFlowInstruction : public NativeInstruction {
  public:
-  ControlFlowInstruction(driver::DecodedInstruction *instruction_,
-                         BasicBlock *target_);
-
   virtual ~ControlFlowInstruction(void) = default;
+
+  GRANARY_INTERNAL_DEFINITION
+  ControlFlowInstruction(driver::DecodedInstruction *instruction_,
+                         BasicBlock *target_)
+      : NativeInstruction(instruction_),
+        target(target_) {}
 
   // Driver-specific implementations.
   bool IsFunctionCall(void) const;
@@ -162,7 +175,7 @@ class ControlFlowInstruction : public NativeInstruction {
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
     SHARED = true,
     ALIGNMENT = 1
-  });
+  })
 
   BasicBlock * const target;
 

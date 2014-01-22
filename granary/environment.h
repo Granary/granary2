@@ -22,7 +22,7 @@ class Environment {
 
   // Annotates the instruction, or adds an annotated instruction into the
   // instruction list. This returns the first
-  Instruction *AnnotateInstruction(Instruction *instr) const;
+  void AnnotateInstruction(Instruction *instr) const;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);

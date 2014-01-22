@@ -1,5 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/base/cast.h"
 #include "granary/base/memory.h"
 #include "granary/base/new.h"
