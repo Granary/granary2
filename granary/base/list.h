@@ -6,6 +6,10 @@
 
 #include "granary/base/base.h"
 
+#ifdef GRANARY_DEBUG
+# include "granary/breakpoint.h"
+#endif
+
 namespace granary {
 
 // Generic, type-safe, embeddable list implementation, similar to in the
@@ -14,9 +18,25 @@ class ListHead {
  public:
   ListHead(void);
 
+#ifdef GRANARY_DEBUG
+  // Ensure that the correct `object` pointer is being passed to the `ListHead`
+  // public APIs.
+  template <typename T>
+  void CheckObject(const T *object) const {
+    const void *obj_ptr(object);
+    const void *next_obj_ptr(object + 1);
+    const void *this_ptr(this);
+    const void *next_this_ptr(this + 1);
+    if (!(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr)) {
+      granary_break_on_fault();
+    }
+  }
+#endif
+
   // Get the object that comes after the object that contains this list head.
   template <typename T>
   T *GetNext(const T *object) const {
+    GRANARY_IF_DEBUG( CheckObject(object); )
     if (!next) {
       return nullptr;
     }
@@ -27,6 +47,7 @@ class ListHead {
   // Set the object that should go after this object's list head.
   template <typename T>
   void SetNext(const T *this_object, const T *that_object) {
+    GRANARY_IF_DEBUG( CheckObject(this_object); )
     if (!that_object) {
       return;
     }
@@ -39,6 +60,7 @@ class ListHead {
   // Get the object that comes before the object that contains this list head.
   template <typename T>
   T *GetPrevious(const T *object) const {
+    GRANARY_IF_DEBUG( CheckObject(object); )
     if (!prev) {
       return nullptr;
     }
@@ -49,6 +71,7 @@ class ListHead {
   // Set the object that should go before this object's list head.
   template <typename T>
   void SetPrevious(const T *this_object, const T *that_object) {
+    GRANARY_IF_DEBUG( CheckObject(this_object); )
     if (!that_object) {
       return;
     }

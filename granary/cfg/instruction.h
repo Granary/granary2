@@ -38,8 +38,11 @@ class Instruction {
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
-  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
-  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
+  GRANARY_IF_DEBUG(virtual)
+  Instruction *InsertBefore(std::unique_ptr<Instruction>);
+
+  GRANARY_IF_DEBUG(virtual)
+  Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
   // Unlink an instruction from an instruction list.
   static std::unique_ptr<Instruction> Unlink(Instruction *);
@@ -78,8 +81,10 @@ class AnnotationInstruction : public Instruction {
       : annotation(annotation_),
         data(data_) {}
 
+#ifdef GRANARY_DEBUG
   virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
+#endif
 
   const InstructionAnnotation annotation;
   void * const data;

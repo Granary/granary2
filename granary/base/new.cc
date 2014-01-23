@@ -18,14 +18,12 @@ enum {
   UNINITIALIZED_MEMORY_POISON = 0xCD,
 };
 
-
 // Initialize a new slab list. Once initialized, slab lists are never changed.
 SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
                    size_t slab_number_)
     : next(next_slab_),
       min_allocation_number(min_allocation_number_),
       number(slab_number_) {}
-
 
 // Initialize the slab allocator. The slab allocator starts off having the slab
 // list head point to a dummy slab, so that the allocator itself can avoid NULL
@@ -47,19 +45,20 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
   GRANARY_UNUSED(unaligned_size);
 }
 
-
 // Allocate a new slab of memory for this object. The backing memory of the
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
   const size_t slab_number(next_slab_number.fetch_add(1));
   void *slab_memory(AllocatePages(1));
   memset(slab_memory, UNALLOCATED_MEMORY_POISON, GRANARY_ARCH_PAGE_FRAME_SIZE);
+  VALGRIND_MAKE_MEM_UNDEFINED(
+      reinterpret_cast<char *>(slab_memory) + start_offset,
+      (GRANARY_ARCH_PAGE_FRAME_SIZE - start_offset));
   return new (slab_memory) SlabList(
       prev_slab,
       slab_number * num_allocations_per_slab,
       slab_number);
 }
-
 
 // Get a pointer into the slab list. This potentially allocates a new slab.
 // The slab pointer returned might not be the exact slab for the particular
@@ -84,7 +83,6 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
   return nullptr;
 }
 
-
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
   void *address(AllocateFromFreeList());
@@ -102,26 +100,26 @@ void *SlabAllocator::Allocate(void) {
   }
 
   VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
-  memset(address, UNINITIALIZED_MEMORY_POISON, unaligned_size);
-  VALGRIND_MAKE_MEM_UNDEFINED(address, unaligned_size);
+  memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
+  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
   return address;
 }
 
-
 // Free some memory that was allocated from the slab allocator.
 void SlabAllocator::Free(void *address) {
+  VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
   memset(address, DEALLOCATED_MEMORY_POISON, aligned_size);
+  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
   FreeList *list(reinterpret_cast<FreeList *>(address));
   FreeList *next(nullptr);
 
   do {
     next = free_list.load(std::memory_order_relaxed);
+    VALGRIND_MAKE_MEM_DEFINED(list, sizeof *list);
     list->next = next;
+    VALGRIND_MAKE_MEM_UNDEFINED(list, sizeof *list);
   } while (!free_list.compare_exchange_strong(next, list));
-
-  VALGRIND_FREELIKE_BLOCK(address, unaligned_size);
 }
-
 
 // Allocate an object from the free list, if possible. Returns `nullptr` if
 // no object can be allocated.
@@ -133,9 +131,9 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     if (!head) {
       return nullptr;
     }
-    VALGRIND_MAKE_MEM_DEFINED(head, sizeof(*head));
+    VALGRIND_MAKE_MEM_DEFINED(head, sizeof *head);
     next = head->next;
-    VALGRIND_MAKE_MEM_UNDEFINED(head, sizeof(*head));
+    VALGRIND_MAKE_MEM_UNDEFINED(head, sizeof *head);
   } while (!free_list.compare_exchange_strong(head, next));
   return head;
 }

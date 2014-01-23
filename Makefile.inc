@@ -57,7 +57,7 @@ endif
 # Enable/disable features based on whether or not this is a debug or release
 # build.
 ifeq ($(GRANARY_TARGET),debug)
-    GRANARY_COMMON_FLAGS += -O0 -g3
+    GRANARY_COMMON_FLAGS += -O0 -g3 -DGRANARY_DEBUG
     GRANARY_LD_FLAGS += -O0 -g3
 else
     GRANARY_COMMON_FLAGS += -O3 -g0

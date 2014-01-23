@@ -30,6 +30,11 @@
 # define alignof(...) 16
 #endif
 
+#ifdef GRANARY_DEBUG
+# define GRANARY_IF_DEBUG(...) __VA_ARGS__
+#else
+# define GRANARY_IF_DEBUG(...)
+#endif
 
 // Marks some pointers as being internal, and convertible to void for exports.
 #ifdef GRANARY_INTERNAL

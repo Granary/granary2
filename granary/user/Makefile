@@ -33,7 +33,7 @@ $(GRANARY_BIN_DIR)/%.o: $(GRANARY_BIN_DIR)/%.S
 # Link together all compiled .ll files into a single .ll file.
 $(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
 	@echo "Linking intermediate bitcode files."
-	@llvm-link $(GRANARY_LL_FILES) -o $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_NAME).ll
+	@llvm-link $(GRANARY_LL_FILES) -o $(GRANARY_INTERMEDIATE_FILE).ll
 
 
 # Compile the linked together .ll file into an object file. This should enable

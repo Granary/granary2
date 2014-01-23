@@ -14,7 +14,7 @@ namespace granary {
 // Redefines operators `new` and `delete` as deleted.
 # define GRANARY_DISABLE_NEW_ALLOCATOR(class_name) \
   inline static void *operator new(std::size_t) { return nullptr; } \
-  inline static void operator delete(void *, std::size_t) {}
+  inline static void operator delete(void *) {}
 
 // Defines a global new allocator for a specific class.
 # define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
@@ -28,11 +28,12 @@ namespace granary {
     VALGRIND_MAKE_MEM_UNDEFINED(address, sizeof(class_name)); \
     return address; \
   } \
-  static void operator delete(void *addr, std::size_t) { \
-    OperatorNewAllocator<class_name>::Free(addr); \
+  static void operator delete(void *address) { \
+    OperatorNewAllocator<class_name>::Free(address); \
+    VALGRIND_FREELIKE_BLOCK(address, sizeof(class_name)); \
   } \
   static void *operator new[](std::size_t) = delete; \
-  static void operator delete[](void *, std::size_t) = delete;
+  static void operator delete[](void *) = delete;
 
 
 namespace detail {
@@ -132,13 +133,24 @@ class OperatorNewAllocator {
     ALIGNED_OBJECT_SIZE = GRANARY_ALIGN_TO(MIN_OBJECT_SIZE, ALIGNMENT),
 
     // The first offset in a page is for an object.
-    ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(OBJECT_SIZE, ALIGNMENT),
+    ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(
+        sizeof(detail::SlabList), ALIGNMENT),
 
     // Figure out the number of allocations that can fit into a one-page slab.
-    NUM_ALLOCS_FOR_META_DATA = ALGINED_SLAB_LIST_SIZE / ALIGNED_OBJECT_SIZE,
-    NUM_ALLOCS_FOR_PAGE = GRANARY_ARCH_PAGE_FRAME_SIZE / ALIGNED_OBJECT_SIZE,
-    NUM_ALLOCS_PER_SLAB = NUM_ALLOCS_FOR_PAGE - NUM_ALLOCS_FOR_META_DATA
+    MAX_ALLOCATABLE_SPACE = GRANARY_ARCH_PAGE_FRAME_SIZE -
+                            ALGINED_SLAB_LIST_SIZE,
+    NUM_ALLOCS_PER_SLAB = MAX_ALLOCATABLE_SPACE / ALIGNED_OBJECT_SIZE,
+
+    // Figure out how much space can actually be used.
+    PAGE_USAGE = ALGINED_SLAB_LIST_SIZE +
+                 (NUM_ALLOCS_PER_SLAB * ALIGNED_OBJECT_SIZE)
   };
+
+  static_assert(OBJECT_SIZE <= ALIGNED_OBJECT_SIZE,
+      "Error computing the aligned object size.");
+
+  static_assert(PAGE_USAGE <= GRANARY_ARCH_PAGE_FRAME_SIZE,
+      "Error computing the layout of meta-data and objects on page frames.");
 
   OperatorNewAllocator(void) = delete;
 

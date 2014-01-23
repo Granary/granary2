@@ -25,8 +25,6 @@ class BasicBlockList {
   inline explicit BasicBlockList(BasicBlock *block_)
       : block(block_) {}
 
-  ~BasicBlockList(void) = default;
-
   // Basic block lists are allocated from a global memory pool using the
   // `new` and `delete` operators.
   GRANARY_DEFINE_NEW_ALLOCATOR(BasicBlockList, {

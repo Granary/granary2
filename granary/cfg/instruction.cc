@@ -38,6 +38,9 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   return std::unique_ptr<Instruction>(instr);
 }
 
+#ifdef GRANARY_DEBUG
+// Prevent adding an instruction before the beginning instruction of a basic
+// block.
 Instruction *AnnotationInstruction::InsertBefore(
     std::unique_ptr<Instruction> that) {
   if (GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation)) {
@@ -46,6 +49,7 @@ Instruction *AnnotationInstruction::InsertBefore(
   return this->Instruction::InsertBefore(std::move(that));
 }
 
+// Prevent adding an instruction after the ending instruction of a basic block.
 Instruction *AnnotationInstruction::InsertAfter(
     std::unique_ptr<Instruction> that) {
   if (GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation)) {
@@ -53,6 +57,7 @@ Instruction *AnnotationInstruction::InsertAfter(
   }
   return this->Instruction::InsertAfter(std::move(that));
 }
+#endif  // GRANARY_DEBUG
 
 NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
     : instruction(instruction_) {}
