@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include <cstdio>
+
 #include "granary/base/cast.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
@@ -20,6 +22,12 @@ static void test(void) {
   Environment env;
   ControlFlowGraph cfg(&env, start_pc);
 
+  for (auto block : cfg.Blocks()) {
+    printf("BB %p:\n", block->app_start_pc);
+    for (auto succ : block->Successors()) {
+      printf(" -> %p\n", succ.block->app_start_pc);
+    }
+  }
 }
 
 }  // namespace granary

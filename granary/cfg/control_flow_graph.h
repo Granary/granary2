@@ -31,7 +31,7 @@ class BasicBlockIterator {
   }
 
   inline BasicBlockIterator end(void) const {
-    return BasicBlockIterator(nullptr);
+    return BasicBlockIterator();
   }
 
   inline bool operator!=(const BasicBlockIterator &that) const {
@@ -44,7 +44,9 @@ class BasicBlockIterator {
  private:
   friend class granary::ControlFlowGraph;
 
-  BasicBlockIterator(void) = delete;
+  inline BasicBlockIterator(void)
+      : blocks(nullptr) {}
+
   inline explicit BasicBlockIterator(BasicBlockList *blocks_)
       : blocks(blocks_) {}
 

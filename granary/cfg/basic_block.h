@@ -70,20 +70,22 @@ class SuccessorBlockIterator {
   }
 
   inline SuccessorBlockIterator end(void) const {
-    return SuccessorBlockIterator(nullptr);
+    return SuccessorBlockIterator();
   }
 
   inline bool operator!=(const SuccessorBlockIterator &that) const {
     return cursor != that.cursor;
   }
 
-  inline BasicBlockSuccessor operator*(void) const;
+  BasicBlockSuccessor operator*(void) const;
   void operator++(void);
 
  private:
+  friend class granary::BasicBlock;
   friend class granary::InFlightBasicBlock;
 
-  SuccessorBlockIterator(void) = delete;
+  inline SuccessorBlockIterator(void)
+      : cursor(nullptr) {}
 
   GRANARY_INTERNAL_DEFINITION
   explicit SuccessorBlockIterator(Instruction *instr_);
@@ -160,6 +162,16 @@ class BasicBlock : public UnownedCountedObject {
       : UnownedCountedObject(),
         app_start_pc(app_start_pc_) {}
 
+  // Find the successors of this basic block. This can be used as follows:
+  //
+  //    for(auto succ : block->Successors()) {
+  //      succ.block
+  //      succ.cti
+  //    }
+  //
+  // Note: This method is only usefully defined for `InFlightBasicBlock`. All
+  //       other basic block types are treated as having no successors.
+  virtual detail::SuccessorBlockIterator Successors(void);
 
   GRANARY_BASE_CLASS(BasicBlock)
 
@@ -227,15 +239,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   InFlightBasicBlock(AppProgramCounter app_start_pc_,
                      BasicBlockMetaData *entry_meta_);
 
-  // Find the successors of this basic block. This can be used as follows:
-  //
-  //    for(auto succ : block->Successors()) {
-  //      succ.block
-  //      succ.cti
-  //    }
-  inline detail::SuccessorBlockIterator Successors(void) {
-    return detail::SuccessorBlockIterator(first);
-  }
+  virtual detail::SuccessorBlockIterator Successors(void);
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {

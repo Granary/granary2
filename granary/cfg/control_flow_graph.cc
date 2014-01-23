@@ -44,7 +44,7 @@ void BasicBlockIterator::operator++(void) {
     next = nullptr;
 
     // Auto-clean up blocks while iterating over them.
-    if (GRANARY_UNLIKELY(blocks->block->CanRelease())) {
+    if (blocks && GRANARY_UNLIKELY(blocks->block->CanRelease())) {
       next = blocks->list.GetNext(blocks);
       blocks->list.Unlink();
       delete blocks;

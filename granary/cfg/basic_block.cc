@@ -44,6 +44,10 @@ void BackwardInstructionIterator::operator++(void) {
 
 }  // namespace detail
 
+detail::SuccessorBlockIterator BasicBlock::Successors(void) {
+  return detail::SuccessorBlockIterator();
+}
+
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(
     AppProgramCounter app_start_pc_, const BasicBlockMetaData *entry_meta_)
@@ -75,6 +79,11 @@ InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
       last(new AnnotationInstruction(END_BASIC_BLOCK)) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
+}
+
+
+detail::SuccessorBlockIterator InFlightBasicBlock::Successors(void) {
+  return detail::SuccessorBlockIterator(first);
 }
 
 }  // namespace granary
