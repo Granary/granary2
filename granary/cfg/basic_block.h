@@ -97,6 +97,9 @@ class SuccessorBlockIterator {
 // Iterator that moves forward through a list of instructions.
 class ForwardInstructionIterator {
  public:
+  inline ForwardInstructionIterator(void)
+      : instr(nullptr) {}
+
   explicit inline ForwardInstructionIterator(Instruction *instr_)
       : instr(instr_) {}
 
@@ -105,7 +108,7 @@ class ForwardInstructionIterator {
   }
 
   inline ForwardInstructionIterator end(void) const {
-    return ForwardInstructionIterator(nullptr);
+    return ForwardInstructionIterator();
   }
 
   inline bool operator!=(const ForwardInstructionIterator &that) const {
@@ -125,6 +128,9 @@ class ForwardInstructionIterator {
 // Iterator that moves backward through a list of instructions.
 class BackwardInstructionIterator {
  public:
+  inline BackwardInstructionIterator(void)
+      : instr(nullptr) {}
+
   explicit inline BackwardInstructionIterator(Instruction *instr_)
       : instr(instr_) {}
 
@@ -133,7 +139,7 @@ class BackwardInstructionIterator {
   }
 
   inline BackwardInstructionIterator end(void) const {
-    return BackwardInstructionIterator(nullptr);
+    return BackwardInstructionIterator();
   }
 
   inline bool operator!=(const BackwardInstructionIterator &that) const {

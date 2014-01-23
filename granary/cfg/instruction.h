@@ -176,16 +176,20 @@ class ControlFlowInstruction : public NativeInstruction {
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 
+  inline BasicBlock *TargetBlock(void) const {
+    return target;
+  }
+
   GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
-  BasicBlock * const target;
-
  private:
   ControlFlowInstruction(void) = delete;
+
+  mutable BasicBlock *target;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };

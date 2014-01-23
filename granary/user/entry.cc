@@ -16,18 +16,21 @@
 
 namespace granary {
 
-static void test(void) {
-  auto start_pc = UnsafeCast<AppProgramCounter>(&test);
-
-  Environment env;
-  ControlFlowGraph cfg(&env, start_pc);
-
-  for (auto block : cfg.Blocks()) {
+static void Instrument(ControlFlowGraph *cfg) {
+  for (auto block : cfg->Blocks()) {
     printf("BB %p:\n", block->app_start_pc);
     for (auto succ : block->Successors()) {
       printf(" -> %p\n", succ.block->app_start_pc);
     }
   }
+}
+
+static void Test(void) {
+  auto start_pc = UnsafeCast<AppProgramCounter>(&Test);
+
+  Environment env;
+  ControlFlowGraph cfg(&env, start_pc);
+  Instrument(&cfg);
 }
 
 }  // namespace granary
@@ -40,7 +43,7 @@ int main(int argc, const char *argv[]) {
   (void) argc;
   (void) argv;
 
-  granary::test();
+  granary::Test();
 
   return 0;
 }

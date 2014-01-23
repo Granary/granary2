@@ -27,7 +27,7 @@ SuccessorBlockIterator::SuccessorBlockIterator(Instruction *instr_)
 
 BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
   auto cti(DynamicCast<ControlFlowInstruction *>(cursor));
-  return BasicBlockSuccessor(cti, cti->target);
+  return BasicBlockSuccessor(cti, cti->TargetBlock());
 }
 
 void SuccessorBlockIterator::operator++(void) {

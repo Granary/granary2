@@ -75,8 +75,8 @@ bool DecodedInstruction::IsSystemReturn(void) const {
 
 bool DecodedInstruction::IsConditionalJump(void) const {
   const unsigned op(instruction.opcode);
-  return (dynamorio::OP_jb <= op && op <= dynamorio::OP_jnle) ||
-         (dynamorio::OP_jb_short <= op && op <= dynamorio::OP_jnle_short);
+  return (dynamorio::OP_jo <= op && op <= dynamorio::OP_jnle) ||
+         (dynamorio::OP_jo_short <= op && op <= dynamorio::OP_jnle_short);
 }
 
 bool DecodedInstruction::IsJump(void) const {
@@ -90,7 +90,7 @@ bool DecodedInstruction::HasIndirectTarget(void) const {
   return IsFunctionReturn() || IsInterruptCall() || IsInterruptReturn() ||
          IsSystemCall() || IsSystemReturn() || dynamorio::OP_call_ind == op ||
          dynamorio::OP_call_far_ind == op || dynamorio::OP_jmp_ind == op ||
-         dynamorio::OP_jmp_far_ind;
+         dynamorio::OP_jmp_far_ind == op;
 }
 
 }  // namespace driver

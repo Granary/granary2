@@ -63,13 +63,16 @@ ControlFlowGraph::ControlFlowGraph(Environment *environment_,
                                    AppProgramCounter pc,
                                    BasicBlockMetaData *meta)
       : environment(environment_),
-        blocks(new detail::BasicBlockList(new InFlightBasicBlock(pc, meta))) {
-
+        blocks(nullptr) {
+  auto block = new InFlightBasicBlock(pc, meta);
+  blocks = new detail::BasicBlockList(block);
+  Materialize(block, blocks);
 }
 
 // Destroy the CFG.
 ControlFlowGraph::~ControlFlowGraph(void) {
-  for (detail::BasicBlockList *curr(blocks), *next(nullptr); curr; curr = next) {
+  for (detail::BasicBlockList *curr(blocks), *next(nullptr);
+       curr; curr = next) {
     next = curr->list.GetNext(curr);
     delete curr;
   }
@@ -104,15 +107,11 @@ static Instruction *MakeDirectCTI(driver::DecodedInstruction *instr,
 // Convert a decoded instruction into the internal Granary instruction IR.
 static Instruction *RaiseInstruction(
     driver::DecodedInstruction *instr) {
-  if (instr->IsConditionalJump()) {
-    return MakeDirectCTI(instr, instr->BranchTarget());
 
-  } else if (instr->HasIndirectTarget()) {
+  if (instr->HasIndirectTarget()) {
     return new ControlFlowInstruction(instr, &UNKNOWN_BLOCK);
-
-  } else if (instr->IsFunctionCall() || instr->IsJump()) {
+  } else if (instr->IsJump() || instr->IsFunctionCall()) {
     return MakeDirectCTI(instr, instr->BranchTarget());
-
   } else {
     return new NativeInstruction(instr);
   }
@@ -120,57 +119,21 @@ static Instruction *RaiseInstruction(
 
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block. The last decoded instruction is returned.
-static ControlFlowInstruction *DecodeInstructionList(
-    Instruction *instr, AppProgramCounter *pc) {
+static ControlFlowInstruction *DecodeInstructionList(Instruction *instr,
+                                                     AppProgramCounter *pc) {
   driver::InstructionDecoder decoder;
   driver::DecodedInstruction dinstr;
 
   for (AppProgramCounter decoded_pc(*pc);
        !IsA<ControlFlowInstruction *>(instr) && decoder.DecodeNext(&dinstr, pc);
        decoded_pc = *pc) {
-    instr = instr->InsertAfter(
-        std::unique_ptr<Instruction>(RaiseInstruction(dinstr.Copy())));
+
+    instr = instr->InsertAfter(std::unique_ptr<Instruction>(
+        RaiseInstruction(dinstr.Copy())));
   }
   return DynamicCast<ControlFlowInstruction *>(instr);
 }
 
-#if 0
-
-// Decode and return an in-flight basic block.
-static std::unique_ptr<Instruction> DecodeInstructionList(
-    AppProgramCounter start_pc) {
-
-  driver::InstructionDecoder decoder;
-  driver::DecodedInstruction instr;
-
-
-
-  Instruction *curr_instr(block->first);
-  Instruction *next_instr(nullptr);
-
-  for (AppProgramCounter next_pc(block->app_start_pc), decoded_pc(next_pc);
-       decoder.DecodeNext(&instr, &next_pc);
-       decoded_pc = next_pc, curr_instr = next_instr) {
-
-    // Decode and annotate the instruction.
-    curr_instr = RaiseInstruction(instr.Copy());
-    next_instr = cfg->environment->AnnotateInstruction(curr_instr);
-
-    if (IsA<ControlFlowInstruction *>(curr_instr)) {
-      break;
-    }
-
-    // Add a synthesized jump to the next basic block.
-    const auto cti = DynamicCast<ControlFlowInstruction *>(curr_instr);
-    if (cti) {
-      if (cti->IsConditionalJump() || cti->IsFunctionCall()) {
-        next_instr->InsertAfter(mir::Jump(cfg, next_pc));
-      }
-      break;
-    }
-  }
-}
-#endif
 }  // namespace
 
 // Materialize an in-flight basic block by decoding native instructions,
@@ -186,14 +149,12 @@ void ControlFlowGraph::Materialize(InFlightBasicBlock *block,
 
   for (auto instr : block->Instructions()) {
     environment->AnnotateInstruction(instr);
-    cti = DynamicCast<ControlFlowInstruction *>(instr);
-
-    if (!cti) {
+    if (!(cti = DynamicCast<ControlFlowInstruction *>(instr))) {
       continue;
     }
 
     // Add the nodes into the control-flow graph in pre-order.
-    auto next_block_list = new detail::BasicBlockList(cti->target);
+    auto next_block_list = new detail::BasicBlockList(cti->TargetBlock());
     block_list->list.SetNext(block_list, next_block_list);
     block_list = next_block_list;
   }
