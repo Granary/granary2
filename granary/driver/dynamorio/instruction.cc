@@ -5,6 +5,7 @@
 #include "granary/base/string.h"
 #include "granary/base/types.h"
 #include "granary/cfg/instruction.h"
+#include "granary/driver/dynamorio/decoder.h"
 #include "granary/driver/dynamorio/instruction.h"
 
 namespace granary {
@@ -92,6 +93,16 @@ bool DecodedInstruction::HasIndirectTarget(void) const {
          IsSystemCall() || IsSystemReturn() || dynamorio::OP_call_ind == op ||
          dynamorio::OP_call_far_ind == op || dynamorio::OP_jmp_ind == op ||
          dynamorio::OP_jmp_far_ind == op;
+}
+
+// Return the (current) length of the instruction.
+int DecodedInstruction::Length(void) const {
+  if (GRANARY_LIKELY(!dynamorio::instr_needs_encoding(&instruction))) {
+    return static_cast<int>(instruction.length);
+  }
+
+  InstructionDecoder decoder(const_cast<DecodedInstruction *>(this));
+  return dynamorio::instr_length(&decoder, &instruction);
 }
 
 }  // namespace driver

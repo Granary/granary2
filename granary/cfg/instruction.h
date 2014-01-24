@@ -37,6 +37,7 @@ class Instruction {
 
   Instruction *Next(void);
   Instruction *Previous(void);
+  virtual int Length(void) const;
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
@@ -110,6 +111,8 @@ class NativeInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   explicit NativeInstruction(driver::DecodedInstruction *instruction_);
+
+  virtual int Length(void) const;
 
   GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {

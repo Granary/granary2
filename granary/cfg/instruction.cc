@@ -17,6 +17,11 @@ Instruction *Instruction::Previous(void) {
   return list.GetPrevious(this);
 }
 
+// By default, non-native instructions are treated as having zero length.
+int Instruction::Length(void) const {
+  return 0;
+}
+
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
   Instruction *instr(that.release());
   list.SetPrevious(this, instr);
@@ -58,6 +63,11 @@ NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
 
 NativeInstruction::~NativeInstruction(void) {}
 
+// Get the length of the instruction.
+int NativeInstruction::Length(void) const {
+  return instruction->Length();
+}
+
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
     driver::DecodedInstruction *instruction_, BasicBlock *target_)
@@ -81,6 +91,8 @@ ControlFlowInstruction::~ControlFlowInstruction(void) {
   }
 }
 
+// Change the target of a control-flow instruction. This can involve an
+// ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
   auto old_target = target;
   new_target->Acquire();

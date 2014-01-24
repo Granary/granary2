@@ -37,6 +37,8 @@ class DecodedInstruction {
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 
+  int Length(void) const;
+
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE

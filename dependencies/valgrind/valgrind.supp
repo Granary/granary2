@@ -72,3 +72,92 @@
    fun:_ZN7granary22ControlFlowInstructionD0Ev
    ...
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary17UnknownBasicBlock13IsDerivedFromEPKNS_10BasicBlockE
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary16FutureBasicBlock13IsDerivedFromEPKNS_10BasicBlockE
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary18InFlightBasicBlock13IsDerivedFromEPKNS_10BasicBlockE
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZNKSt10unique_ptrIN7granary10BasicBlockESt14default_deleteIS1_EE3getEv
+   fun:_ZNK7granary6detail18BasicBlockIteratordeEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZNK7granary8ListHead7GetNextINS_6detail14BasicBlockListEEEPT_PKS4_
+   fun:_ZN7granary6detail18BasicBlockIteratorppEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:_ZNK7granary20UnownedCountedObject10CanDestroyEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:_ZN7granary20UnownedCountedObject7ReleaseEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZNK7granary8ListHead7GetNextINS_11InstructionEEEPT_PKS3_
+   fun:_ZN7granary11Instruction4NextEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary16ControlFlowGraphD1Ev
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZNKSt10unique_ptrIN7granary10BasicBlockESt14default_deleteIS1_EE3getEv
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:_ZN7granary20UnownedCountedObject7AcquireEv
+   fun:_ZN7granary16ControlFlowGraphD1Ev
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary8ListHead5ChainEPS0_S1_
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary8ListHead7SetNextINS_6detail14BasicBlockListEEEvPKT_S6_
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:_ZN7granary8ListHead6UnlinkEv
+   fun:_ZN7granary6detail18BasicBlockIteratorppEv
+   ...
+}

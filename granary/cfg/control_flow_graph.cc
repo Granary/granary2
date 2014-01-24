@@ -139,6 +139,7 @@ BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target,
 // block.
 BasicBlock *ControlFlowGraph::Materialize(
     const ControlFlowInstruction *cti, const BasicBlockMetaData *meta) {
+
   auto old_block = cti->TargetBlock();
   granary_break_on_fault_if(!old_block->list);
 
@@ -149,6 +150,9 @@ BasicBlock *ControlFlowGraph::Materialize(
   // We've already materialized this basic block in this session.
   auto target_pc = old_block->app_start_pc;
   auto found_block = FindMaterialized(target_pc, meta, old_block);
+
+  // TODO(pag): Meta-data driven transitions!!! Need to make it possible to
+  //            materialize a native instruction.
 
   // Don't have the block; go decode it.
   if (!found_block) {

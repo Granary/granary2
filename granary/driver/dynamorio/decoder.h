@@ -19,7 +19,7 @@ class DynamoRIOHeap;
 class InstructionBuilder;
 
 // Manages encoding and decoding of instructions.
-class InstructionDecoder : private dynamorio::dcontext_t {
+class InstructionDecoder : public dynamorio::dcontext_t {
  public:
   // Initialize the instruction decoder.
   InstructionDecoder(void);
