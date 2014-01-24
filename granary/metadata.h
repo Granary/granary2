@@ -30,7 +30,15 @@ enum BasicBlockFlags : uint32_t {
 
   // Should this basic block be run natively? I.e. should be just run the
   // app code instead of instrumenting it?
-  RUN_NATIVELY          = (1 << 2)
+  RUN_NATIVELY          = (1 << 2),
+
+  // Should we expect that the target is not decodable? For example, the Linux
+  // kernel's `BUG_ON` macro generates `ud2` instructions. We treat these as
+  // dead ends, and go native on them so that we can see the right debugging
+  // info. Similarly, debugger breakpoints inject `int3`s into the code. In
+  // order to properly trigger those breakpoints, we go native before executing
+  // those breakpoints.
+  TARGET_NOT_RUNNABLE   = (1 << 3) | RUN_NATIVELY,
 };
 
 // Meta-data about a basic block. This structure contains a small amount of
@@ -38,12 +46,9 @@ enum BasicBlockFlags : uint32_t {
 // a header to an unknown amount of client/tool-specific meta-data.
 class BasicBlockMetaData {
  public:
-
-  // TODO(pag): Should probably pass in some form of allocator or something
-  //            that knows how to do a deep copy of the meta-data.
   BasicBlockMetaData *Copy(void) const;
-
   void Hash(HashFunction *hasher) const;
+  bool Equals(const BasicBlockMetaData *meta) const;
 
   const GRANARY_POINTER(detail::MetaDataDescription) * const description;
 

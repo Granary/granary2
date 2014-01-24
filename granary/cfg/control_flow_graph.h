@@ -17,6 +17,7 @@ class ControlFlowGraph;
 class BasicBlockMetaData;
 class Environment;
 class ControlFlowInstruction;
+class Instruction;
 
 namespace detail {
 
@@ -78,10 +79,10 @@ class ControlFlowGraph {
   //                          one might be made.
   //    `NativeBasicBlock`:   If the block jumps to somewhere that should go
   //                          native.
-  BasicBlock *Materialize(const detail::BasicBlockSuccessor &target,
+  BasicBlock *Materialize(detail::BasicBlockSuccessor &target,
                           const BasicBlockMetaData *meta=nullptr);
 
-  BasicBlock *Materialize(const ControlFlowInstruction *instruction,
+  BasicBlock *Materialize(const ControlFlowInstruction *cti,
                           const BasicBlockMetaData *meta=nullptr);
 
   // Returns an object that can be used inside of a range-based for loop. For
@@ -89,7 +90,7 @@ class ControlFlowGraph {
   //
   //    for(auto block : cfg.Blocks())
   //      ...
-  inline detail::BasicBlockIterator Blocks(void) {
+  inline detail::BasicBlockIterator Blocks(void) const {
     return detail::BasicBlockIterator(first_block);
   }
 
@@ -97,12 +98,20 @@ class ControlFlowGraph {
 
  private:
   GRANARY_INTERNAL_DEFINITION
-  void Materialize(InFlightBasicBlock *block,
-                   detail::BasicBlockList *block_list);
+  void DecodeInstructionList(Instruction *instr, AppProgramCounter pc);
 
   GRANARY_INTERNAL_DEFINITION
-  void InsertAfter(detail::BasicBlockList *list,
-                   detail::BasicBlockList *new_list);
+  void MaterializeInFlight(InFlightBasicBlock *block,
+                           detail::BasicBlockList *block_list);
+
+  GRANARY_INTERNAL_DEFINITION
+  detail::BasicBlockList *InsertAfter(detail::BasicBlockList *list,
+                                      detail::BasicBlockList *new_list);
+
+  GRANARY_INTERNAL_DEFINITION
+  BasicBlock *FindMaterialized(AppProgramCounter target_pc,
+                               const BasicBlockMetaData *meta,
+                               const BasicBlock * const ignore_block) const;
 
   // List of basic blocks known to this control-flow graph.
   detail::BasicBlockList *first_block;

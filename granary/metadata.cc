@@ -14,4 +14,9 @@ void BasicBlockMetaData::Hash(HashFunction *hasher) const {
   GRANARY_UNUSED(hasher);  // TODO(pag): Implement this.
 }
 
+bool BasicBlockMetaData::Equals(const BasicBlockMetaData *meta) const {
+  GRANARY_UNUSED(meta);
+  return false;
+}
+
 }  // namespace granary

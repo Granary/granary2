@@ -3,14 +3,18 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
+
 #include "granary/base/list.h"
 #include "granary/base/new.h"
 #include "granary/base/types.h"
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+
 #include "granary/driver.h"
 #include "granary/environment.h"
+#include "granary/metadata.h"
 #include "granary/mir.h"
 
 namespace granary {
@@ -24,13 +28,7 @@ class BasicBlockList {
 
   inline explicit BasicBlockList(BasicBlock *block_)
       : block(block_) {
-#ifdef GRANARY_DEBUG
-    // Unusual case: the basic block is already linked in to a CFG's basic block
-    // list.
-    if (GRANARY_UNLIKELY(nullptr != block->list)) {
-      granary_break_on_fault();
-    }
-#endif
+    granary_break_on_fault_if(GRANARY_UNLIKELY(nullptr != block->list));
     block->list = this;
   }
 
@@ -47,18 +45,17 @@ class BasicBlockList {
 
 // Move the iterator to the next basic block.
 void BasicBlockIterator::operator++(void) {
-  BasicBlockList *next(blocks->list.GetNext(blocks));
-  do {
-    blocks = next;
-    next = nullptr;
+  BasicBlockList *curr(blocks->list.GetNext(blocks));
+  BasicBlockList *next(nullptr);
 
-    // Auto-clean up blocks while iterating over them.
-    if (blocks && GRANARY_UNLIKELY(blocks->block->CanDestroy())) {
-      next = blocks->list.GetNext(blocks);
-      blocks->list.Unlink();
-      delete blocks;
-    }
-  } while (GRANARY_UNLIKELY(nullptr != next));
+  // Auto-clean up blocks while iterating over them.
+  for (; curr && curr->block->CanDestroy(); curr = next) {
+    next = curr->list.GetNext(curr);
+    curr->list.Unlink();
+    delete curr;
+  }
+
+  blocks = curr;
 }
 
 // Get a basic block out of the iterator.
@@ -68,6 +65,7 @@ BasicBlock *BasicBlockIterator::operator*(void) const {
 
 }  // namespace detail
 
+// Initialize the control flow graph with a single in-flight basic block.
 ControlFlowGraph::ControlFlowGraph(Environment *environment_,
                                    AppProgramCounter pc,
                                    BasicBlockMetaData *meta)
@@ -76,7 +74,7 @@ ControlFlowGraph::ControlFlowGraph(Environment *environment_,
         last_block(nullptr) {
   auto block = new InFlightBasicBlock(pc, meta);
   first_block = last_block = new detail::BasicBlockList(block);
-  Materialize(block, first_block);
+  MaterializeInFlight(block, first_block);
 
   // The control-flow graph has sole ownership over the initial basic block.
   // All other basic blocks are owned by control-transfer instructions.
@@ -85,11 +83,32 @@ ControlFlowGraph::ControlFlowGraph(Environment *environment_,
 
 // Destroy the CFG.
 ControlFlowGraph::~ControlFlowGraph(void) {
+
+  // Start by marking every block as owned; we're destroying them anyway so
+  // this sets up a simple invariant regarding the interaction between freeing
+  // instructions and basic blocks.
+  for (detail::BasicBlockList *curr(first_block);
+       curr; curr = curr->list.GetNext(curr)) {
+    curr->block->Acquire();
+    granary_break_on_fault_if(curr->block->list != curr);
+  }
+
+  // Free up all of the instruction lists.
+  for (detail::BasicBlockList *curr(first_block);
+       curr; curr = curr->list.GetNext(curr)) {
+    auto in_flight_block = DynamicCast<InFlightBasicBlock *>(curr->block.get());
+    if (in_flight_block) {
+      in_flight_block->FreeInstructionList();
+    }
+  }
+
+  // Free up all the basic blocks.
   for (detail::BasicBlockList *curr(first_block), *next(nullptr);
        curr; curr = next) {
     next = curr->list.GetNext(curr);
     delete curr;
   }
+
   first_block = last_block = nullptr;
 }
 
@@ -105,25 +124,50 @@ FutureBasicBlock *ControlFlowGraph::Materialize(
   return block;
 }
 
-BasicBlock *ControlFlowGraph::Materialize(
-    const detail::BasicBlockSuccessor &target, const BasicBlockMetaData *meta) {
-  GRANARY_UNUSED(target);
-  GRANARY_UNUSED(meta);
-  return nullptr;
+// Materialize a potentially new basic block given a basic block successor
+// (an instruction+target block) pair.
+BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target,
+                                          const BasicBlockMetaData *meta) {
+  granary_break_on_fault_if(target.block != target.cti->TargetBlock());
+  auto block = Materialize(target.cti, meta);
+  const_cast<BasicBlock *&>(target.block) = block;
+  return block;
 }
 
+// Materialize a potentially new basic block given a CTI (that points to the
+// block to be materialized) and the metadata to use when materializing the
+// block.
 BasicBlock *ControlFlowGraph::Materialize(
-    const ControlFlowInstruction *instruction, const BasicBlockMetaData *meta) {
-  GRANARY_UNUSED(instruction);
-  GRANARY_UNUSED(meta);
-  return nullptr;
+    const ControlFlowInstruction *cti, const BasicBlockMetaData *meta) {
+  auto old_block = cti->TargetBlock();
+  granary_break_on_fault_if(!old_block->list);
+
+  if (!IsA<FutureBasicBlock *>(old_block)) {
+    return old_block;
+  }
+
+  // We've already materialized this basic block in this session.
+  auto target_pc = old_block->app_start_pc;
+  auto found_block = FindMaterialized(target_pc, meta, old_block);
+
+  // Don't have the block; go decode it.
+  if (!found_block) {
+    auto new_block = new InFlightBasicBlock(target_pc, meta);
+    auto block_list = old_block->list;
+
+    cti->ChangeTarget(new_block);
+    block_list = InsertAfter(block_list, new detail::BasicBlockList(new_block));
+    MaterializeInFlight(new_block, block_list);
+    return new_block;
+
+  // Got the block; change the target in the CTI.
+  } else {
+    cti->ChangeTarget(found_block);
+    return found_block;
+  }
 }
 
 namespace {
-
-// A basic block that has not yet been decoded, and which we don't know about
-// at this time because it's the target of an indirect jump/call.
-static UnknownBasicBlock UNKNOWN_BLOCK;
 
 // Return a control-flow instruction that targets a future basic block.
 static Instruction *MakeDirectCTI(driver::DecodedInstruction *instr,
@@ -133,57 +177,64 @@ static Instruction *MakeDirectCTI(driver::DecodedInstruction *instr,
 }
 
 // Convert a decoded instruction into the internal Granary instruction IR.
-static Instruction *RaiseInstruction(
+static std::unique_ptr<Instruction> RaiseInstruction(
     driver::DecodedInstruction *instr) {
-
+  Instruction *ret_instr(nullptr);
   if (instr->HasIndirectTarget()) {
-    return new ControlFlowInstruction(instr, &UNKNOWN_BLOCK);
+    ret_instr = new ControlFlowInstruction(instr, new UnknownBasicBlock);
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    return MakeDirectCTI(instr, instr->BranchTarget());
+    ret_instr = MakeDirectCTI(instr, instr->BranchTarget());
   } else {
-    return new NativeInstruction(instr);
+    ret_instr = new NativeInstruction(instr);
   }
-}
-
-// Decode the list of instructions and appends them to the first instruction in
-// a basic block. The last decoded instruction is returned.
-static ControlFlowInstruction *DecodeInstructionList(Instruction *instr,
-                                                     AppProgramCounter *pc) {
-  driver::InstructionDecoder decoder;
-  driver::DecodedInstruction dinstr;
-
-  for (AppProgramCounter decoded_pc(*pc);
-       !IsA<ControlFlowInstruction *>(instr) && decoder.DecodeNext(&dinstr, pc);
-       decoded_pc = *pc) {
-
-    instr = instr->InsertAfter(std::unique_ptr<Instruction>(
-        RaiseInstruction(dinstr.Copy())));
-  }
-  return DynamicCast<ControlFlowInstruction *>(instr);
+  return std::unique_ptr<Instruction>(ret_instr);
 }
 
 }  // namespace
 
+// Decode the list of instructions and appends them to the first instruction in
+// a basic block. The last decoded instruction is returned.
+void ControlFlowGraph::DecodeInstructionList(Instruction *instr,
+                                             AppProgramCounter pc) {
+  driver::InstructionDecoder decoder;
+  driver::DecodedInstruction dinstr;
+  bool synthesize_native_jump(false);
+
+  for (; !IsA<ControlFlowInstruction *>(instr); ) {
+    if (!decoder.DecodeNext(&dinstr, &pc)) {
+      synthesize_native_jump = true;
+      break;
+    }
+    instr = instr->InsertAfter(std::move(RaiseInstruction(dinstr.Copy())));
+  }
+
+  if (synthesize_native_jump) {
+    // TODO(pag): Implement this!!
+  }
+
+  // Synthesize a fall-through jump.
+  ControlFlowInstruction *cti(DynamicCast<ControlFlowInstruction *>(instr));
+  if (cti->IsFunctionCall() || cti->IsConditionalJump()) {
+    cti->InsertAfter(mir::Jump(this, pc));
+  }
+}
+
 // Materialize an in-flight basic block by decoding native instructions,
 // annotating those instructions, and updating the CFG with new successor
 // basic blocks.
-void ControlFlowGraph::Materialize(InFlightBasicBlock *block,
-                                   detail::BasicBlockList *block_list) {
-  auto pc = block->app_start_pc;
-  auto cti = DecodeInstructionList(block->FirstInstruction(), &pc);
+void ControlFlowGraph::MaterializeInFlight(InFlightBasicBlock *block,
+                                           detail::BasicBlockList *block_list) {
+  ControlFlowInstruction *cti(nullptr);
+  DecodeInstructionList(block->FirstInstruction(), block->app_start_pc);
 
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-    cti->InsertAfter(mir::Jump(this, pc));
-  }
-
+  // Attach the targeted future basic blocks into the control-flow graph.
   for (auto instr : block->Instructions()) {
     environment->AnnotateInstruction(instr);
     if (!(cti = DynamicCast<ControlFlowInstruction *>(instr))) {
       continue;
     }
 
-    // Add the nodes into the control-flow graph in pre-order so that if we're
-    // iterating over block when we'll see the materialized block(s) next.
+    // Blocks targeted by MIR instructions are already in the list.
     auto next_block = cti->TargetBlock();
     if (!next_block->list) {
       InsertAfter(block_list, new detail::BasicBlockList(next_block));
@@ -191,12 +242,47 @@ void ControlFlowGraph::Materialize(InFlightBasicBlock *block,
   }
 }
 
-void ControlFlowGraph::InsertAfter(detail::BasicBlockList *list,
-                                   detail::BasicBlockList *new_list) {
+// Insert a basic block list `new_list` after another existing list `list`.
+detail::BasicBlockList *ControlFlowGraph::InsertAfter(
+    detail::BasicBlockList *list, detail::BasicBlockList *new_list) {
   list->list.SetNext(list, new_list);
   if (last_block == list) {
     last_block = new_list;
   }
+  return new_list;
+}
+
+// Figure out if we've already materialized this basic block. If so, return
+// the already materialized basic block. Otherwise, return `nullptr`.
+BasicBlock *ControlFlowGraph::FindMaterialized(
+    AppProgramCounter target_pc,
+    const BasicBlockMetaData *meta,
+    const BasicBlock * const ignore_block) const {
+
+  InstrumentedBasicBlock *target_block(nullptr);
+  for (auto block : Blocks()) {
+    if (block == ignore_block ||
+        block->app_start_pc != target_pc ||
+        !(target_block = DynamicCast<InstrumentedBasicBlock *>(block))) {
+      continue;
+    }
+
+    if (meta == target_block->entry_meta) {
+      return block;
+
+    // TODO(pag): Need to make sure that meta-data is never null, as then
+    // there would be issues when dealing with, e.g. function entries and such.
+    } else if (!meta || !target_block->entry_meta) {
+      continue;
+    }
+
+    if (meta->Equals(target_block->entry_meta)) {
+      return block;
+    }
+  }
+
+  // TODO(pag): Look for the block in the code cache!
+  return nullptr;
 }
 
 }  // namespace granary

@@ -27,9 +27,7 @@ class ListHead {
     const void *next_obj_ptr(object + 1);
     const void *this_ptr(this);
     const void *next_this_ptr(this + 1);
-    if (!(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr)) {
-      granary_break_on_fault();
-    }
+    granary_break_on_fault_if(!(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr));
   }
 #endif
 

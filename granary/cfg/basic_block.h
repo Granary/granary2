@@ -17,13 +17,13 @@ namespace granary {
 class Instruction;
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
-    BasicBlock,
-    NativeBasicBlock,
-    InstrumentedBasicBlock,
-    CachedBasicBlock,
-    InFlightBasicBlock,
-    FutureBasicBlock,
-    UnknownBasicBlock);
+    (BasicBlock, 2),
+    (NativeBasicBlock, 2 * 3),
+    (InstrumentedBasicBlock, 2 * 5),
+    (CachedBasicBlock, 2 * 5 * 7),
+    (InFlightBasicBlock, 2 * 5 * 11),
+    (FutureBasicBlock, 2 * 5 * 13),
+    (UnknownBasicBlock, 2 * 5 * 17));
 
 // Forward declarations.
 class BasicBlock;
@@ -46,7 +46,10 @@ class BasicBlockSuccessor {
   BasicBlockSuccessor(const BasicBlockSuccessor &) = default;
 
   // Control-transfer instruction leading to the target basic block.
-  ControlFlowInstruction * const cti;
+  //
+  // `const`-qualified so that `cti` isn't unlinked from an instruction list
+  // while the successors are being iterated.
+  const ControlFlowInstruction * const cti;
 
   // The basic block targeted by `cti`.
   BasicBlock * const block;
@@ -179,7 +182,7 @@ class BasicBlock : public UnownedCountedObject {
   //
   // Note: This method is only usefully defined for `InFlightBasicBlock`. All
   //       other basic block types are treated as having no successors.
-  virtual detail::SuccessorBlockIterator Successors(void);
+  virtual detail::SuccessorBlockIterator Successors(void) const;
 
   GRANARY_BASE_CLASS(BasicBlock)
 
@@ -195,7 +198,6 @@ class BasicBlock : public UnownedCountedObject {
   friend class detail::BasicBlockList;
   friend class ControlFlowInstruction;
   friend class ControlFlowGraph;
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 
@@ -207,18 +209,17 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
- protected:
+  // The meta-data associated with this basic block. Points to some (usually)
+  // interned meta-data that is valid on entry to this basic block.
+  const GRANARY_POINTER(BasicBlockMetaData) * const entry_meta;
+
+ GRANARY_PROTECTED:
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
                          const BasicBlockMetaData *entry_meta_);
 
  private:
   InstrumentedBasicBlock(void) = delete;
-
-  // The meta-data associated with this basic block. Points to some (usually)
-  // interned meta-data that is valid on entry to this basic block.
-  const GRANARY_POINTER(BasicBlockMetaData) * const entry_meta;
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBasicBlock);
 };
 
@@ -249,20 +250,19 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
 // A basic block that has been decoded but not yet committed to the code cache.
 class InFlightBasicBlock : public InstrumentedBasicBlock {
  public:
-  virtual ~InFlightBasicBlock(void);
+  virtual ~InFlightBasicBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
   InFlightBasicBlock(AppProgramCounter app_start_pc_,
                      const BasicBlockMetaData *entry_meta_);
 
-  virtual detail::SuccessorBlockIterator Successors(void);
+  virtual detail::SuccessorBlockIterator Successors(void) const;
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(InFlightBasicBlock, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   })
-
 
   inline Instruction *FirstInstruction(void) const {
     return first;
@@ -281,7 +281,12 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   }
 
  private:
+  friend class ControlFlowGraph;
+
   InFlightBasicBlock(void) = delete;
+
+  GRANARY_INTERNAL_DEFINITION
+  void FreeInstructionList(void);
 
   // In-progress meta-data about this basic block.
   GRANARY_POINTER(BasicBlockMetaData) *meta;
@@ -311,7 +316,7 @@ class FutureBasicBlock : public InstrumentedBasicBlock {
   GRANARY_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(FutureBasicBlock, {
     SHARED = true,
-    ALIGNMENT = 1  // Read-only after allocation.
+    ALIGNMENT = 1
   })
 
  private:
@@ -331,7 +336,11 @@ class UnknownBasicBlock : public InstrumentedBasicBlock {
       : InstrumentedBasicBlock(nullptr, nullptr) {}
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
-  GRANARY_DISABLE_NEW_ALLOCATOR(UnknownBasicBlock)
+  GRANARY_DEFINE_NEW_ALLOCATOR(FutureBasicBlock, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
+
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(UnknownBasicBlock);
 };
@@ -346,7 +355,7 @@ class NativeBasicBlock : public BasicBlock {
   GRANARY_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(NativeBasicBlock, {
     SHARED = true,
-    ALIGNMENT = 1  // Pack these tightly as they are read-only.
+    ALIGNMENT = 1
   })
 
  private:

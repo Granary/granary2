@@ -63,14 +63,16 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
     return pc;
   }
 
-  const AppProgramCounter decoded_pc(pc);
+
   in_flight_instruction = instr;
   instr->Clear();
 
   dynamorio::instr_t *raw_instr(dynamorio::instr_create(this));
-  pc = dynamorio::decode_raw(this, pc, raw_instr);
+
+  const AppProgramCounter decoded_pc(pc);
+  pc = dynamorio::decode_raw(this, decoded_pc, raw_instr);
   if (pc) {
-    dynamorio::decode(this, pc, raw_instr);
+    dynamorio::decode(this, decoded_pc, raw_instr);
   }
 
   // Special cases: all of these examples should end a basic block and lead to

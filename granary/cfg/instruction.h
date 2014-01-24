@@ -19,11 +19,11 @@ class DecodedInstruction;
 }  // namespace driver
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
-    Instruction,
-    AnnotationInstruction,
-    NativeInstruction,
-    BranchInstruction,
-    ControlFlowInstruction);
+    (Instruction, 2),
+    (AnnotationInstruction, 2 * 3),
+    (NativeInstruction, 2 * 5),
+    (BranchInstruction, 2 * 5 * 7),
+    (ControlFlowInstruction, 2 * 5 * 11));
 
 // Represents an abstract instruction.
 class Instruction {
@@ -187,9 +187,14 @@ class ControlFlowInstruction : public NativeInstruction {
   })
 
  private:
+  friend class ControlFlowGraph;
+
   ControlFlowInstruction(void) = delete;
 
   mutable BasicBlock *target;
+
+  GRANARY_INTERNAL_DEFINITION
+  void ChangeTarget(BasicBlock *new_target) const;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };

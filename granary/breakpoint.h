@@ -11,6 +11,12 @@ void granary_break_on_unreachable_code(void);
 void granary_break_on_encode(const void *);
 void granary_break_on_decode(const void *);
 
+inline void granary_break_on_fault_if(bool cond) {
+  if (cond) {
+    granary_break_on_fault();
+  }
+}
+
 }  // extern C
 
 #endif  // GRANARY_BREAKPOINT_H_

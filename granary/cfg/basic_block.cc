@@ -44,7 +44,7 @@ void BackwardInstructionIterator::operator++(void) {
 
 }  // namespace detail
 
-detail::SuccessorBlockIterator BasicBlock::Successors(void) {
+detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
 }
 
@@ -53,7 +53,13 @@ InstrumentedBasicBlock::InstrumentedBasicBlock(
     AppProgramCounter app_start_pc_, const BasicBlockMetaData *entry_meta_)
     : BasicBlock(app_start_pc_),
       entry_meta(entry_meta_) {
-  GRANARY_UNUSED(entry_meta);  // TODO(pag): Use the entry metadata.
+
+  // TODO(pag): Use the entry metadata. This should involve looking into some
+  //            global "pool" of meta-data for all basic blocks, and making
+  //            a copy of that meta-data for this basic block. The eventual
+  //            requirement should be that entry_meta is guaranteed to be non-
+  //            null.
+  GRANARY_UNUSED(entry_meta);
 }
 
 // Initialize a cached basic block.
@@ -62,15 +68,6 @@ CachedBasicBlock::CachedBasicBlock(AppProgramCounter app_start_pc_,
                                    const BasicBlockMetaData *entry_meta_)
     : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
       cache_start_pc(cache_start_pc_) {}
-
-// Clean up the memory of an in-flight basic block.
-InFlightBasicBlock::~InFlightBasicBlock(void) {
-  for (Instruction *instr(first), *next(nullptr); instr; instr = next) {
-    next = instr->Next();
-    delete instr;
-  }
-  list = nullptr;
-}
 
 // Initialize an in-flight basic block.
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
@@ -82,9 +79,20 @@ InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
-
-detail::SuccessorBlockIterator InFlightBasicBlock::Successors(void) {
+// Return an iterator of the successors of a basic block.
+detail::SuccessorBlockIterator InFlightBasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator(first);
+}
+
+// Free all of the instructions in the basic block. This is invoked by
+// ControlFlowGraph::~ControlFlowGraph, as the freeing of instructions
+// interacts with the ownership model of basic blocks inside of basic block
+// lists.
+void InFlightBasicBlock::FreeInstructionList(void) {
+  for (Instruction *instr(first), *next(nullptr); instr; instr = next) {
+    next = instr->Next();
+    delete instr;
+  }
 }
 
 }  // namespace granary

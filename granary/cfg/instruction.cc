@@ -30,10 +30,8 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
 }
 
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  if (GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr))) {
-    granary_break_on_fault();
-  }
-
+  granary_break_on_fault_if(
+      GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr)));
   instr->list.Unlink();
   return std::unique_ptr<Instruction>(instr);
 }
@@ -43,18 +41,14 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
 // block.
 Instruction *AnnotationInstruction::InsertBefore(
     std::unique_ptr<Instruction> that) {
-  if (GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation)) {
-    granary_break_on_fault();
-  }
+  granary_break_on_fault_if(GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation));
   return this->Instruction::InsertBefore(std::move(that));
 }
 
 // Prevent adding an instruction after the ending instruction of a basic block.
 Instruction *AnnotationInstruction::InsertAfter(
     std::unique_ptr<Instruction> that) {
-  if (GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation)) {
-    granary_break_on_fault();
-  }
+  granary_break_on_fault_if(GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation));
   return this->Instruction::InsertAfter(std::move(that));
 }
 #endif  // GRANARY_DEBUG
@@ -75,24 +69,23 @@ ControlFlowInstruction::ControlFlowInstruction(
 // Destroy a control-flow transfer instruction.
 ControlFlowInstruction::~ControlFlowInstruction(void) {
   target->Release();
+  auto old_target = target;
+  target = nullptr;
 
   // In some cases, instructions need to clean up after basic blocks. E.g.
   // a CTI is unlinked, never re-linked, and therefore goes out of scope, thus
-  // deleting the destructor. If that CTI is the only link to a basic block,
+  // deleting the instruction. If that CTI is the only link to a basic block,
   // then the associated block must also be destroyed.
-  //
-  // This can cause a bit of thrashing when control-flow graphs are destroyed.
-  // TODO(pag): Check that all behavior works out in this case.
-  if (target->CanDestroy()) {
-
-    // If it's in a basic block list, then the CFG will clean it up. Otherwise,
-    // it's unknown and so the CTI cleans it up.
-    if (!target->list) {
-      delete target;
-    }
+  if (!old_target->list && old_target->CanDestroy()) {
+    delete old_target;
   }
+}
 
-  target = nullptr;
+void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
+  auto old_target = target;
+  new_target->Acquire();
+  target = new_target;
+  old_target->Release();
 }
 
 }  // namespace granary

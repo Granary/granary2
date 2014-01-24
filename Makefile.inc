@@ -126,6 +126,16 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code"
 # Handle global `operator new(unsigned long)`.
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code"
 
+# Handle some other C/C++ runtime library functions.
+ifeq (kernel,$(GRANARY_WHERE))
+    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_atexit=granary_break_on_unreachable_code"
+    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_acquire=granary_break_on_unreachable_code"
+    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_release=granary_break_on_unreachable_code"
+    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_abort=granary_break_on_unreachable_code"
+    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
+	# TODO(pag): __cxx_global_var_init for all static global variables?
+endif
+
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5
 GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_FLAGS)

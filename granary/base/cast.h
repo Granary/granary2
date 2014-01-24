@@ -99,15 +99,17 @@ inline ToT UnsafeCast(const FromT v) {
     return true; \
   } \
   static bool IsDerivedFrom(const base_type *base) { \
-    return base->IdOf() == GRANARY_CAT(kIdOf, derived_type); \
+    return !(base->IdOf() % GRANARY_CAT(kIdOf, derived_type)); \
   } \
   virtual int IdOf(void) const { \
     return GRANARY_CAT(kIdOf, derived_type); \
   }
 
 // Helper macro for declaring class id enumeration constants.
-# define GRANARY_DECLARE_CLASS_ID(class_name) \
-  GRANARY_CAT(kIdOf, class_name)
+# define GRANARY_DECLARE_CLASS_ID_(class_name, value) \
+  GRANARY_CAT(kIdOf, class_name) = value
+# define GRANARY_DECLARE_CLASS_ID(params) \
+    GRANARY_DECLARE_CLASS_ID_ params
 
 // Define an enum that assigns unique (within the single-inheritance class
 // hierarchy) numeric IDs for each class within the class hierarchy.

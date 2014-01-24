@@ -4,6 +4,8 @@
 #ifndef GRANARY_BASE_REFCOUNT_H_
 #define GRANARY_BASE_REFCOUNT_H_
 
+#include "granary/breakpoint.h"
+
 namespace granary {
 
 // Implements intrusive reference counting for an object. The concept here is
@@ -20,7 +22,7 @@ class UnownedCountedObject {
   }
 
   inline void Release(void) {
-    --count;
+    granary_break_on_fault_if(0 > --count);
   }
 
   inline bool CanDestroy(void) const {

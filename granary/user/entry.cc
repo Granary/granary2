@@ -4,9 +4,9 @@
 
 #include <cstdio>
 
-#include "granary/base/cast.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
+#include "granary/cfg/instruction.h"
 
 #include "granary/breakpoint.h"
 #include "granary/driver.h"
@@ -18,9 +18,25 @@ namespace granary {
 
 static void Instrument(ControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
+    if (IsA<UnknownBasicBlock *>(block)) {
+      continue;
+    }
+
     printf("BB %p:\n", block->app_start_pc);
     for (auto succ : block->Successors()) {
-      printf(" -> %p\n", succ.block->app_start_pc);
+
+      // Trace all fall-through basic blocks.
+      if (succ.cti->IsJump() &&
+          !succ.cti->IsConditionalJump() &&
+          !succ.cti->HasIndirectTarget()) {
+        cfg->Materialize(succ);
+      }
+
+      if (IsA<UnknownBasicBlock *>(succ.block)) {
+        printf(" -> indirect\n");
+      } else {
+        printf(" -> %p\n", succ.block->app_start_pc);
+      }
     }
   }
 }
