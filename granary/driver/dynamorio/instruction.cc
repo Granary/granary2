@@ -56,7 +56,8 @@ bool DecodedInstruction::IsFunctionReturn(void) const {
 }
 
 bool DecodedInstruction::IsInterruptCall(void) const {
-  return dynamorio::OP_int == instruction.opcode;
+  const unsigned op(instruction.opcode);
+  return dynamorio::OP_int3 <= op && op <= dynamorio::OP_into;
 }
 
 bool DecodedInstruction::IsInterruptReturn(void) const {

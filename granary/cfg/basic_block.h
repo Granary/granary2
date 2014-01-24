@@ -35,6 +35,7 @@ class ControlFlowInstruction;
 
 namespace detail {
 
+class BasicBlockList;
 class SuccessorBlockIterator;
 
 // A successor of a basic block. A successor is a pair defined as a control-flow
@@ -166,7 +167,8 @@ class BasicBlock : public UnownedCountedObject {
   GRANARY_INTERNAL_DEFINITION
   inline explicit BasicBlock(AppProgramCounter app_start_pc_)
       : UnownedCountedObject(),
-        app_start_pc(app_start_pc_) {}
+        app_start_pc(app_start_pc_),
+        list(nullptr) {}
 
   // Find the successors of this basic block. This can be used as follows:
   //
@@ -185,7 +187,15 @@ class BasicBlock : public UnownedCountedObject {
   // cache.
   const AppProgramCounter app_start_pc;
 
+ GRANARY_PROTECTED:
+  // All blocks are "owned" by a single basic block list.
+  GRANARY_POINTER(detail::BasicBlockList) *list;
+
  private:
+  friend class detail::BasicBlockList;
+  friend class ControlFlowInstruction;
+  friend class ControlFlowGraph;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 
@@ -243,7 +253,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
 
   GRANARY_INTERNAL_DEFINITION
   InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                     BasicBlockMetaData *entry_meta_);
+                     const BasicBlockMetaData *entry_meta_);
 
   virtual detail::SuccessorBlockIterator Successors(void);
 
@@ -276,7 +286,8 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   // In-progress meta-data about this basic block.
   GRANARY_POINTER(BasicBlockMetaData) *meta;
 
-  // List of instructions in this basic block.
+  // List of instructions in this basic block. Basic blocks have sole ownership
+  // over their instructions.
   Instruction * const first;
   Instruction * const last;
 
@@ -290,7 +301,7 @@ class FutureBasicBlock : public InstrumentedBasicBlock {
 
   GRANARY_INTERNAL_DEFINITION
   inline FutureBasicBlock(AppProgramCounter app_start_pc_,
-                          BasicBlockMetaData *entry_meta_)
+                          const BasicBlockMetaData *entry_meta_)
       : InstrumentedBasicBlock(app_start_pc_, entry_meta_) {}
 
   // Mark this basic block as being able to be run natively.

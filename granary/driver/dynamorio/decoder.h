@@ -16,12 +16,14 @@ namespace driver {
 
 class DecodedInstruction;
 class DynamoRIOHeap;
+class InstructionBuilder;
 
 // Manages encoding and decoding of instructions.
 class InstructionDecoder : private dynamorio::dcontext_t {
  public:
   // Initialize the instruction decoder.
   InstructionDecoder(void);
+  explicit InstructionDecoder(DecodedInstruction *);
 
   // Decode/Encode an instruction, and update the program counter by reference
   // to point to the next logical instruction. Returns `true` if the
@@ -36,6 +38,7 @@ class InstructionDecoder : private dynamorio::dcontext_t {
 
  private:
   friend class DynamoRIOHeap;
+  friend class InstructionBuilder;
 
   // Internal APIs for encoding and decoding instructions. These APIs directly
   // interact with the DynamoRIO driver.

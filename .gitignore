@@ -22,3 +22,10 @@ bin
 # swp and tmp files
 *.*~
 *.swp
+*.log
+*.tmp
+*.dump
+
+# Generated files
+generated/*
+

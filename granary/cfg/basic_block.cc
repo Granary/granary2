@@ -69,11 +69,12 @@ InFlightBasicBlock::~InFlightBasicBlock(void) {
     next = instr->Next();
     delete instr;
   }
+  list = nullptr;
 }
 
 // Initialize an in-flight basic block.
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                                       BasicBlockMetaData *entry_meta_)
+                                       const BasicBlockMetaData *entry_meta_)
     : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
       meta(entry_meta_->Copy()),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),

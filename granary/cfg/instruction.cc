@@ -2,8 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
-
 #include "granary/breakpoint.h"
 #include "granary/driver.h"
 
@@ -63,5 +63,36 @@ NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
     : instruction(instruction_) {}
 
 NativeInstruction::~NativeInstruction(void) {}
+
+// Initialize a control-flow transfer instruction.
+ControlFlowInstruction::ControlFlowInstruction(
+    driver::DecodedInstruction *instruction_, BasicBlock *target_)
+      : NativeInstruction(instruction_),
+        target(target_) {
+  target->Acquire();
+}
+
+// Destroy a control-flow transfer instruction.
+ControlFlowInstruction::~ControlFlowInstruction(void) {
+  target->Release();
+
+  // In some cases, instructions need to clean up after basic blocks. E.g.
+  // a CTI is unlinked, never re-linked, and therefore goes out of scope, thus
+  // deleting the destructor. If that CTI is the only link to a basic block,
+  // then the associated block must also be destroyed.
+  //
+  // This can cause a bit of thrashing when control-flow graphs are destroyed.
+  // TODO(pag): Check that all behavior works out in this case.
+  if (target->CanDestroy()) {
+
+    // If it's in a basic block list, then the CFG will clean it up. Otherwise,
+    // it's unknown and so the CTI cleans it up.
+    if (!target->list) {
+      delete target;
+    }
+  }
+
+  target = nullptr;
+}
 
 }  // namespace granary

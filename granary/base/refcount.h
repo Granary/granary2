@@ -13,7 +13,7 @@ class UnownedCountedObject {
  public:
   virtual ~UnownedCountedObject(void) = default;
   inline UnownedCountedObject(void)
-      : count(1) {}
+      : count(0) {}
 
   inline void Acquire(void) {
     ++count;
@@ -23,7 +23,7 @@ class UnownedCountedObject {
     --count;
   }
 
-  inline bool CanRelease(void) const {
+  inline bool CanDestroy(void) const {
     return 0 >= count;
   }
 #endif  // GRANARY_INTERNAL

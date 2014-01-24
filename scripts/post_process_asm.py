@@ -3,7 +3,7 @@
 the @N@ symbol with a new line.
 
 Author:     Peter Goodman (peter.goodman@gmail.com)
-Copyright:  Copyright 2012-2013 Peter Goodman, all rights reserved.
+Copyright:  Copyright 2014 Peter Goodman, all rights reserved.
 """
 
 import sys

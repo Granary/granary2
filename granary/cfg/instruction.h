@@ -28,7 +28,9 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
 // Represents an abstract instruction.
 class Instruction {
  public:
-  Instruction(void) = default;
+  inline Instruction(void)
+      : list() {}
+
   virtual ~Instruction(void) = default;
 
   GRANARY_BASE_CLASS(Instruction)
@@ -157,13 +159,11 @@ class BranchInstruction : public NativeInstruction {
 //       redirect control back to the beginning of the basic block.
 class ControlFlowInstruction : public NativeInstruction {
  public:
-  virtual ~ControlFlowInstruction(void) = default;
+  virtual ~ControlFlowInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
   ControlFlowInstruction(driver::DecodedInstruction *instruction_,
-                         BasicBlock *target_)
-      : NativeInstruction(instruction_),
-        target(target_) {}
+                         BasicBlock *target_);
 
   // Driver-specific implementations.
   bool IsFunctionCall(void) const;

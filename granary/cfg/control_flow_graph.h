@@ -65,17 +65,24 @@ class ControlFlowGraph {
 
   ~ControlFlowGraph(void);
 
+  // Create a new (future) basic block. This block is left as un-owned and
+  // will not appear in any iterators until some instruction takes ownership
+  // of it. This can be achieved by targeting this newly created basic block
+  // with a CTI.
+  FutureBasicBlock *Materialize(AppProgramCounter start_pc,
+                                const BasicBlockMetaData *meta=nullptr);
+
   // Convert a `FutureBasicBlock` into either of a:
   //    `CachedBasicBlock`:   If the block has already been translated.
   //    `InFlightBasicBlock`: If the block is already in the CFG. If not, a new
   //                          one might be made.
   //    `NativeBasicBlock`:   If the block jumps to somewhere that should go
   //                          native.
-  void Materialize(const detail::BasicBlockSuccessor &target,
-                   const BasicBlockMetaData *meta=nullptr);
+  BasicBlock *Materialize(const detail::BasicBlockSuccessor &target,
+                          const BasicBlockMetaData *meta=nullptr);
 
-  void Materialize(const ControlFlowInstruction *instruction,
-                   const BasicBlockMetaData *meta=nullptr);
+  BasicBlock *Materialize(const ControlFlowInstruction *instruction,
+                          const BasicBlockMetaData *meta=nullptr);
 
   // Returns an object that can be used inside of a range-based for loop. For
   // example:
@@ -83,19 +90,23 @@ class ControlFlowGraph {
   //    for(auto block : cfg.Blocks())
   //      ...
   inline detail::BasicBlockIterator Blocks(void) {
-    return detail::BasicBlockIterator(blocks);
+    return detail::BasicBlockIterator(first_block);
   }
 
   GRANARY_POINTER(Environment) * const environment;
 
  private:
-
   GRANARY_INTERNAL_DEFINITION
   void Materialize(InFlightBasicBlock *block,
                    detail::BasicBlockList *block_list);
 
+  GRANARY_INTERNAL_DEFINITION
+  void InsertAfter(detail::BasicBlockList *list,
+                   detail::BasicBlockList *new_list);
+
   // List of basic blocks known to this control-flow graph.
-  detail::BasicBlockList *blocks;
+  detail::BasicBlockList *first_block;
+  detail::BasicBlockList *last_block;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);
 };

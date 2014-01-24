@@ -18,6 +18,15 @@ InstructionDecoder::InstructionDecoder(void)
   this->dynamorio::dcontext_t::x86_mode = false;
 }
 
+// Initialize the instruction decoder.
+InstructionDecoder::InstructionDecoder(DecodedInstruction *instr)
+    : in_flight_instruction(instr),
+      allocated_instruction(false),
+      allocated_raw_bytes(false),
+      num_allocated_operands(0) {
+  this->dynamorio::dcontext_t::x86_mode = false;
+}
+
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
 // successfully decoded.

@@ -23,6 +23,11 @@ GRANARY_ARCH_DIR ?=  $(GRANARY_SRC_DIR)/granary/arch/$(GRANARY_ARCH)
 GRANARY_BIN_DIR ?= /home/pag/Code/Granary+/bin
 GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)
 
+# Figure out the generated files directories.
+# TODO(pag): Make generated source files target-specific?
+GRANARY_GEN_SRC_DIR = $(GRANARY_SRC_DIR)/generated
+GRANARY_GEN_BIN_DIR = $(GRANARY_BIN_DIR)/generated
+
 GRANARY_EXTRA_CXX_FLAGS ?=
 GRANARY_EXTRA_CC_FLAGS ?=
 
