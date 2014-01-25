@@ -9,12 +9,17 @@ GRANARY_LL_FILES = $(shell find $(GRANARY_BIN_DIR) -type f -name '*.ll')
 # Figure out the prefix and suffix of the output file.
 GRANARY_NAME_PREFIX =
 GRANARY_NAME_SUFFIX = .out
+GRANARY_INJECTOR =
 ifeq (0,$(GRANARY_STANDALONE))
 	GRANARY_NAME_PREFIX = lib
 	GRANARY_NAME_SUFFIX = .so
 	GRANARY_LD_FLAGS_EARLY += -shared
+	GRANARY_INJECTOR = injector
 endif
 
+GRANARY_INJECTOR_FLAGS =
+GRANARY_INJECTOR_FLAGS += -std=c++11 -fno-rtti -fno-exceptions
+GRANARY_INJECTOR_FLAGS += -O3 -g0 -fno-asynchronous-unwind-tables
 
 # Most of the output file name. Used to link together .ll files, generate a .o
 # file, and make either a .out or .so file.
@@ -40,12 +45,24 @@ $(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
 # a simple form of link-time optimization.
 $(GRANARY_INTERMEDIATE_FILE).o: $(GRANARY_INTERMEDIATE_FILE).ll
 	@echo "Building object $@"
-	@$(GRANARY_CC) $(GRANARY_LD_FLAGS) -c $(GRANARY_INTERMEDIATE_FILE).ll -o $(GRANARY_INTERMEDIATE_FILE).o
+	@$(GRANARY_CC) $(GRANARY_LD_FLAGS) \
+		-c $(GRANARY_INTERMEDIATE_FILE).ll \
+		-o $(GRANARY_INTERMEDIATE_FILE).o
 
+
+# Compile the injector for 
+injector:
+	@echo "Compiling injector $(GRANARY_BIN_DIR)/grr"
+	@$(GRANARY_CXX) $(GRANARY_INJECTOR_FLAGS) \
+		-c $(GRANARY_SRC_DIR)/granary/user/inject.cc \
+		-o $(GRANARY_BIN_DIR)/granary/user/inject.o
+	@$(GRANARY_CXX) $(GRANARY_INJECTOR_FLAGS) \
+		$(GRANARY_BIN_DIR)/granary/user/inject.o \
+		-o $(GRANARY_BIN_DIR)/grr
 
 # Link together the final .o file with each of the compiled assembly files
 # to form the final .out or .so file.
-all: $(GRANARY_ASM_OBJ_FILES) $(GRANARY_INTERMEDIATE_FILE).o
+all: $(GRANARY_ASM_OBJ_FILES) $(GRANARY_INTERMEDIATE_FILE).o $(GRANARY_INJECTOR)
 	@echo "Linking $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_NAME)$(GRANARY_NAME_SUFFIX)"
 	@$(GRANARY_CC) \
 		$(GRANARY_LD_FLAGS) \

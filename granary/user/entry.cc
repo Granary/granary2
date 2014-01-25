@@ -28,12 +28,6 @@ struct StateMeta : public MutableMetaData {
 };
 
 static void Instrument(ControlFlowGraph *cfg) {
-  auto foo_meta = detail::meta::GetInfo<FooMeta>();
-  auto state_meta = detail::meta::GetInfo<StateMeta>();
-
-  GRANARY_USED(foo_meta);
-  GRANARY_USED(state_meta);
-
   printf("digraph {\n");
   for (auto block : cfg->Blocks()) {
     if (IsA<UnknownBasicBlock *>(block)) {
@@ -77,6 +71,13 @@ int main(int argc, const char *argv[]) {
 }  // extern C
 
 #else
+
+#include <cstdio>
+
+__attribute__((constructor))
+void init(void) {
+  printf("Attached!!\n");
+}
 
 #endif
 
