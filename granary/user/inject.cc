@@ -1,5 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#ifndef GRANARY_STANDALONE
+
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -65,7 +67,8 @@ static void SetPreload(void) {
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
 }
 
-// Set the arguments
+// Combine the arguments into a single string for passing as an environment
+// variable to the program that will be instrumented.
 static int SetArgs(int argc, const char **argv) {
   auto index = 0;
   auto max_len = ArrayLength(ARGS);
@@ -78,7 +81,7 @@ static int SetArgs(int argc, const char **argv) {
       break;
     }
   }
-  setenv("GRANARY_ARGS", ARGS, 1);
+  setenv("GRANARY_OPTIONS", ARGS, 1);
   return i + 1;
 }
 
@@ -93,4 +96,4 @@ int main(int argc, const char **argv) {
       const_cast<char * const *>(environ));
 }
 
-
+#endif  // GRANARY_STANDALONE

@@ -4,6 +4,8 @@
 
 #include <cstdio>
 
+#include "granary/base/options.h"
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
@@ -14,70 +16,32 @@
 
 #include "granary/metadata.h"
 
-#if GRANARY_STANDALONE
-
 namespace granary {
 
-struct FooMeta : public SerializableMetaData {
-  void Hash(HashFunction *) const { }
-  bool Equals(const FooMeta *x) const { return !x; }
-};
+GRANARY_DEFINE_string(tools, "")
 
-struct StateMeta : public MutableMetaData {
-
-};
-
-static void Instrument(ControlFlowGraph *cfg) {
-  printf("digraph {\n");
-  for (auto block : cfg->Blocks()) {
-    if (IsA<UnknownBasicBlock *>(block)) {
-      continue;
-    }
-    for (auto succ : block->Successors()) {
-      if (succ.cti->IsJump() && !succ.cti->HasIndirectTarget()) {
-        cfg->Materialize(succ);
-      }
-
-      if (IsA<UnknownBasicBlock *>(succ.block)) {
-        printf("bb%p -> indirect\n", block->app_start_pc);
-      } else {
-        printf("bb%p -> bb%p\n", block->app_start_pc, succ.block->app_start_pc);
-      }
-    }
-  }
-  printf("}\n");
-}
-
-static void Test(void) {
-  auto start_pc = UnsafeCast<AppProgramCounter>(&Instrument);
-  Environment env;
-  ControlFlowGraph cfg(&env, start_pc);
-  Instrument(&cfg);
+static void Init(void) {
+  granary::driver::Init();
+  printf("--tools=%s\n", FLAG_tools);
 }
 
 }  // namespace granary
 
+#ifdef GRANARY_STANDALONE
+
 extern "C" {
-
 int main(int argc, const char *argv[]) {
-  granary::driver::Init();
-  granary::Test();
-
-  GRANARY_UNUSED(argc);
-  GRANARY_UNUSED(argv);
+  granary::InitOptions(argc, argv);
+  granary::Init();
   return 0;
 }
-
 }  // extern C
-
 #else
 
-#include <cstdio>
-
 __attribute__((constructor))
-void init(void) {
-  printf("Attached!!\n");
+void granary_init(void) {
+  granary::InitOptions(getenv("GRANARY_OPTIONS"));
+  granary::Init();
 }
 
 #endif
-

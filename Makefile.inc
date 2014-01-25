@@ -10,7 +10,7 @@ GRANARY_OS ?= linux
 GRANARY_TARGET ?= debug
 GRANARY_WHERE ?= user
 GRANARY_DRIVER ?= dynamorio
-GRANARY_STANDALONE ?= 1
+GRANARY_STANDALONE ?= 0
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0
 
@@ -44,24 +44,23 @@ GRANARY_COMMON_WARN_FLAGS =
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
 GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR)
-GRANARY_COMMON_FLAGS += -DGRANARY_STANDALONE=$(GRANARY_STANDALONE)
 
 # Use C11 and C++11.
 GRANARY_CC_FLAGS += -std=gnu99
 GRANARY_CXX_FLAGS += -std=c++11
 
-ifeq ($(GRANARY_WHERE),kernel)
-	GRANARY_STANDALONE := 0
+# Enable valgrind checking of code.
+ifeq (1,$(GRANARY_WITH_VALGRIND))
+	GRANARY_CXX_FLAGS += -DGRANARY_WITH_VALGRIND
 endif
 
-# Enable valgrind checking of code.
-ifeq ($(GRANARY_WITH_VALGRIND),1)
-	GRANARY_CXX_FLAGS += -DGRANARY_WITH_VALGRIND
+ifeq (1,$(GRANARY_STANDALONE))
+	GRANARY_COMMON_FLAGS += -DGRANARY_STANDALONE
 endif
 
 # Enable/disable features based on whether or not this is a debug or release
 # build.
-ifeq ($(GRANARY_TARGET),debug)
+ifeq (debug,$(GRANARY_TARGET))
     GRANARY_COMMON_FLAGS += -O0 -g3 -DGRANARY_DEBUG
     GRANARY_LD_FLAGS += -O0 -g3
 else
@@ -84,7 +83,7 @@ endif
 # Make sure certain language features are disabled.
 GRANARY_CXX_FLAGS += -fno-asynchronous-unwind-tables -fno-rtti -fno-exceptions 
 
-ifeq ($(GRANARY_WHERE),kernel)  # Make sure we follow the kernel ABI.
+ifeq (kernel,$(GRANARY_WHERE))  # Make sure we follow the kernel ABI.
 	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
 endif
 

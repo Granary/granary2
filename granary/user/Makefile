@@ -28,18 +28,15 @@ GRANARY_INTERMEDIATE_FILE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_N
 # Remove the final linked together file, just in case it is present.
 GRANARY_LL_FILES := $(GRANARY_LL_FILES:$(GRANARY_INTERMEDIATE_FILE).ll=)
 
-
 # Compile an assembly source file into an object file.
 $(GRANARY_BIN_DIR)/%.o: $(GRANARY_BIN_DIR)/%.S
 	@echo "Building ASM object $@"
 	$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -c $< -o $@
 
-
 # Link together all compiled .ll files into a single .ll file.
 $(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
 	@echo "Linking intermediate bitcode files."
 	@llvm-link $(GRANARY_LL_FILES) -o $(GRANARY_INTERMEDIATE_FILE).ll
-
 
 # Compile the linked together .ll file into an object file. This should enable
 # a simple form of link-time optimization.
@@ -49,8 +46,7 @@ $(GRANARY_INTERMEDIATE_FILE).o: $(GRANARY_INTERMEDIATE_FILE).ll
 		-c $(GRANARY_INTERMEDIATE_FILE).ll \
 		-o $(GRANARY_INTERMEDIATE_FILE).o
 
-
-# Compile the injector for 
+# Compile the injector for launching an executable with libgranary.so.
 injector:
 	@echo "Compiling injector $(GRANARY_BIN_DIR)/grr"
 	@$(GRANARY_CXX) $(GRANARY_INJECTOR_FLAGS) \
@@ -63,7 +59,7 @@ injector:
 # Link together the final .o file with each of the compiled assembly files
 # to form the final .out or .so file.
 all: $(GRANARY_ASM_OBJ_FILES) $(GRANARY_INTERMEDIATE_FILE).o $(GRANARY_INJECTOR)
-	@echo "Linking $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_NAME)$(GRANARY_NAME_SUFFIX)"
+	@echo "Linking $(GRANARY_INTERMEDIATE_FILE)$(GRANARY_NAME_SUFFIX)"
 	@$(GRANARY_CC) \
 		$(GRANARY_LD_FLAGS) \
 		$(GRANARY_LD_FLAGS_EARLY) \
