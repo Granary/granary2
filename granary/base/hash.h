@@ -14,6 +14,11 @@ class HashFunction {
  public:
   virtual ~HashFunction(void) = default;
 
+  template <typename T>
+  inline void Accumulate(const T &bytes_) {
+    Accumulate(&bytes_);
+  }
+
   // Accumulate a sequence of bytes (where the sequence has type `T`) into the
   // hash.
   template <typename T>

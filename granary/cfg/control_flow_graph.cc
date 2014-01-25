@@ -68,7 +68,7 @@ BasicBlock *BasicBlockIterator::operator*(void) const {
 // Initialize the control flow graph with a single in-flight basic block.
 ControlFlowGraph::ControlFlowGraph(Environment *environment_,
                                    AppProgramCounter pc,
-                                   BasicBlockMetaData *meta)
+                                   GenericMetaData *meta)
       : environment(environment_),
         first_block(nullptr),
         last_block(nullptr) {
@@ -116,8 +116,8 @@ ControlFlowGraph::~ControlFlowGraph(void) {
 // will not appear in any iterators until some instruction takes ownership
 // of it. This can be achieved by targeting this newly created basic block
 // with a CTI.
-FutureBasicBlock *ControlFlowGraph::Materialize(
-    AppProgramCounter start_pc, const BasicBlockMetaData *meta) {
+FutureBasicBlock *ControlFlowGraph::Materialize(AppProgramCounter start_pc) {
+  auto meta = new GenericMetaData;
   auto block = new FutureBasicBlock(start_pc, meta);
   auto list_entry = new detail::BasicBlockList(block);
   InsertAfter(last_block, list_entry);
@@ -126,10 +126,9 @@ FutureBasicBlock *ControlFlowGraph::Materialize(
 
 // Materialize a potentially new basic block given a basic block successor
 // (an instruction+target block) pair.
-BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target,
-                                          const BasicBlockMetaData *meta) {
+BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target) {
   granary_break_on_fault_if(target.block != target.cti->TargetBlock());
-  auto block = Materialize(target.cti, meta);
+  auto block = Materialize(target.cti);
   const_cast<BasicBlock *&>(target.block) = block;
   return block;
 }
@@ -137,18 +136,13 @@ BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target,
 // Materialize a potentially new basic block given a CTI (that points to the
 // block to be materialized) and the metadata to use when materializing the
 // block.
-BasicBlock *ControlFlowGraph::Materialize(
-    const ControlFlowInstruction *cti, const BasicBlockMetaData *meta) {
-
-  auto old_block = cti->TargetBlock();
-  granary_break_on_fault_if(!old_block->list);
-
-  if (!IsA<FutureBasicBlock *>(old_block)) {
-    return old_block;
-  }
+BasicBlock *ControlFlowGraph::Materialize(const ControlFlowInstruction *cti) {
+  auto old_block = DynamicCast<FutureBasicBlock *>(cti->TargetBlock());
+  granary_break_on_fault_if(!old_block || !old_block->list);
 
   // We've already materialized this basic block in this session.
   auto target_pc = old_block->app_start_pc;
+  auto meta = old_block->meta;
   auto found_block = FindMaterialized(target_pc, meta, old_block);
 
   // TODO(pag): Meta-data driven transitions!!! Need to make it possible to
@@ -260,7 +254,7 @@ detail::BasicBlockList *ControlFlowGraph::InsertAfter(
 // the already materialized basic block. Otherwise, return `nullptr`.
 BasicBlock *ControlFlowGraph::FindMaterialized(
     AppProgramCounter target_pc,
-    const BasicBlockMetaData *meta,
+    const GenericMetaData *meta,
     const BasicBlock * const ignore_block) const {
 
   InstrumentedBasicBlock *target_block(nullptr);
@@ -271,16 +265,13 @@ BasicBlock *ControlFlowGraph::FindMaterialized(
       continue;
     }
 
-    if (meta == target_block->entry_meta) {
+    // It can happen that when we materialize one basic block, there are other
+    // links to that block in the control-flow graph that we haven't considered.
+    if (meta == target_block->meta && !IsA<FutureBasicBlock *>(block)) {
       return block;
-
-    // TODO(pag): Need to make sure that meta-data is never null, as then
-    // there would be issues when dealing with, e.g. function entries and such.
-    } else if (!meta || !target_block->entry_meta) {
-      continue;
     }
 
-    if (meta->Equals(target_block->entry_meta)) {
+    if (meta->Equals(target_block->meta)) {
       return block;
     }
   }

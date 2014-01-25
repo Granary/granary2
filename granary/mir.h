@@ -11,7 +11,7 @@ namespace granary {
 
 class ControlFlowGraph;
 class BasicBlock;
-class BasicBlockMetaData;
+class GenericMetaData;
 class Instruction;
 class AnnotationInstruction;
 
@@ -26,8 +26,7 @@ std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
                                   BasicBlock *target_block);
 
 std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
-                                  AppProgramCounter target_pc,
-                                  const BasicBlockMetaData *meta=nullptr);
+                                  AppProgramCounter target_pc);
 
 std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
                                   const AnnotationInstruction *target_instr);

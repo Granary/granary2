@@ -49,31 +49,22 @@ detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
 }
 
 // Initialize an instrumented basic block.
-InstrumentedBasicBlock::InstrumentedBasicBlock(
-    AppProgramCounter app_start_pc_, const BasicBlockMetaData *entry_meta_)
+InstrumentedBasicBlock::InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
+                                               GenericMetaData *meta_)
     : BasicBlock(app_start_pc_),
-      entry_meta(entry_meta_) {
-
-  // TODO(pag): Use the entry metadata. This should involve looking into some
-  //            global "pool" of meta-data for all basic blocks, and making
-  //            a copy of that meta-data for this basic block. The eventual
-  //            requirement should be that entry_meta is guaranteed to be non-
-  //            null.
-  GRANARY_UNUSED(entry_meta);
-}
+      meta(meta_) {}
 
 // Initialize a cached basic block.
 CachedBasicBlock::CachedBasicBlock(AppProgramCounter app_start_pc_,
                                    CacheProgramCounter cache_start_pc_,
-                                   const BasicBlockMetaData *entry_meta_)
-    : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
+                                   GenericMetaData *meta_)
+    : InstrumentedBasicBlock(app_start_pc_, meta_),
       cache_start_pc(cache_start_pc_) {}
 
 // Initialize an in-flight basic block.
 InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                                       const BasicBlockMetaData *entry_meta_)
-    : InstrumentedBasicBlock(app_start_pc_, entry_meta_),
-      meta(entry_meta_->Copy()),
+                                       GenericMetaData *meta_)
+    : InstrumentedBasicBlock(app_start_pc_, meta_),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
       last(new AnnotationInstruction(END_BASIC_BLOCK)) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));

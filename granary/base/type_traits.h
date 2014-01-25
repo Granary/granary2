@@ -52,7 +52,7 @@ struct IsArray<T[]> {
   };
 };
 
-template <const bool Condition, typename TrueType, typename FalseType=void>
+template <const bool Condition, typename TrueType=int, typename FalseType=void>
 struct EnableIf;
 
 template <typename TrueType, typename FalseType>

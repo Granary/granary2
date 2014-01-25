@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <memory>
 #include <initializer_list>
+#include <type_traits>
+
 #include <stdint.h>
 
 // Useful for Valgrind-based debugging.

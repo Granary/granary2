@@ -29,7 +29,7 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
 class BasicBlock;
 class CachedBasicBlock;
 class InFlightBasicBlock;
-class BasicBlockMetaData;
+class GenericMetaData;
 class ControlFlowGraph;
 class ControlFlowInstruction;
 
@@ -209,16 +209,18 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
-  // The meta-data associated with this basic block. Points to some (usually)
-  // interned meta-data that is valid on entry to this basic block.
-  const GRANARY_POINTER(BasicBlockMetaData) * const entry_meta;
-
  GRANARY_PROTECTED:
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
-                         const BasicBlockMetaData *entry_meta_);
+                         GenericMetaData *meta_);
 
  private:
+  friend class ControlFlowGraph;
+
+  // The meta-data associated with this basic block. Points to some (usually)
+  // interned meta-data that is valid on entry to this basic block.
+  GRANARY_POINTER(GenericMetaData) * const meta;
+
   InstrumentedBasicBlock(void) = delete;
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBasicBlock);
 };
@@ -229,7 +231,7 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION
   CachedBasicBlock(AppProgramCounter app_start_pc_,
                    CacheProgramCounter cache_start_pc_,
-                   const BasicBlockMetaData *entry_meta_);
+                   GenericMetaData *meta_);
 
   virtual ~CachedBasicBlock(void) = default;
 
@@ -254,7 +256,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
 
   GRANARY_INTERNAL_DEFINITION
   InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                     const BasicBlockMetaData *entry_meta_);
+                     GenericMetaData *meta_);
 
   virtual detail::SuccessorBlockIterator Successors(void) const;
 
@@ -288,9 +290,6 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION
   void FreeInstructionList(void);
 
-  // In-progress meta-data about this basic block.
-  GRANARY_POINTER(BasicBlockMetaData) *meta;
-
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.
   Instruction * const first;
@@ -306,8 +305,8 @@ class FutureBasicBlock : public InstrumentedBasicBlock {
 
   GRANARY_INTERNAL_DEFINITION
   inline FutureBasicBlock(AppProgramCounter app_start_pc_,
-                          const BasicBlockMetaData *entry_meta_)
-      : InstrumentedBasicBlock(app_start_pc_, entry_meta_) {}
+                          GenericMetaData *meta_)
+      : InstrumentedBasicBlock(app_start_pc_, meta_) {}
 
   // Mark this basic block as being able to be run natively.
   void EnableDirectReturn(void);

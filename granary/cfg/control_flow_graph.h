@@ -14,7 +14,7 @@ class BasicBlock;
 class InFlightBasicBlock;
 class FutureBasicBlock;
 class ControlFlowGraph;
-class BasicBlockMetaData;
+class GenericMetaData;
 class Environment;
 class ControlFlowInstruction;
 class Instruction;
@@ -62,7 +62,7 @@ class ControlFlowGraph {
  public:
   GRANARY_INTERNAL_DEFINITION
   ControlFlowGraph(Environment *environment_, AppProgramCounter pc,
-                   BasicBlockMetaData *meta=nullptr);
+                   GenericMetaData *meta=nullptr);
 
   ~ControlFlowGraph(void);
 
@@ -70,8 +70,7 @@ class ControlFlowGraph {
   // will not appear in any iterators until some instruction takes ownership
   // of it. This can be achieved by targeting this newly created basic block
   // with a CTI.
-  FutureBasicBlock *Materialize(AppProgramCounter start_pc,
-                                const BasicBlockMetaData *meta=nullptr);
+  FutureBasicBlock *Materialize(AppProgramCounter start_pc);
 
   // Convert a `FutureBasicBlock` into either of a:
   //    `CachedBasicBlock`:   If the block has already been translated.
@@ -79,11 +78,8 @@ class ControlFlowGraph {
   //                          one might be made.
   //    `NativeBasicBlock`:   If the block jumps to somewhere that should go
   //                          native.
-  BasicBlock *Materialize(detail::BasicBlockSuccessor &target,
-                          const BasicBlockMetaData *meta=nullptr);
-
-  BasicBlock *Materialize(const ControlFlowInstruction *cti,
-                          const BasicBlockMetaData *meta=nullptr);
+  BasicBlock *Materialize(detail::BasicBlockSuccessor &target);
+  BasicBlock *Materialize(const ControlFlowInstruction *cti);
 
   // Returns an object that can be used inside of a range-based for loop. For
   // example:
@@ -110,7 +106,7 @@ class ControlFlowGraph {
 
   GRANARY_INTERNAL_DEFINITION
   BasicBlock *FindMaterialized(AppProgramCounter target_pc,
-                               const BasicBlockMetaData *meta,
+                               const GenericMetaData *meta,
                                const BasicBlock * const ignore_block) const;
 
   // List of basic blocks known to this control-flow graph.

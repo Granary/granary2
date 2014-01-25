@@ -3,67 +3,170 @@
 
 #ifndef GRANARY_METADATA_H_
 #define GRANARY_METADATA_H_
-#ifdef GRANARY_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/new.h"
+#include "granary/base/hash.h"
 
 namespace granary {
 
 // Forward declarations.
-class HashFunction;
+class GenericMetaData;
+
+// Interfaces that meta-data must follow.
+class SerializableMetaData {
+ public:
+  void Hash(HashFunction *hasher) const;
+  bool Equals(const GenericMetaData *meta) const;
+};
+
+class MutableMetaData {};
 
 namespace detail {
-class MetaDataDescription;
+namespace meta {
+
+// Describes some generic meta-data in a way that Granary understands.
+struct MetaDataInfo {
+  const MetaDataInfo * const next;
+
+  // Where in the generic meta-data is this specific meta-data.
+  const size_t size;
+  const size_t align;
+  const int offset;
+
+  // Is this meta-data serializable (and so is treated as immutable once
+  // committed to the code cache) or is it mutable, and potentially changing
+  // over time.
+  enum {
+    MUTABLE,
+    SERIALIZABLE
+  } const kind;
+
+  // Generic ways for Granary to interact with this meta-data.
+  void (* const initialize)(void *);
+  void (* const copy_initialize)(void *, void *);
+  void (* const destroy)(void *);
+  void (* const hash)(HashFunction *, const void *);
+  bool (* const compare_equals)(const void *, const void *);
+};
+
+// Initialize some meta-data.
+template <typename T>
+void Initialize(void *mem) {
+  new (mem) T;
+}
+
+// Initialize some meta-data.
+template <typename T>
+void CopyInitialize(void *mem, void *that) {
+  new (mem) T(*reinterpret_cast<T *>(that));
+}
+
+// Destroy some meta-data.
+template <typename T>
+void Destroy(void *mem) {
+  reinterpret_cast<T *>(mem)->~T();
+}
+
+// Hash some meta-data.
+template <typename T>
+void Hash(HashFunction *hasher, const void *mem) {
+  reinterpret_cast<const T *>(mem)->Hash(hasher);
+}
+
+// Compare some meta-data for equality.
+template <typename T>
+bool CompareEquals(const void *a, const void *b) {
+  return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
+}
+
+// Assume that stateful meta-data is equivalent, which can be expressed as
+// not contributing any new information to the hasher.
+void FakeHash(HashFunction *, const void *);
+
+// Assume all stateful meta-data is equivalent.
+bool FakeCompareEquals(const void *, const void *);
+
+// Get the meta-data info for some serializable meta-data.
+template <
+  typename T,
+  typename EnableIf<
+    std::is_convertible<T *, SerializableMetaData *>::value &&
+    !std::is_convertible<T *, MutableMetaData *>::value
+  >::Type=0
+>
+const MetaDataInfo *GetInfo(void) {
+  static MetaDataInfo kInfo = {
+      nullptr,
+      sizeof(T),
+      alignof(T),
+      -1,
+      MetaDataInfo::SERIALIZABLE,
+      &(Initialize<T>),
+      &(CopyInitialize<T>),
+      &(Destroy<T>),
+      &(Hash<T>),
+      &(CompareEquals<T>)
+  };
+  return &kInfo;
+}
+
+// Get the meta-data info for some mutable meta-data.
+template <
+  typename T,
+  typename EnableIf<
+    !std::is_convertible<T *, SerializableMetaData *>::value &&
+    std::is_convertible<T *, MutableMetaData *>::value
+  >::Type=0
+>
+const MetaDataInfo *GetInfo(void) {
+  static MetaDataInfo kInfo = {
+      nullptr,
+      sizeof(T),
+      alignof(T),
+      -1,
+      MetaDataInfo::MUTABLE,
+      &(Initialize<T>),
+      &(CopyInitialize<T>),
+      &(Destroy<T>),
+      &(FakeHash),
+      &(FakeCompareEquals)
+  };
+  return &kInfo;
+}
+
+}  // namespace meta
 }  // namespace detail
 
-// TODO(pag): Need a structure that can describe the contents of the meta-data.
-// TODO(pag): Need a dummy structure that represents some client meta-data.
 
-enum BasicBlockFlags : uint32_t {
-  // Has this meta-data been committed to longer-term storage?
-  IS_INTERNED           = (1 << 0),
-
-  // If this basic block has a return from procedure instruction in it, then
-  // should that be translated using the identity translation?
-  ENABLE_DIRECT_RETURN  = (1 << 1),
-
-  // Should this basic block be run natively? I.e. should be just run the
-  // app code instead of instrumenting it?
-  RUN_NATIVELY          = (1 << 2),
-
-  // Should we expect that the target is not decodable? For example, the Linux
-  // kernel's `BUG_ON` macro generates `ud2` instructions. We treat these as
-  // dead ends, and go native on them so that we can see the right debugging
-  // info. Similarly, debugger breakpoints inject `int3`s into the code. In
-  // order to properly trigger those breakpoints, we go native before executing
-  // those breakpoints.
-  TARGET_NOT_RUNNABLE   = (1 << 3) | RUN_NATIVELY,
-};
-
-// Meta-data about a basic block. This structure contains a small amount of
-// information that is useful to Granary's internal operation, and acts as
-// a header to an unknown amount of client/tool-specific meta-data.
-class BasicBlockMetaData {
+#ifdef GRANARY_INTERNAL
+// Meta-data about a basic block.
+class GenericMetaData {
  public:
-  BasicBlockMetaData *Copy(void) const;
+  GRANARY_INTERNAL_DEFINITION
+  GenericMetaData(void) = default;
+
+  GenericMetaData *Copy(void) const;
   void Hash(HashFunction *hasher) const;
-  bool Equals(const BasicBlockMetaData *meta) const;
+  bool Equals(const GenericMetaData *meta) const;
 
-  const GRANARY_POINTER(detail::MetaDataDescription) * const description;
+  GRANARY_INTERNAL_DEFINITION
+  static GenericMetaData *CopyOrCreate(const GenericMetaData *meta);
 
+  GRANARY_INTERNAL_DEFINITION
+  static void *operator new(std::size_t) {
+    return nullptr;  // TODO(pag): Implement this.
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  static void operator delete(void *) {
+    // TODO(pag): Implement this.
+  }
  private:
-  // Tracks internal flags, including whether or not this meta-data has been
-  // interned, whether or not (when executing the function containing this
-  // block), we would expect the return address to be transparent or non-
-  // transparent, and whether or not an annotation was added to this basic block
-  // at decode time.
-  GRANARY_UINT32(BasicBlockFlags) flags;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlockMetaData);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(GenericMetaData);
 };
+#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 
-#endif  // GRANARY_INTERNAL
 #endif  // GRANARY_METADATA_H_

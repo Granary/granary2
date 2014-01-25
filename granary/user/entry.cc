@@ -12,11 +12,28 @@
 #include "granary/driver.h"
 #include "granary/environment.h"
 
+#include "granary/metadata.h"
+
 #if GRANARY_STANDALONE
 
 namespace granary {
 
+struct FooMeta : public SerializableMetaData {
+  void Hash(HashFunction *) const { }
+  bool Equals(const FooMeta *x) const { return !x; }
+};
+
+struct StateMeta : public MutableMetaData {
+
+};
+
 static void Instrument(ControlFlowGraph *cfg) {
+  auto foo_meta = detail::meta::GetInfo<FooMeta>();
+  auto state_meta = detail::meta::GetInfo<StateMeta>();
+
+  GRANARY_USED(foo_meta);
+  GRANARY_USED(state_meta);
+
   printf("digraph {\n");
   for (auto block : cfg->Blocks()) {
     if (IsA<UnknownBasicBlock *>(block)) {

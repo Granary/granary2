@@ -31,9 +31,8 @@ std::unique_ptr<Instruction> Jump(ControlFlowGraph *,
 }
 
 std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
-                                  AppProgramCounter target_pc,
-                                  const BasicBlockMetaData *meta) {
-  return Jump(cfg, cfg->Materialize(target_pc, meta));
+                                  AppProgramCounter target_pc) {
+  return Jump(cfg, cfg->Materialize(target_pc));
 }
 
 }  // namespace mir
