@@ -20,6 +20,7 @@
 #include "granary/environment.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"
+#include "granary/tool.h"
 
 namespace granary {
 
@@ -58,20 +59,49 @@ static void LoadTools(void) {
   }
 }
 
-}  // namespace
-
-// Initialize Granary.
-static void Init(void) {
-  driver::Init();
-
+// Initialize Granary for debugging by GDB. For example, if one is doing:
+//
+//    grr --tools=foo -- ls
+//
+// Then in another terminal, one can do:
+//
+//    gdb ls
+//    > attach <pid that is printed out>
+//    > c
+//
+// Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
+// continue execution under GDB's supervision.
+static void InitDebug(void) {
 #ifdef GRANARY_DEBUG
   char buff[2];
   Log(LogOutput, "Process ID for attaching GDB: %d\n", getpid());
   Log(LogOutput, "Press enter to continue.\n");
   read(0, buff, 1);
 #endif
+}
 
+}  // namespace
+
+// Initialize Granary.
+static void Init(void) {
+  InitDebug();
+
+  // Initialize the driver (e.g. DynamoRIO). This usually performs from
+  // architecture-specific checks to determine which architectural features
+  // are enabled.
+  driver::Init();
+
+  // Dynamically load in zero or more tools. Tools are specified on the
+  // command-line.
   LoadTools();
+
+  // Initialize all instrumentation tools for dynamic instrumentation of a
+  // running binary.
+  InitTools(InitKind::DYNAMIC);
+
+  // Finalize the meta-data structure after tools are initialized. Tools might
+  // change what meta-data is registered depending on command-line options.
+  InitMetaData();
 }
 
 }  // namespace granary

@@ -75,6 +75,28 @@ detail::SuccessorBlockIterator InFlightBasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator(first);
 }
 
+// Return the first instruction in the basic block.
+Instruction *InFlightBasicBlock::FirstInstruction(void) const {
+  return first;
+}
+
+// Return the last instruction in the basic block.
+Instruction *InFlightBasicBlock::LastInstruction(void) const {
+  return last;
+}
+
+// Return an iterator for the instructions of the block.
+detail::ForwardInstructionIterator
+InFlightBasicBlock::Instructions(void) const {
+  return detail::ForwardInstructionIterator(first);
+}
+
+// Return a reverse iterator for the instructions of the block.
+detail::BackwardInstructionIterator
+InFlightBasicBlock::ReversedInstructions(void) const {
+  return detail::BackwardInstructionIterator(last);
+}
+
 // Free all of the instructions in the basic block. This is invoked by
 // ControlFlowGraph::~ControlFlowGraph, as the freeing of instructions
 // interacts with the ownership model of basic blocks inside of basic block

@@ -17,6 +17,18 @@ class Tool;
 // many distinct tool class instances.
 void RegisterTool(Tool *tool);
 
+#ifdef GRANARY_INTERNAL
+
+enum InitKind {
+  DYNAMIC,
+  STATIC
+};
+
+// Initialize all loaded Granary tools.
+void InitTools(InitKind kind);
+
+#endif  // GRANARY_INTERNAL
+
 // Describes the structure of tools.
 class Tool {
  public:
@@ -39,6 +51,7 @@ class Tool {
 
  private:
   GRANARY_INTERNAL_DEFINITION friend void RegisterTool(Tool *tool);
+  GRANARY_INTERNAL_DEFINITION friend void InitTools(InitKind kind);
 
   GRANARY_POINTER(Tool) *next;
 

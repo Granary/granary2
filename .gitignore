@@ -5,6 +5,7 @@
 *.a
 *.dylib
 *.ko
+*.ll
 bin
 
 # Debugging and dependencies

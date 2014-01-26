@@ -27,6 +27,13 @@
 #define GRANARY_DECLARE_string(type, name) \
   extern const char *GRANARY_FLAG_NAME(name);
 
+#define GRANARY_DEFINE_bool(name, default_value, docstring) \
+  bool GRANARY_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring)
+
+#define GRANARY_DECLARE_bool(type, name) \
+  extern bool GRANARY_FLAG_NAME(name);
+
 namespace granary {
 
 // Backing structure for describing command-line options to Granary.
@@ -51,6 +58,9 @@ void RegisterOption(Option *option);
 
 // Parse an option that is a string.
 void ParseStringOption(Option *option);
+
+// Parse an option that will be interpreted as a boolean value.
+void ParseBoolOption(Option *option);
 
 }  // namespace detail
 }  // namespace granary

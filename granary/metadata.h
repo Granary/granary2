@@ -20,6 +20,8 @@ class SerializableMetaData {
   bool Equals(const GenericMetaData *meta) const;
 };
 
+// TODO(pag): How to eventually handle static instrumentation with mutable
+//            meta-data?
 class MutableMetaData {};
 
 namespace detail {
@@ -27,12 +29,12 @@ namespace meta {
 
 // Describes some generic meta-data in a way that Granary understands.
 struct MetaDataInfo {
-  const MetaDataInfo * const next;
+  GRANARY_CONST MetaDataInfo * GRANARY_CONST next;
 
   // Where in the generic meta-data is this specific meta-data.
   const size_t size;
   const size_t align;
-  const int offset;
+  GRANARY_CONST int offset;
 
   // Is this meta-data serializable (and so is treated as immutable once
   // committed to the code cache) or is it mutable, and potentially changing
@@ -48,7 +50,8 @@ struct MetaDataInfo {
   void (* const destroy)(void *);
   void (* const hash)(HashFunction *, const void *);
   bool (* const compare_equals)(const void *, const void *);
-};
+
+} __attribute__((packed));
 
 // Initialize some meta-data.
 template <typename T>
@@ -135,36 +138,45 @@ const MetaDataInfo *GetInfo(void) {
   return &kInfo;
 }
 
+// Register some meta-data with Granary.
+void RegisterMetaData(const MetaDataInfo *meta);
+
 }  // namespace meta
 }  // namespace detail
 
+// Register some meta-data with Granary.
+template <typename T>
+inline void RegisterMetaData(void) {
+  detail::meta::RegisterMetaData(detail::meta::GetInfo<T>());
+}
 
 #ifdef GRANARY_INTERNAL
 // Meta-data about a basic block.
 class GenericMetaData {
  public:
-  GRANARY_INTERNAL_DEFINITION
   GenericMetaData(void) = default;
 
   GenericMetaData *Copy(void) const;
   void Hash(HashFunction *hasher) const;
   bool Equals(const GenericMetaData *meta) const;
 
-  GRANARY_INTERNAL_DEFINITION
   static GenericMetaData *CopyOrCreate(const GenericMetaData *meta);
 
-  GRANARY_INTERNAL_DEFINITION
   static void *operator new(std::size_t) {
     return nullptr;  // TODO(pag): Implement this.
   }
 
-  GRANARY_INTERNAL_DEFINITION
   static void operator delete(void *) {
     // TODO(pag): Implement this.
   }
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(GenericMetaData);
 };
+
+// Initialize all meta-data. This finalizes the meta-data structures, which
+// determines the runtime layout of the packed meta-data structure.
+void InitMetaData(void);
+
 #endif  // GRANARY_INTERNAL
 
 }  // namespace granary

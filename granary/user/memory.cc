@@ -4,8 +4,8 @@
 
 #include "granary/arch/base.h"
 #include "granary/base/base.h"
-#include "granary/base/memory.h"
 #include "granary/base/string.h"
+#include "granary/memory.h"
 
 #define PROT_ALL (~0)
 #ifndef MAP_ANONYMOUS

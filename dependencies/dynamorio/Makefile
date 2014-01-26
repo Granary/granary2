@@ -35,7 +35,6 @@ $(DR_BIN_DIR)/%.ll: $(DR_SRC_DIR)/%.c
 	@mkdir -p $(@D)
 	$(GRANARY_CC) $(GRANARY_CC_FLAGS) -emit-llvm -c $< -o $@
 
-
 # Run the C pre-processor on the *.asm files, then run those through the
 # ASM post-processor to do extra token pasting and macro expansion.
 $(DR_BIN_DIR)/%.S: $(DR_SRC_DIR)/%.asm

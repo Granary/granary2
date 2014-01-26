@@ -266,21 +266,17 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   })
 
-  inline Instruction *FirstInstruction(void) const {
-    return first;
-  }
+  // Return the first instruction in the basic block.
+  Instruction *FirstInstruction(void) const;
 
-  inline Instruction *LastInstruction(void) const {
-    return last;
-  }
+  // Return the last instruction in the basic block.
+  Instruction *LastInstruction(void) const;
 
-  inline detail::ForwardInstructionIterator Instructions(void) const {
-    return detail::ForwardInstructionIterator(first);
-  }
+  // Return an iterator for the instructions of the block.
+  detail::ForwardInstructionIterator Instructions(void) const;
 
-  inline detail::BackwardInstructionIterator ReversedInstructions(void) const {
-    return detail::BackwardInstructionIterator(last);
-  }
+  // Return a reverse iterator for the instructions of the block.
+  detail::BackwardInstructionIterator ReversedInstructions(void) const;
 
  private:
   friend class ControlFlowGraph;
@@ -292,8 +288,8 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
 
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.
-  Instruction * const first;
-  Instruction * const last;
+  GRANARY_INTERNAL_DEFINITION Instruction * const first;
+  GRANARY_INTERNAL_DEFINITION Instruction * const last;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InFlightBasicBlock);
 };

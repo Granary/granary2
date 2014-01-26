@@ -1,8 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
-#ifndef GRANARY_BASE_MEMORY_H_
-#define GRANARY_BASE_MEMORY_H_
+#ifndef GRANARY_MEMORY_H_
+#define GRANARY_MEMORY_H_
 
 namespace granary {
 
@@ -17,19 +16,16 @@ enum class MemoryProtection {
   MEMORY_INACCESSIBLE
 };
 
-
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocatePages(int num);
 
-
 // Frees `num` pages back to the OS.
 void FreePages(void *, int num);
-
 
 // Changes the memory protection of some pages.
 void ProtectPages(void *addr, int num, MemoryProtection prot);
 
 }  // namespace granary
 
-#endif  // GRANARY_BASE_MEMORY_H_
+#endif  // GRANARY_MEMORY_H_

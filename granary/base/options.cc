@@ -118,6 +118,7 @@ static void ProcessOptionString(void) {
         if ('-' == *ch) {
           state = IN_OPTION;
           granary_break_on_fault_if(num_options >= MAX_NUM_OPTIONS);
+          OPTION_VALUES[num_options] = "";  // Default to positional.
           OPTION_NAMES[num_options++] = ch + 1;
         } else {
           state = ELSEWHERE;
@@ -209,6 +210,32 @@ void ParseStringOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
     *reinterpret_cast<const char **>(option->value) = value;
+  }
+}
+
+// Parse an option that will be interpreted as a boolean value.
+void ParseBoolOption(Option *option) {
+  auto value = FindValueForName(option->name);
+  if (value) {
+    switch (*value) {
+      case '1':
+      case 'y':
+      case 'Y':
+      case 't':
+      case 'T':
+      case '\0':  // Special case, treat positional as setting to true.
+        *reinterpret_cast<bool *>(option->value) = true;
+        break;
+      case '0':
+      case 'n':
+      case 'N':
+      case 'f':
+      case 'F':
+        *reinterpret_cast<bool *>(option->value) = false;
+        break;
+      default:
+        break;
+    }
   }
 }
 

@@ -3,10 +3,11 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/cast.h"
-#include "granary/base/memory.h"
 #include "granary/base/new.h"
 #include "granary/base/string.h"
+
 #include "granary/breakpoint.h"
+#include "granary/memory.h"
 
 namespace granary {
 namespace detail {

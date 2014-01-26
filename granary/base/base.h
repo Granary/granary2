@@ -50,6 +50,7 @@
 # define GRANARY_POINTER(type) type
 # define GRANARY_UINT32(type) type
 # define GRANARY_PROTECTED protected
+# define GRANARY_CONST
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
 # define GRANARY_INTERNAL_DEFINITION
@@ -59,6 +60,7 @@
 # define GRANARY_POINTER(type) void
 # define GRANARY_UINT32(type) uint32_t
 # define GRANARY_PROTECTED private
+# define GRANARY_CONST const
 #endif
 
 
