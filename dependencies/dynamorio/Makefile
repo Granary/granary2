@@ -44,5 +44,5 @@ $(DR_BIN_DIR)/%.S: $(DR_SRC_DIR)/%.asm
 	@$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -E -o $@ -x c -std=c99 $< 
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/post_process_asm.py $@
 
-
+# Compile the DynamoRIO dependencies into .S (x86) and .ll files.
 all: $(DR_OBJ_FILES) $(DR_S_FILES) $(GRANARY_GEN_BIN_DIR)/dynamorio/builder.ll

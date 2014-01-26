@@ -102,13 +102,15 @@ static void ProcessOptionString(void) {
         break;
 
       case SEEN_EQUAL:
-        if ('[' == *ch) {
+        if ('[' == *ch) {  // E.g. `--tools=[bbcount:pgo]`.
           *ch = '\0';
           state = IN_LITERAL_VALUE;
           OPTION_VALUES[num_options - 1] = ch + 1;
-        } else {
+        } else if (IsValidValueChar(*ch)) {  // E.g. `--tools=bbcount`.
           state = IN_VALUE;
           OPTION_VALUES[num_options - 1] = ch;
+        } else {  // E.g. `--tools=`.
+          state = ELSEWHERE;
         }
         break;
 

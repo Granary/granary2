@@ -50,24 +50,24 @@ clean_generated:
 headers:
 	@mkdir -p $(GRANARY_EXPORT_HEADERS_DIR)
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
-		$(GRANARY_SRC_DIR) $(GRANARY_EXPORT_HEADERS_DIR)
+		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_EXPORT_HEADERS_DIR)
 
 # Install libgranary.so onto the OS.
 install: all headers
 	cp $(GRANARY_BIN_DIR)/libgranary.so $(GRANARY_EXPORT_LIB_DIR)
 
-# Compile a specific example tool. To use this, do something like:
-# `make tools GRANARY_TOOL_DIR=examples GRANARY_TOOLS=bbcount`.
+# Compile one or more specific tools. For example:
+# `make tools GRANARY_TOOLS=bbcount`.
 tools:
 	$(MAKE) -C $(GRANARY_SRC_DIR) -f Tool.mk \
 		$(MFLAGS) \
 		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
-		GRANARY_TOOL_DIR=$(realpath $(GRANARY_TOOL_DIR)) all
+		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) all
 
-		# Compile a specific example tool. To use this, do something like:
-# `make tools GRANARY_TOOL_DIR=examples GRANARY_TOOLS=bbcount`.
+# Clean one or more specific tools. For example:
+# `make clean_tools GRANARY_TOOLS=bbcount`.
 clean_tools:
 	$(MAKE) -C $(GRANARY_SRC_DIR) -f Tool.mk \
 		$(MFLAGS) \
 		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
-		GRANARY_TOOL_DIR=$(realpath $(GRANARY_TOOL_DIR)) clean
+		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) clean

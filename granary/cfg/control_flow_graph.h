@@ -66,6 +66,16 @@ class ControlFlowGraph {
 
   ~ControlFlowGraph(void);
 
+  // Return the entry basic block of this control-flow graph.
+  InFlightBasicBlock *EntryBlock(void) const;
+
+  // Returns an object that can be used inside of a range-based for loop. For
+  // example:
+  //
+  //    for(auto block : cfg.Blocks())
+  //      ...
+  detail::BasicBlockIterator Blocks(void) const;
+
   // Create a new (future) basic block. This block is left as un-owned and
   // will not appear in any iterators until some instruction takes ownership
   // of it. This can be achieved by targeting this newly created basic block
@@ -80,15 +90,6 @@ class ControlFlowGraph {
   //                          native.
   BasicBlock *Materialize(detail::BasicBlockSuccessor &target);
   BasicBlock *Materialize(const ControlFlowInstruction *cti);
-
-  // Returns an object that can be used inside of a range-based for loop. For
-  // example:
-  //
-  //    for(auto block : cfg.Blocks())
-  //      ...
-  inline detail::BasicBlockIterator Blocks(void) const {
-    return detail::BasicBlockIterator(first_block);
-  }
 
   GRANARY_POINTER(Environment) * const environment;
 
@@ -109,9 +110,13 @@ class ControlFlowGraph {
                                const GenericMetaData *meta,
                                const BasicBlock * const ignore_block) const;
 
+  // Entrypoint basic block.
+  GRANARY_INTERNAL_DEFINITION InFlightBasicBlock * const entry_block;
+
   // List of basic blocks known to this control-flow graph.
-  detail::BasicBlockList *first_block;
-  detail::BasicBlockList *last_block;
+  GRANARY_INTERNAL_DEFINITION detail::BasicBlockList *first_block;
+
+  GRANARY_INTERNAL_DEFINITION detail::BasicBlockList *last_block;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);
 };

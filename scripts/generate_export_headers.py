@@ -18,6 +18,7 @@ EXPORT_HEADERS = [
   "granary/logging.h",
   "granary/metadata.h",
   "granary/mir.h",
+  "granary/tool.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")
@@ -112,7 +113,9 @@ def strip_combined_files(new_lines):
         last_line_was_space = False
         new_lines.append(line)
 
-def main(source_dir, export_dir):
+def main(where, source_dir, export_dir):
+  EXPORT_HEADERS.append("granary/%s/init.h" % where)
+
   system_includes, lines = combine_output_files(source_dir)
   preprocess_combined_files(source_dir, lines)
   new_lines = combine_system_headers(system_includes)
@@ -123,4 +126,4 @@ def main(source_dir, export_dir):
       "\n".join(new_lines))
 
 if "__main__" == __name__:
-  main(sys.argv[1], sys.argv[2])
+  main(sys.argv[1], sys.argv[2], sys.argv[3])

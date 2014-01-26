@@ -70,15 +70,15 @@ ControlFlowGraph::ControlFlowGraph(Environment *environment_,
                                    AppProgramCounter pc,
                                    GenericMetaData *meta)
       : environment(environment_),
+        entry_block(new InFlightBasicBlock(pc, meta)),
         first_block(nullptr),
         last_block(nullptr) {
-  auto block = new InFlightBasicBlock(pc, meta);
-  first_block = last_block = new detail::BasicBlockList(block);
-  MaterializeInFlight(block, first_block);
+  first_block = last_block = new detail::BasicBlockList(entry_block);
+  MaterializeInFlight(entry_block, first_block);
 
   // The control-flow graph has sole ownership over the initial basic block.
   // All other basic blocks are owned by control-transfer instructions.
-  block->Acquire();
+  entry_block->Acquire();
 }
 
 // Destroy the CFG.
@@ -110,6 +110,16 @@ ControlFlowGraph::~ControlFlowGraph(void) {
   }
 
   first_block = last_block = nullptr;
+}
+
+// Return the entry basic block of this control-flow graph.
+InFlightBasicBlock *ControlFlowGraph::EntryBlock(void) const {
+  return entry_block;
+}
+
+// Returns an object that can be used inside of a range-based for loop.
+detail::BasicBlockIterator ControlFlowGraph::Blocks(void) const {
+  return detail::BasicBlockIterator(first_block);
 }
 
 // Create a new (future) basic block. This block is left as un-owned and

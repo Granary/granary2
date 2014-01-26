@@ -13,6 +13,8 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
+#include "granary/user/init.h"
+
 #include "granary/breakpoint.h"
 #include "granary/driver.h"
 #include "granary/environment.h"
@@ -27,13 +29,6 @@ GRANARY_DEFINE_string(tools, "",
 
 namespace {
 
-// void VisitBasicBlock(ControlFlowGraph *cfg, InFlightBasicBlock *entry_block);
-const char * const VISIT_BASIC_BLOCK = \
-    "_Z15VisitBasicBlockPN7granary16ControlFlowGraphEPNS_18InFlightBasicBlockE";
-
-// void InitDynamic(void)
-const char * const INIT_DYNAMIC = "_Z11InitDynamicv";
-
 // Load a tool into Granary.
 static void LoadTool(const char *tool_name) {
   void *tool(dlopen(tool_name, RTLD_NOW | RTLD_LOCAL));
@@ -42,21 +37,13 @@ static void LoadTool(const char *tool_name) {
     return;
   }
 
-  auto InitDynamic = UnsafeCast<void (*)(void)>(dlsym(tool, INIT_DYNAMIC));
-  if (InitDynamic) {
-    InitDynamic();
-  }
+  // The tool's static initializers should have registered the tool.
 }
 
 // Scan the `tools` command line option and load each tool in order.
 static void LoadTools(void) {
   char tool_name[256] = {'l', 'i', 'b', '\0'};
   const char *ch(FLAG_tools);
-
-  if (!*ch) {
-    return;
-  }
-
   for (int i(3); *ch; ++ch) {
     tool_name[i++] = *ch;
     if (!ch[1] || ':' == ch[1]) {
@@ -100,10 +87,9 @@ int main(int argc, const char *argv[]) {
 }  // extern C
 #else
 
-__attribute__((constructor(102), used))
-void granary_init(void) {
+GRANARY_INIT(granary, {
   granary::InitOptions(getenv("GRANARY_OPTIONS"));
   granary::Init();
-}
+})
 
 #endif

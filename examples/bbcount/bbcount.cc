@@ -3,17 +3,22 @@
 #include <granary/granary.h>
 
 using namespace granary;
+namespace {
 
-void VisitBasicBlock(ControlFlowGraph *cfg, InFlightBasicBlock *entry_block) {
-  (void) cfg;
-  (void) entry_block;
-}
+// Defines the bbcount tool.
+class BBCount : public Tool {
+ public:
+  virtual ~BBCount(void) = default;
 
-void InitDynamic(void) {
-  Log(LogOutput, "Initializing bbcount.\n");
-}
+  virtual void InitDynamic(void) {
 
-// TODO(pag): Make a generalized initializer that will work in both user and
-//            kernel space. Have it register a tool data structure, that way
-//            Granary doesn't need to hackishly look up every symbol.
+  }
 
+} static TOOL;
+
+}  // namespace
+
+GRANARY_INIT(bbcount, {
+  Log(LogOutput, "Registering `bbcount` tool.\n");
+  RegisterTool(&TOOL);
+})

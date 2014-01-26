@@ -28,6 +28,9 @@
 # define VALGRIND_MAKE_MEM_DEFINED(addr,size)
 #endif
 
+// For namespace-based `using` declarations without triggering the linter.
+#define GRANARY_USING_NAMESPACE using namespace  // NOLINT
+
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
 #ifdef GRANARY_ECLIPSE

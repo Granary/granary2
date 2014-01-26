@@ -33,7 +33,7 @@ GRANARY_INTERMEDIATE_FILE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_N
 GRANARY_LL_FILES := $(GRANARY_LL_FILES:$(GRANARY_INTERMEDIATE_FILE).ll=)
 
 # Compile an assembly source file into an object file.
-$(GRANARY_BIN_DIR)/%.o: $(GRANARY_BIN_DIR)/%.S
+$(GRANARY_BIN_DIR)/%.o:: $(GRANARY_BIN_DIR)/%.S
 	@echo "Building ASM object $@"
 	$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -c $< -o $@
 
@@ -44,7 +44,7 @@ $(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
 
 # Compile the linked together .ll file into an object file. This should enable
 # a simple form of link-time optimization.
-$(GRANARY_INTERMEDIATE_FILE).o: $(GRANARY_INTERMEDIATE_FILE).ll
+$(GRANARY_INTERMEDIATE_FILE).o:: $(GRANARY_INTERMEDIATE_FILE).ll
 	@echo "Building object $@"
 	@$(GRANARY_CC) $(GRANARY_LD_FLAGS) \
 		-c $(GRANARY_INTERMEDIATE_FILE).ll \
