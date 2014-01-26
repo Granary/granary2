@@ -77,8 +77,8 @@ static void ProcessOptionString(void) {
           *ch = '\0';
         }
 
-        // We've seen an equal, which mean's we're moving into the beginning of
-        // a value.
+        // We've seen an equal, which mean's we're moving into the
+        // beginning of a value.
         if ('=' == ch_val) {
           state = SEEN_EQUAL;
         }

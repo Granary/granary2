@@ -1,4 +1,6 @@
 
+.PHONY: all
+
 include ../../Makefile.inc
 
 DR_SRC_DIR = $(GRANARY_SRC_DIR)/dependencies/dynamorio

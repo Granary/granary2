@@ -814,7 +814,8 @@ extern const instr_info_t extra_operands[];
 /* table that translates opcode enums into pointers into above tables */
 extern const instr_info_t * const op_instr[];
 /* for debugging: printing out types and sizes */
+#ifndef GRANARY
 extern const char * const type_names[];
 extern const char * const size_names[];
-
+#endif  // GRANARY
 #endif /* DECODE_H */

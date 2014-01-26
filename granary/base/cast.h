@@ -81,6 +81,19 @@ inline ToT UnsafeCast(const FromT v) {
 
 #ifdef GRANARY_INTERNAL
 
+// Helper macro for declaring class id enumeration constants.
+# define GRANARY_DECLARE_CLASS_ID_(class_name, value) \
+  GRANARY_CAT(kIdOf, class_name) = value
+# define GRANARY_DECLARE_CLASS_ID(params) \
+    GRANARY_DECLARE_CLASS_ID_ params
+
+// Define an enum that assigns unique (within the single-inheritance class
+// hierarchy) numeric IDs for each class within the class hierarchy.
+# define GRANARY_DECLARE_CLASS_HEIRARCHY(...) \
+  enum : int { \
+    GRANARY_APPLY_EACH(GRANARY_DECLARE_CLASS_ID, GRANARY_COMMA, ##__VA_ARGS__) \
+  };
+
 // Declare that a class is the base class of a single-inheritance class
 // hierarchy.
 # define GRANARY_BASE_CLASS(base_type) \
@@ -103,19 +116,6 @@ inline ToT UnsafeCast(const FromT v) {
   } \
   virtual int IdOf(void) const { \
     return GRANARY_CAT(kIdOf, derived_type); \
-  }
-
-// Helper macro for declaring class id enumeration constants.
-# define GRANARY_DECLARE_CLASS_ID_(class_name, value) \
-  GRANARY_CAT(kIdOf, class_name) = value
-# define GRANARY_DECLARE_CLASS_ID(params) \
-    GRANARY_DECLARE_CLASS_ID_ params
-
-// Define an enum that assigns unique (within the single-inheritance class
-// hierarchy) numeric IDs for each class within the class hierarchy.
-# define GRANARY_DECLARE_CLASS_HEIRARCHY(...) \
-  enum : int { \
-    GRANARY_APPLY_EACH(GRANARY_DECLARE_CLASS_ID, GRANARY_COMMA, ##__VA_ARGS__) \
   }
 
 #else

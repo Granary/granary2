@@ -221,7 +221,9 @@ typedef byte opnd_size_t; /* contains a DR_REG_ or OPSZ_ enum value */
 
 /* DR_API EXPORT END */
 /* indexed by enum */
+#ifndef GRANARY
 extern const char * const reg_names[];
+#endif
 extern const reg_id_t dr_reg_fixer[];
 /* DR_API EXPORT BEGIN */
 

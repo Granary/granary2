@@ -60,7 +60,7 @@
 #include "dependencies/dynamorio/x86/decode_fast.h"
 #include "dependencies/dynamorio/x86/instr_create.h"
 
-#include <string.h> /* for memcpy */
+#include "granary/base/string.h" /* for memcpy */
 
 #include "dependencies/dynamorio/x86/instr_inline.h"
 
@@ -1479,11 +1479,13 @@ opnd_compute_address(opnd_t opnd, dr_mcontext_t *mc)
  ***      Register utility functions
  ***************************************************************************/
 
+#ifndef GRANARY
 const char *
 get_register_name(reg_id_t reg)
 {
     return reg_names[reg];
 }
+#endif
 
 reg_id_t
 reg_to_pointer_sized(reg_id_t reg)

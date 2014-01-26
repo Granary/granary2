@@ -2,29 +2,30 @@
 
 #ifndef GRANARY_STANDALONE
 
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <errno.h>
+#define _GNU_SOURCE
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
-static char GRANARY_PATH[1024] = {'\0'};
-static char LD_LIBRARY_PATH[1024] = {'\0'};
-static char LD_PRELOAD[256] = {'\0'};
-static char ARGS[1024] = {'\0'};
+enum {
+  GRANARY_PATH_LEN = 1024,
+  LD_LIBRARY_PATH_LEN = 1024,
+  LD_PRELOAD_LEN = 256,
+  ARGS_LEN = 1024
+};
 
-// Get the length of an array.
-template <typename T, unsigned long len>
-unsigned long ArrayLength(T(&)[len]) {
-  return len;
-}
+static char GRANARY_PATH[GRANARY_PATH_LEN] = {'\0'};
+static char LD_LIBRARY_PATH[LD_LIBRARY_PATH_LEN] = {'\0'};
+static char LD_PRELOAD[LD_PRELOAD_LEN] = {'\0'};
+static char ARGS[ARGS_LEN] = {'\0'};
 
 // Get the path to the injector executable.
 static const char *GetPath(const char *exec_name) {
   realpath(exec_name, GRANARY_PATH);
-
-  char *last_slash(nullptr);
-  char *curr(GRANARY_PATH);
+  char *last_slash = NULL;
+  char *curr = GRANARY_PATH;
   for (; *curr; ++curr) {
     if ('/' == *curr) {
       last_slash = curr;
@@ -41,42 +42,41 @@ static const char *GetPath(const char *exec_name) {
 
 // Add the path to libgranary.so to the LD_LIBRARY_PATH.
 static void SetPath(const char *exec_name) {
-  auto ld_path = getenv("LD_LIBRARY_PATH");
-  auto index = 0UL;
-  auto max_len = ArrayLength(LD_LIBRARY_PATH);
+  const char *ld_path = getenv("LD_LIBRARY_PATH");
+  unsigned long index = 0UL;
   if (ld_path) {
-    index = static_cast<unsigned long>(
-        snprintf(LD_LIBRARY_PATH, max_len, "%s:", ld_path));
+    index = snprintf(LD_LIBRARY_PATH, LD_LIBRARY_PATH_LEN, "%s:", ld_path);
   }
   snprintf(
-      &(LD_LIBRARY_PATH[index]), max_len - index, "%s", GetPath(exec_name));
+      &(LD_LIBRARY_PATH[index]),
+      LD_LIBRARY_PATH_LEN - index,
+      "%s",
+      GetPath(exec_name));
 
   setenv("LD_LIBRARY_PATH", LD_LIBRARY_PATH, 1);
 }
 
 // Add `libgranary.so` to the
 static void SetPreload(void) {
-  auto preloads = getenv("LD_PRELOAD");
-  auto index = 0UL;
-  auto max_len = ArrayLength(LD_PRELOAD);
+  const char *preloads = getenv("LD_PRELOAD");
+  unsigned long index = 0UL;
   if (preloads) {
-    index = static_cast<unsigned long>(
-        snprintf(LD_PRELOAD, max_len, "%s ", preloads));
+    index = snprintf(LD_PRELOAD, LD_PRELOAD_LEN, "%s ", preloads);
   }
-  snprintf(&(LD_PRELOAD[index]), max_len - index, "libgranary.so");
+  snprintf(&(LD_PRELOAD[index]), LD_PRELOAD_LEN - index, "libgranary.so");
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
 }
 
 // Combine the arguments into a single string for passing as an environment
 // variable to the program that will be instrumented.
 static int SetArgs(int argc, const char **argv) {
-  auto index = 0;
-  auto max_len = ArrayLength(ARGS);
+  int index = 0;
+  unsigned long max_len = ARGS_LEN;
   int i = 1;
   for (; i < argc; ++i) {
     if (0 != strcmp("--", argv[i])) {
       index += snprintf(&(ARGS[index]), max_len, "%s ", argv[i]);
-      max_len -= static_cast<unsigned long>(index);
+      max_len -= index;
     } else {
       break;
     }
@@ -92,8 +92,8 @@ int main(int argc, const char **argv) {
   argv = &(argv[SetArgs(argc, argv)]);
   return execvpe(
       argv[0],
-      const_cast<char * const *>(argv),
-      const_cast<char * const *>(environ));
+      (char * const *) argv,
+      (char * const *) environ);
 }
 
 #endif  // GRANARY_STANDALONE

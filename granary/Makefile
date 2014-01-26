@@ -1,4 +1,6 @@
+# Copyright 2014 Peter Goodman, all rights reserved.
 
+.PHONY: all lint
 
 include ../Makefile.inc
 
@@ -46,10 +48,9 @@ $(GRANARY_BIN_DIR)/granary/%.ll: $(GRANARY_SRC_DIR)/granary/%.cc
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -c $< -o $@
 
-
 lint:
 	@echo "Linting Granary files."
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.h' -or -name '*.cc')
 
 
-all: lint $(GRANARY_OBJ_FILES) 
+all: lint $(GRANARY_OBJ_FILES)

@@ -38,12 +38,12 @@
 /* encode.c -- an x86 encoder */
 
 #include "dependencies/dynamorio/globals.h"
-#include "arch.h"
-#include "instr.h"
-#include "decode.h"
-#include "decode_fast.h"
+#include "dependencies/dynamorio/x86/arch.h"
+#include "dependencies/dynamorio/x86/instr.h"
+#include "dependencies/dynamorio/x86/decode.h"
+#include "dependencies/dynamorio/x86/decode_fast.h"
 
-#include <string.h> /* memcpy, memset */
+#include "granary/base/string.h" /* memcpy, memset */
 
 #ifdef DEBUG
 /* case 10450: give messages to clients */
@@ -58,6 +58,7 @@
 
 /* level at which encoding attempts get dumped out...lots of logging! */
 #define ENC_LEVEL 6
+#ifndef GRANARY
 
 const char * const type_names[] = {
     "TYPE_NONE",
@@ -256,6 +257,8 @@ const char * const size_names[] = {
     "OPSZ_8_of_16_vex32",
     "OPSZ_16_of_32",
 };
+
+#endif  // GRANARY
 
 #if defined(DEBUG) && defined(INTERNAL) && !defined(STANDALONE_DECODER)
 /* These operand types store a reg_id_t as their operand "size" */

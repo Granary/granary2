@@ -23,7 +23,7 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     (AnnotationInstruction, 2 * 3),
     (NativeInstruction, 2 * 5),
     (BranchInstruction, 2 * 5 * 7),
-    (ControlFlowInstruction, 2 * 5 * 11));
+    (ControlFlowInstruction, 2 * 5 * 11))
 
 // Represents an abstract instruction.
 class Instruction {

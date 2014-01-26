@@ -12,7 +12,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
+#include "granary/base/string.h"
 #include <sys/types.h>
 
 typedef unsigned long long uint64;

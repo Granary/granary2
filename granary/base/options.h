@@ -7,21 +7,22 @@
 
 #define GRANARY_FLAG_NAME(name) GRANARY_CAT(FLAG_, name)
 
-#define GRANARY_REGISTER_OPTION(name, parser) \
-  __attribute__((constructor, used)) \
+#define GRANARY_REGISTER_OPTION(name, parser, docstring) \
+  __attribute__((constructor(101), used)) \
   static void GRANARY_CAT(RegisterOption, name)(void) { \
     static granary::Option option = { \
         nullptr, \
         GRANARY_TO_STRING(name), \
         &granary::detail::parser, \
-        reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)) \
+        reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)), \
+        docstring \
     }; \
     granary::detail::RegisterOption(&option); \
   }
 
-#define GRANARY_DEFINE_string(name, default_value) \
+#define GRANARY_DEFINE_string(name, default_value, docstring) \
   const char *GRANARY_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParseStringOption)
+  GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring)
 
 #define GRANARY_DECLARE_string(type, name) \
   extern const char *GRANARY_FLAG_NAME(name);
@@ -34,6 +35,7 @@ struct Option {
   const char * const name;
   void (* const parse)(Option *);
   void * const value;
+  const char * const docstring;
 };
 
 // Initialize the options from an environment variable.

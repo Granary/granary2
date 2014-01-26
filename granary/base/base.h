@@ -3,13 +3,16 @@
 #ifndef GRANARY_BASE_BASE_H_
 #define GRANARY_BASE_BASE_H_
 
-#include <atomic>
-#include <cstddef>
-#include <memory>
-#include <initializer_list>
-#include <type_traits>
-
-#include <stdint.h>
+// A bit of a trick to make sure that when generating export headers, we don't
+// accidentally include any system headers in the export.
+#if defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)
+# include <atomic>
+# include <cstddef>
+# include <memory>
+# include <initializer_list>
+# include <type_traits>
+# include <stdint.h>
+#endif
 
 // Useful for Valgrind-based debugging.
 #if defined(GRANARY_WITH_VALGRIND) && defined(GRANARY_INTERNAL)

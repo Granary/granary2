@@ -23,7 +23,7 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     (CachedBasicBlock, 2 * 5 * 7),
     (InFlightBasicBlock, 2 * 5 * 11),
     (FutureBasicBlock, 2 * 5 * 13),
-    (UnknownBasicBlock, 2 * 5 * 17));
+    (UnknownBasicBlock, 2 * 5 * 17))
 
 // Forward declarations.
 class BasicBlock;

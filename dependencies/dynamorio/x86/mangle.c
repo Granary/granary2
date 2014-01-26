@@ -54,11 +54,13 @@
 # include "dependencies/dynamorio/rct.h" /* rct_add_rip_rel_addr */
 #endif
 
+#ifndef GRANARY
 #ifdef UNIX
 #include <sys/syscall.h>
 #endif
+#endif
 
-#include <string.h> /* for memset */
+#include "granary/base/string.h" /* for memset */
 
 /* make code more readable by shortening long lines
  * we mark everything we add as a meta-instr to avoid hitting

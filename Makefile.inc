@@ -13,14 +13,17 @@ GRANARY_DRIVER ?= dynamorio
 GRANARY_STANDALONE ?= 0
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0
+GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
+GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
 
-GRANARY_SRC_DIR ?= /home/pag/Code/Granary+
+GRANARY_SRC_DIR ?= $(shell pwd)
 GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
 GRANARY_WHERE_DIR ?= $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
 GRANARY_ARCH_DIR ?=  $(GRANARY_SRC_DIR)/granary/arch/$(GRANARY_ARCH)
+GRANARY_TOOL_DIR ?= $(GRANARY_SRC_DIR)/examples
 
 # Make the binary directory target-specific.
-GRANARY_BIN_DIR ?= /home/pag/Code/Granary+/bin
+GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
 GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)
 
 # Figure out the generated files directories.
@@ -41,11 +44,17 @@ GRANARY_COMMON_FLAGS =
 GRANARY_COMMON_ARCH_FLAGS =
 GRANARY_COMMON_WARN_FLAGS =
 
+ifdef GRANARY_TOOL_NAME
+	GRANARY_TOOL_BIN_DIR ?= $(GRANARY_BIN_DIR)/tools
+	GRANARY_STANDALONE = 0
+	GRANARY_LD_FLAGS_EARLY += -shared
+endif
+
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
 GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR)
 
-# Use C11 and C++11.
+# Use GNU C99 and standard C++11.
 GRANARY_CC_FLAGS += -std=gnu99
 GRANARY_CXX_FLAGS += -std=c++11
 
@@ -72,7 +81,7 @@ endif
 GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -march=native
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
-GRANARY_COMMON_ARCH_FLAGS += -fvisibility=hidden
+#GRANARY_COMMON_ARCH_FLAGS += -fvisibility=hidden
 ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-3dnow
 endif

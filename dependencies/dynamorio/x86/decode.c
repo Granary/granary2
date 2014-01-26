@@ -38,11 +38,11 @@
 /* decode.c -- a full x86 decoder */
 
 #include "dependencies/dynamorio/globals.h"
-#include "arch.h"
-#include "instr.h"
-#include "decode.h"
-#include "decode_fast.h"
-#include <string.h> /* for memcpy */
+#include "dependencies/dynamorio/x86/arch.h"
+#include "dependencies/dynamorio/x86/instr.h"
+#include "dependencies/dynamorio/x86/decode.h"
+#include "dependencies/dynamorio/x86/decode_fast.h"
+#include "granary/base/string.h" /* for memcpy */
 
 /*
  * XXX i#431: consider cpuid features when deciding invalid instrs:
