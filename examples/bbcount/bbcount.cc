@@ -11,6 +11,10 @@ GRANARY_DEFINE_bool(count_execs, false,
 
 // Runtime block execution counter.
 class BlockCounter : public MutableMetaData {
+ public:
+  BlockCounter(void)
+      : count(0) {}
+
   uint64_t count;
 };
 
@@ -33,6 +37,9 @@ class BBCount : public Tool {
       return;
     }
 
+    auto meta = GetMetaData<BlockCounter>(bb);
+    GRANARY_UNUSED(meta);
+
     for (auto instr : bb->Instructions()) {
       GRANARY_UNUSED(instr);
     }
@@ -40,6 +47,7 @@ class BBCount : public Tool {
 
 } static BBCOUNT;
 
+// Initialize the bbcount tool.
 GRANARY_INIT(bbcount, {
   RegisterTool(&BBCOUNT);
   if (FLAG_count_execs) {

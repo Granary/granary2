@@ -207,6 +207,9 @@ class InstrumentedBasicBlock : public BasicBlock {
  public:
   virtual ~InstrumentedBasicBlock(void) = default;
 
+  // Return this basic block's meta-data.
+  GenericMetaData *MetaData(void);
+
   GRANARY_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
  GRANARY_PROTECTED:

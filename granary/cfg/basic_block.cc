@@ -48,6 +48,11 @@ detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
 }
 
+// Get this basic block's meta-data.
+GenericMetaData *InstrumentedBasicBlock::MetaData(void) {
+  return meta;
+}
+
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
                                                GenericMetaData *meta_)

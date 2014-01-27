@@ -96,6 +96,48 @@ class ListHead {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ListHead);
 };
 
+// Generic iterator for simple linked lists with public `next` fields.
+template <typename T>
+class LinkedListIterator {
+ public:
+  typedef LinkedListIterator<T> Iterator;
+
+  LinkedListIterator(void)
+      : curr(nullptr) {}
+
+  explicit LinkedListIterator(T *first)
+      : curr(first) {}
+
+  LinkedListIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  LinkedListIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(nullptr);
+  }
+
+  inline void operator++(void) {
+    curr = curr->next;
+  }
+
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
+
+  inline T *operator*(void) const {
+    return curr;
+  }
+
+ private:
+  T *curr;
+};
+
 }  // namespace granary
 
 #endif  // GRANARY_BASE_LIST_H_

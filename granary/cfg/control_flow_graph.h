@@ -62,7 +62,7 @@ class ControlFlowGraph {
  public:
   GRANARY_INTERNAL_DEFINITION
   ControlFlowGraph(Environment *environment_, AppProgramCounter pc,
-                   GenericMetaData *meta=nullptr);
+                   GenericMetaData *meta);
 
   ~ControlFlowGraph(void);
 

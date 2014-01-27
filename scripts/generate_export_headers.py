@@ -19,6 +19,7 @@ EXPORT_HEADERS = [
   "granary/metadata.h",
   "granary/mir.h",
   "granary/tool.h",
+  "granary/util.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")

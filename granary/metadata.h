@@ -7,11 +7,13 @@
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 #include "granary/base/hash.h"
+#include "granary/base/type_traits.h"
 
 namespace granary {
 
 // Forward declarations.
 class GenericMetaData;
+class InstrumentedBasicBlock;
 
 // Serializable meta-data (i.e. immutable once committed to the code cache)
 // must implement the `Hash` and `Equals` methods, and extend this template
@@ -34,14 +36,14 @@ struct MutableMetaData {};
 // guides the translation process.
 //
 // This meta-data is registered in `granary::InitMetaData`.
-struct TranslatioMetaData : SerializableMetaData<TranslatioMetaData> {
+struct TranslationMetaData : SerializableMetaData<TranslationMetaData> {
   union {
     struct {
       // Should function returns be translated or run natively. This is related
       // to transparency and comprehensiveness, but can also be used to
       // implement fast function returns when instrumentation isn't being
       // transparent.
-      bool native_return:1;
+      bool translate_function_return:1;
 
       // Should this basic block be run natively? I.e. should be just run the
       // app code instead of instrumenting it?
@@ -64,11 +66,14 @@ struct TranslatioMetaData : SerializableMetaData<TranslatioMetaData> {
     uint8_t raw_bits;
   };
 
+  // Initialize Granary's internal translation meta-data.
+  TranslationMetaData(void);
+
   // Hash the translation meta-data.
   void Hash(HashFunction *hasher) const;
 
   // Compare two translation meta-data objects for equality.
-  bool Equals(const TranslatioMetaData *meta) const;
+  bool Equals(const TranslationMetaData *meta) const;
 } __attribute__((packed));
 
 namespace detail {
@@ -131,10 +136,10 @@ bool CompareEquals(const void *a, const void *b) {
 // Get the meta-data info for some serializable meta-data.
 template <
   typename T,
-  typename EnableIf<
+  GRANARY_ENABLE_IF(typename EnableIf<
     std::is_convertible<T *, SerializableMetaData<T> *>::value &&
     !std::is_convertible<T *, MutableMetaData *>::value
-  >::Type=0
+  >::Type)=0
 >
 const MetaDataInfo *GetInfo(void) {
   static MetaDataInfo kInfo = {
@@ -156,10 +161,10 @@ const MetaDataInfo *GetInfo(void) {
 // Get the meta-data info for some mutable meta-data.
 template <
   typename T,
-  typename EnableIf<
+  GRANARY_ENABLE_IF(typename EnableIf<
     !std::is_convertible<T *, SerializableMetaData<T> *>::value &&
     std::is_convertible<T *, MutableMetaData *>::value
-  >::Type=0
+  >::Type)=0
 >
 const MetaDataInfo *GetInfo(void) {
   static MetaDataInfo kInfo = {
@@ -181,6 +186,9 @@ const MetaDataInfo *GetInfo(void) {
 // Register some meta-data with Granary.
 void RegisterMetaData(const MetaDataInfo *meta);
 
+// Get some specific meta-data from some generic meta-data.
+void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta);
+
 }  // namespace meta
 }  // namespace detail
 
@@ -188,6 +196,23 @@ void RegisterMetaData(const MetaDataInfo *meta);
 template <typename T>
 inline void RegisterMetaData(void) {
   detail::meta::RegisterMetaData(detail::meta::GetInfo<T>());
+}
+
+// Cast some generic meta-data into some specific meta-data.
+template <
+  typename T,
+  typename EnableIf<IsPointer<T>::RESULT, int>::Type = 0,
+  GRANARY_ENABLE_IF(typename EnableIf<
+    std::is_convertible<
+      T, SerializableMetaData<typename RemovePointer<T>::Type> *
+    >::value ||
+    std::is_convertible<T, MutableMetaData *>::value
+  >::Type)=0
+>
+inline T MetaDataCast(GenericMetaData *meta) {
+  return reinterpret_cast<T>(
+      detail::meta::GetMetaData(
+          detail::meta::GetInfo<typename RemovePointer<T>::Type>(), meta));
 }
 
 #ifdef GRANARY_INTERNAL

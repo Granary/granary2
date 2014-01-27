@@ -6,18 +6,9 @@
 #include <unistd.h>
 #include <dlfcn.h>
 
-#include "granary/base/cast.h"
 #include "granary/base/options.h"
-
-#include "granary/cfg/control_flow_graph.h"
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/instruction.h"
-
 #include "granary/user/init.h"
-
-#include "granary/breakpoint.h"
 #include "granary/driver.h"
-#include "granary/environment.h"
 #include "granary/instrument.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"

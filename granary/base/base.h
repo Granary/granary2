@@ -37,6 +37,9 @@
 # define decltype(...) void
 # define alignas(...)
 # define alignof(...) 16
+# define GRANARY_ENABLE_IF(...) int
+#else
+# define GRANARY_ENABLE_IF(...) __VA_ARGS__
 #endif
 
 #ifdef GRANARY_DEBUG
@@ -51,6 +54,7 @@
 # define GRANARY_POINTER(type) type
 # define GRANARY_UINT32(type) type
 # define GRANARY_PROTECTED protected
+# define GRANARY_PUBLIC public
 # define GRANARY_CONST
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
@@ -61,6 +65,7 @@
 # define GRANARY_POINTER(type) void
 # define GRANARY_UINT32(type) uint32_t
 # define GRANARY_PROTECTED private
+# define GRANARY_PUBLIC private
 # define GRANARY_CONST const
 #endif
 

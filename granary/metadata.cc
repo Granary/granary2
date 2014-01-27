@@ -2,19 +2,31 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/list.h"
 #include "granary/base/new.h"
+#include "granary/base/options.h"
 #include "granary/breakpoint.h"
 #include "granary/metadata.h"
 
 namespace granary {
 
+GRANARY_DEFINE_bool(transparent_returns, false,
+    "Should Granary try to preserve transparent return addresses? The default "
+    "is false. If enabled, Granary will likely execute much more slowly.")
+
+// Initialize Granary's internal translation meta-data.
+TranslationMetaData::TranslationMetaData(void)
+    : raw_bits(0) {
+  translate_function_return = FLAG_transparent_returns;
+}
+
 // Hash the translation meta-data.
-void TranslatioMetaData::Hash(HashFunction *hasher) const {
+void TranslationMetaData::Hash(HashFunction *hasher) const {
   hasher->Accumulate(raw_bits);
 }
 
 // Compare two translation meta-data objects for equality.
-bool TranslatioMetaData::Equals(const TranslatioMetaData *meta) const {
+bool TranslationMetaData::Equals(const TranslationMetaData *meta) const {
   return raw_bits == meta->raw_bits;
 }
 
@@ -32,6 +44,11 @@ static size_t META_ALIGN = 0;
 // Is it too late to register meta-data?
 static bool CAN_REGISTER_META = true;
 
+inline static LinkedListIterator<detail::meta::MetaDataInfo>
+MetaDataInfos(void) {
+  return LinkedListIterator<detail::meta::MetaDataInfo>(META);
+}
+
 }  // namespace
 namespace detail {
 namespace meta {
@@ -47,9 +64,8 @@ void RegisterMetaData(const MetaDataInfo *meta_) {
     return;
   }
 
-  // Find the insertion point.
   auto next_ptr = &META;
-  for (auto curr(META); curr; ) {
+  for (auto curr(META); curr; ) {  // Find the insertion point.
     if ((meta->size > curr->size) ||
         (meta->size == curr->size && meta->align > curr->align)) {
       break;
@@ -64,6 +80,13 @@ void RegisterMetaData(const MetaDataInfo *meta_) {
   *next_ptr = meta;
 }
 
+// Get some specific meta-data from some generic meta-data.
+void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta) {
+  GRANARY_IF_DEBUG( granary_break_on_fault_if(!info->is_registered); )
+  auto meta_ptr = reinterpret_cast<uintptr_t>(meta);
+  return reinterpret_cast<void *>(meta_ptr + info->offset);
+}
+
 }  // namespace meta
 }  // namespace detail
 
@@ -71,7 +94,7 @@ void RegisterMetaData(const MetaDataInfo *meta_) {
 // the contained meta-data within this generic meta-data.
 GenericMetaData::GenericMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     meta->initialize(reinterpret_cast<void *>(this_ptr + meta->offset));
   }
 }
@@ -80,7 +103,7 @@ GenericMetaData::GenericMetaData(void) {
 // contained meta-data within this generic meta-data.
 GenericMetaData::~GenericMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     meta->destroy(reinterpret_cast<void *>(this_ptr + meta->offset));
   }
 }
@@ -92,7 +115,7 @@ GenericMetaData *GenericMetaData::Copy(void) const {
   auto that_ptr = reinterpret_cast<uintptr_t>(
       GenericMetaData::operator new(0));
 
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     meta->copy_initialize(
         reinterpret_cast<void *>(that_ptr + meta->offset),
         reinterpret_cast<const void *>(this_ptr + meta->offset));
@@ -104,7 +127,7 @@ GenericMetaData *GenericMetaData::Copy(void) const {
 // Hash all serializable meta-data contained within this generic meta-data.
 void GenericMetaData::Hash(HashFunction *hasher) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     meta->hash(hasher, reinterpret_cast<const void *>(this_ptr + meta->offset));
   }
 }
@@ -114,7 +137,7 @@ void GenericMetaData::Hash(HashFunction *hasher) const {
 bool GenericMetaData::Equals(const GenericMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     if (!meta->is_serializable) {
       continue;
     }
@@ -144,31 +167,31 @@ static void InitMetaDataAllocator(void) {
 }
 
 // The actual allocator (as backed by the `META_ALLOCATOR_MEM` storage).
-static detail::SlabAllocator &META_ALLOCATOR = \
-    *UnsafeCast<detail::SlabAllocator *>(&META_ALLOCATOR_MEM);
+static detail::SlabAllocator * const META_ALLOCATOR = \
+    reinterpret_cast<detail::SlabAllocator *>(&META_ALLOCATOR_MEM);
 
 }  // namespace
 
 // Dynamically allocate meta-data.
 void *GenericMetaData::operator new(std::size_t) {
-  void *address(META_ALLOCATOR.Allocate());
+  void *address(META_ALLOCATOR->Allocate());
   VALGRIND_MALLOCLIKE_BLOCK(address, META_SIZE, 0, 0);
   return address;
 }
 
 // Dynamically free meta-data.
 void GenericMetaData::operator delete(void *address) {
-  META_ALLOCATOR.Free(address);
+  META_ALLOCATOR->Free(address);
   VALGRIND_FREELIKE_BLOCK(address, META_SIZE);
 }
 
 // Initialize all meta-data. This finalizes the meta-data structures, which
 // determines the runtime layout of the packed meta-data structure.
 void InitMetaData(void) {
-  RegisterMetaData<TranslatioMetaData>();
+  RegisterMetaData<TranslationMetaData>();
   CAN_REGISTER_META = false;
 
-  for (auto meta = META; meta; meta = meta->next) {
+  for (auto meta : MetaDataInfos()) {
     if (META_SIZE) {
       META_SIZE += GRANARY_ALIGN_FACTOR(META_SIZE, meta->align);
     } else {

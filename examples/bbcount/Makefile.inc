@@ -1,4 +1,5 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_TOOLS += bbcount
+# Tool-name: bbcount
+GRANARY_TOOLS += # Add additional tool dependencies here.
 bbcount-objs += bbcount.ll
