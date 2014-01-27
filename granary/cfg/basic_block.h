@@ -189,6 +189,10 @@ class BasicBlock : public UnownedCountedObject {
   friend class detail::BasicBlockList;
   friend class ControlFlowInstruction;
   friend class ControlFlowGraph;
+
+  // TODO(pag): Store a pointer to a description of the module containing this
+  //            basic block.
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
 

@@ -4,12 +4,11 @@
 
 using namespace granary;
 
-// Simple tool for static and dynamic basic block counting.
+// Simple tool for tracing direct and synthesized jumps (but not conditional
+// jumps) in a control-flow graph.
 class TraceFallThroughCTIs : public Tool {
  public:
   virtual ~TraceFallThroughCTIs(void) = default;
-
-  // Instrument a basic block.
   virtual void InstrumentCFG(ControlFlowGraph *cfg) {
     for (auto block : cfg->Blocks()) {
       if (IsA<UnknownBasicBlock *>(block)) {
@@ -26,7 +25,7 @@ class TraceFallThroughCTIs : public Tool {
   }
 } static TRACER;
 
-// Initialize the bbcount tool.
+// Initialize the `trace_fall_throughs` tool.
 GRANARY_INIT(trace_fall_throughs, {
   RegisterTool(&TRACER);
 })

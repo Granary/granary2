@@ -13,7 +13,9 @@ GRANARY_DEFINE_bool(print_successors, false,
 
 static LogLevel kStream(LogOutput);
 
-// Simple tool for static and dynamic basic block counting.
+// Simple tool for printing out the addresses of basic blocks.
+//
+// TODO(pag): Relativize the printed addresses into module offsets.
 class BBPrinter : public Tool {
  public:
   virtual ~BBPrinter(void) = default;
@@ -32,7 +34,7 @@ class BBPrinter : public Tool {
   }
 } static PRINTER;
 
-// Initialize the bbcount tool.
+// Initialize the `print_bbs` tool.
 GRANARY_INIT(print_bbs, {
   RegisterTool(&PRINTER);
   kStream = FLAG_print_stderr ? LogWarning : LogOutput;
