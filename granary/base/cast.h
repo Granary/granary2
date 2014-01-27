@@ -94,42 +94,40 @@ inline ToT UnsafeCast(const FromT v) {
     GRANARY_APPLY_EACH(GRANARY_DECLARE_CLASS_ID, GRANARY_COMMA, ##__VA_ARGS__) \
   };
 
-// Declare that a class is the base class of a single-inheritance class
+// Define that a class is the base class of a single-inheritance class
 // hierarchy.
-# define GRANARY_BASE_CLASS(base_type) \
-  static bool IsDerivedFrom(const base_type *) { \
+# define GRANARY_DEFINE_BASE_CLASS(base_type) \
+  bool base_type::IsDerivedFrom(const base_type *) { \
     return true; \
   } \
-  virtual int IdOf(void) const { \
+  int base_type::IdOf(void) const { \
     return GRANARY_CAT(kIdOf, base_type); \
   }
 
-// Declare that a class is a derived class of a single-inheritance class
+// Define that a class is a derived class of a single-inheritance class
 // hierarchy. The base type is the base class of the entire class hierarchy,
 // not just the base class of the derived type.
-# define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
-  static bool IsDerivedFrom(const derived_type *) { \
+# define GRANARY_DEFINE_DERIVED_CLASS_OF(base_type, derived_type) \
+  bool derived_type::IsDerivedFrom(const derived_type *) { \
     return true; \
   } \
-  static bool IsDerivedFrom(const base_type *base) { \
+  bool derived_type::IsDerivedFrom(const base_type *base) { \
     return !(base->IdOf() % GRANARY_CAT(kIdOf, derived_type)); \
   } \
-  virtual int IdOf(void) const { \
+  int derived_type::IdOf(void) const { \
     return GRANARY_CAT(kIdOf, derived_type); \
   }
 
-#else
-# define GRANARY_BASE_CLASS(base_type) \
+#endif  // GRANARY_INTERNAL
+
+#define GRANARY_DECLARE_BASE_CLASS(base_type) \
   static bool IsDerivedFrom(const base_type *); \
   virtual int IdOf(void) const;
 
-# define GRANARY_DERIVED_CLASS_OF(base_type, derived_type) \
+#define GRANARY_DECLARE_DERIVED_CLASS_OF(base_type, derived_type) \
   static bool IsDerivedFrom(const derived_type *); \
   static bool IsDerivedFrom(const base_type *base); \
   virtual int IdOf(void) const;
-
-# define GRANARY_DECLARE_CLASS_HEIRARCHY(...)
-#endif  // GRANARY_INTERNAL
 
 // Base type to derived type cast.
 template <

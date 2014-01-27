@@ -16,15 +16,6 @@ namespace granary {
 
 class Instruction;
 
-GRANARY_DECLARE_CLASS_HEIRARCHY(
-    (BasicBlock, 2),
-    (NativeBasicBlock, 2 * 3),
-    (InstrumentedBasicBlock, 2 * 5),
-    (CachedBasicBlock, 2 * 5 * 7),
-    (InFlightBasicBlock, 2 * 5 * 11),
-    (FutureBasicBlock, 2 * 5 * 13),
-    (UnknownBasicBlock, 2 * 5 * 17))
-
 // Forward declarations.
 class BasicBlock;
 class CachedBasicBlock;
@@ -184,7 +175,7 @@ class BasicBlock : public UnownedCountedObject {
   //       other basic block types are treated as having no successors.
   virtual detail::SuccessorBlockIterator Successors(void) const;
 
-  GRANARY_BASE_CLASS(BasicBlock)
+  GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
   // Starting program counter of this basic block in the app and in the code
   // cache.
@@ -210,7 +201,7 @@ class InstrumentedBasicBlock : public BasicBlock {
   // Return this basic block's meta-data.
   GenericMetaData *MetaData(void);
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
  GRANARY_PROTECTED:
   GRANARY_INTERNAL_DEFINITION
@@ -238,7 +229,7 @@ class CachedBasicBlock : public InstrumentedBasicBlock {
 
   virtual ~CachedBasicBlock(void) = default;
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
@@ -263,7 +254,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
 
   virtual detail::SuccessorBlockIterator Successors(void) const;
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(InFlightBasicBlock, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
@@ -311,7 +302,7 @@ class FutureBasicBlock : public InstrumentedBasicBlock {
   void EnableDirectReturn(void);
   void RunNatively(void);
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(FutureBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
@@ -333,7 +324,7 @@ class UnknownBasicBlock : public InstrumentedBasicBlock {
   inline UnknownBasicBlock(void)
       : InstrumentedBasicBlock(nullptr, nullptr) {}
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(FutureBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
@@ -350,7 +341,7 @@ class NativeBasicBlock : public BasicBlock {
   using BasicBlock::BasicBlock;
   virtual ~NativeBasicBlock(void) = default;
 
-  GRANARY_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(NativeBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1

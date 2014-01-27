@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_IMPLEMENT_DYNAMIC_CAST
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
@@ -8,6 +9,19 @@
 #include "granary/driver.h"
 
 namespace granary {
+
+GRANARY_DECLARE_CLASS_HEIRARCHY(
+    (Instruction, 2),
+    (AnnotationInstruction, 2 * 3),
+    (NativeInstruction, 2 * 5),
+    (BranchInstruction, 2 * 5 * 7),
+    (ControlFlowInstruction, 2 * 5 * 11))
+
+GRANARY_DEFINE_BASE_CLASS(Instruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 
 Instruction *Instruction::Next(void) {
   return list.GetNext(this);

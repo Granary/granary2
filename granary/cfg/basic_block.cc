@@ -7,6 +7,24 @@
 #include "granary/metadata.h"
 
 namespace granary {
+
+GRANARY_DECLARE_CLASS_HEIRARCHY(
+    (BasicBlock, 2),
+    (NativeBasicBlock, 2 * 3),
+    (InstrumentedBasicBlock, 2 * 5),
+    (CachedBasicBlock, 2 * 5 * 7),
+    (InFlightBasicBlock, 2 * 5 * 11),
+    (FutureBasicBlock, 2 * 5 * 13),
+    (UnknownBasicBlock, 2 * 5 * 17))
+
+GRANARY_DEFINE_BASE_CLASS(BasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
+
 namespace detail {
 
 // Return the next successor by iterating through the instructions in the

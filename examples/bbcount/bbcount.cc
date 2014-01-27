@@ -44,7 +44,6 @@ class BBCount : public Tool {
       GRANARY_UNUSED(instr);
     }
   }
-
 } static BBCOUNT;
 
 // Initialize the bbcount tool.

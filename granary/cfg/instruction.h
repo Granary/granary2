@@ -18,13 +18,6 @@ namespace driver {
 class DecodedInstruction;
 }  // namespace driver
 
-GRANARY_DECLARE_CLASS_HEIRARCHY(
-    (Instruction, 2),
-    (AnnotationInstruction, 2 * 3),
-    (NativeInstruction, 2 * 5),
-    (BranchInstruction, 2 * 5 * 7),
-    (ControlFlowInstruction, 2 * 5 * 11))
-
 // Represents an abstract instruction.
 class Instruction {
  public:
@@ -33,7 +26,7 @@ class Instruction {
 
   virtual ~Instruction(void) = default;
 
-  GRANARY_BASE_CLASS(Instruction)
+  GRANARY_DECLARE_BASE_CLASS(Instruction)
 
   Instruction *Next(void);
   Instruction *Previous(void);
@@ -92,7 +85,7 @@ class AnnotationInstruction : public Instruction {
   const InstructionAnnotation annotation;
   void * const data;
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
@@ -114,7 +107,7 @@ class NativeInstruction : public Instruction {
 
   virtual int Length(void) const;
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, NativeInstruction)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
@@ -143,7 +136,7 @@ class BranchInstruction : public NativeInstruction {
 
   const AnnotationInstruction * const target;
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, BranchInstruction)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
     SHARED = true,
     ALIGNMENT = 1
@@ -183,7 +176,7 @@ class ControlFlowInstruction : public NativeInstruction {
     return target;
   }
 
-  GRANARY_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
     SHARED = true,
     ALIGNMENT = 1

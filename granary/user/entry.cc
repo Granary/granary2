@@ -17,8 +17,8 @@
 namespace granary {
 
 GRANARY_DEFINE_string(tools, "",
-    "Colon-seprated list of tools to dynamically load on start-up. "
-    "For example: `--tools=bbcount:pgo`.")
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--tools=bbcount,pgo`.")
 
 namespace {
 
@@ -39,7 +39,7 @@ static void LoadTools(void) {
   const char *ch(FLAG_tools);
   for (int i(3); *ch; ++ch) {
     tool_name[i++] = *ch;
-    if (!ch[1] || ':' == ch[1]) {
+    if (!ch[1] || ',' == ch[1]) {
       tool_name[i] = '.';
       tool_name[i + 1] = 's';
       tool_name[i + 2] = 'o';

@@ -50,7 +50,10 @@ void Instrument(AppProgramCounter *return_address) {
   auto trans = MetaDataCast<TranslationMetaData *>(meta);
   trans->translate_function_return = true;
 
-  ControlFlowGraph cfg(&env, *return_address, meta);
+  // *return_address
+  GRANARY_UNUSED(return_address);
+
+  ControlFlowGraph cfg(&env, UnsafeCast<AppProgramCounter>(detail::Instrument), meta);
   Instrument(&cfg);
 }
 
