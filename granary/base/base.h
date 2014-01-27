@@ -35,6 +35,7 @@
 // `decltype` or `alignof` well)
 #ifdef GRANARY_ECLIPSE
 # define decltype(...) void
+# define alignas(...)
 # define alignof(...) 16
 #endif
 

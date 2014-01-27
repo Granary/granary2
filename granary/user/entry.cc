@@ -18,6 +18,7 @@
 #include "granary/breakpoint.h"
 #include "granary/driver.h"
 #include "granary/environment.h"
+#include "granary/instrument.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
@@ -34,7 +35,7 @@ namespace {
 static void LoadTool(const char *tool_name) {
   void *tool(dlopen(tool_name, RTLD_NOW | RTLD_LOCAL));
   if (!tool) {
-    Log(LogError, "Failed to load tool '%s'.\n", tool_name);
+    Log(LogError, "Failed to load tool '%s': %s\n", tool_name, dlerror());
     return;
   }
 
@@ -117,9 +118,17 @@ int main(int argc, const char *argv[]) {
 }  // extern C
 #else
 
+GRANARY_DEFINE_bool(dont_attach, false,
+    "Should Granary attach to the program and begin instrumenting it "
+    "immediately after Granary and its tools have been initialized? "
+    "By default, Granary attaches immediately after initializing.")
+
 GRANARY_INIT(granary, {
   granary::InitOptions(getenv("GRANARY_OPTIONS"));
   granary::Init();
+  if (!FLAG_dont_attach) {
+    granary::Instrument();  // Upon return, code is instrumented.
+  }
 })
 
 #endif

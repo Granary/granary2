@@ -4,7 +4,6 @@
 
 START_FILE
 
-
 DEFINE_FUNC(granary_memcpy)
     movq %rdx, %rcx;
     movq %rdi, %rdx;
@@ -12,7 +11,6 @@ DEFINE_FUNC(granary_memcpy)
     movq %rdx, %rax;
     retq;
 END_FUNC(granary_memcpy)
-
 
 DEFINE_FUNC(granary_memset)
     movq %rsi, %rax;
@@ -22,7 +20,6 @@ DEFINE_FUNC(granary_memset)
     movq %rdx, %rax;
     retq;
 END_FUNC(granary_memset)
-
 
 DEFINE_FUNC(granary_memcmp)
 .Lgranary_memcmp_next_byte:
@@ -42,6 +39,5 @@ DEFINE_FUNC(granary_memcmp)
 .Lgranary_memcmp_done:
     retq;
 END_FUNC(granary_memcmp)
-
 
 END_FILE

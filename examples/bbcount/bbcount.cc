@@ -29,7 +29,6 @@ class BBCount : public Tool {
   // Instrument a basic block.
   virtual void InstrumentBB(InFlightBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
-
     if (!FLAG_count_execs) {
       return;
     }
