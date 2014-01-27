@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/base/base.h"
+#include "granary/base/string.h"
 #include "granary/logging.h"
 
 #include <unistd.h>
@@ -15,15 +16,6 @@ static int OUTPUT_FD[] = {
     2,  // LogFatalError
     -1
 };
-
-// Compute the length of a string.
-static unsigned long StringLength(const char *ch) throw() {
-  unsigned long len(0);
-  for (; *ch; ++ch) {
-    ++len;
-  }
-  return len;
-}
 
 typedef decltype('a') CharLiteral;
 

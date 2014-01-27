@@ -8,6 +8,7 @@
 #if defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)
 # include <atomic>
 # include <cstddef>
+# include <cstdarg>
 # include <memory>
 # include <initializer_list>
 # include <type_traits>

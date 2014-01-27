@@ -19,7 +19,7 @@ class InstrumentedBasicBlock;
 // must implement the `Hash` and `Equals` methods, and extend this template
 // using CRTP.
 template <typename T>
-struct SerializableMetaData {
+struct IndexableMetaData {
  public:
   void Hash(HashFunction *hasher) const;
   bool Equals(const T *that) const;
@@ -36,7 +36,7 @@ struct MutableMetaData {};
 // guides the translation process.
 //
 // This meta-data is registered in `granary::InitMetaData`.
-struct TranslationMetaData : SerializableMetaData<TranslationMetaData> {
+struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
   union {
     struct {
       // Should function returns be translated or run natively. This is related
@@ -137,7 +137,7 @@ bool CompareEquals(const void *a, const void *b) {
 template <
   typename T,
   GRANARY_ENABLE_IF(typename EnableIf<
-    std::is_convertible<T *, SerializableMetaData<T> *>::value &&
+    std::is_convertible<T *, IndexableMetaData<T> *>::value &&
     !std::is_convertible<T *, MutableMetaData *>::value
   >::Type)=0
 >
@@ -162,7 +162,7 @@ const MetaDataInfo *GetInfo(void) {
 template <
   typename T,
   GRANARY_ENABLE_IF(typename EnableIf<
-    !std::is_convertible<T *, SerializableMetaData<T> *>::value &&
+    !std::is_convertible<T *, IndexableMetaData<T> *>::value &&
     std::is_convertible<T *, MutableMetaData *>::value
   >::Type)=0
 >
@@ -204,7 +204,7 @@ template <
   typename EnableIf<IsPointer<T>::RESULT, int>::Type = 0,
   GRANARY_ENABLE_IF(typename EnableIf<
     std::is_convertible<
-      T, SerializableMetaData<typename RemovePointer<T>::Type> *
+      T, IndexableMetaData<typename RemovePointer<T>::Type> *
     >::value ||
     std::is_convertible<T, MutableMetaData *>::value
   >::Type)=0

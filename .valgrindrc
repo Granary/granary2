@@ -1,3 +1,4 @@
 --memcheck:leak-check=full
 --show-reachable=yes
 --suppressions=dependencies/valgrind/valgrind.supp
+--trace-children=yes

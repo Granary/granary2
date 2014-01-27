@@ -15,7 +15,6 @@ typedef enum {
 
 int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 
-
 }  // namespace granary
 
 #endif  // GRANARY_LOGGING_H_

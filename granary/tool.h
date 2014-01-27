@@ -5,6 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"
+#include "granary/init.h"
 
 namespace granary {
 
@@ -22,11 +23,6 @@ class Tool;
 void RegisterTool(Tool *tool);
 
 #ifdef GRANARY_INTERNAL
-
-enum InitKind {
-  DYNAMIC,
-  STATIC
-};
 
 // Initialize all loaded Granary tools.
 void InitTools(InitKind kind);

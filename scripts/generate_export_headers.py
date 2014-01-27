@@ -18,6 +18,7 @@ EXPORT_HEADERS = [
   "granary/logging.h",
   "granary/metadata.h",
   "granary/mir.h",
+  "granary/module.h",
   "granary/tool.h",
   "granary/util.h",
 ]

@@ -105,14 +105,14 @@ class LinkedListIterator {
   LinkedListIterator(void)
       : curr(nullptr) {}
 
-  explicit LinkedListIterator(T *first)
-      : curr(first) {}
-
   LinkedListIterator(const Iterator &that)  // NOLINT
       : curr(that.curr) {}
 
   LinkedListIterator(const Iterator &&that)  // NOLINT
       : curr(that.curr) {}
+
+  explicit LinkedListIterator(T *first)
+      : curr(first) {}
 
   inline Iterator begin(void) const {
     return *this;

@@ -1,4 +1,12 @@
 {
+   Syscall param getcwd(buf) points to unaddressable byte(s)
+   Memcheck:Param
+   getcwd(buf)
+   fun:getcwd
+   fun:realpath@@GLIBC_2.3
+   fun:main
+}
+{
    ~InFlightBasicBlock -> Instruction::Next -> ListHead::GetNext
    Memcheck:Addr8
    fun:_ZNK7granary8ListHead7GetNextINS_11InstructionEEEPT_PKS3_

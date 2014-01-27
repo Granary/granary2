@@ -6,7 +6,7 @@ using namespace granary;
 
 GRANARY_DEFINE_bool(count_execs, false,
     "Count the number of times each block is executed. This option is only "
-    "meaningful for static instrumentation. By default, `bbcount` does not "
+    "meaningful for static instrumentation. By default, `count_bbs` does not "
     "count the number of executions of each basic block.")
 
 // Runtime block execution counter.
@@ -46,8 +46,8 @@ class BBCount : public Tool {
   }
 } static BBCOUNT;
 
-// Initialize the bbcount tool.
-GRANARY_INIT(bbcount, {
+// Initialize the count_bbs tool.
+GRANARY_INIT(count_bbs, {
   RegisterTool(&BBCOUNT);
   if (FLAG_count_execs) {
     RegisterMetaData<BlockCounter>();

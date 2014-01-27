@@ -23,14 +23,14 @@ class BBPrinter : public Tool {
   // Instrument a basic block.
   virtual void InstrumentBB(InFlightBasicBlock *bb) {
     Log(kStream, "%p\n", bb->app_start_pc);
-    if (!FLAG_print_successors) {
-      return;
-    }
-    for (auto succ : bb->Successors()) {
-      if (!IsA<UnknownBasicBlock *>(succ.block)) {
-        Log(kStream, "-> %p\n", succ.block->app_start_pc);
+    if (FLAG_print_successors) {
+      for (auto succ : bb->Successors()) {
+        if (!IsA<UnknownBasicBlock *>(succ.block)) {
+          Log(kStream, "-> %p\n", succ.block->app_start_pc);
+        }
       }
     }
+
   }
 } static PRINTER;
 

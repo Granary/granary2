@@ -6,9 +6,10 @@
 
 namespace granary {
 
-// TODO(pag): Call `__cxx_global_var_init` from kernel space?
-//            Perhaps rename this symbol in kernel builds to something more
-//            appropriate.
+enum class InitKind {
+  DYNAMIC,
+  STATIC
+};
 
 }  // namespace granary
 

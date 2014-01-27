@@ -1,5 +1,5 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-# Tool-name: bbcount
+# Tool-name: count_bbs
 GRANARY_TOOLS += # Add additional tool dependencies here.
-bbcount-objs += bbcount.ll
+count_bbs-objs += count.ll
