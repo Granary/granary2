@@ -25,22 +25,22 @@ class ModuleOffset {
   // counter is not located in the module.
   const Module * const module;
 
-  // The beginning of the module region containing the program counter.
-  AppProgramCounter const region_pc;
-
   // The offset into the module region. If a search for `pc` returns a valid
   // `ModuleOffset` instance then `pc = region_pc + offset`.
   uintptr_t const offset;
+
+  // Returns true if this is a valid module offset.
+  inline bool IsValid(void) const {
+    return nullptr != module;
+  }
 
  private:
   GRANARY_INTERNAL_DEFINITION friend class Module;
 
   // Initialize a `ModuleOffset` instances.
   GRANARY_INTERNAL_DEFINITION
-  inline ModuleOffset(const Module *module_, AppProgramCounter region_pc_,
-                      uint64_t const offset_)
+  inline ModuleOffset(const Module *module_, uintptr_t const offset_)
       : module(module_),
-        region_pc(region_pc_),
         offset(offset_) {}
 };
 
@@ -61,17 +61,19 @@ enum class ModuleKind {
 namespace detail {
 
 enum ModuleMemoryPerms {
-  READABLE = (1 << 0),
-  WRITABLE = (1 << 1),
-  EXECUTABLE = (1 << 2),
-  COPY_ON_WRITE = (1 << 3)
+  MODULE_READABLE = (1 << 0),
+  MODULE_WRITABLE = (1 << 1),
+  MODULE_EXECUTABLE = (1 << 2),
+  MODULE_COPY_ON_WRITE = (1 << 3)
 };
 
 // Represents a range of code/data within a module.
 struct ModuleAddressRange {
   ModuleAddressRange *next;
-  uintptr_t begin_addr;
+  uintptr_t begin_addr;  // Runtime offsets.
   uintptr_t end_addr;
+  uintptr_t begin_offset;  // Static offsets in the module code.
+  uintptr_t end_offset;
   ModuleMemoryPerms perms;
 };
 
@@ -88,6 +90,11 @@ struct ModuleAddressRange {
 //            particular modules.
 class Module {
  public:
+  enum {
+    MAX_NAME_LEN = 256
+  };
+
+  Module(void) = delete;
 
   // Return a module offset object for a program counter (that is expected to
   // be contained inside of the module). If the program counter is not part of
@@ -112,10 +119,6 @@ class Module {
   GRANARY_INTERNAL_DEFINITION Module *next;
 
  private:
-  enum {
-    MAX_NAME_LEN = 256
-  };
-
   // The kind of this module (e.g. granary, tool, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
 

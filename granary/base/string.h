@@ -34,6 +34,9 @@ unsigned long CopyString(char *buffer, unsigned long buffer_len,
 __attribute__ ((format(printf, 3, 4)))
 unsigned long Format(char *buffer, unsigned long len, const char *format, ...);
 
+__attribute__ ((format(scanf, 2, 3)))
+unsigned long DeFormat(char *buffer, const char *format, ...);
+
 // Copies one string into another.
 }  // namespace granary
 #endif

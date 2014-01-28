@@ -22,7 +22,7 @@ static const detail::ModuleAddressRange *FindRange(
     const detail::ModuleAddressRange *ranges, AppProgramCounter pc) {
   auto addr = reinterpret_cast<uintptr_t>(pc);
   for (auto range : ModuleAddressRangeIterator(ranges)) {
-    if (detail::ModuleMemoryPerms::EXECUTABLE & range->perms) {
+    if (detail::MODULE_EXECUTABLE & range->perms) {
       if (range->begin_addr <= addr && addr < range->end_addr) {
         return range;
       }
@@ -39,12 +39,10 @@ static const detail::ModuleAddressRange *FindRange(
 ModuleOffset Module::OffsetOf(AppProgramCounter pc) const {
   auto range = FindRange(&ranges, pc);
   if (!range) {
-    return ModuleOffset(nullptr, nullptr, 0);
+    return ModuleOffset(nullptr, 0);
   }
-  return ModuleOffset(
-      this,
-      reinterpret_cast<AppProgramCounter>(range->begin_addr),
-      reinterpret_cast<uintptr_t>(pc) - range->begin_addr);
+  auto addr = reinterpret_cast<uintptr_t>(pc);
+  return ModuleOffset(this, range->begin_offset + (addr - range->begin_addr));
 }
 
 // Returns true if a module contains the code address `pc`, and if that code

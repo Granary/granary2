@@ -101,11 +101,12 @@ unsigned long Format(char *buffer, unsigned long len, const char *format, ...) {
   auto buffer_end = (buffer + len) - 1;
 
   for (; *format && buffer < buffer_end; ) {
-    if ('%' != *format || '%' == format[1]) {  // Normal characters.
-      if ('%' == format[1]) {
-        ++format;
-      }
+    if ('%' != *format) {  // Normal characters.
       *buffer++ = *format++;
+      continue;
+    } else if ('%' == format[1]) {
+      *buffer++ = *format++;
+      ++format;
       continue;
     }
 
@@ -166,6 +167,8 @@ unsigned long Format(char *buffer, unsigned long len, const char *format, ...) {
         granary_break_on_fault();
         break;
     }
+
+    ++format;
   }
 
   va_end(args);

@@ -12,6 +12,7 @@
 #include "granary/instrument.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"
+#include "granary/module.h"
 #include "granary/tool.h"
 
 namespace granary {
@@ -94,6 +95,9 @@ static void Init(void) {
   // Finalize the meta-data structure after tools are initialized. Tools might
   // change what meta-data is registered depending on command-line options.
   InitMetaData();
+
+  // Tell granary about loaded modules.
+  InitModules(InitKind::DYNAMIC);
 }
 
 }  // namespace granary
