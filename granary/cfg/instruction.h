@@ -183,7 +183,7 @@ class ControlFlowInstruction : public NativeInstruction {
   })
 
  private:
-  friend class ControlFlowGraph;
+  friend class LocalControlFlowGraph;
 
   ControlFlowInstruction(void) = delete;
 

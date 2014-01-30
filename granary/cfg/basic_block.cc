@@ -121,7 +121,7 @@ InFlightBasicBlock::ReversedInstructions(void) const {
 }
 
 // Free all of the instructions in the basic block. This is invoked by
-// ControlFlowGraph::~ControlFlowGraph, as the freeing of instructions
+// LocalControlFlowGraph::~LocalControlFlowGraph, as the freeing of instructions
 // interacts with the ownership model of basic blocks inside of basic block
 // lists.
 void InFlightBasicBlock::FreeInstructionList(void) {

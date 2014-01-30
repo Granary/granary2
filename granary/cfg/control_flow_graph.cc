@@ -66,7 +66,7 @@ BasicBlock *BasicBlockIterator::operator*(void) const {
 }  // namespace detail
 
 // Initialize the control flow graph with a single in-flight basic block.
-ControlFlowGraph::ControlFlowGraph(Environment *environment_,
+LocalControlFlowGraph::LocalControlFlowGraph(Environment *environment_,
                                    AppProgramCounter pc,
                                    GenericMetaData *meta)
       : environment(environment_),
@@ -82,7 +82,7 @@ ControlFlowGraph::ControlFlowGraph(Environment *environment_,
 }
 
 // Destroy the CFG.
-ControlFlowGraph::~ControlFlowGraph(void) {
+LocalControlFlowGraph::~LocalControlFlowGraph(void) {
 
   // Start by marking every block as owned; we're destroying them anyway so
   // this sets up a simple invariant regarding the interaction between freeing
@@ -113,12 +113,12 @@ ControlFlowGraph::~ControlFlowGraph(void) {
 }
 
 // Return the entry basic block of this control-flow graph.
-InFlightBasicBlock *ControlFlowGraph::EntryBlock(void) const {
+InFlightBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
   return entry_block;
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-detail::BasicBlockIterator ControlFlowGraph::Blocks(void) const {
+detail::BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
   return detail::BasicBlockIterator(first_block);
 }
 
@@ -126,7 +126,7 @@ detail::BasicBlockIterator ControlFlowGraph::Blocks(void) const {
 // will not appear in any iterators until some instruction takes ownership
 // of it. This can be achieved by targeting this newly created basic block
 // with a CTI.
-FutureBasicBlock *ControlFlowGraph::Materialize(AppProgramCounter start_pc) {
+FutureBasicBlock *LocalControlFlowGraph::Materialize(AppProgramCounter start_pc) {
   auto meta = new GenericMetaData;
   auto block = new FutureBasicBlock(start_pc, meta);
   auto list_entry = new detail::BasicBlockList(block);
@@ -136,7 +136,7 @@ FutureBasicBlock *ControlFlowGraph::Materialize(AppProgramCounter start_pc) {
 
 // Materialize a potentially new basic block given a basic block successor
 // (an instruction+target block) pair.
-BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target) {
+BasicBlock *LocalControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target) {
   granary_break_on_fault_if(target.block != target.cti->TargetBlock());
   auto block = Materialize(target.cti);
   const_cast<BasicBlock *&>(target.block) = block;
@@ -146,7 +146,7 @@ BasicBlock *ControlFlowGraph::Materialize(detail::BasicBlockSuccessor &target) {
 // Materialize a potentially new basic block given a CTI (that points to the
 // block to be materialized) and the metadata to use when materializing the
 // block.
-BasicBlock *ControlFlowGraph::Materialize(const ControlFlowInstruction *cti) {
+BasicBlock *LocalControlFlowGraph::Materialize(const ControlFlowInstruction *cti) {
   auto old_block = DynamicCast<FutureBasicBlock *>(cti->TargetBlock());
   granary_break_on_fault_if(!old_block || !old_block->list);
 
@@ -202,7 +202,7 @@ static std::unique_ptr<Instruction> RaiseInstruction(
 
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block. The last decoded instruction is returned.
-void ControlFlowGraph::DecodeInstructionList(Instruction *instr,
+void LocalControlFlowGraph::DecodeInstructionList(Instruction *instr,
                                              AppProgramCounter pc) {
   driver::InstructionDecoder decoder;
   driver::DecodedInstruction dinstr;
@@ -230,7 +230,7 @@ void ControlFlowGraph::DecodeInstructionList(Instruction *instr,
 // Materialize an in-flight basic block by decoding native instructions,
 // annotating those instructions, and updating the CFG with new successor
 // basic blocks.
-void ControlFlowGraph::MaterializeInFlight(InFlightBasicBlock *block,
+void LocalControlFlowGraph::MaterializeInFlight(InFlightBasicBlock *block,
                                            detail::BasicBlockList *block_list) {
   ControlFlowInstruction *cti(nullptr);
   DecodeInstructionList(block->FirstInstruction(), block->app_start_pc);
@@ -251,7 +251,7 @@ void ControlFlowGraph::MaterializeInFlight(InFlightBasicBlock *block,
 }
 
 // Insert a basic block list `new_list` after another existing list `list`.
-detail::BasicBlockList *ControlFlowGraph::InsertAfter(
+detail::BasicBlockList *LocalControlFlowGraph::InsertAfter(
     detail::BasicBlockList *list, detail::BasicBlockList *new_list) {
   list->list.SetNext(list, new_list);
   if (last_block == list) {
@@ -262,7 +262,7 @@ detail::BasicBlockList *ControlFlowGraph::InsertAfter(
 
 // Figure out if we've already materialized this basic block. If so, return
 // the already materialized basic block. Otherwise, return `nullptr`.
-BasicBlock *ControlFlowGraph::FindMaterialized(
+BasicBlock *LocalControlFlowGraph::FindMaterialized(
     AppProgramCounter target_pc,
     const GenericMetaData *meta,
     const BasicBlock * const ignore_block) const {

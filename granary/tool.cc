@@ -2,12 +2,15 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/string.h"
 #include "granary/breakpoint.h"
 #include "granary/tool.h"
 
 namespace granary {
 namespace {
 
+// Tools are added to the end of the list by storing a pointer to the last
+// `next` pointer, or a pointer to `TOOLS`.
 static Tool *TOOLS(nullptr);
 static Tool **NEXT_TOOL(&TOOLS);
 
@@ -16,15 +19,27 @@ static Tool **NEXT_TOOL(&TOOLS);
 // Register a tool with granary. Different instances of the same tool can be
 // simultaneously registered, and a given instrumentation tool might register
 // many distinct tool class instances.
-void RegisterTool(Tool *tool) {
+void RegisterTool(const char *name, Tool *tool) {
   granary_break_on_fault_if(!tool);
   if (tool->is_registered) {
     return;
   }
 
+  tool->name = name;
   tool->is_registered = true;
+
   *NEXT_TOOL = tool;
   NEXT_TOOL = &(tool->next);
+}
+
+// Returns the tool by name, or `nullptr` if the tool is not loaded.
+Tool *FindTool(const char *name) {
+  for (auto tool : ToolIterator(TOOLS)) {
+    if (StringsMatch(name, tool->name)) {
+      return tool;
+    }
+  }
+  return nullptr;
 }
 
 // Initialize all loaded Granary tools.
@@ -51,16 +66,16 @@ void Tool::InitDynamic(void) {}
 void Tool::InitStatic(void) {
   granary_break_on_fault();
 }
-void Tool::InstrumentCFG(ControlFlowGraph *) {}
+void Tool::InstrumentCFG(LocalControlFlowGraph *) {}
 
 // Used to initialize an instrumentation session.
-void Tool::BeginInstrumentBB(ControlFlowGraph *) {}
+void Tool::BeginInstrumentBB(LocalControlFlowGraph *) {}
 void Tool::InstrumentBB(InFlightBasicBlock *) {}
-void Tool::EndInstrumentBB(ControlFlowGraph *) {}
+void Tool::EndInstrumentBB(LocalControlFlowGraph *) {}
 
 // Returns an iterable of all registered tools.
-LinkedListIterator<Tool> Tools(void) {
-  return LinkedListIterator<Tool>(TOOLS);
+ToolIterator Tools(void) {
+  return ToolIterator(TOOLS);
 }
 
 }  // namespace granary

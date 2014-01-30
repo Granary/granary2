@@ -31,11 +31,16 @@ unsigned long StringLength(const char *ch);
 unsigned long CopyString(char *buffer, unsigned long buffer_len,
                          const char *str);
 
+// Similar to `snprintf`. Returns the number of formatted characters.
 __attribute__ ((format(printf, 3, 4)))
 unsigned long Format(char *buffer, unsigned long len, const char *format, ...);
 
+// Similar to `sscanf`. Returns the number of de-formatted arguments.
 __attribute__ ((format(scanf, 2, 3)))
-unsigned long DeFormat(char *buffer, const char *format, ...);
+int DeFormat(const char *buffer, const char *format, ...);
+
+// Compares two C strings for equality.
+bool StringsMatch(const char *str1, const char *str2);
 
 // Copies one string into another.
 }  // namespace granary

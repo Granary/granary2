@@ -16,22 +16,23 @@ GRANARY_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_C
 DRIVER_CC_SRC_FILES = $(shell find $(GRANARY_DRIVER_DIR) -type f -name '*.cc')
 DRIVER_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(DRIVER_CC_SRC_FILES:.cc=.ll))
 
-
 # Find files specific to the environment being instrumented (user/kernel).
 WHERE_CC_SRC_FILES = $(shell find $(GRANARY_WHERE_DIR) -type f -name '*.cc')
 WHERE_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(WHERE_CC_SRC_FILES:.cc=.ll))
-
 
 # Find files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_ASM_SRC_FILES = $(shell find $(GRANARY_ARCH_DIR) -type f -name '*.asm')
 ARCH_ASM_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_ASM_SRC_FILES:.asm=.S))
 
+# Find files specific to the architecture being instrumented (e.g. x86-64).
+ARCH_CC_SRC_FILES = $(shell find $(GRANARY_ARCH_DIR) -type f -name '*.cc')
+ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_FILES:.cc=.ll))
 
 # All object files to be compiled.
 GRANARY_OBJ_FILES =
 GRANARY_OBJ_FILES += $(GRANARY_CC_OBJ_FILES) $(DRIVER_OBJ_FILES)
 GRANARY_OBJ_FILES += $(WHERE_CC_OBJ_FILES) $(ARCH_ASM_OBJ_FILES)
-
+GRANARY_OBJ_FILES += $(ARCH_CC_OBJ_FILES)
 
 # Run the C pre-processor on the *.asm files, then run those through the
 # ASM post-processor to do extra token pasting and macro expansion.
@@ -40,7 +41,6 @@ $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/%.S: $(GRANARY_ARCH_DIR)/%.asm
 	@mkdir -p $(@D)
 	@$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -E -o $@ -x c -std=c99 $< 
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/post_process_asm.py $@
-
 
 # Compile C++ files to LLVM bitcode.
 $(GRANARY_BIN_DIR)/granary/%.ll: $(GRANARY_SRC_DIR)/granary/%.cc

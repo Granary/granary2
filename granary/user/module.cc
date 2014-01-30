@@ -9,7 +9,7 @@
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
 #include "granary/module.h"
-#include "granary/logging.h"
+#include "granary/tool.h"
 
 namespace granary {
 namespace {
@@ -107,29 +107,96 @@ static int OpenMapsFile(void) {
   return fd;
 }
 
+// Returns a pointer to the name of a module. For example, we want to extract
+// `acl` from `/lib/x86_64-linux-gnu/libacl.so.1.1.0`.
+static const char *PathToName(const char *path, char *name) {
+  const char *after_last_slash = nullptr;
+  for (; *path; ++path) {
+    if ('/' == *path) {
+      after_last_slash = path + 1;
+    }
+  }
+
+  // Copy part of the name in.
+  for (auto ch(name); *after_last_slash; ) {
+    if ('.' == *after_last_slash || '-' == *after_last_slash) {
+      *ch = '\0';
+      break;
+    }
+    *ch++ = *after_last_slash++;
+  }
+
+  if ('l' == name[0] && 'i' == name[1] && 'b' == name[2]) {
+    return name + 3;
+  }
+
+  return nullptr;
+}
+
+// Get the module kind given a module path and the previous kind.
+static ModuleKind KindFromPath(const char *path, ModuleKind *prev_kind) {
+  char name_buffer[Module::MAX_NAME_LEN] = {'\0'};
+  auto kind = *prev_kind;
+
+  if (ModuleKind::SHARED_LIBRARY == kind) {
+    auto name = PathToName(path, name_buffer);
+    if (StringsMatch("granary", name)) {
+      kind = ModuleKind::GRANARY;
+    } else if (FindTool(name)) {
+      kind = ModuleKind::GRANARY_TOOL;
+    }
+  }
+
+  // Pretend that all non-PROGRAM kinds are shared libraries until otherwise
+  // determined.
+  *prev_kind = ModuleKind::SHARED_LIBRARY;
+
+  return kind;
+}
+
 // Parse the `/proc/<pid>/maps` file for information about mapped modules.
 static void ParseMapsFile(Lexer * const lexer) {
-  const char *new_line_or_path(nullptr);
+  auto kind = ModuleKind::PROGRAM;
+
   for (;;) {
+    uintptr_t base_addr(0);
+    uintptr_t limit_addr(0);
+    unsigned module_perms(0);
+    uintptr_t module_offset(0);
+    const char *module_path(nullptr);
+
     auto address_range = lexer->NextToken();
-    if (!address_range[0]) {
+    if (!DeFormat(address_range, "%lx-%lx", &base_addr, &limit_addr)) {
       break;
     }
 
-    Log(LogOutput, "Info: \n");
-    Log(LogOutput, "  range <%s>\n", address_range);
     auto perms = lexer->NextToken();
-    Log(LogOutput, "  perms <%s>\n", perms);
-    auto offset = lexer->NextToken();
-    Log(LogOutput, "  offset <%s>\n", offset);
+    module_perms |= 'r' == perms[0] ? detail::MODULE_READABLE : 0;
+    module_perms |= 'w' == perms[1] ? detail::MODULE_WRITABLE : 0;
+    module_perms |= 'x' == perms[2] ? detail::MODULE_EXECUTABLE : 0;
+    module_perms |= 'p' == perms[3] ? detail::MODULE_COPY_ON_WRITE : 0;
+
+    DeFormat(lexer->NextToken(), "%lx", &module_offset);
+
     lexer->NextToken();  // dev.
     lexer->NextToken();  // inode.
-    new_line_or_path = lexer->NextToken();
-    if ('\n' != new_line_or_path[0]) {
-      auto path = new_line_or_path;
-      Log(LogOutput, "  path <%s>\n", path);
-      new_line_or_path = lexer->NextToken();  // new line.
+    module_path = lexer->NextToken();
+
+    // TODO(pag): Do something about non-executable memory?
+    if ('\n' == module_path[0]) {
+      continue;
+    } else if (!(module_perms & detail::MODULE_EXECUTABLE)) {
+      lexer->NextToken();  // new line.
+      continue;
     }
+
+    auto module = FindModule(module_path);
+    if (!module) {
+      module = new Module(KindFromPath(module_path, &kind), module_path);
+    }
+
+    module->AddRange(base_addr, limit_addr, module_offset, module_perms);
+    lexer->NextToken();  // new line.
   };
 }
 

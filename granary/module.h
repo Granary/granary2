@@ -6,8 +6,8 @@
 #include "granary/arch/base.h"
 #include "granary/base/new.h"
 #include "granary/base/types.h"
-
 #include "granary/init.h"
+#include "granary/lock.h"
 
 namespace granary {
 
@@ -60,21 +60,13 @@ enum class ModuleKind {
 #ifdef GRANARY_INTERNAL
 namespace detail {
 
-enum ModuleMemoryPerms {
+struct ModuleAddressRange;
+
+enum {
   MODULE_READABLE = (1 << 0),
   MODULE_WRITABLE = (1 << 1),
   MODULE_EXECUTABLE = (1 << 2),
   MODULE_COPY_ON_WRITE = (1 << 3)
-};
-
-// Represents a range of code/data within a module.
-struct ModuleAddressRange {
-  ModuleAddressRange *next;
-  uintptr_t begin_addr;  // Runtime offsets.
-  uintptr_t end_addr;
-  uintptr_t begin_offset;  // Static offsets in the module code.
-  uintptr_t end_offset;
-  ModuleMemoryPerms perms;
 };
 
 }  // namespace detail
@@ -94,7 +86,8 @@ class Module {
     MAX_NAME_LEN = 256
   };
 
-  Module(void) = delete;
+  GRANARY_INTERNAL_DEFINITION
+  Module(ModuleKind kind_, const char *name_);
 
   // Return a module offset object for a program counter (that is expected to
   // be contained inside of the module). If the program counter is not part of
@@ -111,6 +104,15 @@ class Module {
   // Returns the name of this module.
   const char *Name(void) const;
 
+  // Add a range to a module. This will potentially split a single range into two
+  // ranges, extend an existing range, add a new range, or do nothing if the new
+  // range is fully subsumed by another one.
+  void AddRange(uintptr_t begin_addr, uintptr_t end_addr,
+                uintptr_t begin_offset, unsigned perms);
+
+  // Remove a range from a module.
+  void RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
+
   GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
@@ -119,23 +121,40 @@ class Module {
   GRANARY_INTERNAL_DEFINITION Module *next;
 
  private:
+  GRANARY_INTERNAL_DEFINITION friend Module *FindModule(const char *name);
+  GRANARY_INTERNAL_DEFINITION friend void InitModules(InitKind kind);
+
+  Module(void) = delete;
+
+  // Adds a range into the range list. Returns a range to free if that range is
+  // no longer needed.
+  GRANARY_INTERNAL_DEFINITION
+  detail::ModuleAddressRange *AddRange(detail::ModuleAddressRange *range);
+
   // The kind of this module (e.g. granary, tool, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
 
   // Name/path of this module.
   GRANARY_INTERNAL_DEFINITION char name[MAX_NAME_LEN];
+  GRANARY_INTERNAL_DEFINITION char path[MAX_NAME_LEN];
 
   // The address ranges of this module.
-  //
-  // TODO(pag): For now we will assume that module segments are loaded into
-  //            contiguous memory regions.
-  GRANARY_INTERNAL_DEFINITION detail::ModuleAddressRange ranges;
+  GRANARY_INTERNAL_DEFINITION detail::ModuleAddressRange *ranges;
+
+  // Lock for accessing and modifying ranges.
+  GRANARY_INTERNAL_DEFINITION mutable ReaderWriterLock ranges_lock;
+
+  // Age of the data structure. Used as a heuristic to merge/split ranges.
+  GRANARY_INTERNAL_DEFINITION std::atomic<unsigned> age;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Module);
 };
 
 // Find a module given a program counter.
 const Module *FindModule(AppProgramCounter pc);
+
+// Find a module given its name.
+GRANARY_INTERNAL_DEFINITION Module *FindModule(const char *name);
 
 // Register a module with the module tracker.
 void RegisterModule(Module *module);

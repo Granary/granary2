@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/options.h"
+#include "granary/base/string.h"
 #include "granary/breakpoint.h"
 
 namespace granary {
@@ -136,21 +137,11 @@ static void ProcessOptionString(void) {
   }
 }
 
-// Compares two option names and returns true if they match.
-static bool OptionNamesMatch(const char *name, const char *search_name) {
-  for (; *name == *search_name; ++name, ++search_name) {
-    if (!*name) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Returns a pointer to the value for an option name, or a nullptr if the option
 // name was not found (or if it was specified but had no value).
 const char *FindValueForName(const char *name) {
   for (int i(0); i < MAX_NUM_OPTIONS && OPTION_NAMES[i]; ++i) {
-    if (OptionNamesMatch(OPTION_NAMES[i], name)) {
+    if (StringsMatch(OPTION_NAMES[i], name)) {
       return OPTION_VALUES[i];
     }
   }

@@ -36,6 +36,6 @@ class BBPrinter : public Tool {
 
 // Initialize the `print_bbs` tool.
 GRANARY_INIT(print_bbs, {
-  RegisterTool(&PRINTER);
+  RegisterTool("print_bbs", &PRINTER);
   kStream = FLAG_print_stderr ? LogWarning : LogOutput;
 })

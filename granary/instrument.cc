@@ -20,7 +20,7 @@ namespace {
 // Apply the instrumentation passes to the control-flow graph. First this
 // instruments at the tool granularity, and then it instruments at the block
 // granularity.
-static void Instrument(ControlFlowGraph *cfg) {
+static void Instrument(LocalControlFlowGraph *cfg) {
   for (auto tool : Tools()) {
     tool->InstrumentCFG(cfg);
   }
@@ -50,7 +50,7 @@ void Instrument(AppProgramCounter *return_address) {
   auto trans = MetaDataCast<TranslationMetaData *>(meta);
   trans->translate_function_return = true;
 
-  ControlFlowGraph cfg(&env, *return_address, meta);
+  LocalControlFlowGraph cfg(&env, *return_address, meta);
   Instrument(&cfg);
 }
 

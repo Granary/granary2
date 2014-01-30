@@ -15,6 +15,7 @@ EXPORT_HEADERS = [
   "granary/cfg/basic_block.h",
   "granary/cfg/instruction.h",
   "granary/breakpoint.h",
+  "granary/lock.h",
   "granary/logging.h",
   "granary/metadata.h",
   "granary/mir.h",

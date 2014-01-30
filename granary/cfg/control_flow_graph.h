@@ -13,7 +13,7 @@ namespace granary {
 class BasicBlock;
 class InFlightBasicBlock;
 class FutureBasicBlock;
-class ControlFlowGraph;
+class LocalControlFlowGraph;
 class GenericMetaData;
 class Environment;
 class ControlFlowInstruction;
@@ -43,7 +43,7 @@ class BasicBlockIterator {
   BasicBlock *operator*(void) const;
 
  private:
-  friend class granary::ControlFlowGraph;
+  friend class granary::LocalControlFlowGraph;
 
   inline BasicBlockIterator(void)
       : blocks(nullptr) {}
@@ -58,13 +58,13 @@ class BasicBlockIterator {
 }  // namespace detail
 
 // A control flow graph of basic blocks to instrument.
-class ControlFlowGraph {
+class LocalControlFlowGraph {
  public:
   GRANARY_INTERNAL_DEFINITION
-  ControlFlowGraph(Environment *environment_, AppProgramCounter pc,
+  LocalControlFlowGraph(Environment *environment_, AppProgramCounter pc,
                    GenericMetaData *meta);
 
-  ~ControlFlowGraph(void);
+  ~LocalControlFlowGraph(void);
 
   // Return the entry basic block of this control-flow graph.
   InFlightBasicBlock *EntryBlock(void) const;
@@ -118,7 +118,7 @@ class ControlFlowGraph {
 
   GRANARY_INTERNAL_DEFINITION detail::BasicBlockList *last_block;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowGraph);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(LocalControlFlowGraph);
 };
 
 }  // namespace granary

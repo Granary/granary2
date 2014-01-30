@@ -9,7 +9,7 @@ using namespace granary;
 class TraceFallThroughCTIs : public Tool {
  public:
   virtual ~TraceFallThroughCTIs(void) = default;
-  virtual void InstrumentCFG(ControlFlowGraph *cfg) {
+  virtual void InstrumentCFG(LocalControlFlowGraph *cfg) {
     for (auto block : cfg->Blocks()) {
       if (IsA<UnknownBasicBlock *>(block)) {
         continue;
@@ -26,6 +26,6 @@ class TraceFallThroughCTIs : public Tool {
 } static TRACER;
 
 // Initialize the `trace_fall_throughs` tool.
-GRANARY_INIT(trace_fall_throughs, {
-  RegisterTool(&TRACER);
+GRANARY_INIT(follow_jumps, {
+  RegisterTool("follow_jumps", &TRACER);
 })

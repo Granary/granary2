@@ -1,5 +1,5 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-# Tool-name: trace_fall_throughs
+# Tool-name: follow_jumps
 GRANARY_TOOLS += # Add additional tool dependencies here.
-trace_fall_throughs-objs += trace.ll
+follow_jumps-objs += trace.ll

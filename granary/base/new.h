@@ -85,9 +85,9 @@ class SlabAllocator {
   const size_t unaligned_size;
   const SlabList slab_list_tail;
 
-  // TODO(pag): Padding between the atomic and non-atomic components?
+  alignas(GRANARY_ARCH_CACHE_LINE_SIZE) \
+      std::atomic<const SlabList *> slab_list_head;
 
-  std::atomic<const SlabList *> slab_list_head;
   std::atomic<FreeList *> free_list;
   std::atomic<size_t> next_slab_number;
   std::atomic<size_t> next_allocation_number;

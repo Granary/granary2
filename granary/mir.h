@@ -9,7 +9,7 @@
 
 namespace granary {
 
-class ControlFlowGraph;
+class LocalControlFlowGraph;
 class BasicBlock;
 class GenericMetaData;
 class Instruction;
@@ -18,17 +18,17 @@ class AnnotationInstruction;
 namespace mir {
 
 // Function call instructions.
-std::unique_ptr<Instruction> Call(ControlFlowGraph *cfg,
+std::unique_ptr<Instruction> Call(LocalControlFlowGraph *cfg,
                                   BasicBlock *target_block);
 
 // Variants of direct jump instructions.
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
                                   BasicBlock *target_block);
 
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
                                   AppProgramCounter target_pc);
 
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
                                   const AnnotationInstruction *target_instr);
 
 

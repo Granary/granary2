@@ -10,7 +10,7 @@
 namespace granary {
 
 // Forward declarations.
-class ControlFlowGraph;
+class LocalControlFlowGraph;
 class InFlightBasicBlock;
 class Tool;
 
@@ -20,7 +20,10 @@ class Tool;
 //
 // TODO(pag): Need a mechanism to register multiple available concurrent
 //            versions of a tool to be run.
-void RegisterTool(Tool *tool);
+void RegisterTool(const char *name, Tool *tool);
+
+// Returns the tool by name, or `nullptr` if the tool is not loaded.
+Tool *FindTool(const char *name);
 
 #ifdef GRANARY_INTERNAL
 
@@ -44,25 +47,29 @@ class Tool {
   // tell Granary how to expand a control-flow graph, what basic blocks should
   // be instrumented and not instrumented, and as a mechanism to determine
   // if control branches to an already cached basic block.
-  virtual void InstrumentCFG(ControlFlowGraph *cfg);
+  virtual void InstrumentCFG(LocalControlFlowGraph *cfg);
 
   // Used to implement the typical JIT-based model of single basic-block at a
   // time instrumentation.
-  virtual void BeginInstrumentBB(ControlFlowGraph *cfg);
+  virtual void BeginInstrumentBB(LocalControlFlowGraph *cfg);
   virtual void InstrumentBB(InFlightBasicBlock *block);
-  virtual void EndInstrumentBB(ControlFlowGraph *cfg);
+  virtual void EndInstrumentBB(LocalControlFlowGraph *cfg);
 
  GRANARY_PUBLIC:
+
   GRANARY_POINTER(Tool) * GRANARY_CONST next;
   GRANARY_CONST bool is_registered;
+  const char * GRANARY_CONST name;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Tool);
 };
 
 #ifdef GRANARY_INTERNAL
 
+typedef LinkedListIterator<Tool> ToolIterator;
+
 // Returns an iterable of all registered tools.
-LinkedListIterator<Tool> Tools(void);
+ToolIterator Tools(void);
 
 #endif  // GRANARY_INTERNAL
 

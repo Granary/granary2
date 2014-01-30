@@ -14,23 +14,23 @@ namespace granary {
 namespace mir {
 
 // Function call instructions.
-std::unique_ptr<Instruction> Call(ControlFlowGraph *, BasicBlock *) {
+std::unique_ptr<Instruction> Call(LocalControlFlowGraph *, BasicBlock *) {
   return std::unique_ptr<Instruction>(nullptr);
 }
 
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *,
                                   BasicBlock *target_block) {
   driver::InstructionBuilder builder;
   return std::unique_ptr<Instruction>(new ControlFlowInstruction(builder.JMP(
       dynamorio::opnd_create_pc(target_block->app_start_pc)),target_block));
 }
 
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *,
                                   const AnnotationInstruction *) {
   return std::unique_ptr<Instruction>(nullptr);
 }
 
-std::unique_ptr<Instruction> Jump(ControlFlowGraph *cfg,
+std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
                                   AppProgramCounter target_pc) {
   return Jump(cfg, cfg->Materialize(target_pc));
 }

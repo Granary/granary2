@@ -26,11 +26,6 @@ static char *WriteGenericInt(
   bool is_signed,
   unsigned base
 ) throw() {
-  if (16 == base) {
-    *buff++ = '0';
-    *buff++ = 'x';
-  }
-
   if (!data) {
     *buff++ = '0';
     return buff;
@@ -135,10 +130,12 @@ int Log(LogLevel level, const char *format, ...) throw() {
 
       case 's':  // String.
         sub_string = va_arg(args, const char *);
-        num_written += static_cast<int>(write(
-            OUTPUT_FD[static_cast<unsigned>(level)],
-            sub_string,
-            StringLength(sub_string)));
+        if (sub_string) {
+          num_written += static_cast<int>(write(
+              OUTPUT_FD[static_cast<unsigned>(level)],
+              sub_string,
+              StringLength(sub_string)));
+        }
         ++ch;
         break;
 

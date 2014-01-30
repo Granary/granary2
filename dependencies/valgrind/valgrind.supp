@@ -41,10 +41,10 @@
    ...
 }
 {
-   ~ControlFlowGraph -> ~BasicBlockList
+   ~LocalControlFlowGraph -> ~BasicBlockList
    Memcheck:Addr8
    fun:_ZNK7granary8ListHead7GetNextINS_6detail14BasicBlockListEEEPT_PKS4_
-   fun:_ZN7granary16ControlFlowGraphD1Ev
+   fun:_ZN7granary21LocalControlFlowGraphD1Ev
    ...
 }
 {
@@ -134,7 +134,7 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:_ZN7granary16ControlFlowGraphD1Ev
+   fun:_ZN7granary21LocalControlFlowGraphD1Ev
    ...
 }
 {
@@ -147,7 +147,7 @@
    <insert_a_suppression_name_here>
    Memcheck:Addr4
    fun:_ZN7granary20UnownedCountedObject7AcquireEv
-   fun:_ZN7granary16ControlFlowGraphD1Ev
+   fun:_ZN7granary21LocalControlFlowGraphD1Ev
    ...
 }
 {

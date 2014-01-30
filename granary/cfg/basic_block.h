@@ -21,7 +21,7 @@ class BasicBlock;
 class CachedBasicBlock;
 class InFlightBasicBlock;
 class GenericMetaData;
-class ControlFlowGraph;
+class LocalControlFlowGraph;
 class ControlFlowInstruction;
 
 namespace detail {
@@ -46,7 +46,7 @@ class BasicBlockSuccessor {
   BasicBlock * const block;
 
  private:
-  friend class ControlFlowGraph;
+  friend class LocalControlFlowGraph;
   friend class SuccessorBlockIterator;
 
   inline BasicBlockSuccessor(ControlFlowInstruction *cti_,
@@ -188,7 +188,7 @@ class BasicBlock : public UnownedCountedObject {
  private:
   friend class detail::BasicBlockList;
   friend class ControlFlowInstruction;
-  friend class ControlFlowGraph;
+  friend class LocalControlFlowGraph;
 
   // TODO(pag): Store a pointer to a description of the module containing this
   //            basic block.
@@ -213,7 +213,7 @@ class InstrumentedBasicBlock : public BasicBlock {
                          GenericMetaData *meta_);
 
  private:
-  friend class ControlFlowGraph;
+  friend class LocalControlFlowGraph;
 
   // The meta-data associated with this basic block. Points to some (usually)
   // interned meta-data that is valid on entry to this basic block.
@@ -277,7 +277,7 @@ class InFlightBasicBlock : public InstrumentedBasicBlock {
   detail::BackwardInstructionIterator ReversedInstructions(void) const;
 
  private:
-  friend class ControlFlowGraph;
+  friend class LocalControlFlowGraph;
 
   InFlightBasicBlock(void) = delete;
 

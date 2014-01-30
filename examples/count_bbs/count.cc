@@ -44,11 +44,11 @@ class BBCount : public Tool {
       GRANARY_UNUSED(instr);
     }
   }
-} static BBCOUNT;
+} static COUNTER;
 
 // Initialize the count_bbs tool.
 GRANARY_INIT(count_bbs, {
-  RegisterTool(&BBCOUNT);
+  RegisterTool("count_bbs", &COUNTER);
   if (FLAG_count_execs) {
     RegisterMetaData<BlockCounter>();
   }
