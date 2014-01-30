@@ -53,4 +53,4 @@ lint:
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.h' -or -name '*.cc')
 
 
-all: lint $(GRANARY_OBJ_FILES)
+all: $(GRANARY_LINT) $(GRANARY_OBJ_FILES)

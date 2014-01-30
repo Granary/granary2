@@ -11,6 +11,8 @@
 #include "granary/module.h"
 #include "granary/tool.h"
 
+#include "granary/logging.h"
+
 namespace granary {
 namespace {
 
@@ -34,8 +36,8 @@ class Lexer {
   // tokens across file buffers.
   const char *NextToken(void) {
     for (; file_offset < BUFF_SIZE; ) {
-      if (!file_buffer[file_offset]) {  // Done.
-        return FinalizeToken();
+      if (!file_buffer[file_offset]) {  // Done or need to fill the buffer.
+        break;
 
       // Break tokens at spaces and new lines, but treat new lines as tokens
       // themselves.
@@ -67,16 +69,16 @@ class Lexer {
 
   // Fill the file buffer of the lexer.
   bool FillBuffer(void) {
-    file_offset = 0;
     if (try_fill_buffer) {
-      auto amount_read = read(fd, &(file_buffer), BUFF_SIZE);
-      try_fill_buffer = amount_read == BUFF_SIZE;
-      if (0 <= amount_read) {
+      file_offset = 0;
+      file_buffer[0] = '\0';
+      auto amount_read = read(fd, &(file_buffer[0]), BUFF_SIZE);
+      try_fill_buffer = 0 < amount_read;
+      if (amount_read < BUFF_SIZE) {
         file_buffer[amount_read] = '\0';
-        return true;
       }
     }
-    return false;
+    return try_fill_buffer;
   }
 
   // Finalize a token.
@@ -133,69 +135,63 @@ static const char *PathToName(const char *path, char *name) {
   return nullptr;
 }
 
-// Get the module kind given a module path and the previous kind.
-static ModuleKind KindFromPath(const char *path, ModuleKind *prev_kind) {
-  char name_buffer[Module::MAX_NAME_LEN] = {'\0'};
-  auto kind = *prev_kind;
-
-  if (ModuleKind::SHARED_LIBRARY == kind) {
+// Get the module kind given a module path and the number of modules already
+// seen.
+static ModuleKind KindFromPath(const char *path, int num_modules) {
+  if (!num_modules) {
+    return ModuleKind::PROGRAM;
+  } else if ('[' == path[0]) {  // [vdso], [vsyscall], [stack], [heap].
+    return ModuleKind::DYNAMIC;
+  } else {
+    char name_buffer[Module::MAX_NAME_LEN] = {'\0'};
     auto name = PathToName(path, name_buffer);
     if (StringsMatch("granary", name)) {
-      kind = ModuleKind::GRANARY;
+      return ModuleKind::GRANARY;
     } else if (FindTool(name)) {
-      kind = ModuleKind::GRANARY_TOOL;
+      return ModuleKind::GRANARY_TOOL;
     }
   }
-
-  // Pretend that all non-PROGRAM kinds are shared libraries until otherwise
-  // determined.
-  *prev_kind = ModuleKind::SHARED_LIBRARY;
-
-  return kind;
+  return ModuleKind::SHARED_LIBRARY;
 }
 
 // Parse the `/proc/<pid>/maps` file for information about mapped modules.
 static void ParseMapsFile(Lexer * const lexer) {
-  auto kind = ModuleKind::PROGRAM;
+  int num_found_modules(0);
 
   for (;;) {
-    uintptr_t base_addr(0);
-    uintptr_t limit_addr(0);
+    uintptr_t module_base(0);
+    uintptr_t module_limit(0);
     unsigned module_perms(0);
     uintptr_t module_offset(0);
-    const char *module_path(nullptr);
+    const char *token(nullptr);
 
-    auto address_range = lexer->NextToken();
-    if (!DeFormat(address_range, "%lx-%lx", &base_addr, &limit_addr)) {
+    token = lexer->NextToken();
+    if (!DeFormat(token, "%lx-%lx", &module_base, &module_limit)) {
       break;
     }
 
-    auto perms = lexer->NextToken();
-    module_perms |= 'r' == perms[0] ? detail::MODULE_READABLE : 0;
-    module_perms |= 'w' == perms[1] ? detail::MODULE_WRITABLE : 0;
-    module_perms |= 'x' == perms[2] ? detail::MODULE_EXECUTABLE : 0;
-    module_perms |= 'p' == perms[3] ? detail::MODULE_COPY_ON_WRITE : 0;
+    token = lexer->NextToken();
+    module_perms |= 'r' == token[0] ? detail::MODULE_READABLE : 0;
+    module_perms |= 'w' == token[1] ? detail::MODULE_WRITABLE : 0;
+    module_perms |= 'x' == token[2] ? detail::MODULE_EXECUTABLE : 0;
+    module_perms |= 'p' == token[3] ? detail::MODULE_COPY_ON_WRITE : 0;
 
     DeFormat(lexer->NextToken(), "%lx", &module_offset);
 
     lexer->NextToken();  // dev.
     lexer->NextToken();  // inode.
-    module_path = lexer->NextToken();
-
-    // TODO(pag): Do something about non-executable memory?
-    if ('\n' == module_path[0]) {
-      continue;
-    } else if (!(module_perms & detail::MODULE_EXECUTABLE)) {
-      lexer->NextToken();  // new line.
+    token = lexer->NextToken();
+    if ('\n' == token[0]) {
       continue;
     }
 
-    auto module = FindModule(module_path);
+    auto module = FindModuleByName(token);
     if (!module) {
-      module = new Module(KindFromPath(module_path, &kind), module_path);
+      module = new Module(KindFromPath(token, num_found_modules++), token);
+      RegisterModule(module);
     }
 
-    module->AddRange(base_addr, limit_addr, module_offset, module_perms);
+    module->AddRange(module_base, module_limit, module_offset, module_perms);
     lexer->NextToken();  // new line.
   };
 }

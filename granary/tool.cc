@@ -34,9 +34,11 @@ void RegisterTool(const char *name, Tool *tool) {
 
 // Returns the tool by name, or `nullptr` if the tool is not loaded.
 Tool *FindTool(const char *name) {
-  for (auto tool : ToolIterator(TOOLS)) {
-    if (StringsMatch(name, tool->name)) {
-      return tool;
+  if (name) {
+    for (auto tool : ToolIterator(TOOLS)) {
+      if (StringsMatch(name, tool->name)) {
+        return tool;
+      }
     }
   }
   return nullptr;

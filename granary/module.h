@@ -121,7 +121,7 @@ class Module {
   GRANARY_INTERNAL_DEFINITION Module *next;
 
  private:
-  GRANARY_INTERNAL_DEFINITION friend Module *FindModule(const char *name);
+  GRANARY_INTERNAL_DEFINITION friend Module *FindModuleByName(const char *name);
   GRANARY_INTERNAL_DEFINITION friend void InitModules(InitKind kind);
 
   Module(void) = delete;
@@ -151,13 +151,13 @@ class Module {
 };
 
 // Find a module given a program counter.
-const Module *FindModule(AppProgramCounter pc);
+const Module *FindModuleByPC(AppProgramCounter pc);
 
 // Find a module given its name.
-GRANARY_INTERNAL_DEFINITION Module *FindModule(const char *name);
+GRANARY_CONST Module *FindModuleByName(const char *name);
 
 // Register a module with the module tracker.
-void RegisterModule(Module *module);
+GRANARY_INTERNAL_DEFINITION void RegisterModule(Module *module);
 
 // Initialize the module tracker.
 GRANARY_INTERNAL_DEFINITION void InitModules(InitKind);

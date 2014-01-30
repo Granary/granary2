@@ -29,6 +29,8 @@ class FineGrainedLock {
 
  private:
   std::atomic<bool> is_locked;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLock);
 };
 
 // Ensures that a lock is held within some scope.
@@ -47,14 +49,14 @@ class FineGrainedLocked {
   FineGrainedLocked(void) = delete;
 
   FineGrainedLock *lock;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLocked);
 };
 
 // Implements a fine-grained reader/writer lock.
 class ReaderWriterLock {
  public:
-  inline ReaderWriterLock(void)
-      : writer_lock(),
-        reader_count(ATOMIC_VAR_INIT(0)) {}
+  ReaderWriterLock(void);
 
   void ReadAcquire(void);
   void ReadRelease(void);
@@ -67,6 +69,8 @@ class ReaderWriterLock {
 
   std::atomic<int> reader_count;
   std::atomic<int> writer_count;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReaderWriterLock);
 };
 
 // Ensures that a read lock is held within some scope.
@@ -85,6 +89,8 @@ class ReadLocked {
   ReadLocked(void) = delete;
 
   ReaderWriterLock *lock;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReadLocked);
 };
 
 // Ensures that a write lock is held within some scope.
@@ -103,6 +109,8 @@ class WriteLocked {
   WriteLocked(void) = delete;
 
   ReaderWriterLock *lock;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(WriteLocked);
 };
 
 

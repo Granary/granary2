@@ -56,12 +56,9 @@ static const detail::ModuleAddressRange *FindRange(
     const detail::ModuleAddressRange *ranges, AppProgramCounter pc) {
   auto addr = reinterpret_cast<uintptr_t>(pc);
   for (auto range : ModuleAddressRangeIterator(ranges)) {
-    if (detail::MODULE_EXECUTABLE & range->perms) {
-      if (range->begin_addr <= addr && addr < range->end_addr) {
-        return range;
-      }
-    }
-    if (range->begin_addr > addr) {
+    if (range->begin_addr <= addr && addr < range->end_addr) {
+      return range;
+    } else if (range->begin_addr > addr) {
       return nullptr;
     }
   }
@@ -114,17 +111,16 @@ const char *Module::Name(void) const {
 // range is fully subsumed by another one.
 void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                       uintptr_t begin_offset, unsigned perms) {
-  if (!(detail::MODULE_EXECUTABLE & perms)) {
-    return;  // TODO(pag): Handle executable ranges.
-  }
-  auto range = new detail::ModuleAddressRange(
-      begin_addr, end_addr, begin_offset, perms, age.fetch_add(1));
-  do {
-    WriteLocked locker(&ranges_lock);
-    range = AddRange(range);
-  } while (false);
-  if (range) {
-    delete range;
+  if (detail::MODULE_EXECUTABLE & perms) {
+    auto range = new detail::ModuleAddressRange(
+        begin_addr, end_addr, begin_offset, perms, age.fetch_add(1));
+    do {
+      WriteLocked locker(&ranges_lock);
+      range = AddRange(range);
+    } while (false);
+    if (range) {
+      delete range;
+    }
   }
 }
 
@@ -141,6 +137,7 @@ void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
 // TODO(pag): Test this code!!
 detail::ModuleAddressRange *Module::AddRange(
     detail::ModuleAddressRange *range) {
+
   detail::ModuleAddressRange **next_ptr(&ranges);
   detail::ModuleAddressRange *curr(ranges);
   detail::ModuleAddressRange *remove(nullptr);
@@ -198,7 +195,7 @@ detail::ModuleAddressRange *Module::AddRange(
 }
 
 // Find a module given a program counter.
-const Module *FindModule(AppProgramCounter pc) {
+const Module *FindModuleByPC(AppProgramCounter pc) {
   for (auto module : ModuleIterator(MODULES.load(std::memory_order_relaxed))) {
     if (module->Contains(pc)) {
       return module;
@@ -208,7 +205,7 @@ const Module *FindModule(AppProgramCounter pc) {
 }
 
 // Find a module given its name.
-Module *FindModule(const char *name) {
+Module *FindModuleByName(const char *name) {
   for (auto module : ModuleIterator(MODULES.load(std::memory_order_relaxed))) {
     if (StringsMatch(module->name, name)) {
       return module;

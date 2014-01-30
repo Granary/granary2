@@ -15,6 +15,7 @@ GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0
 GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
 GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
+GRANARY_LINT ?= lint
 
 GRANARY_SRC_DIR ?= $(shell pwd)
 GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
