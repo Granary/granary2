@@ -10,6 +10,9 @@ all_objects:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/xxhash"
+	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/xxhash \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 	@echo "Entering $(GRANARY_SRC_DIR)/granary"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
@@ -28,7 +31,6 @@ all: all_objects
     	$(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/asm/string.o \
     	$(GRANARY_BIN_DIR)/granary/breakpoint.o \
     	-o $(GRANARY_BIN_DIR)/tool.o
-	
 	@echo "Done."
 
 # Clean up all executable / binary files.

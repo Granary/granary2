@@ -2,16 +2,14 @@
 
 #define GRANARY_INTERNAL
 
-#include <unistd.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
 #include "granary/module.h"
 #include "granary/tool.h"
-
-#include "granary/logging.h"
 
 namespace granary {
 namespace {
@@ -20,11 +18,12 @@ namespace {
 // non-whitespace sequences of characters as tokens.
 class Lexer {
  public:
-  explicit Lexer(int fd_)
-      : fd(fd_),
+  explicit Lexer(void)
+      : fd(open("/proc/self/maps", O_RDONLY)),
         file_offset(0),
         token_offset(0),
         try_fill_buffer(true) {
+    granary_break_on_fault_if(-1 == fd);
     FillBuffer();
   }
 
@@ -100,15 +99,6 @@ class Lexer {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Lexer);
 };
 
-// Return a file descriptor for `/proc/<pid>/maps`.
-static int OpenMapsFile(void) {
-  char name_buffer[Module::MAX_NAME_LEN] = {'\0'};
-  Format(name_buffer, 100, "/proc/%u/maps", getpid());
-  auto fd = open(&(name_buffer[0]), O_RDONLY);
-  granary_break_on_fault_if(-1 == fd);
-  return fd;
-}
-
 // Returns a pointer to the name of a module. For example, we want to extract
 // `acl` from `/lib/x86_64-linux-gnu/libacl.so.1.1.0`.
 static const char *PathToName(const char *path, char *name) {
@@ -155,7 +145,8 @@ static ModuleKind KindFromPath(const char *path, int num_modules) {
 }
 
 // Parse the `/proc/<pid>/maps` file for information about mapped modules.
-static void ParseMapsFile(Lexer * const lexer) {
+static void ParseMapsFile(void) {
+  Lexer lexer;
   int num_found_modules(0);
 
   for (;;) {
@@ -165,22 +156,22 @@ static void ParseMapsFile(Lexer * const lexer) {
     uintptr_t module_offset(0);
     const char *token(nullptr);
 
-    token = lexer->NextToken();
+    token = lexer.NextToken();
     if (!DeFormat(token, "%lx-%lx", &module_base, &module_limit)) {
       break;
     }
 
-    token = lexer->NextToken();
+    token = lexer.NextToken();
     module_perms |= 'r' == token[0] ? detail::MODULE_READABLE : 0;
     module_perms |= 'w' == token[1] ? detail::MODULE_WRITABLE : 0;
     module_perms |= 'x' == token[2] ? detail::MODULE_EXECUTABLE : 0;
     module_perms |= 'p' == token[3] ? detail::MODULE_COPY_ON_WRITE : 0;
 
-    DeFormat(lexer->NextToken(), "%lx", &module_offset);
+    DeFormat(lexer.NextToken(), "%lx", &module_offset);
 
-    lexer->NextToken();  // dev.
-    lexer->NextToken();  // inode.
-    token = lexer->NextToken();
+    lexer.NextToken();  // dev.
+    lexer.NextToken();  // inode.
+    token = lexer.NextToken();
     if ('\n' == token[0]) {
       continue;
     }
@@ -192,7 +183,7 @@ static void ParseMapsFile(Lexer * const lexer) {
     }
 
     module->AddRange(module_base, module_limit, module_offset, module_perms);
-    lexer->NextToken();  // new line.
+    lexer.NextToken();  // new line.
   };
 }
 
@@ -201,9 +192,7 @@ static void ParseMapsFile(Lexer * const lexer) {
 // Initialize the module tracker.
 void InitModules(InitKind kind) {
   granary_break_on_fault_if(InitKind::DYNAMIC != kind); // TODO(pag): Implement.
-
-  Lexer lexer(OpenMapsFile());
-  ParseMapsFile(&lexer);
+  ParseMapsFile();
 }
 
 }  // namespace granary

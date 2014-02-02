@@ -9,6 +9,8 @@
 #include "granary/base/hash.h"
 #include "granary/base/type_traits.h"
 
+#include "granary/module.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -37,34 +39,37 @@ struct MutableMetaData {};
 //
 // This meta-data is registered in `granary::InitMetaData`.
 struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
-  union {
-    struct {
-      // Should function returns be translated or run natively. This is related
-      // to transparency and comprehensiveness, but can also be used to
-      // implement fast function returns when instrumentation isn't being
-      // transparent.
-      bool translate_function_return:1;
 
-      // Should this basic block be run natively? I.e. should be just run the
-      // app code instead of instrumenting it?
-      bool run_natively:1;
+  // The module from which this block originates.
+  GRANARY_CONST ModuleOffset source;
 
-      // Should we expect that the target is not decodable? For example, the
-      // Linux kernel's `BUG_ON` macro generates `ud2` instructions. We treat
-      // these as dead ends, and go native on them so that we can see the right
-      // debugging info. Similarly, debugger breakpoints inject `int3`s into
-      // the code. In order to properly trigger those breakpoints, we go native
-      // before executing those breakpoints.
-      bool cant_decode:1;
+  // The program counter.
+  GRANARY_CONST AppProgramCounter native_pc;
 
-      // Should this block's address be committed to the code cache index? If
-      // a block is marked as private then it can be specially treated by tools,
-      // e.g. for performing trace-specific optimizations.
-      bool is_private:1;
-    };
+  // Should function returns be translated or run natively. This is related
+  // to transparency and comprehensiveness, but can also be used to
+  // implement fast function returns when instrumentation isn't being
+  // transparent.
+  //bool translate_function_return;
 
-    uint8_t raw_bits;
-  };
+  // Should this basic block be run natively? I.e. should be just run the
+  // app code instead of instrumenting it?
+  //bool run_natively;
+
+  // Should we expect that the target is not decodable? For example, the
+  // Linux kernel's `BUG_ON` macro generates `ud2` instructions. We treat
+  // these as dead ends, and go native on them so that we can see the right
+  // debugging info. Similarly, debugger breakpoints inject `int3`s into
+  // the code. In order to properly trigger those breakpoints, we go native
+  // before executing those breakpoints.
+  //bool cant_decode;
+
+  // Should this block's address be committed to the code cache index? If
+  // a block is marked as private then it can be specially treated by tools,
+  // e.g. for performing trace-specific optimizations.
+  //bool is_private;
+
+  //bool force_decode;
 
   // Initialize Granary's internal translation meta-data.
   TranslationMetaData(void);
@@ -133,14 +138,47 @@ bool CompareEquals(const void *a, const void *b) {
   return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
 }
 
-// Get the meta-data info for some serializable meta-data.
-template <
-  typename T,
-  GRANARY_ENABLE_IF(typename EnableIf<
-    std::is_convertible<T *, IndexableMetaData<T> *>::value &&
-    !std::is_convertible<T *, MutableMetaData *>::value
-  >::Type)=0
->
+
+// Describes whether some type is an indexable meta-data type.
+template <typename T>
+struct IsIndexableMetaData {
+  enum {
+    RESULT = !!std::is_convertible<T *, IndexableMetaData<T> *>::value
+  };
+};
+
+// Describes whether some type is an indexable meta-data type.
+template <typename T>
+struct IsMutableMetaData {
+  enum {
+    RESULT = !!std::is_convertible<T *, MutableMetaData *>::value
+  };
+};
+
+// Describes whether some type is a meta-data type.
+template <typename T>
+struct IsMetaData {
+  enum {
+    RESULT = IsIndexableMetaData<T>::RESULT || IsMutableMetaData<T>::RESULT
+  };
+};
+
+// Describes whether some pointer is a pointer to some meta-data.
+template <typename T>
+struct IsMetaDataPointer {
+  static_assert(
+      IsPointer<T>::RESULT,
+      "`MetaDataCast` can only cast to pointer types.");
+  typedef typename RemovePointer<T>::Type PointedT0;
+  typedef typename RemoveConst<PointedT0>::Type PointedT;
+
+  enum {
+    RESULT = IsMetaData<PointedT>::RESULT
+  };
+};
+
+// Get the meta-data info for some indexable meta-data.
+template <typename T, typename EnableIf<IsIndexableMetaData<T>::RESULT>::Type=0>
 const MetaDataInfo *GetInfo(void) {
   static MetaDataInfo kInfo = {
       nullptr,
@@ -159,13 +197,7 @@ const MetaDataInfo *GetInfo(void) {
 }
 
 // Get the meta-data info for some mutable meta-data.
-template <
-  typename T,
-  GRANARY_ENABLE_IF(typename EnableIf<
-    !std::is_convertible<T *, IndexableMetaData<T> *>::value &&
-    std::is_convertible<T *, MutableMetaData *>::value
-  >::Type)=0
->
+template <typename T, typename EnableIf<IsMutableMetaData<T>::RESULT>::Type=0>
 const MetaDataInfo *GetInfo(void) {
   static MetaDataInfo kInfo = {
       nullptr,
@@ -201,13 +233,7 @@ inline void RegisterMetaData(void) {
 // Cast some generic meta-data into some specific meta-data.
 template <
   typename T,
-  typename EnableIf<IsPointer<T>::RESULT, int>::Type = 0,
-  GRANARY_ENABLE_IF(typename EnableIf<
-    std::is_convertible<
-      T, IndexableMetaData<typename RemovePointer<T>::Type> *
-    >::value ||
-    std::is_convertible<T, MutableMetaData *>::value
-  >::Type)=0
+  typename EnableIf<detail::meta::IsMetaDataPointer<T>::RESULT>::Type=0
 >
 inline T MetaDataCast(GenericMetaData *meta) {
   return reinterpret_cast<T>(
@@ -219,9 +245,10 @@ inline T MetaDataCast(GenericMetaData *meta) {
 // Meta-data about a basic block.
 class GenericMetaData {
  public:
+  GRANARY_INTERNAL_DEFINITION
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  GenericMetaData(void);
+  explicit GenericMetaData(AppProgramCounter pc);
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
@@ -245,6 +272,8 @@ class GenericMetaData {
   static void operator delete(void *);
 
  private:
+  GenericMetaData(void) = delete;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(GenericMetaData);
 };
 

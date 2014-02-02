@@ -59,7 +59,8 @@ void InitTools(InitKind kind) {
 // every API function.
 Tool::Tool(void)
     : next(nullptr),
-      is_registered(false) {}
+      is_registered(false),
+      name(nullptr) {}
 
 // Dummy implementation of InitDynamic for tools that can do all of their
 // initialization
@@ -68,12 +69,27 @@ void Tool::InitDynamic(void) {}
 void Tool::InitStatic(void) {
   granary_break_on_fault();
 }
-void Tool::InstrumentCFG(LocalControlFlowGraph *) {}
 
-// Used to initialize an instrumentation session.
-void Tool::BeginInstrumentBB(LocalControlFlowGraph *) {}
-void Tool::InstrumentBB(InFlightBasicBlock *) {}
-void Tool::EndInstrumentBB(LocalControlFlowGraph *) {}
+// Used to instrument control-flow instructions and decide how basic blocks
+// should be materialized.
+//
+// This method is repeatedly executed until no more materialization
+// requests are made.
+void Tool::InstrumentControlFlow(Materializer *, LocalControlFlowGraph *) {}
+
+// Used to implement more complex forms of instrumentation where tools need to
+// see the entire local control-flow graph.
+//
+// This method is executed once per tool per instrumentation session.
+void Tool::InstrumentBlocks(const LocalControlFlowGraph *) {}
+
+// Used to implement the typical JIT-based model of single basic-block at a
+// time instrumentation.
+//
+// This method is executed for each decoded BB in the local CFG,
+// but is never re-executed for the same (tool, BB) pair in the current
+// instrumentation session.
+void Tool::InstrumentBlock(DecodedBasicBlock *) {}
 
 // Returns an iterable of all registered tools.
 ToolIterator Tools(void) {

@@ -30,12 +30,6 @@ void FineGrainedLock::Release(void) {
   is_locked.store(false, std::memory_order_release);
 }
 
-// Initialize the reader/writer lock.
-ReaderWriterLock::ReaderWriterLock(void)
-    : writer_lock(),
-      reader_count(ATOMIC_VAR_INIT(0)),
-      writer_count(ATOMIC_VAR_INIT(0)) {}
-
 // Read-side acquire.
 void ReaderWriterLock::ReadAcquire(void) {
   for (;;) {

@@ -5,11 +5,10 @@
 
 #include "granary/base/base.h"
 
-
-#define GRANARY_INIT(tool_name, ...) \
+#define GRANARY_INIT(...) \
   namespace { \
     __attribute__((used, constructor(102))) \
-    static void GRANARY_CAT(Init, tool_name)(void) { \
+    static void GRANARY_CAT(Init, GRANARY_UNIQUE_SYMBOL)(void) { \
       GRANARY_USING_NAMESPACE granary; \
       __VA_ARGS__ \
     } \

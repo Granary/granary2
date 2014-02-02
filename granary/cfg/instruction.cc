@@ -82,6 +82,11 @@ int NativeInstruction::Length(void) const {
   return instruction->Length();
 }
 
+// Return the targeted instruction of this branch.
+const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
+  return target;
+}
+
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
     driver::DecodedInstruction *instruction_, BasicBlock *target_)
@@ -100,9 +105,14 @@ ControlFlowInstruction::~ControlFlowInstruction(void) {
   // a CTI is unlinked, never re-linked, and therefore goes out of scope, thus
   // deleting the instruction. If that CTI is the only link to a basic block,
   // then the associated block must also be destroyed.
-  if (!old_target->list && old_target->CanDestroy()) {
+  if (!old_target->list.IsAttached() && old_target->CanDestroy()) {
     delete old_target;
   }
+}
+
+// Return the target block of this CFI.
+BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
+  return target;
 }
 
 // Change the target of a control-flow instruction. This can involve an

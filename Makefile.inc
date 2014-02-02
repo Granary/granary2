@@ -15,7 +15,7 @@ GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0
 GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
 GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
-GRANARY_LINT ?= lint
+GRANARY_LINT_CODE ?= 1
 
 GRANARY_SRC_DIR ?= $(shell pwd)
 GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
@@ -57,7 +57,7 @@ GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR)
 
 # Use GNU C99 and standard C++11.
 GRANARY_CC_FLAGS += -std=gnu99
-GRANARY_CXX_FLAGS += -std=c++11
+GRANARY_COMMON_CXX_FLAGS = -std=c++11
 
 # Enable valgrind checking of code.
 ifeq (1,$(GRANARY_WITH_VALGRIND))
@@ -91,7 +91,8 @@ ifneq (user,$(GRANARY_WHERE))
 endif
 
 # Make sure certain language features are disabled.
-GRANARY_CXX_FLAGS += -fno-asynchronous-unwind-tables -fno-rtti -fno-exceptions 
+GRANARY_COMMON_CXX_FLAGS += -fno-asynchronous-unwind-tables
+GRANARY_COMMON_CXX_FLAGS += -fno-rtti -fno-exceptions 
 
 ifeq (kernel,$(GRANARY_WHERE))  # Make sure we follow the kernel ABI.
 	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
@@ -115,7 +116,7 @@ GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
 GRANARY_COMMON_WARN_FLAGS += -Wno-gnu -Wno-c11-extensions -Wno-long-long
 
 # Add the common flags to both the C++ and C compiler flags.
-GRANARY_CXX_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
+GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_CC_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
@@ -141,9 +142,11 @@ ifeq (kernel,$(GRANARY_WHERE))
     GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_acquire=granary_break_on_unreachable_code"
     GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_release=granary_break_on_unreachable_code"
     GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_abort=granary_break_on_unreachable_code"
-    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
+    
 	# TODO(pag): __cxx_global_var_init for all static global variables?
 endif
+
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5

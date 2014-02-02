@@ -31,6 +31,11 @@ class ListHead {
   }
 #endif
 
+  // Returns true if this list element is attached to any other list elements.
+  inline bool IsAttached(void) const {
+    return nullptr != prev || nullptr != next;
+  }
+
   // Get the object that comes after the object that contains this list head.
   template <typename T>
   T *GetNext(const T *object) const {

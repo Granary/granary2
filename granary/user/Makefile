@@ -14,13 +14,16 @@ GRANARY_INJECTOR_LL = $(GRANARY_BIN_DIR)/granary/user/inject.ll
 GRANARY_NAME_PREFIX =
 GRANARY_NAME_SUFFIX = .out
 GRANARY_INJECTOR =
+GRANARY_LD_FLAGS_LATE += -ldl
 ifeq (0,$(GRANARY_STANDALONE))
 	GRANARY_NAME_PREFIX = lib
 	GRANARY_NAME_SUFFIX = .so
 	GRANARY_LD_FLAGS_EARLY += -shared
 	#GRANARY_LD_FLAGS_LATE += "-Wl,-Bstatic"
-	GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic" -ldl
+	GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic"
 	GRANARY_INJECTOR = injector
+else
+	GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 endif
 
 GRANARY_INJECTOR_FLAGS = -O3 -g0 -fno-asynchronous-unwind-tables -std=gnu99

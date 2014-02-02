@@ -6,33 +6,50 @@
 
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
-#include "granary/cfg/instruction.h"
-#include "granary/environment.h"
+
 #include "granary/instrument.h"
+#include "granary/materialize.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
 namespace granary {
-
-namespace detail {
 namespace {
 
-// Apply the instrumentation passes to the control-flow graph. First this
-// instruments at the tool granularity, and then it instruments at the block
-// granularity.
-static void Instrument(LocalControlFlowGraph *cfg) {
-  for (auto tool : Tools()) {
-    tool->InstrumentCFG(cfg);
+// Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
+// allowed to materialize direct basic blocks into other forms of basic blocks.
+static void InstrumentControlFlow(LocalControlFlowGraph *cfg,
+                                  GenericMetaData *meta) {
+  Materializer materializer(cfg);
+  materializer.MaterializeInitialBlock(meta);
+  for (;; materializer.MaterializeRequestedBlocks()) {
+    for (auto tool : Tools()) {
+      tool->InstrumentControlFlow(&materializer, cfg);
+    }
+    if (!materializer.HasPendingMaterializationRequest()) {
+      break;
+    }
   }
+}
+
+// Apply LCFG-wide instrumentation for every tool.
+static void InstrumentBlocks(LocalControlFlowGraph *cfg) {
   for (auto tool : Tools()) {
-    tool->BeginInstrumentBB(cfg);
-    for (auto block : cfg->Blocks()) {
-      auto in_flight_block = DynamicCast<InFlightBasicBlock *>(block);
-      if (in_flight_block) {
-        tool->InstrumentBB(in_flight_block);
+    tool->InstrumentBlocks(cfg);
+  }
+}
+
+// Apply instrumentation to every block for every tool.
+//
+// Note: This applies tool-specific instrumentation for all tools to a single
+//       block before moving on to the next block in the LCFG.
+static void InstrumentBlock(LocalControlFlowGraph *cfg) {
+  for (auto block : cfg->Blocks()) {
+    for (auto tool : Tools()) {
+      auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
+      if (decoded_block) {
+        tool->InstrumentBlock(decoded_block);
       }
     }
-    tool->EndInstrumentBB(cfg);
   }
 }
 
@@ -40,19 +57,19 @@ static void Instrument(LocalControlFlowGraph *cfg) {
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
-void Instrument(AppProgramCounter *return_address) {
-  Environment env;  // TODO(pag): Thread/CPU-private environment?
-
-  auto meta = new GenericMetaData;
-
-  // When attaching, we assume that the return address (`*return_address`) is
-  // a native return address, and so we tell Granary that is should try ha
-  auto trans = MetaDataCast<TranslationMetaData *>(meta);
-  trans->translate_function_return = true;
-
-  LocalControlFlowGraph cfg(&env, *return_address, meta);
-  Instrument(&cfg);
+void Instrument(LocalControlFlowGraph *cfg,
+                std::unique_ptr<GenericMetaData> meta) {
+  InstrumentControlFlow(cfg, meta.release());
+  InstrumentBlocks(cfg);
+  InstrumentBlock(cfg);
 }
 
-}  // namespace detail
+// Test the instrumentation system.
+void TestInstrument(void) {
+  LocalControlFlowGraph cfg;
+  auto meta = new GenericMetaData(
+      UnsafeCast<AppProgramCounter>(&InstrumentControlFlow));
+  Instrument(&cfg, std::move(std::unique_ptr<GenericMetaData>(meta)));
+}
+
 }  // namespace granary

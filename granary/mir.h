@@ -9,7 +9,7 @@
 
 namespace granary {
 
-class LocalControlFlowGraph;
+class Materializer;
 class BasicBlock;
 class GenericMetaData;
 class Instruction;
@@ -17,15 +17,27 @@ class AnnotationInstruction;
 
 namespace mir {
 
-// Function call instructions.
-std::unique_ptr<Instruction> Call(LocalControlFlowGraph *cfg,
-                                  BasicBlock *target_block);
+// Hyper call. Ensures that machine state is saved/restored.
+std::unique_ptr<Instruction> HyperCall(AppProgramCounter target_pc);
 
-// Variants of direct jump instructions.
-std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
-                                  BasicBlock *target_block);
+// Hyper call that doesn't ensure machine state is saved and/or restored.
+std::unique_ptr<Instruction> UnsafeHyperCall(AppProgramCounter target_pc);
 
-std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
+// Hyper jump that doesn't ensure machine state is saved and/or restored.
+std::unique_ptr<Instruction> UnsafeHyperJump(AppProgramCounter target_pc);
+
+// Call / jump to existing basic blocks.
+std::unique_ptr<Instruction> Call(BasicBlock *target_block);
+std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
+
+// Materialize a direct basic block and insert a direct jump to that
+// basic block.
+std::unique_ptr<Instruction> Jump(Materializer *materializer,
+                                  AppProgramCounter target_pc);
+
+// Materialize a direct basic block and insert a direct call to that
+// basic block.
+std::unique_ptr<Instruction> Call(Materializer *materializer,
                                   AppProgramCounter target_pc);
 
 std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,

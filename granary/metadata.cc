@@ -10,24 +10,19 @@
 
 namespace granary {
 
-GRANARY_DEFINE_bool(transparent_returns, false,
-    "Should Granary try to preserve transparent return addresses? The default "
-    "is false. If enabled, Granary will likely execute much more slowly.")
-
 // Initialize Granary's internal translation meta-data.
 TranslationMetaData::TranslationMetaData(void)
-    : raw_bits(0) {
-  translate_function_return = FLAG_transparent_returns;
-}
+    : source(),
+      native_pc(nullptr) {}
 
 // Hash the translation meta-data.
 void TranslationMetaData::Hash(HashFunction *hasher) const {
-  hasher->Accumulate(raw_bits);
+  hasher->Accumulate(this);
 }
 
 // Compare two translation meta-data objects for equality.
 bool TranslationMetaData::Equals(const TranslationMetaData *meta) const {
-  return raw_bits == meta->raw_bits;
+  return source == meta->source && native_pc == meta->native_pc;
 }
 
 namespace {
@@ -92,11 +87,19 @@ void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta) {
 
 // Initialize a new meta-data instance. This involves separately initializing
 // the contained meta-data within this generic meta-data.
-GenericMetaData::GenericMetaData(void) {
+GenericMetaData::GenericMetaData(AppProgramCounter pc) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
     meta->initialize(reinterpret_cast<void *>(this_ptr + meta->offset));
   }
+
+  // Default-initialize the translation meta-data.
+  auto trans = MetaDataCast<TranslationMetaData *>(this);
+  if (pc) {
+    auto module = FindModuleByPC(pc);
+    trans->source = module->OffsetOf(pc);
+  }
+  trans->native_pc = pc;
 }
 
 // Destroy a meta-data instance. This involves separately destroying the

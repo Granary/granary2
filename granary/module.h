@@ -18,24 +18,32 @@ class Module;
 // are necessarily contiguous, but in most cases they are.
 class ModuleOffset {
  public:
-  ModuleOffset(void) = delete;
+  inline ModuleOffset(void)
+      : module(nullptr),
+        offset(0) {}
+
   ModuleOffset(const ModuleOffset &) = default;
 
   // Module containing searched-for program counter, or `nullptr` if the program
   // counter is not located in the module.
-  const Module * const module;
+  const Module * GRANARY_CONST module;
 
   // The offset into the module region. If a search for `pc` returns a valid
   // `ModuleOffset` instance then `pc = region_pc + offset`.
-  uintptr_t const offset;
+  uintptr_t GRANARY_CONST offset;
 
   // Returns true if this is a valid module offset.
   inline bool IsValid(void) const {
     return nullptr != module;
   }
 
+  // Returns true if one module offset is the same as another.
+  inline bool operator==(const ModuleOffset &that) const {
+    return module == that.module && offset == that.offset;
+  }
+
  private:
-  GRANARY_INTERNAL_DEFINITION friend class Module;
+  friend class Module;
 
   // Initialize a `ModuleOffset` instances.
   GRANARY_INTERNAL_DEFINITION
@@ -121,8 +129,8 @@ class Module {
   GRANARY_INTERNAL_DEFINITION Module *next;
 
  private:
-  GRANARY_INTERNAL_DEFINITION friend Module *FindModuleByName(const char *name);
-  GRANARY_INTERNAL_DEFINITION friend void InitModules(InitKind kind);
+  friend Module *FindModuleByName(const char *name);
+  friend void InitModules(InitKind kind);
 
   Module(void) = delete;
 

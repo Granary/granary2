@@ -9,15 +9,16 @@ GRANARY_DEFINE_bool(print_stderr, false,
 
 GRANARY_DEFINE_bool(print_bb_successors, false,
     "Should the printer print the successor blocks of this basic block? The "
-    "default is fals: no successors will be printed.")
+    "default is false: no successors is printed.")
 
 GRANARY_DEFINE_bool(print_bb_module, false,
-    "Should the originating module of a basic block be printed? The default is "
-    "false.")
+    "Should the originating module name/path of a basic block be printed? The "
+    "default is false: no module information is printed.")
 
 GRANARY_DEFINE_bool(print_bb_offset, false,
-    "If the module name/path is being printed, then also print the offset of "
-    "this basic block from within the module. The default is false.")
+    "If `print_bb_module` is `true`, then also print the offset of "
+    "this basic block from within the module. The default is false: no "
+    "module offsets are printed.")
 
 static LogLevel kStream(LogOutput);
 
@@ -28,25 +29,29 @@ class BBPrinter : public Tool {
  public:
   virtual ~BBPrinter(void) = default;
 
-  // Instrument a basic block.
-  virtual void InstrumentBB(InFlightBasicBlock *bb) {
+  // Instrument a decoded basic block.
+  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+    auto start_pc = bb->StartPC();
     if (!FLAG_print_bb_module) {
-      Log(kStream, "%p\n", bb->app_start_pc);
+      Log(kStream, "%p\n", start_pc);
     } else {
-      auto module = FindModuleByPC(bb->app_start_pc);
+      auto module = FindModuleByPC(start_pc);
       if (FLAG_print_bb_offset) {
-        auto offset = module->OffsetOf(bb->app_start_pc);
-        Log(kStream, "%p %s:%lx\n", bb->app_start_pc, module->Name(),
-            offset.offset);
+        auto offset = module->OffsetOf(start_pc);
+        Log(kStream, "%p %s:%lx\n", start_pc, module->Name(), offset.offset);
       } else {
-        Log(kStream, "%p %s\n", bb->app_start_pc, module->Name());
+        Log(kStream, "%p %s\n", start_pc, module->Name());
       }
     }
 
     if (FLAG_print_bb_successors) {
       for (auto succ : bb->Successors()) {
-        if (!IsA<UnknownBasicBlock *>(succ.block)) {
-          Log(kStream, "-> %p\n", succ.block->app_start_pc);
+        if (IsA<IndirectBasicBlock *>(succ.block)) {
+          Log(kStream, "-> indirect\n");
+        } else if (IsA<ReturnBasicBlock *>(succ.block)) {
+          Log(kStream, "   return\n");
+        } else {
+          Log(kStream, "-> %p\n", succ.block->StartPC());
         }
       }
     }
@@ -55,7 +60,7 @@ class BBPrinter : public Tool {
 } static PRINTER;
 
 // Initialize the `print_bbs` tool.
-GRANARY_INIT(print_bbs, {
+GRANARY_INIT({
   RegisterTool("print_bbs", &PRINTER);
   kStream = FLAG_print_stderr ? LogWarning : LogOutput;
 })

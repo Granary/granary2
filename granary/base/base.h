@@ -32,6 +32,13 @@
 // For namespace-based `using` declarations without triggering the linter.
 #define GRANARY_USING_NAMESPACE using namespace  // NOLINT
 
+#define GRANARY_UNIQUE_SYMBOL \
+  GRANARY_CAT( \
+    GRANARY_CAT( \
+      GRANARY_CAT(_, __LINE__), \
+      GRANARY_CAT(_, __INCLUDE_LEVEL__)), \
+    GRANARY_CAT(_, __COUNTER__))
+
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
 #ifdef GRANARY_ECLIPSE
@@ -57,6 +64,7 @@
 # define GRANARY_PROTECTED protected
 # define GRANARY_PUBLIC public
 # define GRANARY_CONST
+# define GRANARY_IF_EXTERNAL(...)
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
 # define GRANARY_INTERNAL_DEFINITION
@@ -68,6 +76,7 @@
 # define GRANARY_PROTECTED private
 # define GRANARY_PUBLIC private
 # define GRANARY_CONST const
+# define GRANARY_IF_EXTERNAL(...)  __VA_ARGS__
 #endif
 
 
@@ -101,9 +110,9 @@
 // Determine the number of arguments in a variadic macro argument pack.
 // From: http://efesx.com/2010/07/17/variadic-macro-to-count-number-of-\
 // arguments/#comment-256
-#define GRANARY_NUM_PARAMS_(_0,_1,_2,_3,_4,_5,_6,_7,N,...) N
+#define GRANARY_NUM_PARAMS_(_0,_1,_2,_3,_4,_5,_6,_7,_8,_9,N,...) N
 #define GRANARY_NUM_PARAMS(...) \
-  GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,7,6,5,4,3,2,1,0)
+  GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,9,8,7,6,5,4,3,2,1,0)
 
 
 // Spits back out the arguments passed into the macro function.
@@ -231,6 +240,16 @@
   pp(a6) sep() \
   pp(a7)
 
+#define GRANARY_APPLY_EACH_9(pp, sep, a0, a1, a2, a3, a4, a5, a6, a7, a8) \
+  pp(a0) sep() \
+  pp(a1) sep() \
+  pp(a2) sep() \
+  pp(a3) sep() \
+  pp(a4) sep() \
+  pp(a5) sep() \
+  pp(a6) sep() \
+  pp(a7) sep() \
+  pp(a8)
 
 // Mark a symbol as exported.
 #define GRANARY_EXPORT __attribute__((visibility("default")))

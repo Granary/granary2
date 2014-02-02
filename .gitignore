@@ -29,4 +29,6 @@ bin
 
 # Generated files
 generated/*
+!generated/dynamorio/types.h
+
 

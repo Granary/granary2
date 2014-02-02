@@ -7,7 +7,8 @@
 #include "granary/arch/base.h"
 #include "granary/base/base.h"
 #include "granary/base/new.h"
-#include "granary/driver/dynamorio/types.h"
+
+#include "generated/dynamorio/types.h"
 
 namespace granary {
 namespace driver {

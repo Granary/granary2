@@ -6,26 +6,27 @@ using namespace granary;
 
 // Simple tool for tracing direct and synthesized jumps (but not conditional
 // jumps) in a control-flow graph.
-class TraceFallThroughCTIs : public Tool {
+class JumpFollower : public Tool {
  public:
-  virtual ~TraceFallThroughCTIs(void) = default;
-  virtual void InstrumentCFG(LocalControlFlowGraph *cfg) {
-    for (auto block : cfg->Blocks()) {
-      if (IsA<UnknownBasicBlock *>(block)) {
+  virtual ~JumpFollower(void) = default;
+  virtual void InstrumentControlFlow(Materializer *materializer,
+                                     LocalControlFlowGraph *cfg) {
+    for (auto block : cfg->NewBlocks()) {
+      if (IsA<IndirectBasicBlock *>(block) || IsA<ReturnBasicBlock *>(block)) {
         continue;
       }
       for (auto succ : block->Successors()) {
         if (succ.cti->IsJump() &&
             !succ.cti->IsConditionalJump() &&
             !succ.cti->HasIndirectTarget()) {
-          cfg->Materialize(succ);
+          materializer->RequestMaterialize(succ.block);
         }
       }
     }
   }
 } static TRACER;
 
-// Initialize the `trace_fall_throughs` tool.
-GRANARY_INIT(follow_jumps, {
+// Initialize the `follow_jumps` tool.
+GRANARY_INIT({
   RegisterTool("follow_jumps", &TRACER);
 })

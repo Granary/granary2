@@ -10,8 +10,9 @@
 namespace granary {
 
 // Forward declarations.
+class Materializer;
 class LocalControlFlowGraph;
-class InFlightBasicBlock;
+class DecodedBasicBlock;
 class Tool;
 
 // Register a tool with granary. Different instances of the same tool can be
@@ -42,18 +43,27 @@ class Tool {
   virtual void InitDynamic(void);
   virtual void InitStatic(void);
 
+  // Used to instrument control-flow instructions and decide how basic blocks
+  // should be materialized.
+  //
+  // This method is repeatedly executed until no more materialization
+  // requests are made.
+  virtual void InstrumentControlFlow(Materializer *materializer,
+                                     LocalControlFlowGraph *cfg);
 
-  // Used to implement more complex forms of instrumentation where tools can
-  // tell Granary how to expand a control-flow graph, what basic blocks should
-  // be instrumented and not instrumented, and as a mechanism to determine
-  // if control branches to an already cached basic block.
-  virtual void InstrumentCFG(LocalControlFlowGraph *cfg);
+  // Used to implement more complex forms of instrumentation where tools need to
+  // see the entire local control-flow graph.
+  //
+  // This method is executed once per tool per instrumentation session.
+  virtual void InstrumentBlocks(const LocalControlFlowGraph *cfg);
 
   // Used to implement the typical JIT-based model of single basic-block at a
   // time instrumentation.
-  virtual void BeginInstrumentBB(LocalControlFlowGraph *cfg);
-  virtual void InstrumentBB(InFlightBasicBlock *block);
-  virtual void EndInstrumentBB(LocalControlFlowGraph *cfg);
+  //
+  // This method is executed for each decoded BB in the local CFG,
+  // but is never re-executed for the same (tool, BB) pair in the current
+  // instrumentation session.
+  virtual void InstrumentBlock(DecodedBasicBlock *block);
 
  GRANARY_PUBLIC:
 

@@ -17,6 +17,7 @@ EXPORT_HEADERS = [
   "granary/breakpoint.h",
   "granary/lock.h",
   "granary/logging.h",
+  "granary/materialize.h",
   "granary/metadata.h",
   "granary/mir.h",
   "granary/module.h",
@@ -55,10 +56,12 @@ def combine_output_files(source_dir):
 def preprocess_combined_files(source_dir, lines):
   open("/tmp/granary_export0.h", "w").write("\n".join(lines))
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL -E -x c++ /tmp/granary_export0.h "
+      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL "
+      "-E -x c++ /tmp/granary_export0.h "
       "> /tmp/granary_export1.h" % source_dir)
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL -E -dM -x c++ /tmp/granary_export0.h"
+      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL "
+      "-E -dM -x c++ /tmp/granary_export0.h"
       " > /tmp/granary_export2.h" % source_dir)
   os.system(
       "clang++ -std=c++11 -dM -E -x c++ /dev/null > /tmp/granary_export3.h")
@@ -94,6 +97,11 @@ def strip_combined_files(new_lines):
       if line.startswith("#"):  # Remove pre-processor file/line associations.
         continue
 
+      # Don't reveal internals about abstraction-breaking relationships among
+      # Granary's internal classes/functions.
+      if line.lstrip("\t ").startswith("friend "):
+        continue
+
       if "GRANARY_INTERNAL_DEFINITION" in line:
         in_internal_definition = True
         brace_count = 0
@@ -101,9 +109,9 @@ def strip_combined_files(new_lines):
       if in_internal_definition:
         brace_count += len(OPEN_BRACE.sub("", line))
         had_braces = 0 < brace_count
-        brace_count -= len(OPEN_BRACE.sub("", line))
+        brace_count -= len(CLOSE_BRACE.sub("", line))
 
-        if not brace_count and (had_braces or ";" == line[-1]):
+        if not brace_count and (had_braces or (line and ";" == line[-1])):
           in_internal_definition = False
         continue
       

@@ -6,7 +6,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/types.h"
-#include "granary/driver/dynamorio/types.h"
+#include "generated/dynamorio/types.h"
 
 namespace granary {
 

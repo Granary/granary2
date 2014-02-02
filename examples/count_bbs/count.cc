@@ -31,7 +31,7 @@ class BBCount : public Tool {
   virtual ~BBCount(void) = default;
 
   // Instrument a basic block.
-  virtual void InstrumentBB(InFlightBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
       return;
@@ -46,8 +46,8 @@ class BBCount : public Tool {
   }
 } static COUNTER;
 
-// Initialize the count_bbs tool.
-GRANARY_INIT(count_bbs, {
+// Initialize the `count_bbs` tool.
+GRANARY_INIT({
   RegisterTool("count_bbs", &COUNTER);
   if (FLAG_count_execs) {
     RegisterMetaData<BlockCounter>();

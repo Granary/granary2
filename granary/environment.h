@@ -10,7 +10,7 @@ namespace granary {
 
 // Forward declarations.
 class Instruction;
-class InFlightBasicBlock;
+class DecodedBasicBlock;
 
 // Manages environmental information that changes how Granary behaves. For
 // example, in the Linux kernel, the environmental data gives the instruction

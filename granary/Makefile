@@ -34,6 +34,12 @@ GRANARY_OBJ_FILES += $(GRANARY_CC_OBJ_FILES) $(DRIVER_OBJ_FILES)
 GRANARY_OBJ_FILES += $(WHERE_CC_OBJ_FILES) $(ARCH_ASM_OBJ_FILES)
 GRANARY_OBJ_FILES += $(ARCH_CC_OBJ_FILES)
 
+# Should Granary's main code be linted?
+GRANARY_LINT_TARGET =
+ifeq (1,$(GRANARY_LINT_CODE))
+	GRANARY_LINT_TARGET = lint
+endif
+
 # Run the C pre-processor on the *.asm files, then run those through the
 # ASM post-processor to do extra token pasting and macro expansion.
 $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/%.S: $(GRANARY_ARCH_DIR)/%.asm
@@ -53,4 +59,4 @@ lint:
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.h' -or -name '*.cc')
 
 
-all: $(GRANARY_LINT) $(GRANARY_OBJ_FILES)
+all: $(GRANARY_LINT_TARGET) $(GRANARY_OBJ_FILES)

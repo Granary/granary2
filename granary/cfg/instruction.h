@@ -13,14 +13,17 @@ namespace granary {
 // Forward declarations.
 class BasicBlock;
 class ControlFlowInstruction;
+class Materializer;
 
 namespace driver {
-class DecodedInstruction;
+GRANARY_INTERNAL_DEFINITION class DecodedInstruction;
 }  // namespace driver
 
 // Represents an abstract instruction.
 class Instruction {
  public:
+
+  GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list() {}
 
@@ -43,14 +46,16 @@ class Instruction {
   // Unlink an instruction from an instruction list.
   static std::unique_ptr<Instruction> Unlink(Instruction *);
 
- GRANARY_PROTECTED:
-  ListHead list;
+  // Used to put instructions into lists.
+  GRANARY_INTERNAL_DEFINITION ListHead list;
 
  private:
+  GRANARY_IF_EXTERNAL( Instruction(void) = delete; )
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
 
 // Built-in annotations.
+GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {
   BEGIN_BASIC_BLOCK,
   END_BASIC_BLOCK,
@@ -58,7 +63,9 @@ enum InstructionAnnotation {
   END_MIGHT_FAULT,
   BEGIN_DELAY_INTERRUPT,
   END_DELAY_INTERRUPT,
-  LABEL
+  LABEL,
+  CONDITIONAL_FALL_THROUGH,
+  FUNCTION_CALL_FALL_THROUGH
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -67,13 +74,13 @@ enum InstructionAnnotation {
 // are used to mark those boundaries (e.g. by having an annotation that begins
 // a faultable sequence of instructions and an annotation that ends it).
 // Annotation instructions should not be removed by instrumentation.
-class AnnotationInstruction : public Instruction {
+class AnnotationInstruction final : public Instruction {
  public:
   virtual ~AnnotationInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
   inline AnnotationInstruction(InstructionAnnotation annotation_,
-                               void *data_=nullptr)
+                               const void *data_=nullptr)
       : annotation(annotation_),
         data(data_) {}
 
@@ -82,8 +89,8 @@ class AnnotationInstruction : public Instruction {
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 #endif
 
-  const InstructionAnnotation annotation;
-  void * const data;
+  GRANARY_INTERNAL_DEFINITION const InstructionAnnotation annotation;
+  GRANARY_INTERNAL_DEFINITION const void * const data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
@@ -124,7 +131,7 @@ class NativeInstruction : public Instruction {
 
 // Represents a control-flow instruction that is local to a basic block, i.e.
 // keeps control within the same basic block.
-class BranchInstruction : public NativeInstruction {
+class BranchInstruction final : public NativeInstruction {
  public:
   virtual ~BranchInstruction(void) = default;
 
@@ -134,7 +141,8 @@ class BranchInstruction : public NativeInstruction {
       : NativeInstruction(instruction_),
         target(target_) {}
 
-  const AnnotationInstruction * const target;
+  // Return the targeted instruction of this branch.
+  const AnnotationInstruction *TargetInstruction(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
@@ -145,6 +153,10 @@ class BranchInstruction : public NativeInstruction {
  private:
   BranchInstruction(void) = delete;
 
+  // Instruction targeted by this branch. Assumed to be within the same
+  // basic block as this instruction.
+  GRANARY_INTERNAL_DEFINITION const AnnotationInstruction * const target;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BranchInstruction);
 };
 
@@ -153,7 +165,7 @@ class BranchInstruction : public NativeInstruction {
 //
 // Note: A special case is that a non-local control-flow instruction can
 //       redirect control back to the beginning of the basic block.
-class ControlFlowInstruction : public NativeInstruction {
+class ControlFlowInstruction final : public NativeInstruction {
  public:
   virtual ~ControlFlowInstruction(void);
 
@@ -172,9 +184,8 @@ class ControlFlowInstruction : public NativeInstruction {
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 
-  inline BasicBlock *TargetBlock(void) const {
-    return target;
-  }
+  // Return the target block of this CFI.
+  BasicBlock *TargetBlock(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
@@ -183,11 +194,12 @@ class ControlFlowInstruction : public NativeInstruction {
   })
 
  private:
-  friend class LocalControlFlowGraph;
+  friend class Materializer;
 
   ControlFlowInstruction(void) = delete;
 
-  mutable BasicBlock *target;
+  // Target block of this CFI.
+  GRANARY_INTERNAL_DEFINITION mutable BasicBlock *target;
 
   GRANARY_INTERNAL_DEFINITION
   void ChangeTarget(BasicBlock *new_target) const;

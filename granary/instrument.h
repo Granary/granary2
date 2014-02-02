@@ -3,19 +3,21 @@
 #ifndef GRANARY_INSTRUMENT_H_
 #define GRANARY_INSTRUMENT_H_
 
-#include "granary/base/types.h"
+#include "granary/base/base.h"
 
 namespace granary {
-namespace detail {
 
-// Take over a program's execution by replacing a return address with an
-// instrumented return address.
-void Instrument(AppProgramCounter *return_address);
+class LocalControlFlowGraph;
+class GenericMetaData;
 
-}  // namespace detail
+// Instrument some initial code (described by `meta`) and fills the LCFG `cfg`
+// with the instrumented code. `meta` is taken as a `unique_ptr` to communicate
+// that `Instrument` takes ownership of the meta-data.
+void Instrument(LocalControlFlowGraph *cfg,
+                std::unique_ptr<GenericMetaData> meta);
 
-// Begin instrumenting code.
-extern void Instrument(void);
+// Test the instrumentation system.
+void TestInstrument(void);
 
 }  // namespace granary
 

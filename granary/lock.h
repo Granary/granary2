@@ -56,7 +56,10 @@ class FineGrainedLocked {
 // Implements a fine-grained reader/writer lock.
 class ReaderWriterLock {
  public:
-  ReaderWriterLock(void);
+  inline ReaderWriterLock(void)
+      : writer_lock(),
+        reader_count(ATOMIC_VAR_INIT(0)),
+        writer_count(ATOMIC_VAR_INIT(0)) {}
 
   void ReadAcquire(void);
   void ReadRelease(void);

@@ -4,7 +4,8 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
-#include "granary/metadata.h"
+#include "granary/materialize.h"
+#include "granary/util.h"
 
 namespace granary {
 
@@ -13,17 +14,19 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     (NativeBasicBlock, 2 * 3),
     (InstrumentedBasicBlock, 2 * 5),
     (CachedBasicBlock, 2 * 5 * 7),
-    (InFlightBasicBlock, 2 * 5 * 11),
-    (FutureBasicBlock, 2 * 5 * 13),
-    (UnknownBasicBlock, 2 * 5 * 17))
+    (DecodedBasicBlock, 2 * 5 * 11),
+    (DirectBasicBlock, 2 * 5 * 13),
+    (IndirectBasicBlock, 2 * 5 * 17),
+    (ReturnBasicBlock, 2 * 19))
 
 GRANARY_DEFINE_BASE_CLASS(BasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
-GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, InFlightBasicBlock)
-GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, FutureBasicBlock)
-GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, UnknownBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
 
 namespace detail {
 
@@ -39,9 +42,6 @@ static Instruction *FindNextSuccessorInstruction(Instruction *instr) {
   return nullptr;
 }
 }  // namespace
-
-SuccessorBlockIterator::SuccessorBlockIterator(Instruction *instr_)
-    : cursor(FindNextSuccessorInstruction(instr_)) {}
 
 BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
   auto cti(DynamicCast<ControlFlowInstruction *>(cursor));
@@ -62,8 +62,17 @@ void BackwardInstructionIterator::operator++(void) {
 
 }  // namespace detail
 
+BasicBlock::BasicBlock(void)
+    : UnownedCountedObject(),
+      list() {}
+
 detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
+}
+
+// Returns the number of predecessors of this basic block within the LCFG.
+int BasicBlock::NumLocalPredecessors(void) const {
+  return this->NumReferences();
 }
 
 // Get this basic block's meta-data.
@@ -72,51 +81,59 @@ GenericMetaData *InstrumentedBasicBlock::MetaData(void) {
 }
 
 // Initialize an instrumented basic block.
-InstrumentedBasicBlock::InstrumentedBasicBlock(AppProgramCounter app_start_pc_,
-                                               GenericMetaData *meta_)
-    : BasicBlock(app_start_pc_),
-      meta(meta_) {}
+InstrumentedBasicBlock::InstrumentedBasicBlock(GenericMetaData *meta_)
+    : meta(meta_),
+      cached_meta_hash(0),
+      native_pc(MetaDataCast<TranslationMetaData *>(meta)->native_pc) {}
 
-// Initialize a cached basic block.
-CachedBasicBlock::CachedBasicBlock(AppProgramCounter app_start_pc_,
-                                   CacheProgramCounter cache_start_pc_,
-                                   GenericMetaData *meta_)
-    : InstrumentedBasicBlock(app_start_pc_, meta_),
-      cache_start_pc(cache_start_pc_) {}
+// Returns the starting PC of this basic block.
+AppProgramCounter InstrumentedBasicBlock::StartPC(void) const {
+  return native_pc;
+}
 
-// Initialize an in-flight basic block.
-InFlightBasicBlock::InFlightBasicBlock(AppProgramCounter app_start_pc_,
-                                       GenericMetaData *meta_)
-    : InstrumentedBasicBlock(app_start_pc_, meta_),
+// Initialize a decoded basic block.
+DecodedBasicBlock::DecodedBasicBlock(GenericMetaData *meta_)
+    : InstrumentedBasicBlock(meta_),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
       last(new AnnotationInstruction(END_BASIC_BLOCK)) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
+// Clean up an instrumented basic block. If the meta-data hasn't already been
+// unlinked by now then we assume this basic block is unreachable, as is its
+// meta-data.
+InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
+  if (meta) {
+    delete meta;
+    meta = nullptr;
+  }
+}
+
 // Return an iterator of the successors of a basic block.
-detail::SuccessorBlockIterator InFlightBasicBlock::Successors(void) const {
-  return detail::SuccessorBlockIterator(first);
+detail::SuccessorBlockIterator DecodedBasicBlock::Successors(void) const {
+  return detail::SuccessorBlockIterator(
+      detail::FindNextSuccessorInstruction(first));
 }
 
 // Return the first instruction in the basic block.
-Instruction *InFlightBasicBlock::FirstInstruction(void) const {
+Instruction *DecodedBasicBlock::FirstInstruction(void) const {
   return first;
 }
 
 // Return the last instruction in the basic block.
-Instruction *InFlightBasicBlock::LastInstruction(void) const {
+Instruction *DecodedBasicBlock::LastInstruction(void) const {
   return last;
 }
 
 // Return an iterator for the instructions of the block.
 detail::ForwardInstructionIterator
-InFlightBasicBlock::Instructions(void) const {
+DecodedBasicBlock::Instructions(void) const {
   return detail::ForwardInstructionIterator(first);
 }
 
 // Return a reverse iterator for the instructions of the block.
 detail::BackwardInstructionIterator
-InFlightBasicBlock::ReversedInstructions(void) const {
+DecodedBasicBlock::ReversedInstructions(void) const {
   return detail::BackwardInstructionIterator(last);
 }
 
@@ -124,11 +141,38 @@ InFlightBasicBlock::ReversedInstructions(void) const {
 // LocalControlFlowGraph::~LocalControlFlowGraph, as the freeing of instructions
 // interacts with the ownership model of basic blocks inside of basic block
 // lists.
-void InFlightBasicBlock::FreeInstructionList(void) {
+void DecodedBasicBlock::FreeInstructionList(void) {
   for (Instruction *instr(first), *next(nullptr); instr; instr = next) {
     next = instr->Next();
     delete instr;
   }
+}
+
+// Initialize a future basic block.
+DirectBasicBlock::DirectBasicBlock(GenericMetaData *meta_)
+    : InstrumentedBasicBlock(meta_),
+      materialized_block(nullptr),
+      materialize_strategy(MATERIALIZE_LATER) {}
+
+// Returns the starting PC of this basic block.
+AppProgramCounter IndirectBasicBlock::StartPC(void) const {
+  granary_break_on_fault();
+  return nullptr;
+}
+
+// Initialize a return basic block.
+ReturnBasicBlock::ReturnBasicBlock(void)
+    : BasicBlock() {}
+
+// Returns the starting PC of this basic block.
+AppProgramCounter ReturnBasicBlock::StartPC(void) const {
+  granary_break_on_fault();
+  return nullptr;
+}
+
+// Returns the starting PC of this basic block.
+AppProgramCounter NativeBasicBlock::StartPC(void) const {
+  return native_pc;
 }
 
 }  // namespace granary

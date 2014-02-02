@@ -4,6 +4,7 @@
 #ifndef GRANARY_BASE_REFCOUNT_H_
 #define GRANARY_BASE_REFCOUNT_H_
 
+#include "granary/base/base.h"
 #include "granary/breakpoint.h"
 
 namespace granary {
@@ -18,11 +19,25 @@ class UnownedCountedObject {
       : count(0) {}
 
   inline void Acquire(void) {
-    ++count;
+    count += 2;
+  }
+
+  // Mark this object as being permanently held onto by some object. This
+  // permanence lives "outside" the normal reference chain, insofar as if
+  // object A permanently holds onto B, but does not `Acquire` B, then then
+  // all else being equal, B will have `NumReferences() = 0`.
+  inline void MarkAsPermanent(void) {
+    count |= 1;
   }
 
   inline void Release(void) {
-    granary_break_on_fault_if(0 > --count);
+    count -= 2;
+    GRANARY_IF_DEBUG( granary_break_on_fault_if(0 > count); )
+  }
+
+  // Returns the number of objects referring to this object.
+  inline int NumReferences(void) const {
+    return count / 2;
   }
 
   inline bool CanDestroy(void) const {
