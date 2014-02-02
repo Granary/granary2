@@ -16,8 +16,10 @@ class GenericMetaData;
 void Instrument(LocalControlFlowGraph *cfg,
                 std::unique_ptr<GenericMetaData> meta);
 
-// Test the instrumentation system.
-void TestInstrument(void);
+// Initialize the instrumentation system. This goes and checks if any tools
+// are defined that might actually want to instrument code in one way or
+// another.
+void InitInstrumentation(void);
 
 }  // namespace granary
 

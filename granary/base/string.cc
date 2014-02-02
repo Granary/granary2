@@ -17,7 +17,8 @@ unsigned long StringLength(const char *ch) {
 }
 
 // Copy at most `buffer_len` characters from the C string `str` into `buffer`.
-// Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`.
+// Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`. Returns
+// the number of characters copied, exluding the trailing '\0'.
 unsigned long CopyString(char *buffer, unsigned long buffer_len,
                          const char *str) {
   unsigned long i(0);
@@ -26,9 +27,11 @@ unsigned long CopyString(char *buffer, unsigned long buffer_len,
   }
 
   if (i < buffer_len) {
-    buffer[i++] = '\0';
+    buffer[i] = '\0';
   } else {
     buffer[buffer_len - 1] = '\0';
+    i = buffer_len - 2;
+    granary_break_on_fault_if(2 > buffer_len);
   }
 
   return i;

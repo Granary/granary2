@@ -4,69 +4,19 @@
 
 #include <sys/types.h>
 #include <unistd.h>
-#include <dlfcn.h>
+
 #ifdef GRANARY_STANDALONE
-# include <cstdlib>
+# include <cstdio>
+# include "granary/base/string.h"
 #endif
 
-#include "granary/base/cast.h"
 #include "granary/base/options.h"
-#include "granary/base/string.h"
-
 #include "granary/user/init.h"
-
-#include "granary/driver.h"
-#include "granary/instrument.h"
+#include "granary/init.h"
 #include "granary/logging.h"
-#include "granary/metadata.h"
-#include "granary/module.h"
-#include "granary/tool.h"
 
 namespace granary {
-
-GRANARY_DEFINE_string(tools, "",
-    "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--tools=bbcount,pgo`.")
-
 namespace {
-
-// Load a tool into Granary.
-static void LoadTool(const char *tool_name) {
-  void *tool(dlopen(tool_name, RTLD_NOW | RTLD_LOCAL));
-  if (!tool) {
-    Log(LogError, "Failed to load tool '%s': %s\n", tool_name, dlerror());
-    return;
-  }
-
-  // The tool's static initializers should have registered the tool.
-}
-
-enum {
-  TOOL_NAME_BUFF_LEN = 1024  // TODO(pag): Likely less than `PATH_MAX`.
-};
-char tool_name_buff[TOOL_NAME_BUFF_LEN] = {'\0'};
-char *tool_name(&(tool_name_buff[0]));
-
-// Scan the `tools` command line option and load each tool in order.
-static void LoadTools(void) {
-  *tool_name++ = 'l';
-  *tool_name++ = 'i';
-  *tool_name++ = 'b';
-
-  const char *ch(FLAG_tools);
-  for (int i(0); *ch; ++ch) {
-    tool_name[i++] = *ch;
-    if (!ch[1] || ',' == ch[1]) {  // End of tool name list, or next tool name.
-      tool_name[i] = '.';
-      tool_name[i + 1] = 's';
-      tool_name[i + 2] = 'o';
-      tool_name[i + 3] = '\0';
-      LoadTool(tool_name_buff);
-      i = 0;
-      ++ch;
-    }
-  }
-}
 
 // Initialize Granary for debugging by GDB. For example, if one is doing:
 //
@@ -90,11 +40,18 @@ static void InitDebug(void) {
 }
 
 #ifdef GRANARY_STANDALONE
-static void InitToolPath(const char *exe_path) {
-  realpath(exe_path, tool_name_buff);
-  char *ch(&(tool_name_buff[0]));
+enum {
+  GRANARY_PATH_BUFF_LEN = 1024  // TODO(pag): Probably should be `PATH_MAX`.
+};
+
+static char granary_path_buff[GRANARY_PATH_BUFF_LEN] = {'\0'};
+
+// Copy the executable's path into `tool_name_path`.
+static const char *GetGranaryPath(const char *granary_exe_path) {
+  realpath(granary_exe_path, granary_path_buff);
+
   char *last_slash(nullptr);
-  for (; *ch; ++ch) {
+  for (char *ch(&(granary_path_buff[0])); *ch; ++ch) {
     if ('/' == *ch) {
       last_slash = ch;
     }
@@ -102,39 +59,11 @@ static void InitToolPath(const char *exe_path) {
   if (last_slash) {
     last_slash[1] = '\0';
   }
-  tool_name += StringLength(tool_name_buff);
+  return &(granary_path_buff[0]);
 }
 #endif
 
 }  // namespace
-
-// Initialize Granary.
-static void Init(void) {
-  InitDebug();
-
-  // Initialize the driver (e.g. DynamoRIO). This usually performs from
-  // architecture-specific checks to determine which architectural features
-  // are enabled.
-  driver::Init();
-
-  // Dynamically load in zero or more tools. Tools are specified on the
-  // command-line.
-  LoadTools();
-
-  // Initialize all instrumentation tools for dynamic instrumentation of a
-  // running binary.
-  InitTools(InitKind::DYNAMIC);
-
-  // Finalize the meta-data structure after tools are initialized. Tools might
-  // change what meta-data is registered depending on command-line options.
-  InitMetaData();
-
-  // Tell granary about loaded modules.
-  InitModules(InitKind::DYNAMIC);
-
-  TestInstrument();
-}
-
 }  // namespace granary
 
 #ifdef GRANARY_STANDALONE
@@ -142,25 +71,19 @@ static void Init(void) {
 extern "C" {
 int main(int argc, const char *argv[]) {
   GRANARY_USING_NAMESPACE granary;
-  InitToolPath(argv[0]);
+  InitDebug();
   InitOptions(argc, argv);
-  Init();
+  Init(INIT_DYNAMIC, GetGranaryPath(argv[0]));
   return 0;
 }
 }  // extern C
 #else
 
-GRANARY_DEFINE_string(attach_to, "*",
-    "Comma-separated list of modules to which granary should attach. Default "
-    "is `*`, representing that Granary will attach to all (non-Granary, non-"
-    "tool) modules. More specific requests can be made, for example:\n"
-    "\t--attach_to=[*,-libc]\t\tAttach to everything but `libc`.\n"
-    "\t--attach_to=libc\t\tOnly attach to `libc`.")
-
 GRANARY_INIT({
   GRANARY_USING_NAMESPACE granary;
+  InitDebug();
   InitOptions(getenv("GRANARY_OPTIONS"));
-  Init();
+  Init(INIT_DYNAMIC, getenv("GRANARY_PATH"));
 })
 
 #endif

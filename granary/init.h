@@ -6,10 +6,13 @@
 
 namespace granary {
 
-enum class InitKind {
-  DYNAMIC,
-  STATIC
+enum InitKind {
+  INIT_DYNAMIC,
+  INIT_STATIC
 };
+
+// Initialize Granary.
+void Init(InitKind kind, const char *granary_path);
 
 }  // namespace granary
 

@@ -47,7 +47,7 @@ Tool *FindTool(const char *name) {
 // Initialize all loaded Granary tools.
 void InitTools(InitKind kind) {
   for (auto tool(TOOLS); tool; tool = tool->next) {
-    if (InitKind::DYNAMIC == kind) {
+    if (INIT_DYNAMIC == kind) {
       tool->InitDynamic();
     } else {
       tool->InitStatic();

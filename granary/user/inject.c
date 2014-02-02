@@ -12,21 +12,19 @@
 enum {
   GRANARY_PATH_LEN = 1024,
   LD_LIBRARY_PATH_LEN = 1024,
-  LD_PRELOAD_LEN = 256,
+  LD_PRELOAD_LEN = 1024,
   ARGS_LEN = 1024
 };
 
 static char GRANARY_PATH[GRANARY_PATH_LEN] = {'\0'};
-static char LD_LIBRARY_PATH[LD_LIBRARY_PATH_LEN] = {'\0'};
 static char LD_PRELOAD[LD_PRELOAD_LEN] = {'\0'};
 static char ARGS[ARGS_LEN] = {'\0'};
 
 // Get the path to the injector executable.
-static const char *GetPath(const char *exec_name) {
+static void InitGranaryPath(const char *exec_name) {
   realpath(exec_name, GRANARY_PATH);
   char *last_slash = NULL;
-  char *curr = GRANARY_PATH;
-  for (; *curr; ++curr) {
+  for (char *curr = GRANARY_PATH; *curr; ++curr) {
     if ('/' == *curr) {
       last_slash = curr;
     }
@@ -36,25 +34,9 @@ static const char *GetPath(const char *exec_name) {
     exit(EXIT_FAILURE);
   }
 
-  *last_slash = '\0';
-  return GRANARY_PATH;
+  last_slash[1] = '\0';
 }
 
-// Add the path to libgranary.so to the LD_LIBRARY_PATH.
-static void SetPath(const char *exec_name) {
-  const char *ld_path = getenv("LD_LIBRARY_PATH");
-  unsigned long index = 0UL;
-  if (ld_path) {
-    index = snprintf(LD_LIBRARY_PATH, LD_LIBRARY_PATH_LEN, "%s:", ld_path);
-  }
-  snprintf(
-      &(LD_LIBRARY_PATH[index]),
-      LD_LIBRARY_PATH_LEN - index,
-      "%s",
-      GetPath(exec_name));
-
-  setenv("LD_LIBRARY_PATH", LD_LIBRARY_PATH, 1);
-}
 
 // Add `libgranary.so` to the
 static void SetPreload(void) {
@@ -63,7 +45,11 @@ static void SetPreload(void) {
   if (preloads) {
     index = snprintf(LD_PRELOAD, LD_PRELOAD_LEN, "%s ", preloads);
   }
-  snprintf(&(LD_PRELOAD[index]), LD_PRELOAD_LEN - index, "libgranary.so");
+  snprintf(
+      &(LD_PRELOAD[index]),
+      LD_PRELOAD_LEN - index,
+      "%slibgranary.so",
+      GRANARY_PATH);
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
 }
 
@@ -87,7 +73,8 @@ static int SetArgs(int argc, const char **argv) {
 
 // Run a command under Granary's control by setting up LD_PRELOAD.
 int main(int argc, const char **argv) {
-  SetPath(argv[0]);
+  InitGranaryPath(argv[0]);
+  setenv("GRANARY_PATH", GRANARY_PATH, 1);
   SetPreload();
   argv = &(argv[SetArgs(argc, argv)]);
   return execvpe(

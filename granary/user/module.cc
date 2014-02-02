@@ -191,7 +191,7 @@ static void ParseMapsFile(void) {
 
 // Initialize the module tracker.
 void InitModules(InitKind kind) {
-  granary_break_on_fault_if(InitKind::DYNAMIC != kind); // TODO(pag): Implement.
+  granary_break_on_fault_if(INIT_DYNAMIC != kind); // TODO(pag): Implement.
   ParseMapsFile();
 }
 
