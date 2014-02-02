@@ -19,10 +19,10 @@ ifeq (0,$(GRANARY_STANDALONE))
 	GRANARY_NAME_PREFIX = lib
 	GRANARY_NAME_SUFFIX = .so
 	GRANARY_LD_FLAGS_EARLY += -shared
-	#GRANARY_LD_FLAGS_LATE += "-Wl,-Bstatic"
 	GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic"
 	GRANARY_INJECTOR = injector
 else
+	GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
 	GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 endif
 

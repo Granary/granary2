@@ -12,6 +12,7 @@ include $(GRANARY_TOOL_INCS)
 GRANARY_LD_FLAGS_EARLY += -shared
 GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic"
 GRANARY_LD_FLAGS_LATE += "-Wl,-Bdynamic"
+GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
 
 GRANARY_CXX_FLAGS += -fvisibility=hidden
 GRANARY_CC_FLAGS += -fvisibility=hidden

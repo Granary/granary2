@@ -123,8 +123,9 @@ GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 
 # Mask some of the libc and libc++ symbols with Granary equivalents.
 ifeq (0,$(GRANARY_STANDALONE))
-	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
+#	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 endif
+
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memset=granary_memset"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
