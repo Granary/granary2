@@ -164,7 +164,6 @@ void Materializer::MaterializeDirectBlocks(void) {
 // Unlink old blocks from the control-flow graph by changing the targets of
 // CTIs going to now-materialized `DirectBasicBlock`s.
 void Materializer::RelinkCFIs(void) {
-
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
   for (auto block = cfg->first_block;
@@ -261,8 +260,8 @@ void Materializer::MaterializeInitialBlock(GenericMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
   auto decoded_block = new DecodedBasicBlock(meta);
   cfg->AddBlock(decoded_block);
-  ExtendInstructionList(this, decoded_block->FirstInstruction(),
-                        decoded_block->StartPC());
+  ExtendInstructionList(
+      this, decoded_block->FirstInstruction(), decoded_block->StartPC());
 }
 
 // Create a new (future) basic block. This block is left as un-owned and

@@ -63,7 +63,7 @@ static char *WriteGenericInt(
 
 }  // namespace
 
-
+// Log something.
 int Log(LogLevel level, const char *format, ...) throw() {
   enum {
     WRITE_BUFF_SIZE = 255

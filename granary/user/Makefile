@@ -23,7 +23,6 @@ ifeq (0,$(GRANARY_STANDALONE))
 	GRANARY_INJECTOR = injector
 else
 	GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
-	GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 endif
 
 GRANARY_INJECTOR_FLAGS = -O3 -g0 -fno-asynchronous-unwind-tables -std=gnu99

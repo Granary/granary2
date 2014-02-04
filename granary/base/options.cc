@@ -186,7 +186,7 @@ namespace detail {
 void RegisterOption(Option *option) {
 
   // Client/tool options.
-  if (OPTIONS_INITIALIZED.load()) {
+  if (OPTIONS_INITIALIZED.load(std::memory_order_acquire)) {
     option->parse(option);
 
   // Internal Granary options.
@@ -209,19 +209,10 @@ void ParseBoolOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
     switch (*value) {
-      case '1':
-      case 'y':
-      case 'Y':
-      case 't':
-      case 'T':
-      case '\0':  // Special case, treat positional as setting to true.
+      case '1': case 'y': case 'Y': case 't': case 'T': case '\0':
         *reinterpret_cast<bool *>(option->value) = true;
         break;
-      case '0':
-      case 'n':
-      case 'N':
-      case 'f':
-      case 'F':
+      case '0': case 'n': case 'N': case 'f': case 'F':
         *reinterpret_cast<bool *>(option->value) = false;
         break;
       default:

@@ -36,9 +36,11 @@ all: all_objects
 # Clean up all executable / binary files.
 clean:
 	@echo "Removing all previously compiled files."
+	@-rm $(GRANARY_BIN_DIR)/grr > /dev/null 2>&1 ||:  # User space injecter
 	@find $(GRANARY_BIN_DIR) -type f -name \*.so -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.ll -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.o -execdir rm {} \;
+	@find $(GRANARY_BIN_DIR) -type f -name \*.o_shipped -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.o.cmd -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.S -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.out -execdir rm {} \;

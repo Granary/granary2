@@ -17,6 +17,10 @@ GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
 GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
 GRANARY_LINT_CODE ?= 1
 
+GRANARY_KERNEL_VERSION = $(shell uname -r)
+GRANARY_DEFAULT_KERNEL_DIR = /lib/modules/$(GRANARY_KERNEL_VERSION)/build
+GRANARY_KERNEL_DIR ?= $(GRANARY_DEFAULT_KERNEL_DIR)
+
 GRANARY_SRC_DIR ?= $(shell pwd)
 GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
 GRANARY_WHERE_DIR ?= $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
@@ -121,33 +125,28 @@ GRANARY_CC_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 
-# Mask some of the libc and libc++ symbols with Granary equivalents.
 ifeq (0,$(GRANARY_STANDALONE))
-#	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
+	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 endif
 
+# Mask some of the libc and libc++ symbols with Granary equivalents.
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memset=granary_memset"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
-
-# Handle global `operator delete(void*)`.
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code"
-
-# Handle global `operator new(unsigned long)`.
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code"
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code" # delete
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code" # new
 
 # Handle some other C/C++ runtime library functions.
 ifeq (kernel,$(GRANARY_WHERE))
-    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_atexit=granary_break_on_unreachable_code"
-    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_acquire=granary_break_on_unreachable_code"
-    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_release=granary_break_on_unreachable_code"
-    GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_abort=granary_break_on_unreachable_code"
-    
+    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_atexit=granary_break_on_unreachable_code"
+    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_acquire=granary_break_on_unreachable_code"
+    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_release=granary_break_on_unreachable_code"
+    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_abort=granary_break_on_unreachable_code"
 	# TODO(pag): __cxx_global_var_init for all static global variables?
 endif
 
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5

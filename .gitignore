@@ -1,5 +1,6 @@
 # Compiled stuff
 *.o
+*.o_shipped
 *.out
 *.so
 *.a

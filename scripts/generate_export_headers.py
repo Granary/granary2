@@ -125,8 +125,6 @@ def strip_combined_files(new_lines):
         new_lines.append(line)
 
 def main(where, source_dir, export_dir):
-  EXPORT_HEADERS.append("granary/%s/init.h" % where)
-
   system_includes, lines = combine_output_files(source_dir)
   preprocess_combined_files(source_dir, lines)
   new_lines = combine_system_headers(system_includes)

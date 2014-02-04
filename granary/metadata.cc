@@ -158,7 +158,7 @@ namespace {
 // Storage space to hold the meta-data allocator.
 alignas(detail::SlabAllocator) struct {
   uint8_t data[sizeof(detail::SlabAllocator)];
-} META_ALLOCATOR_MEM;
+} static META_ALLOCATOR_MEM;
 
 // Late-initialize the meta-data allocator.
 static void InitMetaDataAllocator(void) {
