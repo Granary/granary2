@@ -8,16 +8,16 @@
 #define GRANARY_FLAG_NAME(name) GRANARY_CAT(FLAG_, name)
 
 #define GRANARY_REGISTER_OPTION(name, parser, docstring) \
+  static granary::Option GRANARY_CAT(OPTION_, name) = { \
+      nullptr, \
+      GRANARY_TO_STRING(name), \
+      &granary::detail::parser, \
+      reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)), \
+      docstring \
+  }; \
   __attribute__((constructor(101), used)) \
-  static void GRANARY_CAT(RegisterOption, name)(void) { \
-    static granary::Option option = { \
-        nullptr, \
-        GRANARY_TO_STRING(name), \
-        &granary::detail::parser, \
-        reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)), \
-        docstring \
-    }; \
-    granary::detail::RegisterOption(&option); \
+  static void GRANARY_CAT(RegisterOption__GLOBAL__I_, name)(void) { \
+    granary::detail::RegisterOption(&GRANARY_CAT(OPTION_, name)); \
   }
 
 #define GRANARY_DEFINE_string(name, default_value, docstring) \

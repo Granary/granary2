@@ -190,7 +190,7 @@ void RegisterOption(Option *option) {
     option->parse(option);
 
   // Internal Granary options.
-  } else {
+  } else if (!option->next) {
     option->next = OPTIONS;
     OPTIONS = option;
   }

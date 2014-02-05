@@ -11,7 +11,6 @@
 #endif
 
 #include "granary/base/options.h"
-#include "granary/user/init.h"
 #include "granary/init.h"
 #include "granary/logging.h"
 

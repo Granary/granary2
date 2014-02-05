@@ -177,42 +177,59 @@ struct IsMetaDataPointer {
   };
 };
 
-// Get the meta-data info for some indexable meta-data.
-template <typename T, typename EnableIf<IsIndexableMetaData<T>::RESULT>::Type=0>
-const MetaDataInfo *GetInfo(void) {
-  static MetaDataInfo kInfo = {
-      nullptr,
-      sizeof(T),
-      alignof(T),
-      0xDEADBEEFUL,
-      false,
-      true,
-      &(Initialize<T>),
-      &(CopyInitialize<T>),
-      &(Destroy<T>),
-      &(Hash<T>),
-      &(CompareEquals<T>)
-  };
-  return &kInfo;
-}
+template <typename T, bool kIsIndexable, bool kIsMutable>
+struct MetaDataInfoStorage;
 
-// Get the meta-data info for some mutable meta-data.
-template <typename T, typename EnableIf<IsMutableMetaData<T>::RESULT>::Type=0>
+template <typename T>
+struct MetaDataInfoStorage<T, true, false> {
+ public:
+  static MetaDataInfo kInfo;
+};
+
+template <typename T>
+struct MetaDataInfoStorage<T, false, true> {
+ public:
+  static MetaDataInfo kInfo;
+};
+
+template <typename T>
+MetaDataInfo MetaDataInfoStorage<T, true, false>::kInfo = {
+    nullptr,
+    sizeof(T),
+    alignof(T),
+    0xDEADBEEFUL,
+    false,
+    true,
+    &(Initialize<T>),
+    &(CopyInitialize<T>),
+    &(Destroy<T>),
+    &(Hash<T>),
+    &(CompareEquals<T>)
+};
+
+template <typename T>
+MetaDataInfo MetaDataInfoStorage<T, false, true>::kInfo = {
+    nullptr,
+    sizeof(T),
+    alignof(T),
+    0xDEADBEEFUL,
+    false,
+    false,
+    &(Initialize<T>),
+    &(CopyInitialize<T>),
+    &(Destroy<T>),
+    nullptr,
+    nullptr
+};
+
+// Get the meta-data info for some indexable meta-data.
+template <typename T>
 const MetaDataInfo *GetInfo(void) {
-  static MetaDataInfo kInfo = {
-      nullptr,
-      sizeof(T),
-      alignof(T),
-      0xDEADBEEFUL,
-      false,
-      false,
-      &(Initialize<T>),
-      &(CopyInitialize<T>),
-      &(Destroy<T>),
-      nullptr,
-      nullptr
-  };
-  return &kInfo;
+  return &(MetaDataInfoStorage<
+      T,
+      IsIndexableMetaData<T>::RESULT,
+      IsMutableMetaData<T>::RESULT
+  >::kInfo);
 }
 
 // Register some meta-data with Granary.

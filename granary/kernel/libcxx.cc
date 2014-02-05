@@ -7,6 +7,9 @@
 
 extern "C" {
 
+// Called inside of `__cxx_global_var_init`.
+void __cxa_atexit(void) { }
+
 // Allocate an exception.
 void *__cxa_allocate_exception(void) {
   granary_break_on_fault();

@@ -32,4 +32,6 @@ bin
 generated/*
 !generated/dynamorio/types.h
 
-
+# Debugging files
+vmlinux
+qemu.img

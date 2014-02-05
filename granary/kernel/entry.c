@@ -21,7 +21,9 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Peter Goodman");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 
-// Initialize a new `KernelModule` from a `struct module`.
+// Initialize a new `KernelModule` from a `struct module`. A `KernelModule`
+// is a stripped down `struct module` that contains enough information for
+// Granary to create its own `Module` structure from.
 static struct KernelModule *init_kernel_module(struct KernelModule *kmod,
                                                const struct module *mod) {
   kmod->name = mod->name;
@@ -31,6 +33,7 @@ static struct KernelModule *init_kernel_module(struct KernelModule *kmod,
   kmod->core_text_end = kmod->core_text_begin + mod->core_text_size;
   kmod->init_text_begin = 0;
   kmod->init_text_end = 0;
+  kmod->next = NULL;
   if (MODULE_STATE_LIVE != mod->state && MODULE_STATE_GOING != mod->state) {
     kmod->init_text_begin = (uintptr_t) mod->module_init;
     kmod->init_text_begin = kmod->init_text_begin + mod->init_text_size;
@@ -49,7 +52,8 @@ static struct KernelModule GRANARY_KERNEL = {
   .core_text_begin = 0xffffffff80000000ULL,
   .core_text_end = 0xffffffffa0000000ULL,
   .init_text_begin = 0,
-  .init_text_end = 0
+  .init_text_end = 0,
+  .next = NULL
 };
 
 // Global variable, shared with granary.
@@ -93,26 +97,26 @@ static void init_module_list(void) {
   BUG_ON(0 > num_modules);
 }
 
-// Pointer to `__cxx_global_var_init`, if it exists and if `CONFIG_CONSTRUCTORS`
-// is disabled.
-static void (*granary_global_var_init)(void) = NULL;
-
 // Find some internal kernel symbols.
 static int find_symbols(void *data, const char *name,
-                                struct module *mod, unsigned long addr) {
-#ifndef CONFIG_CONSTRUCTORS
-  if (NULL == granary_global_var_init &&
-      THIS_MODULE == mod &&
-      0 == strncmp("__cxx_global_var_init", name, 22)) {
-    granary_global_var_init = (typeof(granary_global_var_init)) addr;
-  }
-#endif
+                        struct module *mod, unsigned long addr) {
+  if (THIS_MODULE == mod) {
 
-  if (NULL != mod) {
-    return 0;  // Only care about kernel symbols.
-  }
+    // If we find a constructor for some global Granary data, then invoke it.
+    // This is pretty ugly. A minor hack is used to handle command-line
+    // options, which is to add `_GLOBAL__I_` into the constructor name of those
+    // options to ensure that this method catches those calls.
+    if (NULL != strstr(name, "_GLOBAL__I_")) {
+      ((void (*)(void)) addr)();
+    }
 
-  if (NULL == kernel_modules && 0 == strncmp("modules", name, 8)) {
+  // We don't care (for now?) about other modules.
+  } else if (NULL != mod) {
+    return 0;
+
+  // Get a pointer the kernel's `struct list_head modules` so that we can later
+  // iterate over the list of all modules. Luckily `modules_lock` is exported.
+  } else if (NULL == kernel_modules && 0 == strncmp("modules", name, 8)) {
     kernel_modules = (typeof(kernel_modules)) addr;
     return 0;
   }
@@ -122,9 +126,7 @@ static int find_symbols(void *data, const char *name,
 
 // granary::LoadTools(char const*).
 void _ZN7granary9LoadToolsEPKc(const char *tool_names) {
-  if (!granary_global_var_init) {
-    return;
-  }
+
 }
 
 // granary::InitOptions(char const*)
@@ -137,10 +139,15 @@ enum {
   COMMAND_BUFF_SIZE = 4095
 };
 
+// Has Granary been initialized?
 static int initialized = 0;
-static int started = 0;
+
+// Buffer for storing commands issued from user space. For example, if one does
+//    `echo "init --tools=follow_jumps,print_bbs" > /dev/granary`
+// Then `command_buff` will contain `init --tools=follow_jumps,print_bbs`.
 static char command_buff[COMMAND_BUFF_SIZE + 1] = {'\0'};
 
+// Try to match a command in the command buffer.
 static int match_command(const char *command) {
   return command_buff == strstr(command_buff, command);
 }
@@ -154,14 +161,9 @@ static void process_command(void) {
     initialized = 1;
     printk("[granary] %s\n", command_buff);
     _ZN7granary11InitOptionsEPKc(&(command_buff[4]));
-
-  // Start granary. Once all of the requested tools are loaded, Granary is
-  // ready to start :-D
-  } else if(initialized && !started && match_command("start")) {
-    started = 1;
-    printk("[granary] %s\n", command_buff);
     init_module_list();
     _ZN7granary4InitENS_8InitKindEPKc(0, "");
+
   }
 }
 
@@ -183,6 +185,7 @@ static ssize_t read_command(struct file *file, const char __user *str,
   return size;
 }
 
+// TODO(pag): Output granary::Log to here.
 static ssize_t write_output(struct file *file, char __user *str,
                             size_t size, loff_t *offset) {
   printk("[granary] Writing output.\n");
@@ -190,20 +193,22 @@ static ssize_t write_output(struct file *file, char __user *str,
   return 0;
 }
 
+// File operations on `/dev/granary`.
 static struct file_operations operations = {
     .owner      = THIS_MODULE,
     .write      = read_command,
     .read       = write_output
 };
 
-static struct miscdevice device = {  // Granary takes input from here.
+// Simple character-like device for Granary and user space to communicate.
+static struct miscdevice device = {
     .minor      = 0,
     .name       = "granary",
     .fops       = &operations,
     .mode       = 0666
 };
 
-// Initialize Granary.
+// Initialize the Granary kernel module.
 static int granary_init(void) {
   int ret = 0;
 
@@ -218,11 +223,6 @@ static int granary_init(void) {
   }
 
   BUG_ON(NULL == kernel_modules);
-
-  if (NULL != granary_global_var_init) {
-    //printk("[granary] Invoking global constructors.\n");
-    //granary_global_var_init();
-  }
 
   ret = misc_register(&device);
   if(0 != ret) {
