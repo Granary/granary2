@@ -26,7 +26,7 @@ template <
     IsPointer<FromT>::RESULT || IsInteger<FromT>::RESULT,
     void,
     int
-  >::Type = 0
+  >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   static_assert(sizeof(FromT) == sizeof(ToT),
@@ -42,10 +42,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<
-    IsPointer<FromT>::RESULT && IsInteger<ToT>::RESULT,
-    int
-  >::Type = 0
+  typename EnableIf<IsPointer<FromT>::RESULT && IsInteger<ToT>::RESULT>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return static_cast<ToT>(reinterpret_cast<uintptr_t>(v));
@@ -56,10 +53,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<
-    IsPointer<FromT>::RESULT && IsPointer<ToT>::RESULT,
-    int
-  >::Type = 0
+  typename EnableIf<IsPointer<FromT>::RESULT && IsPointer<ToT>::RESULT>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(reinterpret_cast<uintptr_t>(v));
@@ -70,10 +64,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<
-  IsInteger<FromT>::RESULT && IsPointer<ToT>::RESULT,
-    int
-  >::Type = 0
+  typename EnableIf<IsInteger<FromT>::RESULT && IsPointer<ToT>::RESULT>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));

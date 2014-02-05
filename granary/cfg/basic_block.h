@@ -24,7 +24,7 @@ class DecodedBasicBlock;
 class GenericMetaData;
 class LocalControlFlowGraph;
 class ControlFlowInstruction;
-class Materializer;
+class BlockFactory;
 
 namespace detail {
 
@@ -186,7 +186,7 @@ class BasicBlock : protected UnownedCountedObject {
   friend class detail::BasicBlockIterator;
   friend class ControlFlowInstruction;
   friend class LocalControlFlowGraph;
-  friend class Materializer;
+  friend class BlockFactory;
 
   GRANARY_IF_EXTERNAL( BasicBlock(void) = delete; )
 
@@ -214,7 +214,7 @@ class InstrumentedBasicBlock : public BasicBlock {
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
  private:
-  friend class Materializer;
+  friend class BlockFactory;
 
   InstrumentedBasicBlock(void) = delete;
 
@@ -294,7 +294,7 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
 };
 
 // Forward declaration.
-enum MaterializeStrategy : uint8_t;
+enum BlockRequestKind : uint8_t;
 
 // A basic block that has not yet been decoded, and might eventually be decoded.
 class DirectBasicBlock final : public InstrumentedBasicBlock {
@@ -309,12 +309,12 @@ class DirectBasicBlock final : public InstrumentedBasicBlock {
   })
 
  private:
-  friend class Materializer;
+  friend class BlockFactory;
 
   DirectBasicBlock(void) = delete;
 
   GRANARY_INTERNAL_DEFINITION BasicBlock *materialized_block;
-  GRANARY_INTERNAL_DEFINITION MaterializeStrategy materialize_strategy;
+  GRANARY_INTERNAL_DEFINITION BlockRequestKind materialize_strategy;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectBasicBlock);
 };

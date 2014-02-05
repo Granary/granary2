@@ -50,7 +50,7 @@ void InitModules(InitKind) {
         mod->core_text_begin,
         mod->core_text_end,
         0,
-        detail::MODULE_EXECUTABLE | detail::MODULE_READABLE);
+        internal::MODULE_EXECUTABLE | internal::MODULE_READABLE);
     RegisterModule(module);
   }
 }

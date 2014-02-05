@@ -29,7 +29,7 @@ GRANARY_TOOL_DIR ?= $(GRANARY_SRC_DIR)/examples
 
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
-GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)
+GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_WHERE)
 
 # Figure out the generated files directories.
 # TODO(pag): Make generated source files target-specific?
@@ -86,7 +86,7 @@ endif
 GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -march=native
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
-#GRANARY_COMMON_ARCH_FLAGS += -fvisibility=hidden
+
 ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-3dnow
 endif
@@ -114,13 +114,15 @@ GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings -Wfloat-equa
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
 GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast
+GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 
 # Disable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
 GRANARY_COMMON_WARN_FLAGS += -Wno-gnu -Wno-c11-extensions -Wno-long-long
 
 # Add the common flags to both the C++ and C compiler flags.
-GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
+GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS)
+GRANARY_CXX_FLAGS += $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_CC_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
@@ -137,16 +139,6 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code" # delete
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code" # new
-
-# Handle some other C/C++ runtime library functions.
-ifeq (kernel,$(GRANARY_WHERE))
-    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_atexit=granary_break_on_unreachable_code"
-    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_acquire=granary_break_on_unreachable_code"
-    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_release=granary_break_on_unreachable_code"
-    #GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_guard_abort=granary_break_on_unreachable_code"
-	# TODO(pag): __cxx_global_var_init for all static global variables?
-endif
-
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5

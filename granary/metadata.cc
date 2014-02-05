@@ -156,22 +156,22 @@ bool GenericMetaData::Equals(const GenericMetaData *that) const {
 namespace {
 
 // Storage space to hold the meta-data allocator.
-alignas(detail::SlabAllocator) struct {
-  uint8_t data[sizeof(detail::SlabAllocator)];
+alignas(internal::SlabAllocator) struct {
+  uint8_t data[sizeof(internal::SlabAllocator)];
 } static META_ALLOCATOR_MEM;
 
 // Late-initialize the meta-data allocator.
 static void InitMetaDataAllocator(void) {
-  auto offset = GRANARY_ALIGN_TO(sizeof(detail::SlabList), META_SIZE);
+  auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), META_SIZE);
   auto remaining_size = GRANARY_ARCH_PAGE_FRAME_SIZE - offset;
   auto max_num_allocs = remaining_size / META_SIZE;
-  new (&META_ALLOCATOR_MEM) detail::SlabAllocator(
+  new (&META_ALLOCATOR_MEM) internal::SlabAllocator(
       max_num_allocs, offset, META_SIZE, META_SIZE);
 }
 
 // The actual allocator (as backed by the `META_ALLOCATOR_MEM` storage).
-static detail::SlabAllocator * const META_ALLOCATOR = \
-    reinterpret_cast<detail::SlabAllocator *>(&META_ALLOCATOR_MEM);
+static internal::SlabAllocator * const META_ALLOCATOR = \
+    reinterpret_cast<internal::SlabAllocator *>(&META_ALLOCATOR_MEM);
 
 }  // namespace
 

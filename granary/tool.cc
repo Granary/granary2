@@ -75,7 +75,7 @@ void Tool::InitStatic(void) {
 //
 // This method is repeatedly executed until no more materialization
 // requests are made.
-void Tool::InstrumentControlFlow(Materializer *, LocalControlFlowGraph *) {}
+void Tool::InstrumentControlFlow(BlockFactory *, LocalControlFlowGraph *) {}
 
 // Used to implement more complex forms of instrumentation where tools need to
 // see the entire local control-flow graph.

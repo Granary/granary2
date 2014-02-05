@@ -10,7 +10,7 @@
 #include "granary/memory.h"
 
 namespace granary {
-namespace detail {
+namespace internal {
 
 // Constants that define how we will initialize various chunks of memory.
 enum {
@@ -139,5 +139,5 @@ void *SlabAllocator::AllocateFromFreeList(void) {
   return head;
 }
 
-}  // namespace detail
+}  // namespace internal
 }  // namespace granary

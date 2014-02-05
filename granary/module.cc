@@ -8,7 +8,7 @@
 #include "granary/module.h"
 
 namespace granary {
-namespace detail {
+namespace internal {
 
 // Represents a range of code/data within a module.
 struct ModuleAddressRange {
@@ -37,9 +37,9 @@ struct ModuleAddressRange {
   })
 };
 
-}  // namespace detail
+}  // namespace internal
 
-typedef LinkedListIterator<const detail::ModuleAddressRange>
+typedef LinkedListIterator<const internal::ModuleAddressRange>
         ModuleAddressRangeIterator;
 
 typedef LinkedListIterator<Module> ModuleIterator;
@@ -52,8 +52,8 @@ static std::atomic<Module *> MODULES(ATOMIC_VAR_INIT(nullptr));
 
 // Find the address range that contains a particular program counter. Returns
 // `nullptr` if no such range exists in the specified list.
-static const detail::ModuleAddressRange *FindRange(
-    const detail::ModuleAddressRange *ranges, AppProgramCounter pc) {
+static const internal::ModuleAddressRange *FindRange(
+    const internal::ModuleAddressRange *ranges, AppProgramCounter pc) {
   auto addr = reinterpret_cast<uintptr_t>(pc);
   for (auto range : ModuleAddressRangeIterator(ranges)) {
     if (range->begin_addr <= addr && addr < range->end_addr) {
@@ -111,8 +111,8 @@ const char *Module::Name(void) const {
 // range is fully subsumed by another one.
 void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                       uintptr_t begin_offset, unsigned perms) {
-  if (detail::MODULE_EXECUTABLE & perms) {
-    auto range = new detail::ModuleAddressRange(
+  if (internal::MODULE_EXECUTABLE & perms) {
+    auto range = new internal::ModuleAddressRange(
         begin_addr, end_addr, begin_offset, perms, age.fetch_add(1));
     do {
       WriteLocked locker(&ranges_lock);
@@ -135,12 +135,12 @@ void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
 // no longer needed.
 //
 // TODO(pag): Test this code!!
-detail::ModuleAddressRange *Module::AddRange(
-    detail::ModuleAddressRange *range) {
+internal::ModuleAddressRange *Module::AddRange(
+    internal::ModuleAddressRange *range) {
 
-  detail::ModuleAddressRange **next_ptr(&ranges);
-  detail::ModuleAddressRange *curr(ranges);
-  detail::ModuleAddressRange *remove(nullptr);
+  internal::ModuleAddressRange **next_ptr(&ranges);
+  internal::ModuleAddressRange *curr(ranges);
+  internal::ModuleAddressRange *remove(nullptr);
 
   // Find an insertion point.
   for (; curr; next_ptr = &(curr->next), curr = curr->next) {

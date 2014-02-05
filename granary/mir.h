@@ -9,7 +9,7 @@
 
 namespace granary {
 
-class Materializer;
+class BlockFactory;
 class BasicBlock;
 class GenericMetaData;
 class Instruction;
@@ -32,12 +32,12 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
 
 // Materialize a direct basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<Instruction> Jump(Materializer *materializer,
+std::unique_ptr<Instruction> Jump(BlockFactory *materializer,
                                   AppProgramCounter target_pc);
 
 // Materialize a direct basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<Instruction> Call(Materializer *materializer,
+std::unique_ptr<Instruction> Call(BlockFactory *materializer,
                                   AppProgramCounter target_pc);
 
 std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,

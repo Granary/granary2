@@ -13,7 +13,7 @@ namespace granary {
 class BasicBlock;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
-class Materializer;
+class BlockFactory;
 
 namespace detail {
 
@@ -92,7 +92,7 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION void AddBlock(BasicBlock *block);
 
  private:
-  friend class Materializer;  // For `first_new_block`.
+  friend class BlockFactory;  // For `first_new_block`.
 
   // List of basic blocks known to this control-flow graph.
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_block;

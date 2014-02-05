@@ -66,7 +66,7 @@ enum class ModuleKind {
 };
 
 #ifdef GRANARY_INTERNAL
-namespace detail {
+namespace internal {
 
 struct ModuleAddressRange;
 
@@ -77,7 +77,7 @@ enum {
   MODULE_COPY_ON_WRITE = (1 << 3)
 };
 
-}  // namespace detail
+}  // namespace internal
 #endif
 
 // Represents a loaded module. For example, in user space, the executable is a
@@ -137,7 +137,7 @@ class Module {
   // Adds a range into the range list. Returns a range to free if that range is
   // no longer needed.
   GRANARY_INTERNAL_DEFINITION
-  detail::ModuleAddressRange *AddRange(detail::ModuleAddressRange *range);
+  internal::ModuleAddressRange *AddRange(internal::ModuleAddressRange *range);
 
   // The kind of this module (e.g. granary, tool, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
@@ -147,7 +147,7 @@ class Module {
   GRANARY_INTERNAL_DEFINITION char path[MAX_NAME_LEN];
 
   // The address ranges of this module.
-  GRANARY_INTERNAL_DEFINITION detail::ModuleAddressRange *ranges;
+  GRANARY_INTERNAL_DEFINITION internal::ModuleAddressRange *ranges;
 
   // Lock for accessing and modifying ranges.
   GRANARY_INTERNAL_DEFINITION mutable ReaderWriterLock ranges_lock;

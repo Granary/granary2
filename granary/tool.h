@@ -10,7 +10,7 @@
 namespace granary {
 
 // Forward declarations.
-class Materializer;
+class BlockFactory;
 class LocalControlFlowGraph;
 class DecodedBasicBlock;
 class Tool;
@@ -48,7 +48,7 @@ class Tool {
   //
   // This method is repeatedly executed until no more materialization
   // requests are made.
-  virtual void InstrumentControlFlow(Materializer *materializer,
+  virtual void InstrumentControlFlow(BlockFactory *materializer,
                                      LocalControlFlowGraph *cfg);
 
   // Used to implement more complex forms of instrumentation where tools need to

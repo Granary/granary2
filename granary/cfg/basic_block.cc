@@ -4,7 +4,7 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
-#include "granary/materialize.h"
+#include "granary/factory.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -28,7 +28,7 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
 
-namespace detail {
+namespace internal {
 
 // Return the next successor by iterating through the instructions in the
 // basic block.
@@ -42,6 +42,8 @@ static Instruction *FindNextSuccessorInstruction(Instruction *instr) {
   return nullptr;
 }
 }  // namespace
+}  // namespace internal
+namespace detail {
 
 BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
   auto cti(DynamicCast<ControlFlowInstruction *>(cursor));
@@ -49,7 +51,7 @@ BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
 }
 
 void SuccessorBlockIterator::operator++(void) {
-  cursor = FindNextSuccessorInstruction(cursor);
+  cursor = internal::FindNextSuccessorInstruction(cursor);
 }
 
 void ForwardInstructionIterator::operator++(void) {
@@ -112,7 +114,7 @@ InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
 // Return an iterator of the successors of a basic block.
 detail::SuccessorBlockIterator DecodedBasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator(
-      detail::FindNextSuccessorInstruction(first));
+      internal::FindNextSuccessorInstruction(first));
 }
 
 // Return the first instruction in the basic block.
@@ -152,7 +154,7 @@ void DecodedBasicBlock::FreeInstructionList(void) {
 DirectBasicBlock::DirectBasicBlock(GenericMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       materialized_block(nullptr),
-      materialize_strategy(MATERIALIZE_LATER) {}
+      materialize_strategy(REQUEST_LATER) {}
 
 // Returns the starting PC of this basic block.
 AppProgramCounter IndirectBasicBlock::StartPC(void) const {

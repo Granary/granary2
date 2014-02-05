@@ -10,16 +10,32 @@
 #include <linux/rculist.h>
 #include <linux/kallsyms.h>
 #include <linux/miscdevice.h>
+#include <linux/moduleparam.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/gfp.h>
 #include <asm/uaccess.h>
 
+#include "export.h"  // Auto-generated file!
+
 #include "granary/kernel/module.h"
 
+#ifndef CONFIG_MODULES
+# error "Module auto-loading must be supported (`CONFIG_MODULES`)."
+#endif
+
+#ifndef CONFIG_KALLSYMS_ALL
+# error "All symbols must be included in kallsyms (`CONFIG_KALLSYMS_ALL`)."
+#endif
+
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Peter Goodman");
+MODULE_AUTHOR("Peter Goodman <peter.goodman@gmail.com>");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
+
+char *tool_path = "";
+module_param(tool_path, charp, 0);
+MODULE_PARM_DESC(tool_path, "Absolute path to where the .ko files for Granary "
+                            "tools can be found.");
 
 // Initialize a new `KernelModule` from a `struct module`. A `KernelModule`
 // is a stripped down `struct module` that contains enough information for
@@ -124,9 +140,26 @@ static int find_symbols(void *data, const char *name,
   return 0;
 }
 
-// granary::LoadTools(char const*).
-void _ZN7granary9LoadToolsEPKc(const char *tool_names) {
+// The list of tools to dynamically load.
+extern const char *FLAG_tools;
 
+// granary::LoadTools(char const*). Scan Granary's tools command line value and
+void _ZN7granary9LoadToolsEPKc(const char *tool_path) {
+  char tool_name[50] = {'\0'};
+  const char *ch = FLAG_tools;
+  int i = 0;
+
+  for (i = 0; *ch; ++ch) {
+    tool_name[i++] = *ch;
+    if (!ch[1] || ',' == ch[1]) {  // End of tool name list, or next tool name.
+      tool_name[i] = '\0';
+      tool_name[49] = '\0';
+      printk("[granary] Loading tool '%s/%s.ko'.\n", tool_path, tool_name);
+      request_module("%s/%s.ko", tool_path, tool_name);
+      i = 0;
+      ++ch;
+    }
+  }
 }
 
 // granary::InitOptions(char const*)
@@ -162,8 +195,7 @@ static void process_command(void) {
     printk("[granary] %s\n", command_buff);
     _ZN7granary11InitOptionsEPKc(&(command_buff[4]));
     init_module_list();
-    _ZN7granary4InitENS_8InitKindEPKc(0, "");
-
+    _ZN7granary4InitENS_8InitKindEPKc(0, tool_path);
   }
 }
 

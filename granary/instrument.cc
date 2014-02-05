@@ -7,8 +7,8 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 
+#include "granary/factory.h"
 #include "granary/instrument.h"
-#include "granary/materialize.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
@@ -19,7 +19,7 @@ namespace {
 // allowed to materialize direct basic blocks into other forms of basic blocks.
 static void InstrumentControlFlow(LocalControlFlowGraph *cfg,
                                   GenericMetaData *meta) {
-  Materializer materializer(cfg);
+  BlockFactory materializer(cfg);
   materializer.MaterializeInitialBlock(meta);
   for (;; materializer.MaterializeRequestedBlocks()) {
     for (auto tool : Tools()) {

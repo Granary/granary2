@@ -24,9 +24,10 @@ all: all_objects
 	# Make a final object that tools can link against for getting arch-specific
 	# implementations of built-in compiler functions that are also sometimes
 	# synthesized by optimizing compilers (e.g. memset).
-	@echo "Building object $@"
+	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
 	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.ll \
     	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
+	@echo "Loading object $(GRANARY_BIN_DIR)/tool.o"
 	@$(GRANARY_LD) -r \
     	$(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/asm/string.o \
     	$(GRANARY_BIN_DIR)/granary/breakpoint.o \
@@ -63,7 +64,7 @@ install: all headers
 # Compile one or more specific tools. For example:
 # `make tools GRANARY_TOOLS=bbcount`.
 tools:
-	$(MAKE) -C $(GRANARY_SRC_DIR) -f Tool.mk \
+	$(MAKE) -C $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE) -f Tool.mk \
 		$(MFLAGS) \
 		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
 		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) all
@@ -71,7 +72,7 @@ tools:
 # Clean one or more specific tools. For example:
 # `make clean_tools GRANARY_TOOLS=bbcount`.
 clean_tools:
-	$(MAKE) -C $(GRANARY_SRC_DIR) -f Tool.mk \
+	$(MAKE) -C $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE) -f Tool.mk \
 		$(MFLAGS) \
 		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
 		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) clean

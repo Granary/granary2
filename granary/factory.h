@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_MATERIALIZE_H_
-#define GRANARY_MATERIALIZE_H_
+#ifndef GRANARY_FACTORY_H_
+#define GRANARY_FACTORY_H_
 
 #include "granary/base/base.h"
 #include "granary/base/bloom_filter.h"
@@ -20,51 +20,51 @@ class HashFunction;
 // materialization strategy represents granularity. For example, of two
 // materialization requests are submitted for the same `DirectBasicBlock`, then
 // the chosen strategy will be the minimum of the two requests strategies.
-enum MaterializeStrategy : uint8_t {
+enum BlockRequestKind : uint8_t {
 
   // Don't materialize this basic block. This is the default.
-  MATERIALIZE_LATER,
+  REQUEST_LATER,
 
   // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
   // already been cached (at the time of lookup) and if we haven't already
   // materialized it into our local control-flow graph.
-  MATERIALIZE_CHECK_INDEX_AND_LCFG,
+  REQUEST_CHECK_INDEX_AND_LCFG,
 
   // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
   // already been materialized into the CFG.
-  MATERIALIZE_CHECK_LCFG,
+  REQUEST_CHECK_LCFG,
 
   // Always materialize this block into an `DecodedBasicBlock`, even if it's
   // indexed in the cache or if already in the `LocalControlFlowGraph`.
-  MATERIALIZE_NOW,
+  REQUEST_NOW,
 
   // Materialize to the native target.
-  MATERIALIZE_NATIVE
+  REQUEST_NATIVE
 };
 
 
 // Basic block materializer.
-class Materializer {
+class BlockFactory {
  public:
 
   // Initialize the materializer with an environment and a local control-flow
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit Materializer(LocalControlFlowGraph *cfg_);
+  explicit BlockFactory(LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
-  void RequestMaterialize(
+  void RequestBlock(
       BasicBlock *block,
-      MaterializeStrategy strategy=MATERIALIZE_CHECK_INDEX_AND_LCFG);
+      BlockRequestKind strategy=REQUEST_CHECK_INDEX_AND_LCFG);
 
   // Request that a `block` be materialized according to strategy `strategy`.
   // If multiple requests are made, then the most fine-grained strategy is
   // chosen.
-  void RequestMaterialize(
+  void RequestBlock(
       DirectBasicBlock *block,
-      MaterializeStrategy strategy=MATERIALIZE_CHECK_INDEX_AND_LCFG);
+      BlockRequestKind strategy=REQUEST_CHECK_INDEX_AND_LCFG);
 
   // Satisfy all materialization requests.
   GRANARY_INTERNAL_DEFINITION void MaterializeRequestedBlocks(void);
@@ -86,7 +86,7 @@ class Materializer {
   std::unique_ptr<DirectBasicBlock> Materialize(AppProgramCounter start_pc);
 
  private:
-  Materializer(void) = delete;
+  BlockFactory(void) = delete;
 
   // Hash the meta data of all basic blocks.
   GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);
@@ -115,9 +115,9 @@ class Materializer {
 
   GRANARY_INTERNAL_DEFINITION bool has_pending_request;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(Materializer);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockFactory);
 };
 
 }  // namespace granary
 
-#endif  // GRANARY_MATERIALIZE_H_
+#endif  // GRANARY_FACTORY_H_

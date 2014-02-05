@@ -2,7 +2,7 @@
 
 .PHONY: all clean
 
-include Makefile.inc
+include ../../Makefile.inc
 
 # Include the `Makefile.inc`s of every tool.
 GRANARY_TOOL_INCS := $(addsuffix /Makefile.inc,$(GRANARY_TOOLS))
@@ -28,13 +28,11 @@ $(1)-all : $(addprefix $(GRANARY_TOOL_DIR)/$(1)/,$($(1)-objs))
 	
 	# Convert the linked bitcode files into a single object file. Goal here is
 	# to take advantage of optimization on the now fully-linked file.
-	@$(GRANARY_CC) $(GRANARY_LD_FLAGS) \
+	@$(GRANARY_CC) -Qunused-arguments $(GRANARY_CC_FLAGS) \
 		-c $(GRANARY_TOOL_DIR)/$(1)/lib$(1).ll \
 		-o $(GRANARY_TOOL_DIR)/$(1)/lib$(1).o
 	
 	# Compile the object file into a shared library.
-	# TODO(pag): Make a kernel space equivalent, e.g. output `.S` above instead
-	#            of a `.o`.
 	@$(GRANARY_CC) \
 		$(GRANARY_LD_FLAGS) \
 		$(GRANARY_LD_FLAGS_EARLY) \

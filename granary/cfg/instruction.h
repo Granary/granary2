@@ -13,7 +13,7 @@ namespace granary {
 // Forward declarations.
 class BasicBlock;
 class ControlFlowInstruction;
-class Materializer;
+class BlockFactory;
 
 namespace driver {
 GRANARY_INTERNAL_DEFINITION class DecodedInstruction;
@@ -194,7 +194,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   })
 
  private:
-  friend class Materializer;
+  friend class BlockFactory;
 
   ControlFlowInstruction(void) = delete;
 

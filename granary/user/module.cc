@@ -162,10 +162,10 @@ static void ParseMapsFile(void) {
     }
 
     token = lexer.NextToken();
-    module_perms |= 'r' == token[0] ? detail::MODULE_READABLE : 0;
-    module_perms |= 'w' == token[1] ? detail::MODULE_WRITABLE : 0;
-    module_perms |= 'x' == token[2] ? detail::MODULE_EXECUTABLE : 0;
-    module_perms |= 'p' == token[3] ? detail::MODULE_COPY_ON_WRITE : 0;
+    module_perms |= 'r' == token[0] ? internal::MODULE_READABLE : 0;
+    module_perms |= 'w' == token[1] ? internal::MODULE_WRITABLE : 0;
+    module_perms |= 'x' == token[2] ? internal::MODULE_EXECUTABLE : 0;
+    module_perms |= 'p' == token[3] ? internal::MODULE_COPY_ON_WRITE : 0;
 
     DeFormat(lexer.NextToken(), "%lx", &module_offset);
 

@@ -10,7 +10,7 @@
 
 #include "granary/driver.h"
 #include "granary/environment.h"
-#include "granary/materialize.h"
+#include "granary/factory.h"
 #include "granary/metadata.h"
 #include "granary/mir.h"
 #include "granary/module.h"
@@ -20,26 +20,26 @@ namespace granary {
 // Initialize the materializer with an environment and a local control-flow
 // graph. The environment is needed for lookups in the code cache index, and
 // the LCFG is needed so that blocks can be added.
-Materializer::Materializer(LocalControlFlowGraph *cfg_)
+BlockFactory::BlockFactory(LocalControlFlowGraph *cfg_)
     : meta_data_filter(),
       cfg(cfg_),
       has_pending_request(false) {}
 
 // Request that a block be materialized. This does nothing if the block is
 // not a `DirectBasicBlock`.
-void Materializer::RequestMaterialize(BasicBlock *block,
-                                      MaterializeStrategy strategy) {
+void BlockFactory::RequestBlock(BasicBlock *block,
+                                      BlockRequestKind strategy) {
   auto direct_block = DynamicCast<DirectBasicBlock *>(block);
   if (direct_block) {
-    RequestMaterialize(direct_block, strategy);
+    RequestBlock(direct_block, strategy);
   }
 }
 
 // Request that a `block` be materialized according to strategy `strategy`.
 // If multiple requests are made, then the most fine-grained strategy is
 // chosen.
-void Materializer::RequestMaterialize(DirectBasicBlock *block,
-                                      MaterializeStrategy strategy) {
+void BlockFactory::RequestBlock(DirectBasicBlock *block,
+                                      BlockRequestKind strategy) {
   granary_break_on_fault_if(!block || !block->list.IsAttached());
   has_pending_request = true;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
@@ -89,7 +89,7 @@ static std::unique_ptr<Instruction> MakeInstruction(
 
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block.
-static void ExtendInstructionList(Materializer *materializer,
+static void ExtendInstructionList(BlockFactory *materializer,
                                   Instruction *instr,
                                   AppProgramCounter pc) {
   driver::InstructionDecoder decoder;
@@ -126,7 +126,7 @@ static uint32_t HashMetaData(HashFunction *hasher,
 
 // Hash the meta data of all basic blocks. This resets the `materialized_block`
 // of any `DirectBasicBlock` from prior materialization runs.
-void Materializer::HashBlockMetaDatas(HashFunction *hasher) {
+void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
   for (auto block : cfg->Blocks()) {
     auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
     if (meta_block) {
@@ -143,7 +143,7 @@ void Materializer::HashBlockMetaDatas(HashFunction *hasher) {
 }
 
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
-void Materializer::MaterializeDirectBlocks(void) {
+void BlockFactory::MaterializeDirectBlocks(void) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
   for (auto block = cfg->first_block, last_block = cfg->last_block;
@@ -163,7 +163,7 @@ void Materializer::MaterializeDirectBlocks(void) {
 
 // Unlink old blocks from the control-flow graph by changing the targets of
 // CTIs going to now-materialized `DirectBasicBlock`s.
-void Materializer::RelinkCFIs(void) {
+void BlockFactory::RelinkCFIs(void) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
   for (auto block = cfg->first_block;
@@ -181,7 +181,7 @@ void Materializer::RelinkCFIs(void) {
 
 // Search an LCFG for a block whose meta-data matches the meta-data of
 // `exclude`.
-BasicBlock *Materializer::MaterializeFromLCFG(DirectBasicBlock *exclude) {
+BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
   for (auto block = cfg->first_block;
@@ -211,16 +211,16 @@ BasicBlock *Materializer::MaterializeFromLCFG(DirectBasicBlock *exclude) {
 }
 
 // Materialize a basic block if there is a pending request.
-BasicBlock *Materializer::MaterializeBlock(DirectBasicBlock *block) {
+BasicBlock *BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   switch (block->materialize_strategy) {
-    case MATERIALIZE_LATER:
+    case REQUEST_LATER:
       return nullptr;
 
-    case MATERIALIZE_CHECK_INDEX_AND_LCFG:
+    case REQUEST_CHECK_INDEX_AND_LCFG:
       // TODO(pag): Implement me.
       // Fall-through.
 
-    case MATERIALIZE_CHECK_LCFG:
+    case REQUEST_CHECK_LCFG:
       if (meta_data_filter.MightContain({block->cached_meta_hash})) {
         if (BasicBlock *found_block = MaterializeFromLCFG(block)) {
           return found_block;
@@ -228,7 +228,7 @@ BasicBlock *Materializer::MaterializeBlock(DirectBasicBlock *block) {
       }
       // Fall-through.
 
-    case MATERIALIZE_NOW: {
+    case REQUEST_NOW: {
       auto decoded_block = new DecodedBasicBlock(block->meta);
       block->meta = nullptr;  // Steal.
       ExtendInstructionList(
@@ -237,13 +237,13 @@ BasicBlock *Materializer::MaterializeBlock(DirectBasicBlock *block) {
       return decoded_block;
     }
 
-    case MATERIALIZE_NATIVE:
+    case REQUEST_NATIVE:
       return new NativeBasicBlock(block->StartPC());
   }
 }
 
 // Satisfy all materialization requests.
-void Materializer::MaterializeRequestedBlocks(void) {
+void BlockFactory::MaterializeRequestedBlocks(void) {
   xxhash::HashFunction hasher(0xDEADBEEFUL);
   meta_data_filter.Clear();
   HashBlockMetaDatas(&hasher);
@@ -256,7 +256,7 @@ void Materializer::MaterializeRequestedBlocks(void) {
 }
 
 // Materialize the initial basic block.
-void Materializer::MaterializeInitialBlock(GenericMetaData *meta) {
+void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
   auto decoded_block = new DecodedBasicBlock(meta);
   cfg->AddBlock(decoded_block);
@@ -268,7 +268,7 @@ void Materializer::MaterializeInitialBlock(GenericMetaData *meta) {
 // will not appear in any iterators until some instruction takes ownership
 // of it. This can be achieved by targeting this newly created basic block
 // with a CTI.
-std::unique_ptr<DirectBasicBlock> Materializer::Materialize(
+std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
     AppProgramCounter start_pc) {
   auto block = new DirectBasicBlock(new GenericMetaData(start_pc));
   cfg->AddBlock(block);

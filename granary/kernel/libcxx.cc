@@ -31,6 +31,21 @@ void __cxa_pure_virtual(void) {
   granary_break_on_fault();
 }
 
+__extension__ typedef int __guard __attribute__((mode(__DI__)));
+
+// Called when initializing a static variable inside of a function. Treat
+// `guard` as an atomic spin lock.
+int __cxa_guard_acquire (__guard *g) {
+  while(__sync_lock_test_and_set(g, 1)) { }
+  return 1;
+}
+
+void __cxa_guard_release (__guard *g) {
+  *g = 0;
+}
+
+void __cxa_guard_abort (__guard *) { }
+
 // `operator new`
 void *_Znwm(void) {
   granary_break_on_fault();

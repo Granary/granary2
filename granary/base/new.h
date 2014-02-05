@@ -35,7 +35,7 @@ namespace granary {
   static void operator delete[](void *) = delete;
 
 
-namespace detail {
+namespace internal {
 
 // Dummy singly-linked list for free objects.
 class FreeList {
@@ -95,7 +95,7 @@ class SlabAllocator {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SlabAllocator);
 };
 
-}  // namespace detail
+}  // namespace internal
 
 
 // Simple, slab-based allocator used to service operators `new` and `delete` for
@@ -128,12 +128,12 @@ class OperatorNewAllocator {
     MIN_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
     ALIGNMENT = GRANARY_MAX(MIN_ALIGNMENT, alignof(T)),
     OBJECT_SIZE = sizeof(T),
-    MIN_OBJECT_SIZE = GRANARY_MAX(OBJECT_SIZE, sizeof(detail::FreeList *)),
+    MIN_OBJECT_SIZE = GRANARY_MAX(OBJECT_SIZE, sizeof(internal::FreeList *)),
     ALIGNED_OBJECT_SIZE = GRANARY_ALIGN_TO(MIN_OBJECT_SIZE, ALIGNMENT),
 
     // The first offset in a page is for an object.
     ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(
-        sizeof(detail::SlabList), ALIGNMENT),
+        sizeof(internal::SlabList), ALIGNMENT),
 
     // Figure out the number of allocations that can fit into a one-page slab.
     MAX_ALLOCATABLE_SPACE = GRANARY_ARCH_PAGE_FRAME_SIZE -
@@ -153,7 +153,7 @@ class OperatorNewAllocator {
 
   OperatorNewAllocator(void) = delete;
 
-  static detail::SlabAllocator allocator __attribute__((init_priority (101)));
+  static internal::SlabAllocator allocator __attribute__((init_priority (101)));
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(OperatorNewAllocator, (T));
 };
@@ -161,7 +161,7 @@ class OperatorNewAllocator {
 
 // Static initialization of the (typeless) internal slab allocator.
 template <typename T>
-detail::SlabAllocator OperatorNewAllocator<T>::allocator(
+internal::SlabAllocator OperatorNewAllocator<T>::allocator(
     OperatorNewAllocator<T>::NUM_ALLOCS_PER_SLAB,
     OperatorNewAllocator<T>::ALGINED_SLAB_LIST_SIZE,
     OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE,

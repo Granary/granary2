@@ -5,7 +5,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/driver.h"
-#include "granary/materialize.h"
+#include "granary/factory.h"
 #include "granary/mir.h"
 #include "granary/util.h"
 
@@ -48,7 +48,7 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
 
 // Materialize a future basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<Instruction> Jump(Materializer *materializer,
+std::unique_ptr<Instruction> Jump(BlockFactory *materializer,
                                   AppProgramCounter target_pc) {
   auto target_block = materializer->Materialize(target_pc);
   driver::InstructionBuilder builder;
@@ -59,7 +59,7 @@ std::unique_ptr<Instruction> Jump(Materializer *materializer,
 
 // Materialize a future basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<Instruction> Call(Materializer *materializer,
+std::unique_ptr<Instruction> Call(BlockFactory *materializer,
                                   AppProgramCounter target_pc) {
   auto target_block = materializer->Materialize(target_pc);
   driver::InstructionBuilder builder;

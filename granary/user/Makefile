@@ -48,7 +48,7 @@ $(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
 # a simple form of link-time optimization.
 $(GRANARY_INTERMEDIATE_FILE).o:: $(GRANARY_INTERMEDIATE_FILE).ll
 	@echo "Building object $@"
-	@$(GRANARY_CC) $(GRANARY_LD_FLAGS) \
+	@$(GRANARY_CC) -Qunused-arguments $(GRANARY_CC_FLAGS) \
 		-c $(GRANARY_INTERMEDIATE_FILE).ll \
 		-o $(GRANARY_INTERMEDIATE_FILE).o
 
