@@ -96,10 +96,6 @@ def main(argv):
       help="Extract the sections from a given module on the current machine")
 
   parser.add_argument(
-      '--tools', type=str, default="",
-      help="Comma-separated list of tools to copy onto the target machine.")
-
-  parser.add_argument(
       '--target', type=str, default="debug",
       help="Compilation target (i.e. release or debug).")
 
@@ -138,18 +134,12 @@ def main(argv):
     # Copy the kernel module binary to the target
     agent.copy_to_target(local_granary_file, "/tmp/granary.ko")
 
-    # Copy the tool kernel module binaries to the target.
-    for tool in args.tools.split(","):
-      agent.copy_to_target(
-          os.path.join(sys.path[0], "%sbin/%s_kernel/tools/%s.ko" % (rel_path, args.target, tool)),
-          "/tmp/%s.ko" % tool)
-
     # Copy this script to the target
     agent.copy_to_target(sys.argv[0], "/tmp/__granary__remoteload.py")
 
     # Load Granary module & get sections
     cmd = [
-        """sudo insmod %s tool_path=/tmp""" % "/tmp/granary.ko",
+        """sudo insmod /tmp/granary.ko""",
         """sudo python /tmp/__granary__remoteload.py --get_sections={module}""".format(module=args.module),
         ]
     agent.run_on_target(";".join(cmd))

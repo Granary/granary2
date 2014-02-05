@@ -19,13 +19,11 @@ void Init(InitKind kind, const char *granary_path);
 #endif  // GRANARY_INTERNAL
 
 #define GRANARY_INIT(...) \
-  namespace { \
-    __attribute__((used, constructor(102))) \
-    static void GRANARY_CAT(Init, GRANARY_UNIQUE_SYMBOL)(void) { \
-      GRANARY_USING_NAMESPACE granary; \
-      __VA_ARGS__ \
-    } \
-  }
+  __attribute__((used, constructor(102))) \
+  static void GRANARY_CAT(InitTool_GLOBAL__I_, GRANARY_UNIQUE_SYMBOL)(void) { \
+    GRANARY_USING_NAMESPACE granary; \
+    __VA_ARGS__ \
+  } \
 
 }  // namespace granary
 

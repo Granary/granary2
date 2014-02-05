@@ -13,13 +13,28 @@ include $(GRANARY_TOOL_INCS)
 GRANARY_TOOL_MKS := $(addsuffix .mk,$(GRANARY_TOOLS))
 GRANARY_TOOL_MKS := $(addprefix $(GRANARY_BIN_DIR)/tools/,$(GRANARY_TOOL_MKS))
 
+GRANARY_ASM_S_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.S')
+GRANARY_ASM_O_FILES := $(GRANARY_ASM_S_FILES:.S=.o)
+GRANARY_ASM_REL_O_FILES := $(subst $(GRANARY_BIN_DIR)/,,$(GRANARY_ASM_O_FILES))
+
 GRANARY_CXX_FLAGS += -fvisibility=hidden
 GRANARY_CC_FLAGS += -fvisibility=hidden
-
 GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic"
 GRANARY_LD_FLAGS_LATE += "-Wl,-Bdynamic"
 GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
-GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
+#GRANARY_LD_FLAGS_LATE += -fvisibility=hidden
+
+# Makefile contents for Granary's kernel module Makefile.
+GRANARY_MAKEFILE_HEADER =
+GRANARY_MAKEFILE_FOOTER =
+GRANARY_MAKEFILE_HEADER += "obj-m += $(GRANARY_NAME).o\n"
+GRANARY_MAKEFILE_HEADER += "$(GRANARY_NAME)-y := granary/kernel/entry.o\n"
+GRANARY_MAKEFILE_HEADER += "$(GRANARY_NAME)-y += $(GRANARY_ASM_REL_O_FILES)\n"
+GRANARY_MAKEFILE_HEADER += "$(GRANARY_NAME)-y += $(GRANARY_NAME)_merged.o_shipped"
+
+GRANARY_MAKEFILE_FOOTER += "ccflags-y += $(GRANARY_LD_FLAGS_LATE) -I$(GRANARY_SRC_DIR)\n"
+GRANARY_MAKEFILE_FOOTER += "asflags-y += $(GRANARY_LD_FLAGS_LATE)\n"
+GRANARY_MAKEFILE_FOOTER += "ldflags-y += --export-dynamic\n"
 
 # Generate a rule to build the LLVM bitcode files for a specific tool.
 define GENRULE
@@ -35,13 +50,6 @@ $(1)-all : $(addprefix $(GRANARY_TOOL_DIR)/$(1)/,$($(1)-objs))
 	# to take advantage of optimization on the now fully-linked file.
 	@$(GRANARY_CC) -Qunused-arguments $(GRANARY_CC_FLAGS) \
 		-c $(GRANARY_TOOL_DIR)/$(1)/$(1).ll \
-		$(GRANARY_LD_FLAGS_LATE) \
-		-o $(GRANARY_TOOL_DIR)/$(1)/$(1).o
-	
-	# Link together Granary's `tool.o` and the grouped `llvm-link` compiled file
-	# into a shipped .o file.
-	@$(GRANARY_LD) -r \
-		$(GRANARY_TOOL_DIR)/$(1)/$(1).o $(GRANARY_BIN_DIR)/tool.o \
 		-o $(GRANARY_BIN_DIR)/tools/$(1)_merged.o_shipped
 	
 	# Create an `.cmd` file for the merged binary.
@@ -49,8 +57,7 @@ $(1)-all : $(addprefix $(GRANARY_TOOL_DIR)/$(1)/,$($(1)-objs))
 		> $(GRANARY_BIN_DIR)/tools/.$(1)_merged.o_shipped.cmd
 	
 	# Create an includable Makefile for this tool.
-	@echo "obj-m += $(1).o\n" \
-	      "$(1)-y := $(1)_merged.o_shipped tool_entry.o\n" \
+	@echo "$(GRANARY_NAME)-y += tools/$(1)_merged.o_shipped\n" \
 		> $(GRANARY_BIN_DIR)/tools/$(1).mk
 endef
 
@@ -71,22 +78,16 @@ $(GRANARY_TOOL_DIR)/%.ll: $(GRANARY_TOOL_DIR)/%.cc
 
 # Build all tools specified in `GRANARY_TOOLS`.
 all: $(addsuffix -all,$(GRANARY_TOOLS))
-	# Copy in the tool entrypoint code.
-	@cp $(GRANARY_SRC_DIR)/granary/kernel/tool_entry.c $(GRANARY_BIN_DIR)/tools
-	
 	# Make a unified tool makefile.
-	@echo "include $(GRANARY_TOOL_MKS)\n" \
-		  "ccflags-y += $(GRANARY_LD_FLAGS_LATE) -I$(GRANARY_SRC_DIR)\n" \
-		  "asflags-y += $(GRANARY_LD_FLAGS_LATE)\n" \
-		  "ldflags-y += --export-dynamic -Bdynamic\n" \
-		> $(GRANARY_BIN_DIR)/tools/Makefile
+	@echo $(GRANARY_MAKEFILE_HEADER) > $(GRANARY_BIN_DIR)/Makefile
+	@cat $(GRANARY_TOOL_MKS) >> $(GRANARY_BIN_DIR)/Makefile
+	@echo $(GRANARY_MAKEFILE_FOOTER) >> $(GRANARY_BIN_DIR)/Makefile
 	
-	# Instruct the kernel to compile the tools and to reference the symbols
-	# of `granary.ko`.
-	make -C $(GRANARY_KERNEL_DIR) \
-		M=$(GRANARY_BIN_DIR)/tools \
-		KBUILD_EXTRA_SYMBOLS=$(GRANARY_BIN_DIR)/Module.symvers \
-		modules
+	# Instruct the kernel to compile the specified tools into Granary by
+	# invoking the kernel module makefile on the unified makefile.
+	@echo "Building $(GRANARY_BIN_DIR)/granary.ko with $(GRANARY_TOOLS)."
+	@make -C $(GRANARY_KERNEL_DIR) M=$(GRANARY_BIN_DIR) modules
+	@echo "Done."
 	
 # Clean all tools specified in `GRANARY_TOOLS`.	
 clean: $(addsuffix -clean,$(GRANARY_TOOLS))

@@ -2,7 +2,7 @@
 
 include Makefile.inc
 
-.PHONY: all all_objects clean clean_generated install example
+.PHONY: all all_objects clean clean_generated install user_tool kernel_tool
 
 # Compile all files. This passes in `GRANARY_SRC_DIR` through to all sub-
 # invocations of `make`.
@@ -20,18 +20,24 @@ all_objects:
 	$(MAKE) -C $(GRANARY_WHERE_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-all: all_objects
-	# Make a final object that tools can link against for getting arch-specific
-	# implementations of built-in compiler functions that are also sometimes
-	# synthesized by optimizing compilers (e.g. memset).
+# Make a final object that tools can link against for getting arch-specific
+# implementations of built-in compiler functions that are also sometimes
+# synthesized by optimizing compilers (e.g. memset).
+user_tool: $(GRANARY_BIN_DIR)/granary/breakpoint.ll
 	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
 	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.ll \
     	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
-	@echo "Loading object $(GRANARY_BIN_DIR)/tool.o"
+    	
+	@echo "Loading user space $(GRANARY_BIN_DIR)/tool.o"
 	@$(GRANARY_LD) -r \
     	$(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/asm/string.o \
     	$(GRANARY_BIN_DIR)/granary/breakpoint.o \
     	-o $(GRANARY_BIN_DIR)/tool.o
+	
+# We handle the equivalent of `user_tool` in `granary/kernel/Took.mk`.
+kernel_tool:
+    	
+all: all_objects $(GRANARY_WHERE)_tool
 	@echo "Done."
 
 # Clean up all executable / binary files.
