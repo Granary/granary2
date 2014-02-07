@@ -28,7 +28,15 @@ make clean ; make all GRANARY_WHERE=kernel
 If you are compiling Granary against a custom kernel, run:
 
 ```basemake
-make clean ; make all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path to your kernel source code>
+make clean  GRANARY_WHERE=kernel
+make all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 ```
 
 ### Step 3: Compiling tools.
+
+If you are compiling Granary tools against a custom kernel, run:
+
+```basemake
+make clean_tools GRANARY_WHERE=kernel
+make tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
+```

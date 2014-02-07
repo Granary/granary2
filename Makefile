@@ -23,7 +23,7 @@ all_objects:
 # Make a final object that tools can link against for getting arch-specific
 # implementations of built-in compiler functions that are also sometimes
 # synthesized by optimizing compilers (e.g. memset).
-user_tool: $(GRANARY_BIN_DIR)/granary/breakpoint.ll
+user_tool: all_objects
 	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
 	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.ll \
     	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
@@ -35,9 +35,9 @@ user_tool: $(GRANARY_BIN_DIR)/granary/breakpoint.ll
     	-o $(GRANARY_BIN_DIR)/tool.o
 	
 # We handle the equivalent of `user_tool` in `granary/kernel/Took.mk`.
-kernel_tool:
+kernel_tool: all_objects
     	
-all: all_objects $(GRANARY_WHERE)_tool
+all: $(GRANARY_WHERE)_tool
 	@echo "Done."
 
 # Clean up all executable / binary files.

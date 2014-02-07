@@ -1,8 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
-#ifndef GRANARY_LOCK_H_
-#define GRANARY_LOCK_H_
+#ifndef GRANARY_BASE_LOCK_H_
+#define GRANARY_BASE_LOCK_H_
 
 #include "granary/base/base.h"
 
@@ -57,9 +56,7 @@ class FineGrainedLocked {
 class ReaderWriterLock {
  public:
   inline ReaderWriterLock(void)
-      : writer_lock(),
-        reader_count(ATOMIC_VAR_INIT(0)),
-        writer_count(ATOMIC_VAR_INIT(0)) {}
+      : lock(ATOMIC_VAR_INIT(0)) {}
 
   void ReadAcquire(void);
   void ReadRelease(void);
@@ -68,10 +65,8 @@ class ReaderWriterLock {
   void WriteRelease(void);
 
  private:
-  FineGrainedLock writer_lock;
 
-  std::atomic<int> reader_count;
-  std::atomic<int> writer_count;
+  std::atomic<uint32_t> lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ReaderWriterLock);
 };
@@ -119,4 +114,4 @@ class WriteLocked {
 
 }  // namespace granary
 
-#endif  // GRANARY_LOCK_H_
+#endif  // GRANARY_BASE_LOCK_H_

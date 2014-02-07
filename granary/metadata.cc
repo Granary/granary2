@@ -39,6 +39,9 @@ static size_t META_ALIGN = 0;
 // Is it too late to register meta-data?
 static bool CAN_REGISTER_META = true;
 
+// Do we have any unifiable meta-data?
+static bool HAS_UNIFIABLE_META = false;
+
 inline static LinkedListIterator<detail::meta::MetaDataInfo>
 MetaDataInfos(void) {
   return LinkedListIterator<detail::meta::MetaDataInfo>(META);
@@ -57,6 +60,10 @@ void RegisterMetaData(const MetaDataInfo *meta_) {
   auto meta = const_cast<MetaDataInfo *>(meta_);
   if (meta->is_registered) {
     return;
+  }
+
+  if (meta->can_unify) {
+    HAS_UNIFIABLE_META = true;
   }
 
   auto next_ptr = &META;
@@ -131,7 +138,10 @@ GenericMetaData *GenericMetaData::Copy(void) const {
 void GenericMetaData::Hash(HashFunction *hasher) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
-    meta->hash(hasher, reinterpret_cast<const void *>(this_ptr + meta->offset));
+    if (meta->hash) {
+      meta->hash(hasher,
+                 reinterpret_cast<const void *>(this_ptr + meta->offset));
+    }
   }
 }
 
@@ -141,16 +151,35 @@ bool GenericMetaData::Equals(const GenericMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   for (auto meta : MetaDataInfos()) {
-    if (!meta->is_serializable) {
-      continue;
-    }
-    auto this_meta = reinterpret_cast<const void *>(this_ptr + meta->offset);
-    auto that_meta = reinterpret_cast<const void *>(that_ptr + meta->offset);
-    if (!meta->compare_equals(this_meta, that_meta)) {
-      return false;
+    if (meta->compare_equals) {  // Indexable.
+      auto this_meta = reinterpret_cast<const void *>(this_ptr + meta->offset);
+      auto that_meta = reinterpret_cast<const void *>(that_ptr + meta->offset);
+      if (!meta->compare_equals(this_meta, that_meta)) {
+        return false;
+      }
     }
   }
   return true;
+}
+
+// Check to see if this meta-data can unify with some other generic meta-data.
+UnificationStatus GenericMetaData::CanUnifyWith(
+    const GenericMetaData *that) const {
+  auto this_ptr = reinterpret_cast<uintptr_t>(this);
+  auto that_ptr = reinterpret_cast<uintptr_t>(that);
+  auto can_unify = UnificationStatus::ACCEPT;
+  if (!HAS_UNIFIABLE_META) {
+    return can_unify;
+  }
+  for (auto meta : MetaDataInfos()) {
+    if (meta->can_unify) {  // Unifyable.
+      auto this_meta = reinterpret_cast<const void *>(this_ptr + meta->offset);
+      auto that_meta = reinterpret_cast<const void *>(that_ptr + meta->offset);
+      auto local_can_unify = meta->can_unify(this_meta, that_meta);
+      can_unify = GRANARY_MAX(can_unify, local_can_unify);
+    }
+  }
+  return can_unify;
 }
 
 namespace {

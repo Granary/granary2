@@ -4,10 +4,10 @@
 #define GRANARY_MODULE_H_
 
 #include "granary/arch/base.h"
+#include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/types.h"
 #include "granary/init.h"
-#include "granary/lock.h"
 
 namespace granary {
 

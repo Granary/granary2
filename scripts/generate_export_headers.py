@@ -9,6 +9,7 @@ import sys
 
 EXPORT_HEADERS = [
   "granary/base/base.h",
+  "granary/base/lock.h",
   "granary/base/string.h",
   "granary/base/options.h",
   "granary/cfg/control_flow_graph.h",
@@ -16,7 +17,6 @@ EXPORT_HEADERS = [
   "granary/cfg/instruction.h",
   "granary/breakpoint.h",
   "granary/factory.h",
-  "granary/lock.h",
   "granary/logging.h",
   "granary/metadata.h",
   "granary/mir.h",

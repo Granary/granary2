@@ -31,6 +31,23 @@ struct IndexableMetaData {
 // must extend this base class.
 struct MutableMetaData {};
 
+enum class UnificationStatus {
+  ACCEPT = 0,  // Unifies perfectly.
+  ADAPT = 2,  // Does not unify perfectly, but can be adapted.
+  REJECT = 1  // Cannot be unified / adapted.
+};
+
+// Unifiable meta-data, i.e. meta-data that behaves a bit like indexable meta-
+// data, but doesn't directly participate in the indexing process. The idea here
+// is that sometimes we want to generate new versions of basic blocks, and other
+// times we want to be able to re-use old versions, but the old versions aren't
+// necessarily perfectly suited, so we need to adapt to them.
+template <typename T>
+struct UnifiableMetaData {
+ public:
+  UnificationStatus CanUnifyWith(const T *that) const;
+};
+
 // TODO(pag): How to eventually handle static instrumentation with mutable
 //            meta-data?
 
@@ -45,31 +62,6 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
 
   // The program counter.
   GRANARY_CONST AppProgramCounter native_pc;
-
-  // Should function returns be translated or run natively. This is related
-  // to transparency and comprehensiveness, but can also be used to
-  // implement fast function returns when instrumentation isn't being
-  // transparent.
-  //bool translate_function_return;
-
-  // Should this basic block be run natively? I.e. should be just run the
-  // app code instead of instrumenting it?
-  //bool run_natively;
-
-  // Should we expect that the target is not decodable? For example, the
-  // Linux kernel's `BUG_ON` macro generates `ud2` instructions. We treat
-  // these as dead ends, and go native on them so that we can see the right
-  // debugging info. Similarly, debugger breakpoints inject `int3`s into
-  // the code. In order to properly trigger those breakpoints, we go native
-  // before executing those breakpoints.
-  //bool cant_decode;
-
-  // Should this block's address be committed to the code cache index? If
-  // a block is marked as private then it can be specially treated by tools,
-  // e.g. for performing trace-specific optimizations.
-  //bool is_private;
-
-  //bool force_decode;
 
   // Initialize Granary's internal translation meta-data.
   TranslationMetaData(void);
@@ -94,17 +86,13 @@ struct MetaDataInfo {
   GRANARY_CONST size_t offset;
   GRANARY_CONST bool is_registered;
 
-  // Is this meta-data serializable (and so is treated as immutable once
-  // committed to the code cache) or is it mutable, and potentially changing
-  // over time.
-  bool is_serializable;
-
   // Generic ways for Granary to interact with this meta-data.
   void (* const initialize)(void *);
   void (* const copy_initialize)(void *, const void *);
   void (* const destroy)(void *);
   void (* const hash)(HashFunction *, const void *);
   bool (* const compare_equals)(const void *, const void *);
+  UnificationStatus (* const can_unify)(const void *, const void *);
 
 } __attribute__((packed));
 
@@ -138,6 +126,12 @@ bool CompareEquals(const void *a, const void *b) {
   return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
 }
 
+// Compare some meta-data for equality.
+template <typename T>
+UnificationStatus CanUnify(const void *a, const void *b) {
+  return reinterpret_cast<const T *>(a)->CanUnifyWith(
+      reinterpret_cast<const T *>(b));
+}
 
 // Describes whether some type is an indexable meta-data type.
 template <typename T>
@@ -155,11 +149,21 @@ struct IsMutableMetaData {
   };
 };
 
+// Describes whether some type is an indexable meta-data type.
+template <typename T>
+struct IsUnifiableMetaData {
+  enum {
+    RESULT = !!std::is_convertible<T *, IsUnifiableMetaData<T> *>::value
+  };
+};
+
 // Describes whether some type is a meta-data type.
 template <typename T>
 struct IsMetaData {
   enum {
-    RESULT = IsIndexableMetaData<T>::RESULT || IsMutableMetaData<T>::RESULT
+    RESULT = IsIndexableMetaData<T>::RESULT ||
+             IsMutableMetaData<T>::RESULT ||
+             IsUnifiableMetaData<T>::RESULT
   };
 };
 
@@ -177,49 +181,73 @@ struct IsMetaDataPointer {
   };
 };
 
-template <typename T, bool kIsIndexable, bool kIsMutable>
+template <typename T, bool kIsIndexable, bool kIsMutable, bool kIsUnifiable>
 struct MetaDataInfoStorage;
 
 template <typename T>
-struct MetaDataInfoStorage<T, true, false> {
+struct MetaDataInfoStorage<T, true, false, false> {
  public:
   static MetaDataInfo kInfo;
 };
 
 template <typename T>
-struct MetaDataInfoStorage<T, false, true> {
+struct MetaDataInfoStorage<T, false, true, false> {
  public:
   static MetaDataInfo kInfo;
 };
 
 template <typename T>
-MetaDataInfo MetaDataInfoStorage<T, true, false>::kInfo = {
+struct MetaDataInfoStorage<T, false, false, true> {
+ public:
+  static MetaDataInfo kInfo;
+};
+
+// Indexable.
+template <typename T>
+MetaDataInfo MetaDataInfoStorage<T, true, false, false>::kInfo = {
     nullptr,
     sizeof(T),
     alignof(T),
     0xDEADBEEFUL,
     false,
-    true,
     &(Initialize<T>),
     &(CopyInitialize<T>),
     &(Destroy<T>),
     &(Hash<T>),
-    &(CompareEquals<T>)
+    &(CompareEquals<T>),
+    nullptr
 };
 
+// Mutable.
 template <typename T>
-MetaDataInfo MetaDataInfoStorage<T, false, true>::kInfo = {
+MetaDataInfo MetaDataInfoStorage<T, false, true, false>::kInfo = {
     nullptr,
     sizeof(T),
     alignof(T),
     0xDEADBEEFUL,
     false,
+    &(Initialize<T>),
+    &(CopyInitialize<T>),
+    &(Destroy<T>),
+    nullptr,
+    nullptr,
+    nullptr
+};
+
+// Unifyable.
+template <typename T>
+MetaDataInfo MetaDataInfoStorage<T, false, false, true>::kInfo = {
+    nullptr,
+    sizeof(T),
+    alignof(T),
+    0xDEADBEEFUL,
     false,
     &(Initialize<T>),
     &(CopyInitialize<T>),
     &(Destroy<T>),
     nullptr,
-    nullptr
+    nullptr,
+    &(CanUnify<T>)
 };
 
 // Get the meta-data info for some indexable meta-data.
@@ -228,7 +256,8 @@ const MetaDataInfo *GetInfo(void) {
   return &(MetaDataInfoStorage<
       T,
       IsIndexableMetaData<T>::RESULT,
-      IsMutableMetaData<T>::RESULT
+      IsMutableMetaData<T>::RESULT,
+      IsUnifiableMetaData<T>::RESULT
   >::kInfo);
 }
 
@@ -281,6 +310,9 @@ class GenericMetaData {
   // Compare the serializable components of two generic meta-data instances for
   // strict equality.
   bool Equals(const GenericMetaData *meta) const;
+
+  // Check to see if this meta-data can unify with some other generic meta-data.
+  UnificationStatus CanUnifyWith(const GenericMetaData *meta) const;
 
   // Dynamically allocate and free meta-data. These operations are only
   // valid *after* `granary::InitMetaData`, as that sets up the meta-data

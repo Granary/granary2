@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/arch/cpu.h"
-#include "granary/lock.h"
+#include "granary/base/lock.h"
 
 namespace granary {
 
@@ -32,10 +32,12 @@ void FineGrainedLock::Release(void) {
 
 // Read-side acquire.
 void ReaderWriterLock::ReadAcquire(void) {
+  uint32_t old_value(0);
   for (;;) {
-    if (!writer_count.load(std::memory_order_acquire)) {
-      reader_count.fetch_add(1, std::memory_order_acquire);
-      break;
+    old_value = lock.load(std::memory_order_acquire) & 0x7fffffffU;
+    if (lock.compare_exchange_weak(
+        old_value, old_value + 1, std::memory_order_release)) {
+      return;
     }
     cpu::Relax();
   }
@@ -43,27 +45,30 @@ void ReaderWriterLock::ReadAcquire(void) {
 
 // Read-side release.
 void ReaderWriterLock::ReadRelease(void) {
-  reader_count.fetch_sub(1, std::memory_order_release);
+  lock.fetch_sub(1, std::memory_order_release);
 }
 
 // Write-side acquire.
 void ReaderWriterLock::WriteAcquire(void) {
-  if (!writer_count.fetch_add(1, std::memory_order_acquire)) {
-    writer_lock.Acquire();
-  } else {
-    writer_lock.ContendedAcquire();
+  uint32_t old_value(0);
+
+  for (;;) {
+    old_value = lock.load(std::memory_order_acquire) & 0x7fffffffU;
+    if (lock.compare_exchange_weak(
+        old_value, old_value | 0x80000000, std::memory_order_release)) {
+      break;
+    }
+    cpu::Relax();
   }
 
-  // We're holding the write lock, now block on any concurrent readers.
-  while (reader_count.load(std::memory_order_acquire)) {
+  while (lock.load(std::memory_order_acquire) & 0x7fffffff) {
     cpu::Relax();
   }
 }
 
 // Write-side release.
 void ReaderWriterLock::WriteRelease(void) {
-  writer_lock.Release();
-  writer_count.fetch_sub(1, std::memory_order_release);
+  lock.store(0, std::memory_order_release);
 }
 
 }  // namespace granary

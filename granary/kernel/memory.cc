@@ -1,10 +1,11 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "granary/arch/base.h"
+
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
 
 #include "granary/breakpoint.h"
-#include "granary/lock.h"
 #include "granary/memory.h"
 
 extern "C" {

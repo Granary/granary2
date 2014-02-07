@@ -36,7 +36,7 @@ __extension__ typedef int __guard __attribute__((mode(__DI__)));
 // Called when initializing a static variable inside of a function. Treat
 // `guard` as an atomic spin lock.
 int __cxa_guard_acquire (__guard *g) {
-  while(__sync_lock_test_and_set(g, 1)) { }
+  while (__sync_lock_test_and_set(g, 1)) { }
   return 1;
 }
 
