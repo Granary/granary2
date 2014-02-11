@@ -35,6 +35,7 @@ class DecodedInstruction {
   bool IsSystemCall(void) const;
   bool IsSystemReturn(void) const;
   bool IsJump(void) const;
+  bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 

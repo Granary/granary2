@@ -4,8 +4,9 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/factory.h"
+
 #include "granary/driver.h"
-#include "granary/factory.h"
 #include "granary/mir.h"
 #include "granary/util.h"
 

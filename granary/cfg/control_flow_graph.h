@@ -6,6 +6,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/types.h"
+#include "granary/cfg/iterator.h"
 
 namespace granary {
 
@@ -14,45 +15,6 @@ class BasicBlock;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class BlockFactory;
-
-namespace detail {
-
-class BasicBlockSuccessor;
-
-// An iterator for basic blocks that implements C++11 range-based for loops.
-class BasicBlockIterator {
- public:
-  inline BasicBlockIterator begin(void) const {
-    return *this;
-  }
-
-  inline BasicBlockIterator end(void) const {
-    return BasicBlockIterator();
-  }
-
-  inline bool operator!=(const BasicBlockIterator &that) const {
-    return cursor != that.cursor;
-  }
-
-  void operator++(void);
-  BasicBlock *operator*(void) const;
-
- private:
-  friend class granary::LocalControlFlowGraph;
-
-  inline BasicBlockIterator(void)
-      : cursor(nullptr) {}
-
-  GRANARY_INTERNAL_DEFINITION
-  inline explicit BasicBlockIterator(BasicBlock *block_)
-      : cursor(block_) {}
-
-  // Pointer into a CFG's block list.
-  GRANARY_POINTER(BasicBlock) *cursor;
-};
-
-}  // namespace detail
-
 
 // A control flow graph of basic blocks to instrument.
 class LocalControlFlowGraph final {
@@ -74,7 +36,7 @@ class LocalControlFlowGraph final {
   //
   //    for(auto block : cfg.Blocks())
   //      ...
-  detail::BasicBlockIterator Blocks(void) const;
+  BasicBlockIterator Blocks(void) const;
 
   // Returns an iterable that can be used inside of a range-based for loop. For
   // example:
@@ -85,7 +47,7 @@ class LocalControlFlowGraph final {
   // The distinction between `Blocks` and `NewBlocks` is relevant to
   // block materialization passes, where `Blocks` is the list of all basic
   // blocks, and `NewBlocks` is the list of newly materialized basic blocks.
-  detail::BasicBlockIterator NewBlocks(void) const;
+  BasicBlockIterator NewBlocks(void) const;
 
   // Add a block to the CFG. If the block has successors that haven't yet been
   // added, then add those too.

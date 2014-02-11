@@ -48,10 +48,19 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
   return instr;
 }
 
+// Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   granary_break_on_fault_if(
       GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr)));
   instr->list.Unlink();
+
+  // If we're unlinking a branch then make sure that the target itself does
+  // not continue to reference the branch.
+  auto branch = DynamicCast<BranchInstruction *>(instr);
+  if (branch) {
+    const_cast<const void *&>(branch->TargetInstruction()->data) = nullptr;
+  }
+
   return std::unique_ptr<Instruction>(instr);
 }
 
@@ -71,6 +80,16 @@ Instruction *AnnotationInstruction::InsertAfter(
   return this->Instruction::InsertAfter(std::move(that));
 }
 #endif  // GRANARY_DEBUG
+
+// Returns true if this instruction is a label.
+bool AnnotationInstruction::IsLabel(void) const {
+  return LABEL == annotation;
+}
+
+// Returns true if this instruction is targeted by any branches.
+bool AnnotationInstruction::IsBranchTarget(void) const {
+  return LABEL == annotation && nullptr != data;
+}
 
 NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
     : instruction(instruction_) {}

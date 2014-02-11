@@ -12,6 +12,7 @@
 #include "granary/base/refcount.h"
 #include "granary/base/types.h"
 #include "granary/base/type_traits.h"
+#include "granary/cfg/iterator.h"
 
 namespace granary {
 
@@ -25,10 +26,10 @@ class GenericMetaData;
 class LocalControlFlowGraph;
 class ControlFlowInstruction;
 class BlockFactory;
+class BasicBlockIterator;
 
 namespace detail {
 
-class BasicBlockIterator;
 class SuccessorBlockIterator;
 
 // A successor of a basic block. A successor is a pair defined as a control-flow
@@ -92,68 +93,6 @@ class SuccessorBlockIterator {
   GRANARY_POINTER(Instruction) *cursor;
 };
 
-// Iterator that moves forward through a list of instructions.
-class ForwardInstructionIterator {
- public:
-  inline ForwardInstructionIterator(void)
-      : instr(nullptr) {}
-
-  explicit inline ForwardInstructionIterator(Instruction *instr_)
-      : instr(instr_) {}
-
-  inline ForwardInstructionIterator begin(void) const {
-    return *this;
-  }
-
-  inline ForwardInstructionIterator end(void) const {
-    return ForwardInstructionIterator();
-  }
-
-  inline bool operator!=(const ForwardInstructionIterator &that) const {
-    return instr != that.instr;
-  }
-
-  inline Instruction *operator*(void) const {
-    return instr;
-  }
-
-  void operator++(void);
-
- private:
-  Instruction *instr;
-};
-
-// Iterator that moves backward through a list of instructions.
-class BackwardInstructionIterator {
- public:
-  inline BackwardInstructionIterator(void)
-      : instr(nullptr) {}
-
-  explicit inline BackwardInstructionIterator(Instruction *instr_)
-      : instr(instr_) {}
-
-  inline BackwardInstructionIterator begin(void) const {
-    return *this;
-  }
-
-  inline BackwardInstructionIterator end(void) const {
-    return BackwardInstructionIterator();
-  }
-
-  inline bool operator!=(const BackwardInstructionIterator &that) const {
-    return instr != that.instr;
-  }
-
-  inline Instruction *operator*(void) const {
-    return instr;
-  }
-
-  void operator++(void);
-
- private:
-  Instruction *instr;
-};
-
 }  // namespace detail
 
 // Abstract basic block of instructions.
@@ -183,7 +122,7 @@ class BasicBlock : protected UnownedCountedObject {
   GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
  private:
-  friend class detail::BasicBlockIterator;
+  friend class BasicBlockIterator;
   friend class ControlFlowInstruction;
   friend class LocalControlFlowGraph;
   friend class BlockFactory;
@@ -272,10 +211,20 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   Instruction *LastInstruction(void) const;
 
   // Return an iterator for the instructions of the block.
-  detail::ForwardInstructionIterator Instructions(void) const;
+  ForwardInstructionIterator Instructions(void) const;
 
   // Return a reverse iterator for the instructions of the block.
-  detail::BackwardInstructionIterator ReversedInstructions(void) const;
+  BackwardInstructionIterator ReversedInstructions(void) const;
+
+  GRANARY_INTERNAL_DEFINITION
+  inline bool IsScheduled(void) const {
+    return 0 == num_fragments;
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  inline void AddFragment(void) {
+    ++num_fragments;
+  }
 
  private:
   friend class LocalControlFlowGraph;
@@ -289,6 +238,9 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   // over their instructions.
   GRANARY_INTERNAL_DEFINITION Instruction * const first;
   GRANARY_INTERNAL_DEFINITION Instruction * const last;
+
+  // Across how many fragments is this basic block scheduled to be encoded?
+  GRANARY_INTERNAL_DEFINITION int num_fragments;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBasicBlock);
 };

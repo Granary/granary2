@@ -52,8 +52,10 @@
 
 #ifdef GRANARY_DEBUG
 # define GRANARY_IF_DEBUG(...) __VA_ARGS__
+# define GRANARY_ASSERT(...) granary_break_on_fault_if(!(__VA_ARGS__))
 #else
 # define GRANARY_IF_DEBUG(...)
+# define GRANARY_ASSERT(...)
 #endif
 
 // Marks some pointers as being internal, and convertible to void for exports.

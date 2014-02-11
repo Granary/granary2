@@ -4,7 +4,7 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
-#include "granary/factory.h"
+#include "granary/cfg/factory.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -43,6 +43,7 @@ static Instruction *FindNextSuccessorInstruction(Instruction *instr) {
 }
 }  // namespace
 }  // namespace internal
+
 namespace detail {
 
 BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
@@ -52,14 +53,6 @@ BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
 
 void SuccessorBlockIterator::operator++(void) {
   cursor = internal::FindNextSuccessorInstruction(cursor);
-}
-
-void ForwardInstructionIterator::operator++(void) {
-  instr = instr->Next();
-}
-
-void BackwardInstructionIterator::operator++(void) {
-  instr = instr->Previous();
 }
 
 }  // namespace detail
@@ -97,7 +90,8 @@ AppProgramCounter InstrumentedBasicBlock::StartPC(void) const {
 DecodedBasicBlock::DecodedBasicBlock(GenericMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
-      last(new AnnotationInstruction(END_BASIC_BLOCK)) {
+      last(new AnnotationInstruction(END_BASIC_BLOCK)),
+      num_fragments(0) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
@@ -128,15 +122,14 @@ Instruction *DecodedBasicBlock::LastInstruction(void) const {
 }
 
 // Return an iterator for the instructions of the block.
-detail::ForwardInstructionIterator
-DecodedBasicBlock::Instructions(void) const {
-  return detail::ForwardInstructionIterator(first);
+ForwardInstructionIterator DecodedBasicBlock::Instructions(void) const {
+  return ForwardInstructionIterator(first);
 }
 
 // Return a reverse iterator for the instructions of the block.
-detail::BackwardInstructionIterator
+BackwardInstructionIterator
 DecodedBasicBlock::ReversedInstructions(void) const {
-  return detail::BackwardInstructionIterator(last);
+  return BackwardInstructionIterator(last);
 }
 
 // Free all of the instructions in the basic block. This is invoked by

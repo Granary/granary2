@@ -139,6 +139,20 @@ class LinkedListIterator {
     return curr;
   }
 
+  // Returns the last valid element from an iterator.
+  static T *Last(LinkedListIterator<T> elems) {
+    T *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline T *Last(T *elems_ptr) {
+    return Last(LinkedListIterator<T>(elems_ptr));
+  }
+
  private:
   T *curr;
 };

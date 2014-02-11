@@ -7,10 +7,10 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/factory.h"
 
 #include "granary/driver.h"
 #include "granary/environment.h"
-#include "granary/factory.h"
 #include "granary/metadata.h"
 #include "granary/mir.h"
 #include "granary/module.h"
@@ -104,12 +104,7 @@ static void ExtendInstructionList(BlockFactory *materializer,
   }
   auto cti = DynamicCast<ControlFlowInstruction *>(instr);
   if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-    auto annot_instr = new AnnotationInstruction(
-        cti->IsFunctionCall() ? FUNCTION_CALL_FALL_THROUGH :
-                                CONDITIONAL_FALL_THROUGH,
-        pc);
     instr->InsertAfter(mir::Jump(materializer, pc));
-    instr->InsertAfter(std::move(std::unique_ptr<Instruction>(annot_instr)));
   }
 }
 

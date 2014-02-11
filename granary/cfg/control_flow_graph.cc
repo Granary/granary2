@@ -8,28 +8,6 @@
 #include "granary/cfg/control_flow_graph.h"
 
 namespace granary {
-namespace detail {
-
-// Move the iterator to the next basic block.
-void BasicBlockIterator::operator++(void) {
-  BasicBlock *curr(cursor->list.GetNext(cursor));
-  BasicBlock *next(nullptr);
-
-  // Auto-clean up blocks while iterating over them.
-  for (; curr && curr->CanDestroy(); curr = next) {
-    next = curr->list.GetNext(curr);
-    curr->list.Unlink();
-    delete curr;
-  }
-  cursor = curr;
-}
-
-// Get a basic block out of the iterator.
-BasicBlock *BasicBlockIterator::operator*(void) const {
-  return cursor;
-}
-
-}  // namespace detail
 
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
@@ -66,13 +44,13 @@ DecodedBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-detail::BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
-  return detail::BasicBlockIterator(first_block);
+BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
+  return BasicBlockIterator(first_block);
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-detail::BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
-  return detail::BasicBlockIterator(first_new_block);
+BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
+  return BasicBlockIterator(first_new_block);
 }
 
 // Add a block to the CFG. If the block has successors that haven't yet been

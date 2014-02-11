@@ -61,11 +61,18 @@ enum InstructionAnnotation {
   END_BASIC_BLOCK,
   BEGIN_MIGHT_FAULT,
   END_MIGHT_FAULT,
+
+  // Used to bound atomic regions of code.
   BEGIN_DELAY_INTERRUPT,
   END_DELAY_INTERRUPT,
+
+  // Target of a branch instruction.
   LABEL,
-  CONDITIONAL_FALL_THROUGH,
-  FUNCTION_CALL_FALL_THROUGH
+
+  // When eliding function calls (for partial function inlining), we have a
+  // special annotation that takes the place of the function call instruction
+  // and is responsible for pushing the function's return address on the stack.
+  PUSH_FUNCTION_RETURN_ADDRESS
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -88,6 +95,12 @@ class AnnotationInstruction final : public Instruction {
   virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 #endif
+
+  // Returns true if this instruction is a label.
+  bool IsLabel(void) const;
+
+  // Returns true if this instruction is targeted by any branches.
+  bool IsBranchTarget(void) const;
 
   GRANARY_INTERNAL_DEFINITION const InstructionAnnotation annotation;
   GRANARY_INTERNAL_DEFINITION const void * const data;
@@ -181,6 +194,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   bool IsSystemCall(void) const;
   bool IsSystemReturn(void) const;
   bool IsJump(void) const;
+  bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 

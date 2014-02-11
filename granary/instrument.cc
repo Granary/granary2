@@ -6,11 +6,13 @@
 
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
+#include "granary/cfg/factory.h"
 
-#include "granary/factory.h"
 #include "granary/instrument.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
+
+#include "granary/code/assemble.h"
 
 namespace granary {
 namespace {
@@ -59,6 +61,10 @@ static void TestInstrument(void) {
   auto meta = new GenericMetaData(
       UnsafeCast<AppProgramCounter>(&InstrumentControlFlow));
   Instrument(&cfg, std::move(std::unique_ptr<GenericMetaData>(meta)));
+
+  auto list = ScheduleBlocks(&cfg);
+  Assemble(list);
+  GRANARY_UNUSED(list);
 }
 
 }  // namespace

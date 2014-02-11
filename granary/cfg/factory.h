@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_FACTORY_H_
-#define GRANARY_FACTORY_H_
+#ifndef GRANARY_CFG_FACTORY_H_
+#define GRANARY_CFG_FACTORY_H_
 
 #include "granary/base/base.h"
 #include "granary/base/bloom_filter.h"
@@ -120,4 +120,4 @@ class BlockFactory {
 
 }  // namespace granary
 
-#endif  // GRANARY_FACTORY_H_
+#endif  // GRANARY_CFG_FACTORY_H_

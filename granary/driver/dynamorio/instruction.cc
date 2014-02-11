@@ -81,10 +81,13 @@ bool DecodedInstruction::IsConditionalJump(void) const {
          (dynamorio::OP_jo_short <= op && op <= dynamorio::OP_jnle_short);
 }
 
-bool DecodedInstruction::IsJump(void) const {
+bool DecodedInstruction::IsUnconditionalJump(void) const {
   const unsigned op(instruction.opcode);
-  return (dynamorio::OP_jmp <= op && op <= dynamorio::OP_jmp_far_ind) ||
-         IsConditionalJump();
+  return dynamorio::OP_jmp <= op && op <= dynamorio::OP_jmp_far_ind;
+}
+
+bool DecodedInstruction::IsJump(void) const {
+  return IsUnconditionalJump() || IsConditionalJump();
 }
 
 bool DecodedInstruction::HasIndirectTarget(void) const {
@@ -133,6 +136,10 @@ bool ControlFlowInstruction::IsSystemReturn(void) const {
 
 bool ControlFlowInstruction::IsJump(void) const {
   return instruction->IsJump();
+}
+
+bool ControlFlowInstruction::IsUnconditionalJump(void) const {
+  return instruction->IsUnconditionalJump();
 }
 
 bool ControlFlowInstruction::IsConditionalJump(void) const {
