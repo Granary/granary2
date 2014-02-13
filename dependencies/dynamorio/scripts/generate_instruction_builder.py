@@ -28,7 +28,7 @@ def format_argument(opcode, arg_name):
   elif "n" == arg_name:  # NOPNBYTE
     return "unsigned n"
   elif "CC" in opcode and "op" == arg_name:  # JCC, JCC_SHORT, SETCC
-    return "int op"
+    return "unsigned op"
   else:  # The rest are plain old operands.
     return "dynamorio::opnd_t %s" % arg_name
 

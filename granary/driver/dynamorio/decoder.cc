@@ -55,6 +55,19 @@ bool InstructionDecoder::Encode(DecodedInstruction *instr,
   return nullptr != EncodeInternal(instr, pc);
 }
 
+namespace {
+static unsigned ConvertOpcode(unsigned opcode) {
+  if (opcode == dynamorio::OP_jmp_short) {
+    return dynamorio::OP_jmp;
+  } else if (dynamorio::OP_jo_short <= opcode &&
+             dynamorio::OP_jnle_short >= opcode) {
+    return opcode + (dynamorio::OP_jo - dynamorio::OP_jo_short);
+  } else {
+    return opcode;
+  }
+}
+}  // namespace
+
 // Decode an x86 instruction into a DynamoRIO instruction intermediate
 // representation.
 AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
@@ -88,7 +101,17 @@ AppProgramCounter InstructionDecoder::DecodeInternal(DecodedInstruction *instr,
     case dynamorio::OP_int3:
       return nullptr;
 
-    default: break;
+    default:
+      break;
+  }
+
+  // Change the opcode if necessary (e.g. convert 8-bit relative to 32-bit
+  // relative jumps). This is typically a pessimistic choice, but at this
+  // stage, we can't know whether or not the encoded target will be close
+  // enough to the encoded jump.
+  auto new_opcode = ConvertOpcode(raw_instr->opcode);
+  if (new_opcode != raw_instr->opcode) {
+    dynamorio::instr_set_opcode(raw_instr, new_opcode);
   }
 
   raw_instr->bytes = decoded_pc;

@@ -40,6 +40,7 @@ class DecodedInstruction {
   bool HasIndirectTarget(void) const;
 
   int Length(void) const;
+  bool IsNoOp(void) const;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedInstruction, {
     SHARED = true,

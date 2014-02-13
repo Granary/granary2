@@ -5,9 +5,9 @@
 #include "granary/base/options.h"
 #include "granary/base/string.h"
 
+#include "granary/compile.h"
 #include "granary/driver.h"
 #include "granary/init.h"
-#include "granary/instrument.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"
 #include "granary/module.h"
@@ -56,8 +56,8 @@ void Init(InitKind kind, const char *granary_path) {
   // Tell granary about loaded modules.
   InitModules(kind);
 
-  // Initialize the instrumentation system.
-  InitInstrumentation();
+  // Initialize the code cache.
+  InitCompiler();
 }
 
 

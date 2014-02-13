@@ -227,13 +227,13 @@ BasicBlock *BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       auto decoded_block = new DecodedBasicBlock(block->meta);
       block->meta = nullptr;  // Steal.
       ExtendInstructionList(
-          this, decoded_block->FirstInstruction(), block->StartPC());
+          this, decoded_block->FirstInstruction(), block->AppStartPC());
       cfg->AddBlock(decoded_block);
       return decoded_block;
     }
 
     case REQUEST_NATIVE:
-      return new NativeBasicBlock(block->StartPC());
+      return new NativeBasicBlock(block->AppStartPC());
   }
 }
 
@@ -256,7 +256,7 @@ void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
   auto decoded_block = new DecodedBasicBlock(meta);
   cfg->AddBlock(decoded_block);
   ExtendInstructionList(
-      this, decoded_block->FirstInstruction(), decoded_block->StartPC());
+      this, decoded_block->FirstInstruction(), decoded_block->AppStartPC());
 }
 
 // Create a new (future) basic block. This block is left as un-owned and

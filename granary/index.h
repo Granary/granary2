@@ -5,7 +5,7 @@
 #define GRANARY_INDEX_H_
 
 #ifndef GRANARY_INTERNAL
-# error "Indexing is only available to internal Granary code."
+# error "This code is internal to Granary."
 #endif
 
 namespace granary {

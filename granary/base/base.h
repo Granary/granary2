@@ -12,7 +12,11 @@
 # include <memory>
 # include <initializer_list>
 # include <type_traits>
+# ifndef __STDC_LIMIT_MACROS
+#   define __STDC_LIMIT_MACROS
+# endif
 # include <stdint.h>
+# include <climits>
 #endif
 
 // Useful for Valgrind-based debugging.

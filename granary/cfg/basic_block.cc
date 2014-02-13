@@ -82,16 +82,22 @@ InstrumentedBasicBlock::InstrumentedBasicBlock(GenericMetaData *meta_)
       native_pc(MetaDataCast<TranslationMetaData *>(meta)->native_pc) {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter InstrumentedBasicBlock::StartPC(void) const {
+AppProgramCounter InstrumentedBasicBlock::AppStartPC(void) const {
   return native_pc;
 }
+
+// Returns the starting PC of this basic block in the code cache.
+CacheProgramCounter InstrumentedBasicBlock::CacheStartPC(void) const {
+  return MetaDataCast<CacheMetaData *>(meta)->cache_pc;
+}
+
 
 // Initialize a decoded basic block.
 DecodedBasicBlock::DecodedBasicBlock(GenericMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
+      next(nullptr),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
-      last(new AnnotationInstruction(END_BASIC_BLOCK)),
-      num_fragments(0) {
+      last(new AnnotationInstruction(END_BASIC_BLOCK)) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
@@ -137,9 +143,10 @@ DecodedBasicBlock::ReversedInstructions(void) const {
 // interacts with the ownership model of basic blocks inside of basic block
 // lists.
 void DecodedBasicBlock::FreeInstructionList(void) {
-  for (Instruction *instr(first), *next(nullptr); instr; instr = next) {
-    next = instr->Next();
+  for (Instruction *instr(first), *next_instr(nullptr); instr;) {
+    next_instr = instr->Next();
     delete instr;
+    instr = next_instr;
   }
 }
 
@@ -150,7 +157,13 @@ DirectBasicBlock::DirectBasicBlock(GenericMetaData *meta_)
       materialize_strategy(REQUEST_LATER) {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter IndirectBasicBlock::StartPC(void) const {
+AppProgramCounter IndirectBasicBlock::AppStartPC(void) const {
+  granary_break_on_fault();
+  return nullptr;
+}
+
+// Returns the starting PC of this basic block in the code cache.
+CacheProgramCounter IndirectBasicBlock::CacheStartPC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
@@ -160,14 +173,26 @@ ReturnBasicBlock::ReturnBasicBlock(void)
     : BasicBlock() {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter ReturnBasicBlock::StartPC(void) const {
+AppProgramCounter ReturnBasicBlock::AppStartPC(void) const {
+  granary_break_on_fault();
+  return nullptr;
+}
+
+// Returns the starting PC of this basic block in the code cache.
+CacheProgramCounter ReturnBasicBlock::CacheStartPC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
 
 // Returns the starting PC of this basic block.
-AppProgramCounter NativeBasicBlock::StartPC(void) const {
+AppProgramCounter NativeBasicBlock::AppStartPC(void) const {
   return native_pc;
+}
+
+// Returns the starting PC of this basic block in the code cache.
+CacheProgramCounter NativeBasicBlock::CacheStartPC(void) const {
+  granary_break_on_fault();
+  return nullptr;
 }
 
 }  // namespace granary

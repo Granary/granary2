@@ -22,7 +22,7 @@ namespace granary {
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
-void *AllocatePages(int num) {
+void *AllocatePages(int num, MemoryIntent) {
   void *ret(mmap(
       nullptr,
       static_cast<size_t>(GRANARY_ARCH_PAGE_FRAME_SIZE * num),
@@ -35,18 +35,18 @@ void *AllocatePages(int num) {
 }
 
 // Frees `num` pages back to the OS.
-void FreePages(void *addr, int num) {
+void FreePages(void *addr, int num, MemoryIntent) {
   munmap(addr, static_cast<size_t>(GRANARY_ARCH_PAGE_FRAME_SIZE * num));
 }
 
 // Changes the memory protection of some pages.
 void ProtectPages(void *addr, int num, MemoryProtection prot) {
   int prot_bits(0);
-  if (MemoryProtection::MEMORY_EXECUTABLE == prot) {
+  if (MemoryProtection::EXECUTABLE == prot) {
     prot_bits = PROT_EXEC;
-  } else if (MemoryProtection::MEMORY_READ_ONLY == prot) {
+  } else if (MemoryProtection::READ_ONLY == prot) {
     prot_bits = PROT_READ;
-  } else if (MemoryProtection::MEMORY_READ_WRITE == prot) {
+  } else if (MemoryProtection::READ_WRITE == prot) {
     prot_bits = PROT_READ | PROT_WRITE;
   } else {
     prot_bits = 0; //  MEMORY_INACCESSIBLE

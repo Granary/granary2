@@ -37,14 +37,14 @@ std::unique_ptr<Instruction> UnsafeHyperJump(AppProgramCounter target_pc) {
 std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
   driver::InstructionBuilder builder;
   return std::unique_ptr<Instruction>(new ControlFlowInstruction(builder.CALL(
-      dynamorio::opnd_create_pc(target_block->StartPC())), target_block));
+      dynamorio::opnd_create_pc(target_block->AppStartPC())), target_block));
 }
 
 // Jump to an existing basic block.
 std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
   driver::InstructionBuilder builder;
   return std::unique_ptr<Instruction>(new ControlFlowInstruction(builder.JMP(
-      dynamorio::opnd_create_pc(target_block->StartPC())), target_block));
+      dynamorio::opnd_create_pc(target_block->AppStartPC())), target_block));
 }
 
 // Materialize a future basic block and insert a direct jump to that

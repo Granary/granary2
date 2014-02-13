@@ -3,12 +3,19 @@
 #ifndef GRANARY_CODE_ASSEMBLE_H_
 #define GRANARY_CODE_ASSEMBLE_H_
 
-#include "granary/code/fragment.h"
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
 
 namespace granary {
 
-// Assemble a fragment list.
-void Assemble(FragmentList fragment_list);
+// Forward declarations.
+class LocalControlFlowGraph;
+class CodeAllocator;
+
+// Assemble the local control-flow graph.
+void Assemble(LocalControlFlowGraph *cfg, CodeAllocator *cache,
+              CodeAllocator *stub);
 
 }  // namespace granary
 

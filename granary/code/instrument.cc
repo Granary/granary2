@@ -8,11 +8,10 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/factory.h"
 
-#include "granary/instrument.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
-#include "granary/code/assemble.h"
+#include "granary/code/instrument.h"
 
 namespace granary {
 namespace {
@@ -55,36 +54,14 @@ static void InstrumentBlock(LocalControlFlowGraph *cfg) {
   }
 }
 
-// Test the instrumentation system.
-static void TestInstrument(void) {
-  LocalControlFlowGraph cfg;
-  auto meta = new GenericMetaData(
-      UnsafeCast<AppProgramCounter>(&InstrumentControlFlow));
-  Instrument(&cfg, std::move(std::unique_ptr<GenericMetaData>(meta)));
-
-  auto list = ScheduleBlocks(&cfg);
-  Assemble(list);
-  GRANARY_UNUSED(list);
-}
-
 }  // namespace
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
-void Instrument(LocalControlFlowGraph *cfg,
-                std::unique_ptr<GenericMetaData> meta) {
-  InstrumentControlFlow(cfg, meta.release());
+void Instrument(LocalControlFlowGraph *cfg, GenericMetaData *meta) {
+  InstrumentControlFlow(cfg, meta);
   InstrumentBlocks(cfg);
   InstrumentBlock(cfg);
-}
-
-// Initialize the instrumentation system. This goes and checks if any tools
-// are defined that might actually want to instrument code in one way or
-// another.
-void InitInstrumentation(void) {
-
-
-  TestInstrument();  // TODO(pag): Remove me.
 }
 
 }  // namespace granary

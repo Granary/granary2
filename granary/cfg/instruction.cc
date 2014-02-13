@@ -36,6 +36,12 @@ int Instruction::Length(void) const {
   return 0;
 }
 
+// Pretend to encode this instruction at address `cache_pc`.
+CacheProgramCounter Instruction::StageEncode(CacheProgramCounter cache_pc_) {
+  cache_pc = cache_pc_;
+  return cache_pc + this->Length();
+}
+
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
   Instruction *instr(that.release());
   list.SetPrevious(this, instr);
@@ -99,6 +105,52 @@ NativeInstruction::~NativeInstruction(void) {}
 // Get the length of the instruction.
 int NativeInstruction::Length(void) const {
   return instruction->Length();
+}
+
+// Returns true if this instruction is essentially a no-op, i.e. it does
+// nothing and has no observable side-effects.
+bool NativeInstruction::IsNoOp(void) const {
+  return instruction->IsNoOp();
+}
+
+bool NativeInstruction::IsFunctionCall(void) const {
+  return instruction->IsFunctionCall();
+}
+
+bool NativeInstruction::IsFunctionReturn(void) const {
+  return instruction->IsFunctionReturn();
+}
+
+bool NativeInstruction::IsInterruptCall(void) const {
+  return instruction->IsInterruptCall();
+}
+
+bool NativeInstruction::IsInterruptReturn(void) const {
+  return instruction->IsInterruptReturn();
+}
+
+bool NativeInstruction::IsSystemCall(void) const {
+  return instruction->IsSystemCall();
+}
+
+bool NativeInstruction::IsSystemReturn(void) const {
+  return instruction->IsSystemReturn();
+}
+
+bool NativeInstruction::IsJump(void) const {
+  return instruction->IsJump();
+}
+
+bool NativeInstruction::IsUnconditionalJump(void) const {
+  return instruction->IsUnconditionalJump();
+}
+
+bool NativeInstruction::IsConditionalJump(void) const {
+  return instruction->IsConditionalJump();
+}
+
+bool NativeInstruction::HasIndirectTarget(void) const {
+  return instruction->HasIndirectTarget();
 }
 
 // Return the targeted instruction of this branch.

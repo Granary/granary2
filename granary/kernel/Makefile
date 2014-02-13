@@ -37,5 +37,5 @@ $(GRANARY_SHIPPED_FILE): $(GRANARY_INTERMEDIATE_FILE).ll
 		$(GRANARY_BIN_DIR)/.$(GRANARY_NAME)_merged.o_shipped.cmd
 
 all: $(GRANARY_OBJS)
-	@cp $(GRANARY_SRC_DIR)/granary/kernel/entry.c \
+	@cp $(GRANARY_SRC_DIR)/granary/kernel/linux/entry.c \
 		$(GRANARY_BIN_DIR)/granary/kernel

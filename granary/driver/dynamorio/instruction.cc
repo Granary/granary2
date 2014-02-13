@@ -4,7 +4,6 @@
 
 #include "granary/base/string.h"
 #include "granary/base/types.h"
-#include "granary/cfg/instruction.h"
 #include "granary/driver/dynamorio/decoder.h"
 #include "granary/driver/dynamorio/instruction.h"
 
@@ -108,46 +107,10 @@ int DecodedInstruction::Length(void) const {
   return dynamorio::instr_length(&decoder, &instruction);
 }
 
+// Return the (current) length of the instruction.
+bool DecodedInstruction::IsNoOp(void) const {
+  return dynamorio::instr_is_nop(&instruction);
+}
+
 }  // namespace driver
-
-bool ControlFlowInstruction::IsFunctionCall(void) const {
-  return instruction->IsFunctionCall();
-}
-
-bool ControlFlowInstruction::IsFunctionReturn(void) const {
-  return instruction->IsFunctionReturn();
-}
-
-bool ControlFlowInstruction::IsInterruptCall(void) const {
-  return instruction->IsInterruptCall();
-}
-
-bool ControlFlowInstruction::IsInterruptReturn(void) const {
-  return instruction->IsInterruptReturn();
-}
-
-bool ControlFlowInstruction::IsSystemCall(void) const {
-  return instruction->IsSystemCall();
-}
-
-bool ControlFlowInstruction::IsSystemReturn(void) const {
-  return instruction->IsSystemReturn();
-}
-
-bool ControlFlowInstruction::IsJump(void) const {
-  return instruction->IsJump();
-}
-
-bool ControlFlowInstruction::IsUnconditionalJump(void) const {
-  return instruction->IsUnconditionalJump();
-}
-
-bool ControlFlowInstruction::IsConditionalJump(void) const {
-  return instruction->IsConditionalJump();
-}
-
-bool ControlFlowInstruction::HasIndirectTarget(void) const {
-  return instruction->HasIndirectTarget();
-}
-
 }  // namespace granary

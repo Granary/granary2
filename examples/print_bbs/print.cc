@@ -31,7 +31,7 @@ class BBPrinter : public Tool {
 
   // Instrument a decoded basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    auto start_pc = bb->StartPC();
+    auto start_pc = bb->AppStartPC();
     if (!FLAG_print_bb_module) {
       Log(kStream, "%p\n", start_pc);
     } else {
@@ -51,7 +51,7 @@ class BBPrinter : public Tool {
         } else if (IsA<ReturnBasicBlock *>(succ.block)) {
           Log(kStream, "   return\n");
         } else {
-          Log(kStream, "-> %p\n", succ.block->StartPC());
+          Log(kStream, "-> %p\n", succ.block->AppStartPC());
         }
       }
     }

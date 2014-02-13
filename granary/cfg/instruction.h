@@ -7,6 +7,7 @@
 #include "granary/base/cast.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
+#include "granary/base/types.h"
 
 namespace granary {
 
@@ -25,7 +26,8 @@ class Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
-      : list() {}
+      : list(),
+        cache_pc(nullptr) {}
 
   virtual ~Instruction(void) = default;
 
@@ -34,6 +36,16 @@ class Instruction {
   Instruction *Next(void);
   Instruction *Previous(void);
   virtual int Length(void) const;
+
+  // Pretend to encode this instruction at address `cache_pc`.
+  GRANARY_INTERNAL_DEFINITION
+  CacheProgramCounter StageEncode(CacheProgramCounter cache_pc_);
+
+  // Return the encoded location of this instruction.
+  GRANARY_INTERNAL_DEFINITION
+  inline CacheProgramCounter CacheStartPC(void) const {
+    return cache_pc;
+  }
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
@@ -50,6 +62,9 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION ListHead list;
 
  private:
+  // Where has this instruction been encoded?
+  GRANARY_INTERNAL_DEFINITION CacheProgramCounter cache_pc;
+
   GRANARY_IF_EXTERNAL( Instruction(void) = delete; )
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
@@ -127,6 +142,22 @@ class NativeInstruction : public Instruction {
 
   virtual int Length(void) const;
 
+  // Returns true if this instruction is essentially a no-op, i.e. it does
+  // nothing and has no observable side-effects.
+  bool IsNoOp(void) const;
+
+  // Driver-specific implementations.
+  bool IsFunctionCall(void) const;
+  bool IsFunctionReturn(void) const;
+  bool IsInterruptCall(void) const;
+  bool IsInterruptReturn(void) const;
+  bool IsSystemCall(void) const;
+  bool IsSystemReturn(void) const;
+  bool IsJump(void) const;
+  bool IsUnconditionalJump(void) const;
+  bool IsConditionalJump(void) const;
+  bool HasIndirectTarget(void) const;
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
@@ -185,18 +216,6 @@ class ControlFlowInstruction final : public NativeInstruction {
   GRANARY_INTERNAL_DEFINITION
   ControlFlowInstruction(driver::DecodedInstruction *instruction_,
                          BasicBlock *target_);
-
-  // Driver-specific implementations.
-  bool IsFunctionCall(void) const;
-  bool IsFunctionReturn(void) const;
-  bool IsInterruptCall(void) const;
-  bool IsInterruptReturn(void) const;
-  bool IsSystemCall(void) const;
-  bool IsSystemReturn(void) const;
-  bool IsJump(void) const;
-  bool IsUnconditionalJump(void) const;
-  bool IsConditionalJump(void) const;
-  bool HasIndirectTarget(void) const;
 
   // Return the target block of this CFI.
   BasicBlock *TargetBlock(void) const;

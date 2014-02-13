@@ -48,9 +48,6 @@ struct UnifiableMetaData {
   UnificationStatus CanUnifyWith(const T *that) const;
 };
 
-// TODO(pag): How to eventually handle static instrumentation with mutable
-//            meta-data?
-
 // Meta-data that Granary maintains about all basic blocks. This meta-data
 // guides the translation process.
 //
@@ -72,6 +69,27 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
   // Compare two translation meta-data objects for equality.
   bool Equals(const TranslationMetaData *meta) const;
 } __attribute__((packed));
+
+#ifdef GRANARY_INTERNAL
+// Meta-data that Granary maintains about all basic blocks that are committed to
+// the code cache. This is meta-data is private to Granary and therefore not
+// exposed (directly) to tools.
+struct CacheMetaData : MutableMetaData {
+
+  // Where this block is located in the code cache.
+  CacheProgramCounter cache_pc;
+
+  // TODO(pag): Encoded size?
+  // TODO(pag): Interrupt delay regions? Again: make this a command-line
+  //            option, that registers separate meta-data.
+  // TODO(pag): Cache PCs to native PCs? If doing this, perhaps make it a
+  //            separate kind of meta-data that is only registered if a certain
+  //            command-line option is specified. That way, the overhead of
+  //            recording the extra info is reduced. Also, consider a delta
+  //            encoding, (e.g. https://docs.google.com/document/d/
+  //            1lyPIbmsYbXnpNj57a261hgOYVpNRcgydurVQIyZOz_o/pub).
+};
+#endif  // GRANARY_INTERNAL
 
 namespace detail {
 namespace meta {

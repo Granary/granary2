@@ -221,6 +221,8 @@ void GenericMetaData::operator delete(void *address) {
 // determines the runtime layout of the packed meta-data structure.
 void InitMetaData(void) {
   RegisterMetaData<TranslationMetaData>();
+  RegisterMetaData<CacheMetaData>();
+
   CAN_REGISTER_META = false;
 
   for (auto meta : MetaDataInfos()) {
