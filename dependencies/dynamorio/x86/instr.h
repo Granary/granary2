@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2013 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2014 Google, Inc.  All rights reserved.
  * Copyright (c) 2000-2010 VMware, Inc.  All rights reserved.
  * **********************************************************/
 
@@ -234,7 +234,7 @@ extern const reg_id_t dr_reg_fixer[];
 # define DR_REG_STOP_GPR DR_REG_XDI /**< End of general register enum values */
 #endif
 /**< Number of general registers */
-#define DR_NUM_GPR_REGS (DR_REG_STOP_GPR - DR_REG_START_GPR)
+#define DR_NUM_GPR_REGS (DR_REG_STOP_GPR - DR_REG_START_GPR + 1)
 #define DR_REG_START_64    DR_REG_RAX  /**< Start of 64-bit general register enum values */
 #define DR_REG_STOP_64     DR_REG_R15  /**< End of 64-bit general register enum values */  
 #define DR_REG_START_32    DR_REG_EAX  /**< Start of 32-bit general register enum values */
@@ -996,6 +996,14 @@ opnd_is_far_base_disp(opnd_t opnd);
 
 DR_API
 /** 
+ * Returns true iff \p opnd uses vector indexing via a VSIB byte.  This
+ * memory addressing form was introduced in Intel AVX2.
+ */
+bool
+opnd_is_vsib(opnd_t opnd);
+
+DR_API
+/** 
  * Returns true iff \p opnd is a (near or far) absolute address operand.
  * Returns true for both base-disp operands with no base or index and
  * 64-bit non-base-disp absolute address operands. 
@@ -1646,6 +1654,11 @@ DR_API
  * or typical fs: or gs: references on Linux.  For far addresses the
  * calling thread's segment selector is used.
  * \p mc->flags must include DR_MC_CONTROL and DR_MC_INTEGER.
+ *
+ * \note This routine does not support vector addressing (via VSIB,
+ * introduced in AVX2).  Use instr_compute_address(),
+ * instr_compute_address_ex(), or instr_compute_address_ex_pos()
+ * instead.
  */
 app_pc
 opnd_compute_address(opnd_t opnd, dr_mcontext_t *mc);
@@ -2497,7 +2510,11 @@ DR_API
  * Assumes that \p instr's raw bits are valid.
  * Returns a pointer to \p instr's raw bits.
  * \note A freshly-decoded instruction has valid raw bits that point to the
- * address from which it was decoded.
+ * address from which it was decoded.  However, for instructions presented
+ * in the basic block or trace events, use instr_get_app_pc() to retrieve
+ * the corresponding application address, as the raw bits will not be set
+ * for instructions added after decoding, and may point to a different location
+ * for insructions that have been modified.
  */
 byte *
 instr_get_raw_bits(instr_t *instr);
@@ -2954,6 +2971,8 @@ DR_API
  * when the operands are considered in this order: destinations and then
  * sources.  The address is computed using the passed-in registers.
  * \p mc->flags must include DR_MC_CONTROL and DR_MC_INTEGER.
+ * For instructions that use vector addressing (VSIB, introduced in AVX2),
+ * mc->flags must additionally include DR_MC_MULTIMEDIA.
  */
 app_pc
 instr_compute_address(instr_t *instr, dr_mcontext_t *mc);
@@ -2973,6 +2992,8 @@ DR_API
  * write is returned in \p is_write.  Either or both OUT variables can
  * be NULL.
  * \p mc->flags must include DR_MC_CONTROL and DR_MC_INTEGER.
+ * For instructions that use vector addressing (VSIB, introduced in AVX2),
+ * mc->flags must additionally include DR_MC_MULTIMEDIA.
  */
 bool
 instr_compute_address_ex(instr_t *instr, dr_mcontext_t *mc, uint index,
@@ -3000,6 +3021,8 @@ DR_API
  * Calculates the size, in bytes, of the memory read or write of \p instr.
  * If \p instr does not reference memory, or is invalid, returns 0.
  * If \p instr is a repeated string instruction, considers only one iteration.
+ * If \p instr uses vector addressing (VSIB, introduced in AVX2), considers
+ * only the size of each separate memory access.
  */
 uint
 instr_memory_reference_size(instr_t *instr);
@@ -3670,6 +3693,9 @@ opnd_t opnd_create_dcontext_field_byte(dcontext_t *dcontext, int offs);
 opnd_t opnd_create_dcontext_field_sz(dcontext_t *dcontext, int offs, opnd_size_t sz);
 instr_t * instr_create_save_to_dcontext(dcontext_t *dcontext, reg_id_t reg, int offs);
 instr_t * instr_create_save_immed_to_dcontext(dcontext_t *dcontext, int immed, int offs);
+instr_t *
+instr_create_save_immed_to_dc_via_reg(dcontext_t *dcontext, reg_id_t basereg,
+                                      int offs, ptr_int_t immed, opnd_size_t sz);
 instr_t * instr_create_restore_from_dcontext(dcontext_t *dcontext, reg_id_t reg, int offs);
 
 /* basereg, if left as REG_NULL, is assumed to be xdi (xsi for upcontext) */
@@ -3801,6 +3827,8 @@ enum {
     RAW_PREFIX_jcc_not_taken   = 0x2e,
     RAW_PREFIX_jcc_taken       = 0x3e,
     RAW_PREFIX_lock            = 0xf0,
+    RAW_PREFIX_xacquire        = 0xf2,
+    RAW_PREFIX_xrelease        = 0xf3,
 };
 
 enum { /* FIXME: vs RAW_OPCODE_* enum */
@@ -3886,7 +3914,11 @@ enum {
     NUM_REGPARM          = 0,
     REGPARM_MINSTACK     = 0,
     REDZONE_SIZE         = 0,
+# ifdef MACOS
+    REGPARM_END_ALIGN    = 16,
+# else
     REGPARM_END_ALIGN    = sizeof(XSP_SZ),
+# endif
 #endif
 };
 extern const reg_id_t regparms[];
@@ -4136,7 +4168,7 @@ enum op_code_type {
 /* 195 */     OP_movzx,        /* &second_byte[0xb7], */ /**< movzx opcode */
 /* 196 */     OP_ud2b,         /* &second_byte[0xb9], */ /**< ud2b opcode */
 /* 197 */     OP_btc,          /* &second_byte[0xbb], */ /**< btc opcode */
-/* 198 */     OP_bsf,          /* &second_byte[0xbc], */ /**< bsf opcode */
+/* 198 */     OP_bsf,          /* &prefix_extensions[140][0], */ /**< bsf opcode */
 /* 199 */     OP_bsr,          /* &prefix_extensions[136][0], */ /**< bsr opcode */
 /* 200 */     OP_movsx,        /* &second_byte[0xbf], */ /**< movsx opcode */
 /* 201 */     OP_xadd,         /* &second_byte[0xc1], */ /**< xadd opcode */
@@ -4495,7 +4527,7 @@ enum op_code_type {
 /* 538 */     OP_palignr,        /* &prefix_extensions[133][0], */ /**< palignr opcode */
 
     /* SSE4 (incl AMD (SSE4A) and Intel-specific (SSE4.1, SSE4.2) extensions */
-/* 539 */     OP_popcnt,         /* &prefix_extensions[140][1], */ /**< popcnt opcode */
+/* 539 */     OP_popcnt,         /* &second_byte[0xb8], */ /**< popcnt opcode */
 /* 540 */     OP_movntss,        /* &prefix_extensions[11][1], */ /**< movntss opcode */
 /* 541 */     OP_movntsd,        /* &prefix_extensions[11][3], */ /**< movntsd opcode */
 /* 542 */     OP_extrq,          /* &prefix_extensions[134][2], */ /**< extrq opcode */
@@ -4508,7 +4540,7 @@ enum op_code_type {
 /* 549 */     OP_pmovsxbw,       /* &vex_extensions[4][0], */ /**< pmovsxbw opcode */
 /* 550 */     OP_pmovsxbd,       /* &vex_extensions[5][0], */ /**< pmovsxbd opcode */
 /* 551 */     OP_pmovsxbq,       /* &vex_extensions[6][0], */ /**< pmovsxbq opcode */
-/* 552 */     OP_pmovsxdw,       /* &vex_extensions[7][0], */ /**< pmovsxdw opcode */
+/* 552 */     OP_pmovsxwd,       /* &vex_extensions[7][0], */ /**< pmovsxwd opcode */
 /* 553 */     OP_pmovsxwq,       /* &vex_extensions[8][0], */ /**< pmovsxwq opcode */
 /* 554 */     OP_pmovsxdq,       /* &vex_extensions[9][0], */ /**< pmovsxdq opcode */
 /* 555 */     OP_pmuldq,         /* &vex_extensions[10][0], */ /**< pmuldq opcode */
@@ -4518,7 +4550,7 @@ enum op_code_type {
 /* 559 */     OP_pmovzxbw,       /* &vex_extensions[14][0], */ /**< pmovzxbw opcode */
 /* 560 */     OP_pmovzxbd,       /* &vex_extensions[15][0], */ /**< pmovzxbd opcode */
 /* 561 */     OP_pmovzxbq,       /* &vex_extensions[16][0], */ /**< pmovzxbq opcode */
-/* 562 */     OP_pmovzxdw,       /* &vex_extensions[17][0], */ /**< pmovzxdw opcode */
+/* 562 */     OP_pmovzxwd,       /* &vex_extensions[17][0], */ /**< pmovzxwd opcode */
 /* 563 */     OP_pmovzxwq,       /* &vex_extensions[18][0], */ /**< pmovzxwq opcode */
 /* 564 */     OP_pmovzxdq,       /* &vex_extensions[19][0], */ /**< pmovzxdq opcode */
 /* 565 */     OP_pcmpgtq,        /* &vex_extensions[20][0], */ /**< pcmpgtq opcode */
@@ -4563,7 +4595,7 @@ enum op_code_type {
 /* 600 */     OP_vmlaunch,       /* &rm_extensions[0][2], */ /**< vmlaunch opcode */
 /* 601 */     OP_vmresume,       /* &rm_extensions[0][3], */ /**< vmresume opcode */
 /* 602 */     OP_vmxoff,         /* &rm_extensions[0][4], */ /**< vmxoff opcode */
-/* 603 */     OP_vmptrst,        /* &extensions[16][7], */ /**< vmptrst opcode */
+/* 603 */     OP_vmptrst,        /* &mod_extensions[13][0], */ /**< vmptrst opcode */
 /* 604 */     OP_vmptrld,        /* &prefix_extensions[137][0], */ /**< vmptrld opcode */
 /* 605 */     OP_vmxon,          /* &prefix_extensions[137][1], */ /**< vmxon opcode */
 /* 606 */     OP_vmclear,        /* &prefix_extensions[137][2], */ /**< vmclear opcode */
@@ -4799,7 +4831,7 @@ enum op_code_type {
 /* 821 */     OP_vpmovsxbw,      /* &vex_extensions[ 4][1], */ /**< vpmovsxbw opcode */
 /* 822 */     OP_vpmovsxbd,      /* &vex_extensions[ 5][1], */ /**< vpmovsxbd opcode */
 /* 823 */     OP_vpmovsxbq,      /* &vex_extensions[ 6][1], */ /**< vpmovsxbq opcode */
-/* 824 */     OP_vpmovsxdw,      /* &vex_extensions[ 7][1], */ /**< vpmovsxdw opcode */
+/* 824 */     OP_vpmovsxwd,      /* &vex_extensions[ 7][1], */ /**< vpmovsxwd opcode */
 /* 825 */     OP_vpmovsxwq,      /* &vex_extensions[ 8][1], */ /**< vpmovsxwq opcode */
 /* 826 */     OP_vpmovsxdq,      /* &vex_extensions[ 9][1], */ /**< vpmovsxdq opcode */
 /* 827 */     OP_vpmuldq,        /* &vex_extensions[10][1], */ /**< vpmuldq opcode */
@@ -4809,7 +4841,7 @@ enum op_code_type {
 /* 831 */     OP_vpmovzxbw,      /* &vex_extensions[14][1], */ /**< vpmovzxbw opcode */
 /* 832 */     OP_vpmovzxbd,      /* &vex_extensions[15][1], */ /**< vpmovzxbd opcode */
 /* 833 */     OP_vpmovzxbq,      /* &vex_extensions[16][1], */ /**< vpmovzxbq opcode */
-/* 834 */     OP_vpmovzxdw,      /* &vex_extensions[17][1], */ /**< vpmovzxdw opcode */
+/* 834 */     OP_vpmovzxwd,      /* &vex_extensions[17][1], */ /**< vpmovzxwd opcode */
 /* 835 */     OP_vpmovzxwq,      /* &vex_extensions[18][1], */ /**< vpmovzxwq opcode */
 /* 836 */     OP_vpmovzxdq,      /* &vex_extensions[19][1], */ /**< vpmovzxdq opcode */
 /* 837 */     OP_vpcmpgtq,       /* &vex_extensions[20][1], */ /**< vpcmpgtq opcode */
@@ -4857,15 +4889,17 @@ enum op_code_type {
 /* 879 */     OP_vldmxcsr,       /* &vex_extensions[61][1], */ /**< vldmxcsr opcode */
 /* 880 */     OP_vstmxcsr,       /* &vex_extensions[62][1], */ /**< vstmxcsr opcode */
 /* 881 */     OP_vbroadcastss,   /* &vex_extensions[64][1], */ /**< vbroadcastss opcode */
-/* 882 */     OP_vbroadcastsd,   /* &vex_L_extensions[1][2], */ /**< vbroadcastsd opcode */
-/* 883 */     OP_vbroadcastf128, /* &vex_L_extensions[2][2], */ /**< vbroadcastf128 opcode */
+/* 882 */     OP_vbroadcastsd,   /* &vex_extensions[65][1], */ /**< vbroadcastsd opcode */
+/* 883 */     OP_vbroadcastf128, /* &vex_extensions[66][1], */ /**< vbroadcastf128 opcode */
 /* 884 */     OP_vmaskmovps,     /* &vex_extensions[67][1], */ /**< vmaskmovps opcode */
 /* 885 */     OP_vmaskmovpd,     /* &vex_extensions[68][1], */ /**< vmaskmovpd opcode */
 /* 886 */     OP_vpermilps,      /* &vex_extensions[71][1], */ /**< vpermilps opcode */
 /* 887 */     OP_vpermilpd,      /* &vex_extensions[72][1], */ /**< vpermilpd opcode */
 /* 888 */     OP_vperm2f128,     /* &vex_extensions[73][1], */ /**< vperm2f128 opcode */
 /* 889 */     OP_vinsertf128,    /* &vex_extensions[74][1], */ /**< vinsertf128 opcode */
-/* 890 */     OP_vextractf128,   /* &vex_L_extensions[3][2], */ /**< vextractf128 opcode */
+/* 890 */     OP_vextractf128,   /* &vex_extensions[75][1], */ /**< vextractf128 opcode */
+
+    /* added in Ivy Bridge I believe, and covered by F16C cpuid flag */
 /* 891 */     OP_vcvtph2ps,      /* &vex_extensions[63][1], */ /**< vcvtph2ps opcode */
 /* 892 */     OP_vcvtps2ph,      /* &vex_extensions[76][1], */ /**< vcvtps2ph opcode */
 
@@ -4940,10 +4974,174 @@ enum op_code_type {
 /* 958 */     OP_xrstor64,       /* &rex_w_extensions[3][1], */ /**< xrstor64 opcode */
 /* 959 */     OP_xsaveopt64,     /* &rex_w_extensions[4][1], */ /**< xsaveopt64 opcode */
 
+    /* added in Intel Ivy Bridge: RDRAND and FSGSBASE cpuid flags */
+/* 960 */     OP_rdrand,         /* &mod_extensions[12][1], */ /**< rdrand opcode */
+/* 961 */     OP_rdfsbase,       /* &mod_extensions[14][1], */ /**< rdfsbase opcode */
+/* 962 */     OP_rdgsbase,       /* &mod_extensions[15][1], */ /**< rdgsbase opcode */
+/* 963 */     OP_wrfsbase,       /* &mod_extensions[16][1], */ /**< wrfsbase opcode */
+/* 964 */     OP_wrgsbase,       /* &mod_extensions[17][1], */ /**< wrgsbase opcode */
+
+    /* coming in the future but adding now since enough details are known */
+/* 965 */     OP_rdseed,         /* &mod_extensions[13][1], */ /**< rdseed opcode */
+
+    /* AMD FMA4 */
+/* 966 */     OP_vfmaddsubps,    /* &vex_W_extensions[30][0], */ /**< vfmaddsubps opcode */
+/* 967 */     OP_vfmaddsubpd,    /* &vex_W_extensions[31][0], */ /**< vfmaddsubpd opcode */
+/* 968 */     OP_vfmsubaddps,    /* &vex_W_extensions[32][0], */ /**< vfmsubaddps opcode */
+/* 969 */     OP_vfmsubaddpd,    /* &vex_W_extensions[33][0], */ /**< vfmsubaddpd opcode */
+/* 970 */     OP_vfmaddps,       /* &vex_W_extensions[34][0], */ /**< vfmaddps opcode */
+/* 971 */     OP_vfmaddpd,       /* &vex_W_extensions[35][0], */ /**< vfmaddpd opcode */
+/* 972 */     OP_vfmaddss,       /* &vex_W_extensions[36][0], */ /**< vfmaddss opcode */
+/* 973 */     OP_vfmaddsd,       /* &vex_W_extensions[37][0], */ /**< vfmaddsd opcode */
+/* 974 */     OP_vfmsubps,       /* &vex_W_extensions[38][0], */ /**< vfmsubps opcode */
+/* 975 */     OP_vfmsubpd,       /* &vex_W_extensions[39][0], */ /**< vfmsubpd opcode */
+/* 976 */     OP_vfmsubss,       /* &vex_W_extensions[40][0], */ /**< vfmsubss opcode */
+/* 977 */     OP_vfmsubsd,       /* &vex_W_extensions[41][0], */ /**< vfmsubsd opcode */
+/* 978 */     OP_vfnmaddps,      /* &vex_W_extensions[42][0], */ /**< vfnmaddps opcode */
+/* 979 */     OP_vfnmaddpd,      /* &vex_W_extensions[43][0], */ /**< vfnmaddpd opcode */
+/* 980 */     OP_vfnmaddss,      /* &vex_W_extensions[44][0], */ /**< vfnmaddss opcode */
+/* 981 */     OP_vfnmaddsd,      /* &vex_W_extensions[45][0], */ /**< vfnmaddsd opcode */
+/* 982 */     OP_vfnmsubps,      /* &vex_W_extensions[46][0], */ /**< vfnmsubps opcode */
+/* 983 */     OP_vfnmsubpd,      /* &vex_W_extensions[47][0], */ /**< vfnmsubpd opcode */
+/* 984 */     OP_vfnmsubss,      /* &vex_W_extensions[48][0], */ /**< vfnmsubss opcode */
+/* 985 */     OP_vfnmsubsd,      /* &vex_W_extensions[49][0], */ /**< vfnmsubsd opcode */
+
+    /* AMD XOP */
+/* 986 */     OP_vfrczps,        /* &xop_extensions[27], */ /**< vfrczps opcode */
+/* 987 */     OP_vfrczpd,        /* &xop_extensions[28], */ /**< vfrczpd opcode */
+/* 988 */     OP_vfrczss,        /* &xop_extensions[29], */ /**< vfrczss opcode */
+/* 989 */     OP_vfrczsd,        /* &xop_extensions[30], */ /**< vfrczsd opcode */
+/* 990 */     OP_vpcmov,         /* &vex_W_extensions[50][0], */ /**< vpcmov opcode */
+/* 991 */     OP_vpcomb,         /* &xop_extensions[19], */ /**< vpcomb opcode */
+/* 992 */     OP_vpcomw,         /* &xop_extensions[20], */ /**< vpcomw opcode */
+/* 993 */     OP_vpcomd,         /* &xop_extensions[21], */ /**< vpcomd opcode */
+/* 994 */     OP_vpcomq,         /* &xop_extensions[22], */ /**< vpcomq opcode */
+/* 995 */     OP_vpcomub,        /* &xop_extensions[23], */ /**< vpcomub opcode */
+/* 996 */     OP_vpcomuw,        /* &xop_extensions[24], */ /**< vpcomuw opcode */
+/* 997 */     OP_vpcomud,        /* &xop_extensions[25], */ /**< vpcomud opcode */
+/* 998 */     OP_vpcomuq,        /* &xop_extensions[26], */ /**< vpcomuq opcode */
+/* 999 */     OP_vpermil2pd,     /* &vex_W_extensions[65][0], */ /**< vpermil2pd opcode */
+/* 1000 */     OP_vpermil2ps,     /* &vex_W_extensions[64][0], */ /**< vpermil2ps opcode */
+/* 1001 */     OP_vphaddbw,       /* &xop_extensions[43], */ /**< vphaddbw opcode */
+/* 1002 */     OP_vphaddbd,       /* &xop_extensions[44], */ /**< vphaddbd opcode */
+/* 1003 */     OP_vphaddbq,       /* &xop_extensions[45], */ /**< vphaddbq opcode */
+/* 1004 */     OP_vphaddwd,       /* &xop_extensions[46], */ /**< vphaddwd opcode */
+/* 1005 */     OP_vphaddwq,       /* &xop_extensions[47], */ /**< vphaddwq opcode */
+/* 1006 */     OP_vphadddq,       /* &xop_extensions[48], */ /**< vphadddq opcode */
+/* 1007 */     OP_vphaddubw,      /* &xop_extensions[49], */ /**< vphaddubw opcode */
+/* 1008 */     OP_vphaddubd,      /* &xop_extensions[50], */ /**< vphaddubd opcode */
+/* 1009 */     OP_vphaddubq,      /* &xop_extensions[51], */ /**< vphaddubq opcode */
+/* 1010 */     OP_vphadduwd,      /* &xop_extensions[52], */ /**< vphadduwd opcode */
+/* 1011 */     OP_vphadduwq,      /* &xop_extensions[53], */ /**< vphadduwq opcode */
+/* 1012 */     OP_vphaddudq,      /* &xop_extensions[54], */ /**< vphaddudq opcode */
+/* 1013 */     OP_vphsubbw,       /* &xop_extensions[55], */ /**< vphsubbw opcode */
+/* 1014 */     OP_vphsubwd,       /* &xop_extensions[56], */ /**< vphsubwd opcode */
+/* 1015 */     OP_vphsubdq,       /* &xop_extensions[57], */ /**< vphsubdq opcode */
+/* 1016 */     OP_vpmacssww,      /* &xop_extensions[ 1], */ /**< vpmacssww opcode */
+/* 1017 */     OP_vpmacsswd,      /* &xop_extensions[ 2], */ /**< vpmacsswd opcode */
+/* 1018 */     OP_vpmacssdql,     /* &xop_extensions[ 3], */ /**< vpmacssdql opcode */
+/* 1019 */     OP_vpmacssdd,      /* &xop_extensions[ 4], */ /**< vpmacssdd opcode */
+/* 1020 */     OP_vpmacssdqh,     /* &xop_extensions[ 5], */ /**< vpmacssdqh opcode */
+/* 1021 */     OP_vpmacsww,       /* &xop_extensions[ 6], */ /**< vpmacsww opcode */
+/* 1022 */     OP_vpmacswd,       /* &xop_extensions[ 7], */ /**< vpmacswd opcode */
+/* 1023 */     OP_vpmacsdql,      /* &xop_extensions[ 8], */ /**< vpmacsdql opcode */
+/* 1024 */     OP_vpmacsdd,       /* &xop_extensions[ 9], */ /**< vpmacsdd opcode */
+/* 1025 */     OP_vpmacsdqh,      /* &xop_extensions[10], */ /**< vpmacsdqh opcode */
+/* 1026 */     OP_vpmadcsswd,     /* &xop_extensions[13], */ /**< vpmadcsswd opcode */
+/* 1027 */     OP_vpmadcswd,      /* &xop_extensions[14], */ /**< vpmadcswd opcode */
+/* 1028 */     OP_vpperm,         /* &vex_W_extensions[51][0], */ /**< vpperm opcode */
+/* 1029 */     OP_vprotb,         /* &xop_extensions[15], */ /**< vprotb opcode */
+/* 1030 */     OP_vprotw,         /* &xop_extensions[16], */ /**< vprotw opcode */
+/* 1031 */     OP_vprotd,         /* &xop_extensions[17], */ /**< vprotd opcode */
+/* 1032 */     OP_vprotq,         /* &xop_extensions[18], */ /**< vprotq opcode */
+/* 1033 */     OP_vpshlb,         /* &vex_W_extensions[56][0], */ /**< vpshlb opcode */
+/* 1034 */     OP_vpshlw,         /* &vex_W_extensions[57][0], */ /**< vpshlw opcode */
+/* 1035 */     OP_vpshld,         /* &vex_W_extensions[58][0], */ /**< vpshld opcode */
+/* 1036 */     OP_vpshlq,         /* &vex_W_extensions[59][0], */ /**< vpshlq opcode */
+/* 1037 */     OP_vpshab,         /* &vex_W_extensions[60][0], */ /**< vpshab opcode */
+/* 1038 */     OP_vpshaw,         /* &vex_W_extensions[61][0], */ /**< vpshaw opcode */
+/* 1039 */     OP_vpshad,         /* &vex_W_extensions[62][0], */ /**< vpshad opcode */
+/* 1040 */     OP_vpshaq,         /* &vex_W_extensions[63][0], */ /**< vpshaq opcode */
+
+    /* AMD TBM */
+/* 1041 */     OP_bextr,          /* &prefix_extensions[141][4], */ /**< bextr opcode */
+/* 1042 */     OP_blcfill,        /* &extensions[27][1], */ /**< blcfill opcode */
+/* 1043 */     OP_blci,           /* &extensions[28][6], */ /**< blci opcode */
+/* 1044 */     OP_blcic,          /* &extensions[27][5], */ /**< blcic opcode */
+/* 1045 */     OP_blcmsk,         /* &extensions[28][1], */ /**< blcmsk opcode */
+/* 1046 */     OP_blcs,           /* &extensions[27][3], */ /**< blcs opcode */
+/* 1047 */     OP_blsfill,        /* &extensions[27][2], */ /**< blsfill opcode */
+/* 1048 */     OP_blsic,          /* &extensions[27][6], */ /**< blsic opcode */
+/* 1049 */     OP_t1mskc,         /* &extensions[27][7], */ /**< t1mskc opcode */
+/* 1050 */     OP_tzmsk,          /* &extensions[27][4], */ /**< tzmsk opcode */
+
+    /* AMD LWP */
+/* 1051 */     OP_llwpcb,         /* &extensions[29][0], */ /**< llwpcb opcode */
+/* 1052 */     OP_slwpcb,         /* &extensions[29][1], */ /**< slwpcb opcode */
+/* 1053 */     OP_lwpins,         /* &extensions[30][0], */ /**< lwpins opcode */
+/* 1054 */     OP_lwpval,         /* &extensions[30][1], */ /**< lwpval opcode */
+
+    /* Intel BMI1 */
+    /* (includes non-immed form of OP_bextr) */
+/* 1055 */     OP_andn,           /* &third_byte_38[100], */ /**< andn opcode */
+/* 1056 */     OP_blsr,           /* &extensions[31][1], */ /**< blsr opcode */
+/* 1057 */     OP_blsmsk,         /* &extensions[31][2], */ /**< blsmsk opcode */
+/* 1058 */     OP_blsi,           /* &extensions[31][3], */ /**< blsi opcode */
+/* 1059 */     OP_tzcnt,          /* &prefix_extensions[140][1], */ /**< tzcnt opcode */
+
+    /* Intel BMI2 */
+/* 1060 */     OP_bzhi,           /* &prefix_extensions[142][4], */ /**< bzhi opcode */
+/* 1061 */     OP_pext,           /* &prefix_extensions[142][6], */ /**< pext opcode */
+/* 1062 */     OP_pdep,           /* &prefix_extensions[142][7], */ /**< pdep opcode */
+/* 1063 */     OP_sarx,           /* &prefix_extensions[141][5], */ /**< sarx opcode */
+/* 1064 */     OP_shlx,           /* &prefix_extensions[141][6], */ /**< shlx opcode */
+/* 1065 */     OP_shrx,           /* &prefix_extensions[141][7], */ /**< shrx opcode */
+/* 1066 */     OP_rorx,           /* &third_byte_3a[56], */ /**< rorx opcode */
+/* 1067 */     OP_mulx,           /* &prefix_extensions[143][7], */ /**< mulx opcode */
+
+    /* Intel Safer Mode Extensions */
+/* 1068 */     OP_getsec,         /* &second_byte[0x37], */ /**< getsec opcode */
+
+    /* Misc Intel additions */
+/* 1069 */     OP_vmfunc,         /* &rm_extensions[4][4], */ /**< vmfunc opcode */
+/* 1070 */     OP_invpcid,        /* &third_byte_38[103], */ /**< invpcid opcode */
+
+    /* Intel TSX */
+/* 1071 */     OP_xabort,         /* &extensions[17][7], */ /**< xabort opcode */
+/* 1072 */     OP_xbegin,         /* &extensions[18][7], */ /**< xbegin opcode */
+/* 1073 */     OP_xend,           /* &rm_extensions[4][5], */ /**< xend opcode */
+/* 1074 */     OP_xtest,          /* &rm_extensions[4][6], */ /**< xtest opcode */
+
+    /* AVX2 */
+/* 1075 */     OP_vpgatherdd,     /* &vex_W_extensions[66][0], */ /**< vpgatherdd opcode */
+/* 1076 */     OP_vpgatherdq,     /* &vex_W_extensions[66][1], */ /**< vpgatherdq opcode */
+/* 1077 */     OP_vpgatherqd,     /* &vex_W_extensions[67][0], */ /**< vpgatherqd opcode */
+/* 1078 */     OP_vpgatherqq,     /* &vex_W_extensions[67][1], */ /**< vpgatherqq opcode */
+/* 1079 */     OP_vgatherdps,     /* &vex_W_extensions[68][0], */ /**< vgatherdps opcode */
+/* 1080 */     OP_vgatherdpd,     /* &vex_W_extensions[68][1], */ /**< vgatherdpd opcode */
+/* 1081 */     OP_vgatherqps,     /* &vex_W_extensions[69][0], */ /**< vgatherqps opcode */
+/* 1082 */     OP_vgatherqpd,     /* &vex_W_extensions[69][1], */ /**< vgatherqpd opcode */
+/* 1083 */     OP_vbroadcasti128,  /* &third_byte_38[108], */ /**< vbroadcasti128 opcode */
+/* 1084 */     OP_vinserti128,    /* &third_byte_3a[57], */ /**< vinserti128 opcode */
+/* 1085 */     OP_vextracti128,   /* &third_byte_3a[58], */ /**< vextracti128 opcode */
+/* 1086 */     OP_vpmaskmovd,     /* &vex_W_extensions[70][0], */ /**< vpmaskmovd opcode */
+/* 1087 */     OP_vpmaskmovq,     /* &vex_W_extensions[70][1], */ /**< vpmaskmovq opcode */
+/* 1088 */     OP_vperm2i128,     /* &vex_W_extensions[69][1], */ /**< vperm2i128 opcode */
+/* 1089 */     OP_vpermd,         /* &third_byte_38[112], */ /**< vpermd opcode */
+/* 1090 */     OP_vpermps,        /* &third_byte_38[111], */ /**< vpermps opcode */
+/* 1091 */     OP_vpermq,         /* &third_byte_3a[59], */ /**< vpermq opcode */
+/* 1092 */     OP_vpermpd,        /* &third_byte_3a[60], */ /**< vpermpd opcode */
+/* 1093 */     OP_vpblendd,       /* &third_byte_3a[61], */ /**< vpblendd opcode */
+/* 1094 */     OP_vpsllvd,        /* &vex_W_extensions[73][0], */ /**< vpsllvd opcode */
+/* 1095 */     OP_vpsllvq,        /* &vex_W_extensions[73][1], */ /**< vpsllvq opcode */
+/* 1096 */     OP_vpsravd,        /* &third_byte_38[114], */ /**< vpsravd opcode */
+/* 1097 */     OP_vpsrlvd,        /* &vex_W_extensions[72][0], */ /**< vpsrlvd opcode */
+/* 1098 */     OP_vpsrlvq,        /* &vex_W_extensions[72][1], */ /**< vpsrlvq opcode */
+
     /* Keep these at the end so that ifdefs don't change internal enum values */
 #ifdef IA32_ON_IA64
-/* 960 */     OP_jmpe,       /* &extensions[13][6], */ /**< jmpe opcode */
-/* 961 */     OP_jmpe_abs,   /* &second_byte[0xb8], */ /**< jmpe_abs opcode */
+/* 1099 */     OP_jmpe,       /* &extensions[13][6], */ /**< jmpe opcode */
+/* 1100 */     OP_jmpe_abs,   /* &second_byte[0xb8], */ /**< jmpe_abs opcode */
 #endif
 
     OP_AFTER_LAST,
@@ -4961,18 +5159,27 @@ enum op_code_type {
  *   fstsw, fstcw, fstenv, finit, fclex
  * for us that has to be a sequence of instructions: a separate fwait
  */
+/* XXX i#1307: we could add extra decode table layers to print the proper name
+ * when we disassemble these, but it's not clear it's worth the effort.
+ */
 /* 16-bit versions that have different names */
 #define OP_cbw        OP_cwde /**< Alternative opcode name for 16-bit version. */
 #define OP_cwd        OP_cdq /**< Alternative opcode name for 16-bit version. */
 #define OP_jcxz       OP_jecxz /**< Alternative opcode name for 16-bit version. */
 /* 64-bit versions that have different names */
+#define OP_cdqe       OP_cwde /**< Alternative opcode name for 64-bit version. */
+#define OP_cqo        OP_cdq /**< Alternative opcode name for 64-bit version. */
 #define OP_jrcxz      OP_jecxz     /**< Alternative opcode name for 64-bit version. */
 #define OP_cmpxchg16b OP_cmpxchg8b /**< Alternative opcode name for 64-bit version. */
 #define OP_pextrq     OP_pextrd    /**< Alternative opcode name for 64-bit version. */
 #define OP_pinsrq     OP_pinsrd    /**< Alternative opcode name for 64-bit version. */
+#define OP_vpextrq     OP_vpextrd    /**< Alternative opcode name for 64-bit version. */
+#define OP_vpinsrq     OP_vpinsrd    /**< Alternative opcode name for 64-bit version. */
 /* reg-reg version has different name */
 #define OP_movhlps    OP_movlps /**< Alternative opcode name for reg-reg version. */
 #define OP_movlhps    OP_movhps /**< Alternative opcode name for reg-reg version. */
+#define OP_vmovhlps    OP_vmovlps /**< Alternative opcode name for reg-reg version. */
+#define OP_vmovlhps    OP_vmovhps /**< Alternative opcode name for reg-reg version. */
 /* condition codes */
 #define OP_jae_short  OP_jnb_short  /**< Alternative opcode name. */
 #define OP_jnae_short OP_jb_short   /**< Alternative opcode name. */
@@ -5013,6 +5220,8 @@ enum op_code_type {
 # define OP_xrstor   OP_xrstor32   /**< Alternative opcode name. */
 # define OP_xsaveopt OP_xsaveopt32 /**< Alternative opcode name. */
 #endif
+#define OP_wait   OP_fwait /**< Alternative opcode name. */
+#define OP_sal    OP_shl /**< Alternative opcode name. */
 /* undocumented opcodes */
 #define OP_icebp OP_int1
 #define OP_setalc OP_salc

@@ -20,6 +20,7 @@ GRANARY_INTERNAL_DEFINITION
 namespace driver {
 class DecodedInstruction;
 class InstructionDecoder;
+class InstructionRelativizer;
 }  // namespace driver
 
 // Represents an abstract instruction.
@@ -186,6 +187,7 @@ class NativeInstruction : public Instruction {
 
  private:
   friend class ControlFlowInstruction;
+  friend class driver::InstructionRelativizer;
 
   NativeInstruction(void) = delete;
 
@@ -218,6 +220,8 @@ class BranchInstruction final : public NativeInstruction {
   })
 
  private:
+  friend class driver::InstructionRelativizer;
+
   BranchInstruction(void) = delete;
 
   // Instruction targeted by this branch. Assumed to be within the same
@@ -255,6 +259,7 @@ class ControlFlowInstruction final : public NativeInstruction {
 
  private:
   friend class BlockFactory;
+  friend class driver::InstructionRelativizer;
 
   ControlFlowInstruction(void) = delete;
 

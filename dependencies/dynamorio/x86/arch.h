@@ -45,9 +45,9 @@
 #define X86_ARCH_H
 
 #include <stddef.h> /* for offsetof */
-#include "instr.h" /* for reg_id_t */
-#include "decode.h" /* for X64_CACHE_MODE_DC */
-#include "arch_exports.h" /* for FRAG_IS_32 and FRAG_IS_X86_TO_X64 */
+#include "dependencies/dynamorio/x86/instr.h" /* for reg_id_t */
+#include "dependencies/dynamorio/x86/decode.h" /* for X64_CACHE_MODE_DC */
+#include "dependencies/dynamorio/x86/arch_exports.h" /* for FRAG_IS_32 and FRAG_IS_X86_TO_X64 */
 
 /* FIXME: check on all platforms: these are for Fedora 8 and XP SP2
  * Keep in synch w/ defines in x86.asm
@@ -116,7 +116,10 @@ mixed_mode_enabled(void)
 
 #define NEXT_TAG_OFFSET        ((PROT_OFFS)+offsetof(dcontext_t, next_tag))
 #define LAST_EXIT_OFFSET       ((PROT_OFFS)+offsetof(dcontext_t, last_exit))
+#define LAST_FRAG_OFFSET       ((PROT_OFFS)+offsetof(dcontext_t, last_fragment))
 #define DSTACK_OFFSET          ((PROT_OFFS)+offsetof(dcontext_t, dstack))
+#define THREAD_RECORD_OFFSET   ((PROT_OFFS)+offsetof(dcontext_t, thread_record))
+#define WHEREAMI_OFFSET        ((PROT_OFFS)+offsetof(dcontext_t, whereami))
 
 #define FRAGMENT_FIELD_OFFSET  ((PROT_OFFS)+offsetof(dcontext_t, fragment_field))
 #define PRIVATE_CODE_OFFSET    ((PROT_OFFS)+offsetof(dcontext_t, private_code))
@@ -271,7 +274,9 @@ typedef enum {
 #define NUM_XMM_REGS  NUM_XMM_SAVED
 #define NUM_GP_REGS   (1 + (IF_X64_ELSE(DR_REG_R15, DR_REG_XDI) - DR_REG_XAX))
 
-/* information about each individual clean call invocation site */
+/* Information about each individual clean call invocation site.
+ * The whole struct is set to 0 at init time.
+ */
 typedef struct _clean_call_info_t {
     void *callee;
     uint num_args;
@@ -286,6 +291,7 @@ typedef struct _clean_call_info_t {
     uint num_regs_skip;
     bool reg_skip[NUM_GP_REGS];
     bool preserve_mcontext; /* even if skip reg save, preserve mcontext shape */
+    bool out_of_line_swap; /* whether we use clean_call_{save,restore} gencode */
     void *callee_info;  /* callee information */
     instrlist_t *ilist; /* instruction list for inline optimization */
 } clean_call_info_t;
@@ -581,7 +587,13 @@ typedef struct ibl_code_t {
     uint entry_stats_to_lookup_table_offset; /* offset to (entry_stats - lookup_table)  */
 #endif 
 } ibl_code_t;
-    
+
+/* special ibls */
+#define NUM_SPECIAL_IBL_XFERS 3 /* client_ibl and native_plt/ret__ibl */
+#define CLIENT_IBL_IDX     0
+#define NATIVE_PLT_IBL_IDX 1
+#define NATIVE_RET_IBL_IDX 2
+
 /* Each thread needs its own copy of these routines, but not all
  * routines here are created in a thread-private: we could save space
  * by splitting into two separate structs.
@@ -664,11 +676,9 @@ typedef struct _generated_code_t {
     /* FIXME: these two return routines are only needed in the global struct */
     byte *fcache_return_coarse;
     byte *trace_head_return_coarse;
-#ifdef CLIENT_INTERFACE
-    /* i#849: low-overhead xfer for clients */
-    byte *client_ibl_xfer;
-    uint client_ibl_unlink_offs;
-#endif
+    /* special ibl xfer */
+    byte *special_ibl_xfer[NUM_SPECIAL_IBL_XFERS];
+    uint  special_ibl_unlink_offs[NUM_SPECIAL_IBL_XFERS];
     /* i#171: out-of-line clean call context switch */
     byte *clean_call_save;
     byte *clean_call_restore;
@@ -783,6 +793,30 @@ get_shared_gencode(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
     (USE_SHARED_GENCODE_ALWAYS() || DYNAMO_OPTION(shared_traces) || \
      DYNAMO_OPTION(shared_trace_ibl_routine))
 
+#ifndef GRANARY
+/* returns the thread private code or GLOBAL thread shared code */
+static inline generated_code_t*
+get_emitted_routines_code(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
+{
+    generated_code_t *code;
+    /* This routine exists only because GLOBAL_DCONTEXT is not a real dcontext
+     * structure. Still, useful to wrap all references to private_code. */
+    /* PR 244737: thread-private uses only shared gencode on x64 */
+    /* PR 253431: to distinguish shared x86 gencode from x64 gencode, a dcontext
+     * must be passed in; use get_shared_gencode() for x64 builds */
+    IF_X64(ASSERT(mode != GENCODE_FROM_DCONTEXT || dcontext != GLOBAL_DCONTEXT));
+    if (USE_SHARED_GENCODE_ALWAYS() ||
+        (USE_SHARED_GENCODE() && dcontext == GLOBAL_DCONTEXT)) {
+        code = get_shared_gencode(dcontext _IF_X64(mode));
+    } else {
+        ASSERT(dcontext != GLOBAL_DCONTEXT);
+        /* NOTE thread private code entry points may also refer to shared
+         * routines */
+        code = (generated_code_t *) dcontext->private_code;
+    }
+    return code;
+}
+
 ibl_code_t *get_ibl_routine_code(dcontext_t *dcontext, ibl_branch_type_t branch_type,
                                  uint fragment_flags);
 ibl_code_t *get_ibl_routine_code_ex(dcontext_t *dcontext, ibl_branch_type_t branch_type,
@@ -884,6 +918,14 @@ byte *
 emit_client_ibl_xfer(dcontext_t *dcontext, byte *pc, generated_code_t *code);
 #endif
 
+#ifdef UNIX
+byte *
+emit_native_plt_ibl_xfer(dcontext_t *dcontext, byte *pc, generated_code_t *code);
+
+byte *
+emit_native_ret_ibl_xfer(dcontext_t *dcontext, byte *pc, generated_code_t *code);
+#endif
+
 /* clean calls are used by core DR: native_exec, so not in CLIENT_INTERFACE */
 byte *
 emit_clean_call_save(dcontext_t *dcontext, byte *pc, generated_code_t *code);
@@ -907,7 +949,7 @@ insert_shared_get_dcontext(dcontext_t *dcontext, instrlist_t *ilist, instr_t *wh
 void
 insert_shared_restore_dcontext_reg(dcontext_t *dcontext, instrlist_t *ilist,
                                    instr_t *where);
-
+#endif  /* !GRANARY */
 /* in optimize.c */
 instr_t *find_next_self_loop(dcontext_t *dcontext, app_pc tag, instr_t *instr);
 void replace_inst(dcontext_t *dcontext, instrlist_t *ilist, instr_t *old, instr_t *new);

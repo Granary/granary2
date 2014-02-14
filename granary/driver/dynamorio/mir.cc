@@ -8,7 +8,6 @@
 
 #include "granary/driver.h"
 #include "granary/mir.h"
-#include "granary/util.h"
 
 #include "generated/dynamorio/builder.h"
 

@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_KERNEL_MODULE_H_
 #define GRANARY_KERNEL_MODULE_H_
 

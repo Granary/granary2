@@ -331,10 +331,10 @@ typedef struct _coarse_incoming_t {
  */
 #define LINKSTUB_NEXT_INCOMING(l) \
     (LINKSTUB_NORMAL_DIRECT((l)->flags) ? \
-     (((direct_linkstub_t *)(l))->cdl.next_incoming) : \
+     ((linkstub_t*)(((direct_linkstub_t *)(l))->cdl.next_incoming)) : \
      (LINKSTUB_CBR_FALLTHROUGH((l)->flags) ? \
-      (((cbr_fallthrough_linkstub_t *)(l))->cdl.next_incoming) : \
-      (ASSERT(false && "indirect linkstub has no next_incoming"), NULL)))
+      ((linkstub_t*)(((cbr_fallthrough_linkstub_t *)(l))->cdl.next_incoming)) : \
+      (ASSERT(false && "indirect linkstub has no next_incoming"), ((linkstub_t*)NULL))))
 
 /* if sharing a stub then no offs, else offs to get to subsequent stub */
 #define CBR_FALLTHROUGH_STUB_OFFS(f) \
@@ -501,9 +501,8 @@ const linkstub_t * get_hot_patch_linkstub(void);
 #endif
 #ifdef CLIENT_INTERFACE
 const linkstub_t * get_client_linkstub(void);
-bool is_client_ibl_linkstub(const linkstub_t *l);
-const linkstub_t * get_client_ibl_linkstub(uint link_flags, uint frag_flags);
 #endif
+const linkstub_t *get_special_ibl_linkstub(int index, bool is_trace);
 const linkstub_t * get_ibl_sourceless_linkstub(uint link_flags, uint frag_flags);
 bool is_ibl_sourceless_linkstub(const linkstub_t *l);
 const linkstub_t * get_coarse_exit_linkstub(void);

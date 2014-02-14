@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_MIR_H_
 #define GRANARY_MIR_H_
 

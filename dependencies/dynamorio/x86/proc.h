@@ -53,7 +53,9 @@
  */
 
 /* page size is 4K on all DR-supported platforms */
-#define PAGE_SIZE (4*1024) /**< Size of a page of memory. */
+#ifndef PAGE_SIZE /* defined on Mac */
+#  define PAGE_SIZE (4*1024) /**< Size of a page of memory. */
+#endif
 
 /**< Convenience macro to align to the start of a page of memory. */
 #define PAGE_START(x) (((ptr_uint_t)(x)) & ~((PAGE_SIZE)-1))
@@ -248,9 +250,11 @@ extern size_t cache_line_size;
 #define CACHE_LINE_SIZE() cache_line_size
 
 /* xcr0 and xstate_bv feature bits */
-#define XCR0_AVX 4
-#define XCR0_SSE 2
-#define XCR0_FP  1
+enum {
+    XCR0_AVX = 4,
+    XCR0_SSE = 2,
+    XCR0_FP  = 1,
+};
 
 void proc_init(void);
 
@@ -366,44 +370,5 @@ DR_API
  */
 size_t
 proc_fpstate_save_size(void);
-#ifndef GRANARY
-DR_API
-/**
- * Saves the floating point state into the 16-byte-aligned buffer \p buf,
- * which must be 512 bytes for processors with the FXSR feature, and
- * 108 bytes for those without (where this routine does not support
- * 16-bit operand sizing).  \note proc_fpstate_save_size() can be used
- * to determine the particular size needed.
- *
- * When the FXSR feature is present, the fxsave format matches the bitwidth
- * of the x86 mode of the current thread (see get_x86_mode()).
- *
- * The last floating-point instruction address is left in an
- * untranslated state (i.e., it may point into the code cache).
- * 
- * DR does NOT save the application's floating-point, MMX, or SSE state
- * on context switches!  Thus if a client performs any floating-point 
- * operations in its main routines called by DR, the client must save 
- * and restore the floating-point/MMX/SSE state.
- * If the client needs to do so inside the code cache the client should implement
- * that itself.
- * Returns number of bytes written.
- */
-size_t
-proc_save_fpstate(byte *buf);
 
-DR_API
-/**
- * Restores the floating point state from the 16-byte-aligned buffer
- * \p buf, which must be 512 bytes for processors with the FXSR feature,
- * and 108 bytes for those without (where this routine does not
- * support 16-bit operand sizing).  \note proc_fpstate_save_size() can
- * be used to determine the particular size needed.
- *
- * When the FXSR feature is present, the fxsave format matches the bitwidth
- * of the x86 mode of the current thread (see get_x86_mode()).
- */
-void 
-proc_restore_fpstate(byte *buf);
-#endif /* GRANARY */
 #endif /* _PROC_H_ */

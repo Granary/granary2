@@ -58,9 +58,11 @@
  * The rep and repne prefixes are encoded directly into the opcodes.
  * 
  */
-#define PREFIX_LOCK           0x1 /**< Makes the instruction's memory accesses atomic. */
-#define PREFIX_JCC_NOT_TAKEN  0x2 /**< Branch hint: conditional branch is taken. */
-#define PREFIX_JCC_TAKEN      0x4 /**< Branch hint: conditional branch is not taken. */
+#define PREFIX_LOCK          0x01 /**< Makes the instruction's memory accesses atomic. */
+#define PREFIX_JCC_NOT_TAKEN 0x02 /**< Branch hint: conditional branch is taken. */
+#define PREFIX_JCC_TAKEN     0x04 /**< Branch hint: conditional branch is not taken. */
+#define PREFIX_XACQUIRE      0x08 /**< Transaction hint: start lock elision. */
+#define PREFIX_XRELEASE      0x10 /**< Transaction hint: end lock elision. */
 
 /* DR_API EXPORT END */
 
@@ -69,40 +71,43 @@
  * For encoding these properties are specified in the operands,
  * with our encoder auto-adding the appropriate prefixes.
  */
-#define PREFIX_DATA           0x0008
-#define PREFIX_ADDR           0x0010
-#define PREFIX_REX_W          0x0020
-#define PREFIX_REX_R          0x0040
-#define PREFIX_REX_X          0x0080
-#define PREFIX_REX_B          0x0100
-#define PREFIX_REX_GENERAL    0x0200 /* 0x40: only matters for SPL...SDL vs AH..BH */
+#define PREFIX_DATA           0x0020
+#define PREFIX_ADDR           0x0040
+#define PREFIX_REX_W          0x0080
+#define PREFIX_REX_R          0x0100
+#define PREFIX_REX_X          0x0200
+#define PREFIX_REX_B          0x0400
+#define PREFIX_REX_GENERAL    0x0800 /* 0x40: only matters for SPL...SDL vs AH..BH */
 #define PREFIX_REX_ALL        (PREFIX_REX_W|PREFIX_REX_R|PREFIX_REX_X|PREFIX_REX_B|\
                                PREFIX_REX_GENERAL)
 #define PREFIX_SIZE_SPECIFIERS (PREFIX_DATA|PREFIX_ADDR|PREFIX_REX_ALL)
 
 /* Unused except in decode tables (we encode the prefix into the opcodes) */
-#define PREFIX_REP            0x0400
-#define PREFIX_REPNE          0x0800
+#define PREFIX_REP            0x1000 /* 0xf3 */
+#define PREFIX_REPNE          0x2000 /* 0xf2 */
 
 /* PREFIX_SEG_* is set by decode or decode_cti and is only a hint
  * to the caller.  Is ignored by encode in favor of the segment 
  * reg specified in the applicable opnds.  We rely on it being set during 
  * bb building.
  */
-#define PREFIX_SEG_FS         0x1000
-#define PREFIX_SEG_GS         0x2000
+#define PREFIX_SEG_FS         0x4000
+#define PREFIX_SEG_GS         0x8000
 
-/* First two are only used during initial decode so if running out of
+/* First 2 are only used during initial decode so if running out of
  * space could replace w/ byte value compare.
  */
-#define PREFIX_VEX_2B    0x000004000
-#define PREFIX_VEX_3B    0x000008000
-#define PREFIX_VEX_L     0x000010000
+#define PREFIX_VEX_2B    0x000010000
+#define PREFIX_VEX_3B    0x000020000
+#define PREFIX_VEX_L     0x000040000
+/* Also only used during initial decode */
+#define PREFIX_XOP       0x000080000
 
 /* We encode some prefixes in the operands themselves, such that we shouldn't
  * consider the whole-instr_t flags when considering equality of Instrs
  */
-#define PREFIX_SIGNIFICANT (PREFIX_LOCK|PREFIX_JCC_TAKEN|PREFIX_JCC_TAKEN)
+#define PREFIX_SIGNIFICANT (PREFIX_LOCK|PREFIX_JCC_TAKEN|PREFIX_JCC_TAKEN|\
+                            PREFIX_XACQUIRE|PREFIX_XRELEASE)
 
 /* branch hints show up as segment modifiers */
 #define SEG_JCC_NOT_TAKEN     SEG_CS
@@ -199,7 +204,7 @@ typedef struct instr_info_t {
     byte src1_type;  opnd_size_t src1_size;
     byte src2_type;  opnd_size_t src2_size;
     byte src3_type;  opnd_size_t src3_size;
-    byte flags; /* modrm and extra operand flags */
+    ushort flags; /* modrm and extra operand flags */
     uint eflags; /* combination of read & write flags from instr.h */
     ptr_int_t code; /* for PREFIX: one of the PREFIX_ constants, or SEG_ constant
                      * for EXTENSION and *_EXT: index into extensions table
@@ -253,10 +258,18 @@ enum {
     VEX_L_EXT,
     /* instructions differing based on vex.W */
     VEX_W_EXT,
+    /* instructions differing based on whether part of an xop prefix */
+    XOP_PREFIX_EXT,
+    /* xop opcode map 8 */
+    XOP_8_EXT,
+    /* xop opcode map 9 */
+    XOP_9_EXT,
+    /* xop opcode map 10 */
+    XOP_A_EXT,
     /* else, from OP_ enum */
 };
 
-/* instr_info_t modrm/extra operands flags == single byte only! */
+/* instr_info_t modrm/extra operands flags == ushort only! */
 #define HAS_MODRM             0x01   /* else, no modrm */
 #define HAS_EXTRA_OPERANDS    0x02   /* else, <= 2 dsts, <= 3 srcs */
 /* if HAS_EXTRA_OPERANDS: */
@@ -266,7 +279,9 @@ enum {
  */
 #define X86_INVALID           0x08
 #define X64_INVALID           0x10
-/* to avoid needing a single-valid-entry subtable in prefix_extensions */
+/* We use this to avoid needing a single-valid-entry subtable in prefix_extensions
+ * when decoding.  This is never needed for encoding.
+ */
 #define REQUIRES_PREFIX       0x20
 /* instr must be encoded using vex.  if this flag is not present, this instruction
  * is invalid if encoded using vex.
@@ -277,6 +292,15 @@ enum {
  * does today.
  */
 #define REQUIRES_REX          0x80
+/* Instr must be encoded with VEX.L=0.  If VEX.L=1 this is an invalid instr.
+ * This helps us avoid creating a ton of vex_L_extensions entries.
+ */
+#define REQUIRES_VEX_L_0    0x0100
+/* Instr must be encoded with VEX.L=1.  If VEX.L=0 this is an invalid instr.
+ * This helps us avoid creating a ton of vex_L_extensions entries.
+ * OPCODE_SUFFIX for REQUIRES_VEX means the same thing for encoding.
+ */
+#define REQUIRES_VEX_L_1    0x0200
 
 /* instr_info_t is used for table entries, it holds info that is constant
  * for all instances of an instruction.
@@ -352,6 +376,7 @@ enum {
     /* operand types */
     TYPE_NONE,
     TYPE_A, /* immediate that is absolute address */
+    TYPE_B, /* vex.vvvv field selects general-purpose register */
     TYPE_C, /* reg of modrm selects control reg */
     TYPE_D, /* reg of modrm selects debug reg */
     TYPE_E, /* modrm selects reg or mem addr */
@@ -361,7 +386,7 @@ enum {
     TYPE_I, /* immediate */
     TYPE_J, /* immediate that is relative offset of EIP */
     TYPE_L, /* top 4 bits of 8-bit immed select xmm/ymm register */
-    TYPE_M, /* modrm select mem addr */
+    TYPE_M, /* modrm selects mem addr */
     TYPE_O, /* immediate that is memory offset */
     TYPE_P, /* reg of modrm selects MMX */
     TYPE_Q, /* modrm selects MMX or mem addr */
@@ -378,7 +403,9 @@ enum {
     TYPE_XLAT,     /* DS:(RE)(E)BX+AL */
     TYPE_MASKMOVQ, /* DS:(RE)(E)DI */
     TYPE_FLOATMEM,
+    TYPE_VSIB, /* modrm selects mem addr with required VSIB */
     TYPE_REG,     /* hardcoded register */
+    TYPE_XREG, /* hardcoded register, default 32/64 bits depending on mode */
     TYPE_VAR_REG, /* hardcoded register, default 32 bits, but can be
                    * 16 w/ data prefix or 64 w/ rex.w: equivalent of Intel 'v'
                    * == like OPSZ_4_rex8_short2 */
@@ -388,6 +415,8 @@ enum {
     TYPE_VAR_XREG, /* hardcoded register, default 32/64 bits depending on mode,
                     * but can be 16 w/ data prefix: equivalent of Intel 'd64'
                     * == like OPSZ_4x8_short2 */
+    TYPE_VAR_REGX, /* hardcoded register, default 32 bits, but can be 64 w/ rex.w:
+                    * equivalent of Intel 'y' == like OPSZ_4_rex8 */
     TYPE_VAR_ADDR_XREG, /* hardcoded register, default 32/64 bits depending on mode,
                          * but can be 16/32 w/ addr prefix: equivalent of Intel 'd64' */
     /* For x64 extensions (Intel '+r.') where rex.r can select an extended
@@ -400,9 +429,7 @@ enum {
                        * used for xchg and mov_imm 'v' immed. */
     TYPE_VAR_XREG_EX, /* like TYPE_VAR_XREG (OPSZ_4x8_short2) but extendable.
                        * used for pop and push. */
-    TYPE_VAR_REGX_EX, /* hardcoded register, default 32 bits, but can be 64 w/ rex.w,
-                       * and extendable.  used for bswap. 
-                       * == OPSZ_4_rex8 */
+    TYPE_VAR_REGX_EX, /* like TYPE_VAR_REGX but extendable.  used for bswap. */
     TYPE_INDIR_E,
     TYPE_INDIR_REG,
     TYPE_INDIR_VAR_XREG, /* indirected register that varies (by addr prefix),
@@ -486,7 +513,7 @@ enum op_size_type {
     OPSZ_8,  /**< Intel 'q','pi': 8 bytes */
     OPSZ_10, /**< Intel 's' 64-bit, or double extended precision floating point
               * (latter used by fld, fstp, fbld, fbstp) */
-    OPSZ_16, /**< Intel 'dq','ps','pd','ss','sd': 16 bytes */
+    OPSZ_16, /**< Intel 'dq','ps','pd','ss','sd', or AMD 'o': 16 bytes */
     OPSZ_14, /**< FPU operating environment with short data size (fldenv, fnstenv) */
     OPSZ_28, /**< FPU operating environment with normal data size (fldenv, fnstenv) */
     OPSZ_94,  /**< FPU state with short data size (fnsave, frstor) */
@@ -509,7 +536,7 @@ enum op_size_type {
                     * accommodate by shifting to its short size, which is 1 byte). */
     OPSZ_4_short2, /**< Intel 'z': 4/2 bytes */
     OPSZ_4_rex8_short2, /**< Intel 'v': 8/4/2 bytes */
-    OPSZ_4_rex8,   /**< Intel 'd/q' (like 'v' but never 2 bytes). */
+    OPSZ_4_rex8,   /**< Intel 'd/q' (like 'v' but never 2 bytes) or 'y'. */
     OPSZ_6_irex10_short4, /**< Intel 'p': On Intel processors this is 10/6/4 bytes for
                            * segment selector + address.  On AMD processors this is
                            * 6/4 bytes for segment selector + address (rex is ignored). */
@@ -555,7 +582,7 @@ enum op_size_type {
     OPSZ_8_rex16,         /**< cmpxcgh8b/cmpxchg16b */
     OPSZ_8_rex16_short4,  /**< Intel 'v' * 2 (far call/ret) */
     OPSZ_12_rex40_short6, /**< unresolved iret */
-    OPSZ_16_vex32,        /**< 16 or 32 bytes depending on VEX.L */
+    OPSZ_16_vex32,        /**< 16 or 32 bytes depending on VEX.L (AMD/Intel 'x'). */
     /* Add new size here.  Also update size_names[] in encode.c. */
     OPSZ_LAST,
 };
@@ -716,8 +743,8 @@ DR_API
  * it were located at address \p orig_pc.  Any pc-relative operands have
  * their values calculated as though the instruction were actually at
  * \p orig_pc, though that address is never de-referenced.
- * The instruction's raw bits are not valid, but its translation field
- * (see instr_get_translation()) is set to \p orig_pc.
+ * The instruction's raw bits are not valid, but its application address field
+ * (see instr_get_app_pc()) is set to \p orig_pc.
  * The instruction's opcode, eflags usage, prefixes, and operands are
  * all filled in.
  * Assumes that \p instr is already initialized, but uses the x86/x64 mode
@@ -811,6 +838,12 @@ extern const instr_info_t float_high_modrm[][64];
 extern const byte suffix_index[256];
 extern const instr_info_t suffix_extensions[];
 extern const instr_info_t extra_operands[];
+extern const byte xop_8_index[256];
+extern const byte xop_9_index[256];
+extern const byte xop_a_index[256];
+extern const instr_info_t xop_prefix_extensions[][2];
+extern const instr_info_t xop_extensions[];
+
 /* table that translates opcode enums into pointers into above tables */
 extern const instr_info_t * const op_instr[];
 /* for debugging: printing out types and sizes */

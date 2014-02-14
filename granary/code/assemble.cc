@@ -20,6 +20,7 @@
 
 namespace granary {
 
+// Iterator over decoded basic blocks.
 typedef LinkedListIterator<DecodedBasicBlock> DecodedBlockIterator;
 
 namespace {
@@ -58,25 +59,46 @@ void CheckNextInstructionReachable(Instruction *instr, bool *is_unreachable) {
 
 // Removes unreachable instructions.
 static void RemoveUnreachableInstructions(DecodedBasicBlock *block) {
-  auto curr = block->FirstInstruction();
-  auto next = curr;
+  auto instr = block->FirstInstruction();
   bool is_unreachable(false);
-  for (; curr; curr = next) {
-    next = curr->Next();
-    if (InstructionIsReachable(curr, &is_unreachable)) {
-      CheckNextInstructionReachable(curr, &is_unreachable);
+  for (auto next = instr; instr; instr = next) {
+    next = instr->Next();
+    if (InstructionIsReachable(instr, &is_unreachable)) {
+      CheckNextInstructionReachable(instr, &is_unreachable);
     } else {
-      Instruction::Unlink(curr);
+      Instruction::Unlink(instr);
     }
   }
 }
 
-// Preprocess the blocks.
-static void PreprocessBlocks(LocalControlFlowGraph *cfg) {
+// Relativizie instructions within a basic block. Instructions with relative
+// components might not be safe because the code cache's placement might place
+// them too far away. This is typical in user space on x86 with 32-bit relative
+// addressing, where native code is placed at a low address, and `mmap`d cache
+// code at a high address (>4GB away).
+static void RelativizeInstructions(DecodedBasicBlock *block,
+                                   CodeAllocator *cache) {
+  auto instr = block->FirstInstruction();
+  driver::InstructionRelativizer relativizer(cache->Allocate(1, 0));
+  for (auto next = instr; instr; instr = next) {
+    next = instr->Next();
+    auto native_instr = DynamicCast<NativeInstruction *>(instr);
+    if (native_instr) {
+      relativizer.Relativize(native_instr);
+    }
+  }
+}
+
+// Preprocess the blocks. This involves removing unreachable instructions and
+// making native instructions with relative components (e.g. RIP-relative
+// addressing on x86-64) safe to execute in the code cache.
+static void PreprocessBlocks(LocalControlFlowGraph *cfg,
+                             CodeAllocator *cache) {
   for (auto block : cfg->Blocks()) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
       RemoveUnreachableInstructions(decoded_block);
+      RelativizeInstructions(decoded_block, cache);
     }
   }
 }
@@ -250,7 +272,7 @@ static void AssembleEdges(LocalControlFlowGraph *cfg, CodeAllocator *edge) {
 // Assemble the local control-flow graph into
 void Assemble(LocalControlFlowGraph *cfg, CodeAllocator *cache,
               CodeAllocator *edge) {
-  PreprocessBlocks(cfg);
+  PreprocessBlocks(cfg, cache);
   AssembleEdges(cfg, edge);
   auto blocks = Schedule(cfg);
   auto relaxed_size = Resize(blocks);

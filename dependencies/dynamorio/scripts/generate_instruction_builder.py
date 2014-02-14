@@ -78,7 +78,9 @@ def main(input_file, output_dir):
   
   both(output_h, output_cc)("/* Auto-generated file. DO NOT CHANGE! */\n")
   output_cc("#define GRANARY_INTERNAL\n")
-  output_h("""#include "granary/driver/dynamorio/decoder.h"\n""")
+  output_h("#ifndef GENERATED_DYNAMORIO_BUILDER_H_")
+  output_h("#define GENERATED_DYNAMORIO_BUILDER_H_\n")
+  output_h("""#include "granary/driver/dynamorio/decoder.h\"""")
   output_cc("""#include "generated/dynamorio/builder.h"\n""")
   output_h("""#include "granary/driver/dynamorio/instruction.h"\n""")
   both(output_h, output_cc)("namespace granary {")
@@ -101,6 +103,7 @@ def main(input_file, output_dir):
   output_h("};  ")
   both(output_h, output_cc)("}  // namespace driver")
   both(output_h, output_cc)("}  // namespace granary")
+  output_h("#endif  // GENERATED_DYNAMORIO_BUILDER_H_")
 
 if "__main__" == __name__:
   main(sys.argv[1], sys.argv[2])

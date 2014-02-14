@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2011-2013 Google, Inc.  All rights reserved.
+ * Copyright (c) 2011-2014 Google, Inc.  All rights reserved.
  * Copyright (c) 2001-2010 VMware, Inc.  All rights reserved.
  * ********************************************************** */
 
@@ -120,5 +120,20 @@ DEFINE_FUNC(our_cpuid)
     pop      %REG_XBX /* callee-saved */
     ret
 END_FUNC(our_cpuid)
+
+/* void dr_xgetbv(uint *high, uint *low) */
+DEFINE_FUNC(dr_xgetbv)
+    mov     %ARG1, %REG_XAX
+    mov     %ARG2, %REG_XDX
+    push    %REG_XAX                /* high */
+    push    %REG_XDX                /* low */
+    mov     $0, %ecx
+    .byte   0x0f,0x01,0xd0          /* xgetbv */
+    pop     %REG_XCX
+    mov     %eax, (%REG_XCX)        /* low */
+    pop     %REG_XCX
+    mov     %edx, (%REG_XCX)        /* high */
+    ret
+END_FUNC(dr_xgetbv)
 
 END_FILE

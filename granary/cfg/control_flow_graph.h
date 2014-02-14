@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_CFG_CONTROL_FLOW_GRAPH_H_
 #define GRANARY_CFG_CONTROL_FLOW_GRAPH_H_
 

@@ -86,6 +86,13 @@ static const instr_info_t escape_38_instr =
     {ESCAPE_3BYTE_38,  0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0};
 static const instr_info_t escape_3a_instr =
     {ESCAPE_3BYTE_3a,  0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0};
+/* used for XOP decoding */
+static const instr_info_t xop_8_instr =
+    {XOP_8_EXT,  0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0};
+static const instr_info_t xop_9_instr =
+    {XOP_9_EXT,  0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0};
+static const instr_info_t xop_a_instr =
+    {XOP_A_EXT,  0x000000, "(bad)", xx, xx, xx, xx, xx, 0, 0, 0};
 #undef xx
 
 #ifdef X64
@@ -591,23 +598,33 @@ read_modrm(byte *pc, decode_info_t *di)
  * bytes (and any prefix bytes) and sets the appropriate prefix flags in di.
  * Sets info to the entry for the first opcode byte, and pc to point past
  * the first opcode byte.
+ * Also handles xop encodings, which are quite similar to vex.
  */
 static byte *
 read_vex(byte *pc, decode_info_t *di, byte instr_byte,
-         const instr_info_t **ret_info INOUT, bool *is_vex)
+         const instr_info_t **ret_info INOUT, bool *is_vex/*or xop*/)
 {
-    int idx;
+    int idx = 0;
     const instr_info_t *info;
     byte vex_last = 0, vex_pp;
     ASSERT(ret_info != NULL && *ret_info != NULL && is_vex != NULL);
     info = *ret_info;
-    ASSERT(info->type == VEX_PREFIX_EXT);
-    /* If 32-bit mode and mod selects for memory, this is not vex */
-    if (X64_MODE(di) || TESTALL(MODRM_BYTE(3, 0, 0), *pc))
-        idx = 1;
-    else
-        idx = 0;
-    info = &vex_prefix_extensions[info->code][idx];
+    if (info->type == VEX_PREFIX_EXT) {
+        /* If 32-bit mode and mod selects for memory, this is not vex */
+        if (X64_MODE(di) || TESTALL(MODRM_BYTE(3, 0, 0), *pc))
+            idx = 1;
+        else
+            idx = 0;
+        info = &vex_prefix_extensions[info->code][idx];
+    } else if (info->type == XOP_PREFIX_EXT) {
+        /* If m-mmm (what AMD calls "map_select") < 8, this is not vex */
+        if ((*pc & 0x1f) < 0x8)
+            idx = 0;
+        else
+            idx = 1;
+        info = &xop_prefix_extensions[info->code][idx];
+    } else
+        CLIENT_ASSERT(false, "internal vex decoding error");
     if (idx == 0) {
         /* not vex */
         *ret_info = info;
@@ -634,7 +651,7 @@ read_vex(byte *pc, decode_info_t *di, byte instr_byte,
         /* 2-byte vex implies leading 0x0f */
         *ret_info = &escape_instr;
         /* rest are shared w/ 3-byte form's final byte */
-    } else if (info->code == PREFIX_VEX_3B) {
+    } else if (info->code == PREFIX_VEX_3B || info->code == PREFIX_XOP) {
         byte vex_mm;
         /* fields are: R, X, B, m-mmmm.  R, X, and B are inverted. */
         if (!TEST(0x80, instr_byte))
@@ -647,16 +664,31 @@ read_vex(byte *pc, decode_info_t *di, byte instr_byte,
         /* our strategy is to decode through the regular tables w/ a vex-encoded
          * flag, to match Intel manuals and vex implicit-prefix flags
          */
-        if (vex_mm == 1) {
-            *ret_info = &escape_instr;
-        } else if (vex_mm == 2) {
-            *ret_info = &escape_38_instr;
-        } else if (vex_mm == 3) {
-            *ret_info = &escape_3a_instr;
+        if (info->code == PREFIX_VEX_3B) {
+            if (vex_mm == 1) {
+                *ret_info = &escape_instr;
+            } else if (vex_mm == 2) {
+                *ret_info = &escape_38_instr;
+            } else if (vex_mm == 3) {
+                *ret_info = &escape_3a_instr;
+            } else {
+                /* #UD: reserved for future use */
+                *ret_info = &invalid_instr;
+                return pc;
+            }
         } else {
-            /* #UD: reserved for future use */
-            *ret_info = &invalid_instr;
-            return pc;
+            /* xop */
+            if (vex_mm == 0x8) {
+                *ret_info = &xop_8_instr;
+            } else if (vex_mm == 0x9) {
+                *ret_info = &xop_9_instr;
+            } else if (vex_mm == 0xa) {
+                *ret_info = &xop_a_instr;
+            } else {
+                /* #UD: reserved for future use */
+                *ret_info = &invalid_instr;
+                return pc;
+            }
         }
         
         /* read 3rd vex byte */
@@ -686,6 +718,49 @@ read_vex(byte *pc, decode_info_t *di, byte instr_byte,
 
     di->vex_encoded = true;
     return pc;
+}
+
+/* Given an instr_info_t PREFIX_EXT entry, reads the next entry based on the prefixes */
+static inline const instr_info_t *
+read_prefix_ext(const instr_info_t *info, decode_info_t *di)
+{
+    /* discard old info, get new one */
+    int code = (int) info->code;
+    int idx = (di->rep_prefix?1 :(di->data_prefix?2 :(di->repne_prefix?3 :0)));
+    if (di->vex_encoded)
+        idx += 4;
+    info = &prefix_extensions[code][idx];
+    if (info->type == INVALID && !DYNAMO_OPTION(decode_strict)) {
+        /* i#1118: some of these seem to not be invalid with
+         * prefixes that land in blank slots in the decode tables.
+         * Though it seems to only be btc, bsf, and bsr (the SSE*
+         * instrs really do seem invalid when given unlisted prefixes),
+         * we'd rather err on the side of treating as valid, which is
+         * after all what gdb and dumpbin list.  Even if these
+         * fault when executed, we know the length, so there's no
+         * downside to listing as valid, for DR anyway.
+         * Users of drdecodelib may want to be more aggressive: hence the
+         * -decode_strict option.
+         */
+        /* Take the base entry w/o prefixes and keep the prefixes */
+        info = &prefix_extensions[code][0 + (di->vex_encoded ? 4 : 0)];
+    } else if (di->rep_prefix)
+        di->rep_prefix = false;
+    else if (di->repne_prefix)
+        di->repne_prefix = false;
+    if (di->data_prefix &&
+        /* Don't remove it if the entry doesn't list 0x66:
+         * e.g., OP_bsr (i#1118).
+         */
+        (info->opcode >> 24) == DATA_PREFIX_OPCODE)
+        di->data_prefix = false;
+    if (info->type == REX_B_EXT) {
+        /* discard old info, get new one */
+        int code = (int) info->code;
+        int idx = (TEST(PREFIX_REX_B, di->prefixes) ? 1 : 0);
+        info = &rex_b_extensions[code][idx];
+    }
+    return info;
 }
 
 /* Disassembles the instruction at pc into the data structures ret_info
@@ -734,11 +809,11 @@ read_instruction(byte *pc, byte *orig_pc,
         if (info->type == X64_EXT) {
             /* discard old info, get new one */
             info = &x64_extensions[info->code][X64_MODE(di) ? 1 : 0];
-        } else if (info->type == VEX_PREFIX_EXT) {
-            bool is_vex = false;
+        } else if (info->type == VEX_PREFIX_EXT || info->type == XOP_PREFIX_EXT) {
+            bool is_vex = false; /* or xop */
             pc = read_vex(pc, di, instr_byte, &info, &is_vex);
             /* if read_vex changes info, leave this loop */
-            if (info->type != VEX_PREFIX_EXT)
+            if (info->type != VEX_PREFIX_EXT && info->type != XOP_PREFIX_EXT)
                 break;
             else {
                 if (is_vex)
@@ -799,6 +874,22 @@ read_instruction(byte *pc, byte *orig_pc,
             info = &third_byte_38[third_byte_38_index[instr_byte]];
         else
             info = &third_byte_3a[third_byte_3a_index[instr_byte]];
+    } else if (info->type == XOP_8_EXT ||
+               info->type == XOP_9_EXT ||
+               info->type == XOP_A_EXT) {
+        /* discard second byte, move to third */
+        int idx = 0;
+        instr_byte = *pc;
+        pc++;
+        if (info->type == XOP_8_EXT)
+            idx = xop_8_index[instr_byte];
+        else if (info->type == XOP_9_EXT)
+            idx = xop_9_index[instr_byte];
+        else if (info->type == XOP_A_EXT)
+            idx = xop_a_index[instr_byte];
+        else
+            CLIENT_ASSERT(false, "internal invalid XOP type");
+        info = &xop_extensions[idx];
     }
 
     /* all FLOAT_EXT and PREFIX_EXT (except nop & pause) and EXTENSION need modrm,
@@ -868,47 +959,7 @@ read_instruction(byte *pc, byte *orig_pc,
     /* can occur AFTER above checks (EXTENSION, in particular */
     if (info->type == PREFIX_EXT) {
         /* discard old info, get new one */
-        int code = (int) info->code;
-        int idx = (di->rep_prefix?1 :(di->data_prefix?2 :(di->repne_prefix?3 :0)));
-        if (di->vex_encoded)
-            idx += 4;
-        info = &prefix_extensions[code][idx];
-        if (info->type == INVALID && !DYNAMO_OPTION(decode_strict)) {
-            /* i#1118: some of these seem to not be invalid with
-             * prefixes that land in blank slots in the decode tables.
-             * Though it seems to only be btc, bsf, and bsr (the SSE*
-             * instrs really do seem invalid when given unlisted prefixes),
-             * we'd rather err on the side of treating as valid, which is
-             * after all what gdb and dumpbin list.  Even if these
-             * fault when executed, we know the length, so there's no
-             * downside to listing as valid, for DR anyway.
-             * Users of drdecodelib may want to be more aggressive: hence the
-             * -decode_strict option.
-             */
-            /* Take the base entry w/o prefixes and keep the prefixes */
-            info = &prefix_extensions[code][0 + (di->vex_encoded ? 4 : 0)];
-        } else if (di->rep_prefix)
-            di->rep_prefix = false;
-        else if (di->repne_prefix)
-            di->repne_prefix = false;
-        if (di->data_prefix &&
-            /* Don't remove it if the entry doesn't list 0x66:
-             * e.g., OP_bsr (i#1118).
-             */
-            (info->opcode >> 24) == PREFIX_DATA)
-            di->data_prefix = false;
-        if (info->type == REX_B_EXT) {
-            /* discard old info, get new one */
-            int code = (int) info->code;
-            int idx = (TEST(PREFIX_REX_B, di->prefixes) ? 1 : 0);
-            info = &rex_b_extensions[code][idx];
-        }
-    }
-    else if (info->type == VEX_EXT) {
-        /* discard old info, get new one */
-        int code = (int) info->code;
-        int idx = (di->vex_encoded ? 1 : 0);
-        info = &vex_extensions[code][idx];
+        info = read_prefix_ext(info, di);
     }
 
     /* can occur AFTER above checks (PREFIX_EXT, in particular) */
@@ -920,13 +971,18 @@ read_instruction(byte *pc, byte *orig_pc,
         if (info->type == RM_EXT) {
             info = &rm_extensions[info->code][di->rm];
         }
+        /* We have to support prefix before mod, and mod before prefix */
+        if (info->type == PREFIX_EXT) {
+            info = read_prefix_ext(info, di);
+        }
     }
-    else if (info->type == VEX_L_EXT) {
+
+    /* can occur AFTER above checks (MOD_EXT, in particular) */
+    if (info->type == VEX_EXT) {
         /* discard old info, get new one */
         int code = (int) info->code;
-        int idx = (di->vex_encoded) ?
-            (TEST(PREFIX_VEX_L, di->prefixes) ? 2 : 1) : 0;
-        info = &vex_L_extensions[code][idx];
+        int idx = (di->vex_encoded ? 1 : 0);
+        info = &vex_extensions[code][idx];
     }
 
     /* can occur AFTER above checks (MOD_EXT, in particular) */
@@ -936,32 +992,49 @@ read_instruction(byte *pc, byte *orig_pc,
         int idx = (TEST(PREFIX_REX_W, di->prefixes) ? 1 : 0);
         info = &rex_w_extensions[code][idx];
     }
+    else if (info->type == VEX_L_EXT) {
+        /* discard old info, get new one */
+        int code = (int) info->code;
+        int idx = (di->vex_encoded) ?
+            (TEST(PREFIX_VEX_L, di->prefixes) ? 2 : 1) : 0;
+        info = &vex_L_extensions[code][idx];
+    }
 
     if (TEST(REQUIRES_PREFIX, info->flags)) {
         byte required = (byte)(info->opcode >> 24);
         bool *prefix_var = NULL;
-        CLIENT_ASSERT(info->opcode > 0xffffff, "decode error in SSSE3/SSE4 instr");
-        if (required == DATA_PREFIX_OPCODE)
-            prefix_var = &di->data_prefix;
-        else if (required == REPNE_PREFIX_OPCODE)
-            prefix_var = &di->repne_prefix;
-        else if (required == REP_PREFIX_OPCODE)
-            prefix_var = &di->rep_prefix;
-        else
-            CLIENT_ASSERT(false, "internal required-prefix error");
-        if (prefix_var == NULL || !*prefix_var) {
-            /* Invalid instr.  TODO: have processor w/ SSE4, confirm that
-             * an exception really is raised.
-             */
-            info = NULL;
-        } else
-            *prefix_var = false;
+        if (required == 0) { /* cannot have a prefix */
+            if (prefix_var != NULL) {
+                /* invalid instr */
+                info = NULL;
+            }
+        } else {
+            CLIENT_ASSERT(info->opcode > 0xffffff, "decode error in SSSE3/SSE4 instr");
+            if (required == DATA_PREFIX_OPCODE)
+                prefix_var = &di->data_prefix;
+            else if (required == REPNE_PREFIX_OPCODE)
+                prefix_var = &di->repne_prefix;
+            else if (required == REP_PREFIX_OPCODE)
+                prefix_var = &di->rep_prefix;
+            else
+                CLIENT_ASSERT(false, "internal required-prefix error");
+            if (prefix_var == NULL || !*prefix_var) {
+                /* Invalid instr.  TODO: have processor w/ SSE4, confirm that
+                 * an exception really is raised.
+                 */
+                info = NULL;
+            } else
+                *prefix_var = false;
+        }
     }
 
     /* we go through regular tables for vex but only some are valid w/ vex */
-    if (info != NULL && di->vex_encoded && !TEST(REQUIRES_VEX, info->flags))
-        info = NULL; /* invalid encoding */
-    else if (info != NULL && !di->vex_encoded && TEST(REQUIRES_VEX, info->flags))
+    if (info != NULL && di->vex_encoded) {
+        if (!TEST(REQUIRES_VEX, info->flags))
+            info = NULL; /* invalid encoding */
+        else if (TEST(REQUIRES_VEX_L_0, info->flags) && TEST(PREFIX_VEX_L, di->prefixes))
+            info = NULL;
+    } else if (info != NULL && !di->vex_encoded && TEST(REQUIRES_VEX, info->flags))
         info = NULL; /* invalid encoding */
     /* XXX: not currently marking these cases as invalid instructions:
      * - if no TYPE_H:
@@ -1007,7 +1080,7 @@ read_instruction(byte *pc, byte *orig_pc,
         *ret_info = &invalid_instr;
         return NULL;
     }
-        
+
 #ifdef INTERNAL
     DODEBUG({ /* rep & repne should have been completely handled by now */
         /* processor will typically ignore extra prefixes, but we log this internally
@@ -1060,6 +1133,17 @@ read_instruction(byte *pc, byte *orig_pc,
             di->prefixes |= PREFIX_DATA;
         }
     }
+    if ((di->repne_prefix || di->rep_prefix) &&
+        (TEST(PREFIX_LOCK, di->prefixes) ||
+         /* xrelease can go on non-0xa3 mov_st w/o lock prefix */
+         (di->repne_prefix && info->type == OP_mov_st &&
+          (info->opcode & 0xa30000) != 0xa30000))) {
+        /* we don't go so far as to ensure the mov_st is of the right type */
+        if (di->repne_prefix)
+            di->prefixes |= PREFIX_XACQUIRE;
+        if (di->rep_prefix)
+            di->prefixes |= PREFIX_XRELEASE;
+    }
     
     /* read any trailing immediate bytes */
     if (info->dst1_type != TYPE_NONE)
@@ -1107,6 +1191,7 @@ typedef enum {
     DECODE_REG_BASE,
     DECODE_REG_INDEX,
     DECODE_REG_RM,
+    DECODE_REG_VEX,
 } decode_reg_t;
 
 /* Pass in the raw opsize, NOT a size passed through resolve_variable_size(),
@@ -1126,6 +1211,13 @@ decode_reg(decode_reg_t which_reg, decode_info_t *di, byte optype, opnd_size_t o
         reg = di->index; extend = X64_MODE(di) && TEST(PREFIX_REX_X, di->prefixes); break;
     case DECODE_REG_RM:
         reg = di->rm;    extend = X64_MODE(di) && TEST(PREFIX_REX_B, di->prefixes); break;
+    case DECODE_REG_VEX:
+        /* Part of XOP/AVX: vex.vvvv selects general-purpose register.
+         * It has 4 bits so no separate prefix bit is needed to extend.
+         */
+        reg = (~di->vex_vvvv) & 0xf; /* bit-inverted */
+        extend = false;
+        break;
     default:
         CLIENT_ASSERT(false, "internal unknown reg error");
         break;
@@ -1139,6 +1231,7 @@ decode_reg(decode_reg_t which_reg, decode_info_t *di, byte optype, opnd_size_t o
     case TYPE_V:
     case TYPE_W:
     case TYPE_V_MODRM:
+    case TYPE_VSIB:
         return ((TEST(PREFIX_VEX_L, di->prefixes) &&
                  /* we use this to indicate .LIG since all {VHW}s{sd} types
                   * and no others are .LIG
@@ -1158,6 +1251,7 @@ decode_reg(decode_reg_t which_reg, decode_info_t *di, byte optype, opnd_size_t o
     case TYPE_E:
     case TYPE_G:
     case TYPE_R:
+    case TYPE_B:
     case TYPE_M:
     case TYPE_INDIR_E:
     case TYPE_FLOATMEM:
@@ -1220,7 +1314,7 @@ decode_modrm(decode_info_t *di, byte optype, opnd_size_t opsize,
         int disp = 0;
         reg_id_t index_reg = REG_NULL;
         int scale = 0;
-        char memtype = TYPE_M;
+        char memtype = (optype == TYPE_VSIB ? TYPE_VSIB : TYPE_M);
         opnd_size_t memsize = resolve_addr_size(di);
         bool encode_zero_disp, force_full_disp;
         if (di->has_disp)
@@ -1232,7 +1326,8 @@ decode_modrm(decode_info_t *di, byte optype, opnd_size_t opsize,
                           "decode error: x86 addr16 cannot have a SIB byte");
             if (di->index == 4 &&
                 /* rex.x enables r12 as index */
-                (!X64_MODE(di) || !TEST(PREFIX_REX_X, di->prefixes))) {
+                (!X64_MODE(di) || !TEST(PREFIX_REX_X, di->prefixes)) &&
+                optype != TYPE_VSIB) {
                 /* no scale/index */
                 index_reg = REG_NULL;
             } else {
@@ -1254,13 +1349,15 @@ decode_modrm(decode_info_t *di, byte optype, opnd_size_t opsize,
                 /* no base */
                 base_reg = REG_NULL;
             } else {
-                base_reg = decode_reg(DECODE_REG_BASE, di, memtype, memsize);
+                base_reg = decode_reg(DECODE_REG_BASE, di, TYPE_M, memsize);
                 if (base_reg == REG_NULL) {
                     CLIENT_ASSERT(false, "decode error: internal modrm decode error");
                     return false;
                 }
             }
         } else {
+            if (optype == TYPE_VSIB)
+                return false; /* invalid w/o vsib byte */
             if ((!addr16 && di->mod == 0 && di->rm == 5) ||
                 (addr16 && di->mod == 0 && di->rm == 6)) {
                 /* just absolute displacement, or rip-relative for x64 */
@@ -1455,6 +1552,12 @@ decode_operand(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *opnd)
     case TYPE_REG:
         *opnd = opnd_create_reg(opsize);
         return true;
+    case TYPE_XREG:
+        *opnd = opnd_create_reg(resolve_var_reg
+                                (di, opsize, false/*!addr*/, false/*!shrinkable*/
+                                 _IF_X64(true/*d64*/) _IF_X64(false/*!growable*/)
+                                 _IF_X64(false/*!extendable*/)));
+        return true;
     case TYPE_VAR_REG:
         *opnd = opnd_create_reg(resolve_var_reg
                                 (di, opsize, false/*!addr*/, true/*shrinkable*/
@@ -1471,6 +1574,12 @@ decode_operand(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *opnd)
         *opnd = opnd_create_reg(resolve_var_reg
                                 (di, opsize, false/*!addr*/, true/*shrinkable*/
                                  _IF_X64(true/*d64*/) _IF_X64(false/*!growable*/)
+                                 _IF_X64(false/*!extendable*/)));
+        return true;
+    case TYPE_VAR_REGX:
+        *opnd = opnd_create_reg(resolve_var_reg
+                                (di, opsize, false/*!addr*/, false/*!shrinkable*/
+                                 _IF_X64(false/*!d64*/) _IF_X64(true/*growable*/)
                                  _IF_X64(false/*!extendable*/)));
         return true;
     case TYPE_VAR_ADDR_XREG:
@@ -1505,6 +1614,7 @@ decode_operand(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *opnd)
         return true;
     case TYPE_FLOATMEM:
     case TYPE_M:
+    case TYPE_VSIB:
         /* ensure referencing memory */
         if (di->mod >= 3)
             return false;
@@ -1703,6 +1813,12 @@ decode_operand(decode_info_t *di, byte optype, opnd_size_t opsize, opnd_t *opnd)
                                       opsize != OPSZ_4_of_16 &&
                                       opsize != OPSZ_8_of_16) ?
                                      REG_START_YMM : REG_START_XMM) + reg);
+            return true;
+        }
+    case TYPE_B:
+        {
+            /* part of XOP/AVX: vex.vvvv selects general-purpose register */
+            *opnd = opnd_create_reg(decode_reg(DECODE_REG_VEX, di, optype, opsize));
             return true;
         }
     default:
@@ -1948,6 +2064,9 @@ decode_common(dcontext_t *dcontext, byte *pc, byte *orig_pc, instr_t *instr)
         }
         }
     }
+    /* PREFIX_XRELEASE is allowed w/o LOCK on mov_st, but use of it or PREFIX_XACQUIRE
+     * in other situations does not result in #UD so we ignore.
+     */
 
     if (orig_pc != pc) {
         /* We do not want to copy when encoding and condone an invalid

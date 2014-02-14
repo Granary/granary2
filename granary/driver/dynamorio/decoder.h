@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_DRIVER_DYNAMORIO_DECODER_H_
 #define GRANARY_DRIVER_DYNAMORIO_DECODER_H_
 

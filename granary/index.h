@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_INDEX_H_
 #define GRANARY_INDEX_H_
 

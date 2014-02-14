@@ -370,6 +370,8 @@ extern void dynamorio_heap_free(void *, void *, unsigned long long, int);
 #define memset granary_memset
 #define memcmp granary_memcmp
 
+extern void dr_xgetbv(uint *high, uint *low);
+
 #ifdef __cplusplus
 }
 #endif

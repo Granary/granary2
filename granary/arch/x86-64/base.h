@@ -1,6 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-
 #ifndef GRANARY_ARCH_X86_64_BASE_H_
 #define GRANARY_ARCH_X86_64_BASE_H_
 

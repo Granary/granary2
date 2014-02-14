@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2012 Google, Inc.  All rights reserved.
+ * Copyright (c) 2012-2014 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -217,7 +217,7 @@ opnd_create_pc(app_pc pc)
 
 #define GET_BASE_DISP(opnd) \
     (CLIENT_ASSERT_(opnd_is_base_disp(opnd), \
-                    "opnd_get_disp called on invalid opnd type") \
+                    "opnd_get_base_disp called on invalid opnd type") \
      (opnd).value.base_disp)
 
 #define OPND_GET_BASE(opnd)  (GET_BASE_DISP(opnd).base_reg)
@@ -345,8 +345,35 @@ instr_get_note(instr_t *instr)
 {
     return instr->note;
 }
+#ifndef GRANARY
+INSTR_INLINE
+instr_t*
+instr_get_next(instr_t *instr)
+{
+    return instr->next;
+}
 
+INSTR_INLINE
+instr_t*
+instr_get_prev(instr_t *instr)
+{
+    return instr->prev;
+}
 
+INSTR_INLINE
+void
+instr_set_next(instr_t *instr, instr_t *next)
+{
+    instr->next = next;
+}
+
+INSTR_INLINE
+void
+instr_set_prev(instr_t *instr, instr_t *prev)
+{
+    instr->prev = prev;
+}
+#endif  /* GRANARY */
 #endif /* DR_FAST_IR */
 
 /* DR_API EXPORT END */
