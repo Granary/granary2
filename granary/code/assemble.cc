@@ -15,6 +15,7 @@
 #include "granary/code/assemble.h"
 #include "granary/code/edge.h"
 
+#include "granary/driver.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -85,18 +86,17 @@ static void PreprocessBlocks(LocalControlFlowGraph *cfg) {
 // jumps.
 static DecodedBasicBlock **Schedule(DecodedBasicBlock *block,
                                     DecodedBasicBlock **next_ptr) {
-  if (block->next) {
-    return next_ptr;
-  }
-  *next_ptr = block; // Chain this block into the schedule.
-  next_ptr = &(block->next);
-
-  for (auto instr : block->Instructions()) {
-    auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
-    if (cfi && cfi->IsUnconditionalJump()) {
-      auto target = DynamicCast<DecodedBasicBlock *>(cfi->TargetBlock());
-      if (target) {
-        next_ptr = Schedule(target, next_ptr);
+  if (!block->next) {
+    *next_ptr = block;  // Chain this block into the schedule.
+    next_ptr = &(block->next);
+    block->next = block;  // Sentinel to prevent loops in the list.
+    for (auto instr : block->Instructions()) {
+      auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
+      if (cfi && cfi->IsUnconditionalJump()) {
+        auto target = DynamicCast<DecodedBasicBlock *>(cfi->TargetBlock());
+        if (target) {
+          next_ptr = Schedule(target, next_ptr);
+        }
       }
     }
   }
@@ -109,11 +109,11 @@ static DecodedBasicBlock *Schedule(LocalControlFlowGraph *cfg) {
   DecodedBasicBlock **next(&first);
   for (auto block : cfg->Blocks()) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    if (!decoded_block || decoded_block->next) {
-      continue;  // Wrong kind of block, or already scheduled.
+    if (decoded_block && !decoded_block->next) {
+      next = Schedule(decoded_block, next);
     }
-    next = Schedule(decoded_block, next);
   }
+  *next = nullptr;  // Clobber the remaining sentinel with a `nullptr`.
   return first;
 }
 
@@ -133,7 +133,8 @@ static ProgramCounter TargetPC(const Instruction *instr) {
   if (IsA<const ControlFlowInstruction *>(instr)) {
     auto cfi = DynamicCast<const ControlFlowInstruction *>(instr);
     auto target = cfi->TargetBlock();
-    if (IsA<InstrumentedBasicBlock *>(target)) {
+    if (IsA<InstrumentedBasicBlock *>(target) ||
+        IsA<DirectBasicBlock *>(target)) {
       return target->CacheStartPC();
     } else if (IsA<NativeBasicBlock *>(target)) {
       return target->AppStartPC();
@@ -146,26 +147,24 @@ static ProgramCounter TargetPC(const Instruction *instr) {
   return nullptr;
 }
 
-// Returns true if an instruction can be removed.
+// Returns true if an instruction can be removed. The first test is jumping to
+// the next instruction.
 static bool CanRemoveInstruction(const Instruction *instr) {
   auto instr_pc = instr->CacheStartPC();
   auto target_pc = TargetPC(instr);
-
   if (target_pc) {
     return (instr_pc + instr->Length()) == target_pc;
   }
-
   auto native_instr = DynamicCast<const NativeInstruction *>(instr);
-  if (native_instr) {
-    return native_instr->IsNoOp();
-  }
-
-  return false;
+  return native_instr && native_instr->IsNoOp();
 }
 
 // Returns true if the encoding of a particular instruction can be shrunk.
 static bool CanShrinkInstruction(const Instruction *) {
   // TODO(pag): Implement this. See notes in `arch/x86-64/base.h`.
+  // Note: Need to watch out that a stub that has a shorter relative
+  //       displacement does not imply that the eventual resolved target will
+  //       have the same short relative displacement.
   return false;
 }
 
@@ -198,6 +197,30 @@ static int StageEncode(DecodedBasicBlock *blocks) {
   return static_cast<int>(cache_pc - start_pc);
 }
 
+// Adjust the "stage" encoding of the blocks to pointer to their proper targets.
+void AdjustEncoding(DecodedBasicBlock *block, ptrdiff_t adjust) {
+  auto meta = GetMetaData<CacheMetaData>(block);
+  meta->cache_pc += adjust;
+  for (auto instr : block->Instructions()) {
+    instr->SetCacheStartPC(instr->CacheStartPC() + adjust);
+  }
+}
+
+// Encode all blocks.
+static void Encode(DecodedBasicBlock *blocks, CacheProgramCounter cache_pc) {
+  const CacheProgramCounter base_pc(nullptr);
+  const ptrdiff_t adjust(cache_pc - base_pc);
+  for (auto block : DecodedBlockIterator(blocks)) {
+    AdjustEncoding(block, adjust);
+  }
+  driver::InstructionDecoder decoder;
+  for (auto block : DecodedBlockIterator(blocks)) {
+    for (auto instr : block->Instructions()) {
+      instr->Encode(&decoder);
+    }
+  }
+}
+
 // Try to find the "relaxed" size of the scheduled blocks by repeatedly
 // optimizing the blocks until no further size reduction can be made.
 static int Resize(DecodedBasicBlock *blocks) {
@@ -210,19 +233,29 @@ static int Resize(DecodedBasicBlock *blocks) {
   return static_cast<int>(len);
 }
 
+// Assemble the edges of a local CFG.
+static void AssembleEdges(LocalControlFlowGraph *cfg, CodeAllocator *edge) {
+  for (auto block : cfg->Blocks()) {
+    auto direct_block = DynamicCast<DirectBasicBlock *>(block);
+    if (direct_block) {
+      auto meta = direct_block->MetaData();
+      auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+      cache_meta->cache_pc = AssembleEdge(edge, meta);
+    }
+  }
+}
+
 }  // namespace
 
 // Assemble the local control-flow graph into
 void Assemble(LocalControlFlowGraph *cfg, CodeAllocator *cache,
               CodeAllocator *edge) {
   PreprocessBlocks(cfg);
+  AssembleEdges(cfg, edge);
   auto blocks = Schedule(cfg);
   auto relaxed_size = Resize(blocks);
-  // TODO(pag): stubs.
-  // TODO(pag): Final allocation size check, should match `relaxed_size`.
-  GRANARY_UNUSED(relaxed_size);
-  GRANARY_UNUSED(cache);
-  GRANARY_UNUSED(edge);
+  auto code = cache->Allocate(GRANARY_ARCH_CACHE_LINE_SIZE, relaxed_size);
+  Encode(blocks, code);
 }
 
 }  // namespace granary

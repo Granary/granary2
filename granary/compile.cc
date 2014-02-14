@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/cast.h"
+
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/code/allocate.h"
@@ -27,7 +29,8 @@ void Compile(GenericMetaData *meta) {
 
 // Initialize the compilation system.
 void InitCompiler(void) {
-  //Compile(new GenericMetaData(UnsafeCast<>));
+  Compile(new GenericMetaData(
+      UnsafeCast<AppProgramCounter>(&Compile)));
 }
 
 }  // namespace granary

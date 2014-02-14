@@ -43,7 +43,7 @@ void FreePages(void *addr, int num, MemoryIntent) {
 void ProtectPages(void *addr, int num, MemoryProtection prot) {
   int prot_bits(0);
   if (MemoryProtection::EXECUTABLE == prot) {
-    prot_bits = PROT_EXEC;
+    prot_bits = PROT_EXEC | PROT_READ | PROT_WRITE;
   } else if (MemoryProtection::READ_ONLY == prot) {
     prot_bits = PROT_READ;
   } else if (MemoryProtection::READ_WRITE == prot) {

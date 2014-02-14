@@ -42,6 +42,9 @@ CacheProgramCounter Instruction::StageEncode(CacheProgramCounter cache_pc_) {
   return cache_pc + this->Length();
 }
 
+// Encode this instruction at `cache_pc`.
+void Instruction::Encode(driver::InstructionDecoder *) { }
+
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
   Instruction *instr(that.release());
   list.SetPrevious(this, instr);
@@ -153,6 +156,11 @@ bool NativeInstruction::HasIndirectTarget(void) const {
   return instruction->HasIndirectTarget();
 }
 
+// Encode this instruction at `cache_pc`.
+void NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
+  encoder->Encode(instruction.get(), cache_pc);
+}
+
 // Return the targeted instruction of this branch.
 const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;
@@ -186,6 +194,17 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
   return target;
 }
 
+// Encode this instruction at `cache_pc`.
+void ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
+  if (IsA<InstrumentedBasicBlock *>(target) &&
+      !IsA<IndirectBasicBlock *>(target)) {
+    instruction->SetBranchTarget(target->CacheStartPC());
+  } else if (IsA<NativeBasicBlock *>(target)) {
+    instruction->SetBranchTarget(target->AppStartPC());
+  }
+  encoder->Encode(instruction.get(), cache_pc);
+}
+
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
@@ -193,6 +212,12 @@ void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
   new_target->Acquire();
   target = new_target;
   old_target->Release();
+}
+
+// Encode this instruction at `cache_pc`.
+void BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
+  instruction->SetBranchTarget(target->CacheStartPC());
+  encoder->Encode(instruction.get(), cache_pc);
 }
 
 }  // namespace granary

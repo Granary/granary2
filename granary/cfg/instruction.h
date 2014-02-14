@@ -16,8 +16,10 @@ class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
 
+GRANARY_INTERNAL_DEFINITION
 namespace driver {
-GRANARY_INTERNAL_DEFINITION class DecodedInstruction;
+class DecodedInstruction;
+class InstructionDecoder;
 }  // namespace driver
 
 // Represents an abstract instruction.
@@ -47,6 +49,15 @@ class Instruction {
     return cache_pc;
   }
 
+  // Change the cache program counter.
+  GRANARY_INTERNAL_DEFINITION
+  inline void SetCacheStartPC(CacheProgramCounter cache_pc_) {
+    cache_pc = cache_pc_;
+  }
+
+  // Encode this instruction at `cache_pc`.
+  GRANARY_INTERNAL_DEFINITION virtual void Encode(driver::InstructionDecoder *);
+
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
   GRANARY_IF_DEBUG(virtual)
@@ -61,10 +72,11 @@ class Instruction {
   // Used to put instructions into lists.
   GRANARY_INTERNAL_DEFINITION ListHead list;
 
- private:
+ protected:
   // Where has this instruction been encoded?
   GRANARY_INTERNAL_DEFINITION CacheProgramCounter cache_pc;
 
+ private:
   GRANARY_IF_EXTERNAL( Instruction(void) = delete; )
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
@@ -72,8 +84,13 @@ class Instruction {
 // Built-in annotations.
 GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {
+  // Dummy annotations representing the beginning and end of a given basic
+  // block.
   BEGIN_BASIC_BLOCK,
   END_BASIC_BLOCK,
+
+  // This identifies regions of code in the kernel that might fault. In Linux,
+  // these regions are identified using exception tables.
   BEGIN_MIGHT_FAULT,
   END_MIGHT_FAULT,
 
@@ -82,12 +99,7 @@ enum InstructionAnnotation {
   END_DELAY_INTERRUPT,
 
   // Target of a branch instruction.
-  LABEL,
-
-  // When eliding function calls (for partial function inlining), we have a
-  // special annotation that takes the place of the function call instruction
-  // and is responsible for pushing the function's return address on the stack.
-  PUSH_FUNCTION_RETURN_ADDRESS
+  LABEL
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -158,19 +170,26 @@ class NativeInstruction : public Instruction {
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
 
+  // Encode this instruction at `cache_pc`.
+  GRANARY_INTERNAL_DEFINITION
+  virtual void Encode(driver::InstructionDecoder *) override;
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
+ protected:
+  GRANARY_INTERNAL_DEFINITION
+  std::unique_ptr<driver::DecodedInstruction> instruction;
+
  private:
   friend class ControlFlowInstruction;
 
   NativeInstruction(void) = delete;
 
-  GRANARY_INTERNAL_DEFINITION
-  std::unique_ptr<driver::DecodedInstruction> instruction;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeInstruction);
 };
 
 // Represents a control-flow instruction that is local to a basic block, i.e.
@@ -187,6 +206,10 @@ class BranchInstruction final : public NativeInstruction {
 
   // Return the targeted instruction of this branch.
   const AnnotationInstruction *TargetInstruction(void) const;
+
+  // Encode this instruction at `cache_pc`.
+  GRANARY_INTERNAL_DEFINITION
+  virtual void Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
@@ -219,6 +242,10 @@ class ControlFlowInstruction final : public NativeInstruction {
 
   // Return the target block of this CFI.
   BasicBlock *TargetBlock(void) const;
+
+  // Encode this instruction at `cache_pc`.
+  GRANARY_INTERNAL_DEFINITION
+  virtual void Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {

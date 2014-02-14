@@ -27,6 +27,7 @@ class DecodedInstruction {
   DecodedInstruction *Copy(void) const;
 
   ProgramCounter BranchTarget(void) const;
+  void SetBranchTarget(ProgramCounter);
 
   bool IsFunctionCall(void) const;
   bool IsFunctionReturn(void) const;

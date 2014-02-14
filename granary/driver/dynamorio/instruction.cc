@@ -45,6 +45,11 @@ ProgramCounter DecodedInstruction::BranchTarget(void) const {
   return instruction.src0.value.pc;
 }
 
+void DecodedInstruction::SetBranchTarget(ProgramCounter pc) {
+  instruction.src0.value.pc = pc;
+  instruction.src0.kind = dynamorio::PC_kind;
+}
+
 bool DecodedInstruction::IsFunctionCall(void) const {
   const unsigned op(instruction.opcode);
   return dynamorio::OP_call <= op && op <= dynamorio::OP_call_far_ind;
