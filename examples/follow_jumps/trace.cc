@@ -17,7 +17,7 @@ class JumpFollower : public Tool {
       }
       for (auto succ : block->Successors()) {
         if (succ.cti->IsJump() &&
-            !succ.cti->IsConditionalJump() &&
+            //!succ.cti->IsConditionalJump() &&
             !succ.cti->HasIndirectTarget()) {
           materializer->RequestBlock(succ.block);
         }

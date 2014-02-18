@@ -7,7 +7,7 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/driver/xed2-intel64/decoder.h"
+#include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
 #include "granary/driver/xed2-intel64/relativize.h"
 

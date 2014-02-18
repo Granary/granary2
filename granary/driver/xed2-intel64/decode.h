@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_XED2_INTEL64_DECODER_H_
-#define GRANARY_DRIVER_XED2_INTEL64_DECODER_H_
+#ifndef GRANARY_DRIVER_XED2_INTEL64_DECODE_H_
+#define GRANARY_DRIVER_XED2_INTEL64_DECODE_H_
 
 #include "granary/base/base.h"
 #include "granary/base/types.h"
@@ -42,4 +42,4 @@ class InstructionDecoder {
 }  // namespace driver
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_XED2_INTEL64_DECODER_H_
+#endif  // GRANARY_DRIVER_XED2_INTEL64_DECODE_H_

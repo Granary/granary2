@@ -25,7 +25,7 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
 
 CodeAllocator::CodeAllocator(int num_pages_)
     : num_pages(num_pages_),
-      num_bytes(num_pages * GRANARY_ARCH_CACHE_LINE_SIZE),
+      num_bytes(num_pages * GRANARY_ARCH_PAGE_FRAME_SIZE),
       slab_sentinel(0, 0, num_bytes + 1, nullptr),
       slab(&slab_sentinel),
       slab_lock() {}

@@ -43,7 +43,9 @@ CachePC Instruction::StageEncode(CachePC cache_pc_) {
 }
 
 // Encode this instruction at `cache_pc`.
-void Instruction::Encode(driver::InstructionDecoder *) { }
+bool Instruction::Encode(driver::InstructionDecoder *) {
+  return true;
+}
 
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
   Instruction *instr(that.release());
@@ -157,8 +159,8 @@ bool NativeInstruction::HasIndirectTarget(void) const {
 }
 
 // Encode this instruction at `cache_pc`.
-void NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
-  encoder->Encode(instruction.get(), cache_pc);
+bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
+  return encoder->Encode(instruction.get(), cache_pc);
 }
 
 // Return the targeted instruction of this branch.
@@ -195,14 +197,14 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
 }
 
 // Encode this instruction at `cache_pc`.
-void ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
+bool ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
   if (IsA<InstrumentedBasicBlock *>(target) &&
       !IsA<IndirectBasicBlock *>(target)) {
     instruction->SetBranchTarget(target->StartCachePC());
   } else if (IsA<NativeBasicBlock *>(target)) {
     instruction->SetBranchTarget(target->StartAppPC());
   }
-  encoder->Encode(instruction.get(), cache_pc);
+  return encoder->Encode(instruction.get(), cache_pc);
 }
 
 // Change the target of a control-flow instruction. This can involve an
@@ -215,9 +217,9 @@ void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
 }
 
 // Encode this instruction at `cache_pc`.
-void BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
-  instruction->SetBranchTarget(target->CacheStartPC());
-  encoder->Encode(instruction.get(), cache_pc);
+bool BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
+  instruction->SetBranchTarget(target->StartCachePC());
+  return encoder->Encode(instruction.get(), cache_pc);
 }
 
 }  // namespace granary

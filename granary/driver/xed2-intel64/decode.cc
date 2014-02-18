@@ -7,7 +7,7 @@
 
 #include "granary/breakpoint.h"
 
-#include "granary/driver/xed2-intel64/decoder.h"
+#include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
 
 namespace granary {
@@ -115,7 +115,7 @@ static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
   instr->has_pc_rel_op = true;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   instr_op->width = 64;
-  instr_op->rel_app_pc = instr->decoded_pc +
+  instr_op->rel_app_pc = instr->decoded_pc + instr->length +
                          xed_decoded_inst_get_branch_displacement(xedd);
 
   // Need to update the instruction width so that we treat all relative
@@ -134,7 +134,6 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
   if (XED_OPERAND_IMM0SIGNED == op_name) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
     instr_op->u.imm0 = xed3_operand_get_imm0(xedd);
-
   } else if (XED_OPERAND_IMM0 == op_name) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
     instr_op->u.imm0 = xed3_operand_get_imm0(xedd);
@@ -146,32 +145,29 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
   instr_op->width = xed_decoded_inst_get_immediate_width_bits(xedd);
 }
 
-// Convert a `xed_operand_t` into an `Operand`.
+// Convert a `xed_operand_t` into an `Operand`. This operates on explicit
+// operands only, and when an increments `instr->num_ops` when a new explicit
+// operand is found.
 static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
                                   const xed_operand_t *op) {
-  if (XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(op)) {
-    return;
-  }
-  auto op_name = xed_operand_name(op);
-  auto op_type = xed_operand_type(op);
-  auto instr_op = &(instr->ops[instr->num_operands++]);
+  if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
+    auto op_name = xed_operand_name(op);
+    auto op_type = xed_operand_type(op);
+    auto instr_op = &(instr->ops[instr->num_ops++]);
+    instr_op->rw = xed_operand_rw(op);
 
-  instr_op->rw = xed_operand_rw(op);
-
-  if (xed_operand_is_register(op_name)) {
-    ConvertRegisterOperand(instr_op, xedd, op_name);
-  } else if (XED_OPERAND_RELBR == op_name) {
-    ConvertRelativeBranch(instr, instr_op, xedd);
-  } else if (XED_OPERAND_TYPE_IMM == op_type ||
-             XED_OPERAND_TYPE_IMM_CONST == op_type) {
-    ConvertImmediateOperand(instr_op, xedd, op_name);
-  // More complicated.
-  } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {
-    granary_break_on_fault();
-
-  } else {
-    // TODO(pag): Implement this!
-    granary_break_on_fault();
+    if (xed_operand_is_register(op_name)) {
+      ConvertRegisterOperand(instr_op, xedd, op_name);
+    } else if (XED_OPERAND_RELBR == op_name) {
+      ConvertRelativeBranch(instr, instr_op, xedd);
+    } else if (XED_OPERAND_TYPE_IMM == op_type ||
+               XED_OPERAND_TYPE_IMM_CONST == op_type) {
+      ConvertImmediateOperand(instr_op, xedd, op_name);
+    } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {  // More complicated.
+      granary_break_on_fault();  // TODO(pag): Implement this!
+    } else {
+      granary_break_on_fault();  // TODO(pag): Implement this!
+    }
   }
 }
 
@@ -184,6 +180,31 @@ static void ConvertDecodedOperands(Instruction *instr,
   }
 }
 
+// Get the prefixes out of the instruction; however, ignore branch hint
+// prefixes.
+static void ConvertDecodedPrefixes(Instruction *instr,
+                                   xed_decoded_inst_t *xedd) {
+  instr->prefixes.s.rep = xed_operand_values_has_rep_prefix(xedd);
+  instr->prefixes.s.repne = xed_operand_values_has_repne_prefix(xedd);
+  instr->prefixes.s.lock = xed_operand_values_has_lock_prefix(xedd);
+}
+
+// Copy the raw bytes into the `encode_buffer` of the instruction. This will
+// strip off branch hint prefixes and adjust the instruction length if there
+// was a branch hint.
+static void ConvertBytes(Instruction *instr, xed_decoded_inst_t *xedd,
+                         AppPC pc) {
+  auto jcc_has_prefix = XED_CATEGORY_COND_BR == instr->category &&
+                        (xed_operand_values_branch_not_taken_hint(xedd) ||
+                         xed_operand_values_branch_taken_hint(xedd));
+  if (jcc_has_prefix) {
+    instr->length -= 1;
+  }
+  memcpy(&(instr->encode_buffer[0]),
+         &(pc[jcc_has_prefix ? 1 : 0]),
+         static_cast<size_t>(instr->length));
+}
+
 // Convert a `xed_decoded_inst_t` into an `Instruction`.
 static void ConvertDecodedInstruction(Instruction *instr,
                                       xed_decoded_inst_t *xedd,
@@ -191,13 +212,16 @@ static void ConvertDecodedInstruction(Instruction *instr,
   memset(instr, 0, sizeof *instr);
   instr->iclass = xed_decoded_inst_get_iclass(xedd);
   instr->category = xed_decoded_inst_get_category(xedd);
-  instr->length = static_cast<int8_t>(xed_decoded_inst_get_length(xedd));
-  instr->num_operands = 0;
+  instr->length = static_cast<decltype(instr->length)>(
+      xed_decoded_inst_get_length(xedd));
+  instr->num_ops = 0;
   instr->needs_encoding = false;
   instr->has_pc_rel_op = false;
+  instr->is_atomic = xed_operand_values_get_atomic(xedd);
   instr->decoded_pc = pc;
-  memcpy(&(instr->encode_buffer[0]), pc, static_cast<size_t>(instr->length));
+  ConvertDecodedPrefixes(instr, xedd);
   ConvertDecodedOperands(instr, xedd);
+  ConvertBytes(instr, xedd, pc);
 }
 }  // namespace
 
@@ -214,13 +238,93 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
   return nullptr;
 }
 
+namespace {
+
+// Convert a Granary relative branch operand into a XED encoder one. Granary's
+// `Operand` structure maintains the actual target, and then when we know where
+// the instruction will be encoded, we calculate the relative displacement. Here
+// we dependend on `instr->length` because we know ahead of time how long
+// the various jumps are. In other cases, `instr->length` is not safe to use.
+static void ConvertRelBranchOperand(const Instruction *instr,
+                                    const Operand *op,
+                                    xed_encoder_operand_t *ir_op) {
+  ir_op->width = 32;
+  if (instr->encoded_pc) {
+    ir_op->u.brdisp = static_cast<decltype(ir_op->u.brdisp)>(
+        op->rel_app_pc - (instr->encoded_pc + instr->length));
+  } else {
+    ir_op->u.brdisp = 0;
+  }
+}
+
+// Convert an `Operand` instro a `xed_encoder_operand_t`.
+static void ConvertEncodedOperand(const Instruction *instr,
+                                  const Operand *op,
+                                  xed_encoder_operand_t *ir_op,
+                                  uint32_t *max_width) {
+  ir_op->type = op->type;
+  if (XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
+    ConvertRelBranchOperand(instr, op, ir_op);
+  } else {
+    ir_op->width = op->width;
+    ir_op->u = op->u;
+  }
+
+  // Set the effective operand width to max width of all operands.
+  if (op->width > *max_width) {
+    *max_width = op->width;
+  }
+}
+
+// Conver an `Instruction` instances into an `xed_encoder_instruction_t`.
+static void ConvertInstruction(const Instruction *instr,
+                               xed_encoder_instruction_t *ir) {
+  uint32_t width(0);
+  ir->mode = XED_STATE;
+  ir->iclass = instr->iclass;
+  ir->prefixes = instr->prefixes;
+  ir->noperands = static_cast<decltype(ir->noperands)>(instr->num_ops);
+  for (int8_t i(0); i < instr->num_ops; ++i) {
+    ConvertEncodedOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
+  }
+  ir->effective_operand_width = width;
+  ir->effective_address_width = 0;
+}
+
+// Encode an instruction into the instruction's encode buffer.
+static void EncodeInstruction(Instruction *instr, CachePC pc) {
+  if (pc) {
+    instr->encoded_pc = pc;
+  }
+  xed_encoder_request_t xedd;
+  xed_encoder_instruction_t ir;
+  ConvertInstruction(instr, &ir);
+  xed_encoder_request_zero_set_mode(&xedd, &XED_STATE);
+  granary_break_on_fault_if(!xed_convert_to_encoder_request(&xedd, &ir));
+  unsigned encoded_len(0);
+  auto encode_status = xed_encode(&xedd, &(instr->encode_buffer[0]),
+                                  XED_MAX_INSTRUCTION_BYTES, &encoded_len);
+  granary_break_on_fault_if(XED_ERROR_NONE != encode_status);
+  instr->length = static_cast<decltype(instr->length)>(encoded_len);
+}
+
+// Copy the encoded instruction buffer to the encode location.
+static void CopyEncodedBytes(Instruction *instr, CachePC pc) {
+  if (pc) {
+    memcpy(pc, &(instr->encode_buffer[0]), static_cast<size_t>(instr->length));
+  }
+}
+}  // namespace
+
 // Encode a DynamoRIO instruction intermediate representation into an x86
 // instruction.
-CachePC InstructionDecoder::EncodeInternal(Instruction *instr,
-                                           CachePC pc) {
-  GRANARY_UNUSED(instr);
-  GRANARY_UNUSED(pc);
-  return pc;
+CachePC InstructionDecoder::EncodeInternal(Instruction *instr, CachePC pc) {
+  if (instr->needs_encoding || instr->has_pc_rel_op) {
+    EncodeInstruction(instr, pc);
+    instr->needs_encoding = false;
+  }
+  CopyEncodedBytes(instr, pc);
+  return pc + instr->length;
 }
 
 }  // namespace driver

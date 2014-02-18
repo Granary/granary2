@@ -46,18 +46,18 @@ class Instruction {
 
   // Return the encoded location of this instruction.
   GRANARY_INTERNAL_DEFINITION
-  inline CachePC CacheStartPC(void) const {
+  inline CachePC StartCachePC(void) const {
     return cache_pc;
   }
 
   // Change the cache program counter.
   GRANARY_INTERNAL_DEFINITION
-  inline void SetCacheStartPC(CachePC cache_pc_) {
+  inline void SetStartCachePC(CachePC cache_pc_) {
     cache_pc = cache_pc_;
   }
 
   // Encode this instruction at `cache_pc`.
-  GRANARY_INTERNAL_DEFINITION virtual void Encode(driver::InstructionDecoder *);
+  GRANARY_INTERNAL_DEFINITION virtual bool Encode(driver::InstructionDecoder *);
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
@@ -173,7 +173,7 @@ class NativeInstruction : public Instruction {
 
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
-  virtual void Encode(driver::InstructionDecoder *) override;
+  virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
@@ -211,7 +211,7 @@ class BranchInstruction final : public NativeInstruction {
 
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
-  virtual void Encode(driver::InstructionDecoder *) override;
+  virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
@@ -249,7 +249,7 @@ class ControlFlowInstruction final : public NativeInstruction {
 
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
-  virtual void Encode(driver::InstructionDecoder *) override;
+  virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {

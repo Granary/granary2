@@ -75,6 +75,9 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
 // exposed (directly) to tools.
 struct CacheMetaData : MutableMetaData {
 
+  // Initialize Granary's internal translation cache meta-data.
+  CacheMetaData(void);
+
   // Where this block is located in the code cache.
   CachePC cache_pc;
 

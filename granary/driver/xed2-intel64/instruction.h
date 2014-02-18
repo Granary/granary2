@@ -55,16 +55,17 @@ struct Instruction {
   // Instruction class. This roughly corresponds to an opcode.
   xed_iclass_enum_t iclass;
   xed_category_enum_t category;
+  xed_encoder_prefixes_t prefixes;
 
   // Length of the instruction in bytes. Invalid if `needs_encoding` is true.
   int8_t length;
 
   // Number of explicit operands.
-  int8_t num_operands;
+  int8_t num_ops;
 
   // This instruction has been changed since being decoded, or was created and
   // so has never been encoded/decoded.
-  bool needs_encoding;
+  bool needs_encoding:1;
 
   // Does this instruction have a PC-relative operand? This is used by
   // `granary/drivers/xed2-intel64/relativize.cc` to more quickly figure out
@@ -72,7 +73,10 @@ struct Instruction {
   //
   // This behaves a bit like `needs_encoding`, because if we have a PC-relative
   // operand then it's treated as requiring relativization.
-  bool has_pc_rel_op;
+  bool has_pc_rel_op:1;
+
+  // Is this an atomic operation?
+  bool is_atomic:1;
 
   // Raw bytes of this instruction. When decoding an instruction, we copy the
   // decoded bytes into here. When encoding an instruction, we overwrite these
@@ -82,10 +86,6 @@ struct Instruction {
   // Explicit operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
   Operand ops[XED_ENCODER_OPERANDS_MAX];
-
-  // Implicit operands. Tables of implicit operand sequences are auto-generated
-  // by `dependencies/xed2-intel64/granary/make_ir.cc`.
-  const xed_encoder_operand_t *implicit_ops;
 
   // Where was this instruction encoded/decoded.
   union {

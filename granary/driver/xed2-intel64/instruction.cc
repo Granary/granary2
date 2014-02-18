@@ -5,6 +5,7 @@
 #include "granary/base/string.h"
 #include "granary/base/types.h"
 
+#include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
 
 #include "granary/breakpoint.h"
@@ -73,7 +74,7 @@ bool Instruction::HasIndirectTarget(void) const {
 // Return the (current) length of the instruction.
 int Instruction::Length(void) const {
   if (GRANARY_UNLIKELY(needs_encoding)) {
-
+    InstructionDecoder().Encode(const_cast<Instruction *>(this), nullptr);
   }
   return length;
 }

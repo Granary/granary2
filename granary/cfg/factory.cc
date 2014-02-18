@@ -94,8 +94,7 @@ static void ExtendInstructionList(BlockFactory *materializer,
   for (; !IsA<ControlFlowInstruction *>(instr); ) {
     auto dinstr = new driver::Instruction;
     if (!decoder.DecodeNext(dinstr, &pc)) {
-      auto block = new NativeBasicBlock(pc);
-      instr->InsertAfter(lir::Jump(block));
+      instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
       delete dinstr;
       return;
     }
@@ -103,7 +102,19 @@ static void ExtendInstructionList(BlockFactory *materializer,
   }
   auto cti = DynamicCast<ControlFlowInstruction *>(instr);
   if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-    instr->InsertAfter(lir::Jump(materializer, pc));
+
+    // Unconditionally decode the next instruction. If it's a jump then we'll
+    // use the jump as the fall-through. If we can't decode it then we'll add
+    // a fall-through to native, and if it's neither then just add in a LIR
+    // instruction for the fall-through.
+    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
+    if (!decoder.Decode(dinstr.get(), pc)) {
+      instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
+    } else if (dinstr->IsUnconditionalJump()) {
+      instr->InsertAfter(std::move(MakeInstruction(dinstr.release())));
+    } else {
+      instr->InsertAfter(lir::Jump(materializer, pc));
+    }
   }
 }
 
@@ -180,24 +191,11 @@ BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
   for (auto block = cfg->first_block;
        block != cfg->first_new_block;
        block = block->list.GetNext(block)) {
-
-    if (block == exclude) {
-      continue;
-    }
-
     auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
-    if (!meta_block ||  // Bad block type or unmatched hash.
-        meta_block->cached_meta_hash != exclude->cached_meta_hash) {
-      continue;
-    }
-
-    if (meta_block->meta->Equals(exclude->meta)) {
-      auto direct_block = DynamicCast<DirectBasicBlock *>(block);
-      if (!direct_block) {
-        return meta_block;
-      } else if (direct_block->materialized_block) {
-        return direct_block->materialized_block;
-      }
+    if (meta_block &&
+        meta_block->cached_meta_hash == exclude->cached_meta_hash &&
+        meta_block->meta->Equals(exclude->meta)) {
+      return meta_block;
     }
   }
   return nullptr;

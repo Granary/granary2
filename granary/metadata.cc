@@ -25,6 +25,10 @@ bool TranslationMetaData::Equals(const TranslationMetaData *meta) const {
   return source == meta->source && native_pc == meta->native_pc;
 }
 
+// Initialize Granary's internal translation cache meta-data.
+CacheMetaData::CacheMetaData(void)
+    : cache_pc(nullptr) {}
+
 namespace {
 
 // Global list of registered meta-data descriptors.

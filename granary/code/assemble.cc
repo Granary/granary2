@@ -140,8 +140,7 @@ static DecodedBasicBlock *Schedule(LocalControlFlowGraph *cfg) {
 }
 
 // Pretend to encode a basic block at `cache_pc`.
-static CachePC StageEncode(DecodedBasicBlock *block,
-                                       CachePC cache_pc) {
+static CachePC StageEncode(DecodedBasicBlock *block, CachePC cache_pc) {
   auto meta = GetMetaData<CacheMetaData>(block);
   meta->cache_pc = cache_pc;
   for (auto instr : block->Instructions()) {
@@ -164,7 +163,7 @@ static PC TargetPC(const Instruction *instr) {
   } else if (IsA<const BranchInstruction *>(instr)) {
     auto branch = DynamicCast<const BranchInstruction *>(instr);
     auto target = branch->TargetInstruction();
-    return target->CacheStartPC();
+    return target->StartCachePC();
   }
   return nullptr;
 }
@@ -172,7 +171,7 @@ static PC TargetPC(const Instruction *instr) {
 // Returns true if an instruction can be removed. The first test is jumping to
 // the next instruction.
 static bool CanRemoveInstruction(const Instruction *instr) {
-  auto instr_pc = instr->CacheStartPC();
+  auto instr_pc = instr->StartCachePC();
   auto target_pc = TargetPC(instr);
   if (target_pc) {
     return (instr_pc + instr->Length()) == target_pc;
@@ -211,29 +210,26 @@ static bool OptimizeEncoding(DecodedBasicBlock *blocks) {
 
 // Stage encode all blocks and return the encoded size of the blocks.
 static int StageEncode(DecodedBasicBlock *blocks) {
-  CachePC cache_pc(nullptr);
-  auto start_pc = cache_pc;
+  auto cache_pc = CachePC(nullptr);
   for (auto block : DecodedBlockIterator(blocks)) {
     cache_pc = StageEncode(block, cache_pc);
   }
-  return static_cast<int>(cache_pc - start_pc);
+  return static_cast<int>(cache_pc - CachePC(nullptr));
 }
 
 // Adjust the "stage" encoding of the blocks to pointer to their proper targets.
-void AdjustEncoding(DecodedBasicBlock *block, ptrdiff_t adjust) {
+void AdjustEncoding(DecodedBasicBlock *block, uintptr_t adjust) {
   auto meta = GetMetaData<CacheMetaData>(block);
   meta->cache_pc += adjust;
   for (auto instr : block->Instructions()) {
-    instr->SetCacheStartPC(instr->CacheStartPC() + adjust);
+    instr->SetStartCachePC(instr->StartCachePC() + adjust);
   }
 }
 
 // Encode all blocks.
 static void Encode(DecodedBasicBlock *blocks, CachePC cache_pc) {
-  const CachePC base_pc(nullptr);
-  const ptrdiff_t adjust(cache_pc - base_pc);
   for (auto block : DecodedBlockIterator(blocks)) {
-    AdjustEncoding(block, adjust);
+    AdjustEncoding(block, reinterpret_cast<uintptr_t>(cache_pc));
   }
   driver::InstructionDecoder decoder;
   for (auto block : DecodedBlockIterator(blocks)) {

@@ -25,9 +25,14 @@ static driver::Instruction *CFI(xed_iclass_enum_t iclass,
 
   instr->iclass = iclass;
   instr->category = category;
-  instr->length = 5; // Opcode + rel32 displacement.
-  instr->num_operands = 1;
-  instr->needs_encoding = false;
+  if (XED_CATEGORY_COND_BR == category) {
+    instr->length = 6; // rel32 Jcc.
+  } else {
+    instr->length = 5; // rel32 CALL/JMP.
+  }
+
+  instr->num_ops = 1;
+  instr->needs_encoding = false;  // Special case!
   instr->has_pc_rel_op = true;
 
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_BRDISP;
