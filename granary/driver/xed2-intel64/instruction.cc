@@ -15,14 +15,14 @@ namespace driver {
 
 // Get the PC-relative branch target.
 PC Instruction::BranchTarget(void) const {
-  return ops[0].rel_pc;
+  return ops[0].rel.pc;
 }
 
 // Set the PC-relative branch target.
 //
 // Note: Don't need to modify `needs_encoding` because
 void Instruction::SetBranchTarget(PC pc) {
-  ops[0].rel_pc = pc;
+  ops[0].rel.pc = pc;
 }
 
 bool Instruction::IsFunctionCall(void) const {
@@ -73,7 +73,7 @@ bool Instruction::HasIndirectTarget(void) const {
 
 // Return the (current) length of the instruction.
 int Instruction::Length(void) const {
-  if (GRANARY_UNLIKELY(needs_encoding)) {
+  if (GRANARY_UNLIKELY(needs_encoding && !has_pc_rel_op)) {
     InstructionDecoder().Encode(const_cast<Instruction *>(this), nullptr);
   }
   return length;

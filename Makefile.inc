@@ -120,7 +120,8 @@ GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 
 # Disable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
-GRANARY_COMMON_WARN_FLAGS += -Wno-gnu -Wno-c11-extensions -Wno-long-long
+GRANARY_COMMON_WARN_FLAGS += -Wno-extended-offsetof -Wno-gnu -Wno-long-long
+GRANARY_COMMON_WARN_FLAGS += -Wno-c11-extensions
 
 # Add the common flags to both the C++ and C compiler flags.
 GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS)

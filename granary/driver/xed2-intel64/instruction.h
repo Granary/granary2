@@ -19,16 +19,25 @@ struct Operand {
   xed_encoder_operand_type_t type;
   union {
     decltype(xed_encoder_operand_t().u) u;
-    uintptr_t rel_imm;
-    PC rel_pc;
-    AppPC rel_app_pc;
-    CachePC rel_cache_pc;
+    union {
+      intptr_t imm;
+      PC pc;
+      AppPC app_pc;
+      CachePC cache_pc;
+    } __attribute__((packed)) rel;
   } __attribute__((packed));
   xed_uint32_t width;  // Operand width in bits.
 
   // Extra field.
   xed_operand_action_enum_t rw;
 };
+
+// Make sure these two fields overlap so that we can treat relative immediates
+// (signed) just like immediates (unsigned).
+static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, u.imm0),
+    "Bad packing of `Operand::rel::imm`. Does not overlap `Operand::u::imm0`.");
+static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, rel.pc),
+    "Bad packing of `Operand::rel::imm`. Does not overlap `Operand::rel::pc`.");
 
 // Represents a high-level API to the XED encoder/decoder. This API represents
 // instructions at the granularity of instruction classes, and supports

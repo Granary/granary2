@@ -109,14 +109,18 @@ static void ConvertRegisterOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
   instr_op->width = xed_get_register_width_bits64(instr_op->u.reg);
 }
 
+static intptr_t NextDecodedAddress(const Instruction *instr) {
+  return reinterpret_cast<intptr_t>(instr->decoded_pc + instr->length);
+}
+
 // Pull out a PC-relative branch target from the XED instruction.
 static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
                                   xed_decoded_inst_t *xedd) {
   instr->has_pc_rel_op = true;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   instr_op->width = 64;
-  instr_op->rel_app_pc = instr->decoded_pc + instr->length +
-                         xed_decoded_inst_get_branch_displacement(xedd);
+  instr_op->rel.imm = NextDecodedAddress(instr) +
+                      xed_decoded_inst_get_branch_displacement(xedd);
 
   // Need to update the instruction width so that we treat all relative
   // branches as being rel32.
@@ -125,6 +129,49 @@ static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
     case 2: instr->length += 2; break;
     case 4: break;
     default: granary_break_on_fault();
+  }
+}
+
+// Returns true if a register is the instruction pointer.
+static bool RegIsInstructionPointer(xed_reg_enum_t reg) {
+  return XED_REG_RIP == reg || XED_REG_EIP == reg || XED_REG_IP == reg;
+}
+
+// Convert a memory operand into an `Operand`.
+static void ConverMemoryOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
+                                unsigned index) {
+  instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+  instr_op->u.mem.seg = xed_decoded_inst_get_seg_reg(xedd, index);
+  instr_op->u.mem.base = xed_decoded_inst_get_base_reg(xedd, index);
+  instr_op->u.mem.index = xed_decoded_inst_get_index_reg(xedd, index);
+  instr_op->u.mem.scale = xed_decoded_inst_get_scale(xedd, index);
+  instr_op->u.mem.disp.displacement =
+      static_cast<decltype(instr_op->u.mem.disp.displacement)>(
+          xed_decoded_inst_get_memory_displacement(xedd, index));
+  instr_op->u.mem.disp.displacement_width =
+      xed_decoded_inst_get_memory_displacement_width_bits(xedd, index);
+
+  // Can't use `xed_decoded_inst_get_effective_operand_width` because it doesn't
+  // consider the BYTEOP attribute. E.g. for a byte mov to memory,
+  // `xed_decoded_inst_get_effective_operand_width` returns a width of 32.
+  instr_op->width = xed_decoded_inst_get_operand_width(xedd);
+}
+
+// Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually
+// treat the effective address as either an immediate or as a base/disp, unlike
+// the expected XED_OPERAND_AGEN, and at encoding time convert back to an AGEN.
+//
+// Note: XED_OPERAND_AGEN's memory operand index is 0. See docs for function
+//       `xed_agen`.
+static void ConvertEffectiveAddress(Instruction *instr, Operand *instr_op,
+                                    xed_decoded_inst_t *xedd) {
+  if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, 0))) {
+    auto disp = xed_decoded_inst_get_memory_displacement(xedd, 0);
+    instr->has_pc_rel_op = true;
+    instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
+    instr_op->rel.imm = NextDecodedAddress(instr) + disp;
+  } else {
+    ConverMemoryOperand(instr_op, xedd, 0);
   }
 }
 
@@ -145,12 +192,20 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
   instr_op->width = xed_decoded_inst_get_immediate_width_bits(xedd);
 }
 
+// Returns true if an implicit operand is ambiguous. An implicit operand is
+// ambiguous if there are multiple encodings for the same iclass, and the given
+// operand (indexed by `op`) is explicit for some iforms but not others.
+bool IsAmbiguousOperand(xed_iform_enum_t iform, unsigned op_num);
+
+#include "generated/xed2-intel64/ambiguous_operands.cc"
+
 // Convert a `xed_operand_t` into an `Operand`. This operates on explicit
 // operands only, and when an increments `instr->num_ops` when a new explicit
 // operand is found.
 static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
-                                  const xed_operand_t *op) {
-  if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
+                                  const xed_operand_t *op, unsigned op_num) {
+  if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
+      IsAmbiguousOperand(xed_decoded_inst_get_iform_enum(xedd), op_num)) {
     auto op_name = xed_operand_name(op);
     auto op_type = xed_operand_type(op);
     auto instr_op = &(instr->ops[instr->num_ops++]);
@@ -160,6 +215,12 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
       ConvertRegisterOperand(instr_op, xedd, op_name);
     } else if (XED_OPERAND_RELBR == op_name) {
       ConvertRelativeBranch(instr, instr_op, xedd);
+    } else if (XED_OPERAND_AGEN == op_name) {
+      ConvertEffectiveAddress(instr, instr_op, xedd);
+    } else if (XED_OPERAND_MEM0 == op_name) {
+      ConverMemoryOperand(instr_op, xedd, 0);
+    } else if (XED_OPERAND_MEM1 == op_name) {
+      ConverMemoryOperand(instr_op, xedd, 1);
     } else if (XED_OPERAND_TYPE_IMM == op_type ||
                XED_OPERAND_TYPE_IMM_CONST == op_type) {
       ConvertImmediateOperand(instr_op, xedd, op_name);
@@ -176,7 +237,7 @@ static void ConvertDecodedOperands(Instruction *instr,
                                    xed_decoded_inst_t *xedd) {
   auto xedi = xed_decoded_inst_inst(xedd);
   for (auto o = 0U; o < xed_inst_noperands(xedi); ++o) {
-    ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o));
+    ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o), o);
   }
 }
 
@@ -215,7 +276,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->length = static_cast<decltype(instr->length)>(
       xed_decoded_inst_get_length(xedd));
   instr->num_ops = 0;
-  instr->needs_encoding = false;
+  instr->needs_encoding = true;
   instr->has_pc_rel_op = false;
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
   instr->decoded_pc = pc;
@@ -251,9 +312,35 @@ static void ConvertRelBranchOperand(const Instruction *instr,
   ir_op->width = 32;
   if (instr->encoded_pc) {
     ir_op->u.brdisp = static_cast<decltype(ir_op->u.brdisp)>(
-        op->rel_app_pc - (instr->encoded_pc + instr->length));
+        op->rel.app_pc - (instr->encoded_pc + instr->length));
   } else {
     ir_op->u.brdisp = 0;
+  }
+}
+
+enum {
+  RIP_REL32_LEA_LEN = 7  // 48 (rex.W) 8d (opcode) 00 (sib) 00 00 00 00 (disp)
+};
+
+// Convert a Granary LEA operand into an AGEN operand that is either a memory
+// operand or
+static void ConverLEAOperand(const Instruction *instr,
+                             const Operand *op,
+                             xed_encoder_operand_t *ir_op) {
+  if (instr->has_pc_rel_op) {
+    ir_op->width = 64;  // Size of the effective address.
+    ir_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+    ir_op->u.mem.seg = XED_REG_INVALID;
+    ir_op->u.mem.base = XED_REG_RIP;
+    ir_op->u.mem.index = XED_REG_INVALID;
+    ir_op->u.mem.scale = 0;
+    ir_op->u.mem.disp.displacement_width = 32;
+    ir_op->u.mem.disp.displacement =
+        static_cast<decltype(ir_op->u.mem.disp.displacement)>(
+            op->rel.pc - (instr->encoded_pc + RIP_REL32_LEA_LEN));
+  } else {
+    ir_op->width = op->width;
+    ir_op->u = op->u;
   }
 }
 
@@ -265,6 +352,8 @@ static void ConvertEncodedOperand(const Instruction *instr,
   ir_op->type = op->type;
   if (XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
     ConvertRelBranchOperand(instr, op, ir_op);
+  } else if (XED_ICLASS_LEA == instr->iclass) {
+    ConverLEAOperand(instr, op, ir_op);
   } else {
     ir_op->width = op->width;
     ir_op->u = op->u;
