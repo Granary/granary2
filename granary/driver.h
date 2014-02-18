@@ -7,9 +7,9 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/driver/dynamorio/decoder.h"
-#include "granary/driver/dynamorio/instruction.h"
-#include "granary/driver/dynamorio/relativize.h"
+#include "granary/driver/xed2-intel64/decoder.h"
+#include "granary/driver/xed2-intel64/instruction.h"
+#include "granary/driver/xed2-intel64/relativize.h"
 
 namespace granary {
 

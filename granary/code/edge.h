@@ -16,7 +16,7 @@ class CodeAllocator;
 class GenericMetaData;
 
 // Must be implemented in each Granary driver.
-CacheProgramCounter AssembleEdge(CodeAllocator *allocator,
+CachePC AssembleEdge(CodeAllocator *allocator,
                                  GenericMetaData *meta);
 
 }  // namespace granary

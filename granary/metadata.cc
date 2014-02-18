@@ -94,7 +94,7 @@ void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta) {
 
 // Initialize a new meta-data instance. This involves separately initializing
 // the contained meta-data within this generic meta-data.
-GenericMetaData::GenericMetaData(AppProgramCounter pc) {
+GenericMetaData::GenericMetaData(AppPC pc) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
     meta->initialize(reinterpret_cast<void *>(this_ptr + meta->offset));

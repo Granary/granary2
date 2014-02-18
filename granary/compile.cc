@@ -29,8 +29,7 @@ void Compile(GenericMetaData *meta) {
 
 // Initialize the compilation system.
 void InitCompiler(void) {
-  Compile(new GenericMetaData(
-      UnsafeCast<AppProgramCounter>(&Compile)));
+  Compile(new GenericMetaData(UnsafeCast<AppPC>(&Compile)));
 }
 
 }  // namespace granary

@@ -82,12 +82,12 @@ InstrumentedBasicBlock::InstrumentedBasicBlock(GenericMetaData *meta_)
       native_pc(MetaDataCast<TranslationMetaData *>(meta)->native_pc) {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter InstrumentedBasicBlock::AppStartPC(void) const {
+AppPC InstrumentedBasicBlock::StartAppPC(void) const {
   return native_pc;
 }
 
 // Returns the starting PC of this basic block in the code cache.
-CacheProgramCounter InstrumentedBasicBlock::CacheStartPC(void) const {
+CachePC InstrumentedBasicBlock::StartCachePC(void) const {
   return MetaDataCast<CacheMetaData *>(meta)->cache_pc;
 }
 
@@ -157,13 +157,13 @@ DirectBasicBlock::DirectBasicBlock(GenericMetaData *meta_)
       materialize_strategy(REQUEST_LATER) {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter IndirectBasicBlock::AppStartPC(void) const {
+AppPC IndirectBasicBlock::StartAppPC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
 
 // Returns the starting PC of this basic block in the code cache.
-CacheProgramCounter IndirectBasicBlock::CacheStartPC(void) const {
+CachePC IndirectBasicBlock::StartCachePC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
@@ -173,24 +173,24 @@ ReturnBasicBlock::ReturnBasicBlock(void)
     : BasicBlock() {}
 
 // Returns the starting PC of this basic block.
-AppProgramCounter ReturnBasicBlock::AppStartPC(void) const {
+AppPC ReturnBasicBlock::StartAppPC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
 
 // Returns the starting PC of this basic block in the code cache.
-CacheProgramCounter ReturnBasicBlock::CacheStartPC(void) const {
+CachePC ReturnBasicBlock::StartCachePC(void) const {
   granary_break_on_fault();
   return nullptr;
 }
 
 // Returns the starting PC of this basic block.
-AppProgramCounter NativeBasicBlock::AppStartPC(void) const {
+AppPC NativeBasicBlock::StartAppPC(void) const {
   return native_pc;
 }
 
 // Returns the starting PC of this basic block in the code cache.
-CacheProgramCounter NativeBasicBlock::CacheStartPC(void) const {
+CachePC NativeBasicBlock::StartCachePC(void) const {
   granary_break_on_fault();
   return nullptr;
 }

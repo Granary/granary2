@@ -100,11 +100,11 @@ class Module {
   // Return a module offset object for a program counter (that is expected to
   // be contained inside of the module). If the program counter is not part of
   // the module then the returned object is all nulled.
-  ModuleOffset OffsetOf(AppProgramCounter pc) const;
+  ModuleOffset OffsetOf(AppPC pc) const;
 
   // Returns true if a module contains the code address `pc`, and if that code
   // address is marked as executable.
-  bool Contains(AppProgramCounter pc) const;
+  bool Contains(AppPC pc) const;
 
   // Returns the kind of this module.
   ModuleKind Kind(void) const;
@@ -159,7 +159,7 @@ class Module {
 };
 
 // Find a module given a program counter.
-const Module *FindModuleByPC(AppProgramCounter pc);
+const Module *FindModuleByPC(AppPC pc);
 
 // Find a module given its name.
 GRANARY_CONST Module *FindModuleByName(const char *name);

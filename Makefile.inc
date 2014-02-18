@@ -9,7 +9,7 @@ GRANARY_ARCH ?= x86-64
 GRANARY_OS ?= linux
 GRANARY_TARGET ?= debug
 GRANARY_WHERE ?= user
-GRANARY_DRIVER ?= dynamorio
+GRANARY_DRIVER ?= xed2-intel64
 GRANARY_STANDALONE ?= 0
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0
@@ -84,11 +84,13 @@ endif
 
 # Make sure certain architectural features are disabled.
 GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
-GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -march=native
+GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
 
 ifeq ("x86-64","$(GRANARY_ARCH)")
-	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-3dnow
+	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3
+	GRANARY_COMMON_ARCH_FLAGS += -mno-sse4.1 -mno-sse4.2 -mno-sse4 -mno-sse4a
+	GRANARY_COMMON_ARCH_FLAGS += -mno-avx -mno-3dnow
 endif
 ifneq (user,$(GRANARY_WHERE))
 	GRANARY_COMMON_ARCH_FLAGS += -nostdlib

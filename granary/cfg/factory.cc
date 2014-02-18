@@ -9,10 +9,11 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
 
+#include "granary/ir/lir.h"
+
 #include "granary/driver.h"
 #include "granary/environment.h"
 #include "granary/metadata.h"
-#include "granary/mir.h"
 #include "granary/module.h"
 
 namespace granary {
@@ -27,8 +28,7 @@ BlockFactory::BlockFactory(LocalControlFlowGraph *cfg_)
 
 // Request that a block be materialized. This does nothing if the block is
 // not a `DirectBasicBlock`.
-void BlockFactory::RequestBlock(BasicBlock *block,
-                                      BlockRequestKind strategy) {
+void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
   auto direct_block = DynamicCast<DirectBasicBlock *>(block);
   if (direct_block) {
     RequestBlock(direct_block, strategy);
@@ -39,7 +39,7 @@ void BlockFactory::RequestBlock(BasicBlock *block,
 // If multiple requests are made, then the most fine-grained strategy is
 // chosen.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
-                                      BlockRequestKind strategy) {
+                                BlockRequestKind strategy) {
   granary_break_on_fault_if(!block || !block->list.IsAttached());
   has_pending_request = true;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
@@ -49,27 +49,26 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 namespace {
 
 // Return a control-flow instruction that targets a future basic block.
-static Instruction *MakeDirectCTI(driver::DecodedInstruction *instr,
-                                  AppProgramCounter target_pc) {
+static Instruction *MakeDirectCTI(driver::Instruction *instr, AppPC target_pc) {
   return new ControlFlowInstruction(
       instr, new DirectBasicBlock(new GenericMetaData(target_pc)));
 }
 
 // Return a control-flow instruction that indirectly targets an unknown future
 // basic block.
-static Instruction *MakeIndirectCTI(driver::DecodedInstruction *instr) {
+static Instruction *MakeIndirectCTI(driver::Instruction *instr) {
   return new ControlFlowInstruction(
       instr, new IndirectBasicBlock(new GenericMetaData(nullptr)));
 }
 
 // Return a control-flow instruction that returns to some existing basic block.
-static Instruction *MakeReturnCTI(driver::DecodedInstruction *instr) {
+static Instruction *MakeReturnCTI(driver::Instruction *instr) {
   return new ControlFlowInstruction(instr, new ReturnBasicBlock);
 }
 
 // Convert a decoded instruction into the internal Granary instruction IR.
 static std::unique_ptr<Instruction> MakeInstruction(
-    driver::DecodedInstruction *instr) {
+    driver::Instruction *instr) {
   Instruction *ret_instr(nullptr);
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionReturn() ||
@@ -90,21 +89,21 @@ static std::unique_ptr<Instruction> MakeInstruction(
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block.
 static void ExtendInstructionList(BlockFactory *materializer,
-                                  Instruction *instr,
-                                  AppProgramCounter pc) {
+                                  Instruction *instr, AppPC pc) {
   driver::InstructionDecoder decoder;
-  driver::DecodedInstruction dinstr;
   for (; !IsA<ControlFlowInstruction *>(instr); ) {
-    if (!decoder.DecodeNext(&dinstr, &pc)) {
+    auto dinstr = new driver::Instruction;
+    if (!decoder.DecodeNext(dinstr, &pc)) {
       auto block = new NativeBasicBlock(pc);
-      instr->InsertAfter(mir::Jump(block));
+      instr->InsertAfter(lir::Jump(block));
+      delete dinstr;
       return;
     }
-    instr = instr->InsertAfter(std::move(MakeInstruction(dinstr.Copy())));
+    instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
   }
   auto cti = DynamicCast<ControlFlowInstruction *>(instr);
   if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-    instr->InsertAfter(mir::Jump(materializer, pc));
+    instr->InsertAfter(lir::Jump(materializer, pc));
   }
 }
 
@@ -149,7 +148,6 @@ void BlockFactory::MaterializeDirectBlocks(void) {
     if (direct_block && !direct_block->materialized_block) {
       direct_block->materialized_block = MaterializeBlock(direct_block);
     }
-
     if (block == last_block) {
       break;  // Can't materialize newly added blocks.
     }
@@ -227,13 +225,13 @@ BasicBlock *BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       auto decoded_block = new DecodedBasicBlock(block->meta);
       block->meta = nullptr;  // Steal.
       ExtendInstructionList(
-          this, decoded_block->FirstInstruction(), block->AppStartPC());
+          this, decoded_block->FirstInstruction(), block->StartAppPC());
       cfg->AddBlock(decoded_block);
       return decoded_block;
     }
 
     case REQUEST_NATIVE:
-      return new NativeBasicBlock(block->AppStartPC());
+      return new NativeBasicBlock(block->StartAppPC());
   }
 }
 
@@ -256,7 +254,7 @@ void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
   auto decoded_block = new DecodedBasicBlock(meta);
   cfg->AddBlock(decoded_block);
   ExtendInstructionList(
-      this, decoded_block->FirstInstruction(), decoded_block->AppStartPC());
+      this, decoded_block->FirstInstruction(), decoded_block->StartAppPC());
 }
 
 // Create a new (future) basic block. This block is left as un-owned and
@@ -264,7 +262,7 @@ void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
 // of it. This can be achieved by targeting this newly created basic block
 // with a CTI.
 std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
-    AppProgramCounter start_pc) {
+    AppPC start_pc) {
   auto block = new DirectBasicBlock(new GenericMetaData(start_pc));
   cfg->AddBlock(block);
   return std::unique_ptr<DirectBasicBlock>(block);

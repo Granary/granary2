@@ -5,6 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/bloom_filter.h"
+#include "granary/base/types.h"
 
 namespace granary {
 
@@ -83,7 +84,7 @@ class BlockFactory {
   // will not appear in any iterators until some instruction takes ownership
   // of it. This can be achieved by targeting this newly created basic block
   // with a CTI.
-  std::unique_ptr<DirectBasicBlock> Materialize(AppProgramCounter start_pc);
+  std::unique_ptr<DirectBasicBlock> Materialize(AppPC start_pc);
 
  private:
   BlockFactory(void) = delete;

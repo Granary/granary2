@@ -113,11 +113,11 @@ class BasicBlock : protected UnownedCountedObject {
   virtual detail::SuccessorBlockIterator Successors(void) const;
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppProgramCounter AppStartPC(void) const = 0;
+  virtual AppPC StartAppPC(void) const = 0;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CacheProgramCounter CacheStartPC(void) const = 0;
+  virtual CachePC StartCachePC(void) const = 0;
 
   // Returns the number of predecessors of this basic block within the LCFG.
   int NumLocalPredecessors(void) const;
@@ -151,11 +151,11 @@ class InstrumentedBasicBlock : public BasicBlock {
   GenericMetaData *MetaData(void);
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppProgramCounter AppStartPC(void) const override;
+  virtual AppPC StartAppPC(void) const override;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CacheProgramCounter CacheStartPC(void) const override;
+  virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
@@ -170,7 +170,7 @@ class InstrumentedBasicBlock : public BasicBlock {
   GRANARY_INTERNAL_DEFINITION uint32_t cached_meta_hash;
 
   // The starting PC of this basic block, if any.
-  GRANARY_INTERNAL_DEFINITION AppProgramCounter native_pc;
+  GRANARY_INTERNAL_DEFINITION AppPC native_pc;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBasicBlock);
 };
@@ -279,11 +279,11 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
   using InstrumentedBasicBlock::InstrumentedBasicBlock;
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppProgramCounter AppStartPC(void) const override;
+  virtual AppPC StartAppPC(void) const override;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CacheProgramCounter CacheStartPC(void) const override;
+  virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectBasicBlock, {
@@ -305,11 +305,11 @@ class ReturnBasicBlock final : public BasicBlock {
   virtual ~ReturnBasicBlock(void) = default;
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppProgramCounter AppStartPC(void) const override;
+  virtual AppPC StartAppPC(void) const override;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CacheProgramCounter CacheStartPC(void) const override;
+  virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(ReturnBasicBlock, {
@@ -329,15 +329,15 @@ class NativeBasicBlock final : public BasicBlock {
   virtual ~NativeBasicBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline explicit NativeBasicBlock(AppProgramCounter native_pc_)
+  inline explicit NativeBasicBlock(AppPC native_pc_)
       : native_pc(native_pc_) {}
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppProgramCounter AppStartPC(void) const override;
+  virtual AppPC StartAppPC(void) const override;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CacheProgramCounter CacheStartPC(void) const override;
+  virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(NativeBasicBlock, {
@@ -348,7 +348,7 @@ class NativeBasicBlock final : public BasicBlock {
  private:
   NativeBasicBlock(void) = delete;
 
-  GRANARY_INTERNAL_DEFINITION const AppProgramCounter native_pc;
+  GRANARY_INTERNAL_DEFINITION const AppPC native_pc;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeBasicBlock);
 };

@@ -19,7 +19,7 @@ class CodeSlab {
  public:
   CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_);
 
-  CacheProgramCounter begin;
+  CachePC begin;
   CodeSlab *next;
   alignas(GRANARY_ARCH_CACHE_LINE_SIZE) std::atomic<int> offset;
 
@@ -43,7 +43,7 @@ class CodeAllocator {
   explicit CodeAllocator(int num_pages_);
 
   // Allocates some executable code of size `size` with alignment `alignment`.
-  CacheProgramCounter Allocate(int alignment, int size);
+  CachePC Allocate(int alignment, int size);
 
  private:
   CodeAllocator(void) = delete;

@@ -18,7 +18,7 @@ class BlockFactory;
 
 GRANARY_INTERNAL_DEFINITION
 namespace driver {
-class DecodedInstruction;
+struct Instruction;
 class InstructionDecoder;
 class InstructionRelativizer;
 }  // namespace driver
@@ -42,17 +42,17 @@ class Instruction {
 
   // Pretend to encode this instruction at address `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
-  CacheProgramCounter StageEncode(CacheProgramCounter cache_pc_);
+  CachePC StageEncode(CachePC cache_pc_);
 
   // Return the encoded location of this instruction.
   GRANARY_INTERNAL_DEFINITION
-  inline CacheProgramCounter CacheStartPC(void) const {
+  inline CachePC CacheStartPC(void) const {
     return cache_pc;
   }
 
   // Change the cache program counter.
   GRANARY_INTERNAL_DEFINITION
-  inline void SetCacheStartPC(CacheProgramCounter cache_pc_) {
+  inline void SetCacheStartPC(CachePC cache_pc_) {
     cache_pc = cache_pc_;
   }
 
@@ -75,7 +75,7 @@ class Instruction {
 
  protected:
   // Where has this instruction been encoded?
-  GRANARY_INTERNAL_DEFINITION CacheProgramCounter cache_pc;
+  GRANARY_INTERNAL_DEFINITION CachePC cache_pc;
 
  private:
   GRANARY_IF_EXTERNAL( Instruction(void) = delete; )
@@ -151,7 +151,7 @@ class NativeInstruction : public Instruction {
   virtual ~NativeInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit NativeInstruction(driver::DecodedInstruction *instruction_);
+  explicit NativeInstruction(driver::Instruction *instruction_);
 
   virtual int Length(void) const;
 
@@ -183,7 +183,7 @@ class NativeInstruction : public Instruction {
 
  protected:
   GRANARY_INTERNAL_DEFINITION
-  std::unique_ptr<driver::DecodedInstruction> instruction;
+  std::unique_ptr<driver::Instruction> instruction;
 
  private:
   friend class ControlFlowInstruction;
@@ -201,7 +201,7 @@ class BranchInstruction final : public NativeInstruction {
   virtual ~BranchInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline BranchInstruction(driver::DecodedInstruction *instruction_,
+  inline BranchInstruction(driver::Instruction *instruction_,
                            const AnnotationInstruction *target_)
       : NativeInstruction(instruction_),
         target(target_) {}
@@ -241,7 +241,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   virtual ~ControlFlowInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  ControlFlowInstruction(driver::DecodedInstruction *instruction_,
+  ControlFlowInstruction(driver::Instruction *instruction_,
                          BasicBlock *target_);
 
   // Return the target block of this CFI.

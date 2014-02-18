@@ -5,10 +5,9 @@
 
 namespace granary {
 
-typedef const unsigned char *ProgramCounter;
-typedef const unsigned char *AppProgramCounter;
-typedef unsigned char *CacheProgramCounter;
-typedef unsigned VirtualRegister;
+typedef const unsigned char *PC;
+typedef const unsigned char *AppPC;
+typedef unsigned char *CachePC;
 
 }  // namespace granary
 

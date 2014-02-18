@@ -13,7 +13,7 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
       next(next_),
       offset(ATOMIC_VAR_INIT(offset_)) {
   if (GRANARY_LIKELY(0 < num_pages)) {
-    begin = reinterpret_cast<CacheProgramCounter>(
+    begin = reinterpret_cast<CachePC>(
         AllocatePages(num_pages, MemoryIntent::EXECUTABLE));
     memset(
         begin, GRANARY_ARCH_EXEC_POISON, static_cast<unsigned long>(num_bytes));
@@ -31,10 +31,10 @@ CodeAllocator::CodeAllocator(int num_pages_)
       slab_lock() {}
 
 // Allocates some executable code of size `size` with alignment `alignment`.
-CacheProgramCounter CodeAllocator::Allocate(int alignment, int size) {
+CachePC CodeAllocator::Allocate(int alignment, int size) {
   int old_offset(0);
   int new_offset(0);
-  CacheProgramCounter addr(nullptr);
+  CachePC addr(nullptr);
   do {
     auto curr_slab = slab;
     old_offset = curr_slab->offset.load(std::memory_order_acquire);

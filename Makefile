@@ -51,6 +51,7 @@ clean:
 	@find $(GRANARY_BIN_DIR) -type f -name \*.o.cmd -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.S -execdir rm {} \;
 	@find $(GRANARY_BIN_DIR) -type f -name \*.out -execdir rm {} \;
+	@find $(GRANARY_BIN_DIR) -type f -name \*.a -execdir rm {} \;
 
 # Clean up all auto-generated files.
 clean_generated:

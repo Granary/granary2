@@ -37,7 +37,7 @@ int Instruction::Length(void) const {
 }
 
 // Pretend to encode this instruction at address `cache_pc`.
-CacheProgramCounter Instruction::StageEncode(CacheProgramCounter cache_pc_) {
+CachePC Instruction::StageEncode(CachePC cache_pc_) {
   cache_pc = cache_pc_;
   return cache_pc + this->Length();
 }
@@ -100,7 +100,7 @@ bool AnnotationInstruction::IsBranchTarget(void) const {
   return LABEL == annotation && nullptr != data;
 }
 
-NativeInstruction::NativeInstruction(driver::DecodedInstruction *instruction_)
+NativeInstruction::NativeInstruction(driver::Instruction *instruction_)
     : instruction(instruction_) {}
 
 NativeInstruction::~NativeInstruction(void) {}
@@ -168,7 +168,7 @@ const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    driver::DecodedInstruction *instruction_, BasicBlock *target_)
+    driver::Instruction *instruction_, BasicBlock *target_)
       : NativeInstruction(instruction_),
         target(target_) {
   target->Acquire();
@@ -198,9 +198,9 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
 void ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
   if (IsA<InstrumentedBasicBlock *>(target) &&
       !IsA<IndirectBasicBlock *>(target)) {
-    instruction->SetBranchTarget(target->CacheStartPC());
+    instruction->SetBranchTarget(target->StartCachePC());
   } else if (IsA<NativeBasicBlock *>(target)) {
-    instruction->SetBranchTarget(target->AppStartPC());
+    instruction->SetBranchTarget(target->StartAppPC());
   }
   encoder->Encode(instruction.get(), cache_pc);
 }

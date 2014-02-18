@@ -140,8 +140,8 @@ static DecodedBasicBlock *Schedule(LocalControlFlowGraph *cfg) {
 }
 
 // Pretend to encode a basic block at `cache_pc`.
-static CacheProgramCounter StageEncode(DecodedBasicBlock *block,
-                                       CacheProgramCounter cache_pc) {
+static CachePC StageEncode(DecodedBasicBlock *block,
+                                       CachePC cache_pc) {
   auto meta = GetMetaData<CacheMetaData>(block);
   meta->cache_pc = cache_pc;
   for (auto instr : block->Instructions()) {
@@ -151,15 +151,15 @@ static CacheProgramCounter StageEncode(DecodedBasicBlock *block,
 }
 
 // Returns the target of a control-flow or branch instruction.
-static ProgramCounter TargetPC(const Instruction *instr) {
+static PC TargetPC(const Instruction *instr) {
   if (IsA<const ControlFlowInstruction *>(instr)) {
     auto cfi = DynamicCast<const ControlFlowInstruction *>(instr);
     auto target = cfi->TargetBlock();
     if (IsA<InstrumentedBasicBlock *>(target) ||
         IsA<DirectBasicBlock *>(target)) {
-      return target->CacheStartPC();
+      return target->StartCachePC();
     } else if (IsA<NativeBasicBlock *>(target)) {
-      return target->AppStartPC();
+      return target->StartAppPC();
     }
   } else if (IsA<const BranchInstruction *>(instr)) {
     auto branch = DynamicCast<const BranchInstruction *>(instr);
@@ -211,7 +211,7 @@ static bool OptimizeEncoding(DecodedBasicBlock *blocks) {
 
 // Stage encode all blocks and return the encoded size of the blocks.
 static int StageEncode(DecodedBasicBlock *blocks) {
-  CacheProgramCounter cache_pc(nullptr);
+  CachePC cache_pc(nullptr);
   auto start_pc = cache_pc;
   for (auto block : DecodedBlockIterator(blocks)) {
     cache_pc = StageEncode(block, cache_pc);
@@ -229,8 +229,8 @@ void AdjustEncoding(DecodedBasicBlock *block, ptrdiff_t adjust) {
 }
 
 // Encode all blocks.
-static void Encode(DecodedBasicBlock *blocks, CacheProgramCounter cache_pc) {
-  const CacheProgramCounter base_pc(nullptr);
+static void Encode(DecodedBasicBlock *blocks, CachePC cache_pc) {
+  const CachePC base_pc(nullptr);
   const ptrdiff_t adjust(cache_pc - base_pc);
   for (auto block : DecodedBlockIterator(blocks)) {
     AdjustEncoding(block, adjust);

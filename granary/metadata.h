@@ -57,7 +57,7 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
   GRANARY_CONST ModuleOffset source;
 
   // The program counter.
-  GRANARY_CONST AppProgramCounter native_pc;
+  GRANARY_CONST AppPC native_pc;
 
   // Initialize Granary's internal translation meta-data.
   TranslationMetaData(void);
@@ -76,7 +76,7 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
 struct CacheMetaData : MutableMetaData {
 
   // Where this block is located in the code cache.
-  CacheProgramCounter cache_pc;
+  CachePC cache_pc;
 
   // TODO(pag): Encoded size?
   // TODO(pag): Interrupt delay regions? Again: make this a command-line
@@ -311,7 +311,7 @@ class GenericMetaData {
   GRANARY_INTERNAL_DEFINITION
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  explicit GenericMetaData(AppProgramCounter pc);
+  explicit GenericMetaData(AppPC pc);
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.

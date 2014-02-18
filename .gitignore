@@ -3,7 +3,6 @@
 *.o_shipped
 *.out
 *.so
-*.a
 *.dylib
 *.ko
 *.ll
@@ -30,8 +29,13 @@ bin
 
 # Generated files
 generated/*
-!generated/dynamorio/types.h
 
 # Debugging files
 vmlinux
 qemu.img
+
+# Intel XED2 files
+dependencies/xed2-intel64/examples/*
+dependencies/xed2-intel64/doc/*
+dependencies/xed2-intel64/bin/*
+

@@ -46,7 +46,6 @@
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
 #ifdef GRANARY_ECLIPSE
-# define decltype(...) void
 # define alignas(...)
 # define alignof(...) 16
 # define GRANARY_ENABLE_IF(...) int

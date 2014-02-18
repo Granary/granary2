@@ -53,7 +53,7 @@ static std::atomic<Module *> MODULES(ATOMIC_VAR_INIT(nullptr));
 // Find the address range that contains a particular program counter. Returns
 // `nullptr` if no such range exists in the specified list.
 static const internal::ModuleAddressRange *FindRange(
-    const internal::ModuleAddressRange *ranges, AppProgramCounter pc) {
+    const internal::ModuleAddressRange *ranges, AppPC pc) {
   auto addr = reinterpret_cast<uintptr_t>(pc);
   for (auto range : ModuleAddressRangeIterator(ranges)) {
     if (range->begin_addr <= addr && addr < range->end_addr) {
@@ -79,7 +79,7 @@ Module::Module(ModuleKind kind_, const char *name_)
 // Return a module offset object for a program counter (that is expected to
 // be contained inside of the module). If the program counter is not part of
 // the module then the returned object is all nulled.
-ModuleOffset Module::OffsetOf(AppProgramCounter pc) const {
+ModuleOffset Module::OffsetOf(AppPC pc) const {
   ReadLocked locker(&ranges_lock);
   auto range = FindRange(ranges, pc);
   if (!range) {
@@ -91,7 +91,7 @@ ModuleOffset Module::OffsetOf(AppProgramCounter pc) const {
 
 // Returns true if a module contains the code address `pc`, and if that code
 // address is marked as executable.
-bool Module::Contains(AppProgramCounter pc) const {
+bool Module::Contains(AppPC pc) const {
   ReadLocked locker(&ranges_lock);
   return nullptr != FindRange(ranges, pc);
 }
@@ -195,7 +195,7 @@ internal::ModuleAddressRange *Module::AddRange(
 }
 
 // Find a module given a program counter.
-const Module *FindModuleByPC(AppProgramCounter pc) {
+const Module *FindModuleByPC(AppPC pc) {
   for (auto module : ModuleIterator(MODULES.load(std::memory_order_relaxed))) {
     if (module->Contains(pc)) {
       return module;
