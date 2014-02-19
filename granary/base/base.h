@@ -19,6 +19,9 @@
 # include <climits>
 #endif
 
+#define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
+#define GRANARY_GLOBAL __attribute__((init_priority(103)))
+
 // Useful for Valgrind-based debugging.
 #if defined(GRANARY_WITH_VALGRIND) && defined(GRANARY_INTERNAL)
 # include <valgrind/valgrind.h>

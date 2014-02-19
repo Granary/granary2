@@ -69,20 +69,18 @@ static const char *GetGranaryPath(const char *granary_exe_path) {
 
 extern "C" {
 int main(int argc, const char *argv[]) {
-  GRANARY_USING_NAMESPACE granary;
-  InitDebug();
-  InitOptions(argc, argv);
-  Init(INIT_DYNAMIC, GetGranaryPath(argv[0]));
+  granary::InitDebug();
+  granary::InitOptions(argc, argv);
+  granary::Init(granary::INIT_DYNAMIC, granary::GetGranaryPath(argv[0]));
   return 0;
 }
 }  // extern C
 #else
 
 GRANARY_INIT({
-  GRANARY_USING_NAMESPACE granary;
-  InitDebug();
-  InitOptions(getenv("GRANARY_OPTIONS"));
-  Init(INIT_DYNAMIC, getenv("GRANARY_PATH"));
+  granary::InitDebug();
+  granary::InitOptions(getenv("GRANARY_OPTIONS"));
+  granary::Init(granary::INIT_DYNAMIC, getenv("GRANARY_PATH"));
 })
 
 #endif

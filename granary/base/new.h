@@ -153,7 +153,7 @@ class OperatorNewAllocator {
 
   OperatorNewAllocator(void) = delete;
 
-  static internal::SlabAllocator allocator __attribute__((init_priority (101)));
+  static internal::SlabAllocator allocator GRANARY_EARLY_GLOBAL;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(OperatorNewAllocator, (T));
 };

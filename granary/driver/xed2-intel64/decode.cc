@@ -180,14 +180,17 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
                                     xed_operand_enum_t op_name) {
   if (XED_OPERAND_IMM0SIGNED == op_name) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
-    instr_op->u.imm0 = xed3_operand_get_imm0(xedd);
+    instr_op->u.imm0 = static_cast<decltype(instr_op->u.imm0)>(
+        xed_decoded_inst_get_signed_immediate(xedd));
+
   } else if (XED_OPERAND_IMM0 == op_name) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-    instr_op->u.imm0 = xed3_operand_get_imm0(xedd);
-  } else if (XED_OPERAND_IMM1 == op_name) {
+    instr_op->u.imm0 = xed_decoded_inst_get_unsigned_immediate(xedd);
+
+  } else if (XED_OPERAND_IMM1 == op_name ||
+             XED_OPERAND_IMM1_BYTES == op_name) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM1;
-    instr_op->u.imm1 = static_cast<decltype(instr_op->u.imm1)>(
-        xed3_operand_get_imm1(xedd));
+    instr_op->u.imm1 = xed_decoded_inst_get_second_immediate(xedd);
   }
   instr_op->width = xed_decoded_inst_get_immediate_width_bits(xedd);
 }
@@ -281,7 +284,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->length = static_cast<decltype(instr->length)>(
       xed_decoded_inst_get_length(xedd));
   instr->num_ops = 0;
-  instr->needs_encoding = true;
+  instr->needs_encoding = false;
   instr->has_pc_rel_op = false;
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
   instr->decoded_pc = pc;
@@ -370,10 +373,23 @@ static void ConvertEncodedOperand(const Instruction *instr,
   }
 }
 
-// Conver an `Instruction` instances into an `xed_encoder_instruction_t`.
+// Adjust the effective operand width. This is a special case for return
+// instructions.
+//
+// TODO(pag): Is the effective operand width for `RET <imm>` also 64?
+static void AdjustEffectiveOperandWidth(xed_encoder_instruction_t *ir) {
+  if (!ir->effective_operand_width) {
+    if (XED_ICLASS_RET_NEAR == ir->iclass ||
+        XED_ICLASS_RET_FAR == ir->iclass) {
+      ir->effective_operand_width = 64;
+    }
+  }
+}
+
+// Convert an `Instruction` instances into an `xed_encoder_instruction_t`.
 static void ConvertInstruction(const Instruction *instr,
                                xed_encoder_instruction_t *ir) {
-  uint32_t width(0);
+  auto width = 0U;
   ir->mode = XED_STATE;
   ir->iclass = instr->iclass;
   ir->prefixes = instr->prefixes;
@@ -383,6 +399,7 @@ static void ConvertInstruction(const Instruction *instr,
   }
   ir->effective_operand_width = width;
   ir->effective_address_width = 0;
+  AdjustEffectiveOperandWidth(ir);
 }
 
 // Encode an instruction into the instruction's encode buffer.
@@ -394,6 +411,7 @@ static void EncodeInstruction(Instruction *instr, CachePC pc) {
   xed_encoder_instruction_t ir;
   ConvertInstruction(instr, &ir);
   xed_encoder_request_zero_set_mode(&xedd, &XED_STATE);
+  xed_encoder_request_set_iclass(&xedd, instr->iclass);
   granary_break_on_fault_if(!xed_convert_to_encoder_request(&xedd, &ir));
   unsigned encoded_len(0);
   auto encode_status = xed_encode(&xedd, &(instr->encode_buffer[0]),

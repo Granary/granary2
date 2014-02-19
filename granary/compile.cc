@@ -15,8 +15,8 @@
 
 namespace granary {
 namespace {
-static CodeAllocator instrumented_code(8);
-static CodeAllocator edge_code(1);
+GRANARY_EARLY_GLOBAL static CodeAllocator instrumented_code(8);
+GRANARY_EARLY_GLOBAL static CodeAllocator edge_code(1);
 }  // namespace
 
 // Compile some code described by its `GenericMetaData` instance.
@@ -24,7 +24,7 @@ void Compile(GenericMetaData *meta) {
   LocalControlFlowGraph cfg;
   Instrument(&cfg, meta);
   Assemble(&cfg, &instrumented_code, &edge_code);
-  // TODO(pag): Add things into the code cache.
+  // TODO(pag): Add things into the code cache index.
 }
 
 // Initialize the compilation system.
