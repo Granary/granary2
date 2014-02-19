@@ -7,13 +7,18 @@
 #include <set>
 #include <bitset>
 
-#include "granary/driver/xed2-intel64/instruction.h"
-
-namespace granary {
-namespace driver {
+extern "C" {
+#include "dependencies/xed2-intel64/include/xed-interface.h"
+}
 
 typedef std::bitset<8> ops_bitset_t;
 
+// Info about an instruction. We group together all xed_inst_t's for a given
+// iclass. Based on the size of the instruction decode table and the number
+// of iforms, it's not a 1-to-1 mapping of iform to xed_inst_t's, but with this
+// setup we can get close enough to discover ambiguous encodings (defined in
+// terms of the same operand being explicit in one iform but implicit in
+// another) in an iclass-specific way.
 struct InstructionInfo {
   std::set<const xed_inst_t *> templates;
   ops_bitset_t ops;
@@ -21,6 +26,10 @@ struct InstructionInfo {
   int max_num_explicit_args;
 };
 
+// Special cases where we allow the ambiguities to go undetected.
+std::set<xed_iclass_enum_t> ingored_iclasses = {
+    XED_ICLASS_RET_NEAR, XED_ICLASS_RET_FAR
+};
 
 // Maps `xed_iclass_enum_t` to information about the instruction.
 InstructionInfo instr_table[XED_ICLASS_LAST];
@@ -30,6 +39,11 @@ static void FillTable(void) {
   for (auto i = 0; i < XED_MAX_INST_TABLE_NODES; ++i) {
     auto instr = xed_inst_table_base() + i;
     auto iclass = xed_inst_iclass(instr);
+
+    if (ingored_iclasses.count(iclass)) {
+      continue;
+    }
+
     auto info = instr_table + iclass;
     info->templates.insert(instr);
     info->min_num_explicit_args = 999;
@@ -63,8 +77,9 @@ static void CountExplicitArguments(void) {
 static const char *INDENT = "  ";
 
 static void GenerateOperandCheckerPrologue(void) {
-  std::cout << "bool IsAmbiguousOperand(xed_iform_enum_t iform, " \
-            << "unsigned op_num) {\n"
+  std::cout << "static bool IsAmbiguousOperand(xed_iclass_enum_t iclass,\n"
+            << "                               xed_iform_enum_t iform,\n"
+            << "                               unsigned op_num) {\n"
             << INDENT << "if (false) {\n";
 }
 
@@ -74,17 +89,31 @@ static void GenerateOperandCheckerEpilogue(void) {
             << "}\n";
 }
 
-static void GenerateInstructionCheck(const xed_inst_t *instr) {
-  std::cout << INDENT << "} else if (XED_IFORM_"
+static void GenerateIclassCheck(const xed_inst_t *instr) {
+  std::cout << INDENT << "} else if (XED_ICLASS_"
+            << xed_iclass_enum_t2str(xed_inst_iclass(instr))
+            << " == iclass) {\n";
+}
+
+static void GenerateIformCheck(const xed_inst_t *instr, bool has_ambiguous) {
+  std::cout << INDENT << INDENT;
+  if (has_ambiguous) {
+    std::cout << "} else ";
+  }
+  std::cout << "if (XED_IFORM_"
             << xed_iform_enum_t2str(xed_inst_iform_enum(instr))
             << " == iform) {\n";
+}
+
+static void GenerateIclassCheckEpilogue(void) {
+  std::cout << INDENT << INDENT << "}\n";
 }
 
 static void GenerateOperandCheck(int num, bool has_ambiguous) {
   if (has_ambiguous) {
     std::cout << " || ";
   } else {
-    std::cout << INDENT << INDENT << "return ";
+    std::cout << INDENT << INDENT << INDENT << "return ";
   }
   std::cout << num << " == op_num";
 }
@@ -97,6 +126,8 @@ static void GenerateOperandCheckEpilogue(bool has_ambiguous) {
 
 // Output code to handle an instruction with a potentially ambiguous decoding.
 static void GenerateDisambiguator(InstructionInfo &info) {
+  auto has_ambiguous_iclass = false;
+  GenerateIclassCheck(*(info.templates.begin()));
   for (auto instr : info.templates) {
     ops_bitset_t args;
     auto num = ExplicitArgumentCount(instr, args);
@@ -104,18 +135,22 @@ static void GenerateDisambiguator(InstructionInfo &info) {
       continue;
     }
 
-    GenerateInstructionCheck(instr);
+
+    GenerateIformCheck(instr, has_ambiguous_iclass);
+    has_ambiguous_iclass = true;
+
     auto ambiguous_args = args ^ info.ops;
     auto arg_num = 0;
-    bool has_ambiguous = false;
+    bool has_ambiguous_arg = false;
     for (auto arg_num = 0; arg_num < 8; ++arg_num) {
       if (ambiguous_args[arg_num] && info.ops[arg_num]) {
-        GenerateOperandCheck(arg_num, has_ambiguous);
-        has_ambiguous = true;
+        GenerateOperandCheck(arg_num, has_ambiguous_arg);
+        has_ambiguous_arg = true;
       }
     }
-    GenerateOperandCheckEpilogue(has_ambiguous);
+    GenerateOperandCheckEpilogue(has_ambiguous_arg);
   }
+  GenerateIclassCheckEpilogue();
 }
 
 // Identify instructions with ambiguous encodings.
@@ -127,11 +162,7 @@ static void FindAmbiguousEncodings(void) {
   }
 }
 
-}  // namespace driver
-}  // namespace granary
-
 int main(void) {
-  using namespace granary::driver;
   FillTable();
   CountExplicitArguments();
   GenerateOperandCheckerPrologue();

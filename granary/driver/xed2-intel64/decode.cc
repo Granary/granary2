@@ -195,7 +195,8 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
 // Returns true if an implicit operand is ambiguous. An implicit operand is
 // ambiguous if there are multiple encodings for the same iclass, and the given
 // operand (indexed by `op`) is explicit for some iforms but not others.
-bool IsAmbiguousOperand(xed_iform_enum_t iform, unsigned op_num);
+static bool IsAmbiguousOperand(xed_iclass_enum_t iclass, xed_iform_enum_t iform,
+                               unsigned op_num);
 
 #include "generated/xed2-intel64/ambiguous_operands.cc"
 
@@ -204,8 +205,9 @@ bool IsAmbiguousOperand(xed_iform_enum_t iform, unsigned op_num);
 // operand is found.
 static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
                                   const xed_operand_t *op, unsigned op_num) {
+  auto iform = xed_decoded_inst_get_iform_enum(xedd);
   if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
-      IsAmbiguousOperand(xed_decoded_inst_get_iform_enum(xedd), op_num)) {
+      IsAmbiguousOperand(instr->iclass, iform, op_num)) {
     auto op_name = xed_operand_name(op);
     auto op_type = xed_operand_type(op);
     auto instr_op = &(instr->ops[instr->num_ops++]);
@@ -236,8 +238,11 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
 static void ConvertDecodedOperands(Instruction *instr,
                                    xed_decoded_inst_t *xedd) {
   auto xedi = xed_decoded_inst_inst(xedd);
-  for (auto o = 0U; o < xed_inst_noperands(xedi); ++o) {
-    ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o), o);
+  auto num_ops = xed_inst_noperands(xedi);
+  for (auto o = 0U; o < num_ops; ++o) {
+    if (instr->num_ops < XED_ENCODER_OPERANDS_MAX) {
+      ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o), o);
+    }
   }
 }
 

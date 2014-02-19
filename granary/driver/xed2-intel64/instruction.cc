@@ -15,7 +15,7 @@ namespace driver {
 
 // Get the PC-relative branch target.
 PC Instruction::BranchTarget(void) const {
-  return ops[0].rel.pc;
+  return ops[0].rel.pc;  // TODO(pag): CALL_FAR, JMP_FAR?
 }
 
 // Set the PC-relative branch target.

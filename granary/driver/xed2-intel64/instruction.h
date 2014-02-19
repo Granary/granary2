@@ -14,7 +14,7 @@ namespace driver {
 
 // Basically a `xed_encoder_operand_t`, but where if the instruction contains
 // a PC-relative operand (e.g. CALL/JMP/Jcc/LEA) then we maintain the resolved
-// address in `rel_imm`/`rel_pc`. This representation
+// address in `rel_imm`/`rel_pc`.
 struct Operand {
   xed_encoder_operand_type_t type;
   union {
