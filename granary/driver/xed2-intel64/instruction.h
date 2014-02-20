@@ -84,6 +84,9 @@ struct Instruction {
   // operand then it's treated as requiring relativization.
   bool has_pc_rel_op:1;
 
+  // Does this instruction have a fixed, known length?
+  bool has_fixed_length:1;
+
   // Is this an atomic operation?
   bool is_atomic:1;
 

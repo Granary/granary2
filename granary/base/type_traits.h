@@ -79,6 +79,20 @@ struct TypesAreEqual<A, A> {
   };
 };
 
+#define GRANARY_DEFINE_TRAIT_REFERENCES(trait_name) \
+  template <typename A> \
+  struct trait_name<A &> { \
+    enum { \
+      RESULT = trait_name<A>::RESULT \
+    }; \
+  }; \
+  template <typename A> \
+  struct trait_name<A &&> { \
+    enum { \
+      RESULT = trait_name<A>::RESULT \
+    }; \
+  }
+
 template <typename A>
 struct IsPointer {
   enum {
@@ -86,24 +100,12 @@ struct IsPointer {
   };
 };
 
+GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
+
 template <typename A>
 struct IsPointer<A *> {
   enum {
     RESULT = true
-  };
-};
-
-template <typename A>
-struct IsPointer<A &> {
-  enum {
-    RESULT = IsPointer<A>::RESULT
-  };
-};
-
-template <typename A>
-struct IsPointer<A &&> {
-  enum {
-    RESULT = IsPointer<A>::RESULT
   };
 };
 
@@ -114,35 +116,53 @@ struct IsInteger {
   };
 };
 
+GRANARY_DEFINE_TRAIT_REFERENCES(IsInteger);
+
 template <typename A>
-struct IsInteger<A &> {
+struct IsSignedInteger {
   enum {
-    RESULT = IsInteger<A>::RESULT
+    RESULT = false
   };
 };
 
 template <typename A>
-struct IsInteger<A &&> {
+struct IsUnsignedInteger {
   enum {
-    RESULT = IsInteger<A>::RESULT
+    RESULT = false
   };
 };
 
-#define GRANARY_DEFINE_IS_INTEGRAL(type) \
+GRANARY_DEFINE_TRAIT_REFERENCES(IsSignedInteger);
+GRANARY_DEFINE_TRAIT_REFERENCES(IsUnsignedInteger);
+
+#define GRANARY_DEFINE_IS_INTEGRAL(type, is_signed) \
   template <> \
   struct IsInteger<type> { \
     enum { \
       RESULT = true \
     }; \
+  }; \
+  template <> \
+  struct IsSignedInteger<type> { \
+    enum { \
+      RESULT = is_signed \
+    }; \
+  }; \
+  template <> \
+  struct IsUnsignedInteger<type> { \
+    enum { \
+      RESULT = !is_signed \
+    }; \
   }
-GRANARY_DEFINE_IS_INTEGRAL(unsigned char);
-GRANARY_DEFINE_IS_INTEGRAL(signed char);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned short);
-GRANARY_DEFINE_IS_INTEGRAL(signed short);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned int);
-GRANARY_DEFINE_IS_INTEGRAL(signed int);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned long);
-GRANARY_DEFINE_IS_INTEGRAL(signed long);
+
+GRANARY_DEFINE_IS_INTEGRAL(unsigned char, false);
+GRANARY_DEFINE_IS_INTEGRAL(signed char, true);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned short, false);
+GRANARY_DEFINE_IS_INTEGRAL(signed short, true);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned int, false);
+GRANARY_DEFINE_IS_INTEGRAL(signed int, true);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned long, false);
+GRANARY_DEFINE_IS_INTEGRAL(signed long, true);
 #undef GRANARY_DEFINE_IS_INTEGRAL
 
 template <typename T>
@@ -154,6 +174,8 @@ template <typename T>
 struct RemoveConst<const T> {
   typedef T Type;
 };
+
+#undef GRANARY_DEFINE_TRAIT_REFERENCES
 
 }  // namespace granary
 

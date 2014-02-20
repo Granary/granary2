@@ -86,9 +86,30 @@ static std::unique_ptr<Instruction> MakeInstruction(
   return std::unique_ptr<Instruction>(ret_instr);
 }
 
+// Add the fall-through instruction for a block.
+static void AddFallThroughInstruction(BlockFactory *materializer,
+                                      driver::InstructionDecoder *decoder,
+                                      Instruction *last_instr, AppPC pc) {
+  auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
+  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
+    // Unconditionally decode the next instruction. If it's a jump then we'll
+    // use the jump as the fall-through. If we can't decode it then we'll add
+    // a fall-through to native, and if it's neither then just add in a LIR
+    // instruction for the fall-through.
+    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
+    if (!decoder->Decode(dinstr.get(), pc)) {
+      last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
+    } else if (dinstr->IsUnconditionalJump()) {
+      last_instr->InsertAfter(std::move(MakeInstruction(dinstr.release())));
+    } else {
+      last_instr->InsertAfter(lir::Jump(materializer, pc));
+    }
+  }
+}
+
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block.
-static void ExtendInstructionList(BlockFactory *materializer,
+static void DecodeInstructionList(BlockFactory *materializer,
                                   Instruction *instr, AppPC pc) {
   driver::InstructionDecoder decoder;
   for (; !IsA<ControlFlowInstruction *>(instr); ) {
@@ -100,22 +121,7 @@ static void ExtendInstructionList(BlockFactory *materializer,
     }
     instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
   }
-  auto cti = DynamicCast<ControlFlowInstruction *>(instr);
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-
-    // Unconditionally decode the next instruction. If it's a jump then we'll
-    // use the jump as the fall-through. If we can't decode it then we'll add
-    // a fall-through to native, and if it's neither then just add in a LIR
-    // instruction for the fall-through.
-    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
-    if (!decoder.Decode(dinstr.get(), pc)) {
-      instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
-    } else if (dinstr->IsUnconditionalJump()) {
-      instr->InsertAfter(std::move(MakeInstruction(dinstr.release())));
-    } else {
-      instr->InsertAfter(lir::Jump(materializer, pc));
-    }
-  }
+  AddFallThroughInstruction(materializer, &decoder, instr, pc);
 }
 
 // Hash some basic block meta-data.
@@ -148,21 +154,24 @@ void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
 }
 
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
-void BlockFactory::MaterializeDirectBlocks(void) {
+// Returns `true` if any changes were made to the LCFG.
+bool BlockFactory::MaterializeDirectBlocks(void) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
+  bool materialized_a_block(false);
   for (auto block = cfg->first_block, last_block = cfg->last_block;
        nullptr != block;
        block = block->list.GetNext(block)) {
 
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
-    if (direct_block && !direct_block->materialized_block) {
-      direct_block->materialized_block = MaterializeBlock(direct_block);
+    if (direct_block && MaterializeBlock(direct_block)) {
+      materialized_a_block = true;
     }
     if (block == last_block) {
       break;  // Can't materialize newly added blocks.
     }
   }
+  return materialized_a_block;
 }
 
 // Unlink old blocks from the control-flow graph by changing the targets of
@@ -184,7 +193,8 @@ void BlockFactory::RelinkCFIs(void) {
 }
 
 // Search an LCFG for a block whose meta-data matches the meta-data of
-// `exclude`.
+// `exclude`. The returned block, if any, is guaranteed not to be `exclude`,
+// as well as not being another `DirectBasicBlock` instance.
 BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
@@ -193,7 +203,9 @@ BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
        block = block->list.GetNext(block)) {
     auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
     if (meta_block &&
+        meta_block != exclude &&
         meta_block->cached_meta_hash == exclude->cached_meta_hash &&
+        !IsA<DirectBasicBlock *>(meta_block) &&
         meta_block->meta->Equals(exclude->meta)) {
       return meta_block;
     }
@@ -202,35 +214,41 @@ BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
 }
 
 // Materialize a basic block if there is a pending request.
-BasicBlock *BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
-  switch (block->materialize_strategy) {
-    case REQUEST_LATER:
-      return nullptr;
+bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
+  if (!block->materialized_block) {
+    switch (block->materialize_strategy) {
+      case REQUEST_LATER:
+        return false;
 
-    case REQUEST_CHECK_INDEX_AND_LCFG:
-      // TODO(pag): Implement me.
-      // Fall-through.
+      case REQUEST_CHECK_INDEX_AND_LCFG:
+        // TODO(pag): Implement me.
+        // Fall-through.
 
-    case REQUEST_CHECK_LCFG:
-      if (meta_data_filter.MightContain({block->cached_meta_hash})) {
-        if (BasicBlock *found_block = MaterializeFromLCFG(block)) {
-          return found_block;
+      case REQUEST_CHECK_LCFG:
+        if (meta_data_filter.MightContain({block->cached_meta_hash})) {
+          if (BasicBlock *found_block = MaterializeFromLCFG(block)) {
+            block->materialized_block = found_block;
+            return true;
+          }
         }
+        // Fall-through.
+
+      case REQUEST_NOW: {
+        auto decoded_block = new DecodedBasicBlock(block->meta);
+        block->meta = nullptr;  // Steal.
+        DecodeInstructionList(this, decoded_block->FirstInstruction(),
+                              block->StartAppPC());
+        cfg->AddBlock(decoded_block);
+        block->materialized_block = decoded_block;
+        return true;
       }
-      // Fall-through.
 
-    case REQUEST_NOW: {
-      auto decoded_block = new DecodedBasicBlock(block->meta);
-      block->meta = nullptr;  // Steal.
-      ExtendInstructionList(
-          this, decoded_block->FirstInstruction(), block->StartAppPC());
-      cfg->AddBlock(decoded_block);
-      return decoded_block;
+      case REQUEST_NATIVE:
+        block->materialized_block = new NativeBasicBlock(block->StartAppPC());
+        return true;
     }
-
-    case REQUEST_NATIVE:
-      return new NativeBasicBlock(block->StartAppPC());
   }
+  return false;
 }
 
 // Satisfy all materialization requests.
@@ -240,8 +258,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
   HashBlockMetaDatas(&hasher);
   cfg->first_new_block = nullptr;
   has_pending_request = false;
-  MaterializeDirectBlocks();
-  if (cfg->first_new_block) {
+  if (MaterializeDirectBlocks() || cfg->first_new_block) {
     RelinkCFIs();
   }
 }
@@ -250,9 +267,9 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
   auto decoded_block = new DecodedBasicBlock(meta);
+  DecodeInstructionList(this, decoded_block->FirstInstruction(),
+                        decoded_block->StartAppPC());
   cfg->AddBlock(decoded_block);
-  ExtendInstructionList(
-      this, decoded_block->FirstInstruction(), decoded_block->StartAppPC());
 }
 
 // Create a new (future) basic block. This block is left as un-owned and
@@ -262,7 +279,6 @@ void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
 std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
     AppPC start_pc) {
   auto block = new DirectBasicBlock(new GenericMetaData(start_pc));
-  cfg->AddBlock(block);
   return std::unique_ptr<DirectBasicBlock>(block);
 }
 

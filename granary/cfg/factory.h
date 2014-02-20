@@ -93,7 +93,7 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);
 
   // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
-  GRANARY_INTERNAL_DEFINITION void MaterializeDirectBlocks(void);
+  GRANARY_INTERNAL_DEFINITION bool MaterializeDirectBlocks(void);
 
   // Unlink old blocks from the control-flow graph by changing the targets of
   // CTIs going to now-materialized `DirectBasicBlock`s.
@@ -105,7 +105,7 @@ class BlockFactory {
 
   // Materialize a direct basic block.
   GRANARY_INTERNAL_DEFINITION
-  BasicBlock *MaterializeBlock(DirectBasicBlock *block);
+  bool MaterializeBlock(DirectBasicBlock *block);
 
   // Used for fast checking on whether or not a block already exists in the
   // LCFG.

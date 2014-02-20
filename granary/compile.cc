@@ -15,7 +15,12 @@
 
 namespace granary {
 namespace {
+
+// Represents the "code cache", i.e. all instrumented code is managed by this
+// allocator.
 GRANARY_EARLY_GLOBAL static CodeAllocator instrumented_code(8);
+
+// Represents "edge code" that is used to resolve direct/indirect branching.
 GRANARY_EARLY_GLOBAL static CodeAllocator edge_code(1);
 }  // namespace
 
@@ -29,7 +34,7 @@ void Compile(GenericMetaData *meta) {
 
 // Initialize the compilation system.
 void InitCompiler(void) {
-  Compile(new GenericMetaData(UnsafeCast<AppPC>(&InitMetaData)));
+  Compile(new GenericMetaData(UnsafeCast<AppPC>(&Compile)));
 }
 
 }  // namespace granary

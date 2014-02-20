@@ -14,6 +14,7 @@
 namespace granary {
 namespace lir {
 namespace {
+
 // Create a control-flow instruction with a 32-bit PC-relative operand (whose
 // effective width is 64 bits). We initialize the relative branch target to
 // `0`, but don't mark the instruction as being modified.

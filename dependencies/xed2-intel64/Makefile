@@ -6,7 +6,7 @@ include ../../Makefile.inc
 XED_SRC_DIR = $(GRANARY_SRC_DIR)/dependencies/xed2-intel64
 XED_GEN_DIR = $(GRANARY_SRC_DIR)/generated/xed2-intel64
 
-XED_TOOLS = ambiguous_operands
+XED_TOOLS = ambiguous_operands instruction_builder
 XED_TOOL_OBJS = $(addprefix $(XED_SRC_DIR)/granary/,$(addsuffix .out,$(XED_TOOLS)))
 
 # Generate rules for each Granary-specific XED tool. Each XED tool generates

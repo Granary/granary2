@@ -74,33 +74,6 @@ static xed_error_enum_t DecodeBytes(xed_decoded_inst_t *xedd, PC pc) {
   }
 }
 
-/*
- *
- *  XED_ENCODER_OPERAND_TYPE_INVALID,
-    XED_ENCODER_OPERAND_TYPE_BRDISP,
-    XED_ENCODER_OPERAND_TYPE_REG,
-    XED_ENCODER_OPERAND_TYPE_IMM0,
-    XED_ENCODER_OPERAND_TYPE_SIMM0,
-    XED_ENCODER_OPERAND_TYPE_IMM1,
-    XED_ENCODER_OPERAND_TYPE_MEM,
-    XED_ENCODER_OPERAND_TYPE_PTR,
-
-    XED_ENCODER_OPERAND_TYPE_SEG0,
-
-    XED_ENCODER_OPERAND_TYPE_SEG1,
-
-    XED_ENCODER_OPERAND_TYPE_OTHER
- */
-
-/*
-XED_OPERAND_TYPE_INVALID,
-XED_OPERAND_TYPE_ERROR,
-XED_OPERAND_TYPE_IMM,
-XED_OPERAND_TYPE_IMM_CONST,
-XED_OPERAND_TYPE_NT_LOOKUP_FN,
-XED_OPERAND_TYPE_REG,
-*/
-
 // Pull out a register operand from the XED instruction.
 static void ConvertRegisterOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
                                    xed_operand_enum_t op_name) {
@@ -117,6 +90,7 @@ static intptr_t NextDecodedAddress(const Instruction *instr) {
 static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
                                   xed_decoded_inst_t *xedd) {
   instr->has_pc_rel_op = true;
+  instr->has_fixed_length = true;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   instr_op->width = 64;
   instr_op->rel.imm = NextDecodedAddress(instr) +
@@ -138,8 +112,8 @@ static bool RegIsInstructionPointer(xed_reg_enum_t reg) {
 }
 
 // Convert a memory operand into an `Operand`.
-static void ConverMemoryOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
-                                unsigned index) {
+static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
+                                xed_decoded_inst_t *xedd, unsigned index) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   instr_op->u.mem.seg = xed_decoded_inst_get_seg_reg(xedd, index);
   instr_op->u.mem.base = xed_decoded_inst_get_base_reg(xedd, index);
@@ -155,6 +129,10 @@ static void ConverMemoryOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
   // consider the BYTEOP attribute. E.g. for a byte mov to memory,
   // `xed_decoded_inst_get_effective_operand_width` returns a width of 32.
   instr_op->width = xed_decoded_inst_get_operand_width(xedd);
+
+  if (RegIsInstructionPointer(instr_op->u.mem.base)) {
+    instr->has_pc_rel_op = true;
+  }
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually
@@ -170,8 +148,9 @@ static void ConvertEffectiveAddress(Instruction *instr, Operand *instr_op,
     instr->has_pc_rel_op = true;
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
     instr_op->rel.imm = NextDecodedAddress(instr) + disp;
+    instr_op->width = 64;
   } else {
-    ConverMemoryOperand(instr_op, xedd, 0);
+    ConverMemoryOperand(instr, instr_op, xedd, 0);
   }
 }
 
@@ -223,9 +202,9 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
     } else if (XED_OPERAND_AGEN == op_name) {
       ConvertEffectiveAddress(instr, instr_op, xedd);
     } else if (XED_OPERAND_MEM0 == op_name) {
-      ConverMemoryOperand(instr_op, xedd, 0);
+      ConverMemoryOperand(instr, instr_op, xedd, 0);
     } else if (XED_OPERAND_MEM1 == op_name) {
-      ConverMemoryOperand(instr_op, xedd, 1);
+      ConverMemoryOperand(instr, instr_op, xedd, 1);
     } else if (XED_OPERAND_TYPE_IMM == op_type ||
                XED_OPERAND_TYPE_IMM_CONST == op_type) {
       ConvertImmediateOperand(instr_op, xedd, op_name);
@@ -286,6 +265,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->num_ops = 0;
   instr->needs_encoding = false;
   instr->has_pc_rel_op = false;
+  instr->has_fixed_length = false;
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
   instr->decoded_pc = pc;
   ConvertDecodedPrefixes(instr, xedd);
@@ -330,8 +310,7 @@ enum {
   RIP_REL32_LEA_LEN = 7  // 48 (rex.W) 8d (opcode) 00 (sib) 00 00 00 00 (disp)
 };
 
-// Convert a Granary LEA operand into an AGEN operand that is either a memory
-// operand or
+// Convert a Granary LEA operand into a XED_ENCODER_OPERAND_TYPE_MEM operand.
 static void ConverLEAOperand(const Instruction *instr,
                              const Operand *op,
                              xed_encoder_operand_t *ir_op) {
