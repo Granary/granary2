@@ -43,9 +43,18 @@ static bool AddressNeedsRelativizing(PC relative_pc, PC cache_pc) {
 }
 }  // namespace
 
+#define INSERT_BEFORE(...) \
+  do { \
+    auto ir = new Instruction; \
+    __VA_ARGS__ ; \
+    auto ir_instr = new NativeInstruction(ir); \
+    native_instr->InsertBefore( \
+        std::move(std::unique_ptr<granary::Instruction>(ir_instr))); \
+  } while (0)
+
 // Convert a RIP-relative LEA into a MOV <imm64>, reg.
 void InstructionRelativizer::RelativizeLEA(void) {
-  auto rel_pc = instr->ops[1].rel.pc;
+  auto rel_pc = instr->ops[1].rel.pc;  // LEA_GPRv_AGEN
   if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
     auto rel_ptr = reinterpret_cast<uintptr_t>(rel_pc);
     auto dest_reg = instr->ops[0].u.reg;
@@ -54,14 +63,29 @@ void InstructionRelativizer::RelativizeLEA(void) {
 }
 
 void InstructionRelativizer::RelativizePUSH(void) {
-  auto rel_pc = instr->ops[1].rel.pc;
+  auto rel_pc = instr->ops[0].rel.pc;  // PUSH_MEMv
   if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
-
+    INSERT_BEFORE(LEA_GPRv_AGEN(ir, REG_RSP, REG_RSP[-8]));
+    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RAX));
+    INSERT_BEFORE(MOV_GPRv_IMMv(ir, REG_RAX, Immediate(rel_pc)));
+    INSERT_BEFORE(MOV_GPRv_MEMv(ir, REG_RAX, *REG_RAX));
+    INSERT_BEFORE(MOV_MEMv_GPRv(ir, REG_RSP[8], REG_RAX));
+    POP_GPRv_51(instr, REG_RAX);
   }
 }
 
 void InstructionRelativizer::RelativizePOP(void) {
-
+  auto rel_pc = instr->ops[0].rel.pc;  // POP_MEMv
+  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
+    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RAX));
+    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RBX));
+    INSERT_BEFORE(MOV_GPRv_IMMv(ir, REG_RAX, Immediate(rel_pc)));
+    INSERT_BEFORE(MOV_GPRv_MEMv(ir, REG_RBX, REG_RSP[16]));
+    INSERT_BEFORE(MOV_MEMv_GPRv(ir, *REG_RAX, REG_RBX));
+    INSERT_BEFORE(POP_GPRv_51(ir, REG_RBX));
+    INSERT_BEFORE(POP_GPRv_51(ir, REG_RAX));
+    LEA_GPRv_AGEN(instr, REG_RSP, REG_RSP[8]);
+  }
 }
 
 // Convert a RIP-relative CALL/JMP to some far-off location into

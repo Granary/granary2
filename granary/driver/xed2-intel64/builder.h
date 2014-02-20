@@ -86,12 +86,20 @@ struct Immediate {
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   explicit Immediate(T imm)
       : value(static_cast<uint64_t>(static_cast<int64_t>(imm))),
-        width(ImmediateWidth(imm)) {}
+        width(ImmediateWidth(value)) {}
 
+  // TODO(pag): Assuming width corresponds to sign-extension might be dangerous
+  //            when using MOV_* instructions; however, it also reveals some
+  //            better instruction selection opportunities with MOVSX_*.
   template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
   explicit Immediate(T imm)
       : value(static_cast<uint64_t>(imm)),
         width(ImmediateWidth(imm)) {}
+
+  template <typename T>
+  explicit Immediate(T *ptr)
+      : value(reinterpret_cast<uintptr_t>(ptr)),
+        width(ImmediateWidth(value)) {}
 
   uint64_t value;
   unsigned width;
