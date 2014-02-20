@@ -264,7 +264,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->length = static_cast<decltype(instr->length)>(
       xed_decoded_inst_get_length(xedd));
   instr->num_ops = 0;
-  instr->needs_encoding = false;
+  instr->needs_encoding = GRANARY_IF_DEBUG_ELSE(true, false);
   instr->has_pc_rel_op = false;
   instr->has_fixed_length = false;
   instr->is_atomic = xed_operand_values_get_atomic(xedd);

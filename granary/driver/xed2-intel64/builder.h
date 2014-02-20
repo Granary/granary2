@@ -106,10 +106,14 @@ struct Immediate {
 };
 
 // Import operands into an `Instruction` instance.
-void ImportOperand(Instruction *instr, Operand *op, Register reg);
-void ImportOperand(Instruction *instr, Operand *op, BaseDisp bdisp);
-void ImportOperand(Instruction *instr, Operand *op, RelativeAddress addr);
-void ImportOperand(Instruction *instr, Operand *op, Immediate imm,
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, Register reg);
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, BaseDisp bdisp);
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, RelativeAddress addr);
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, Immediate imm,
                    xed_encoder_operand_type_t type);
 
 #ifndef GRANARY_DEFINE_XED_REG

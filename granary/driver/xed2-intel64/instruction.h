@@ -93,6 +93,9 @@ struct Instruction {
   // Does this instruction have a memory operand?
   bool has_memory_op:1;
 
+  // Does this instruction have a virtual register operand?
+  bool has_virtual_reg_op:1;
+
   // Raw bytes of this instruction. When decoding an instruction, we copy the
   // decoded bytes into here. When encoding an instruction, we overwrite these
   // bytes.

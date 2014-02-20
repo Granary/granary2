@@ -41,26 +41,32 @@ void ImportInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->has_fixed_length = false;
   instr->is_atomic = false;
   instr->has_memory_op = false;
+  instr->has_virtual_reg_op = false;
 }
 
 // Import a register operand into Granary's low-level IR.
-void ImportOperand(Instruction *, Operand *op, Register reg) {
+void ImportOperand(Instruction *, Operand *op, xed_operand_action_enum_t rw,
+                   Register reg) {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
   op->u.reg = reg.reg;
   op->width = xed_get_register_width_bits64(reg.reg);
+  op->rw = rw;
 }
 
 // Import a base/displacement memory operand into Granary's low-level IR.
-void ImportOperand(Instruction *instr, Operand *op, BaseDisp bdisp) {
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, BaseDisp bdisp) {
   granary_break_on_fault_if(XED_REG_RIP == bdisp.base);
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   op->u.mem = bdisp;
   op->width = 0;  // Inherit size.
+  op->rw = rw;
   instr->has_memory_op = true;
 }
 
 // Import a relative address operand into Granary's low-level IR.
-void ImportOperand(Instruction *instr, Operand *op, RelativeAddress addr) {
+void ImportOperand(Instruction *instr, Operand *op,
+                   xed_operand_action_enum_t rw, RelativeAddress addr) {
   if (instr->IsJump() || instr->IsFunctionCall()) {
     op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   } else {
@@ -71,12 +77,13 @@ void ImportOperand(Instruction *instr, Operand *op, RelativeAddress addr) {
   }
   op->rel.imm = addr.addr;
   op->width = 64;
+  op->rw = rw;
   instr->has_pc_rel_op = true;
 }
 
 // Import an immediate operand into Granary's low-level IR.
-void ImportOperand(Instruction *, Operand *op, Immediate imm,
-                   xed_encoder_operand_type_t type) {
+void ImportOperand(Instruction *, Operand *op, xed_operand_action_enum_t rw,
+                   Immediate imm, xed_encoder_operand_type_t type) {
   op->type = type;
   if (XED_ENCODER_OPERAND_TYPE_IMM1 == type) {
     op->u.imm1 = static_cast<decltype(op->u.imm1)>(imm.value);
@@ -84,6 +91,7 @@ void ImportOperand(Instruction *, Operand *op, Immediate imm,
     op->u.imm0 = imm.value;
   }
   op->width = imm.width;
+  op->rw = rw;
 }
 
 }  // namespace driver

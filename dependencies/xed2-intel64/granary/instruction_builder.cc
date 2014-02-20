@@ -12,7 +12,9 @@ static void GenerateExplicitOperandBuilder(InstructionInfo *info,
                                            unsigned op_num,
                                            unsigned arg_num) {
   std::cout << INDENT << "ImportOperand(instr, &(instr->ops["
-            << op_num << "]), a" << arg_num;
+            << op_num << "]), XED_OPERAND_ACTION_"
+            << xed_operand_action_enum_t2str(xed_operand_rw(op))
+            << ", a" << arg_num;
 
   auto op_name = xed_operand_name(op);
   if (XED_OPERAND_IMM0 == op_name) {

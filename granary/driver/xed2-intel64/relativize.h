@@ -34,6 +34,7 @@ class InstructionRelativizer {
   void RelativizePUSH(void);
   void RelativizePOP(void);
   void RelativizeCFI(void);
+  void RelativizeMemOP(void);
 
   // Estimated location at which this instruction will be encoded.
   CachePC cache_pc;

@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/new.h"
+
 #include "granary/cfg/instruction.h"
 
 #include "granary/driver/xed2-intel64/builder.h"
@@ -24,10 +26,12 @@ void InstructionRelativizer::Relativize(NativeInstruction *native_instr_) {
       case XED_ICLASS_JMP_FAR:
       case XED_ICLASS_CALL_FAR:
       case XED_ICLASS_CALL_NEAR: return RelativizeCFI();
-      default: return;
+      default:
+        if (instr->has_memory_op) {
+          RelativizeMemOP();
+        }
     }
   }
-  GRANARY_UNUSED(cache_pc);
 }
 
 namespace {
@@ -62,6 +66,8 @@ void InstructionRelativizer::RelativizeLEA(void) {
   }
 }
 
+// Relativize a `PUSH X(%RIP)` instruction if the native instruction pointer
+// is too far away from the code cache.
 void InstructionRelativizer::RelativizePUSH(void) {
   auto rel_pc = instr->ops[0].rel.pc;  // PUSH_MEMv
   if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
@@ -74,6 +80,8 @@ void InstructionRelativizer::RelativizePUSH(void) {
   }
 }
 
+// Relativize a `POP X(%RIP)` instruction if the native instruction pointer
+// is too far away from the code cache.
 void InstructionRelativizer::RelativizePOP(void) {
   auto rel_pc = instr->ops[0].rel.pc;  // POP_MEMv
   if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
@@ -88,11 +96,52 @@ void InstructionRelativizer::RelativizePOP(void) {
   }
 }
 
-// Convert a RIP-relative CALL/JMP to some far-off location into
-void InstructionRelativizer::RelativizeCFI(void) {
-  auto rel_pc = instr->ops[0].rel.pc;
-  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
+namespace {
+// Represents a far-away program counter.
+struct FarPC {
+  PC pc;
+  GRANARY_DEFINE_NEW_ALLOCATOR(FarPC, {
+    SHARED = true,
+    ALIGNMENT = 8
+  })
+};
+}  // namespace
 
+// Convert a RIP-relative CALL/JMP to some far-off location.
+void InstructionRelativizer::RelativizeCFI(void) {
+  Operand &op(instr->ops[0]);
+  auto rel_pc = op.rel.pc;
+  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
+    if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
+      // TODO(pag): Use virtual reg.
+
+    } else if (XED_ENCODER_OPERAND_TYPE_BRDISP) {
+      granary_break_on_fault_if(instr->IsConditionalJump());
+      op.type = XED_ENCODER_OPERAND_TYPE_PTR;
+      op.rel.imm = reinterpret_cast<intptr_t>(new FarPC{rel_pc});
+    } else {
+      granary_break_on_fault();
+    }
+  }
+}
+
+// Relativize a memory operation with a RIP-relative memory operand.
+void InstructionRelativizer::RelativizeMemOP(void) {
+  auto op_num = 0;
+  for (Operand &op : instr->ops) {
+    if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
+      break;
+    }
+    ++op_num;
+  }
+
+  Operand &op(instr->ops[op_num]);
+  if (xed_operand_action_written(op.rw)) {
+    // TODO(pag): Use virtual reg.
+  } else if (xed_operand_action_read(op.rw)) {
+    // TODO(pag): Use virtual reg.
+  } else {
+    granary_break_on_fault();  // TODO(pag): Implement this. CMPXCHG?
   }
 }
 
