@@ -13,16 +13,17 @@
 
 #include "granary/driver.h"
 #include "granary/environment.h"
-#include "granary/metadata.h"
 #include "granary/module.h"
+#include "granary/util.h"
 
 namespace granary {
 
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the LCFG
 // is needed so that blocks can be added.
-BlockFactory::BlockFactory(LocalControlFlowGraph *cfg_)
+BlockFactory::BlockFactory(Environment *env_, LocalControlFlowGraph *cfg_)
     : meta_data_filter(),
+      env(env_),
       cfg(cfg_),
       has_pending_request(false) {}
 
@@ -107,23 +108,6 @@ static void AddFallThroughInstruction(BlockFactory *factory,
   }
 }
 
-// Decode the list of instructions and appends them to the first instruction in
-// a basic block.
-static void DecodeInstructionList(BlockFactory *factory, Instruction *instr,
-                                  AppPC pc) {
-  driver::InstructionDecoder decoder;
-  for (; !IsA<ControlFlowInstruction *>(instr); ) {
-    auto dinstr = new driver::Instruction;
-    if (!decoder.DecodeNext(dinstr, &pc)) {
-      instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
-      delete dinstr;
-      return;
-    }
-    instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
-  }
-  AddFallThroughInstruction(factory, &decoder, instr, pc);
-}
-
 // Hash some basic block meta-data.
 static uint32_t HashMetaData(HashFunction *hasher,
                              InstrumentedBasicBlock *block) {
@@ -134,6 +118,24 @@ static uint32_t HashMetaData(HashFunction *hasher,
 }
 
 }  // namespace
+
+// Decode an instruction list starting at `pc` and link the decoded
+// instructions into the instruction list beginning with `instr`.
+void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
+  driver::InstructionDecoder decoder;
+  for (; !IsA<ControlFlowInstruction *>(instr); ) {
+    auto dinstr = new driver::Instruction;
+    auto decoded_pc = pc;
+    if (!decoder.DecodeNext(dinstr, &pc)) {
+      instr->InsertAfter(lir::Jump(new NativeBasicBlock(decoded_pc)));
+      delete dinstr;
+      return;
+    }
+    instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
+    env->AnnotateInstruction(instr);
+  }
+  AddFallThroughInstruction(this, &decoder, instr, pc);
+}
 
 // Hash the meta data of all basic blocks. This resets the `materialized_block`
 // of any `DirectBasicBlock` from prior materialization runs.
@@ -213,13 +215,34 @@ BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
   return nullptr;
 }
 
+// Returns true if we can try to materialize this block. If it looks like
+// there's a pending request then we double check that the module of the
+// requested block matches the module of the LCFG's first block. If they don't
+// match then we permanently deny materialization within this session. The
+// reason for this is that we want all code cache allocations to be specific
+// to an individual module.
+bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
+  if (block->materialized_block ||
+      REQUEST_LATER == block->materialize_strategy ||
+      REQUEST_DENIED == block->materialize_strategy) {
+    return false;
+  } else {
+    auto meta = GetMetaData<TranslationMetaData>(block);
+    auto first_meta = GetMetaData<TranslationMetaData>(
+        DynamicCast<InstrumentedBasicBlock *>(cfg->first_block));
+    if (meta->source.module != first_meta->source.module) {
+      block->materialize_strategy = REQUEST_DENIED;
+      return false;  // Modules of requested and first blocks don't match.
+    } else {
+      return true;
+    }
+  }
+}
+
 // Materialize a basic block if there is a pending request.
 bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
-  if (!block->materialized_block) {
+  if (CanMaterializeBlock(block)) {
     switch (block->materialize_strategy) {
-      case REQUEST_LATER:
-        return false;
-
       case REQUEST_CHECK_INDEX_AND_LCFG:
         // TODO(pag): Implement me.
         // Fall-through.
@@ -236,7 +259,7 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       case REQUEST_NOW: {
         auto decoded_block = new DecodedBasicBlock(block->meta);
         block->meta = nullptr;  // Steal.
-        DecodeInstructionList(this, decoded_block->FirstInstruction(),
+        DecodeInstructionList(decoded_block->FirstInstruction(),
                               block->StartAppPC());
         cfg->AddBlock(decoded_block);
         block->materialized_block = decoded_block;
@@ -246,6 +269,8 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       case REQUEST_NATIVE:
         block->materialized_block = new NativeBasicBlock(block->StartAppPC());
         return true;
+
+      default: {}  // REQUEST_LATER, REQUEST_DENIED.
     }
   }
   return false;
@@ -267,7 +292,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
   auto decoded_block = new DecodedBasicBlock(meta);
-  DecodeInstructionList(this, decoded_block->FirstInstruction(),
+  DecodeInstructionList(decoded_block->FirstInstruction(),
                         decoded_block->StartAppPC());
   cfg->AddBlock(decoded_block);
 }

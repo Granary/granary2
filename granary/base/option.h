@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_BASE_OPTIONS_H_
-#define GRANARY_BASE_OPTIONS_H_
+#ifndef GRANARY_BASE_OPTION_H_
+#define GRANARY_BASE_OPTION_H_
 
 #include "granary/base/base.h"
 
@@ -34,6 +34,13 @@
 #define GRANARY_DECLARE_bool( name) \
   extern bool GRANARY_FLAG_NAME(name);
 
+#define GRANARY_DEFINE_non_negative_int(name, default_value, docstring) \
+  int GRANARY_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParseNonNegativeIntOption, docstring)
+
+#define GRANARY_DECLARE_non_negative_int( name) \
+  extern int GRANARY_FLAG_NAME(name);
+
 namespace granary {
 
 // Backing structure for describing command-line options to Granary.
@@ -62,7 +69,11 @@ void ParseStringOption(Option *option);
 // Parse an option that will be interpreted as a boolean value.
 void ParseBoolOption(Option *option);
 
+// Parse an option that will be interpreted as an unsigned integer but stored
+// as a signed integer.
+void ParseNonNegativeIntOption(Option *option);
+
 }  // namespace detail
 }  // namespace granary
 
-#endif  // GRANARY_BASE_OPTIONS_H_
+#endif  // GRANARY_BASE_OPTION_H_

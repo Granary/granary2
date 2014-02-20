@@ -45,6 +45,11 @@ class CodeAllocator {
   // Allocates some executable code of size `size` with alignment `alignment`.
   CachePC Allocate(int alignment, int size);
 
+  GRANARY_DEFINE_NEW_ALLOCATOR(CodeAllocator, {
+    SHARED = true,
+    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+  })
+
  private:
   CodeAllocator(void) = delete;
 

@@ -5,7 +5,7 @@
 #include <dlfcn.h>
 #include <cstdlib>
 
-#include "granary/base/options.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 #include "granary/logging.h"
 

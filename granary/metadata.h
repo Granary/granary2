@@ -6,7 +6,7 @@
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 #include "granary/base/hash.h"
-#include "granary/base/type_traits.h"
+#include "granary/base/type_trait.h"
 
 #include "granary/module.h"
 

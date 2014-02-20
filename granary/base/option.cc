@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/options.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
 
@@ -218,6 +218,15 @@ void ParseBoolOption(Option *option) {
       default:
         break;
     }
+  }
+}
+
+// Parse an option that will be interpreted as an unsigned integer but stored
+// as a signed integer.
+void ParseNonNegativeIntOption(Option *option) {
+  auto value = FindValueForName(option->name);
+  if (value) {
+    DeFormat(value, "%u", reinterpret_cast<unsigned *>(option->value));
   }
 }
 

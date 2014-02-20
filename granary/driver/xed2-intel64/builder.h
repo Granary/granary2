@@ -4,7 +4,7 @@
 #define GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
 
 #include "granary/base/base.h"
-#include "granary/base/type_traits.h"
+#include "granary/base/type_trait.h"
 
 #include "granary/driver/xed2-intel64/instruction.h"
 

@@ -18,9 +18,9 @@ namespace {
 
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic blocks.
-static void InstrumentControlFlow(LocalControlFlowGraph *cfg,
+static void InstrumentControlFlow(Environment *env, LocalControlFlowGraph *cfg,
                                   GenericMetaData *meta) {
-  BlockFactory materializer(cfg);
+  BlockFactory materializer(env, cfg);
   materializer.MaterializeInitialBlock(meta);
   for (;; materializer.MaterializeRequestedBlocks()) {
     for (auto tool : Tools()) {
@@ -58,8 +58,9 @@ static void InstrumentBlock(LocalControlFlowGraph *cfg) {
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
-void Instrument(LocalControlFlowGraph *cfg, GenericMetaData *meta) {
-  InstrumentControlFlow(cfg, meta);
+void Instrument(Environment *env, LocalControlFlowGraph *cfg,
+                GenericMetaData *meta) {
+  InstrumentControlFlow(env, cfg, meta);
   InstrumentBlocks(cfg);
   InstrumentBlock(cfg);
 }

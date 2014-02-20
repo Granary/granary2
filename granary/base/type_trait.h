@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_BASE_TYPE_TRAITS_H_
-#define GRANARY_BASE_TYPE_TRAITS_H_
+#ifndef GRANARY_BASE_TYPE_TRAIT_H_
+#define GRANARY_BASE_TYPE_TRAIT_H_
 
 
 namespace granary {
@@ -180,4 +180,4 @@ struct RemoveConst<const T> {
 }  // namespace granary
 
 
-#endif  // GRANARY_BASE_TYPE_TRAITS_H_
+#endif  // GRANARY_BASE_TYPE_TRAIT_H_

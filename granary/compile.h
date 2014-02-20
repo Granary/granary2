@@ -10,10 +10,12 @@
 namespace granary {
 
 // Forward declarations.
+class Environment;
 class GenericMetaData;
 
-// Compile some code described by its `GenericMetaData` instance.
-void Compile(GenericMetaData *);
+// Compile some code described by its `GenericMetaData` instance within the
+// environment `env`.
+void Compile(Environment *env, GenericMetaData *meta);
 
 // Initialize the compilation system.
 void InitCompiler(void);

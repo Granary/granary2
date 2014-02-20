@@ -4,8 +4,17 @@
 
 #include "granary/base/list.h"
 #include "granary/base/string.h"
+#include "granary/base/option.h"
+
+#include "granary/code/allocate.h"
+
 #include "granary/breakpoint.h"
 #include "granary/module.h"
+
+GRANARY_DEFINE_non_negative_int(module_cache_slab_size, 8,
+    "The number of pages allocated at once to store cache code. Each "
+    "module maintains its own cache code allocator. The default value is "
+    "8 pages per slab.")
 
 namespace granary {
 namespace internal {
@@ -69,6 +78,7 @@ static const internal::ModuleAddressRange *FindRange(
 
 Module::Module(ModuleKind kind_, const char *name_)
     : next(nullptr),
+      cache_code_allocator(new CodeAllocator(FLAG_module_cache_slab_size)),
       kind(kind_),
       ranges(nullptr),
       ranges_lock(),

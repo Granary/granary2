@@ -10,7 +10,7 @@
 # include "granary/base/string.h"
 #endif
 
-#include "granary/base/options.h"
+#include "granary/base/option.h"
 #include "granary/init.h"
 #include "granary/logging.h"
 

@@ -9,6 +9,7 @@ namespace granary {
 
 // Forward declarations.
 class Instruction;
+GRANARY_INTERNAL_DEFINITION class CodeAllocator;
 class DecodedBasicBlock;
 
 // Manages environmental information that changes how Granary behaves. For
@@ -17,11 +18,14 @@ class DecodedBasicBlock;
 // instructions as potentially faulting.
 class Environment {
  public:
-  Environment(void) = default;
+  Environment(void);
 
   // Annotates the instruction, or adds an annotated instruction into the
   // instruction list. This returns the first
+  GRANARY_INTERNAL_DEFINITION
   void AnnotateInstruction(Instruction *instr) const;
+
+  GRANARY_INTERNAL_DEFINITION CodeAllocator * const edge_code_allocator;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);

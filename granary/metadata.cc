@@ -4,7 +4,7 @@
 
 #include "granary/base/list.h"
 #include "granary/base/new.h"
-#include "granary/base/options.h"
+#include "granary/base/option.h"
 #include "granary/breakpoint.h"
 #include "granary/metadata.h"
 

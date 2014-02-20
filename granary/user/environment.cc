@@ -2,8 +2,9 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/environment.h"
 #include "granary/cfg/instruction.h"
+
+#include "granary/environment.h"
 
 namespace granary {
 

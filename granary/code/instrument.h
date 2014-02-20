@@ -8,11 +8,13 @@ namespace granary {
 // Forward declarations.
 class LocalControlFlowGraph;
 class GenericMetaData;
+class Environment;
 
 // Instrument some initial code (described by `meta`) and fills the LCFG `cfg`
 // with the instrumented code. `meta` is taken as being "owned", i.e. no one
 // should be concurrently modifying `meta`!
-void Instrument(LocalControlFlowGraph *cfg, GenericMetaData *meta);
+void Instrument(Environment *env, LocalControlFlowGraph *cfg,
+                GenericMetaData *meta);
 
 }  // namespace granary
 

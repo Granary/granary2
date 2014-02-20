@@ -2,16 +2,21 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/options.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 
 #include "granary/compile.h"
 #include "granary/driver.h"
+#include "granary/environment.h"
 #include "granary/init.h"
 #include "granary/logging.h"
 #include "granary/metadata.h"
 #include "granary/module.h"
 #include "granary/tool.h"
+
+// TODO(pag): Remove me.
+#include "granary/base/cast.h"
+#include "granary/base/types.h"
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
@@ -58,6 +63,10 @@ void Init(InitKind kind, const char *granary_path) {
 
   // Initialize the code cache.
   InitCompiler();
+
+  // TODO(pag): Remove me.
+  Environment env;
+  Compile(&env, new GenericMetaData(UnsafeCast<AppPC>(&LoadTools)));
 }
 
 

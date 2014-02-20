@@ -40,7 +40,11 @@ enum BlockRequestKind : uint8_t {
   REQUEST_NOW,
 
   // Materialize to the native target.
-  REQUEST_NATIVE
+  REQUEST_NATIVE,
+
+  // Materialization request cannot be satisfied. This happens when we try to
+  // materialize a block accross a module boundary.
+  REQUEST_DENIED
 };
 
 
@@ -52,7 +56,7 @@ class BlockFactory {
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit BlockFactory(LocalControlFlowGraph *cfg_);
+  explicit BlockFactory(Environment *env_, LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
@@ -89,6 +93,11 @@ class BlockFactory {
  private:
   BlockFactory(void) = delete;
 
+  // Decode an instruction list starting at `pc` and link the decoded
+  // instructions into the instruction list beginning with `instr`.
+  GRANARY_INTERNAL_DEFINITION
+  void DecodeInstructionList(Instruction *instr, AppPC pc);
+
   // Hash the meta data of all basic blocks.
   GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);
 
@@ -103,6 +112,10 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION
   BasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);
 
+  // Returns true if we can try to materialize this block.
+  GRANARY_INTERNAL_DEFINITION
+  bool CanMaterializeBlock(DirectBasicBlock *block);
+
   // Materialize a direct basic block.
   GRANARY_INTERNAL_DEFINITION
   bool MaterializeBlock(DirectBasicBlock *block);
@@ -110,6 +123,9 @@ class BlockFactory {
   // Used for fast checking on whether or not a block already exists in the
   // LCFG.
   GRANARY_INTERNAL_DEFINITION BloomFilter<256> meta_data_filter;
+
+  // Then environment in which we're decoding.
+  GRANARY_INTERNAL_DEFINITION Environment *env;
 
   // The LCFG into which blocks are materialized.
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;

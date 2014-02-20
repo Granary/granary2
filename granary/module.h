@@ -13,6 +13,7 @@ namespace granary {
 
 // Forward declarations.
 class Module;
+GRANARY_INTERNAL_DEFINITION class CodeAllocator;
 
 // Represents a location in a module. Note that not all segments within modules
 // are necessarily contiguous, but in most cases they are.
@@ -127,6 +128,9 @@ class Module {
   })
 
   GRANARY_INTERNAL_DEFINITION Module *next;
+
+  // Memory allocator for code from the code cache.
+  GRANARY_INTERNAL_DEFINITION CodeAllocator * const cache_code_allocator;
 
  private:
   friend Module *FindModuleByName(const char *name);

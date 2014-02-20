@@ -10,7 +10,7 @@
 #define GRANARY_BASE_CAST_H_
 
 #include "granary/base/base.h"
-#include "granary/base/type_traits.h"
+#include "granary/base/type_trait.h"
 
 namespace granary {
 

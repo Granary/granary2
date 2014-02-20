@@ -8,6 +8,8 @@
 
 namespace granary {
 namespace internal {
+
+// Initialize the metadata about a generic code slab.
 CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
     : begin(nullptr),
       next(next_),
@@ -21,6 +23,7 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
     VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
   }
 }
+
 }  // namespace internal
 
 CodeAllocator::CodeAllocator(int num_pages_)

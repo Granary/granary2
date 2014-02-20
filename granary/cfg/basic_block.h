@@ -10,7 +10,7 @@
 #include "granary/base/new.h"
 #include "granary/base/refcount.h"
 #include "granary/base/types.h"
-#include "granary/base/type_traits.h"
+#include "granary/base/type_trait.h"
 #include "granary/cfg/iterator.h"
 
 namespace granary {
