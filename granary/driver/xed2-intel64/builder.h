@@ -11,19 +11,9 @@
 namespace granary {
 namespace driver {
 
-// Returns the bit width of some immediate value.
-inline static unsigned ImmediateWidth(uint64_t imm) {
-  enum {
-    WIDTH_8   = 0x0FFUL,
-    WIDTH_16  = WIDTH_8 | (WIDTH_8 << 8),
-    WIDTH_32  = WIDTH_16 | (WIDTH_16 << 16)
-  };
-  if (!imm) return 0;
-  if ((imm & WIDTH_8) == imm) return 8;
-  if ((imm & WIDTH_16) == imm) return 16;
-  if ((imm & WIDTH_32) == imm) return 32;
-  return 64;
-}
+// Returns the bit width of an immediate integer. This is to calculate operand
+// width when using the instruction builder IR.
+unsigned ImmediateWidth(uint64_t imm);
 
 // Returns the bit width of some signed immediate value. This accounts for
 // sign extension.

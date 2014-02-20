@@ -18,9 +18,9 @@
 
 namespace granary {
 
-// Initialize the materializer with an environment and a local control-flow
-// graph. The environment is needed for lookups in the code cache index, and
-// the LCFG is needed so that blocks can be added.
+// Initialize the factory with an environment and a local control-flow graph.
+// The environment is needed for lookups in the code cache index, and the LCFG
+// is needed so that blocks can be added.
 BlockFactory::BlockFactory(LocalControlFlowGraph *cfg_)
     : meta_data_filter(),
       cfg(cfg_),
@@ -87,7 +87,7 @@ static std::unique_ptr<Instruction> MakeInstruction(
 }
 
 // Add the fall-through instruction for a block.
-static void AddFallThroughInstruction(BlockFactory *materializer,
+static void AddFallThroughInstruction(BlockFactory *factory,
                                       driver::InstructionDecoder *decoder,
                                       Instruction *last_instr, AppPC pc) {
   auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
@@ -102,15 +102,15 @@ static void AddFallThroughInstruction(BlockFactory *materializer,
     } else if (dinstr->IsUnconditionalJump()) {
       last_instr->InsertAfter(std::move(MakeInstruction(dinstr.release())));
     } else {
-      last_instr->InsertAfter(lir::Jump(materializer, pc));
+      last_instr->InsertAfter(lir::Jump(factory, pc));
     }
   }
 }
 
 // Decode the list of instructions and appends them to the first instruction in
 // a basic block.
-static void DecodeInstructionList(BlockFactory *materializer,
-                                  Instruction *instr, AppPC pc) {
+static void DecodeInstructionList(BlockFactory *factory, Instruction *instr,
+                                  AppPC pc) {
   driver::InstructionDecoder decoder;
   for (; !IsA<ControlFlowInstruction *>(instr); ) {
     auto dinstr = new driver::Instruction;
@@ -121,7 +121,7 @@ static void DecodeInstructionList(BlockFactory *materializer,
     }
     instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
   }
-  AddFallThroughInstruction(materializer, &decoder, instr, pc);
+  AddFallThroughInstruction(factory, &decoder, instr, pc);
 }
 
 // Hash some basic block meta-data.

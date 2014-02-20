@@ -21,13 +21,11 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
 
 // Materialize a direct basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<Instruction> Jump(BlockFactory *materializer,
-                                  AppPC target_pc);
+std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc);
 
 // Materialize a direct basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<Instruction> Call(BlockFactory *materializer,
-                                  AppPC target_pc);
+std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc);
 
 std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
                                   const AnnotationInstruction *target_instr);

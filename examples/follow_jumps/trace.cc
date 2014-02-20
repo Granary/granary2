@@ -9,7 +9,7 @@ using namespace granary;
 class JumpFollower : public Tool {
  public:
   virtual ~JumpFollower(void) = default;
-  virtual void InstrumentControlFlow(BlockFactory *materializer,
+  virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       if (IsA<IndirectBasicBlock *>(block) || IsA<ReturnBasicBlock *>(block)) {
@@ -17,9 +17,9 @@ class JumpFollower : public Tool {
       }
       for (auto succ : block->Successors()) {
         if (succ.cti->IsJump() &&
-            //!succ.cti->IsConditionalJump() &&
+            !succ.cti->IsConditionalJump() &&
             !succ.cti->HasIndirectTarget()) {
-          materializer->RequestBlock(succ.block);
+          factory->RequestBlock(succ.block);
         }
       }
     }

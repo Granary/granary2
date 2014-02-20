@@ -90,6 +90,9 @@ struct Instruction {
   // Is this an atomic operation?
   bool is_atomic:1;
 
+  // Does this instruction have a memory operand?
+  bool has_memory_op:1;
+
   // Raw bytes of this instruction. When decoding an instruction, we copy the
   // decoded bytes into here. When encoding an instruction, we overwrite these
   // bytes.

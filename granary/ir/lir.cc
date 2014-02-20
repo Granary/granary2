@@ -13,17 +13,15 @@ namespace lir {
 
 // Materialize a future basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<Instruction> Jump(BlockFactory *materializer,
-                                  AppPC target_pc) {
-  auto target_block = materializer->Materialize(target_pc);
+std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc) {
+  auto target_block = factory->Materialize(target_pc);
   return Jump(target_block.release());
 }
 
 // Materialize a future basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<Instruction> Call(BlockFactory *materializer,
-                                  AppPC target_pc) {
-  auto target_block = materializer->Materialize(target_pc);
+std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc) {
+  auto target_block = factory->Materialize(target_pc);
   return Call(target_block.release());
 }
 

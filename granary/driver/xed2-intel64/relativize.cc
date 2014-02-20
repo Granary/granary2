@@ -54,15 +54,22 @@ void InstructionRelativizer::RelativizeLEA(void) {
 }
 
 void InstructionRelativizer::RelativizePUSH(void) {
+  auto rel_pc = instr->ops[1].rel.pc;
+  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
 
+  }
 }
 
 void InstructionRelativizer::RelativizePOP(void) {
 
 }
 
+// Convert a RIP-relative CALL/JMP to some far-off location into
 void InstructionRelativizer::RelativizeCFI(void) {
+  auto rel_pc = instr->ops[0].rel.pc;
+  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
 
+  }
 }
 
 }  // namespace driver

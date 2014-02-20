@@ -129,10 +129,7 @@ static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
   // consider the BYTEOP attribute. E.g. for a byte mov to memory,
   // `xed_decoded_inst_get_effective_operand_width` returns a width of 32.
   instr_op->width = xed_decoded_inst_get_operand_width(xedd);
-
-  if (RegIsInstructionPointer(instr_op->u.mem.base)) {
-    instr->has_pc_rel_op = true;
-  }
+  instr->has_memory_op = true;
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually
@@ -142,15 +139,19 @@ static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
 // Note: XED_OPERAND_AGEN's memory operand index is 0. See docs for function
 //       `xed_agen`.
 static void ConvertEffectiveAddress(Instruction *instr, Operand *instr_op,
-                                    xed_decoded_inst_t *xedd) {
-  if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, 0))) {
-    auto disp = xed_decoded_inst_get_memory_displacement(xedd, 0);
+                                    xed_decoded_inst_t *xedd, unsigned index) {
+  if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
+    auto disp = xed_decoded_inst_get_memory_displacement(xedd, index);
     instr->has_pc_rel_op = true;
-    instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
+    instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->rel.imm = NextDecodedAddress(instr) + disp;
     instr_op->width = 64;
+
+    if (XED_ICLASS_LEA != instr->iclass) {
+      instr->has_memory_op = true;
+    }
   } else {
-    ConverMemoryOperand(instr, instr_op, xedd, 0);
+    ConverMemoryOperand(instr, instr_op, xedd, index);
   }
 }
 
@@ -200,11 +201,11 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
     } else if (XED_OPERAND_RELBR == op_name) {
       ConvertRelativeBranch(instr, instr_op, xedd);
     } else if (XED_OPERAND_AGEN == op_name) {
-      ConvertEffectiveAddress(instr, instr_op, xedd);
+      ConvertEffectiveAddress(instr, instr_op, xedd, 0);
     } else if (XED_OPERAND_MEM0 == op_name) {
-      ConverMemoryOperand(instr, instr_op, xedd, 0);
+      ConvertEffectiveAddress(instr, instr_op, xedd, 0);
     } else if (XED_OPERAND_MEM1 == op_name) {
-      ConverMemoryOperand(instr, instr_op, xedd, 1);
+      ConvertEffectiveAddress(instr, instr_op, xedd, 1);
     } else if (XED_OPERAND_TYPE_IMM == op_type ||
                XED_OPERAND_TYPE_IMM_CONST == op_type) {
       ConvertImmediateOperand(instr_op, xedd, op_name);
@@ -267,6 +268,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->has_pc_rel_op = false;
   instr->has_fixed_length = false;
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
+  instr->has_memory_op = false;
   instr->decoded_pc = pc;
   ConvertDecodedPrefixes(instr, xedd);
   ConvertDecodedOperands(instr, xedd);
@@ -294,7 +296,7 @@ namespace {
 // the instruction will be encoded, we calculate the relative displacement. Here
 // we dependend on `instr->length` because we know ahead of time how long
 // the various jumps are. In other cases, `instr->length` is not safe to use.
-static void ConvertRelBranchOperand(const Instruction *instr,
+static void SelectRelBranchOperand(const Instruction *instr,
                                     const Operand *op,
                                     xed_encoder_operand_t *ir_op) {
   ir_op->width = 32;
@@ -311,9 +313,9 @@ enum {
 };
 
 // Convert a Granary LEA operand into a XED_ENCODER_OPERAND_TYPE_MEM operand.
-static void ConverLEAOperand(const Instruction *instr,
-                             const Operand *op,
-                             xed_encoder_operand_t *ir_op) {
+static void SelectMemoryOperand(const Instruction *instr,
+                                const Operand *op,
+                                xed_encoder_operand_t *ir_op) {
   if (instr->has_pc_rel_op) {
     ir_op->width = 64;  // Size of the effective address.
     ir_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
@@ -331,16 +333,14 @@ static void ConverLEAOperand(const Instruction *instr,
   }
 }
 
-// Convert an `Operand` instro a `xed_encoder_operand_t`.
-static void ConvertEncodedOperand(const Instruction *instr,
-                                  const Operand *op,
-                                  xed_encoder_operand_t *ir_op,
-                                  uint32_t *max_width) {
+// Convert an `Operand` into a `xed_encoder_operand_t`.
+static void SelectOperand(const Instruction *instr, const Operand *op,
+                          xed_encoder_operand_t *ir_op, uint32_t *max_width) {
   ir_op->type = op->type;
-  if (XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
-    ConvertRelBranchOperand(instr, op, ir_op);
-  } else if (XED_ICLASS_LEA == instr->iclass) {
-    ConverLEAOperand(instr, op, ir_op);
+  if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
+    SelectRelBranchOperand(instr, op, ir_op);
+  } else if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
+    SelectMemoryOperand(instr, op, ir_op);
   } else {
     ir_op->width = op->width;
     ir_op->u = op->u;
@@ -366,15 +366,15 @@ static void AdjustEffectiveOperandWidth(xed_encoder_instruction_t *ir) {
 }
 
 // Convert an `Instruction` instances into an `xed_encoder_instruction_t`.
-static void ConvertInstruction(const Instruction *instr,
-                               xed_encoder_instruction_t *ir) {
+static void SelectInstruction(const Instruction *instr,
+                              xed_encoder_instruction_t *ir) {
   auto width = 0U;
   ir->mode = XED_STATE;
   ir->iclass = instr->iclass;
   ir->prefixes = instr->prefixes;
   ir->noperands = static_cast<decltype(ir->noperands)>(instr->num_ops);
   for (int8_t i(0); i < instr->num_ops; ++i) {
-    ConvertEncodedOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
+    SelectOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
   }
   ir->effective_operand_width = width;
   ir->effective_address_width = 0;
@@ -388,7 +388,7 @@ static void EncodeInstruction(Instruction *instr, CachePC pc) {
   }
   xed_encoder_request_t xedd;
   xed_encoder_instruction_t ir;
-  ConvertInstruction(instr, &ir);
+  SelectInstruction(instr, &ir);
   xed_encoder_request_zero_set_mode(&xedd, &XED_STATE);
   xed_encoder_request_set_iclass(&xedd, instr->iclass);
   granary_break_on_fault_if(!xed_convert_to_encoder_request(&xedd, &ir));
