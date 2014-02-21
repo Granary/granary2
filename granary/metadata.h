@@ -56,7 +56,7 @@ struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
   // The module from which this block originates.
   GRANARY_CONST ModuleOffset source;
 
-  // The program counter.
+  // The native program counter where this block begins.
   GRANARY_CONST AppPC native_pc;
 
   // Initialize Granary's internal translation meta-data.
@@ -90,6 +90,8 @@ struct CacheMetaData : MutableMetaData {
   //            recording the extra info is reduced. Also, consider a delta
   //            encoding, (e.g. https://docs.google.com/document/d/
   //            1lyPIbmsYbXnpNj57a261hgOYVpNRcgydurVQIyZOz_o/pub).
+  // TODO(pag): Things that are kernel-specific (e.g. exc. table, delay regions)
+  //            should go in their own cache data structures.
 };
 #endif  // GRANARY_INTERNAL
 

@@ -8,10 +8,12 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/factory.h"
 
+#include "granary/code/instrument.h"
+
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
-#include "granary/code/instrument.h"
+#include "dependencies/xxhash/hash.h"
 
 namespace granary {
 namespace {
@@ -54,15 +56,29 @@ static void InstrumentBlock(LocalControlFlowGraph *cfg) {
   }
 }
 
+static uint32_t HashMetaData(GenericMetaData *meta) {
+  xxhash::HashFunction hasher(0xDEADBEEFUL);
+  hasher.Reset();
+  meta->Hash(&hasher);
+  hasher.Finalize();
+  return hasher.Extract32();
+}
+
 }  // namespace
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
 void Instrument(Environment *env, LocalControlFlowGraph *cfg,
                 GenericMetaData *meta) {
+  auto meta_hash = HashMetaData(meta);
+
   InstrumentControlFlow(env, cfg, meta);
   InstrumentBlocks(cfg);
   InstrumentBlock(cfg);
+
+  // Verify that the indexable meta-data for the entry basic block has not
+  // changed during the instrumentation process.
+  granary_break_on_fault_if(HashMetaData(meta) != meta_hash);
 }
 
 }  // namespace granary
