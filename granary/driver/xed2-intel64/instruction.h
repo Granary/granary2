@@ -15,7 +15,24 @@ namespace driver {
 // Basically a `xed_encoder_operand_t`, but where if the instruction contains
 // a PC-relative operand (e.g. CALL/JMP/Jcc/LEA) then we maintain the resolved
 // address in `rel_imm`/`rel_pc`.
-struct Operand {
+class Operand {
+ public:
+  inline bool IsRead(void) const {
+    return xed_operand_action_read(rw);
+  }
+
+  inline bool IsWrite(void) const {
+    return xed_operand_action_written(rw);
+  }
+
+  inline bool IsConditionalRead(void) const {
+    return xed_operand_action_conditional_read(rw);
+  }
+
+  inline bool IsConditionalWrite(void) const {
+    return xed_operand_action_conditional_write(rw);
+  }
+
   xed_encoder_operand_type_t type;
   union {
     decltype(xed_encoder_operand_t().u) u;
@@ -43,7 +60,8 @@ static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, rel.pc),
 // instructions at the granularity of instruction classes, and supports
 // de-selection of `xed_decoded_inst_t` to `Instruction` and selections
 // of `Instruction` to `xed_encoder_request_t`.
-struct Instruction {
+class Instruction {
+ public:
   PC BranchTarget(void) const;
   void SetBranchTarget(PC);
 
@@ -57,6 +75,10 @@ struct Instruction {
   bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
+
+  inline AppPC GetAppPC(void) const {
+    return decoded_pc;
+  }
 
   int Length(void) const;
   bool IsNoOp(void) const;

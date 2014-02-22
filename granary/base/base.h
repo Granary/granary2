@@ -75,6 +75,7 @@
 # define GRANARY_PUBLIC public
 # define GRANARY_CONST
 # define GRANARY_IF_EXTERNAL(...)
+# define GRANARY_EXTERNAL_DELETE
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
 # define GRANARY_INTERNAL_DEFINITION
@@ -87,6 +88,7 @@
 # define GRANARY_PUBLIC private
 # define GRANARY_CONST const
 # define GRANARY_IF_EXTERNAL(...)  __VA_ARGS__
+# define GRANARY_EXTERNAL_DELETE = delete
 #endif
 
 

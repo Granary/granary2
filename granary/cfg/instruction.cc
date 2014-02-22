@@ -158,6 +158,10 @@ bool NativeInstruction::HasIndirectTarget(void) const {
   return instruction->HasIndirectTarget();
 }
 
+bool NativeInstruction::IsAppInstruction(void) const {
+  return nullptr != instruction->GetAppPC();
+}
+
 // Encode this instruction at `cache_pc`.
 bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
   return encoder->Encode(instruction.get(), cache_pc);

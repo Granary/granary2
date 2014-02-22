@@ -9,6 +9,8 @@
 #include "granary/base/new.h"
 #include "granary/base/types.h"
 
+#include "granary/operand/match.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -18,7 +20,7 @@ class BlockFactory;
 
 GRANARY_INTERNAL_DEFINITION
 namespace driver {
-struct Instruction;
+class Instruction;
 class InstructionDecoder;
 class InstructionRelativizer;
 }  // namespace driver
@@ -170,6 +172,23 @@ class NativeInstruction : public Instruction {
   bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
+  bool IsAppInstruction(void) const;
+
+  // Try to match and bind one or more operands from this instruction.
+  //
+  // Note: Matches are attempted in order!
+  template <typename... OperandMatchers>
+  inline bool MatchOperands(OperandMatchers... matchers) {
+    return detail::MatchAndBindOperands(this, {matchers...});
+  }
+
+  // Try to match and bind one or more operands from this instruction. Returns
+  // the number of operands matched, starting from the first operand.
+  template <typename... OperandMatchers>
+  inline int CountMatchedOperands(OperandMatchers... matchers) {
+    return static_cast<int>(
+        detail::TryMatchAndBindOperands(this, {matchers...}));
+  }
 
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION

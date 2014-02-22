@@ -138,6 +138,11 @@ DecodedBasicBlock::ReversedInstructions(void) const {
   return BackwardInstructionIterator(last);
 }
 
+// Return an iterator for the application instructions of a basic block.
+AppInstructionIterator DecodedBasicBlock::AppInstructions(void) const {
+  return AppInstructionIterator(first);
+}
+
 // Free all of the instructions in the basic block. This is invoked by
 // LocalControlFlowGraph::~LocalControlFlowGraph, as the freeing of instructions
 // interacts with the ownership model of basic blocks inside of basic block

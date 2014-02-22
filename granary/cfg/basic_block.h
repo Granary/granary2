@@ -223,6 +223,9 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   // Return a reverse iterator for the instructions of the block.
   BackwardInstructionIterator ReversedInstructions(void) const;
 
+  // Return an iterator for the application instructions of a basic block.
+  AppInstructionIterator AppInstructions(void) const;
+
   // Used to find the next scheduled decoded basic block. This field is only
   // updated at assembly time.
   GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *next;

@@ -15,6 +15,27 @@ void BackwardInstructionIterator::operator++(void) {
   instr = instr->Previous();
 }
 
+namespace {
+// Returns the next application instruction, given an arbitrary instruction. If
+// the given instruction is an application instruction then it will be returned.
+static NativeInstruction *FindNextAppInstruction(Instruction *instr) {
+  for (; instr; instr = instr->Next()) {
+    auto native_instr = DynamicCast<NativeInstruction *>(instr);
+    if (native_instr && native_instr->IsAppInstruction()) {
+      return native_instr;
+    }
+  }
+  return nullptr;
+}
+}  // namespace
+
+AppInstructionIterator::AppInstructionIterator(Instruction *instr_)
+    : instr(FindNextAppInstruction(instr_)) {}
+
+void AppInstructionIterator::operator++(void) {
+  instr = FindNextAppInstruction(instr->Next());
+}
+
 // Move the iterator to the next basic block.
 void BasicBlockIterator::operator++(void) {
   BasicBlock *curr(cursor->list.GetNext(cursor));

@@ -7,15 +7,15 @@ GRANARY_PYTHON ?= python2.7
 
 GRANARY_ARCH ?= x86-64
 GRANARY_OS ?= linux
-GRANARY_TARGET ?= debug
-GRANARY_WHERE ?= user
+GRANARY_TARGET ?= debug# release, debug, test
+GRANARY_WHERE ?= user# user, kernel
 GRANARY_DRIVER ?= xed2-intel64
 GRANARY_STANDALONE ?= 0
 GRANARY_NAME ?= granary
-GRANARY_WITH_VALGRIND ?= 0
+GRANARY_WITH_VALGRIND ?= 0# 0, 1
 GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
 GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
-GRANARY_LINT_CODE ?= 1
+GRANARY_LINT_CODE ?= 1# 0, 1
 
 GRANARY_KERNEL_VERSION = $(shell uname -r)
 GRANARY_DEFAULT_KERNEL_DIR = /lib/modules/$(GRANARY_KERNEL_VERSION)/build
@@ -30,6 +30,9 @@ GRANARY_TOOL_DIR ?= $(GRANARY_SRC_DIR)/examples
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
 GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_WHERE)
+
+# Googletest setup
+GTEST_DIR := $(GRANARY_SRC_DIR)/dependencies/googletest
 
 # Figure out the generated files directories.
 # TODO(pag): Make generated source files target-specific?

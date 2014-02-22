@@ -142,7 +142,7 @@ int main(void) {
             << "#define DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "namespace granary {\n"
             << "namespace driver {\n"
-            << "struct Instruction;\n"
+            << "class Instruction;\n"
             << "void ImportInstruction(Instruction *instr, "
             << "xed_iclass_enum_t iclass,\n"
             << "                       xed_category_enum_t category, "

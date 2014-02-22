@@ -12,7 +12,7 @@ namespace granary {
 namespace driver {
 
 // Forward declarations.
-struct Instruction;
+class Instruction;
 
 // Manages encoding and decoding of instructions.
 class InstructionDecoder {

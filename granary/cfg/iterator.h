@@ -9,6 +9,7 @@ namespace granary {
 
 // Forward declarations.
 class Instruction;
+class NativeInstruction;
 class BasicBlock;
 
 // Iterator that moves forward through a list of instructions.
@@ -71,6 +72,36 @@ class BackwardInstructionIterator {
 
  private:
   Instruction *instr;
+};
+
+// An forward iterator for the application instructions of a basic block.
+class AppInstructionIterator {
+ public:
+  inline AppInstructionIterator(void)
+      : instr(nullptr) {}
+
+  explicit AppInstructionIterator(Instruction *instr_);
+
+  inline AppInstructionIterator begin(void) const {
+    return *this;
+  }
+
+  inline AppInstructionIterator end(void) const {
+    return AppInstructionIterator();
+  }
+
+  inline bool operator!=(const AppInstructionIterator &that) const {
+    return instr != that.instr;
+  }
+
+  inline NativeInstruction *operator*(void) const {
+    return instr;
+  }
+
+  void operator++(void);
+
+ private:
+  NativeInstruction *instr;
 };
 
 // An iterator for basic blocks that implements C++11 range-based for loops.
