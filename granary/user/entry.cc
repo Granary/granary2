@@ -1,5 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+// Only include a main() or GRANARY_INIT function if we're not using the test
+// target.
+#ifndef GRANARY_TEST
+
 #define GRANARY_INTERNAL
 
 #include <sys/types.h>
@@ -60,7 +64,7 @@ static const char *GetGranaryPath(const char *granary_exe_path) {
   }
   return &(granary_path_buff[0]);
 }
-#endif
+#endif  // GRANARY_STANDALONE
 
 }  // namespace
 }  // namespace granary
@@ -83,4 +87,5 @@ GRANARY_INIT({
   granary::Init(granary::INIT_DYNAMIC, getenv("GRANARY_PATH"));
 })
 
-#endif
+#endif  // GRANARY_STANDALONE
+#endif  // GRANARY_TEST

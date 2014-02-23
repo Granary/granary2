@@ -171,6 +171,7 @@ void FreePages(void *addr, int num, MemoryIntent intent) {
     case MemoryIntent::EXECUTABLE:
       exec_memory.FreePages(addr, num);
       break;
+    case MemoryIntent::STAGING:
     case MemoryIntent::READ_WRITE:
       rw_memory.FreePages(addr, num);
       break;

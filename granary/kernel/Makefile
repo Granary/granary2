@@ -16,7 +16,7 @@ GRANARY_SHIPPED_FILE = $(GRANARY_INTERMEDIATE_FILE)_merged.o_shipped
 
 # Remove the final linked together file, just in case it is present.
 GRANARY_LL_FILES := $(GRANARY_LL_FILES:$(GRANARY_INTERMEDIATE_FILE).ll=)
-GRANARY_OBJS =  $(GRANARY_SHIPPED_FILE) $(GRANARY_ASM_OBJ_FILES)
+GRANARY_OBJS = $(GRANARY_SHIPPED_FILE) $(GRANARY_ASM_OBJ_FILES)
 GRANARY_KBUILD_OBJS = $(subst $(GRANARY_BIN_DIR)/,,$(GRANARY_OBJS))
 
 # Link together all compiled .ll files into a single .ll file.

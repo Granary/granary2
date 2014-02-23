@@ -29,4 +29,5 @@ $(foreach tool,$(XED_TOOLS),$(eval $(call GENRULE,$(tool))))
 
 # Compile 
 all: $(XED_TOOLS)
+	@mkdir -p $(GRANARY_BIN_DIR)
 	@cp $(XED_SRC_DIR)/lib/libxed.a $(GRANARY_BIN_DIR)

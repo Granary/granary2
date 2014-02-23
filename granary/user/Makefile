@@ -1,78 +1,57 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-.PHONY: all injector
+.PHONY: all
 
 include ../../Makefile.inc
 
-GRANARY_ASM_SRC_FILES = $(shell find $(GRANARY_BIN_DIR) -type f -name '*.S')
-GRANARY_ASM_OBJ_FILES = $(GRANARY_ASM_SRC_FILES:.S=.o)
-
-GRANARY_ARCHIVE_OBJS = $(shell find $(GRANARY_BIN_DIR) -type f -name '*.a')
-
-GRANARY_LL_FILES = $(shell find $(GRANARY_BIN_DIR) -type f -name '*.ll')
-GRANARY_INJECTOR_LL = $(GRANARY_BIN_DIR)/granary/user/inject.ll
-
-# Figure out the prefix and suffix of the output file.
-GRANARY_NAME_PREFIX =
-GRANARY_NAME_SUFFIX = .out
-GRANARY_INJECTOR =
-GRANARY_LD_FLAGS_LATE += -ldl
-ifeq (0,$(GRANARY_STANDALONE))
-	GRANARY_NAME_PREFIX = lib
-	GRANARY_NAME_SUFFIX = .so
-	GRANARY_LD_FLAGS_EARLY += -shared
-	GRANARY_LD_FLAGS_LATE += "-Wl,-Bsymbolic"
-	GRANARY_INJECTOR = injector
-else
-	GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
-endif
-
+GRANARY_INJECTOR = $(GRANARY_BIN_DIR)/grr
+GRANARY_INJECTOR_TARGET =
 GRANARY_INJECTOR_FLAGS = -O3 -g0 -fno-asynchronous-unwind-tables -std=gnu99
 
-# Most of the output file name. Used to link together .ll files, generate a .o
-# file, and make either a .out or .so file.
-GRANARY_INTERMEDIATE_FILE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME_PREFIX)$(GRANARY_NAME)
+GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
+GRANARY_LIBRARY_TARGET =
 
-# Remove the final linked together file, just in case it is present.
-GRANARY_LL_FILES := $(GRANARY_LL_FILES:$(GRANARY_INTERMEDIATE_FILE).ll=)
+GRANARY_EXE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME).out
+GRANARY_EXE_TARGET =
 
-# Compile an assembly source file into an object file.
-$(GRANARY_BIN_DIR)/%.o:: $(GRANARY_BIN_DIR)/%.S
-	@echo "Building ASM object $@"
-	$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -c $< -o $@
+# Extra flags to bring in the dynamic linker (libdl.so on Linux)
+GRANARY_LD_FLAGS_LATE += -ldl
 
-# Link together all compiled .ll files into a single .ll file.
-$(GRANARY_INTERMEDIATE_FILE).ll: $(GRANARY_LL_FILES)
-	@echo "Linking intermediate bitcode files."
-	@llvm-link $(GRANARY_LL_FILES) -o $(GRANARY_INTERMEDIATE_FILE).ll
-
-# Compile the linked together .ll file into an object file. This should enable
-# a simple form of link-time optimization.
-$(GRANARY_INTERMEDIATE_FILE).o:: $(GRANARY_INTERMEDIATE_FILE).ll
-	@echo "Building object $@"
-	@$(GRANARY_CC) -Qunused-arguments $(GRANARY_CC_FLAGS) \
-		-c $(GRANARY_INTERMEDIATE_FILE).ll \
-		-o $(GRANARY_INTERMEDIATE_FILE).o
+ifneq (test,$(GRANARY_TARGET))
+ifeq (0,$(GRANARY_STANDALONE))
+	GRANARY_INJECTOR_TARGET = $(GRANARY_INJECTOR)
+	GRANARY_LIBRARY_TARGET = $(GRANARY_LIBRARY)
+else
+	GRANARY_EXE_TARGET = $(GRANARY_EXE)
+endif
+endif
 
 # Compile the injector for launching an executable with libgranary.so.
-injector:
-	@echo "Compiling injector $(GRANARY_BIN_DIR)/grr"
+$(GRANARY_INJECTOR):
+	@echo "Compiling injector $(GRANARY_INJECTOR)"
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
         -c $(GRANARY_SRC_DIR)/granary/user/inject.c \
 		-o $(GRANARY_BIN_DIR)/granary/user/inject.o
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
         $(GRANARY_BIN_DIR)/granary/user/inject.o \
-        -o $(GRANARY_BIN_DIR)/grr
+        -o $(GRANARY_INJECTOR)
 
-# Link together the final .o file with each of the compiled assembly files
-# to form the final .out or .so file.
-all: $(GRANARY_ASM_OBJ_FILES) $(GRANARY_INTERMEDIATE_FILE).o $(GRANARY_INJECTOR)
-	@echo "Linking $(GRANARY_INTERMEDIATE_FILE)$(GRANARY_NAME_SUFFIX)"
+# Compile Granary as a shared library.
+$(GRANARY_LIBRARY): $(GRANARY_MERGED_OBJ)
+	@echo "Compiling library $(GRANARY_LIBRARY)"
 	@$(GRANARY_CC) $(GRANARY_COMMON_ARCH_FLAGS) \
-		$(GRANARY_LD_FLAGS) \
-		$(GRANARY_LD_FLAGS_EARLY) \
-		$(GRANARY_ASM_OBJ_FILES) \
-		$(GRANARY_INTERMEDIATE_FILE).o \
-		$(GRANARY_LD_FLAGS_LATE) \
-		$(GRANARY_ARCHIVE_OBJS) \
-		-o $(GRANARY_INTERMEDIATE_FILE)$(GRANARY_NAME_SUFFIX)
+		$(GRANARY_LD_FLAGS) $(GRANARY_LD_FLAGS_EARLY) -shared \
+		$(GRANARY_MERGED_OBJ) \
+		$(GRANARY_LD_FLAGS_LATE) "-Wl,-Bsymbolic" \
+		-o $(GRANARY_LIBRARY)
+
+# Compile Granary as a stand-alone executable.
+$(GRANARY_EXE): $(GRANARY_MERGED_OBJ)
+	@echo "Linking $(GRANARY_EXE)"
+	@$(GRANARY_CC) $(GRANARY_COMMON_ARCH_FLAGS) \
+		$(GRANARY_LD_FLAGS) $(GRANARY_LD_FLAGS_EARLY) \
+		$(GRANARY_MERGED_OBJ) \
+		$(GRANARY_LD_FLAGS_LATE) "-Wl,--export-dynamic" \
+		-o $(GRANARY_EXE)
+
+all: $(GRANARY_INJECTOR_TARGET) $(GRANARY_LIBRARY_TARGET) $(GRANARY_EXE_TARGET)

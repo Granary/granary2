@@ -3,6 +3,7 @@
 GRANARY_LD ?= ld
 GRANARY_CC ?= clang
 GRANARY_CXX ?= clang++
+GRANARY_AR ?= ar
 GRANARY_PYTHON ?= python2.7
 
 GRANARY_ARCH ?= x86-64
@@ -17,22 +18,40 @@ GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
 GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
 GRANARY_LINT_CODE ?= 1# 0, 1
 
+# Force Granary into stand-alone mode in user space if we're making a test
+# build.
+ifeq (test,$(GRANARY_TARGET))
+	GRANARY_TARGET := user
+endif
+
 GRANARY_KERNEL_VERSION = $(shell uname -r)
 GRANARY_DEFAULT_KERNEL_DIR = /lib/modules/$(GRANARY_KERNEL_VERSION)/build
 GRANARY_KERNEL_DIR ?= $(GRANARY_DEFAULT_KERNEL_DIR)
 
 GRANARY_SRC_DIR ?= $(shell pwd)
-GRANARY_DRIVER_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
-GRANARY_WHERE_DIR ?= $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
-GRANARY_ARCH_DIR ?=  $(GRANARY_SRC_DIR)/granary/arch/$(GRANARY_ARCH)
 GRANARY_TOOL_DIR ?= $(GRANARY_SRC_DIR)/examples
 
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
 GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_WHERE)
 
+GRANARY_DRIVER_SRC_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
+GRANARY_DRIVER_BIN_DIR ?= $(GRANARY_BIN_DIR)/granary/driver/$(GRANARY_DRIVER)
+
+GRANARY_WHERE_SRC_DIR = $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
+GRANARY_WHERE_BIN_DIR = $(GRANARY_BIN_DIR)/granary/$(GRANARY_WHERE)
+
+GRANARY_ARCH_SRC_DIR ?=  $(GRANARY_SRC_DIR)/granary/arch/$(GRANARY_ARCH)
+GRANARY_ARCH_BIN_DIR := $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)
+
 # Googletest setup
-GTEST_DIR := $(GRANARY_SRC_DIR)/dependencies/googletest
+GRANARY_TEST_SRC_DIR := $(GRANARY_SRC_DIR)/test
+GRANARY_TEST_BIN_DIR := $(GRANARY_BIN_DIR)/test
+GRANARY_GTEST_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/googletest
+GRANARY_GTEST_BIN_DIR := $(GRANARY_BIN_DIR)/test/gtest
+
+# Convenient way to totally ignore output of a shell command that might fail.
+GRANARY_DEV_NULL = > /dev/null 2>&1 ||:
 
 # Figure out the generated files directories.
 # TODO(pag): Make generated source files target-specific?
@@ -70,19 +89,29 @@ GRANARY_COMMON_CXX_FLAGS = -std=c++11
 ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_CXX_FLAGS += -DGRANARY_WITH_VALGRIND
 endif
-
+ifeq (test,$(GRANARY_TARGET))
+	GRANARY_STANDALONE := 1
+	GRANARY_COMMON_FLAGS += -DGRANARY_TEST
+endif
 ifeq (1,$(GRANARY_STANDALONE))
 	GRANARY_COMMON_FLAGS += -DGRANARY_STANDALONE
 endif
 
+# Get the opposite of the where-directory.
+ifeq (kernel,$(GRANARY_WHERE))
+	GRANARY_NOT_WHERE = user
+else
+	GRANARY_NOT_WHERE = kernel
+endif
+
 # Enable/disable features based on whether or not this is a debug or release
 # build.
-ifeq (debug,$(GRANARY_TARGET))
-    GRANARY_COMMON_FLAGS += -O0 -g3 -DGRANARY_DEBUG
-    GRANARY_LD_FLAGS += -O0 -g3
-else
+ifeq (release,$(GRANARY_TARGET))  # release
     GRANARY_COMMON_FLAGS += -O3 -g0
     GRANARY_LD_FLAGS += -O3 -g0
+else  # debug, test
+	GRANARY_COMMON_FLAGS += -O0 -g3 -DGRANARY_DEBUG
+    GRANARY_LD_FLAGS += -O0 -g3
 endif
 
 # Make sure certain architectural features are disabled.
@@ -95,7 +124,7 @@ ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-sse4.1 -mno-sse4.2 -mno-sse4 -mno-sse4a
 	GRANARY_COMMON_ARCH_FLAGS += -mno-avx -mno-3dnow
 endif
-ifneq (user,$(GRANARY_WHERE))
+ifeq (kernel,$(GRANARY_WHERE))
 	GRANARY_COMMON_ARCH_FLAGS += -nostdlib
 endif
 
@@ -149,5 +178,9 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code" 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5
 GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_FLAGS)
+
+# Specific files that are used by user space, kernel space, and test cases.
+GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary_merged.o
+GRANARY_TOOL_OBJ = $(GRANARY_BIN_DIR)/granary_tool.o
 
 .SILENT :

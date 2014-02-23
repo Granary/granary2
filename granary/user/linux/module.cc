@@ -144,7 +144,7 @@ static ModuleKind KindFromPath(const char *path, int num_modules) {
   return ModuleKind::SHARED_LIBRARY;
 }
 
-// Parse the `/proc/<pid>/maps` file for information about mapped modules.
+// Parse the `/proc/self/maps` file for information about mapped modules.
 static void ParseMapsFile(void) {
   Lexer lexer;
   int num_found_modules(0);

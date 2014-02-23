@@ -13,7 +13,9 @@ XX_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(XX_CC_SRC_FILES:.
 $(XX_BIN_DIR)/%.ll: $(XX_SRC_DIR)/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
-	$(GRANARY_CXX) $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS) -emit-llvm -c $< -o $@
+	$(GRANARY_CXX) \
+		$(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS) \
+		$(GRANARY_COMMON_ARCH_FLAGS) -emit-llvm -c $< -o $@
 
 # Compile the xxHash dependencies into .ll files.
 all: $(XX_OBJ_FILES)

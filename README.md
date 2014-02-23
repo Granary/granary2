@@ -43,14 +43,13 @@ Then you can run:
 If you are compiling Granary against your running kernel, run:
 
 ```basemake
-make clean GRANARY_WHERE=kernel ; make all GRANARY_WHERE=kernel
+make clean all GRANARY_WHERE=kernel
 ```
 
 If you are compiling Granary against a custom kernel, run:
 
 ```basemake
-make clean  GRANARY_WHERE=kernel
-make all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
+make clean all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 ```
 
 ### Step 3: Compiling tools.
@@ -66,6 +65,5 @@ make clean_tools tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs"
 If you are compiling Granary tools against a custom kernel, run:
 
 ```basemake
-make clean_tools GRANARY_WHERE=kernel
-make tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
+make clean_tools tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 ```
