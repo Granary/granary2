@@ -102,6 +102,13 @@ struct IsPointer {
 
 GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
 
+template <typename Ret, typename... Args>
+struct IsPointer<Ret (*)(Args...)> {
+  enum {
+    RESULT = true
+  };
+};
+
 template <typename A>
 struct IsPointer<A *> {
   enum {

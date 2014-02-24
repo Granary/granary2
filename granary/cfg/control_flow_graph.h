@@ -56,7 +56,7 @@ class LocalControlFlowGraph final {
   friend class BlockFactory;  // For `first_new_block`.
 
   // List of basic blocks known to this control-flow graph.
-  GRANARY_INTERNAL_DEFINITION BasicBlock *first_block;
+  GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *first_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_new_block;
 

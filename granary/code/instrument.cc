@@ -20,8 +20,8 @@ namespace {
 
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic blocks.
-static void InstrumentControlFlow(Environment *env, LocalControlFlowGraph *cfg,
-                                  GenericMetaData *meta) {
+static void InstrumentControlFlow(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+                                  BlockMetaData *meta) {
   BlockFactory materializer(env, cfg);
   materializer.MaterializeInitialBlock(meta);
   for (;; materializer.MaterializeRequestedBlocks()) {
@@ -56,7 +56,7 @@ static void InstrumentBlock(LocalControlFlowGraph *cfg) {
   }
 }
 
-static uint32_t HashMetaData(GenericMetaData *meta) {
+static uint32_t HashMetaData(BlockMetaData *meta) {
   xxhash::HashFunction hasher(0xDEADBEEFUL);
   hasher.Reset();
   meta->Hash(&hasher);
@@ -68,8 +68,8 @@ static uint32_t HashMetaData(GenericMetaData *meta) {
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
-void Instrument(Environment *env, LocalControlFlowGraph *cfg,
-                GenericMetaData *meta) {
+void Instrument(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+                BlockMetaData *meta) {
   auto meta_hash = HashMetaData(meta);
 
   InstrumentControlFlow(env, cfg, meta);

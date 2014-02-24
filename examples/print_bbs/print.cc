@@ -35,10 +35,11 @@ class BBPrinter : public Tool {
     if (!FLAG_print_bb_module) {
       Log(kStream, "%p\n", start_pc);
     } else {
-      auto module = FindModuleByPC(start_pc);
+      auto module_meta = GetMetaData<ModuleMetaData>(bb);
+      auto module = module_meta->source.module;
+      auto offset = module_meta->source.offset;
       if (FLAG_print_bb_offset) {
-        auto offset = module->OffsetOf(start_pc);
-        Log(kStream, "%p %s:%lx\n", start_pc, module->Name(), offset.offset);
+        Log(kStream, "%p %s:%lx\n", start_pc, module->Name(), offset);
       } else {
         Log(kStream, "%p %s\n", start_pc, module->Name());
       }

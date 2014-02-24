@@ -7,12 +7,14 @@
 #include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/types.h"
-#include "granary/init.h"
+#include "granary/metadata.h"
 
 namespace granary {
 
 // Forward declarations.
 class Module;
+class ModuleMetaData;
+class ModuleManager;
 GRANARY_INTERNAL_DEFINITION class CodeAllocator;
 
 // Represents a location in a module. Note that not all segments within modules
@@ -68,27 +70,19 @@ enum class ModuleKind {
 
 #ifdef GRANARY_INTERNAL
 namespace internal {
-
 struct ModuleAddressRange;
-
 enum {
   MODULE_READABLE = (1 << 0),
   MODULE_WRITABLE = (1 << 1),
   MODULE_EXECUTABLE = (1 << 2),
   MODULE_COPY_ON_WRITE = (1 << 3)
 };
-
 }  // namespace internal
-#endif
+#endif  // GRANARY_INTERNAL
 
 // Represents a loaded module. For example, in user space, the executable is a
 // module, `libgranary.so` is a module, in the kernel, the kernel itself would
 // be treated as module, `granary.ko` as another module, etc.
-//
-// TODO(pag): Track discovered module dependencies. For example, if there is
-//            a direct jump / call from one module to another, mark it as a
-//            dependency. This can be used during code cache flushing of
-//            particular modules.
 class Module {
  public:
   enum {
@@ -129,12 +123,9 @@ class Module {
 
   GRANARY_INTERNAL_DEFINITION Module *next;
 
-  // Memory allocator for code from the code cache.
-  GRANARY_INTERNAL_DEFINITION CodeAllocator * const cache_code_allocator;
-
  private:
-  friend Module *FindModuleByName(const char *name);
-  friend void InitModules(InitKind kind);
+  friend class ModuleMetaData;
+  friend class ModuleManager;
 
   Module(void) = delete;
 
@@ -162,17 +153,76 @@ class Module {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Module);
 };
 
-// Find a module given a program counter.
-const Module *FindModuleByPC(AppPC pc);
+// Module-specific meta-data that Granary maintains about all basic blocks.
+class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
+ public:
+  // Default-initializes Granary's internal module meta-data.
+  ModuleMetaData(void);
 
-// Find a module given its name.
-GRANARY_CONST Module *FindModuleByName(const char *name);
+  // Initialize this meta-data for a given module offset and program counter.
+  GRANARY_INTERNAL_DEFINITION
+  void Init(ModuleOffset source_, AppPC start_pc_);
 
-// Register a module with the module tracker.
-GRANARY_INTERNAL_DEFINITION void RegisterModule(Module *module);
+  // Returns the code cache allocator for this block.
+  GRANARY_INTERNAL_DEFINITION
+  CodeAllocator *CacheCodeAllocatorForBlock(void) const;
 
-// Initialize the module tracker.
-GRANARY_INTERNAL_DEFINITION void InitModules(InitKind);
+  // Returns true if one block's module metadata can be materialized alognside
+  // another block's module metadata. For example, if two blocks all in
+  // different modules then we can't materialize them together in the same
+  // instrumentation session. Similarly, if two blocks fall into different
+  // address ranges of the same module, then we also can't materialize them
+  // in the same session.
+  GRANARY_INTERNAL_DEFINITION
+  bool CanMaterializeWith(const ModuleMetaData *that) const;
+
+  // Hash the translation meta-data.
+  void Hash(HashFunction *hasher) const;
+
+  // Compare two translation meta-data objects for equality.
+  bool Equals(const ModuleMetaData *meta) const;
+
+  // The module from which this block originates.
+  GRANARY_CONST ModuleOffset source;
+
+  // The native program counter where this block begins.
+  GRANARY_CONST AppPC start_pc;
+} __attribute__((packed));
+
+// Specify to Granary tools that the function to get the info about
+// `ModuleMetaData` already exists.
+GRANARY_SHARE_METADATA(ModuleMetaData)
+
+// Manages a set of modules.
+//
+// TODO(pag): Track discovered module dependencies. For example, if there is
+//            a direct jump / call from one module to another, mark it as a
+//            dependency. This can be used during code cache flushing of
+//            particular modules.
+class ModuleManager {
+ public:
+  ModuleManager(void) GRANARY_EXTERNAL_DELETE;
+
+  // Find a module given a program counter.
+  GRANARY_CONST Module *FindModuleByPC(AppPC pc);
+
+  // Find a module given its name.
+  GRANARY_CONST Module *FindModuleByName(const char *name);
+
+  // Register a module with the module tracker.
+  GRANARY_INTERNAL_DEFINITION void RegisterModule(Module *module);
+
+  // Find all built-in modules. In user space, this will go and find things like
+  // libc. In kernel space, this will identify already loaded modules.
+  //
+  // This function should only be invoked once per `ModuleManager` instance.
+  GRANARY_INTERNAL_DEFINITION void FindBuiltInModules(void);
+
+ private:
+  // Linked list of modules. Modules in the list are stored in no particular
+  // order because they can have discontiguous segments.
+  GRANARY_INTERNAL_DEFINITION std::atomic<Module *> modules;
+};
 
 }  // namespace granary
 

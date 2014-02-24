@@ -34,6 +34,9 @@ class Operand {
   }
 
   xed_encoder_operand_type_t type;
+  int8_t width;  // Operand width in bits.
+  xed_operand_action_enum_t rw;  // Readable, writable, etc.
+
   union {
     decltype(xed_encoder_operand_t().u) u;
     union {
@@ -43,11 +46,7 @@ class Operand {
       CachePC cache_pc;
     } __attribute__((packed)) rel;
   } __attribute__((packed));
-  xed_uint32_t width;  // Operand width in bits.
-
-  // Extra field.
-  xed_operand_action_enum_t rw;
-};
+} __attribute__((packed));
 
 // Make sure these two fields overlap so that we can treat relative immediates
 // (signed) just like immediates (unsigned).
@@ -93,6 +92,9 @@ class Instruction {
 
   // Number of explicit operands.
   int8_t num_ops;
+
+  // The effective operand width at decode time, or -1 if unknown.
+  int8_t effective_operand_width;
 
   // This instruction has been changed since being decoded, or was created and
   // so has never been encoded/decoded.

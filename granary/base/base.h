@@ -91,6 +91,11 @@
 # define GRANARY_EXTERNAL_DELETE = delete
 #endif
 
+#ifdef GRANARY_EXTERNAL
+# define GRANARY_EXTERNAL_SHARED extern
+#else
+# define GRANARY_EXTERNAL_SHARED
+#endif
 
 // Static branch prediction hints.
 #define GRANARY_LIKELY(x) __builtin_expect((x),1)

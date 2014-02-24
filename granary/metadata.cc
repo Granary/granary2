@@ -10,21 +10,6 @@
 
 namespace granary {
 
-// Initialize Granary's internal translation meta-data.
-TranslationMetaData::TranslationMetaData(void)
-    : source(),
-      native_pc(nullptr) {}
-
-// Hash the translation meta-data.
-void TranslationMetaData::Hash(HashFunction *hasher) const {
-  hasher->Accumulate(this);
-}
-
-// Compare two translation meta-data objects for equality.
-bool TranslationMetaData::Equals(const TranslationMetaData *meta) const {
-  return source == meta->source && native_pc == meta->native_pc;
-}
-
 // Initialize Granary's internal translation cache meta-data.
 CacheMetaData::CacheMetaData(void)
     : cache_pc(nullptr) {}
@@ -87,7 +72,7 @@ void RegisterMetaData(const MetaDataInfo *meta_) {
 }
 
 // Get some specific meta-data from some generic meta-data.
-void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta) {
+void *GetMetaData(const MetaDataInfo *info, BlockMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!info->is_registered); )
   auto meta_ptr = reinterpret_cast<uintptr_t>(meta);
   return reinterpret_cast<void *>(meta_ptr + info->offset);
@@ -98,24 +83,16 @@ void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta) {
 
 // Initialize a new meta-data instance. This involves separately initializing
 // the contained meta-data within this generic meta-data.
-GenericMetaData::GenericMetaData(AppPC pc) {
+BlockMetaData::BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
     meta->initialize(reinterpret_cast<void *>(this_ptr + meta->offset));
   }
-
-  // Default-initialize the translation meta-data.
-  auto trans = MetaDataCast<TranslationMetaData *>(this);
-  if (pc) {
-    auto module = FindModuleByPC(pc);
-    trans->source = module->OffsetOf(pc);
-  }
-  trans->native_pc = pc;
 }
 
 // Destroy a meta-data instance. This involves separately destroying the
 // contained meta-data within this generic meta-data.
-GenericMetaData::~GenericMetaData(void) {
+BlockMetaData::~BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
     meta->destroy(reinterpret_cast<void *>(this_ptr + meta->offset));
@@ -124,10 +101,10 @@ GenericMetaData::~GenericMetaData(void) {
 
 // Create a copy of some meta-data and return a new instance of the copied
 // meta-data.
-GenericMetaData *GenericMetaData::Copy(void) const {
+BlockMetaData *BlockMetaData::Copy(void) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(
-      GenericMetaData::operator new(0));
+      BlockMetaData::operator new(0));
 
   for (auto meta : MetaDataInfos()) {
     meta->copy_initialize(
@@ -135,11 +112,11 @@ GenericMetaData *GenericMetaData::Copy(void) const {
         reinterpret_cast<const void *>(this_ptr + meta->offset));
   }
 
-  return reinterpret_cast<GenericMetaData *>(that_ptr);
+  return reinterpret_cast<BlockMetaData *>(that_ptr);
 }
 
 // Hash all serializable meta-data contained within this generic meta-data.
-void GenericMetaData::Hash(HashFunction *hasher) const {
+void BlockMetaData::Hash(HashFunction *hasher) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto meta : MetaDataInfos()) {
     if (meta->hash) {
@@ -151,7 +128,7 @@ void GenericMetaData::Hash(HashFunction *hasher) const {
 
 // Compare the serializable components of two generic meta-data instances for
   // strict equality.
-bool GenericMetaData::Equals(const GenericMetaData *that) const {
+bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   for (auto meta : MetaDataInfos()) {
@@ -167,8 +144,8 @@ bool GenericMetaData::Equals(const GenericMetaData *that) const {
 }
 
 // Check to see if this meta-data can unify with some other generic meta-data.
-UnificationStatus GenericMetaData::CanUnifyWith(
-    const GenericMetaData *that) const {
+UnificationStatus BlockMetaData::CanUnifyWith(
+    const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   auto can_unify = UnificationStatus::ACCEPT;
@@ -209,14 +186,14 @@ static internal::SlabAllocator * const META_ALLOCATOR = \
 }  // namespace
 
 // Dynamically allocate meta-data.
-void *GenericMetaData::operator new(std::size_t) {
+void *BlockMetaData::operator new(std::size_t) {
   void *address(META_ALLOCATOR->Allocate());
   VALGRIND_MALLOCLIKE_BLOCK(address, META_SIZE, 0, 0);
   return address;
 }
 
 // Dynamically free meta-data.
-void GenericMetaData::operator delete(void *address) {
+void BlockMetaData::operator delete(void *address) {
   META_ALLOCATOR->Free(address);
   VALGRIND_FREELIKE_BLOCK(address, META_SIZE);
 }
@@ -224,7 +201,6 @@ void GenericMetaData::operator delete(void *address) {
 // Initialize all meta-data. This finalizes the meta-data structures, which
 // determines the runtime layout of the packed meta-data structure.
 void InitMetaData(void) {
-  RegisterMetaData<TranslationMetaData>();
   RegisterMetaData<CacheMetaData>();
 
   CAN_REGISTER_META = false;

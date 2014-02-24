@@ -23,6 +23,11 @@ inline static unsigned ImmediateWidth(T imm) {
   return ImmediateWidth(static_cast<uint64_t>(0 > imm64 ? -imm64 : imm64));
 }
 
+// Import XED instruction information into Granary's low-level IR. This
+// initializes a number of the internal `Instruction` fields to sane defaults.
+void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
+                     xed_category_enum_t category, int8_t num_ops);
+
 // Represents a XED base/displacement operand.
 struct BaseDisp : xed_memop_t {
   inline BaseDisp(void) {

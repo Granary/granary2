@@ -7,20 +7,32 @@
 #include "granary/base/new.h"
 #include "granary/base/hash.h"
 #include "granary/base/type_trait.h"
+#include "granary/base/types.h"
 
-#include "granary/module.h"
+// Used to explicitly instantiate this so that it is available to shared
+// libraries.
+#ifdef GRANARY_EXTERNAL
+# define GRANARY_SHARE_METADATA(meta_class) \
+    namespace detail { \
+    namespace meta { \
+    template <> \
+    const MetaDataInfo *GetInfo<meta_class>(void); \
+    } \
+    }
+#else
+# define GRANARY_SHARE_METADATA(meta_class)
+#endif
 
 namespace granary {
 
 // Forward declarations.
-class GenericMetaData;
-class InstrumentedBasicBlock;
+class BlockMetaData;
 
 // Serializable meta-data (i.e. immutable once committed to the code cache)
 // must implement the `Hash` and `Equals` methods, and extend this template
 // using CRTP.
 template <typename T>
-struct IndexableMetaData {
+class IndexableMetaData {
  public:
   void Hash(HashFunction *hasher) const;
   bool Equals(const T *that) const;
@@ -28,7 +40,7 @@ struct IndexableMetaData {
 
 // Mutable meta-data (i.e. mutable even after committed to the code cache)
 // must extend this base class.
-struct MutableMetaData {};
+class MutableMetaData {};
 
 enum class UnificationStatus {
   ACCEPT = 0,  // Unifies perfectly.
@@ -42,38 +54,16 @@ enum class UnificationStatus {
 // times we want to be able to re-use old versions, but the old versions aren't
 // necessarily perfectly suited, so we need to adapt to them.
 template <typename T>
-struct UnifiableMetaData {
+class UnifiableMetaData {
  public:
   UnificationStatus CanUnifyWith(const T *that) const;
 };
-
-// Meta-data that Granary maintains about all basic blocks. This meta-data
-// guides the translation process.
-//
-// This meta-data is registered in `granary::InitMetaData`.
-struct TranslationMetaData : IndexableMetaData<TranslationMetaData> {
-
-  // The module from which this block originates.
-  GRANARY_CONST ModuleOffset source;
-
-  // The native program counter where this block begins.
-  GRANARY_CONST AppPC native_pc;
-
-  // Initialize Granary's internal translation meta-data.
-  TranslationMetaData(void);
-
-  // Hash the translation meta-data.
-  void Hash(HashFunction *hasher) const;
-
-  // Compare two translation meta-data objects for equality.
-  bool Equals(const TranslationMetaData *meta) const;
-} __attribute__((packed));
 
 #ifdef GRANARY_INTERNAL
 // Meta-data that Granary maintains about all basic blocks that are committed to
 // the code cache. This is meta-data is private to Granary and therefore not
 // exposed (directly) to tools.
-struct CacheMetaData : MutableMetaData {
+struct CacheMetaData : public MutableMetaData {
 
   // Initialize Granary's internal translation cache meta-data.
   CacheMetaData(void);
@@ -175,7 +165,7 @@ struct IsMutableMetaData {
 template <typename T>
 struct IsUnifiableMetaData {
   enum {
-    RESULT = !!std::is_convertible<T *, IsUnifiableMetaData<T> *>::value
+    RESULT = !!std::is_convertible<T *, UnifiableMetaData<T> *>::value
   };
 };
 
@@ -209,19 +199,19 @@ struct MetaDataInfoStorage;
 template <typename T>
 struct MetaDataInfoStorage<T, true, false, false> {
  public:
-  static MetaDataInfo kInfo;
+  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
 };
 
 template <typename T>
 struct MetaDataInfoStorage<T, false, true, false> {
  public:
-  static MetaDataInfo kInfo;
+  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
 };
 
 template <typename T>
 struct MetaDataInfoStorage<T, false, false, true> {
  public:
-  static MetaDataInfo kInfo;
+  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
 };
 
 // Indexable.
@@ -287,7 +277,7 @@ const MetaDataInfo *GetInfo(void) {
 void RegisterMetaData(const MetaDataInfo *meta);
 
 // Get some specific meta-data from some generic meta-data.
-void *GetMetaData(const MetaDataInfo *info, GenericMetaData *meta);
+void *GetMetaData(const MetaDataInfo *info, BlockMetaData *meta);
 
 }  // namespace meta
 }  // namespace detail
@@ -303,7 +293,7 @@ template <
   typename T,
   typename EnableIf<detail::meta::IsMetaDataPointer<T>::RESULT>::Type=0
 >
-inline T MetaDataCast(GenericMetaData *meta) {
+inline T MetaDataCast(BlockMetaData *meta) {
   return reinterpret_cast<T>(
       detail::meta::GetMetaData(
           detail::meta::GetInfo<typename RemovePointer<T>::Type>(), meta));
@@ -311,30 +301,29 @@ inline T MetaDataCast(GenericMetaData *meta) {
 
 #ifdef GRANARY_INTERNAL
 // Meta-data about a basic block.
-class GenericMetaData {
+class BlockMetaData {
  public:
-  GRANARY_INTERNAL_DEFINITION
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  explicit GenericMetaData(AppPC pc);
+  BlockMetaData(void) GRANARY_EXTERNAL_DELETE;
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
-  ~GenericMetaData(void);
+  ~BlockMetaData(void);
 
   // Create a copy of some meta-data and return a new instance of the copied
   // meta-data.
-  GenericMetaData *Copy(void) const;
+  BlockMetaData *Copy(void) const;
 
   // Hash all serializable meta-data contained within this generic meta-data.
   void Hash(HashFunction *hasher) const;
 
   // Compare the serializable components of two generic meta-data instances for
   // strict equality.
-  bool Equals(const GenericMetaData *meta) const;
+  bool Equals(const BlockMetaData *meta) const;
 
   // Check to see if this meta-data can unify with some other generic meta-data.
-  UnificationStatus CanUnifyWith(const GenericMetaData *meta) const;
+  UnificationStatus CanUnifyWith(const BlockMetaData *meta) const;
 
   // Dynamically allocate and free meta-data. These operations are only
   // valid *after* `granary::InitMetaData`, as that sets up the meta-data
@@ -343,9 +332,7 @@ class GenericMetaData {
   static void operator delete(void *);
 
  private:
-  GenericMetaData(void) = delete;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(GenericMetaData);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
 
 // Initialize all meta-data. This finalizes the meta-data structures, which

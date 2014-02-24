@@ -10,7 +10,7 @@ namespace granary {
 
 // Annotates the instruction, or adds an annotated instruction into the
 // instruction list. This returns the first
-void Environment::AnnotateInstruction(Instruction *instr) const {
+void Environment::AnnotateInstruction(Instruction *instr) {
   GRANARY_UNUSED(instr);
 }
 

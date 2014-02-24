@@ -4,10 +4,25 @@
 
 include ../Makefile.inc
 
+GRANARY_LINT_TARGET =
+GRANARY_TOOL_OBJ_TARGET =
+
+# Should Granary's main code be linted?
+ifeq (1,$(GRANARY_LINT_CODE))
+	GRANARY_LINT_TARGET = lint
+endif
+ifeq (user,$(GRANARY_WHERE))
+	GRANARY_TOOL_OBJ_TARGET = $(GRANARY_TOOL_OBJ)
+endif
+
+GRANARY_MERGED_LL_LL = $(GRANARY_BIN_DIR)/granary_merged_ll.ll
+GRANARY_MERGED_LL_OBJ = $(GRANARY_BIN_DIR)/granary_merged_ll.o
+
 # Go find already compiled files that were not compiled by this Makefile.
 GRANARY_EXCLUDE_FIND = -not -path "$(GRANARY_BIN_DIR)/granary/*"
 GRANARY_OTHER_AR_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.a' $(GRANARY_EXCLUDE_FIND))
 GRANARY_OTHER_OBJ_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.ll' $(GRANARY_EXCLUDE_FIND))
+GRANARY_OTHER_OBJ_FILES := $(filter-out $(GRANARY_MERGED_LL_LL),$(GRANARY_OTHER_OBJ_FILES))
 
 # TODO(pag): Will need to filter-out non Linux OS's in the future.
 GRANARY_EXCLUDE_FIND = 
@@ -35,20 +50,6 @@ ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_
 GRANARY_OBJ_FILES =
 GRANARY_OBJ_FILES += $(GRANARY_CC_OBJ_FILES) $(DRIVER_OBJ_FILES)
 GRANARY_OBJ_FILES += $(ARCH_CC_OBJ_FILES)
-
-# Should Granary's main code be linted?
-GRANARY_LINT_TARGET =
-ifeq (1,$(GRANARY_LINT_CODE))
-	GRANARY_LINT_TARGET = lint
-endif
-
-GRANARY_MERGED_LL_LL = $(GRANARY_BIN_DIR)/granary_merged_ll.ll
-GRANARY_MERGED_LL_OBJ = $(GRANARY_BIN_DIR)/granary_merged_ll.o
-GRANARY_TOOL_OBJ_TARGET = $(GRANARY_TOOL_OBJ)
-
-ifneq (user,$(GRANARY_WHERE))
-	GRANARY_TOOL_OBJ_TARGET :=
-endif
 
 GRANARY_TOOL_OBJ_DEPS =
 GRANARY_TOOL_OBJ_DEPS += $(GRANARY_ARCH_BIN_DIR)/asm/string.o

@@ -29,13 +29,14 @@ unsigned ImmediateWidth(uint64_t imm) {
 
 // Import XED instruction information into Granary's low-level IR. This
 // initializes a number of the internal `Instruction` fields to sane defaults.
-void ImportInstruction(Instruction *instr, xed_iclass_enum_t iclass,
-                       xed_category_enum_t category, int8_t num_ops) {
+void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
+                     xed_category_enum_t category, int8_t num_ops) {
   instr->iclass = iclass;
   instr->category = category;
   instr->prefixes.i = 0;
   instr->length = 0;
   instr->num_ops = num_ops;
+  instr->effective_operand_width = -1;
   instr->needs_encoding = true;
   instr->has_pc_rel_op = false;
   instr->has_fixed_length = false;
@@ -49,7 +50,11 @@ void ImportOperand(Instruction *, Operand *op, xed_operand_action_enum_t rw,
                    Register reg) {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
   op->u.reg = reg.reg;
-  op->width = xed_get_register_width_bits64(reg.reg);
+#if 64 == GRANARY_ARCH_ADDRESS_WIDTH
+  op->width = static_cast<int8_t>(xed_get_register_width_bits64(reg.reg));
+#else
+  op->width = static_cast<int8_t>(xed_get_register_width_bits(reg.reg));
+#endif
   op->rw = rw;
 }
 
@@ -76,7 +81,7 @@ void ImportOperand(Instruction *instr, Operand *op,
     }
   }
   op->rel.imm = addr.addr;
-  op->width = 64;
+  op->width = GRANARY_ARCH_ADDRESS_WIDTH;
   op->rw = rw;
   instr->has_pc_rel_op = true;
 }
@@ -90,7 +95,7 @@ void ImportOperand(Instruction *, Operand *op, xed_operand_action_enum_t rw,
   } else {
     op->u.imm0 = imm.value;
   }
-  op->width = imm.width;
+  op->width = static_cast<int8_t>(imm.width);
   op->rw = rw;
 }
 

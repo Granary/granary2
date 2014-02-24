@@ -10,12 +10,18 @@
 namespace granary {
 
 // Forward declarations.
-class Environment;
+class EnvironmentInterface;
 class LocalControlFlowGraph;
 class BasicBlock;
 class DirectBasicBlock;
-class GenericMetaData;
+class BlockMetaData;
 class HashFunction;
+
+#ifdef GRANARY_INTERNAL
+namespace driver {
+class InstructionDecoder;
+}
+#endif  // GRANARY_INTERNAL
 
 // Strategy for materlizing basic blocks. The number associated with each
 // materialization strategy represents granularity. For example, of two
@@ -56,7 +62,7 @@ class BlockFactory {
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit BlockFactory(Environment *env_, LocalControlFlowGraph *cfg_);
+  explicit BlockFactory(EnvironmentInterface *env_, LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
@@ -82,7 +88,7 @@ class BlockFactory {
 
   GRANARY_INTERNAL_DEFINITION
   // Materialize the initial basic block.
-  void MaterializeInitialBlock(GenericMetaData *meta);
+  void MaterializeInitialBlock(BlockMetaData *meta);
 
   // Create a new direct basic block. This block is left as un-owned and
   // will not appear in any iterators until some instruction takes ownership
@@ -92,6 +98,11 @@ class BlockFactory {
 
  private:
   BlockFactory(void) = delete;
+
+  // Add the fall-through instruction for a block.
+  GRANARY_INTERNAL_DEFINITION
+  void AddFallThroughInstruction(driver::InstructionDecoder *decoder,
+                                 Instruction *last_instr, AppPC pc);
 
   // Decode an instruction list starting at `pc` and link the decoded
   // instructions into the instruction list beginning with `instr`.
@@ -125,7 +136,7 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION BloomFilter<256> meta_data_filter;
 
   // Then environment in which we're decoding.
-  GRANARY_INTERNAL_DEFINITION Environment *env;
+  GRANARY_INTERNAL_DEFINITION EnvironmentInterface *env;
 
   // The LCFG into which blocks are materialized.
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;

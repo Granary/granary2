@@ -145,7 +145,7 @@ static ModuleKind KindFromPath(const char *path, int num_modules) {
 }
 
 // Parse the `/proc/self/maps` file for information about mapped modules.
-static void ParseMapsFile(void) {
+static void ParseMapsFile(ModuleManager *manager) {
   Lexer lexer;
   int num_found_modules(0);
 
@@ -176,23 +176,22 @@ static void ParseMapsFile(void) {
       continue;
     }
 
-    auto module = FindModuleByName(token);
+    auto module = manager->FindModuleByName(token);
     if (!module) {
       module = new Module(KindFromPath(token, num_found_modules++), token);
-      RegisterModule(module);
+      manager->RegisterModule(module);
     }
 
     module->AddRange(module_base, module_limit, module_offset, module_perms);
     lexer.NextToken();  // new line.
   };
 }
-
 }  // namespace
 
-// Initialize the module tracker.
-void InitModules(InitKind kind) {
-  granary_break_on_fault_if(INIT_DYNAMIC != kind); // TODO(pag): Implement.
-  ParseMapsFile();
+// Find all built-in modules. In user space, this will go and find things like
+// libc. In kernel space, this will identify already loaded modules.
+void ModuleManager::FindBuiltInModules(void) {
+  ParseMapsFile(this);
 }
 
 }  // namespace granary

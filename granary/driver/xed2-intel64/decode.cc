@@ -16,6 +16,11 @@ namespace driver {
 // Decoder state that sets the mode to 64-bit.
 extern xed_state_t XED_STATE;
 
+// Import XED instruction information into Granary's low-level IR. This
+// initializes a number of the internal `Instruction` fields to sane defaults.
+void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
+                     xed_category_enum_t category, int8_t num_ops);
+
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
 // successfully decoded.
@@ -79,7 +84,8 @@ static void ConvertRegisterOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
                                    xed_operand_enum_t op_name) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->u.reg = xed_decoded_inst_get_reg(xedd, op_name);
-  instr_op->width = xed_get_register_width_bits64(instr_op->u.reg);
+  instr_op->width = static_cast<int8_t>(
+      xed_get_register_width_bits64(instr_op->u.reg));
 }
 
 static intptr_t NextDecodedAddress(const Instruction *instr) {
@@ -92,7 +98,7 @@ static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
   instr->has_pc_rel_op = true;
   instr->has_fixed_length = true;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  instr_op->width = 64;
+  instr_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
   instr_op->rel.imm = NextDecodedAddress(instr) +
                       xed_decoded_inst_get_branch_displacement(xedd);
 
@@ -125,10 +131,7 @@ static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
   instr_op->u.mem.disp.displacement_width =
       xed_decoded_inst_get_memory_displacement_width_bits(xedd, index);
 
-  // Can't use `xed_decoded_inst_get_effective_operand_width` because it doesn't
-  // consider the BYTEOP attribute. E.g. for a byte mov to memory,
-  // `xed_decoded_inst_get_effective_operand_width` returns a width of 32.
-  instr_op->width = xed_decoded_inst_get_operand_width(xedd);
+  instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr->has_memory_op = true;
 }
 
@@ -145,10 +148,12 @@ static void ConvertEffectiveAddress(Instruction *instr, Operand *instr_op,
     instr->has_pc_rel_op = true;
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->rel.imm = NextDecodedAddress(instr) + disp;
-    instr_op->width = 64;
 
     if (XED_ICLASS_LEA != instr->iclass) {
+      instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
       instr->has_memory_op = true;
+    } else {
+      instr_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
     }
   } else {
     ConverMemoryOperand(instr, instr_op, xedd, index);
@@ -172,7 +177,8 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM1;
     instr_op->u.imm1 = xed_decoded_inst_get_second_immediate(xedd);
   }
-  instr_op->width = xed_decoded_inst_get_immediate_width_bits(xedd);
+  instr_op->width = static_cast<int8_t>(
+      xed_decoded_inst_get_immediate_width_bits(xedd));
 }
 
 // Returns true if an implicit operand is ambiguous. An implicit operand is
@@ -259,16 +265,16 @@ static void ConvertDecodedInstruction(Instruction *instr,
                                       xed_decoded_inst_t *xedd,
                                       AppPC pc) {
   memset(instr, 0, sizeof *instr);
-  instr->iclass = xed_decoded_inst_get_iclass(xedd);
-  instr->category = xed_decoded_inst_get_category(xedd);
+  InitInstruction(instr,
+                  xed_decoded_inst_get_iclass(xedd),
+                  xed_decoded_inst_get_category(xedd),
+                  0);
   instr->length = static_cast<decltype(instr->length)>(
       xed_decoded_inst_get_length(xedd));
-  instr->num_ops = 0;
-  instr->needs_encoding = GRANARY_IF_DEBUG_ELSE(true, false);
-  instr->has_pc_rel_op = false;
-  instr->has_fixed_length = false;
+  instr->effective_operand_width = static_cast<int8_t>(
+      xed_decoded_inst_get_operand_width(xedd));
+  GRANARY_IF_DEBUG( instr->needs_encoding = true; )
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
-  instr->has_memory_op = false;
   instr->decoded_pc = pc;
   ConvertDecodedPrefixes(instr, xedd);
   ConvertDecodedOperands(instr, xedd);
@@ -317,7 +323,7 @@ static void SelectMemoryOperand(const Instruction *instr,
                                 const Operand *op,
                                 xed_encoder_operand_t *ir_op) {
   if (instr->has_pc_rel_op) {
-    ir_op->width = 64;  // Size of the effective address.
+    ir_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
     ir_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
     ir_op->u.mem.seg = XED_REG_INVALID;
     ir_op->u.mem.base = XED_REG_RIP;
@@ -328,21 +334,21 @@ static void SelectMemoryOperand(const Instruction *instr,
         static_cast<decltype(ir_op->u.mem.disp.displacement)>(
             op->rel.pc - (instr->encoded_pc + RIP_REL32_LEA_LEN));
   } else {
-    ir_op->width = op->width;
+    ir_op->width = static_cast<decltype(ir_op->width)>(op->width);
     ir_op->u = op->u;
   }
 }
 
 // Convert an `Operand` into a `xed_encoder_operand_t`.
 static void SelectOperand(const Instruction *instr, const Operand *op,
-                          xed_encoder_operand_t *ir_op, uint32_t *max_width) {
+                          xed_encoder_operand_t *ir_op, int8_t *max_width) {
   ir_op->type = op->type;
   if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
     SelectRelBranchOperand(instr, op, ir_op);
   } else if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
     SelectMemoryOperand(instr, op, ir_op);
   } else {
-    ir_op->width = op->width;
+    ir_op->width = static_cast<decltype(ir_op->width)>(op->width);
     ir_op->u = op->u;
   }
 
@@ -355,20 +361,31 @@ static void SelectOperand(const Instruction *instr, const Operand *op,
 // Adjust the effective operand width. This is a special case for return
 // instructions.
 //
-// TODO(pag): Is the effective operand width for `RET <imm>` also 64?
+// TODO(pag): Is the effective operand width for `RET <imm>` also
+//            GRANARY_ARCH_ADDRESS_WIDTH?
 static void AdjustEffectiveOperandWidth(xed_encoder_instruction_t *ir) {
   if (!ir->effective_operand_width) {
     if (XED_ICLASS_RET_NEAR == ir->iclass ||
         XED_ICLASS_RET_FAR == ir->iclass) {
-      ir->effective_operand_width = 64;
+      ir->effective_operand_width = GRANARY_ARCH_ADDRESS_WIDTH;
     }
+  }
+}
+
+// Tries to figure out the effective operand width for this instruction.
+static uint32_t GetEffectiveOperandWidth(const Instruction *instr,
+                                         int8_t width) {
+  if (0 >= instr->effective_operand_width) {
+    return static_cast<uint32_t>(width);
+  } else {
+    return static_cast<uint32_t>(instr->effective_operand_width);
   }
 }
 
 // Convert an `Instruction` instances into an `xed_encoder_instruction_t`.
 static void SelectInstruction(const Instruction *instr,
                               xed_encoder_instruction_t *ir) {
-  auto width = 0U;
+  int8_t width = 0;
   ir->mode = XED_STATE;
   ir->iclass = instr->iclass;
   ir->prefixes = instr->prefixes;
@@ -376,8 +393,9 @@ static void SelectInstruction(const Instruction *instr,
   for (int8_t i(0); i < instr->num_ops; ++i) {
     SelectOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
   }
-  ir->effective_operand_width = width;
-  ir->effective_address_width = 0;
+  ir->effective_operand_width = GetEffectiveOperandWidth(instr, width);
+  ir->effective_address_width = instr->has_memory_op ?
+      GRANARY_ARCH_ADDRESS_WIDTH : 0;
   AdjustEffectiveOperandWidth(ir);
 }
 

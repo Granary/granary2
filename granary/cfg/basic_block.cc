@@ -5,6 +5,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
+#include "granary/module.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -71,15 +72,15 @@ int BasicBlock::NumLocalPredecessors(void) const {
 }
 
 // Get this basic block's meta-data.
-GenericMetaData *InstrumentedBasicBlock::MetaData(void) {
+BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
   return meta;
 }
 
 // Initialize an instrumented basic block.
-InstrumentedBasicBlock::InstrumentedBasicBlock(GenericMetaData *meta_)
+InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
     : meta(meta_),
       cached_meta_hash(0),
-      native_pc(MetaDataCast<TranslationMetaData *>(meta)->native_pc) {}
+      native_pc(MetaDataCast<ModuleMetaData *>(meta)->start_pc) {}
 
 // Returns the starting PC of this basic block.
 AppPC InstrumentedBasicBlock::StartAppPC(void) const {
@@ -93,7 +94,7 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 
 
 // Initialize a decoded basic block.
-DecodedBasicBlock::DecodedBasicBlock(GenericMetaData *meta_)
+DecodedBasicBlock::DecodedBasicBlock(BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       next(nullptr),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
@@ -156,7 +157,7 @@ void DecodedBasicBlock::FreeInstructionList(void) {
 }
 
 // Initialize a future basic block.
-DirectBasicBlock::DirectBasicBlock(GenericMetaData *meta_)
+DirectBasicBlock::DirectBasicBlock(BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       materialized_block(nullptr),
       materialize_strategy(REQUEST_LATER) {}

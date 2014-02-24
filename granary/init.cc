@@ -4,6 +4,7 @@
 
 #include "granary/base/option.h"
 #include "granary/base/string.h"
+#include "granary/code/allocate.h"
 
 #include "granary/compile.h"
 #include "granary/driver.h"
@@ -31,7 +32,20 @@ GRANARY_DEFINE_string(attach_to, "*",
     "\t--attach_to=libc\t\tOnly attach to `libc`.")
 #endif  // GRANARY_STANDALONE
 
+GRANARY_DEFINE_non_negative_int(edge_cache_slab_size, 1,
+    "The number of pages allocated at once to store edge code. Each "
+    "environment maintains its own edge code allocator. The default value is "
+    "1 pages per slab.")
+
 namespace granary {
+namespace {
+
+// TODO(pag): Change this! Can't access the runtime value of
+//            FLAG_edge_cache_slab_size at load time.
+GRANARY_EARLY_GLOBAL static ModuleManager modules;
+GRANARY_EARLY_GLOBAL static CodeAllocator edge_cache_allocator(FLAG_edge_cache_slab_size);
+GRANARY_EARLY_GLOBAL static Environment env(&modules, &edge_cache_allocator);
+}
 
 // Scan the `tools` command line option and load each tool in order.
 //
@@ -56,18 +70,18 @@ void Init(InitKind kind, const char *granary_path) {
 
   // Finalize the meta-data structure after tools are initialized. Tools might
   // change what meta-data is registered depending on command-line options.
+  RegisterMetaData<ModuleMetaData>();  // TODO(pag): Move me!
   InitMetaData();
 
   // Tell granary about loaded modules.
-  InitModules(kind);
+  modules.FindBuiltInModules();
 
   // Initialize the code cache.
   InitCompiler();
 
   // TODO(pag): Remove me.
-  Environment env;
-  Compile(&env, new GenericMetaData(UnsafeCast<AppPC>(&LoadTools)));
+  auto pc = UnsafeCast<AppPC>(&Log);
+  Compile(&env, env.AllocateBlockMetaData(pc));
 }
-
 
 }  // namespace granary

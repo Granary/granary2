@@ -12,12 +12,11 @@
 namespace granary {
 
 // Forward declarations.
-class CodeAllocator;
-class GenericMetaData;
+class BlockMetaData;
+class EnvironmentInterface;
 
 // Must be implemented in each Granary driver.
-CachePC AssembleEdge(CodeAllocator *allocator,
-                                 GenericMetaData *meta);
+CachePC AssembleEdge(EnvironmentInterface *env, BlockMetaData *meta);
 
 }  // namespace granary
 

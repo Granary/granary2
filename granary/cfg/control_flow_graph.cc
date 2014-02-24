@@ -15,15 +15,15 @@ LocalControlFlowGraph::~LocalControlFlowGraph(void) {
   // Start by marking every block as owned; we're destroying them anyway so
   // this sets up a simple invariant regarding the interaction between freeing
   // instructions and basic blocks.
-  for (auto curr(first_block); curr; curr = curr->list.GetNext(curr)) {
+  for (BasicBlock *curr(first_block); curr; curr = curr->list.GetNext(curr)) {
     curr->Acquire();
   }
 
   // Free up all of the instruction lists.
-  for (auto curr(first_block); curr; curr = curr->list.GetNext(curr)) {
-    auto in_flight_block = DynamicCast<DecodedBasicBlock *>(curr);
-    if (in_flight_block) {
-      in_flight_block->FreeInstructionList();
+  for (BasicBlock *curr(first_block); curr; curr = curr->list.GetNext(curr)) {
+    auto decoded_block = DynamicCast<DecodedBasicBlock *>(curr);
+    if (decoded_block) {
+      decoded_block->FreeInstructionList();
     }
   }
 
@@ -40,7 +40,7 @@ LocalControlFlowGraph::~LocalControlFlowGraph(void) {
 
 // Return the entry basic block of this control-flow graph.
 DecodedBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
-  return DynamicCast<DecodedBasicBlock *>(first_block);
+  return first_block;
 }
 
 // Returns an object that can be used inside of a range-based for loop.
@@ -63,8 +63,10 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   // The control-flow graph has sole ownership over the initial basic block.
   // All other basic blocks are owned by control-transfer instructions.
   if (!first_block) {
+    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
+    granary_break_on_fault_if(!decoded_block);
     block->MarkAsPermanent();
-    first_block = block;
+    first_block = decoded_block;
   } else {
     last_block->list.SetNext(last_block, block);
   }

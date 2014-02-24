@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
-#include "granary/kernel/module.h"
+#include "granary/kernel/linux/module.h"
 #include "granary/module.h"
 #include "granary/tool.h"
 
@@ -41,8 +41,9 @@ static ModuleKind GetModuleKind(KernelModule *mod) {
 
 }  // namespace
 
-// Initialize the module tracker.
-void InitModules(InitKind) {
+// Find all built-in modules. In user space, this will go and find things like
+// libc. In kernel space, this will identify already loaded modules.
+void ModuleManager::FindBuiltInModules(void) {
   for (auto mod : KernelModuleIterator(GRANARY_KERNEL_MODULES)) {
     auto module = new Module(GetModuleKind(mod), mod->name);
     mod->seen_by_granary = 1;

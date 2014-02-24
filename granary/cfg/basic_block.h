@@ -21,7 +21,7 @@ class Instruction;
 class BasicBlock;
 class CachedBasicBlock;
 class DecodedBasicBlock;
-class GenericMetaData;
+class BlockMetaData;
 class LocalControlFlowGraph;
 class ControlFlowInstruction;
 class BlockFactory;
@@ -143,12 +143,12 @@ class BasicBlock : protected UnownedCountedObject {
 class InstrumentedBasicBlock : public BasicBlock {
  public:
   GRANARY_INTERNAL_DEFINITION
-  explicit InstrumentedBasicBlock(GenericMetaData *meta_);
+  explicit InstrumentedBasicBlock(BlockMetaData *meta_);
 
   virtual ~InstrumentedBasicBlock(void);
 
   // Return this basic block's meta-data.
-  GenericMetaData *MetaData(void);
+  BlockMetaData *MetaData(void);
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;
@@ -166,7 +166,7 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   // The meta-data associated with this basic block. Points to some (usually)
   // interned meta-data that is valid on entry to this basic block.
-  GRANARY_INTERNAL_DEFINITION GenericMetaData *meta;
+  GRANARY_INTERNAL_DEFINITION BlockMetaData *meta;
   GRANARY_INTERNAL_DEFINITION uint32_t cached_meta_hash;
 
   // The starting PC of this basic block, if any.
@@ -201,7 +201,7 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   virtual ~DecodedBasicBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  explicit DecodedBasicBlock(GenericMetaData *meta_);
+  explicit DecodedBasicBlock(BlockMetaData *meta_);
 
   virtual detail::SuccessorBlockIterator Successors(void) const override;
 
@@ -253,7 +253,7 @@ enum BlockRequestKind : uint8_t;
 class DirectBasicBlock final : public InstrumentedBasicBlock {
  public:
   virtual ~DirectBasicBlock(void) = default;
-  GRANARY_INTERNAL_DEFINITION DirectBasicBlock(GenericMetaData *meta_);
+  GRANARY_INTERNAL_DEFINITION DirectBasicBlock(BlockMetaData *meta_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(DirectBasicBlock, {

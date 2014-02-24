@@ -10,12 +10,12 @@
 namespace granary {
 
 // Forward declarations.
-class GenericMetaData;
+class BlockMetaData;
 class CachedBasicBlock;
 
 // Look for an entry in the code cache index, and try to revive it into a basic
 // block.
-CachedBasicBlock *ReviveBlockFromIndex(const GenericMetaData *);
+CachedBasicBlock *ReviveBlockFromIndex(const BlockMetaData *);
 
 // Add some meta-data to the set.
 // Remove some meta-data.

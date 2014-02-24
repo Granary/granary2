@@ -37,7 +37,7 @@ static driver::Instruction *CFI(xed_iclass_enum_t iclass,
   instr->has_pc_rel_op = true;
 
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  instr->ops[0].width = 64;
+  instr->ops[0].width = GRANARY_ARCH_ADDRESS_WIDTH;
   instr->ops[0].rel.pc = target;
   instr->ops[0].rw = XED_OPERAND_ACTION_R;
 

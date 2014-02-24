@@ -252,13 +252,14 @@ static int Resize(DecodedBasicBlock *blocks) {
 }
 
 // Assemble the edges of a local CFG.
-static void AssembleEdges(LocalControlFlowGraph *cfg, CodeAllocator *edge) {
+static void AssembleEdges(EnvironmentInterface *env,
+                          LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
     if (direct_block) {
       auto meta = direct_block->MetaData();
       auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-      cache_meta->cache_pc = AssembleEdge(edge, meta);
+      cache_meta->cache_pc = AssembleEdge(env, meta);
     }
   }
 }
@@ -266,13 +267,14 @@ static void AssembleEdges(LocalControlFlowGraph *cfg, CodeAllocator *edge) {
 }  // namespace
 
 // Assemble the local control-flow graph into
-void Assemble(LocalControlFlowGraph *cfg, CodeAllocator *cache,
-              CodeAllocator *edge) {
-  PreprocessBlocks(cfg, cache);
-  AssembleEdges(cfg, edge);
+void Assemble(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+              CodeAllocator *cache_code_allocator) {
+  PreprocessBlocks(cfg, cache_code_allocator);
+  AssembleEdges(env, cfg);
   auto blocks = Schedule(cfg);
   auto relaxed_size = Resize(blocks);
-  auto code = cache->Allocate(GRANARY_ARCH_CACHE_LINE_SIZE, relaxed_size);
+  auto code = cache_code_allocator->Allocate(
+      GRANARY_ARCH_CACHE_LINE_SIZE, relaxed_size);
   Encode(blocks, code);
 }
 

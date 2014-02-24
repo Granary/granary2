@@ -30,7 +30,8 @@ struct ModuleAddressRange {
         begin_offset(begin_offset_),
         end_offset(begin_offset + (end_addr - begin_addr)),
         perms(perms_),
-        age(age_) {}
+        age(age_),
+        cache_code_allocator(new CodeAllocator(FLAG_module_cache_slab_size)) {}
 
   ModuleAddressRange *next;
   uintptr_t begin_addr;  // Runtime offsets.
@@ -39,6 +40,9 @@ struct ModuleAddressRange {
   uintptr_t end_offset;
   unsigned perms;
   unsigned age;
+
+  // Memory allocator for code from the code cache.
+  CodeAllocator * const cache_code_allocator;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
     SHARED = true,
@@ -54,10 +58,6 @@ typedef LinkedListIterator<const internal::ModuleAddressRange>
 typedef LinkedListIterator<Module> ModuleIterator;
 
 namespace {
-
-// Static list of loaded modules. Modules are not stored in any particular
-// order as their segments can be discontiguous.
-static std::atomic<Module *> MODULES(ATOMIC_VAR_INIT(nullptr));
 
 // Find the address range that contains a particular program counter. Returns
 // `nullptr` if no such range exists in the specified list.
@@ -78,7 +78,6 @@ static const internal::ModuleAddressRange *FindRange(
 
 Module::Module(ModuleKind kind_, const char *name_)
     : next(nullptr),
-      cache_code_allocator(new CodeAllocator(FLAG_module_cache_slab_size)),
       kind(kind_),
       ranges(nullptr),
       ranges_lock(),
@@ -204,9 +203,57 @@ internal::ModuleAddressRange *Module::AddRange(
   return remove;
 }
 
+// Default-initializes Granary's internal module meta-data.
+ModuleMetaData::ModuleMetaData(void)
+    : source(),
+      start_pc(nullptr) {}
+
+// Initialize this meta-data for a given module offset and program counter.
+void ModuleMetaData::Init(ModuleOffset source_, AppPC start_pc_) {
+  source = source_;
+  start_pc = start_pc_;
+}
+
+// Returns the code cache allocator for this block.
+CodeAllocator *ModuleMetaData::CacheCodeAllocatorForBlock(void) const {
+  ReadLocked locker(&(source.module->ranges_lock));
+  auto range = FindRange(source.module->ranges, start_pc);
+  return range->cache_code_allocator;
+}
+
+// Returns true if one block's module metadata can be materialized alognside
+// another block's module metadata. For example, if two blocks all in
+// different modules then we can't materialize them together in the same
+// instrumentation session. Similarly, if two blocks fall into different
+// address ranges of the same module, then we also can't materialize them
+// in the same session.
+bool ModuleMetaData::CanMaterializeWith(const ModuleMetaData *that) const {
+  if (source.module == that->source.module) {
+    ReadLocked locker(&(source.module->ranges_lock));
+    auto this_range = FindRange(source.module->ranges, start_pc);
+    auto that_range = FindRange(source.module->ranges, that->start_pc);
+    return this_range == that_range;
+  }
+  return false;
+}
+
+// Hash the translation meta-data.
+void ModuleMetaData::Hash(HashFunction *hasher) const {
+  hasher->Accumulate(this);
+}
+
+// Compare two translation meta-data objects for equality.
+bool ModuleMetaData::Equals(const ModuleMetaData *meta) const {
+  return source == meta->source && start_pc == meta->start_pc;
+}
+
+// Initialize the module tracker.
+ModuleManager::ModuleManager(void)
+    : modules(ATOMIC_VAR_INIT(nullptr)) {}
+
 // Find a module given a program counter.
-const Module *FindModuleByPC(AppPC pc) {
-  for (auto module : ModuleIterator(MODULES.load(std::memory_order_relaxed))) {
+GRANARY_CONST Module *ModuleManager::FindModuleByPC(AppPC pc) {
+  for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
     if (module->Contains(pc)) {
       return module;
     }
@@ -215,8 +262,8 @@ const Module *FindModuleByPC(AppPC pc) {
 }
 
 // Find a module given its name.
-Module *FindModuleByName(const char *name) {
-  for (auto module : ModuleIterator(MODULES.load(std::memory_order_relaxed))) {
+GRANARY_CONST Module *ModuleManager::FindModuleByName(const char *name) {
+  for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
     if (StringsMatch(module->name, name)) {
       return module;
     }
@@ -225,14 +272,14 @@ Module *FindModuleByName(const char *name) {
 }
 
 // Register a module with the module tracker.
-void RegisterModule(Module *module) {
+void ModuleManager::RegisterModule(Module *module) {
   granary_break_on_fault_if(nullptr != module->next ||
-                            MODULES.load(std::memory_order_relaxed) == module);
+                            modules.load(std::memory_order_relaxed) == module);
   Module *next(nullptr);
   do {
-    next = MODULES.load(std::memory_order_relaxed);
+    next = modules.load(std::memory_order_relaxed);
     module->next = next;
-  } while (!MODULES.compare_exchange_weak(next, module));
+  } while (!modules.compare_exchange_weak(next, module));
 }
 
 }  // namespace granary

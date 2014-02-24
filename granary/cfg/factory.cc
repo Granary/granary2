@@ -21,7 +21,7 @@ namespace granary {
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the LCFG
 // is needed so that blocks can be added.
-BlockFactory::BlockFactory(Environment *env_, LocalControlFlowGraph *cfg_)
+BlockFactory::BlockFactory(EnvironmentInterface *env_, LocalControlFlowGraph *cfg_)
     : meta_data_filter(),
       env(env_),
       cfg(cfg_),
@@ -49,62 +49,23 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 
 namespace {
 
-// Return a control-flow instruction that targets a future basic block.
-static Instruction *MakeDirectCTI(driver::Instruction *instr, AppPC target_pc) {
-  return new ControlFlowInstruction(
-      instr, new DirectBasicBlock(new GenericMetaData(target_pc)));
-}
-
-// Return a control-flow instruction that indirectly targets an unknown future
-// basic block.
-static Instruction *MakeIndirectCTI(driver::Instruction *instr) {
-  return new ControlFlowInstruction(
-      instr, new IndirectBasicBlock(new GenericMetaData(nullptr)));
-}
-
-// Return a control-flow instruction that returns to some existing basic block.
-static Instruction *MakeReturnCTI(driver::Instruction *instr) {
-  return new ControlFlowInstruction(instr, new ReturnBasicBlock);
-}
-
 // Convert a decoded instruction into the internal Granary instruction IR.
-static std::unique_ptr<Instruction> MakeInstruction(
-    driver::Instruction *instr) {
-  Instruction *ret_instr(nullptr);
+static Instruction *MakeInstruction(EnvironmentInterface *env,
+                                    driver::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionReturn() ||
         instr->IsInterruptReturn() ||
         instr->IsSystemReturn()) {
-      ret_instr = MakeReturnCTI(instr);
+      return new ControlFlowInstruction(instr, new ReturnBasicBlock);
     } else {
-      ret_instr = MakeIndirectCTI(instr);
+      auto meta = env->AllocateEmptyBlockMetaData();
+      return new ControlFlowInstruction(instr, new IndirectBasicBlock(meta));
     }
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    ret_instr = MakeDirectCTI(instr, instr->BranchTarget());
+    auto meta = env->AllocateBlockMetaData(instr->BranchTarget());
+    return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));
   } else {
-    ret_instr = new NativeInstruction(instr);
-  }
-  return std::unique_ptr<Instruction>(ret_instr);
-}
-
-// Add the fall-through instruction for a block.
-static void AddFallThroughInstruction(BlockFactory *factory,
-                                      driver::InstructionDecoder *decoder,
-                                      Instruction *last_instr, AppPC pc) {
-  auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
-    // Unconditionally decode the next instruction. If it's a jump then we'll
-    // use the jump as the fall-through. If we can't decode it then we'll add
-    // a fall-through to native, and if it's neither then just add in a LIR
-    // instruction for the fall-through.
-    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
-    if (!decoder->Decode(dinstr.get(), pc)) {
-      last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
-    } else if (dinstr->IsUnconditionalJump()) {
-      last_instr->InsertAfter(std::move(MakeInstruction(dinstr.release())));
-    } else {
-      last_instr->InsertAfter(lir::Jump(factory, pc));
-    }
+    return new NativeInstruction(instr);
   }
 }
 
@@ -116,8 +77,29 @@ static uint32_t HashMetaData(HashFunction *hasher,
   hasher->Finalize();
   return hasher->Extract32();
 }
-
 }  // namespace
+
+// Add the fall-through instruction for a block.
+void BlockFactory::AddFallThroughInstruction(
+    driver::InstructionDecoder *decoder, Instruction *last_instr, AppPC pc) {
+
+  auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
+  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
+    // Unconditionally decode the next instruction. If it's a jump then we'll
+    // use the jump as the fall-through. If we can't decode it then we'll add
+    // a fall-through to native, and if it's neither then just add in a LIR
+    // instruction for the fall-through.
+    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
+    if (!decoder->Decode(dinstr.get(), pc)) {
+      last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
+    } else if (dinstr->IsUnconditionalJump()) {
+      last_instr->InsertAfter(std::unique_ptr<Instruction>(
+          MakeInstruction(env, dinstr.release())));
+    } else {
+      last_instr->InsertAfter(lir::Jump(this, pc));
+    }
+  }
+}
 
 // Decode an instruction list starting at `pc` and link the decoded
 // instructions into the instruction list beginning with `instr`.
@@ -131,10 +113,11 @@ void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
       delete dinstr;
       return;
     }
-    instr = instr->InsertAfter(std::move(MakeInstruction(dinstr)));
+    instr = instr->InsertAfter(std::unique_ptr<Instruction>(
+        MakeInstruction(env, dinstr)));
     env->AnnotateInstruction(instr);
   }
-  AddFallThroughInstruction(this, &decoder, instr, pc);
+  AddFallThroughInstruction(&decoder, instr, pc);
 }
 
 // Hash the meta data of all basic blocks. This resets the `materialized_block`
@@ -161,7 +144,7 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
   bool materialized_a_block(false);
-  for (auto block = cfg->first_block, last_block = cfg->last_block;
+  for (BasicBlock *block = cfg->first_block, *last_block = cfg->last_block;
        nullptr != block;
        block = block->list.GetNext(block)) {
 
@@ -181,7 +164,7 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
 void BlockFactory::RelinkCFIs(void) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
-  for (auto block = cfg->first_block;
+  for (BasicBlock *block(cfg->first_block);
        block != cfg->first_new_block;
        block = block->list.GetNext(block)) {
 
@@ -200,7 +183,7 @@ void BlockFactory::RelinkCFIs(void) {
 BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
-  for (auto block = cfg->first_block;
+  for (BasicBlock *block(cfg->first_block);
        block != cfg->first_new_block;
        block = block->list.GetNext(block)) {
     auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
@@ -227,10 +210,8 @@ bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
       REQUEST_DENIED == block->materialize_strategy) {
     return false;
   } else {
-    auto meta = GetMetaData<TranslationMetaData>(block);
-    auto first_meta = GetMetaData<TranslationMetaData>(
-        DynamicCast<InstrumentedBasicBlock *>(cfg->first_block));
-    if (meta->source.module != first_meta->source.module) {
+    auto first_meta = GetMetaData<ModuleMetaData>(cfg->first_block);
+    if (!first_meta->CanMaterializeWith(GetMetaData<ModuleMetaData>(block))) {
       block->materialize_strategy = REQUEST_DENIED;
       return false;  // Modules of requested and first blocks don't match.
     } else {
@@ -289,7 +270,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 }
 
 // Materialize the initial basic block.
-void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
+void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
   auto decoded_block = new DecodedBasicBlock(meta);
   DecodeInstructionList(decoded_block->FirstInstruction(),
@@ -303,8 +284,8 @@ void BlockFactory::MaterializeInitialBlock(GenericMetaData *meta) {
 // with a CTI.
 std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
     AppPC start_pc) {
-  auto block = new DirectBasicBlock(new GenericMetaData(start_pc));
-  return std::unique_ptr<DirectBasicBlock>(block);
+  return std::unique_ptr<DirectBasicBlock>(
+      new DirectBasicBlock(env->AllocateBlockMetaData(start_pc)));
 }
 
 }  // namespace granary

@@ -65,7 +65,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
     std::cout << ", A" << i << " a" << i;
   }
   std::cout << ") {\n"
-            << INDENT << "ImportInstruction(instr, XED_ICLASS_"
+            << INDENT << "InitInstruction(instr, XED_ICLASS_"
                       << xed_iclass_enum_t2str(xed_inst_iclass(instr))
                       << ", XED_CATEGORY_"
                       << xed_category_enum_t2str(xed_inst_category(instr))
@@ -142,11 +142,7 @@ int main(void) {
             << "#define DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "namespace granary {\n"
             << "namespace driver {\n"
-            << "class Instruction;\n"
-            << "void ImportInstruction(Instruction *instr, "
-            << "xed_iclass_enum_t iclass,\n"
-            << "                       xed_category_enum_t category, "
-            << "int8_t num_ops);\n";
+            << "class Instruction;\n";
   GenerateInstructionBuilders();
   std::cout << "}  // namespace driver\n"
             << "}  // namespace granary\n"
