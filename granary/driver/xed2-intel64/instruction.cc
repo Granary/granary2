@@ -73,6 +73,7 @@ bool Instruction::HasIndirectTarget(void) const {
 
 // Return the (current) length of the instruction.
 int Instruction::Length(void) const {
+  GRANARY_ASSERT(!has_virtual_reg_op);
   if (GRANARY_UNLIKELY(needs_encoding && !has_pc_rel_op)) {
     InstructionDecoder().Encode(const_cast<Instruction *>(this), nullptr);
   }

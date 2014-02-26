@@ -3,78 +3,49 @@
 #ifndef GRANARY_ENVIRONMENT_H_
 #define GRANARY_ENVIRONMENT_H_
 
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
+
 #include "granary/base/base.h"
+#include "granary/base/types.h"
+
+#include "granary/code/allocate.h"
+
+#include "granary/context.h"
+#include "granary/metadata.h"
+#include "granary/module.h"
+#include "granary/tool.h"
 
 namespace granary {
 
-// Forward declarations.
-class Instruction;
-class DecodedBasicBlock;
-class BlockMetaData;
-GRANARY_INTERNAL_DEFINITION class ModuleManager;
-GRANARY_INTERNAL_DEFINITION class CodeAllocator;
-
-// Interface for environments in Granary.
-class EnvironmentInterface {
+// Pulls together all aspects of an instrumentation environment.
+//
+// This is basically every that a `Context` instance actually needs, all tied
+// up in a single spot. The separation between `Context` and `Environment`
+// mostly exists to not pull so many headers into `Context`, thus allowing it
+// (from the header) to deal explicitly in terms of opaque types.
+class Environment {
  public:
-  EnvironmentInterface(void) = default;
-  virtual ~EnvironmentInterface(void) = default;
+  Environment(void);
 
-  // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list. This returns the first
-  GRANARY_INTERNAL_DEFINITION
-  virtual void AnnotateInstruction(Instruction *instr) = 0;
+  void Attach(void);
 
-  // Allocate and initialize some `BlockMetaData`.
-  GRANARY_INTERNAL_DEFINITION
-  virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
+  void AttachToAppPC(AppPC pc);
 
-  // Allocate and initialize some empty `BlockMetaData`.
-  GRANARY_INTERNAL_DEFINITION
-  virtual BlockMetaData *AllocateEmptyBlockMetaData(void) = 0;
-
-  // Allocate some edge code from the edge code cache.
-  GRANARY_INTERNAL_DEFINITION
-  virtual CachePC AllocateEdgeCode(int num_bytes) = 0;
-};
-
-#ifdef GRANARY_INTERNAL
-
-// Manages environmental information that changes how Granary behaves. For
-// example, in the Linux kernel, the environmental data gives the instruction
-// decoder access to the kernel's exception tables, so that it can annotate
-// instructions as potentially faulting.
-class Environment : public EnvironmentInterface {
- public:
-  Environment(void) = delete;
-  virtual ~Environment(void) = default;
-
-  // Initialize the Environment with a module manager and edge code allocator.
-  inline Environment(ModuleManager *module_manager_,
-                     CodeAllocator *edge_code_allocator_)
-      : module_manager(module_manager_),
-        edge_code_allocator(edge_code_allocator_) {}
-
-  // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list. This returns the first
-  virtual void AnnotateInstruction(Instruction *instr) override;
-
-  // Allocate and initialize some `BlockMetaData`.
-  virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
-
-  // Allocate and initialize some empty `BlockMetaData`.
-  virtual BlockMetaData *AllocateEmptyBlockMetaData(void) override;
-
-  // Allocate some edge code from the edge code cache.
-  virtual CachePC AllocateEdgeCode(int num_bytes) override;
-
-  ModuleManager * const module_manager;
-  CodeAllocator * const edge_code_allocator;
+  // TODO(pag): What does it mean to unload an environment? How do the various
+  //            tools learn of that?
 
  private:
+
+  ModuleManager module_manager;
+  MetaDataManager metadata_manager;
+  ToolManager tool_manager;
+  CodeAllocator edge_cache_allocator;
+  Context context;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);
 };
-#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 

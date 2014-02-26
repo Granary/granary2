@@ -2,34 +2,56 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/arch/base.h"
-#include "granary/code/allocate.h"
+#include "granary/base/option.h"
+#include "granary/base/string.h"
 
 #include "granary/environment.h"
-#include "granary/metadata.h"
-#include "granary/module.h"
+
+GRANARY_DEFINE_string(tools, "",
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--clients=print_bbs,follow_jumps`.")
+
+GRANARY_DEFINE_non_negative_int(edge_cache_slab_size, 1,
+    "The number of pages allocated at once to store edge code. Each "
+    "environment maintains its own edge code allocator. The default value is "
+    "1 pages per slab.")
 
 namespace granary {
 
-// Allocate and initialize some `BlockMetaData`. This will also set-up the
-// `ModuleMetaData` within the `BlockMetaData`.
-BlockMetaData *Environment::AllocateBlockMetaData(AppPC start_pc) {
-  auto meta = new BlockMetaData;
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_manager->FindModuleByPC(start_pc);
-  module_meta->start_pc = start_pc;
-  module_meta->source = module->OffsetOf(start_pc);
-  return meta;
+enum {
+  MAX_TOOL_NAME_LEN = 32
+};
+
+// Initialize a new environment.
+Environment::Environment(void)
+    : module_manager(),
+      metadata_manager(),
+      tool_manager(),
+      edge_cache_allocator(FLAG_edge_cache_slab_size),
+      context(&module_manager, &metadata_manager,
+              &tool_manager, &edge_cache_allocator) {
+
+  // Register internal metadata.
+  metadata_manager.Register<ModuleMetaData>();
+  metadata_manager.Register<CacheMetaData>();
+
+  // Tell this environment about all loaded modules.
+  module_manager.RegisterAllBuiltIn();
+
+  // Tell Granary about all loaded tools.
+  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+      FLAG_tools,
+      [&](const char *tool_name) {
+        tool_manager.Register(tool_name);
+      });
 }
 
-// Allocate and initialize some empty `BlockMetaData`.
-BlockMetaData *Environment::AllocateEmptyBlockMetaData(void) {
-  return new BlockMetaData;
+void Environment::Attach(void) {
+
 }
 
-// Allocate some edge code from the edge code cache.
-CachePC Environment::AllocateEdgeCode(int num_bytes) {
-  return edge_code_allocator->Allocate(GRANARY_ARCH_CACHE_LINE_SIZE, num_bytes);
+void Environment::AttachToAppPC(AppPC pc) {
+  context.Compile(context.AllocateBlockMetaData(pc));
 }
 
 }  // namespace granary

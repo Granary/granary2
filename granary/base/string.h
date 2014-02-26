@@ -41,7 +41,47 @@ int DeFormat(const char *buffer, const char *format, ...);
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);
 
-// Copies one string into another.
+// Apply a functor to each comma-separated value. This will remove leading
+// and trailing spaces.
+template <unsigned long buff_len, typename F>
+void ForEachCommaSeparatedString(const char *str, F functor) {
+  char buffer[buff_len] = {'\0'};
+  char *buff_begin = &(buffer[0]);
+  char *buff_end = &(buffer[buff_len - 1]);
+  char *buff_ch = &(buffer[0]);
+  char *last_non_space_ch = nullptr;
+  auto is_done = false;
+  for (auto ch = str; !is_done; ++ch) {
+    auto chr = *ch;
+    is_done = '\0' == chr;
+    auto is_found = is_done || ',' == chr;
+    if (buff_ch < buff_end) {
+      *buff_ch = chr;
+      if (' ' == chr) {
+        if (buff_ch > buff_begin) {
+          ++buff_ch;  // Strip leading spaces.
+        }
+      } else if (',' == chr) {
+        *buff_ch = '\0';
+      } else {
+        last_non_space_ch = buff_ch;
+        ++buff_ch;
+      }
+    }
+    if (is_found) {
+      *buff_end = '\0';
+      *buff_ch = '\0';
+      if (last_non_space_ch) {
+        last_non_space_ch[1] = '\0';  // Strip trailing spaces.
+      }
+      if (*buff_begin) {
+        functor(buff_begin);
+      }
+      last_non_space_ch = nullptr;  // Reset.
+      buff_ch = buff_begin;
+    }
+  }
+}
 }  // namespace granary
 #endif
 

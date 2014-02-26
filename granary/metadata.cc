@@ -3,8 +3,9 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
-#include "granary/base/new.h"
-#include "granary/base/option.h"
+#include "granary/base/lock.h"
+#include "granary/base/string.h"
+
 #include "granary/breakpoint.h"
 #include "granary/metadata.h"
 
@@ -15,78 +16,33 @@ CacheMetaData::CacheMetaData(void)
     : cache_pc(nullptr) {}
 
 namespace {
+// The next meta-data description ID that we can assign. Every meta-data
+// description has a unique, global ID.
+static int next_description_id(0);
 
-// Global list of registered meta-data descriptors.
-static detail::meta::MetaDataInfo *META = nullptr;
-
-// The total size of the meta-data.
-static size_t META_SIZE = 0;
-
-// The total alignment of the meta-data.
-static size_t META_ALIGN = 0;
-
-// Is it too late to register meta-data?
-static bool CAN_REGISTER_META = true;
-
-// Do we have any unifiable meta-data?
-static bool HAS_UNIFIABLE_META = false;
-
-inline static LinkedListIterator<detail::meta::MetaDataInfo>
-MetaDataInfos(void) {
-  return LinkedListIterator<detail::meta::MetaDataInfo>(META);
-}
-
+// A lock on assigning and ID to any description, as well as to updating the
+// `next_description_id` variable.
+static FineGrainedLock next_description_id_lock;
 }  // namespace
-namespace detail {
-namespace meta {
 
-// Register some meta-data with Granary. This arranges for all meta-data to be
-// in decreasing order of `(size, align)`. That way Granary can pack the meta-
-// data together nicely into one large super structure.
-void RegisterMetaData(const MetaDataInfo *meta_) {
-  granary_break_on_fault_if(!CAN_REGISTER_META);
-
-  auto meta = const_cast<MetaDataInfo *>(meta_);
-  if (meta->is_registered) {
-    return;
-  }
-
-  if (meta->can_unify) {
-    HAS_UNIFIABLE_META = true;
-  }
-
-  auto next_ptr = &META;
-  for (auto curr(META); curr; ) {  // Find the insertion point.
-    if ((meta->size > curr->size) ||
-        (meta->size == curr->size && meta->align > curr->align)) {
-      break;
-    }
-    next_ptr = &(curr->next);
-    curr = curr->next;
-  }
-
-  // Chain the meta-data into the list.
-  meta->is_registered = true;
-  meta->next = *next_ptr;
-  *next_ptr = meta;
+// Cast some generic meta-data into some specific meta-data.
+void *BlockMetaData::Cast(MetaDataDescription *desc) {
+  GRANARY_ASSERT(-1 != desc->id);
+  GRANARY_ASSERT(nullptr != manager->descriptions[desc->id]);
+  auto meta_ptr = reinterpret_cast<uintptr_t>(this);
+  return reinterpret_cast<void *>(meta_ptr + manager->offsets[desc->id]);
 }
-
-// Get some specific meta-data from some generic meta-data.
-void *GetMetaData(const MetaDataInfo *info, BlockMetaData *meta) {
-  GRANARY_IF_DEBUG( granary_break_on_fault_if(!info->is_registered); )
-  auto meta_ptr = reinterpret_cast<uintptr_t>(meta);
-  return reinterpret_cast<void *>(meta_ptr + info->offset);
-}
-
-}  // namespace meta
-}  // namespace detail
 
 // Initialize a new meta-data instance. This involves separately initializing
 // the contained meta-data within this generic meta-data.
-BlockMetaData::BlockMetaData(void) {
+BlockMetaData::BlockMetaData(MetaDataManager *manager_)
+    : manager(manager_) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta : MetaDataInfos()) {
-    meta->initialize(reinterpret_cast<void *>(this_ptr + meta->offset));
+  for (auto desc : manager->descriptions) {
+    if (desc) {
+      auto offset = manager->offsets[desc->id];
+      desc->initialize(reinterpret_cast<void *>(this_ptr + offset));
+    }
   }
 }
 
@@ -94,8 +50,11 @@ BlockMetaData::BlockMetaData(void) {
 // contained meta-data within this generic meta-data.
 BlockMetaData::~BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta : MetaDataInfos()) {
-    meta->destroy(reinterpret_cast<void *>(this_ptr + meta->offset));
+  for (auto desc : manager->descriptions) {
+    if (desc) {
+      auto offset = manager->offsets[desc->id];
+      desc->destroy(reinterpret_cast<void *>(this_ptr + offset));
+    }
   }
 }
 
@@ -103,13 +62,13 @@ BlockMetaData::~BlockMetaData(void) {
 // meta-data.
 BlockMetaData *BlockMetaData::Copy(void) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  auto that_ptr = reinterpret_cast<uintptr_t>(
-      BlockMetaData::operator new(0));
-
-  for (auto meta : MetaDataInfos()) {
-    meta->copy_initialize(
-        reinterpret_cast<void *>(that_ptr + meta->offset),
-        reinterpret_cast<const void *>(this_ptr + meta->offset));
+  auto that_ptr = reinterpret_cast<uintptr_t>(manager->Allocate());
+  for (auto desc : manager->descriptions) {
+    if (desc) {
+      auto offset = manager->offsets[desc->id];
+      desc->copy_initialize(reinterpret_cast<void *>(that_ptr + offset),
+                            reinterpret_cast<const void *>(this_ptr + offset));
+    }
   }
 
   return reinterpret_cast<BlockMetaData *>(that_ptr);
@@ -118,10 +77,10 @@ BlockMetaData *BlockMetaData::Copy(void) const {
 // Hash all serializable meta-data contained within this generic meta-data.
 void BlockMetaData::Hash(HashFunction *hasher) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto meta : MetaDataInfos()) {
-    if (meta->hash) {
-      meta->hash(hasher,
-                 reinterpret_cast<const void *>(this_ptr + meta->offset));
+  for (auto desc : manager->descriptions) {
+    if (desc && desc->hash) {
+      auto offset = manager->offsets[desc->id];
+      desc->hash(hasher, reinterpret_cast<const void *>(this_ptr + offset));
     }
   }
 }
@@ -131,11 +90,12 @@ void BlockMetaData::Hash(HashFunction *hasher) const {
 bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  for (auto meta : MetaDataInfos()) {
-    if (meta->compare_equals) {  // Indexable.
-      auto this_meta = reinterpret_cast<const void *>(this_ptr + meta->offset);
-      auto that_meta = reinterpret_cast<const void *>(that_ptr + meta->offset);
-      if (!meta->compare_equals(this_meta, that_meta)) {
+  for (auto desc : manager->descriptions) {
+    if (desc && desc->compare_equals) {  // Indexable.
+      auto offset = manager->offsets[desc->id];
+      auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
+      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+      if (!desc->compare_equals(this_meta, that_meta)) {
         return false;
       }
     }
@@ -149,74 +109,87 @@ UnificationStatus BlockMetaData::CanUnifyWith(
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   auto can_unify = UnificationStatus::ACCEPT;
-  if (!HAS_UNIFIABLE_META) {
-    return can_unify;
-  }
-  for (auto meta : MetaDataInfos()) {
-    if (meta->can_unify) {  // Unifyable.
-      auto this_meta = reinterpret_cast<const void *>(this_ptr + meta->offset);
-      auto that_meta = reinterpret_cast<const void *>(that_ptr + meta->offset);
-      auto local_can_unify = meta->can_unify(this_meta, that_meta);
+  for (auto desc : manager->descriptions) {
+    if (desc && desc->can_unify) {  // Unifiable.
+      auto offset = manager->offsets[desc->id];
+      auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
+      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+      auto local_can_unify = desc->can_unify(this_meta, that_meta);
       can_unify = GRANARY_MAX(can_unify, local_can_unify);
     }
   }
   return can_unify;
 }
 
-namespace {
-
-// Storage space to hold the meta-data allocator.
-alignas(internal::SlabAllocator) struct {
-  uint8_t data[sizeof(internal::SlabAllocator)];
-} static META_ALLOCATOR_MEM;
-
-// Late-initialize the meta-data allocator.
-static void InitMetaDataAllocator(void) {
-  auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), META_SIZE);
-  auto remaining_size = GRANARY_ARCH_PAGE_FRAME_SIZE - offset;
-  auto max_num_allocs = remaining_size / META_SIZE;
-  new (&META_ALLOCATOR_MEM) internal::SlabAllocator(
-      max_num_allocs, offset, META_SIZE, META_SIZE);
-}
-
-// The actual allocator (as backed by the `META_ALLOCATOR_MEM` storage).
-static internal::SlabAllocator * const META_ALLOCATOR = \
-    reinterpret_cast<internal::SlabAllocator *>(&META_ALLOCATOR_MEM);
-
-}  // namespace
-
-// Dynamically allocate meta-data.
-void *BlockMetaData::operator new(std::size_t) {
-  void *address(META_ALLOCATOR->Allocate());
-  VALGRIND_MALLOCLIKE_BLOCK(address, META_SIZE, 0, 0);
-  return address;
-}
-
 // Dynamically free meta-data.
 void BlockMetaData::operator delete(void *address) {
-  META_ALLOCATOR->Free(address);
-  VALGRIND_FREELIKE_BLOCK(address, META_SIZE);
+  auto self = reinterpret_cast<BlockMetaData *>(address);
+  self->manager->Free(self);
 }
 
-// Initialize all meta-data. This finalizes the meta-data structures, which
-// determines the runtime layout of the packed meta-data structure.
-void InitMetaData(void) {
-  RegisterMetaData<CacheMetaData>();
+// Initialize an empty metadata manager.
+MetaDataManager::MetaDataManager(void)
+    : size(sizeof(BlockMetaData)),
+      is_finalized(false),
+      allocator() {
+  memset(&(descriptions[0]), 0, sizeof(descriptions));
+  memset(&(offsets[0]), 0, sizeof(offsets));
+}
 
-  CAN_REGISTER_META = false;
-
-  for (auto meta : MetaDataInfos()) {
-    if (META_SIZE) {
-      META_SIZE += GRANARY_ALIGN_FACTOR(META_SIZE, meta->align);
-    } else {
-      META_ALIGN = meta->align;
+// Register some meta-data with the meta-data manager. This is a no-op if the
+// meta-data has already been registered.
+void MetaDataManager::Register(MetaDataDescription *desc) {
+  if (!is_finalized) {
+    FineGrainedLocked locker(&next_description_id_lock);
+    if (-1 == desc->id) {
+      GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > next_description_id);
+      desc->id = next_description_id++;
     }
-    meta->offset = META_SIZE;
-    META_SIZE += meta->size;
+    descriptions[desc->id] = desc;
   }
+}
 
-  META_SIZE += GRANARY_ALIGN_FACTOR(META_SIZE, META_ALIGN);
-  InitMetaDataAllocator();
+// Allocate some meta-data. If the manager hasn't been finalized then this
+// returns `nullptr`.
+BlockMetaData *MetaDataManager::Allocate(void) {
+  if (GRANARY_UNLIKELY(!is_finalized)) {
+    Finalize();
+    InitAllocator();
+  }
+  auto meta = new (allocator->Allocate()) BlockMetaData(this);
+  VALGRIND_MALLOCLIKE_BLOCK(meta, size, 0, 0);
+  return meta;
+}
+
+// Free some meta-data. This is a no-op if the manager hasn't been finalized.
+void MetaDataManager::Free(BlockMetaData *meta) {
+  GRANARY_ASSERT(is_finalized);
+  GRANARY_ASSERT(this == meta->manager);
+  allocator->Free(meta);
+  VALGRIND_FREELIKE_BLOCK(meta, size);
+}
+
+
+// Finalizes the meta-data structures, which determines the runtime layout
+// of the packed meta-data structure.
+void MetaDataManager::Finalize(void) {
+  is_finalized = true;
+  for (auto desc : descriptions) {
+    if (desc) {
+      size += GRANARY_ALIGN_FACTOR(size, desc->align);
+      offsets[desc->id] = size;
+      size += desc->size;
+    }
+  }
+  size += GRANARY_ALIGN_FACTOR(size, alignof(BlockMetaData));
+}
+
+// Initialize the allocator for meta-data managed by this manager.
+void MetaDataManager::InitAllocator(void) {
+  auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
+  auto remaining_size = GRANARY_ARCH_PAGE_FRAME_SIZE - offset;
+  auto max_num_allocs = remaining_size / size;
+  allocator.Construct(max_num_allocs, offset, size, size);
 }
 
 }  // namespace granary

@@ -20,6 +20,7 @@ EXPORT_HEADERS = [
   "granary/operand/match.h",
   "granary/operand/operand.h",
   "granary/breakpoint.h",
+  "granary/client.h",
   "granary/logging.h",
   "granary/metadata.h",
   "granary/module.h",

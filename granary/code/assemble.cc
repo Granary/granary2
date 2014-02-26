@@ -252,7 +252,7 @@ static int Resize(DecodedBasicBlock *blocks) {
 }
 
 // Assemble the edges of a local CFG.
-static void AssembleEdges(EnvironmentInterface *env,
+static void AssembleEdges(ContextInterface *env,
                           LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
@@ -267,7 +267,7 @@ static void AssembleEdges(EnvironmentInterface *env,
 }  // namespace
 
 // Assemble the local control-flow graph into
-void Assemble(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+void Assemble(ContextInterface *env, LocalControlFlowGraph *cfg,
               CodeAllocator *cache_code_allocator) {
   PreprocessBlocks(cfg, cache_code_allocator);
   AssembleEdges(env, cfg);

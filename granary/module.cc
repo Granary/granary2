@@ -252,7 +252,7 @@ ModuleManager::ModuleManager(void)
     : modules(ATOMIC_VAR_INIT(nullptr)) {}
 
 // Find a module given a program counter.
-GRANARY_CONST Module *ModuleManager::FindModuleByPC(AppPC pc) {
+GRANARY_CONST Module *ModuleManager::FindByPC(AppPC pc) {
   for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
     if (module->Contains(pc)) {
       return module;
@@ -262,7 +262,7 @@ GRANARY_CONST Module *ModuleManager::FindModuleByPC(AppPC pc) {
 }
 
 // Find a module given its name.
-GRANARY_CONST Module *ModuleManager::FindModuleByName(const char *name) {
+GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
   for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
     if (StringsMatch(module->name, name)) {
       return module;
@@ -272,7 +272,7 @@ GRANARY_CONST Module *ModuleManager::FindModuleByName(const char *name) {
 }
 
 // Register a module with the module tracker.
-void ModuleManager::RegisterModule(Module *module) {
+void ModuleManager::Register(Module *module) {
   granary_break_on_fault_if(nullptr != module->next ||
                             modules.load(std::memory_order_relaxed) == module);
   Module *next(nullptr);

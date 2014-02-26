@@ -56,14 +56,14 @@ make clean all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 #### User Space
 
 ```basemake
-make clean_tools tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs"
-./bin/debug_user/grr --tools=follow_jumps,count_bbs,print_bbs -- ls
+make clean_clients clients GRANARY_CLIENTS="follow_jumps print_bbs"
+./bin/debug_user/grr --clients=follow_jumps,print_bbs --tools=follow_jumps,print_bbs -- ls
 ```
 
 #### Kernel Space
 
-If you are compiling Granary tools against a custom kernel, run:
+If you are compiling Granary clients (and their tools) against a custom kernel, run:
 
 ```basemake
-make clean_tools tools GRANARY_TOOLS="follow_jumps count_bbs print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
+make clean_clients clients GRANARY_CLIENTS="follow_jumps print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 ```

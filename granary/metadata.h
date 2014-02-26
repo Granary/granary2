@@ -4,8 +4,10 @@
 #define GRANARY_METADATA_H_
 
 #include "granary/base/base.h"
+#include "granary/base/container.h"
 #include "granary/base/new.h"
 #include "granary/base/hash.h"
+#include "granary/base/operator.h"
 #include "granary/base/type_trait.h"
 #include "granary/base/types.h"
 
@@ -13,12 +15,8 @@
 // libraries.
 #ifdef GRANARY_EXTERNAL
 # define GRANARY_SHARE_METADATA(meta_class) \
-    namespace detail { \
-    namespace meta { \
     template <> \
-    const MetaDataInfo *GetInfo<meta_class>(void); \
-    } \
-    }
+    meta_class *MetaDataCast<meta_class *>(BlockMetaData *meta);
 #else
 # define GRANARY_SHARE_METADATA(meta_class)
 #endif
@@ -27,6 +25,7 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
+GRANARY_INTERNAL_DEFINITION class MetaDataManager;
 
 // Serializable meta-data (i.e. immutable once committed to the code cache)
 // must implement the `Hash` and `Equals` methods, and extend this template
@@ -42,8 +41,9 @@ class IndexableMetaData {
 // must extend this base class.
 class MutableMetaData {};
 
+// Used to decide whether two pieces of unifiable meta-data can unify.
 enum class UnificationStatus {
-  ACCEPT = 0,  // Unifies perfectly.
+  ACCEPT = 0, // Unifies perfectly.
   ADAPT = 2,  // Does not unify perfectly, but can be adapted.
   REJECT = 1  // Cannot be unified / adapted.
 };
@@ -84,66 +84,6 @@ struct CacheMetaData : public MutableMetaData {
   //            should go in their own cache data structures.
 };
 #endif  // GRANARY_INTERNAL
-
-namespace detail {
-namespace meta {
-
-// Describes some generic meta-data in a way that Granary understands.
-struct MetaDataInfo {
-  GRANARY_CONST MetaDataInfo * GRANARY_CONST next;
-
-  // Where in the generic meta-data is this specific meta-data.
-  const size_t size;
-  const size_t align;
-  GRANARY_CONST size_t offset;
-  GRANARY_CONST bool is_registered;
-
-  // Generic ways for Granary to interact with this meta-data.
-  void (* const initialize)(void *);
-  void (* const copy_initialize)(void *, const void *);
-  void (* const destroy)(void *);
-  void (* const hash)(HashFunction *, const void *);
-  bool (* const compare_equals)(const void *, const void *);
-  UnificationStatus (* const can_unify)(const void *, const void *);
-
-} __attribute__((packed));
-
-// Initialize some meta-data.
-template <typename T>
-void Initialize(void *mem) {
-  new (mem) T;
-}
-
-// Initialize some meta-data.
-template <typename T>
-void CopyInitialize(void *mem, const void *that) {
-  new (mem) T(*reinterpret_cast<const T *>(that));
-}
-
-// Destroy some meta-data.
-template <typename T>
-void Destroy(void *mem) {
-  reinterpret_cast<T *>(mem)->~T();
-}
-
-// Hash some meta-data.
-template <typename T>
-void Hash(HashFunction *hasher, const void *mem) {
-  reinterpret_cast<const T *>(mem)->Hash(hasher);
-}
-
-// Compare some meta-data for equality.
-template <typename T>
-bool CompareEquals(const void *a, const void *b) {
-  return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
-}
-
-// Compare some meta-data for equality.
-template <typename T>
-UnificationStatus CanUnify(const void *a, const void *b) {
-  return reinterpret_cast<const T *>(a)->CanUnifyWith(
-      reinterpret_cast<const T *>(b));
-}
 
 // Describes whether some type is an indexable meta-data type.
 template <typename T>
@@ -194,53 +134,105 @@ struct IsMetaDataPointer {
 };
 
 template <typename T, bool kIsIndexable, bool kIsMutable, bool kIsUnifiable>
-struct MetaDataInfoStorage;
+struct MetaDataDescriptor;
 
-template <typename T>
-struct MetaDataInfoStorage<T, true, false, false> {
+// Describes some generic meta-data in a way that Granary understands.
+class MetaDataDescription {
  public:
-  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
+  // Globally unique ID for this meta-data description. Granary internally
+  // uses this ID to operate with the same meta-data, but registered within
+  // different environments.
+  GRANARY_CONST int id;
+
+  // Where in the generic meta-data is this specific meta-data.
+  const size_t size;
+  const size_t align;
+
+  // Virtual table of operations on the different classes of meta-data.
+  void (* const initialize)(void *);
+  void (* const copy_initialize)(void *, const void *);
+  void (* const destroy)(void *);
+  void (* const hash)(HashFunction *, const void *);
+  bool (* const compare_equals)(const void *, const void *);
+  UnificationStatus (* const can_unify)(const void *, const void *);
+
+  template <typename T>
+  static constexpr MetaDataDescription *Get(void) {
+    return &(MetaDataDescriptor<
+      T,
+      IsIndexableMetaData<T>::RESULT,
+      IsMutableMetaData<T>::RESULT,
+      IsUnifiableMetaData<T>::RESULT
+    >::kDescription);
+  }
+} __attribute__((packed));
+
+// Descriptor for some indexable meta-data.
+template <typename T>
+struct MetaDataDescriptor<T, true, false, false> {
+ public:
+  static MetaDataDescription kDescription GRANARY_EARLY_GLOBAL;
 };
 
+// Descriptor for some mutable meta-data.
 template <typename T>
-struct MetaDataInfoStorage<T, false, true, false> {
+struct MetaDataDescriptor<T, false, true, false> {
  public:
-  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
+  static MetaDataDescription kDescription GRANARY_EARLY_GLOBAL;
 };
 
+// Descriptor for some unifiable meta-data.
 template <typename T>
-struct MetaDataInfoStorage<T, false, false, true> {
+struct MetaDataDescriptor<T, false, false, true> {
  public:
-  static MetaDataInfo kInfo GRANARY_EARLY_GLOBAL;
+  static MetaDataDescription kDescription GRANARY_EARLY_GLOBAL;
 };
+
+namespace detail {
+
+// Hash some meta-data.
+template <typename T>
+void Hash(HashFunction *hasher, const void *mem) {
+  reinterpret_cast<const T *>(mem)->Hash(hasher);
+}
+
+// Compare some meta-data for equality.
+template <typename T>
+bool CompareEquals(const void *a, const void *b) {
+  return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
+}
+
+// Compare some meta-data for equality.
+template <typename T>
+UnificationStatus CanUnify(const void *a, const void *b) {
+  return reinterpret_cast<const T *>(a)->CanUnifyWith(
+      reinterpret_cast<const T *>(b));
+}
+}  // namespace detail
 
 // Indexable.
 template <typename T>
-MetaDataInfo MetaDataInfoStorage<T, true, false, false>::kInfo = {
-    nullptr,
+MetaDataDescription MetaDataDescriptor<T, true, false, false>::kDescription = {
+    -1,
     sizeof(T),
     alignof(T),
-    0xDEADBEEFUL,
-    false,
-    &(Initialize<T>),
-    &(CopyInitialize<T>),
-    &(Destroy<T>),
-    &(Hash<T>),
-    &(CompareEquals<T>),
+    &(Construct<T>),
+    &(CopyConstruct<T>),
+    &(Destruct<T>),
+    &(detail::Hash<T>),
+    &(detail::CompareEquals<T>),
     nullptr
 };
 
 // Mutable.
 template <typename T>
-MetaDataInfo MetaDataInfoStorage<T, false, true, false>::kInfo = {
-    nullptr,
+MetaDataDescription MetaDataDescriptor<T, false, true, false>::kDescription = {
+    -1,
     sizeof(T),
     alignof(T),
-    0xDEADBEEFUL,
-    false,
-    &(Initialize<T>),
-    &(CopyInitialize<T>),
-    &(Destroy<T>),
+    &(Construct<T>),
+    &(CopyConstruct<T>),
+    &(Destruct<T>),
     nullptr,
     nullptr,
     nullptr
@@ -248,96 +240,123 @@ MetaDataInfo MetaDataInfoStorage<T, false, true, false>::kInfo = {
 
 // Unifyable.
 template <typename T>
-MetaDataInfo MetaDataInfoStorage<T, false, false, true>::kInfo = {
-    nullptr,
+MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
+    -1,
     sizeof(T),
     alignof(T),
-    0xDEADBEEFUL,
-    false,
-    &(Initialize<T>),
-    &(CopyInitialize<T>),
-    &(Destroy<T>),
+    &(Construct<T>),
+    &(CopyConstruct<T>),
+    &(Destruct<T>),
     nullptr,
     nullptr,
-    &(CanUnify<T>)
+    &(detail::CanUnify<T>)
 };
 
-// Get the meta-data info for some indexable meta-data.
-template <typename T>
-const MetaDataInfo *GetInfo(void) {
-  return &(MetaDataInfoStorage<
-      T,
-      IsIndexableMetaData<T>::RESULT,
-      IsMutableMetaData<T>::RESULT,
-      IsUnifiableMetaData<T>::RESULT
-  >::kInfo);
-}
 
-// Register some meta-data with Granary.
-void RegisterMetaData(const MetaDataInfo *meta);
-
-// Get some specific meta-data from some generic meta-data.
-void *GetMetaData(const MetaDataInfo *info, BlockMetaData *meta);
-
-}  // namespace meta
-}  // namespace detail
-
-// Register some meta-data with Granary.
-template <typename T>
-inline void RegisterMetaData(void) {
-  detail::meta::RegisterMetaData(detail::meta::GetInfo<T>());
-}
-
-// Cast some generic meta-data into some specific meta-data.
-template <
-  typename T,
-  typename EnableIf<detail::meta::IsMetaDataPointer<T>::RESULT>::Type=0
->
-inline T MetaDataCast(BlockMetaData *meta) {
-  return reinterpret_cast<T>(
-      detail::meta::GetMetaData(
-          detail::meta::GetInfo<typename RemovePointer<T>::Type>(), meta));
-}
-
-#ifdef GRANARY_INTERNAL
 // Meta-data about a basic block.
 class BlockMetaData {
  public:
+  BlockMetaData(void) = delete;
+
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  BlockMetaData(void) GRANARY_EXTERNAL_DELETE;
+  GRANARY_INTERNAL_DEFINITION BlockMetaData(MetaDataManager *manager_);
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
-  ~BlockMetaData(void);
+  ~BlockMetaData(void) GRANARY_EXTERNAL_DELETE;
 
   // Create a copy of some meta-data and return a new instance of the copied
   // meta-data.
-  BlockMetaData *Copy(void) const;
+  GRANARY_INTERNAL_DEFINITION BlockMetaData *Copy(void) const;
 
   // Hash all serializable meta-data contained within this generic meta-data.
-  void Hash(HashFunction *hasher) const;
+  GRANARY_INTERNAL_DEFINITION void Hash(HashFunction *hasher) const;
 
   // Compare the serializable components of two generic meta-data instances for
   // strict equality.
-  bool Equals(const BlockMetaData *meta) const;
+  GRANARY_INTERNAL_DEFINITION bool Equals(const BlockMetaData *meta) const;
 
   // Check to see if this meta-data can unify with some other generic meta-data.
+  GRANARY_INTERNAL_DEFINITION
   UnificationStatus CanUnifyWith(const BlockMetaData *meta) const;
 
-  // Dynamically allocate and free meta-data. These operations are only
-  // valid *after* `granary::InitMetaData`, as that sets up the meta-data
-  // allocator based on the available meta-data descriptions.
-  static void *operator new(std::size_t);
-  static void operator delete(void *);
+  // Cast some generic meta-data into some specific meta-data.
+  void *Cast(MetaDataDescription *desc);
 
- private:
+  // Free this metadata.
+  GRANARY_INTERNAL_DEFINITION static void operator delete(void *address);
+
+  // Manager for this meta-data instance.
+  GRANARY_INTERNAL_DEFINITION MetaDataManager * const manager;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
 
-// Initialize all meta-data. This finalizes the meta-data structures, which
-// determines the runtime layout of the packed meta-data structure.
-void InitMetaData(void);
+// Cast some generic meta-data into some specific meta-data.
+template <typename T, typename EnableIf<IsMetaDataPointer<T>::RESULT>::Type=0>
+inline T MetaDataCast(BlockMetaData *meta) {
+  typedef typename RemovePointer<T>::Type M;
+  return reinterpret_cast<T>(meta->Cast(MetaDataDescription::Get<M>()));
+}
+
+#ifdef GRANARY_INTERNAL
+// Manages all metadata within a particular environment.
+class MetaDataManager {
+ public:
+  // Initialize an empty meta-data manager.
+  MetaDataManager(void);
+
+  // Register some meta-data with Granary. This is a convenience method around
+  // the `Register` method that operates directly on a meta-data description.
+  template <typename T>
+  inline void Register(void) {
+    Register(const_cast<MetaDataDescription *>(MetaDataDescription::Get<T>()));
+  }
+
+  // Register some meta-data with Granary.
+  void Register(MetaDataDescription *desc);
+
+  // Allocate some meta-data. If the manager hasn't been finalized then this
+  // returns nullptr.
+  BlockMetaData *Allocate(void);
+
+  void Free(BlockMetaData *meta);
+
+ private:
+  friend class BlockMetaData;
+
+  enum {
+    // Upper bound on the number of registerable meta-data instances.
+    MAX_NUM_MANAGED_METADATAS = 32
+  };
+
+  // Finalizes the meta-data structures, which determines the runtime layout
+  // of the packed meta-data structure. Once
+  void Finalize(void);
+
+  // Initialize the allocator for meta-data managed by this manager.
+  void InitAllocator(void);
+
+  // Size of the overall metadata structure managed by this manager.
+  size_t size;
+
+  // Whether or not this metadata has been finalized.
+  bool is_finalized;
+
+  // Info on all registered meta-data within this manager. These are indexed
+  // by the `MetaDataDescription::id` field.
+  MetaDataDescription *descriptions[MAX_NUM_MANAGED_METADATAS];
+
+  // Offsets of each meta-data object within the block meta-data block. These
+  // are indexed by the `MetaDataDescription::id` field.
+  size_t offsets[MAX_NUM_MANAGED_METADATAS];
+
+  // Slab allocator for allocating meta-data objects.
+  Container<internal::SlabAllocator> allocator;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(MetaDataManager);
+};
 
 #endif  // GRANARY_INTERNAL
 

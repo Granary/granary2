@@ -75,7 +75,7 @@ extern "C" {
 int main(int argc, const char *argv[]) {
   granary::InitDebug();
   granary::InitOptions(argc, argv);
-  granary::Init(granary::INIT_DYNAMIC, granary::GetGranaryPath(argv[0]));
+  granary::Init(granary::GetGranaryPath(argv[0]));
   return 0;
 }
 }  // extern C

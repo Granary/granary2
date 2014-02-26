@@ -7,23 +7,17 @@ namespace granary {
 
 #ifdef GRANARY_INTERNAL
 
-enum InitKind {
-  INIT_DYNAMIC,
-  INIT_STATIC
-};
-
 // Initialize Granary.
-void Init(InitKind kind, const char *granary_path);
-
-#endif  // GRANARY_INTERNAL
+void Init(const char *granary_path);
 
 #define GRANARY_INIT(...) \
-  __attribute__((used, constructor(999))) \
-  static void GRANARY_CAT(InitTool_GLOBAL__I_, GRANARY_UNIQUE_SYMBOL)(void) { \
+  __attribute__((used, constructor(998))) \
+  static void GRANARY_CAT(Init_GLOBAL__I_, GRANARY_UNIQUE_SYMBOL)(void) { \
     GRANARY_USING_NAMESPACE granary; \
     __VA_ARGS__ \
   } \
 
+#endif  // GRANARY_INTERNAL
 }  // namespace granary
 
 #endif  // GRANARY_INIT_H_

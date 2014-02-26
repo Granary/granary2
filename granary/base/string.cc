@@ -26,12 +26,12 @@ unsigned long CopyString(char *buffer, unsigned long buffer_len,
     buffer[i] = str[i];
   }
 
+  buffer[buffer_len - 1] = '\0';
   if (i < buffer_len) {
     buffer[i] = '\0';
   } else {
-    buffer[buffer_len - 1] = '\0';
-    i = buffer_len - 2;
-    granary_break_on_fault_if(2 > buffer_len);
+    GRANARY_ASSERT(2 <= buffer_len);
+    i = buffer_len - 2;\
   }
 
   return i;

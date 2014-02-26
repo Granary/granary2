@@ -10,6 +10,7 @@
 
 #include "granary/code/instrument.h"
 
+#include "granary/context.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
@@ -20,23 +21,22 @@ namespace {
 
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic blocks.
-static void InstrumentControlFlow(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
-                                  BlockMetaData *meta) {
-  BlockFactory materializer(env, cfg);
-  materializer.MaterializeInitialBlock(meta);
-  for (;; materializer.MaterializeRequestedBlocks()) {
-    for (auto tool : Tools()) {
-      tool->InstrumentControlFlow(&materializer, cfg);
+static void InstrumentControlFlow(Tool *tools,
+                                  BlockFactory *factory,
+                                  LocalControlFlowGraph *cfg) {
+  for (;; factory->MaterializeRequestedBlocks()) {
+    for (auto tool : ToolIterator(tools)) {
+      tool->InstrumentControlFlow(factory, cfg);
     }
-    if (!materializer.HasPendingMaterializationRequest()) {
+    if (!factory->HasPendingMaterializationRequest()) {
       break;
     }
   }
 }
 
 // Apply LCFG-wide instrumentation for every tool.
-static void InstrumentBlocks(LocalControlFlowGraph *cfg) {
-  for (auto tool : Tools()) {
+static void InstrumentBlocks(Tool *tools, LocalControlFlowGraph *cfg) {
+  for (auto tool : ToolIterator(tools)) {
     tool->InstrumentBlocks(cfg);
   }
 }
@@ -45,9 +45,9 @@ static void InstrumentBlocks(LocalControlFlowGraph *cfg) {
 //
 // Note: This applies tool-specific instrumentation for all tools to a single
 //       block before moving on to the next block in the LCFG.
-static void InstrumentBlock(LocalControlFlowGraph *cfg) {
+static void InstrumentBlock(Tool *tools, LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
-    for (auto tool : Tools()) {
+    for (auto tool : ToolIterator(tools)) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
       if (decoded_block) {
         tool->InstrumentBlock(decoded_block);
@@ -68,13 +68,19 @@ static uint32_t HashMetaData(BlockMetaData *meta) {
 
 // Take over a program's execution by replacing a return address with an
 // instrumented return address.
-void Instrument(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+void Instrument(ContextInterface *context,
+                LocalControlFlowGraph *cfg,
                 BlockMetaData *meta) {
   auto meta_hash = HashMetaData(meta);
 
-  InstrumentControlFlow(env, cfg, meta);
-  InstrumentBlocks(cfg);
-  InstrumentBlock(cfg);
+  BlockFactory factory(context, cfg);
+  factory.MaterializeInitialBlock(meta);
+
+  auto tools = context->AllocateTools();
+
+  InstrumentControlFlow(tools, &factory, cfg);
+  InstrumentBlocks(tools, cfg);
+  InstrumentBlock(tools, cfg);
 
   // Verify that the indexable meta-data for the entry basic block has not
   // changed during the instrumentation process.

@@ -24,9 +24,9 @@ class JumpFollower : public Tool {
       }
     }
   }
-} static TRACER;
+};
 
 // Initialize the `follow_jumps` tool.
-GRANARY_INIT({
-  RegisterTool("follow_jumps", &TRACER);
+GRANARY_CLIENT_INIT({
+  RegisterTool<JumpFollower>("follow_jumps");
 })

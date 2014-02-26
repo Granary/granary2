@@ -13,10 +13,10 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-class EnvironmentInterface;
+class ContextInterface;
 
 // Must be implemented in each Granary driver.
-CachePC AssembleEdge(EnvironmentInterface *env, BlockMetaData *meta);
+CachePC AssembleEdge(ContextInterface *env, BlockMetaData *meta);
 
 }  // namespace granary
 

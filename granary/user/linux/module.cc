@@ -8,8 +8,9 @@
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
+
+#include "granary/client.h"
 #include "granary/module.h"
-#include "granary/tool.h"
 
 namespace granary {
 namespace {
@@ -137,8 +138,8 @@ static ModuleKind KindFromPath(const char *path, int num_modules) {
     auto name = PathToName(path, name_buffer);
     if (StringsMatch("granary", name)) {
       return ModuleKind::GRANARY;
-    } else if (FindTool(name)) {
-      return ModuleKind::GRANARY_TOOL;
+    } else if (ClientIsRegistered(name)) {
+      return ModuleKind::GRANARY_CLIENT;
     }
   }
   return ModuleKind::SHARED_LIBRARY;
@@ -176,10 +177,10 @@ static void ParseMapsFile(ModuleManager *manager) {
       continue;
     }
 
-    auto module = manager->FindModuleByName(token);
+    auto module = manager->FindByName(token);
     if (!module) {
       module = new Module(KindFromPath(token, num_found_modules++), token);
-      manager->RegisterModule(module);
+      manager->Register(module);
     }
 
     module->AddRange(module_base, module_limit, module_offset, module_perms);
@@ -190,7 +191,7 @@ static void ParseMapsFile(ModuleManager *manager) {
 
 // Find all built-in modules. In user space, this will go and find things like
 // libc. In kernel space, this will identify already loaded modules.
-void ModuleManager::FindBuiltInModules(void) {
+void ModuleManager::RegisterAllBuiltIn(void) {
   ParseMapsFile(this);
 }
 

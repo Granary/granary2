@@ -4,13 +4,13 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/environment.h"
+#include "granary/context.h"
 
 namespace granary {
 
 // Annotates the instruction, or adds an annotated instruction into the
-// instruction list. This returns the first
-void Environment::AnnotateInstruction(Instruction *instr) {
+// instruction list.
+void Context::AnnotateInstruction(Instruction *instr) {
   GRANARY_UNUSED(instr);
 }
 

@@ -6,13 +6,14 @@
 #include "granary/base/base.h"
 
 #define GRANARY_FLAG_NAME(name) GRANARY_CAT(FLAG_, name)
+#define GRANARY_INTERNAL_FLAG_NAME(name) GRANARY_CAT(INTERNAL_FLAG_, name)
 
 #define GRANARY_REGISTER_OPTION(name, parser, docstring) \
   static granary::Option GRANARY_CAT(OPTION_, name) = { \
       nullptr, \
       GRANARY_TO_STRING(name), \
       &granary::detail::parser, \
-      reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)), \
+      reinterpret_cast<void *>(&GRANARY_INTERNAL_FLAG_NAME(name)), \
       docstring \
   }; \
   __attribute__((constructor(101), used)) \
@@ -21,25 +22,34 @@
   }
 
 #define GRANARY_DEFINE_string(name, default_value, docstring) \
-  const char *GRANARY_FLAG_NAME(name) = (default_value); \
+  namespace { \
+  static const char *GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  } \
+  const char * const &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
   GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring)
 
 #define GRANARY_DECLARE_string(name) \
-  extern const char *GRANARY_FLAG_NAME(name);
+  extern const char * const &GRANARY_FLAG_NAME(name);
 
 #define GRANARY_DEFINE_bool(name, default_value, docstring) \
-  bool GRANARY_FLAG_NAME(name) = (default_value); \
+  namespace { \
+  static bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  } \
+  const bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
   GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring)
 
 #define GRANARY_DECLARE_bool( name) \
-  extern bool GRANARY_FLAG_NAME(name);
+  extern const bool &GRANARY_FLAG_NAME(name);
 
 #define GRANARY_DEFINE_non_negative_int(name, default_value, docstring) \
-  int GRANARY_FLAG_NAME(name) = (default_value); \
+  namespace { \
+  static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  } \
+  const int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
   GRANARY_REGISTER_OPTION(name, ParseNonNegativeIntOption, docstring)
 
 #define GRANARY_DECLARE_non_negative_int( name) \
-  extern int GRANARY_FLAG_NAME(name);
+  extern const int &GRANARY_FLAG_NAME(name);
 
 namespace granary {
 

@@ -13,6 +13,7 @@ void granary_break_on_decode(const void *);
 inline void granary_break_on_fault_if(bool cond) {
   if (cond) {
     granary_break_on_fault();
+    __builtin_unreachable();
   }
 }
 

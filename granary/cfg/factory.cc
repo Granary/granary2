@@ -12,7 +12,7 @@
 #include "granary/ir/lir.h"
 
 #include "granary/driver.h"
-#include "granary/environment.h"
+#include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"
 
@@ -21,9 +21,10 @@ namespace granary {
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the LCFG
 // is needed so that blocks can be added.
-BlockFactory::BlockFactory(EnvironmentInterface *env_, LocalControlFlowGraph *cfg_)
+BlockFactory::BlockFactory(ContextInterface *context_,
+                           LocalControlFlowGraph *cfg_)
     : meta_data_filter(),
-      env(env_),
+      context(context_),
       cfg(cfg_),
       has_pending_request(false) {}
 
@@ -50,7 +51,7 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 namespace {
 
 // Convert a decoded instruction into the internal Granary instruction IR.
-static Instruction *MakeInstruction(EnvironmentInterface *env,
+static Instruction *MakeInstruction(ContextInterface *context,
                                     driver::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionReturn() ||
@@ -58,11 +59,11 @@ static Instruction *MakeInstruction(EnvironmentInterface *env,
         instr->IsSystemReturn()) {
       return new ControlFlowInstruction(instr, new ReturnBasicBlock);
     } else {
-      auto meta = env->AllocateEmptyBlockMetaData();
+      auto meta = context->AllocateEmptyBlockMetaData();
       return new ControlFlowInstruction(instr, new IndirectBasicBlock(meta));
     }
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    auto meta = env->AllocateBlockMetaData(instr->BranchTarget());
+    auto meta = context->AllocateBlockMetaData(instr->BranchTarget());
     return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));
   } else {
     return new NativeInstruction(instr);
@@ -94,7 +95,7 @@ void BlockFactory::AddFallThroughInstruction(
       last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr->IsUnconditionalJump()) {
       last_instr->InsertAfter(std::unique_ptr<Instruction>(
-          MakeInstruction(env, dinstr.release())));
+          MakeInstruction(context, dinstr.release())));
     } else {
       last_instr->InsertAfter(lir::Jump(this, pc));
     }
@@ -114,8 +115,8 @@ void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
       return;
     }
     instr = instr->InsertAfter(std::unique_ptr<Instruction>(
-        MakeInstruction(env, dinstr)));
-    env->AnnotateInstruction(instr);
+        MakeInstruction(context, dinstr)));
+    context->AnnotateInstruction(instr);
   }
   AddFallThroughInstruction(&decoder, instr, pc);
 }
@@ -285,7 +286,7 @@ void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
 std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
     AppPC start_pc) {
   return std::unique_ptr<DirectBasicBlock>(
-      new DirectBasicBlock(env->AllocateBlockMetaData(start_pc)));
+      new DirectBasicBlock(context->AllocateBlockMetaData(start_pc)));
 }
 
 }  // namespace granary

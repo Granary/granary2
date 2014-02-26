@@ -132,11 +132,6 @@ static int find_symbols(void *data, const char *name,
   return 0;
 }
 
-// granary::LoadTools(char const*).
-void _ZN7granary9LoadToolsEPKc(const char *tool_path) {
-  (void) tool_path;
-}
-
 // granary::Log(granary::LogLevel, char const*, ...)
 int _ZN7granary3LogENS_8LogLevelEPKcz(int log_level, const char *format, ...) {
   (void) log_level;

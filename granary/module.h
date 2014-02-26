@@ -59,7 +59,7 @@ class ModuleOffset {
 // about modules that contain executable code.
 enum class ModuleKind {
   GRANARY,
-  GRANARY_TOOL,
+  GRANARY_CLIENT,
   GRANARY_CODE_CACHE,
   KERNEL,
   PROGRAM = KERNEL,
@@ -134,7 +134,7 @@ class Module {
   GRANARY_INTERNAL_DEFINITION
   internal::ModuleAddressRange *AddRange(internal::ModuleAddressRange *range);
 
-  // The kind of this module (e.g. granary, tool, kernel, etc.).
+  // The kind of this module (e.g. granary, client, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
 
   // Name/path of this module.
@@ -204,19 +204,19 @@ class ModuleManager {
   ModuleManager(void) GRANARY_EXTERNAL_DELETE;
 
   // Find a module given a program counter.
-  GRANARY_CONST Module *FindModuleByPC(AppPC pc);
+  GRANARY_CONST Module *FindByPC(AppPC pc);
 
   // Find a module given its name.
-  GRANARY_CONST Module *FindModuleByName(const char *name);
+  GRANARY_CONST Module *FindByName(const char *name);
 
   // Register a module with the module tracker.
-  GRANARY_INTERNAL_DEFINITION void RegisterModule(Module *module);
+  GRANARY_INTERNAL_DEFINITION void Register(Module *module);
 
   // Find all built-in modules. In user space, this will go and find things like
   // libc. In kernel space, this will identify already loaded modules.
   //
   // This function should only be invoked once per `ModuleManager` instance.
-  GRANARY_INTERNAL_DEFINITION void FindBuiltInModules(void);
+  GRANARY_INTERNAL_DEFINITION void RegisterAllBuiltIn(void);
 
  private:
   // Linked list of modules. Modules in the list are stored in no particular

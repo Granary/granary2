@@ -12,10 +12,10 @@ namespace granary {
 // Forward declarations.
 class LocalControlFlowGraph;
 class CodeAllocator;
-class EnvironmentInterface;
+class ContextInterface;
 
 // Assemble the local control-flow graph.
-void Assemble(EnvironmentInterface *env, LocalControlFlowGraph *cfg,
+void Assemble(ContextInterface *env, LocalControlFlowGraph *cfg,
               CodeAllocator *cache_code_allocator);
 
 }  // namespace granary

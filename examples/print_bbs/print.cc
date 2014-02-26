@@ -23,8 +23,6 @@ GRANARY_DEFINE_bool(print_bb_offset, false,
 static LogLevel kStream(LogOutput);
 
 // Simple tool for printing out the addresses of basic blocks.
-//
-// TODO(pag): Relativize the printed addresses into module offsets.
 class BBPrinter : public Tool {
  public:
   virtual ~BBPrinter(void) = default;
@@ -58,10 +56,10 @@ class BBPrinter : public Tool {
     }
 
   }
-} static PRINTER;
+};
 
 // Initialize the `print_bbs` tool.
-GRANARY_INIT({
-  RegisterTool("print_bbs", &PRINTER);
+GRANARY_CLIENT_INIT({
+  RegisterTool<BBPrinter>("print_bbs");
   kStream = FLAG_print_stderr ? LogWarning : LogOutput;
 })

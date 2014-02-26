@@ -3,9 +3,11 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
+
 #include "granary/kernel/linux/module.h"
+
+#include "granary/client.h"
 #include "granary/module.h"
-#include "granary/tool.h"
 
 namespace granary {
 
@@ -25,11 +27,11 @@ static ModuleKind GetModuleKind(KernelModule *mod) {
       return ModuleKind::GRANARY;
 
     case KernelModule::KERNEL_MODULE_TOOL:
-      return ModuleKind::GRANARY_TOOL;
+      return ModuleKind::GRANARY_CLIENT;
 
     case KernelModule::KERNEL_MODULE:
-      if (FindTool(mod->name)) {
-        return ModuleKind::GRANARY_TOOL;
+      if (ClientIsRegistered(mod->name)) {
+        return ModuleKind::GRANARY_CLIENT;
       } else {
         return ModuleKind::KERNEL_MODULE;
       }
@@ -43,7 +45,7 @@ static ModuleKind GetModuleKind(KernelModule *mod) {
 
 // Find all built-in modules. In user space, this will go and find things like
 // libc. In kernel space, this will identify already loaded modules.
-void ModuleManager::FindBuiltInModules(void) {
+void ModuleManager::RegisterAllBuiltIn(void) {
   for (auto mod : KernelModuleIterator(GRANARY_KERNEL_MODULES)) {
     auto module = new Module(GetModuleKind(mod), mod->name);
     mod->seen_by_granary = 1;
@@ -52,7 +54,7 @@ void ModuleManager::FindBuiltInModules(void) {
         mod->core_text_end,
         0,
         internal::MODULE_EXECUTABLE | internal::MODULE_READABLE);
-    RegisterModule(module);
+    Register(module);
   }
 }
 

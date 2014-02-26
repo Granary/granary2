@@ -10,7 +10,7 @@
 namespace granary {
 
 // Forward declarations.
-class EnvironmentInterface;
+class ContextInterface;
 class LocalControlFlowGraph;
 class BasicBlock;
 class DirectBasicBlock;
@@ -62,7 +62,8 @@ class BlockFactory {
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit BlockFactory(EnvironmentInterface *env_, LocalControlFlowGraph *cfg_);
+  explicit BlockFactory(ContextInterface *context_,
+                        LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
@@ -136,7 +137,7 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION BloomFilter<256> meta_data_filter;
 
   // Then environment in which we're decoding.
-  GRANARY_INTERNAL_DEFINITION EnvironmentInterface *env;
+  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
 
   // The LCFG into which blocks are materialized.
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;

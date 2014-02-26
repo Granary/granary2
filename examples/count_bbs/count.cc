@@ -9,6 +9,8 @@ GRANARY_DEFINE_bool(count_execs, false,
     "meaningful for static instrumentation. By default, `count_bbs` does not "
     "count the number of executions of each basic block.")
 
+namespace {
+
 // Runtime block execution counter.
 class BlockCounter : public MutableMetaData {
  public:
@@ -28,6 +30,12 @@ static std::atomic<uint64_t> NUM_BBS(ATOMIC_VAR_INIT(0));
 // Simple tool for static and dynamic basic block counting.
 class BBCount : public Tool {
  public:
+  BBCount(void) {
+    if (FLAG_count_execs) {
+      RegisterMetaData<BlockCounter>();
+    }
+  }
+
   virtual ~BBCount(void) = default;
 
   // Instrument a basic block.
@@ -44,12 +52,11 @@ class BBCount : public Tool {
       GRANARY_UNUSED(instr);
     }
   }
-} static COUNTER;
+};
+
+}  // namespace
 
 // Initialize the `count_bbs` tool.
-GRANARY_INIT({
-  RegisterTool("count_bbs", &COUNTER);
-  if (FLAG_count_execs) {
-    RegisterMetaData<BlockCounter>();
-  }
+GRANARY_CLIENT_INIT({
+  RegisterTool<BBCount>("count_bbs");
 })
