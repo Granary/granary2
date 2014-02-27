@@ -11,7 +11,7 @@ GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
     "For example: `--clients=print_bbs,follow_jumps`.")
 
-GRANARY_DEFINE_non_negative_int(edge_cache_slab_size, 1,
+GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
     "The number of pages allocated at once to store edge code. Each "
     "environment maintains its own edge code allocator. The default value is "
     "1 pages per slab.")
@@ -24,13 +24,15 @@ enum {
 
 // Initialize a new environment.
 Environment::Environment(void)
-    : module_manager(),
+    : module_manager(&context),
       metadata_manager(),
       tool_manager(),
-      edge_cache_allocator(FLAG_edge_cache_slab_size),
+      edge_code_cache(FLAG_edge_cache_slab_size),
       context(&module_manager, &metadata_manager,
-              &tool_manager, &edge_cache_allocator) {
+              &tool_manager, &edge_code_cache) {}
 
+// Setup this environment for Granary-based instrumentation.
+void Environment::Setup(void) {
   // Register internal metadata.
   metadata_manager.Register<ModuleMetaData>();
   metadata_manager.Register<CacheMetaData>();

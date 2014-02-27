@@ -4,66 +4,79 @@
 
 #include "granary/base/list.h"
 #include "granary/base/string.h"
-#include "granary/base/option.h"
 
-#include "granary/code/allocate.h"
+#include "granary/code/cache.h"
 
 #include "granary/breakpoint.h"
+#include "granary/context.h"
 #include "granary/module.h"
 
-GRANARY_DEFINE_non_negative_int(module_cache_slab_size, 8,
-    "The number of pages allocated at once to store cache code. Each "
-    "module maintains its own cache code allocator. The default value is "
-    "8 pages per slab.")
-
 namespace granary {
-namespace internal {
-
 // Represents a range of code/data within a module.
 struct ModuleAddressRange {
+
+  // Initialize a new module address range. Assumes the invariant
+  // `begin_addr_ < end_addr_`, which is checked before a range is added to a
+  // module.
   ModuleAddressRange(uintptr_t begin_addr_, uintptr_t end_addr_,
-                     uintptr_t begin_offset_, unsigned perms_,
-                     unsigned age_)
+                     uintptr_t begin_offset_, unsigned perms_)
       : next(nullptr),
         begin_addr(begin_addr_),
         end_addr(end_addr_),
         begin_offset(begin_offset_),
         end_offset(begin_offset + (end_addr - begin_addr)),
         perms(perms_),
-        age(age_),
-        cache_code_allocator(new CodeAllocator(FLAG_module_cache_slab_size)) {}
+        code_cache(nullptr) {}
 
+  // Destroy the address range.
+  ~ModuleAddressRange(void) {
+    if (code_cache) {
+      delete code_cache;
+    }
+  }
+
+  // Next range. Module ranges are arranged in a sorted linked list such that
+  // for two adjacent ranges `r1` and `r2` in the list, the following
+  // relationships hold:
+  //
+  //    r1.begin_addr < r1.end_addr <= r2.begin_addr < r2.end_addr
   ModuleAddressRange *next;
-  uintptr_t begin_addr;  // Runtime offsets.
+
+  // Runtime offsets in the virtual address space.
+  uintptr_t begin_addr;
   uintptr_t end_addr;
-  uintptr_t begin_offset;  // Static offsets in the module code.
+
+  // Static offsets within the module's code segments.
+  uintptr_t begin_offset;
   uintptr_t end_offset;
+
+  // Permissions (e.g. readable, writable, executable).
   unsigned perms;
-  unsigned age;
 
-  // Memory allocator for code from the code cache.
-  CodeAllocator * const cache_code_allocator;
+  // Memory allocator for code from the code cache. This field can be nulled
+  // out when adding removing ranges, because the current `ContextInterface`
+  // will take ownership of the memory and delete it.
+  mutable CodeCacheInterface *code_cache;
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(ModuleAddressRange, {
     SHARED = true,
     ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
   })
 };
 
-}  // namespace internal
-
-typedef LinkedListIterator<const internal::ModuleAddressRange>
+typedef LinkedListIterator<const ModuleAddressRange>
         ModuleAddressRangeIterator;
+
+typedef LinkedListZipper<ModuleAddressRange> ModuleAddressRangeZipper;
 
 typedef LinkedListIterator<Module> ModuleIterator;
 
 namespace {
 
-// Find the address range that contains a particular program counter. Returns
+// Find the address range that contains a particular address. Returns
 // `nullptr` if no such range exists in the specified list.
-static const internal::ModuleAddressRange *FindRange(
-    const internal::ModuleAddressRange *ranges, AppPC pc) {
-  auto addr = reinterpret_cast<uintptr_t>(pc);
+static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
+                                           uintptr_t addr) {
   for (auto range : ModuleAddressRangeIterator(ranges)) {
     if (range->begin_addr <= addr && addr < range->end_addr) {
       return range;
@@ -74,14 +87,23 @@ static const internal::ModuleAddressRange *FindRange(
   return nullptr;
 }
 
+// Find the address range that contains a particular program counter. Returns
+// `nullptr` if no such range exists in the specified list.
+static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
+                                           AppPC addr) {
+  return FindRange(ranges, reinterpret_cast<uintptr_t>(addr));
+}
+
 }  // namespace
 
+// Initialize a new module with no ranges.
 Module::Module(ModuleKind kind_, const char *name_)
     : next(nullptr),
+      context(nullptr),
       kind(kind_),
       ranges(nullptr),
-      ranges_lock(),
-      age(ATOMIC_VAR_INIT(0)) {
+      ranges_lock() {
+  memset(&(name[0]), 0, MAX_NAME_LEN);
   CopyString(&(name[0]), MAX_NAME_LEN, name_);
 }
 
@@ -93,9 +115,10 @@ ModuleOffset Module::OffsetOf(AppPC pc) const {
   auto range = FindRange(ranges, pc);
   if (!range) {
     return ModuleOffset(nullptr, 0);
+  } else {
+    auto addr = reinterpret_cast<uintptr_t>(pc);
+    return ModuleOffset(this, range->begin_offset + (addr - range->begin_addr));
   }
-  auto addr = reinterpret_cast<uintptr_t>(pc);
-  return ModuleOffset(this, range->begin_offset + (addr - range->begin_addr));
 }
 
 // Returns true if a module contains the code address `pc`, and if that code
@@ -120,87 +143,90 @@ const char *Module::Name(void) const {
 // range is fully subsumed by another one.
 void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                       uintptr_t begin_offset, unsigned perms) {
-  if (internal::MODULE_EXECUTABLE & perms) {
-    auto range = new internal::ModuleAddressRange(
-        begin_addr, end_addr, begin_offset, perms, age.fetch_add(1));
-    do {
-      WriteLocked locker(&ranges_lock);
-      range = AddRange(range);
-    } while (false);
-    if (range) {
-      delete range;
+  if (0 != (MODULE_EXECUTABLE & perms) &&
+      0 < begin_addr &&
+      begin_addr < end_addr) {
+    auto range = new ModuleAddressRange(begin_addr, end_addr,
+                                        begin_offset, perms);
+    if (context) {
+      range->code_cache = context->AllocateCodeCache();
     }
+    WriteLocked locker(&ranges_lock);
+    AddRange(range);
   }
 }
 
 // Remove a range from a module.
 void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
-  // TODO(pag): Synchronize me?
-  GRANARY_UNUSED(begin_addr);
-  GRANARY_UNUSED(end_addr);
+  WriteLocked locker(&ranges_lock);
+  RemoveRangeConflicts(begin_addr, end_addr);
 }
 
-// Adds a range into the range list. Returns a range to free if that range is
-// no longer needed.
+// Adds a range into the range list. If there is a conflict when adding a range
+// then some ranges might be removed (and some parts of those ranges might be
+// re-added). If ranges are removed then these will result in code cache
+// flushing events.
 //
-// TODO(pag): Test this code!!
-internal::ModuleAddressRange *Module::AddRange(
-    internal::ModuleAddressRange *range) {
+// Note: This method is invoked within the context of a `WriteLocked` of the
+//       `ranges_lock`.
+void Module::AddRange(ModuleAddressRange *range) {
+  RemoveRangeConflicts(range->begin_addr, range->end_addr);
+  AddRangeNoConflict(range);
+}
 
-  internal::ModuleAddressRange **next_ptr(&ranges);
-  internal::ModuleAddressRange *curr(ranges);
-  internal::ModuleAddressRange *remove(nullptr);
+namespace {
+// Flush the code cache of a module address range.
+static void FlushCodeCache(ContextInterface *context,
+                           ModuleAddressRange *range) {
+  if (context) {
+    context->FlushCodeCache(range->code_cache);
+    range->code_cache = nullptr;
+  }
+}
+}  // namespace
 
-  // Find an insertion point.
+// Adds a range into the range list. This handles conflicts and performs
+// conflict resolution, which typically results in some code cache flushing
+// events.
+//
+// Note: This must be invoked with the module's `ranges_lock` held as
+//       `WriteLocked`.
+void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
+  for (auto curr_elem : ModuleAddressRangeZipper(&ranges)) {
+    auto curr = curr_elem.Get();
+    if (curr->begin_addr < end_addr &&
+        curr->end_addr > begin_addr) {
+      FlushCodeCache(context, curr);
+
+      if (curr->begin_addr < begin_addr) {  // `curr` overlaps on RHS.
+        curr->end_addr = begin_addr;
+      } else if (end_addr < curr->end_addr) {  // `curr` overlaps on LHS.
+        curr->begin_addr = end_addr;
+      } else {  // `curr` is contained in `range`.
+        curr->end_addr = curr->begin_addr;
+      }
+
+      // Reap a range or replenish its code cache.
+      if (curr->begin_addr >= curr->end_addr) {
+        delete curr_elem.Unlink();
+      } else {
+        curr->code_cache = context->AllocateCodeCache();
+      }
+    }
+  }
+}
+
+// Adds a range into the range list. This will no do conflict resolution.
+void Module::AddRangeNoConflict(ModuleAddressRange *range) {
+  ModuleAddressRange **next_ptr(&ranges);
+  ModuleAddressRange *curr(ranges);
   for (; curr; next_ptr = &(curr->next), curr = curr->next) {
     if (range->begin_addr < curr->begin_addr) {
-      break;
+      break;  // Found the insertion point.
     }
   }
-
-  // Unconditionally add the new range into the range list.
   range->next = *next_ptr;
-  *next_ptr = range;
-
-  // Try to right collapse or left collapse an existing range, and potentially
-  // find a range to remove.
-  for (curr = ranges; curr; curr = curr->next) {
-    if (!curr->next) {
-      continue;
-    }
-
-    auto next_range = curr->next;
-    if (!next_range || curr->end_addr < next_range->begin_addr) {
-      continue;
-    }
-
-    // TODO(pag): Handle this case when it comes up.
-    granary_break_on_fault_if(curr->end_addr > next_range->end_addr);
-
-    if (curr->age < next_range->age) {  // Right collapse `curr`.
-      curr->end_offset -= (next_range->begin_addr - curr->end_addr);
-      curr->end_addr = next_range->begin_addr;
-    } else {  // Left collapse `next`.
-      next_range->begin_offset += curr->end_addr - next_range->begin_addr;
-      next_range->begin_addr = curr->end_addr;
-    }
-
-    if (curr->end_offset != next_range->begin_offset ||
-        curr->perms != next_range->perms) {
-      continue;  // Not a merge candidate.
-    }
-
-    curr->end_addr = next_range->end_addr;
-    curr->end_offset = next_range->end_offset;
-    curr->next = next_range->next;
-
-    if (GRANARY_LIKELY(!remove)) {
-      remove = next_range;  // We'll delete this outside of the write lock.
-    } else {
-      delete next_range;  // Already have something to delete.
-    }
-  }
-  return remove;
+  *next_ptr = range;  // Insert.
 }
 
 // Default-initializes Granary's internal module meta-data.
@@ -215,10 +241,10 @@ void ModuleMetaData::Init(ModuleOffset source_, AppPC start_pc_) {
 }
 
 // Returns the code cache allocator for this block.
-CodeAllocator *ModuleMetaData::CacheCodeAllocatorForBlock(void) const {
+CodeCacheInterface *ModuleMetaData::GetCodeCache(void) const {
   ReadLocked locker(&(source.module->ranges_lock));
   auto range = FindRange(source.module->ranges, start_pc);
-  return range->cache_code_allocator;
+  return range->code_cache;
 }
 
 // Returns true if one block's module metadata can be materialized alognside
@@ -248,12 +274,15 @@ bool ModuleMetaData::Equals(const ModuleMetaData *meta) const {
 }
 
 // Initialize the module tracker.
-ModuleManager::ModuleManager(void)
-    : modules(ATOMIC_VAR_INIT(nullptr)) {}
+ModuleManager::ModuleManager(ContextInterface *context_)
+    : context(context_),
+      modules(nullptr),
+      modules_lock() {}
 
 // Find a module given a program counter.
 GRANARY_CONST Module *ModuleManager::FindByPC(AppPC pc) {
-  for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
+  ReadLocked locker(&modules_lock);
+  for (auto module : ModuleIterator(modules)) {
     if (module->Contains(pc)) {
       return module;
     }
@@ -263,7 +292,8 @@ GRANARY_CONST Module *ModuleManager::FindByPC(AppPC pc) {
 
 // Find a module given its name.
 GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
-  for (auto module : ModuleIterator(modules.load(std::memory_order_relaxed))) {
+  ReadLocked locker(&modules_lock);
+  for (auto module : ModuleIterator(modules)) {
     if (StringsMatch(module->name, name)) {
       return module;
     }
@@ -273,13 +303,18 @@ GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
 
 // Register a module with the module tracker.
 void ModuleManager::Register(Module *module) {
-  granary_break_on_fault_if(nullptr != module->next ||
-                            modules.load(std::memory_order_relaxed) == module);
-  Module *next(nullptr);
-  do {
-    next = modules.load(std::memory_order_relaxed);
-    module->next = next;
-  } while (!modules.compare_exchange_weak(next, module));
+  GRANARY_ASSERT(nullptr == module->context);
+  GRANARY_ASSERT(!FindByName(module->name));
+  if (context) {
+    ReadLocked read_locker(&(module->ranges_lock));
+    module->context = context;  // Take ownership right away.
+    for (auto range : ModuleAddressRangeIterator(module->ranges)) {
+      range->code_cache = context->AllocateCodeCache();
+    }
+  }
+  WriteLocked write_locker(&modules_lock);
+  module->next = modules;
+  modules = module;
 }
 
 }  // namespace granary

@@ -34,7 +34,7 @@ class Lexer {
 
   // Get the next token in the stream. Can be called recursively to build up
   // tokens across file buffers.
-  const char *NextToken(void) {
+  char *NextToken(void) {
     for (; file_offset < BUFF_SIZE; ) {
       if (!file_buffer[file_offset]) {  // Done or need to fill the buffer.
         break;
@@ -82,7 +82,7 @@ class Lexer {
   }
 
   // Finalize a token.
-  const char *FinalizeToken(void) {
+  char *FinalizeToken(void) {
     token_buffer[token_offset] = '\0';
     token_offset = 0;
     return &(token_buffer[0]);
@@ -102,41 +102,40 @@ class Lexer {
 
 // Returns a pointer to the name of a module. For example, we want to extract
 // `acl` from `/lib/x86_64-linux-gnu/libacl.so.1.1.0`.
-static const char *PathToName(const char *path, char *name) {
-  const char *after_last_slash = nullptr;
+static const char *PathToName(char *path) {
+  char *after_last_slash = nullptr;
+  auto name = path;
   for (; *path; ++path) {
     if ('/' == *path) {
       after_last_slash = path + 1;
     }
   }
-
-  // Copy part of the name in.
-  for (auto ch(name); *after_last_slash; ) {
-    if ('.' == *after_last_slash || '-' == *after_last_slash) {
+  if (after_last_slash) {
+    name = after_last_slash;  // Update the beginning of the name.
+  }
+  // Truncate the name at the first period or dash (e.g. `*.so`).
+  for (auto ch(name); *ch; ++ch) {
+    if ('.' == *ch || '-' == *ch) {
       *ch = '\0';
       break;
     }
-    *ch++ = *after_last_slash++;
   }
-
+  // If the name begins with `lib` (e.g. `libc.so`) then remove the `lib` part.
   if ('l' == name[0] && 'i' == name[1] && 'b' == name[2]) {
-    return name + 3;
+    name += 3;
   }
-
-  return nullptr;
+  return name;
 }
 
 // Get the module kind given a module path and the number of modules already
 // seen.
-static ModuleKind KindFromPath(const char *path, int num_modules) {
+static ModuleKind KindFromName(const char *name, int num_modules) {
   if (!num_modules) {
     return ModuleKind::PROGRAM;
-  } else if ('[' == path[0]) {  // [vdso], [vsyscall], [stack], [heap].
+  } else if ('[' == name[0]) {  // [vdso], [vsyscall], [stack], [heap].
     return ModuleKind::DYNAMIC;
   } else {
-    char name_buffer[Module::MAX_NAME_LEN] = {'\0'};
-    auto name = PathToName(path, name_buffer);
-    if (StringsMatch("granary", name)) {
+    if (StringsMatch(GRANARY_TO_STRING(GRANARY_NAME), name)) {
       return ModuleKind::GRANARY;
     } else if (ClientIsRegistered(name)) {
       return ModuleKind::GRANARY_CLIENT;
@@ -155,7 +154,7 @@ static void ParseMapsFile(ModuleManager *manager) {
     uintptr_t module_limit(0);
     unsigned module_perms(0);
     uintptr_t module_offset(0);
-    const char *token(nullptr);
+    char *token(nullptr);
 
     token = lexer.NextToken();
     if (!DeFormat(token, "%lx-%lx", &module_base, &module_limit)) {
@@ -163,10 +162,10 @@ static void ParseMapsFile(ModuleManager *manager) {
     }
 
     token = lexer.NextToken();
-    module_perms |= 'r' == token[0] ? internal::MODULE_READABLE : 0;
-    module_perms |= 'w' == token[1] ? internal::MODULE_WRITABLE : 0;
-    module_perms |= 'x' == token[2] ? internal::MODULE_EXECUTABLE : 0;
-    module_perms |= 'p' == token[3] ? internal::MODULE_COPY_ON_WRITE : 0;
+    module_perms |= 'r' == token[0] ? MODULE_READABLE : 0;
+    module_perms |= 'w' == token[1] ? MODULE_WRITABLE : 0;
+    module_perms |= 'x' == token[2] ? MODULE_EXECUTABLE : 0;
+    module_perms |= 'p' == token[3] ? MODULE_COPY_ON_WRITE : 0;
 
     DeFormat(lexer.NextToken(), "%lx", &module_offset);
 
@@ -177,9 +176,10 @@ static void ParseMapsFile(ModuleManager *manager) {
       continue;
     }
 
-    auto module = manager->FindByName(token);
+    auto name = PathToName(token);
+    auto module = manager->FindByName(name);
     if (!module) {
-      module = new Module(KindFromPath(token, num_found_modules++), token);
+      module = new Module(KindFromName(name, num_found_modules++), name);
       manager->Register(module);
     }
 

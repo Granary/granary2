@@ -5,7 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/new.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 #include "granary/driver/xed2-intel64/xed.h"
 

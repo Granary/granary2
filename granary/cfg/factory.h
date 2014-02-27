@@ -5,7 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/bloom_filter.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 namespace granary {
 

@@ -6,7 +6,7 @@
 
 #include "granary/cfg/control_flow_graph.h"
 
-#include "granary/code/allocate.h"
+#include "granary/code/cache.h"
 #include "granary/code/assemble.h"
 #include "granary/code/instrument.h"
 
@@ -37,7 +37,7 @@ BlockMetaData *Context::AllocateEmptyBlockMetaData(void) {
 
 // Allocate some edge code from the edge code cache.
 CachePC Context::AllocateEdgeCode(int num_bytes) {
-  return edge_code_allocator->Allocate(GRANARY_ARCH_CACHE_LINE_SIZE, num_bytes);
+  return edge_code_cache->AllocateBlock(num_bytes);
 }
 
 // Register some meta-data with Granary.
@@ -55,6 +55,24 @@ void Context::FreeTools(Tool *tools) {
   tool_manager->Free(tools);
 }
 
+// Flush an entire code cache.
+//
+// Note: This should be a lightweight operation as it is usually invoked
+//       whilst fine-grained locks are held (e.g. schedule for the allocator
+//       to be freed).
+void Context::FlushCodeCache(CodeCacheInterface *cache) {
+  // TODO(pag): Implement me!
+  GRANARY_UNUSED(cache);
+}
+
+// Allocate a new code cache.
+//
+// Note: This should be a lightweight operation as it is usually invoked
+//       whilst fine-grained locks are held.
+CodeCacheInterface *Context::AllocateCodeCache(void) {
+  return new CodeCache();
+}
+
 // Compile some code into one of the code caches.
 void Context::Compile(BlockMetaData *meta) {
   LocalControlFlowGraph cfg;
@@ -66,7 +84,7 @@ void Context::Compile(BlockMetaData *meta) {
   //            --> This would be well suited towards a lock in the environment.
 
   Instrument(this, &cfg, meta);
-  Assemble(this, &cfg, module_meta->CacheCodeAllocatorForBlock());
+  Assemble(this, module_meta->GetCodeCache(), &cfg);
 }
 
 }  // namespace granary

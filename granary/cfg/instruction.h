@@ -7,7 +7,7 @@
 #include "granary/base/cast.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 #include "granary/operand/match.h"
 

@@ -8,9 +8,9 @@
 #endif
 
 #include "granary/base/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
-#include "granary/code/allocate.h"
+#include "granary/code/cache.h"
 
 #include "granary/context.h"
 #include "granary/metadata.h"
@@ -29,6 +29,9 @@ class Environment {
  public:
   Environment(void);
 
+  // Setup this environment for Granary-based instrumentation.
+  void Setup(void);
+
   void Attach(void);
 
   void AttachToAppPC(AppPC pc);
@@ -41,7 +44,7 @@ class Environment {
   ModuleManager module_manager;
   MetaDataManager metadata_manager;
   ToolManager tool_manager;
-  CodeAllocator edge_cache_allocator;
+  CodeCache edge_code_cache;
   Context context;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Environment);

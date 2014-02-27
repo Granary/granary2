@@ -11,7 +11,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/allocate.h"
+#include "granary/code/cache.h"
 #include "granary/code/assemble.h"
 #include "granary/code/edge.h"
 
@@ -76,10 +76,10 @@ static void RemoveUnreachableInstructions(DecodedBasicBlock *block) {
 // them too far away. This is typical in user space on x86 with 32-bit relative
 // addressing, where native code is placed at a low address, and `mmap`d cache
 // code at a high address (>4GB away).
-static void RelativizeInstructions(DecodedBasicBlock *block,
-                                   CodeAllocator *cache) {
+static void RelativizeInstructions(CodeCacheInterface *cache,
+                                   DecodedBasicBlock *block) {
   auto instr = block->FirstInstruction();
-  driver::InstructionRelativizer relativizer(cache->Allocate(1, 0));
+  driver::InstructionRelativizer relativizer(cache->AllocateBlock(0));
   for (auto next = instr; instr; instr = next) {
     next = instr->Next();
     auto native_instr = DynamicCast<NativeInstruction *>(instr);
@@ -92,13 +92,13 @@ static void RelativizeInstructions(DecodedBasicBlock *block,
 // Preprocess the blocks. This involves removing unreachable instructions and
 // making native instructions with relative components (e.g. RIP-relative
 // addressing on x86-64) safe to execute in the code cache.
-static void PreprocessBlocks(LocalControlFlowGraph *cfg,
-                             CodeAllocator *cache) {
+static void PreprocessBlocks(CodeCacheInterface *cache,
+                             LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
       RemoveUnreachableInstructions(decoded_block);
-      RelativizeInstructions(decoded_block, cache);
+      RelativizeInstructions(cache, decoded_block);
     }
   }
 }
@@ -266,15 +266,14 @@ static void AssembleEdges(ContextInterface *env,
 
 }  // namespace
 
-// Assemble the local control-flow graph into
-void Assemble(ContextInterface *env, LocalControlFlowGraph *cfg,
-              CodeAllocator *cache_code_allocator) {
-  PreprocessBlocks(cfg, cache_code_allocator);
+// Assemble the local control-flow graph.
+void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
+              LocalControlFlowGraph* cfg) {
+  PreprocessBlocks(code_cache, cfg);
   AssembleEdges(env, cfg);
   auto blocks = Schedule(cfg);
   auto relaxed_size = Resize(blocks);
-  auto code = cache_code_allocator->Allocate(
-      GRANARY_ARCH_CACHE_LINE_SIZE, relaxed_size);
+  auto code = code_cache->AllocateBlock(relaxed_size);
   Encode(blocks, code);
 }
 

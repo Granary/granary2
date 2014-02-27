@@ -7,7 +7,7 @@
 # define "This code is internal to Granary."
 #endif
 
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 namespace granary {
 

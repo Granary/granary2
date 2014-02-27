@@ -4,7 +4,7 @@
 #define GRANARY_DRIVER_XED2_INTEL64_DECODE_H_
 
 #include "granary/base/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 #include "granary/driver/xed2-intel64/xed.h"
 

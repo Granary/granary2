@@ -14,7 +14,7 @@
 
 // TODO(pag): Remove me.
 #include "granary/base/cast.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 #ifndef GRANARY_STANDALONE
 GRANARY_DEFINE_string(attach_to, "*",
@@ -55,7 +55,7 @@ void Init(const char *granary_path) {
   // TODO(pag): Remove me.
   auto pc = UnsafeCast<AppPC>(&Log);
 
-
+  env->Setup();
   env->AttachToAppPC(pc);
 }
 

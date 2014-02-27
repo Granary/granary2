@@ -52,6 +52,12 @@ class FineGrainedLocked {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLocked);
 };
 
+#define GRANARY_LOCKED(lock_name, ...) \
+  do { \
+    FineGrainedLocked locker(&(lock_name)); \
+    __VA_ARGS__ \
+  } while (0)
+
 // Implements a fine-grained reader/writer lock.
 class ReaderWriterLock {
  public:
@@ -91,6 +97,12 @@ class ReadLocked {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ReadLocked);
 };
 
+#define GRANARY_READ_LOCKED(lock_name, ...) \
+  do { \
+    ReadLocked read_locker(&(lock_name)); \
+    __VA_ARGS__ \
+  } while (0)
+
 // Ensures that a write lock is held within some scope.
 class WriteLocked {
  public:
@@ -111,6 +123,11 @@ class WriteLocked {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(WriteLocked);
 };
 
+#define GRANARY_WRITE_LOCKED(lock_name, ...) \
+  do { \
+    WriteLocked write_locker(&(lock_name)); \
+    __VA_ARGS__ \
+  } while (0)
 
 }  // namespace granary
 

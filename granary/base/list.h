@@ -156,6 +156,117 @@ class LinkedListIterator {
   T *curr;
 };
 
+// Forward declaration.
+template <typename T> class LinkedListZipper;
+
+// Zipper element for a linked list. Allows insertion before/after the current
+// element, as well as removal of the current element.
+template <typename T>
+class LinkedListZipperElement {
+ public:
+  LinkedListZipperElement(T **curr_ptr_, T *curr_)
+      : curr_ptr(curr_ptr_),
+        curr(curr_) {}
+
+  inline T &operator*(void) {
+    return *curr;
+  }
+
+  inline T *operator->(void) {
+    return curr;
+  }
+
+  inline void InsertBefore(T *prev) {
+    prev->next = curr;
+    *curr_ptr = prev;
+    curr_ptr = &(prev->next);
+  }
+
+  inline void InsertAfter(T *next) {
+    curr->next = next;
+  }
+
+  // Unlink the current element. This will return the unlinked list element and
+  // invalidate this zipper element (but not the zipper itself).
+  inline T *Unlink(void) {
+    auto old_curr = curr;
+    *curr_ptr = curr->next;  // Invalidates `curr_cache` in `LinkedListZipper`.
+    curr = nullptr;  // Invalidates this `LinkedListZipperElement` element.
+    return old_curr;
+  }
+
+  inline T *Get(void) {
+    return curr;
+  }
+
+ private:
+  LinkedListZipperElement(void) = delete;
+
+  T **curr_ptr;
+  T *curr;
+};
+
+// Zipper for in-place modification of singly-linked lists.
+template <typename T>
+class LinkedListZipper {
+ public:
+  typedef LinkedListZipperElement<T> Element;
+  typedef LinkedListZipper<T> Iterator;
+
+  LinkedListZipper(void)
+      : curr_ptr(nullptr),
+        curr_cache(nullptr) {}
+
+  explicit LinkedListZipper(T **list)
+      : curr_ptr(list),
+        curr_cache(nullptr) {}
+
+  inline Element operator*(void) const {
+    curr_cache = *curr_ptr;
+    return Element(curr_ptr, curr_cache);
+  }
+
+  bool operator!=(const Iterator &that) const {
+    T *curr(nullptr);
+    T *that_curr(nullptr);
+    if (curr_ptr != that.curr_ptr) {
+      if (curr_ptr) {
+        curr = *curr_ptr;
+      }
+      if (that.curr_ptr) {
+        that_curr = *(that.curr_ptr);
+      }
+      return curr != that_curr;
+    } else {
+      return false;
+    }
+  }
+
+  void operator++(void) {
+    auto curr = *curr_ptr;
+    if (curr) {
+      if (curr_cache == curr) {
+        curr_ptr = &(curr->next);  // Advance, unlinking hasn't occurred.
+      }
+    } else {
+      curr_ptr = nullptr;
+    }
+    curr_cache = nullptr;
+  }
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(nullptr);
+  }
+
+ private:
+  T **curr_ptr;
+  mutable T *curr_cache;
+};
+
 }  // namespace granary
 
 #endif  // GRANARY_BASE_LIST_H_

@@ -41,14 +41,14 @@
 #define GRANARY_DECLARE_bool( name) \
   extern const bool &GRANARY_FLAG_NAME(name);
 
-#define GRANARY_DEFINE_non_negative_int(name, default_value, docstring) \
+#define GRANARY_DEFINE_positive_int(name, default_value, docstring) \
   namespace { \
   static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   } \
   const int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
-  GRANARY_REGISTER_OPTION(name, ParseNonNegativeIntOption, docstring)
+  GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring)
 
-#define GRANARY_DECLARE_non_negative_int( name) \
+#define GRANARY_DECLARE_positive_int( name) \
   extern const int &GRANARY_FLAG_NAME(name);
 
 namespace granary {
@@ -81,7 +81,7 @@ void ParseBoolOption(Option *option);
 
 // Parse an option that will be interpreted as an unsigned integer but stored
 // as a signed integer.
-void ParseNonNegativeIntOption(Option *option);
+void ParsePositiveIntOption(Option *option);
 
 }  // namespace detail
 }  // namespace granary

@@ -2,6 +2,15 @@
 
 #ifndef GRANARY_STANDALONE
 
+#ifndef GRANARY_NAME
+# define GRANARY_NAME granary
+#endif
+
+// Convert a sequence of symbols into a string literal.
+#define GRANARY_TO_STRING__(x) #x
+#define GRANARY_TO_STRING_(x) GRANARY_TO_STRING__(x)
+#define GRANARY_TO_STRING(x) GRANARY_TO_STRING_(x)
+
 #define _GNU_SOURCE
 
 #include <stdlib.h>
@@ -48,7 +57,7 @@ static void SetPreload(void) {
   snprintf(
       &(LD_PRELOAD[index]),
       LD_PRELOAD_LEN - index,
-      "%slibgranary.so",
+      "%slib" GRANARY_TO_STRING(GRANARY_NAME) ".so",
       GRANARY_PATH);
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
 }

@@ -9,7 +9,7 @@
 #include "granary/base/hash.h"
 #include "granary/base/operator.h"
 #include "granary/base/type_trait.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 // Used to explicitly instantiate this so that it is available to shared
 // libraries.

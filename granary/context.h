@@ -8,7 +8,7 @@
 #endif
 
 #include "granary/base/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 namespace granary {
 
@@ -21,7 +21,7 @@ class ModuleManager;
 class MetaDataManager;
 class Tool;
 class ToolManager;
-class CodeAllocator;
+class CodeCacheInterface;
 
 // Interface for environments in Granary.
 class ContextInterface {
@@ -55,6 +55,19 @@ class ContextInterface {
 
   // Free the allocated tools.
   virtual void FreeTools(Tool *tools) = 0;
+
+  // Allocate a new code cache.
+  //
+  // Note: This should be a lightweight operation as it is usually invoked
+  //       whilst fine-grained locks are held.
+  virtual CodeCacheInterface *AllocateCodeCache(void) = 0;
+
+  // Flush an entire code cache.
+  //
+  // Note: This should be a lightweight operation as it is usually invoked
+  //       whilst fine-grained locks are held (e.g. schedule for the allocator
+  //       to be freed).
+  virtual void FlushCodeCache(CodeCacheInterface *cache) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -70,11 +83,11 @@ class Context : public ContextInterface {
   inline Context(ModuleManager *module_manager_,
                  MetaDataManager *metadata_manager_,
                  ToolManager *tool_manager_,
-                 CodeAllocator *edge_code_allocator_)
+                 CodeCacheInterface *edge_code_cache_)
       : module_manager(module_manager_),
         metadata_manager(metadata_manager_),
         tool_manager(tool_manager_),
-        edge_code_allocator(edge_code_allocator_) {}
+        edge_code_cache(edge_code_cache_) {}
 
   // Annotates the instruction, or adds an annotated instruction into the
   // instruction list. This returns the first
@@ -101,6 +114,19 @@ class Context : public ContextInterface {
   // Free the allocated tools.
   virtual void FreeTools(Tool *tools) override;
 
+  // Allocate a new code cache.
+  //
+  // Note: This should be a lightweight operation as it is usually invoked
+  //       whilst fine-grained locks are held.
+  virtual CodeCacheInterface *AllocateCodeCache(void) override;
+
+  // Flush an entire code cache.
+  //
+  // Note: This should be a lightweight operation as it is usually invoked
+  //       whilst fine-grained locks are held (e.g. schedule for the allocator
+  //       to be freed).
+  virtual void FlushCodeCache(CodeCacheInterface *cache);
+
  private:
 
   // Manages all modules allocated/understood by this environment.
@@ -113,9 +139,9 @@ class Context : public ContextInterface {
   // environment.
   ToolManager * const tool_manager;
 
-  // Manages all edge code allocated/understoof by this environment. Code cache
+  // Manages all edge code allocated/understood by this environment. Code cache
   // code is managed on a per-module address range basis.
-  CodeAllocator * const edge_code_allocator;
+  CodeCacheInterface * const edge_code_cache;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

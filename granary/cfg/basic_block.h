@@ -9,7 +9,7 @@
 #include "granary/base/list.h"
 #include "granary/base/new.h"
 #include "granary/base/refcount.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 #include "granary/base/type_trait.h"
 #include "granary/cfg/iterator.h"
 

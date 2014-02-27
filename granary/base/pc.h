@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_BASE_TYPES_H_
-#define GRANARY_BASE_TYPES_H_
+#ifndef GRANARY_BASE_PC_H_
+#define GRANARY_BASE_PC_H_
 
 namespace granary {
 
@@ -11,4 +11,4 @@ typedef unsigned char *CachePC;
 
 }  // namespace granary
 
-#endif  // GRANARY_BASE_TYPES_H_
+#endif  // GRANARY_BASE_PC_H_

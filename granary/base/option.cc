@@ -223,10 +223,14 @@ void ParseBoolOption(Option *option) {
 
 // Parse an option that will be interpreted as an unsigned integer but stored
 // as a signed integer.
-void ParseNonNegativeIntOption(Option *option) {
+void ParsePositiveIntOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
-    DeFormat(value, "%u", reinterpret_cast<unsigned *>(option->value));
+    int int_value(0);
+    DeFormat(value, "%u", reinterpret_cast<unsigned *>(&int_value));
+    if (0 < int_value) {
+      *reinterpret_cast<int *>(option->value) = int_value;
+    }
   }
 }
 

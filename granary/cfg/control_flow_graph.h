@@ -4,7 +4,7 @@
 #define GRANARY_CFG_CONTROL_FLOW_GRAPH_H_
 
 #include "granary/base/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 #include "granary/cfg/iterator.h"
 
 namespace granary {

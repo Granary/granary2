@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 

@@ -4,7 +4,7 @@
 #define GRANARY_IR_LIR_H_
 
 #include "granary/base/base.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
 
 namespace granary {
 

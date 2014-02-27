@@ -49,11 +49,8 @@ void ModuleManager::RegisterAllBuiltIn(void) {
   for (auto mod : KernelModuleIterator(GRANARY_KERNEL_MODULES)) {
     auto module = new Module(GetModuleKind(mod), mod->name);
     mod->seen_by_granary = 1;
-    module->AddRange(
-        mod->core_text_begin,
-        mod->core_text_end,
-        0,
-        internal::MODULE_EXECUTABLE | internal::MODULE_READABLE);
+    module->AddRange(mod->core_text_begin, mod->core_text_end,
+                     0, MODULE_EXECUTABLE | MODULE_READABLE);
     Register(module);
   }
 }

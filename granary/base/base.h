@@ -97,6 +97,11 @@
 # define GRANARY_EXTERNAL_SHARED
 #endif
 
+// Name of the granary binary.
+#ifndef GRANARY_NAME
+# define GRANARY_NAME granary
+#endif
+
 // Static branch prediction hints.
 #define GRANARY_LIKELY(x) __builtin_expect((x),1)
 #define GRANARY_UNLIKELY(x) __builtin_expect((x),0)

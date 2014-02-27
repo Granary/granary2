@@ -79,7 +79,7 @@ endif
 
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
-GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR)
+GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR) -DGRANARY_NAME=$(GRANARY_NAME)
 
 # Use GNU C99 and standard C++11.
 GRANARY_CC_FLAGS += -std=gnu99

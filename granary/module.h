@@ -6,16 +6,18 @@
 #include "granary/arch/base.h"
 #include "granary/base/lock.h"
 #include "granary/base/new.h"
-#include "granary/base/types.h"
+#include "granary/base/pc.h"
+
 #include "granary/metadata.h"
 
 namespace granary {
 
 // Forward declarations.
+class ContextInterface;
 class Module;
 class ModuleMetaData;
 class ModuleManager;
-GRANARY_INTERNAL_DEFINITION class CodeAllocator;
+GRANARY_INTERNAL_DEFINITION class CodeCacheInterface;
 
 // Represents a location in a module. Note that not all segments within modules
 // are necessarily contiguous, but in most cases they are.
@@ -69,7 +71,6 @@ enum class ModuleKind {
 };
 
 #ifdef GRANARY_INTERNAL
-namespace internal {
 struct ModuleAddressRange;
 enum {
   MODULE_READABLE = (1 << 0),
@@ -77,7 +78,6 @@ enum {
   MODULE_EXECUTABLE = (1 << 2),
   MODULE_COPY_ON_WRITE = (1 << 3)
 };
-}  // namespace internal
 #endif  // GRANARY_INTERNAL
 
 // Represents a loaded module. For example, in user space, the executable is a
@@ -89,6 +89,7 @@ class Module {
     MAX_NAME_LEN = 256
   };
 
+  // Initialize a new module with no ranges.
   GRANARY_INTERNAL_DEFINITION
   Module(ModuleKind kind_, const char *name_);
 
@@ -129,26 +130,40 @@ class Module {
 
   Module(void) = delete;
 
-  // Adds a range into the range list. Returns a range to free if that range is
-  // no longer needed.
+  // Adds a range into the range list. If there is a conflict when adding a
+  // range then some ranges might be removed (and some parts of those ranges
+  // might be altered or removed). If ranges are removed then these will result
+  // in code cache flushing events.
   GRANARY_INTERNAL_DEFINITION
-  internal::ModuleAddressRange *AddRange(internal::ModuleAddressRange *range);
+  void AddRange(ModuleAddressRange *range);
+
+  // Adds a range into the range list. This handles conflicts and performs
+  // conflict resolution, which typically results in some code cache flushing
+  // events.
+  //
+  // Note: This must be invoked with the module's `ranges_lock` held as
+  //       `WriteLocked`.
+  GRANARY_INTERNAL_DEFINITION
+  void RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr);
+
+  // Adds a range into the range list. This will no do conflict resolution.
+  GRANARY_INTERNAL_DEFINITION
+  void AddRangeNoConflict(ModuleAddressRange *range);
+
+  // Context to which this module belongs.
+  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
 
   // The kind of this module (e.g. granary, client, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
 
   // Name/path of this module.
   GRANARY_INTERNAL_DEFINITION char name[MAX_NAME_LEN];
-  GRANARY_INTERNAL_DEFINITION char path[MAX_NAME_LEN];
 
   // The address ranges of this module.
-  GRANARY_INTERNAL_DEFINITION internal::ModuleAddressRange *ranges;
+  GRANARY_INTERNAL_DEFINITION ModuleAddressRange *ranges;
 
   // Lock for accessing and modifying ranges.
   GRANARY_INTERNAL_DEFINITION mutable ReaderWriterLock ranges_lock;
-
-  // Age of the data structure. Used as a heuristic to merge/split ranges.
-  GRANARY_INTERNAL_DEFINITION std::atomic<unsigned> age;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Module);
 };
@@ -165,7 +180,7 @@ class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
 
   // Returns the code cache allocator for this block.
   GRANARY_INTERNAL_DEFINITION
-  CodeAllocator *CacheCodeAllocatorForBlock(void) const;
+  CodeCacheInterface *GetCodeCache(void) const;
 
   // Returns true if one block's module metadata can be materialized alognside
   // another block's module metadata. For example, if two blocks all in
@@ -193,6 +208,7 @@ class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
 // `ModuleMetaData` already exists.
 GRANARY_SHARE_METADATA(ModuleMetaData)
 
+#ifdef GRANARY_INTERNAL
 // Manages a set of modules.
 //
 // TODO(pag): Track discovered module dependencies. For example, if there is
@@ -201,28 +217,40 @@ GRANARY_SHARE_METADATA(ModuleMetaData)
 //            particular modules.
 class ModuleManager {
  public:
-  ModuleManager(void) GRANARY_EXTERNAL_DELETE;
+  // Intiailize the module manager to know about its context. The context is
+  // passed through to modules so that modules can notify the context when
+  // code cache flushes must occur.
+  explicit ModuleManager(ContextInterface *context_);
 
   // Find a module given a program counter.
-  GRANARY_CONST Module *FindByPC(AppPC pc);
+  Module *FindByPC(AppPC pc);
 
   // Find a module given its name.
-  GRANARY_CONST Module *FindByName(const char *name);
+  Module *FindByName(const char *name);
 
   // Register a module with the module tracker.
-  GRANARY_INTERNAL_DEFINITION void Register(Module *module);
+  void Register(Module *module);
 
   // Find all built-in modules. In user space, this will go and find things like
   // libc. In kernel space, this will identify already loaded modules.
   //
   // This function should only be invoked once per `ModuleManager` instance.
-  GRANARY_INTERNAL_DEFINITION void RegisterAllBuiltIn(void);
+  void RegisterAllBuiltIn(void);
 
  private:
+  ModuleManager(void) = delete;
+
+  // Context to which this manager belongs.
+  ContextInterface *context;
+
   // Linked list of modules. Modules in the list are stored in no particular
   // order because they can have discontiguous segments.
-  GRANARY_INTERNAL_DEFINITION std::atomic<Module *> modules;
+  Module *modules;
+
+  // Lock on updating the modules list.
+  ReaderWriterLock modules_lock;
 };
+#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 
