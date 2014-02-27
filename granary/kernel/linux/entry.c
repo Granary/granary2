@@ -15,7 +15,7 @@
 #include <linux/gfp.h>
 #include <asm/uaccess.h>
 
-#include "granary/kernel/module.h"
+#include "granary/kernel/linux/module.h"
 
 #ifndef CONFIG_MODULES
 # error "Module auto-loading must be supported (`CONFIG_MODULES`)."
@@ -47,7 +47,7 @@ static struct KernelModule *init_kernel_module(struct KernelModule *kmod,
     kmod->init_text_begin = kmod->init_text_begin + mod->init_text_size;
   }
   if (mod == THIS_MODULE) {
-    kmod->kind = KERNEL_MODULE_GRANARY;
+    kmod->kind = GRANARY_MODULE;
   }
   return kmod;
 }

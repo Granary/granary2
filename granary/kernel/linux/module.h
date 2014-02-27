@@ -12,8 +12,7 @@ struct KernelModule {
   const char *name;
 
   enum {
-    KERNEL_MODULE_GRANARY,
-    KERNEL_MODULE_TOOL,
+    GRANARY_MODULE,
     KERNEL_MODULE,
     KERNEL
   } kind;

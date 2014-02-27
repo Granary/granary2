@@ -143,9 +143,7 @@ const char *Module::Name(void) const {
 // range is fully subsumed by another one.
 void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                       uintptr_t begin_offset, unsigned perms) {
-  if (0 != (MODULE_EXECUTABLE & perms) &&
-      0 < begin_addr &&
-      begin_addr < end_addr) {
+  if (0 < begin_addr && begin_addr < end_addr) {
     auto range = new ModuleAddressRange(begin_addr, end_addr,
                                         begin_offset, perms);
     if (context) {

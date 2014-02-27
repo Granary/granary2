@@ -23,14 +23,13 @@ namespace {
 // the module's name.
 static ModuleKind GetModuleKind(KernelModule *mod) {
   switch (mod->kind) {
-    case KernelModule::KERNEL_MODULE_GRANARY:
+    case KernelModule::GRANARY_MODULE:
       return ModuleKind::GRANARY;
 
-    case KernelModule::KERNEL_MODULE_TOOL:
-      return ModuleKind::GRANARY_CLIENT;
-
     case KernelModule::KERNEL_MODULE:
-      if (ClientIsRegistered(mod->name)) {
+      if (StringsMatch(GRANARY_NAME_STRING, mod->name)) {
+        return ModuleKind::GRANARY;
+      } else if (ClientIsRegistered(mod->name)) {
         return ModuleKind::GRANARY_CLIENT;
       } else {
         return ModuleKind::KERNEL_MODULE;

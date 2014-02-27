@@ -14,8 +14,8 @@ using namespace granary;
 class ModuleManagerTest : public ::testing::Test {
  protected:
   ModuleManagerTest(void)
-      : m1(),
-        m2() {
+      : m1(nullptr),
+        m2(nullptr) {
     m2.RegisterAllBuiltIn();
   }
 
@@ -32,11 +32,11 @@ TEST_F(ModuleManagerTest, EmptyDoesNotHaveExit) {
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsGranary) {
-  ASSERT_TRUE(nullptr != m2.FindByName(GRANARY_TO_STRING(GRANARY_NAME)));
+  ASSERT_TRUE(nullptr != m2.FindByName(GRANARY_NAME_STRING));
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsLibC) {
-  auto libc = m2.FindByName("c");
+  ASSERT_TRUE(nullptr != m2.FindByName("c"));
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsPthreads) {
@@ -47,10 +47,16 @@ TEST_F(ModuleManagerTest, WithBuiltinFindsLibDL) {
   ASSERT_TRUE(nullptr != m2.FindByName("dl"));
 }
 
-class ModuleTest : public ::testing::Test {
+class ModuleRangeTest : public ::testing::Test {
  protected:
-  ModuleTest(void) {}
+  ModuleRangeTest(void)
+      : kern(ModuleKind::KERNEL, "kernel"),
+        mod(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
+    mod.AddRange(100, 200, 0, 0);
+  }
 
-  Module m1;
-  Module m2;
+  Module kern;
+  Module mod;
 };
+
+TEST_F(ModuleRangeTest, Foo) { }

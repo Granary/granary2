@@ -159,6 +159,8 @@ class LinkedListIterator {
 // Forward declaration.
 template <typename T> class LinkedListZipper;
 
+namespace detail {
+
 // Zipper element for a linked list. Allows insertion before/after the current
 // element, as well as removal of the current element.
 template <typename T>
@@ -206,11 +208,13 @@ class LinkedListZipperElement {
   T *curr;
 };
 
+}  // namespace detail
+
 // Zipper for in-place modification of singly-linked lists.
 template <typename T>
 class LinkedListZipper {
  public:
-  typedef LinkedListZipperElement<T> Element;
+  typedef detail::LinkedListZipperElement<T> Element;
   typedef LinkedListZipper<T> Iterator;
 
   LinkedListZipper(void)

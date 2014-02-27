@@ -135,7 +135,7 @@ static ModuleKind KindFromName(const char *name, int num_modules) {
   } else if ('[' == name[0]) {  // [vdso], [vsyscall], [stack], [heap].
     return ModuleKind::DYNAMIC;
   } else {
-    if (StringsMatch(GRANARY_TO_STRING(GRANARY_NAME), name)) {
+    if (StringsMatch(GRANARY_NAME_STRING, name)) {
       return ModuleKind::GRANARY;
     } else if (ClientIsRegistered(name)) {
       return ModuleKind::GRANARY_CLIENT;

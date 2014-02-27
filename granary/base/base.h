@@ -101,6 +101,7 @@
 #ifndef GRANARY_NAME
 # define GRANARY_NAME granary
 #endif
+#define GRANARY_NAME_STRING GRANARY_TO_STRING(GRANARY_NAME)
 
 // Static branch prediction hints.
 #define GRANARY_LIKELY(x) __builtin_expect((x),1)
