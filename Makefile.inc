@@ -47,10 +47,10 @@ GRANARY_ARCH_BIN_DIR := $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)
 # Google Test and Google Mock setup
 GRANARY_TEST_SRC_DIR := $(GRANARY_SRC_DIR)/test
 GRANARY_TEST_BIN_DIR := $(GRANARY_BIN_DIR)/test
-GRANARY_GTEST_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/gtest
-GRANARY_GTEST_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/gtest
-GRANARY_GMOCK_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/gmock/trunk
-GRANARY_GMOCK_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/gmock
+GRANARY_GTEST_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/googletest
+GRANARY_GTEST_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googletest
+GRANARY_GMOCK_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/googlemock/trunk
+GRANARY_GMOCK_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googlemock
 
 # Convenient way to totally ignore output of a shell command that might fail.
 GRANARY_DEV_NULL = > /dev/null 2>&1 ||:

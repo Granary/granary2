@@ -1,6 +1,6 @@
-[submodule "dependencies/gtest"]
-	path = dependencies/gtest
+[submodule "dependencies/googletest"]
+	path = dependencies/googletest
 	url = git@github.com:Granary/googletest.git
-[submodule "dependencies/gmock"]
-	path = dependencies/gmock
+[submodule "dependencies/googlemock"]
+	path = dependencies/googlemock
 	url = git@github.com:Granary/googlemock.git
