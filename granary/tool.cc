@@ -71,7 +71,7 @@ static void RegisterToolDescription(ToolDescription *desc, const char *name) {
 //       tool class can register tool-specific meta-data.
 Tool::Tool(void)
     : next(nullptr),
-      env(env) {}
+      context(context) {}
 #pragma clang diagnostic pop
 
 // Used to instrument control-flow instructions and decide how basic blocks
@@ -98,7 +98,7 @@ void Tool::InstrumentBlock(DecodedBasicBlock *) {}
 // Register some meta-data with the meta-data manager associated with this
 // tool.
 void Tool::RegisterMetaData(const MetaDataDescription *desc) {
-  env->RegisterMetaData(const_cast<MetaDataDescription *>(desc));
+  context->RegisterMetaData(const_cast<MetaDataDescription *>(desc));
 }
 
 // Initialize an empty tool manager.
@@ -139,7 +139,7 @@ void ToolManager::Register(const ToolDescription *desc) {
 
 // Allocate all the tools managed by this `ToolManager` instance, and chain
 // then into a linked list.
-Tool *ToolManager::Allocate(ContextInterface *env) {
+Tool *ToolManager::AllocateTools(ContextInterface *context) {
   if (GRANARY_UNLIKELY(!is_finalized)) {
     is_finalized = true;
     InitAllocator();
@@ -153,7 +153,7 @@ Tool *ToolManager::Allocate(ContextInterface *env) {
       } else {
         auto mem = allocator->Allocate();
         auto tool = reinterpret_cast<Tool *>(mem);
-        tool->env = env;  // Initialize before constructing!
+        tool->context = context;  // Initialize before constructing!
         desc->initialize(mem);
         VALGRIND_MALLOCLIKE_BLOCK(tool, desc->size, 0, 0);
 
@@ -166,7 +166,7 @@ Tool *ToolManager::Allocate(ContextInterface *env) {
 }
 
 // Free a tool.
-void ToolManager::Free(Tool *tool) {
+void ToolManager::FreeTools(Tool *tool) {
   for (auto next_tool = tool; tool; tool = next_tool) {
     next_tool = tool->next;
     tool->~Tool();

@@ -27,7 +27,6 @@ GRANARY_INTERNAL_DEFINITION enum {
 class Tool {
  public:
   Tool(void);
-
   virtual ~Tool(void) = default;
 
   // Used to instrument control-flow instructions and decide how basic blocks
@@ -78,7 +77,7 @@ class Tool {
   GRANARY_POINTER(Tool) *next;
 
   // Context into which this tool has been instantiated.
-  GRANARY_POINTER(ContextInterface) *env;
+  GRANARY_POINTER(ContextInterface) *context;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Tool);
 };
@@ -137,10 +136,11 @@ class ToolManager {
   // This ensures that tools are allocated and inserted into the list according
   // to the order of their dependencies, whilst also trying to preserve the
   // tool order specified at the command-line.
-  Tool *Allocate(ContextInterface *env);
+  Tool *AllocateTools(ContextInterface *context);
 
-  // Free some meta-data.
-  void Free(Tool *tool);
+  // Free all allocated tool objects. This expects a list of `Tool` objects, as
+  // allocated by `ToolManager::AllocateTools`.
+  void FreeTools(Tool *tool);
 
  private:
 

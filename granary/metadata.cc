@@ -139,7 +139,7 @@ MetaDataManager::MetaDataManager(void)
 // Register some meta-data with the meta-data manager. This is a no-op if the
 // meta-data has already been registered.
 void MetaDataManager::Register(MetaDataDescription *desc) {
-  if (!is_finalized) {
+  if (GRANARY_UNLIKELY(!is_finalized)) {
     FineGrainedLocked locker(&next_description_id_lock);
     if (-1 == desc->id) {
       GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > next_description_id);

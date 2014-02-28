@@ -47,12 +47,12 @@ void Context::RegisterMetaData(const MetaDataDescription *desc) {
 
 // Allocate instances of the tools that will be used to instrument blocks.
 Tool *Context::AllocateTools(void) {
-  return tool_manager->Allocate(this);
+  return tool_manager->AllocateTools(this);
 }
 
 // Free the allocated tools.
 void Context::FreeTools(Tool *tools) {
-  tool_manager->Free(tools);
+  tool_manager->FreeTools(tools);
 }
 
 // Flush an entire code cache.

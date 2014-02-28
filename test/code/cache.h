@@ -9,7 +9,7 @@
 
 #include "granary/code/cache.h"
 
-// Interface for code caches.
+// Implements a mock Granary `CodeCache`.
 class MockCodeCache : public granary::CodeCacheInterface {
  public:
   MockCodeCache(void) = default;

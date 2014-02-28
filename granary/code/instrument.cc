@@ -77,10 +77,10 @@ void Instrument(ContextInterface *context,
   factory.MaterializeInitialBlock(meta);
 
   auto tools = context->AllocateTools();
-
   InstrumentControlFlow(tools, &factory, cfg);
   InstrumentBlocks(tools, cfg);
   InstrumentBlock(tools, cfg);
+  context->FreeTools(tools);
 
   // Verify that the indexable meta-data for the entry basic block has not
   // changed during the instrumentation process.

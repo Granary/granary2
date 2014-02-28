@@ -9,6 +9,7 @@
 
 #include "granary/context.h"
 
+// Implements a mock Granary `Context`.
 class MockContext : public granary::ContextInterface {
  public:
   MockContext(void) = default;

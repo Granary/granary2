@@ -321,6 +321,7 @@ class MetaDataManager {
   // returns nullptr.
   BlockMetaData *Allocate(void);
 
+  // Free some metadata.
   void Free(BlockMetaData *meta);
 
  private:

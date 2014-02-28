@@ -134,7 +134,7 @@ TEST_F(ModuleRangeTest, OffsetsOfPCsInRangeMatch) {
   TestOffsetsInRange();
 }
 
-// Incrementally the range [100, 200) into many small ranges that cover
+// Incrementally split the range [100, 200) into many small ranges that cover
 // the same larger range. The range is split from the left-hand side.
 //      [100,101), [101,102), ..., [199,200)
 // and test that PC membership within the ranges continue to work.
@@ -148,7 +148,7 @@ TEST_F(ModuleRangeTest, SplitRangeLHS) {
   TestOffsetsInRange();
 }
 
-// Incrementally the range [100, 200) into many small ranges that cover
+// Incrementally split the range [100, 200) into many small ranges that cover
 // the same larger range. The range is split from the right-hand side.
 //      [100,101), [101,102), ..., [199,200)
 // and test that PC membership within the ranges continue to work.
