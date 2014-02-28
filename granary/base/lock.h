@@ -47,7 +47,7 @@ class FineGrainedLocked {
  private:
   FineGrainedLocked(void) = delete;
 
-  FineGrainedLock *lock;
+  FineGrainedLock * const  lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLocked);
 };
@@ -92,16 +92,37 @@ class ReadLocked {
  private:
   ReadLocked(void) = delete;
 
-  ReaderWriterLock *lock;
+  ReaderWriterLock * const lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ReadLocked);
 };
 
-#define GRANARY_READ_LOCKED(lock_name, ...) \
-  do { \
-    ReadLocked read_locker(&(lock_name)); \
-    __VA_ARGS__ \
-  } while (0)
+// Ensures that a read lock is held within some scope, so long as `cond_` is
+// true.
+class ConditionallyReadLocked {
+ public:
+  inline ConditionallyReadLocked(ReaderWriterLock *lock_, bool cond_)
+      : lock(lock_),
+        cond(cond_) {
+    if (cond) {
+      lock->ReadAcquire();
+    }
+  }
+
+  inline ~ConditionallyReadLocked(void) {
+    if (cond) {
+      lock->ReadRelease();
+    }
+  }
+
+ private:
+  ConditionallyReadLocked(void) = delete;
+
+  ReaderWriterLock * const lock;
+  const bool cond;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ConditionallyReadLocked);
+};
 
 // Ensures that a write lock is held within some scope.
 class WriteLocked {
@@ -118,16 +139,37 @@ class WriteLocked {
  private:
   WriteLocked(void) = delete;
 
-  ReaderWriterLock *lock;
+  ReaderWriterLock * const lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(WriteLocked);
 };
 
-#define GRANARY_WRITE_LOCKED(lock_name, ...) \
-  do { \
-    WriteLocked write_locker(&(lock_name)); \
-    __VA_ARGS__ \
-  } while (0)
+// Ensures that a read lock is held within some scope, so long as `cond_` is
+// true.
+class ConditionallyWriteLocked {
+ public:
+  inline ConditionallyWriteLocked(ReaderWriterLock *lock_, bool cond_)
+      : lock(lock_),
+        cond(cond_) {
+    if (cond) {
+      lock->WriteAcquire();
+    }
+  }
+
+  inline ~ConditionallyWriteLocked(void) {
+    if (cond) {
+      lock->WriteRelease();
+    }
+  }
+
+ private:
+  ConditionallyWriteLocked(void) = delete;
+
+  ReaderWriterLock * const lock;
+  const bool cond;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ConditionallyWriteLocked);
+};
 
 }  // namespace granary
 

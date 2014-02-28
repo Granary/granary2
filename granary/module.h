@@ -108,13 +108,19 @@ class Module {
   // Returns the name of this module.
   const char *Name(void) const;
 
+  // Sets the current context of the module.
+  GRANARY_INTERNAL_DEFINITION
+  void SetContext(ContextInterface *context_);
+
   // Add a range to a module. This will potentially split a single range into two
   // ranges, extend an existing range, add a new range, or do nothing if the new
   // range is fully subsumed by another one.
+  GRANARY_INTERNAL_DEFINITION
   void AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                 uintptr_t begin_offset, unsigned perms);
 
   // Remove a range from a module.
+  GRANARY_INTERNAL_DEFINITION
   void RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
@@ -151,6 +157,11 @@ class Module {
   void AddRangeNoConflict(ModuleAddressRange *range);
 
   // Context to which this module belongs.
+  //
+  // Note: We say that a module is shared if and only if `context` is non-
+  //       null. Therefore, if `context` is null, then some locks need not be
+  //       acquired because we don't consider the `Module` to be exposed to
+  //       other threads/cores.
   GRANARY_INTERNAL_DEFINITION ContextInterface *context;
 
   // The kind of this module (e.g. granary, client, kernel, etc.).
@@ -223,7 +234,7 @@ class ModuleManager {
   explicit ModuleManager(ContextInterface *context_);
 
   // Find a module given a program counter.
-  Module *FindByPC(AppPC pc);
+  Module *FindByAppPC(AppPC pc);
 
   // Find a module given its name.
   Module *FindByName(const char *name);

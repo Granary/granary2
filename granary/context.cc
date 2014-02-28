@@ -24,7 +24,7 @@ ContextInterface::ContextInterface(void) {}
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
   auto meta = AllocateEmptyBlockMetaData();
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_manager->FindByPC(start_pc);
+  auto module = module_manager->FindByAppPC(start_pc);
   module_meta->start_pc = start_pc;
   module_meta->source = module->OffsetOf(start_pc);
   return meta;

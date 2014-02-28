@@ -56,7 +56,7 @@ struct ModuleAddressRange {
   // Memory allocator for code from the code cache. This field can be nulled
   // out when adding removing ranges, because the current `ContextInterface`
   // will take ownership of the memory and delete it.
-  mutable CodeCacheInterface *code_cache;
+  CodeCacheInterface *code_cache;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(ModuleAddressRange, {
     SHARED = true,
@@ -65,6 +65,9 @@ struct ModuleAddressRange {
 };
 
 typedef LinkedListIterator<const ModuleAddressRange>
+        ConstModuleAddressRangeIterator;
+
+typedef LinkedListIterator<ModuleAddressRange>
         ModuleAddressRangeIterator;
 
 typedef LinkedListZipper<ModuleAddressRange> ModuleAddressRangeZipper;
@@ -77,7 +80,7 @@ namespace {
 // `nullptr` if no such range exists in the specified list.
 static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
                                            uintptr_t addr) {
-  for (auto range : ModuleAddressRangeIterator(ranges)) {
+  for (auto range : ConstModuleAddressRangeIterator(ranges)) {
     if (range->begin_addr <= addr && addr < range->end_addr) {
       return range;
     } else if (range->begin_addr > addr) {
@@ -94,6 +97,22 @@ static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
   return FindRange(ranges, reinterpret_cast<uintptr_t>(addr));
 }
 
+// Flush the code cache of a module address range.
+static void FlushCodeCache(ContextInterface *context,
+                           ModuleAddressRange *range) {
+  if (context && range->code_cache) {
+    context->FlushCodeCache(range->code_cache);
+    range->code_cache = nullptr;
+  }
+}
+
+// Replenish the code cache of a module address range.
+static void ReplenishCodeCache(ContextInterface *context,
+                               ModuleAddressRange *range) {
+  if (context && !range->code_cache) {
+    range->code_cache = context->AllocateCodeCache();
+  }
+}
 }  // namespace
 
 // Initialize a new module with no ranges.
@@ -138,25 +157,35 @@ const char *Module::Name(void) const {
   return &(name[0]);
 }
 
+// Sets the current context of the module.
+void Module::SetContext(ContextInterface *context_) {
+  ConditionallyReadLocked locker(&ranges_lock, nullptr != context);
+  for (auto range : ModuleAddressRangeIterator(ranges)) {
+    FlushCodeCache(context, range);
+    ReplenishCodeCache(context_, range);
+  }
+  context = context_;
+}
+
 // Add a range to a module. This will potentially split a single range into two
 // ranges, extend an existing range, add a new range, or do nothing if the new
 // range is fully subsumed by another one.
 void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
                       uintptr_t begin_offset, unsigned perms) {
-  if (0 < begin_addr && begin_addr < end_addr) {
+  if (begin_addr < end_addr) {
     auto range = new ModuleAddressRange(begin_addr, end_addr,
                                         begin_offset, perms);
-    if (context) {
-      range->code_cache = context->AllocateCodeCache();
-    }
-    WriteLocked locker(&ranges_lock);
+    ReplenishCodeCache(context, range);
+    ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
     AddRange(range);
+  } else {
+    AddRange(end_addr, begin_addr, begin_offset, perms);
   }
 }
 
 // Remove a range from a module.
 void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
-  WriteLocked locker(&ranges_lock);
+  ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
   RemoveRangeConflicts(begin_addr, end_addr);
 }
 
@@ -172,17 +201,6 @@ void Module::AddRange(ModuleAddressRange *range) {
   AddRangeNoConflict(range);
 }
 
-namespace {
-// Flush the code cache of a module address range.
-static void FlushCodeCache(ContextInterface *context,
-                           ModuleAddressRange *range) {
-  if (context) {
-    context->FlushCodeCache(range->code_cache);
-    range->code_cache = nullptr;
-  }
-}
-}  // namespace
-
 // Adds a range into the range list. This handles conflicts and performs
 // conflict resolution, which typically results in some code cache flushing
 // events.
@@ -196,10 +214,21 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
         curr->end_addr > begin_addr) {
       FlushCodeCache(context, curr);
 
-      if (curr->begin_addr < begin_addr) {  // `curr` overlaps on RHS.
-        curr->end_addr = begin_addr;
+      if (curr->begin_addr < begin_addr) {
+        if (end_addr < curr->end_addr) {  // `range` is contained in `curr`.
+          auto offset = curr->begin_offset + (end_addr - curr->begin_addr);
+          auto after_curr = new ModuleAddressRange(end_addr, curr->end_addr,
+                                                   offset, curr->perms);
+          ReplenishCodeCache(context, after_curr);
+          curr_elem.InsertAfter(after_curr);
+        }
+        curr->end_offset -= curr->end_addr - begin_addr;
+        curr->end_addr = begin_addr;  // `curr` overlaps on RHS.
+
       } else if (end_addr < curr->end_addr) {  // `curr` overlaps on LHS.
+        curr->begin_offset += end_addr - curr->begin_addr;
         curr->begin_addr = end_addr;
+
       } else {  // `curr` is contained in `range`.
         curr->end_addr = curr->begin_addr;
       }
@@ -208,8 +237,10 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
       if (curr->begin_addr >= curr->end_addr) {
         delete curr_elem.Unlink();
       } else {
-        curr->code_cache = context->AllocateCodeCache();
+        ReplenishCodeCache(context, curr);
       }
+    } else if (end_addr < curr->begin_addr) {
+      break;
     }
   }
 }
@@ -278,7 +309,7 @@ ModuleManager::ModuleManager(ContextInterface *context_)
       modules_lock() {}
 
 // Find a module given a program counter.
-GRANARY_CONST Module *ModuleManager::FindByPC(AppPC pc) {
+GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
   ReadLocked locker(&modules_lock);
   for (auto module : ModuleIterator(modules)) {
     if (module->Contains(pc)) {
@@ -304,13 +335,9 @@ void ModuleManager::Register(Module *module) {
   GRANARY_ASSERT(nullptr == module->context);
   GRANARY_ASSERT(!FindByName(module->name));
   if (context) {
-    ReadLocked read_locker(&(module->ranges_lock));
-    module->context = context;  // Take ownership right away.
-    for (auto range : ModuleAddressRangeIterator(module->ranges)) {
-      range->code_cache = context->AllocateCodeCache();
-    }
+    module->SetContext(context);
   }
-  WriteLocked write_locker(&modules_lock);
+  WriteLocked locker(&modules_lock);
   module->next = modules;
   modules = module;
 }
