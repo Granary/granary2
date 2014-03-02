@@ -13,8 +13,8 @@
 
 namespace granary {
 // Represents a range of code/data within a module.
-struct ModuleAddressRange {
-
+class ModuleAddressRange {
+ public:
   // Initialize a new module address range. Assumes the invariant
   // `begin_addr_ < end_addr_`, which is checked before a range is added to a
   // module.
@@ -60,8 +60,13 @@ struct ModuleAddressRange {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(ModuleAddressRange, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
+
+ private:
+  ModuleAddressRange(void) = delete;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ModuleAddressRange);
 };
 
 typedef LinkedListIterator<const ModuleAddressRange>

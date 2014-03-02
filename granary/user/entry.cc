@@ -84,7 +84,7 @@ int main(int argc, const char *argv[]) {
 GRANARY_INIT({
   granary::InitDebug();
   granary::InitOptions(getenv("GRANARY_OPTIONS"));
-  granary::Init(granary::INIT_DYNAMIC, getenv("GRANARY_PATH"));
+  granary::Init(getenv("GRANARY_PATH"));
 })
 
 #endif  // GRANARY_STANDALONE

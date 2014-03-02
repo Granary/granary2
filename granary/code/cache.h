@@ -35,7 +35,7 @@ class CodeCache : public CodeCacheInterface {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeCache, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
  private:

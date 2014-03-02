@@ -22,10 +22,10 @@ namespace granary {
 namespace {
 
 // Load a tool into Granary.
-static void LoadClient(const char *tool_name) {
-  void *tool(dlopen(tool_name, RTLD_NOW | RTLD_LOCAL));
+static void LoadClient(const char *tool_path) {
+  void *tool(dlopen(tool_path, RTLD_NOW | RTLD_LOCAL));
   if (!tool) {
-    Log(LogError, "Failed to load client '%s': %s\n", tool_name, dlerror());
+    Log(LogError, "Failed to load client '%s': %s\n", tool_path, dlerror());
     return;
   }
 

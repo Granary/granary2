@@ -71,7 +71,7 @@ enum class ModuleKind {
 };
 
 #ifdef GRANARY_INTERNAL
-struct ModuleAddressRange;
+class ModuleAddressRange;
 enum {
   MODULE_READABLE = (1 << 0),
   MODULE_WRITABLE = (1 << 1),
@@ -125,7 +125,7 @@ class Module {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
   GRANARY_INTERNAL_DEFINITION Module *next;

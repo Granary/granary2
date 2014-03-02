@@ -8,10 +8,23 @@
 
 #define GRANARY_ARCH_PAGE_FRAME_SIZE 4096
 
-#define GRANARY_ARCH_EXEC_POISON 0xCC
-
 namespace granary {
 namespace arch {
+
+enum {
+  CACHE_LINE_SIZE_BYTES = 64,
+  CACHE_LINE_SIZE_BITS = 64 * 8,
+
+  ADDRESS_SIZE_BYTES = 8,
+  ADDRESS_SIZE_BITS = 64,
+
+  // Excludes %rsp, excludes %rip
+  NUM_GENERAL_PURPOSE_REGISTERS = 14,
+
+  // Byte value with which to poison executable memory. This should normally
+  // correspond to something that .
+  EXEC_MEMORY_POISON_BYTE = 0xCC
+};
 
 // Feature support that guides architecture-oblivious optimization routines.
 enum {

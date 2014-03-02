@@ -38,9 +38,9 @@ class MemTracer : public Tool {
       }
     }
   }
-} static TRACER;
+};
 
 // Initialize the `trace_mem` tool.
-GRANARY_INIT({
-  RegisterTool("trace_mem", &TRACER);
+GRANARY_CLIENT_INIT({
+  RegisterTool<MemTracer>("trace_mem");
 })

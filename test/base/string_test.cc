@@ -389,6 +389,18 @@ TEST(FormatTest, FormatStringTest) {
   EXPECT_TRUE(AllCharsAreExactly(x.before_buffer, '\0', 10));
   EXPECT_TRUE(StringsMatch(x.buffer, "cccccbaaa"));
   EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
+
+  memset(&x, 0, sizeof x);
+  EXPECT_EQ(0, Format(x.buffer, 10, "%s%s%s", "", "", ""));
+  EXPECT_TRUE(AllCharsAreExactly(x.before_buffer, '\0', 10));
+  EXPECT_TRUE(StringsMatch(x.buffer, ""));
+  EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
+
+  memset(&x, 0, sizeof x);
+  EXPECT_EQ(3, Format(x.buffer, 10, "%s%s%s", "a", "a", "a"));
+  EXPECT_TRUE(AllCharsAreExactly(x.before_buffer, '\0', 10));
+  EXPECT_TRUE(StringsMatch(x.buffer, "aaa"));
+  EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
 }
 
 #pragma clang diagnostic pop
@@ -428,5 +440,15 @@ TEST(ForEachCommaSeparatedStringTest, Check) {
   });
   ForEachCommaSeparatedString<10>(" a ", [](const char *buff) {
     EXPECT_TRUE(StringsMatch(buff, "a"));
+  });
+
+  auto i = 0;
+  ForEachCommaSeparatedString<10>("a,bb,ccc", [&](const char *buff) {
+    switch (i++) {
+      case 0: EXPECT_TRUE(StringsMatch(buff, "a")); break;
+      case 1: EXPECT_TRUE(StringsMatch(buff, "bb")); break;
+      case 2: EXPECT_TRUE(StringsMatch(buff, "ccc")); break;
+      default: EXPECT_TRUE(false); break;
+    }
   });
 }

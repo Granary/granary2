@@ -98,7 +98,7 @@ static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
   instr->has_pc_rel_op = true;
   instr->has_fixed_length = true;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  instr_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
+  instr_op->width = arch::ADDRESS_SIZE_BITS;
   instr_op->rel.imm = NextDecodedAddress(instr) +
                       xed_decoded_inst_get_branch_displacement(xedd);
 
@@ -195,31 +195,34 @@ static bool IsAmbiguousOperand(xed_iclass_enum_t iclass, xed_iform_enum_t iform,
 static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
                                   const xed_operand_t *op, unsigned op_num) {
   auto iform = xed_decoded_inst_get_iform_enum(xedd);
+  auto op_name = xed_operand_name(op);
+  auto op_type = xed_operand_type(op);
+  auto instr_op = &(instr->ops[instr->num_ops++]);
+  instr_op->rw = xed_operand_rw(op);
+
+  if (xed_operand_is_register(op_name)) {
+    ConvertRegisterOperand(instr_op, xedd, op_name);
+  } else if (XED_OPERAND_RELBR == op_name) {
+    ConvertRelativeBranch(instr, instr_op, xedd);
+  } else if (XED_OPERAND_AGEN == op_name) {
+    ConvertEffectiveAddress(instr, instr_op, xedd, 0);
+  } else if (XED_OPERAND_MEM0 == op_name) {
+    ConvertEffectiveAddress(instr, instr_op, xedd, 0);
+  } else if (XED_OPERAND_MEM1 == op_name) {
+    ConvertEffectiveAddress(instr, instr_op, xedd, 1);
+  } else if (XED_OPERAND_TYPE_IMM == op_type ||
+             XED_OPERAND_TYPE_IMM_CONST == op_type) {
+    ConvertImmediateOperand(instr_op, xedd, op_name);
+  } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {  // More complicated.
+    granary_break_on_fault();  // TODO(pag): Implement this!
+  } else {
+    granary_break_on_fault();  // TODO(pag): Implement this!
+  }
+
+  // Only include explicit operands in the count.
   if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
       IsAmbiguousOperand(instr->iclass, iform, op_num)) {
-    auto op_name = xed_operand_name(op);
-    auto op_type = xed_operand_type(op);
-    auto instr_op = &(instr->ops[instr->num_ops++]);
-    instr_op->rw = xed_operand_rw(op);
-
-    if (xed_operand_is_register(op_name)) {
-      ConvertRegisterOperand(instr_op, xedd, op_name);
-    } else if (XED_OPERAND_RELBR == op_name) {
-      ConvertRelativeBranch(instr, instr_op, xedd);
-    } else if (XED_OPERAND_AGEN == op_name) {
-      ConvertEffectiveAddress(instr, instr_op, xedd, 0);
-    } else if (XED_OPERAND_MEM0 == op_name) {
-      ConvertEffectiveAddress(instr, instr_op, xedd, 0);
-    } else if (XED_OPERAND_MEM1 == op_name) {
-      ConvertEffectiveAddress(instr, instr_op, xedd, 1);
-    } else if (XED_OPERAND_TYPE_IMM == op_type ||
-               XED_OPERAND_TYPE_IMM_CONST == op_type) {
-      ConvertImmediateOperand(instr_op, xedd, op_name);
-    } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {  // More complicated.
-      granary_break_on_fault();  // TODO(pag): Implement this!
-    } else {
-      granary_break_on_fault();  // TODO(pag): Implement this!
-    }
+    ++instr->num_explicit_ops;
   }
 }
 
@@ -229,7 +232,7 @@ static void ConvertDecodedOperands(Instruction *instr,
   auto xedi = xed_decoded_inst_inst(xedd);
   auto num_ops = xed_inst_noperands(xedi);
   for (auto o = 0U; o < num_ops; ++o) {
-    if (instr->num_ops < XED_ENCODER_OPERANDS_MAX) {
+    if (instr->num_explicit_ops < XED_ENCODER_OPERANDS_MAX) {
       ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o), o);
     }
   }
@@ -323,7 +326,7 @@ static void SelectMemoryOperand(const Instruction *instr,
                                 const Operand *op,
                                 xed_encoder_operand_t *ir_op) {
   if (instr->has_pc_rel_op) {
-    ir_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
+    ir_op->width = arch::ADDRESS_SIZE_BITS;
     ir_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
     ir_op->u.mem.seg = XED_REG_INVALID;
     ir_op->u.mem.base = XED_REG_RIP;
@@ -367,7 +370,7 @@ static void AdjustEffectiveOperandWidth(xed_encoder_instruction_t *ir) {
   if (!ir->effective_operand_width) {
     if (XED_ICLASS_RET_NEAR == ir->iclass ||
         XED_ICLASS_RET_FAR == ir->iclass) {
-      ir->effective_operand_width = GRANARY_ARCH_ADDRESS_WIDTH;
+      ir->effective_operand_width = arch::ADDRESS_SIZE_BITS;
     }
   }
 }
@@ -389,8 +392,8 @@ static void SelectInstruction(const Instruction *instr,
   ir->mode = XED_STATE;
   ir->iclass = instr->iclass;
   ir->prefixes = instr->prefixes;
-  ir->noperands = static_cast<decltype(ir->noperands)>(instr->num_ops);
-  for (int8_t i(0); i < instr->num_ops; ++i) {
+  ir->noperands = static_cast<decltype(ir->noperands)>(instr->num_explicit_ops);
+  for (int8_t i(0); i < instr->num_explicit_ops; ++i) {
     SelectOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
   }
   ir->effective_operand_width = GetEffectiveOperandWidth(instr, width);

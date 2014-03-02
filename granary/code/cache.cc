@@ -28,7 +28,7 @@ CachePC CodeCache::AllocateBlock(int size) {
     // continue to work.
     return allocator.Allocate(1, 0);
   } else {
-    return allocator.Allocate(GRANARY_ARCH_CACHE_LINE_SIZE, size);
+    return allocator.Allocate(arch::CACHE_LINE_SIZE_BYTES, size);
   }
 }
 

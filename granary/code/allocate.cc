@@ -2,6 +2,7 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/arch/base.h"
 #include "granary/base/string.h"
 #include "granary/code/allocate.h"
 #include "granary/memory.h"
@@ -17,8 +18,8 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
   if (GRANARY_LIKELY(0 < num_pages)) {
     begin = reinterpret_cast<CachePC>(
         AllocatePages(num_pages, MemoryIntent::EXECUTABLE));
-    memset(
-        begin, GRANARY_ARCH_EXEC_POISON, static_cast<unsigned long>(num_bytes));
+    memset(begin, arch::EXEC_MEMORY_POISON_BYTE,
+           static_cast<unsigned long>(num_bytes));
     ProtectPages(begin, num_pages, MemoryProtection::EXECUTABLE);
     VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
   }

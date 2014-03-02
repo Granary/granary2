@@ -59,7 +59,7 @@ class NULTerminatedStringIterator {
     return ch != that.ch;
   }
 
-  inline char operator*(void) const{
+  inline char operator*(void) const {
     return *ch;
   }
 
@@ -125,11 +125,11 @@ class WriteBuffer {
   // Finalize the buffer. This adds terminating `NUL` characters to the internal
   // buffer.
   inline void Finalize(void) {
-    if (buffer_end > buffer_begin) {
-      buffer_end[-1] = '\0';
-    }
-    if (buffer < buffer_end) {
-      buffer[1] = '\0';
+    if (GRANARY_LIKELY(buffer_end_logical < buffer_end)) {
+      *buffer_end_logical = '\0';
+      if (buffer < buffer_end_logical) {
+        *buffer = '\0';
+      }
     }
   }
 
@@ -177,7 +177,8 @@ void ForEachCommaSeparatedString(const char *str, F functor) {
   } else {
     char buff[kBufferLen] = {'\0'};
     do {
-      for (; *str && ' ' == *str; ++str) {}  // Skip leading spaces.
+      // Skip leading spaces and commas.
+      for (; *str && (' ' == *str || ',' == *str); ++str) {}
       char *last_space = nullptr;
       for (auto i = 0UL; *str && ',' != *str; ++str, ++i) {
         if (i < (kBufferLen - 1)) {
@@ -193,7 +194,7 @@ void ForEachCommaSeparatedString(const char *str, F functor) {
         functor(buff);
       }
       buff[0] = '\0';
-    } while (0);
+    } while (*str);
   }
 }
 }  // namespace granary

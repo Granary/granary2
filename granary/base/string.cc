@@ -170,13 +170,14 @@ unsigned long Format(char * __restrict buffer, unsigned long len,
       case STATE_SEEN_FORMAT_SPEC:
         if ('%' == format_ch) {
           buff.Write(format_ch);
-          state = STATE_CONTINUE;
         } else if ('c' == format_ch) {
           buff.Write(static_cast<char>(va_arg(args, int)));
         } else if ('s' == format_ch) {
+          state = STATE_CONTINUE;
           buff.Write(va_arg(args, const char *));
         } else if ('l' == format_ch) {  // Long un/signed integer.
           is_long = true;
+          break;  // Don't change the state.
         } else if ('d' == format_ch) {
           long generic_int(0);
           if (is_long) {
@@ -212,9 +213,9 @@ unsigned long Format(char * __restrict buffer, unsigned long len,
           }
           FormatGenericInt(buff, generic_uint, base);
         } else {
-          buff.Write(format_ch);
-          state = STATE_CONTINUE;  // Unexpected char after `%`, elide the `%`.
+          buff.Write(format_ch); // Unexpected char after `%`, elide the `%`.
         }
+        state = STATE_CONTINUE;
         break;
     }
   }

@@ -25,7 +25,7 @@ class CodeSlab {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeSlab, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
  private:

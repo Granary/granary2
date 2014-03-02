@@ -35,7 +35,7 @@ void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->category = category;
   instr->prefixes.i = 0;
   instr->length = 0;
-  instr->num_ops = num_ops;
+  instr->num_explicit_ops = num_ops;
   instr->effective_operand_width = -1;
   instr->needs_encoding = true;
   instr->has_pc_rel_op = false;
@@ -81,7 +81,7 @@ void ImportOperand(Instruction *instr, Operand *op,
     }
   }
   op->rel.imm = addr.addr;
-  op->width = GRANARY_ARCH_ADDRESS_WIDTH;
+  op->width = arch::ADDRESS_SIZE_BITS;
   op->rw = rw;
   instr->has_pc_rel_op = true;
 }

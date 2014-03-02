@@ -208,7 +208,7 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedBasicBlock, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
   // Return the first instruction in the basic block.

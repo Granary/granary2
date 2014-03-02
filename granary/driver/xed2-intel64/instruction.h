@@ -91,6 +91,9 @@ class Instruction {
   int8_t length;
 
   // Number of explicit operands.
+  int8_t num_explicit_ops;
+
+  // Total number of operands.
   int8_t num_ops;
 
   // The effective operand width at decode time, or -1 if unknown.
@@ -138,7 +141,7 @@ class Instruction {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Instruction, {
     SHARED = true,
-    ALIGNMENT = GRANARY_ARCH_CACHE_LINE_SIZE
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 } __attribute__((packed));
 
