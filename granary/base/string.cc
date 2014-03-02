@@ -10,8 +10,10 @@ namespace granary {
 // to but excluding the first '\0' character.
 unsigned long StringLength(const char *ch) {
   unsigned long len(0);
-  for (; *ch; ++ch) {
-    ++len;
+  if (ch) {
+    for (; *ch; ++ch) {
+      ++len;
+    }
   }
   return len;
 }
@@ -19,22 +21,32 @@ unsigned long StringLength(const char *ch) {
 // Copy at most `buffer_len` characters from the C string `str` into `buffer`.
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`. Returns
 // the number of characters copied, exluding the trailing '\0'.
-unsigned long CopyString(char *buffer, unsigned long buffer_len,
-                         const char *str) {
-  unsigned long i(0);
-  for (; i < buffer_len && str[i]; ++i) {
-    buffer[i] = str[i];
-  }
-
-  buffer[buffer_len - 1] = '\0';
-  if (i < buffer_len) {
-    buffer[i] = '\0';
+unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
+                         const char * __restrict str) {
+  if (buffer && str) {
+    WriteBuffer buff(buffer, buffer_len);
+    buff.Write(str);
+    buff.Finalize();
+    return buff.NumCharsWritten();
   } else {
-    GRANARY_ASSERT(2 <= buffer_len);
-    i = buffer_len - 2;\
+    return 0;
   }
+}
 
-  return i;
+// Compares two C strings for equality.
+bool StringsMatch(const char *str1, const char *str2) {
+  if (str1 == str2) {
+    return true;
+  }
+  if ((str1 && !str2) || (!str1 && str2)) {
+    return false;
+  }
+  for (; *str1 == *str2; ++str1, ++str2) {
+    if (!*str1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 namespace {
@@ -42,45 +54,23 @@ namespace {
 typedef decltype('\0') CharLiteral;
 
 // Write an integer into a string.
-static char *FormatGenericInt(char *buff, char *buff_end, unsigned long data,
-                              bool is_64_bit, bool is_signed,
-                              unsigned long base) {
+static void FormatGenericInt(WriteBuffer &buff, unsigned long data,
+                             unsigned long base) {
   if (!data) {
-    granary_break_on_fault_if(buff >= buff_end);
-    *buff++ = '0';
-    return buff;
+    buff.Write('0');
+    return;
   }
-
-  // Sign-extend a 32-bit signed value to 64-bit.
-  if (!is_64_bit && is_signed) {
-    data = static_cast<uint64_t>(static_cast<int64_t>(
-      static_cast<int32_t>(data & 0xFFFFFFFFULL)));
-  }
-
-  // Treat everything as 64-bit.
-  if (is_signed) {
-    const int64_t signed_data(static_cast<int64_t>(data));
-    if (signed_data < 0) {
-      granary_break_on_fault_if(buff >= buff_end);
-      *buff++ = '-';
-      data = static_cast<uint64_t>(-signed_data);
-    }
-  }
-
-  uint64_t max_base(base);
+  auto max_base = base;
   for (; data / max_base; max_base *= base) {}
   for (max_base /= base; max_base; max_base /= base) {
-    const uint64_t digit(data / max_base);
-    granary_break_on_fault_if(buff >= buff_end);
+    auto digit = data / max_base;
     if (digit < 10) {
-      *buff++ = static_cast<char>(static_cast<CharLiteral>(digit) + '0');
+      buff.Write(static_cast<char>(static_cast<CharLiteral>(digit) + '0'));
     } else {
-      *buff++ = static_cast<char>(static_cast<CharLiteral>(digit - 10) + 'a');
+      buff.Write(static_cast<char>(static_cast<CharLiteral>(digit - 10) + 'a'));
     }
     data -= digit * max_base;
   }
-
-  return buff;
 }
 
 // De-format a hexadecimal digit.
@@ -147,100 +137,95 @@ static unsigned long DeFormatGenericInt(const char *buffer, void *data,
 
 // Similar to `snprintf`. Returns the number of formatted characters.
 __attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char *buffer, unsigned long len, const char *format, ...) {
+unsigned long Format(char * __restrict buffer, unsigned long len,
+                     const char * __restrict format, ...) {
   va_list args;
   va_start(args, format);
 
-  bool is_64_bit(false);
-  bool is_signed(false);
-  unsigned long base(10);
-  unsigned long generic_int_data(0);
-
-  auto buffer_begin = buffer;
-  auto buffer_end = (buffer + len) - 1;
-
-  for (; *format && buffer < buffer_end; ) {
-    if ('%' != *format) {  // Normal characters.
-      *buffer++ = *format++;
-      continue;
-    } else if ('%' == format[1]) {
-      *buffer++ = *format++;
-      ++format;
-      continue;
-    }
-
-    is_64_bit = false;
-    is_signed = false;
-    base = 10;
-
-  retry:
-    switch (*++format) {
-      case 'c':  // Character.
-        granary_break_on_fault_if(buffer >= buffer_end);
-        *buffer++ = static_cast<char>(va_arg(args, int));
-        break;
-
-      case 's': {  // String.
-        auto sub_string = va_arg(args, const char *);
-        auto max_len = len - static_cast<unsigned long>(buffer - buffer_begin);
-        buffer += CopyString(buffer, max_len, sub_string);
-        break;
-      }
-
-      case 'd':  // Signed decimal number.
-        is_signed = true;
-        goto generic_int;
-
-      case 'x':  // Unsigned hexadecimal number.
-        is_signed = false;
-        base = 16;
-        goto generic_int;
-
-      case 'p':  // Pointer.
-        is_64_bit = true;
-        base = 16;
-        goto generic_int;
-
-      case 'u':  // Unsigned number.
-      generic_int:
-        generic_int_data = 0;
-        if (is_64_bit) {
-          generic_int_data = va_arg(args, uint64_t);
-        } else {
-          generic_int_data = static_cast<unsigned long>(va_arg(args, uint32_t));
-        }
-        buffer = FormatGenericInt(
-          buffer, buffer_end, generic_int_data, is_64_bit, is_signed, base);
-        break;
-
-      case 'l':  // Long (64-bit) number.
-        is_64_bit = true;
-        goto retry;
-
-      case '\0':  // End of string.
-        granary_break_on_fault_if(buffer >= buffer_end);
-        *buffer++ = '%';
-        break;
-
-      default:  // Unknown.
-        granary_break_on_fault();
-        break;
-    }
-
-    ++format;
+  if (!buffer || !format || !len) {
+    return 0;
   }
 
-  va_end(args);
+  auto is_long = false;
+  auto base = 10UL;
+  WriteBuffer buff(buffer, len);
 
-  granary_break_on_fault_if(buffer > buffer_end);
-  *buffer = '\0';
+  enum {
+    STATE_CONTINUE,
+    STATE_SEEN_FORMAT_SPEC  // Seen a `%`.
+  } state(STATE_CONTINUE);
 
-  return static_cast<unsigned long>(buffer - buffer_begin);
+  for (auto format_ch : NULTerminatedStringIterator(format)) {
+    switch (state) {
+      case STATE_CONTINUE:
+        if ('%' == format_ch) {
+          state = STATE_SEEN_FORMAT_SPEC;
+          is_long = false;
+          base = 10;
+        } else {
+          buff.Write(format_ch);
+        }
+        break;
+
+      case STATE_SEEN_FORMAT_SPEC:
+        if ('%' == format_ch) {
+          buff.Write(format_ch);
+          state = STATE_CONTINUE;
+        } else if ('c' == format_ch) {
+          buff.Write(static_cast<char>(va_arg(args, int)));
+        } else if ('s' == format_ch) {
+          buff.Write(va_arg(args, const char *));
+        } else if ('l' == format_ch) {  // Long un/signed integer.
+          is_long = true;
+        } else if ('d' == format_ch) {
+          long generic_int(0);
+          if (is_long) {
+            generic_int = va_arg(args, long);
+          } else {
+            generic_int = static_cast<long>(va_arg(args, int));
+          }
+          if (0 > generic_int) {
+            buff.Write('-');
+            generic_int = -generic_int;
+          }
+          FormatGenericInt(buff, static_cast<unsigned long>(generic_int), 10);
+        } else if ('u' == format_ch || 'x' == format_ch || 'p' == format_ch) {
+          if ('x' == format_ch) {
+            base = 16;
+          } else if ('p' == format_ch) {
+            base = 16;
+            is_long = true;
+          }
+          unsigned long generic_uint(0);
+          if (is_long) {
+            generic_uint = va_arg(args, unsigned long);
+          } else {
+            generic_uint = static_cast<unsigned long>(va_arg(args, unsigned));
+          }
+          if ('p' == format_ch) {
+            if (!generic_uint) {
+              buff.Write("(nil)");
+              break;
+            } else {
+              buff.Write("0x");
+            }
+          }
+          FormatGenericInt(buff, generic_uint, base);
+        } else {
+          buff.Write(format_ch);
+          state = STATE_CONTINUE;  // Unexpected char after `%`, elide the `%`.
+        }
+        break;
+    }
+  }
+  buff.Finalize();
+  return buff.NumCharsWritten();
 }
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.
 __attribute__ ((format(scanf, 2, 3)))
-int DeFormat(const char *buffer, const char *format, ...) {
+int DeFormat(const char * __restrict buffer,
+             const char * __restrict format, ...) {
   va_list args;
   va_start(args, format);
 
@@ -308,8 +293,7 @@ int DeFormat(const char *buffer, const char *format, ...) {
       case '\0':  // End of string.
         break;
 
-      default:
-        granary_break_on_fault();
+      default:  // Ignore.
         break;
     }
 
@@ -317,22 +301,6 @@ int DeFormat(const char *buffer, const char *format, ...) {
   }
   va_end(args);
   return num_args;
-}
-
-// Compares two C strings for equality.
-bool StringsMatch(const char *str1, const char *str2) {
-  if (str1 == str2) {
-    return true;
-  }
-  if ((str1 && !str2) || (!str1 && str2)) {
-    return false;
-  }
-  for (; *str1 == *str2; ++str1, ++str2) {
-    if (!*str1) {
-      return true;
-    }
-  }
-  return false;
 }
 
 }  // namespace granary
