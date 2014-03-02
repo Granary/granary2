@@ -170,46 +170,30 @@ int DeFormat(const char * __restrict buffer,
 
 // Apply a functor to each comma-separated value. This will remove leading
 // and trailing spaces.
-template <unsigned long buff_len, typename F>
+template <unsigned long kBufferLen, typename F>
 void ForEachCommaSeparatedString(const char *str, F functor) {
   if (!str) {
     return;
-  }
-  char buffer[buff_len] = {'\0'};
-  char *buff_begin = &(buffer[0]);
-  char *buff_end = &(buffer[buff_len - 1]);
-  char *buff_ch = &(buffer[0]);
-  char *last_non_space_ch = nullptr;
-  auto is_done = false;
-  for (auto ch = str; !is_done; ++ch) {
-    auto chr = *ch;
-    is_done = '\0' == chr;
-    auto is_found = is_done || ',' == chr;
-    if (buff_ch < buff_end) {
-      *buff_ch = chr;
-      if (' ' == chr) {
-        if (buff_ch > buff_begin) {
-          ++buff_ch;  // Strip leading spaces.
+  } else {
+    char buff[kBufferLen] = {'\0'};
+    do {
+      for (; *str && ' ' == *str; ++str) {}  // Skip leading spaces.
+      char *last_space = nullptr;
+      for (auto i = 0UL; *str && ',' != *str; ++str, ++i) {
+        if (i < (kBufferLen - 1)) {
+          buff[i] = *str;
+          buff[i + 1] = '\0';
+          last_space = ' ' == buff[i] ? &(buff[i]) : nullptr;
         }
-      } else if (',' == chr) {
-        *buff_ch = '\0';
-      } else {
-        last_non_space_ch = buff_ch;
-        ++buff_ch;
       }
-    }
-    if (is_found) {
-      *buff_end = '\0';
-      *buff_ch = '\0';
-      if (last_non_space_ch) {
-        last_non_space_ch[1] = '\0';  // Strip trailing spaces.
+      if (buff[0]) {
+        if (last_space) {
+          *last_space = '\0';
+        }
+        functor(buff);
       }
-      if (*buff_begin) {
-        functor(buff_begin);
-      }
-      last_non_space_ch = nullptr;  // Reset.
-      buff_ch = buff_begin;
-    }
+      buff[0] = '\0';
+    } while (0);
   }
 }
 }  // namespace granary

@@ -417,4 +417,16 @@ TEST(ForEachCommaSeparatedStringTest, Check) {
   ForEachCommaSeparatedString<10>(" , ", [](const char *) {
     ASSERT_TRUE(false);
   });
+  ForEachCommaSeparatedString<10>("a", [](const char *buff) {
+    EXPECT_TRUE(StringsMatch(buff, "a"));
+  });
+  ForEachCommaSeparatedString<10>("a ", [](const char *buff) {
+    EXPECT_TRUE(StringsMatch(buff, "a"));
+  });
+  ForEachCommaSeparatedString<10>(" a", [](const char *buff) {
+    EXPECT_TRUE(StringsMatch(buff, "a"));
+  });
+  ForEachCommaSeparatedString<10>(" a ", [](const char *buff) {
+    EXPECT_TRUE(StringsMatch(buff, "a"));
+  });
 }
