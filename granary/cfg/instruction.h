@@ -9,6 +9,10 @@
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
+#ifdef GRANARY_INTERNAL
+# include "granary/driver.h"
+#endif
+
 #include "granary/operand/match.h"
 
 namespace granary {
@@ -17,13 +21,6 @@ namespace granary {
 class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
-
-GRANARY_INTERNAL_DEFINITION
-namespace driver {
-class Instruction;
-class InstructionDecoder;
-class InstructionRelativizer;
-}  // namespace driver
 
 // Represents an abstract instruction.
 class Instruction {
@@ -153,7 +150,7 @@ class NativeInstruction : public Instruction {
   virtual ~NativeInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit NativeInstruction(driver::Instruction *instruction_);
+  explicit NativeInstruction(const driver::Instruction *instruction_);
 
   virtual int Length(void) const;
 
@@ -195,14 +192,13 @@ class NativeInstruction : public Instruction {
   virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(NativeInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
  protected:
-  GRANARY_INTERNAL_DEFINITION
-  std::unique_ptr<driver::Instruction> instruction;
+  GRANARY_INTERNAL_DEFINITION driver::Instruction instruction;
 
  private:
   friend class ControlFlowInstruction;
@@ -220,7 +216,7 @@ class BranchInstruction final : public NativeInstruction {
   virtual ~BranchInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline BranchInstruction(driver::Instruction *instruction_,
+  inline BranchInstruction(const driver::Instruction *instruction_,
                            const AnnotationInstruction *target_)
       : NativeInstruction(instruction_),
         target(target_) {}
@@ -260,7 +256,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   virtual ~ControlFlowInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  ControlFlowInstruction(driver::Instruction *instruction_,
+  ControlFlowInstruction(const driver::Instruction *instruction_,
                          BasicBlock *target_);
 
   // Return the target block of this CFI.

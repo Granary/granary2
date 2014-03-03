@@ -277,4 +277,17 @@
 // Mark a symbol as exported.
 #define GRANARY_EXPORT __attribute__((visibility("default")))
 
+// Switches between user and kernel space code.
+#ifdef GRANARY_WHERE_user
+# define GRANARY_IF_USER_ELSE(a, b) a
+# define GRANARY_IF_KERNEL_ELSE(a, b) b
+# define GRANARY_IF_USER(...) __VA_ARGS__
+# define GRANARY_IF_KERNEL(...)
+#else
+# define GRANARY_IF_USER_ELSE(a, b) b
+# define GRANARY_IF_KERNEL_ELSE(a, b) a
+# define GRANARY_IF_USER(...)
+# define GRANARY_IF_KERNEL(...) __VA_ARGS__
+#endif
+
 #endif  // GRANARY_BASE_BASE_H_

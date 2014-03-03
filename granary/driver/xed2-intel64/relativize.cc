@@ -16,7 +16,7 @@ namespace driver {
 // This sometimes results in additional instructions being
 void InstructionRelativizer::Relativize(NativeInstruction *native_instr_) {
   native_instr = native_instr_;
-  instr = native_instr->instruction.get();
+  instr = &(native_instr->instruction);
   if (instr->has_pc_rel_op) {
     switch (instr->iclass) {
       case XED_ICLASS_LEA: return RelativizeLEA();
@@ -49,7 +49,8 @@ static bool AddressNeedsRelativizing(PC relative_pc, PC cache_pc) {
 
 #define INSERT_BEFORE(...) \
   do { \
-    auto ir = new Instruction; \
+    Instruction ir_; \
+    auto ir = &ir_; \
     __VA_ARGS__ ; \
     auto ir_instr = new NativeInstruction(ir); \
     native_instr->InsertBefore( \

@@ -13,6 +13,16 @@
 namespace granary {
 namespace driver {
 
+Instruction::Instruction(void) {
+  memset(this, 0, sizeof *this);
+  iclass = XED_ICLASS_INVALID;
+  category = XED_CATEGORY_INVALID;
+}
+
+Instruction::Instruction(const Instruction &that) {
+  memcpy(this, &that, sizeof that);
+}
+
 // Get the PC-relative branch target.
 PC Instruction::BranchTarget(void) const {
   return ops[0].rel.pc;  // TODO(pag): CALL_FAR, JMP_FAR?

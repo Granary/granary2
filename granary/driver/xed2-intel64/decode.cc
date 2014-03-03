@@ -79,6 +79,14 @@ static xed_error_enum_t DecodeBytes(xed_decoded_inst_t *xedd, PC pc) {
   }
 }
 
+// Fill in an operand as if it's a register operand.
+static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg,
+                                int8_t width) {
+  instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
+  instr_op->u.reg = reg;
+  instr_op->width = width;
+}
+
 // Pull out a register operand from the XED instruction.
 static void ConvertRegisterOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
                                    xed_operand_enum_t op_name) {
@@ -108,7 +116,7 @@ static void ConvertRelativeBranch(Instruction *instr, Operand *instr_op,
     case 1: instr->length += 3; break;
     case 2: instr->length += 2; break;
     case 4: break;
-    default: granary_break_on_fault();
+    default: GRANARY_ASSERT(false);
   }
 }
 
@@ -150,7 +158,8 @@ static void ConvertEffectiveAddress(Instruction *instr, Operand *instr_op,
     instr_op->rel.imm = NextDecodedAddress(instr) + disp;
 
     if (XED_ICLASS_LEA != instr->iclass) {
-      instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
+      instr_op->width = static_cast<int8_t>(
+          xed3_operand_get_mem_width(xedd) * 8);
       instr->has_memory_op = true;
     } else {
       instr_op->width = GRANARY_ARCH_ADDRESS_WIDTH;
@@ -181,6 +190,89 @@ static void ConvertImmediateOperand(Operand *instr_op, xed_decoded_inst_t *xedd,
       xed_decoded_inst_get_immediate_width_bits(xedd));
 }
 
+// Convert a non-terminal operand into a Granary operand. This will sometimes
+// cheat by converting non-terminal operands into a close-enough representation
+// that benefits other parts of Granary (e.g. the virtual register system). Not
+// all non-terminal operands have a decoding that Granary cares about.
+static bool ConvertNonTerminalOperand(Operand *instr_op,
+                                      const xed_operand_t *op) {
+  switch (xed_operand_nonterminal_name(op)) {
+    case XED_NONTERMINAL_AR10:
+      FillRegisterOperand(instr_op, XED_REG_R10, 64);
+      return true;
+    case XED_NONTERMINAL_AR11:
+      FillRegisterOperand(instr_op, XED_REG_R11, 64);
+      return true;
+    case XED_NONTERMINAL_AR12:
+      FillRegisterOperand(instr_op, XED_REG_R12, 64);
+      return true;
+    case XED_NONTERMINAL_AR13:
+      FillRegisterOperand(instr_op, XED_REG_R13, 64);
+      return true;
+    case XED_NONTERMINAL_AR14:
+      FillRegisterOperand(instr_op, XED_REG_R14, 64);
+      return true;
+    case XED_NONTERMINAL_AR15:
+      FillRegisterOperand(instr_op, XED_REG_R15, 64);
+      return true;
+    case XED_NONTERMINAL_AR8:
+      FillRegisterOperand(instr_op, XED_REG_R8, 64);
+      return true;
+    case XED_NONTERMINAL_AR9:
+      FillRegisterOperand(instr_op, XED_REG_R9, 64);
+      return true;
+    case XED_NONTERMINAL_ARAX:
+      FillRegisterOperand(instr_op, XED_REG_RAX, 64);
+      return true;
+    case XED_NONTERMINAL_ARBP:
+      FillRegisterOperand(instr_op, XED_REG_RBP, 64);
+      return true;
+    case XED_NONTERMINAL_ARBX:
+      FillRegisterOperand(instr_op, XED_REG_RBX, 64);
+      return true;
+    case XED_NONTERMINAL_ARCX:
+      FillRegisterOperand(instr_op, XED_REG_RCX, 64);
+      return true;
+    case XED_NONTERMINAL_ARDI:
+      FillRegisterOperand(instr_op, XED_REG_RDI, 64);
+      return true;
+    case XED_NONTERMINAL_ARDX:
+      FillRegisterOperand(instr_op, XED_REG_RDX, 64);
+      return true;
+    case XED_NONTERMINAL_ARSI:
+      FillRegisterOperand(instr_op, XED_REG_RSI, 64);
+      return true;
+    case XED_NONTERMINAL_ARSP:
+      FillRegisterOperand(instr_op, XED_REG_RSP, 64);
+      return true;
+    case XED_NONTERMINAL_OEAX:
+      FillRegisterOperand(instr_op, XED_REG_EAX, 32);
+      return true;
+    case XED_NONTERMINAL_ORAX:
+      FillRegisterOperand(instr_op, XED_REG_RAX, 64);
+      return true;
+    case XED_NONTERMINAL_ORBP:
+      FillRegisterOperand(instr_op, XED_REG_RBP, 64);
+      return true;
+    case XED_NONTERMINAL_ORDX:
+      FillRegisterOperand(instr_op, XED_REG_RDX, 64);
+      return true;
+    case XED_NONTERMINAL_ORSP:
+      FillRegisterOperand(instr_op, XED_REG_RSP, 64);
+      return true;
+    case XED_NONTERMINAL_RIP:
+      FillRegisterOperand(instr_op, XED_REG_RIP, 64);
+      return true;
+    case XED_NONTERMINAL_SRBP:
+      FillRegisterOperand(instr_op, XED_REG_RBP, 64);
+      return true;
+    case XED_NONTERMINAL_SRSP:
+      FillRegisterOperand(instr_op, XED_REG_RSP, 64);
+      return true;
+    default: return false;
+  }
+}
+
 // Returns true if an implicit operand is ambiguous. An implicit operand is
 // ambiguous if there are multiple encodings for the same iclass, and the given
 // operand (indexed by `op`) is explicit for some iforms but not others.
@@ -197,9 +289,11 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
   auto iform = xed_decoded_inst_get_iform_enum(xedd);
   auto op_name = xed_operand_name(op);
   auto op_type = xed_operand_type(op);
-  auto instr_op = &(instr->ops[instr->num_ops++]);
+  auto instr_op = &(instr->ops[op_num]);
   instr_op->rw = xed_operand_rw(op);
 
+  bool is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
+                     IsAmbiguousOperand(instr->iclass, iform, op_num);
   if (xed_operand_is_register(op_name)) {
     ConvertRegisterOperand(instr_op, xedd, op_name);
   } else if (XED_OPERAND_RELBR == op_name) {
@@ -214,14 +308,16 @@ static void ConvertDecodedOperand(Instruction *instr, xed_decoded_inst_t *xedd,
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr_op, xedd, op_name);
   } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {  // More complicated.
-    granary_break_on_fault();  // TODO(pag): Implement this!
+    if (!ConvertNonTerminalOperand(instr_op, op)) {
+      instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;
+      GRANARY_ASSERT(!is_explicit);  // TODO(pag): Implement this!
+    }
   } else {
-    granary_break_on_fault();  // TODO(pag): Implement this!
+    instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;
+    GRANARY_ASSERT(false);  // TODO(pag): Implement this!
   }
 
-  // Only include explicit operands in the count.
-  if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
-      IsAmbiguousOperand(instr->iclass, iform, op_num)) {
+  if (is_explicit) {
     ++instr->num_explicit_ops;
   }
 }
@@ -231,6 +327,7 @@ static void ConvertDecodedOperands(Instruction *instr,
                                    xed_decoded_inst_t *xedd) {
   auto xedi = xed_decoded_inst_inst(xedd);
   auto num_ops = xed_inst_noperands(xedi);
+  instr->num_ops = static_cast<int8_t>(num_ops);
   for (auto o = 0U; o < num_ops; ++o) {
     if (instr->num_explicit_ops < XED_ENCODER_OPERANDS_MAX) {
       ConvertDecodedOperand(instr, xedd, xed_inst_operand(xedi, o), o);

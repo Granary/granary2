@@ -11,7 +11,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 #include "granary/code/assemble.h"
 #include "granary/code/edge.h"
 
@@ -274,6 +274,7 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   auto blocks = Schedule(cfg);
   auto relaxed_size = Resize(blocks);
   auto code = code_cache->AllocateBlock(relaxed_size);
+  CodeCacheTransaction transaction(code_cache);
   Encode(blocks, code);
 }
 

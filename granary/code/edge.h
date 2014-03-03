@@ -4,7 +4,7 @@
 #define GRANARY_CODE_EDGE_H_
 
 #ifndef GRANARY_INTERNAL
-# define "This code is internal to Granary."
+# error "This code is internal to Granary."
 #endif
 
 #include "granary/base/pc.h"

@@ -90,12 +90,12 @@ void BlockFactory::AddFallThroughInstruction(
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR
     // instruction for the fall-through.
-    std::unique_ptr<driver::Instruction> dinstr(new driver::Instruction);
-    if (!decoder->Decode(dinstr.get(), pc)) {
+    driver::Instruction dinstr;
+    if (!decoder->Decode(&dinstr, pc)) {
       last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
-    } else if (dinstr->IsUnconditionalJump()) {
+    } else if (dinstr.IsUnconditionalJump()) {
       last_instr->InsertAfter(std::unique_ptr<Instruction>(
-          MakeInstruction(context, dinstr.release())));
+          MakeInstruction(context, &dinstr)));
     } else {
       last_instr->InsertAfter(lir::Jump(this, pc));
     }
@@ -107,15 +107,14 @@ void BlockFactory::AddFallThroughInstruction(
 void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
   driver::InstructionDecoder decoder;
   for (; !IsA<ControlFlowInstruction *>(instr); ) {
-    auto dinstr = new driver::Instruction;
     auto decoded_pc = pc;
-    if (!decoder.DecodeNext(dinstr, &pc)) {
+    driver::Instruction dinstr;
+    if (!decoder.DecodeNext(&dinstr, &pc)) {
       instr->InsertAfter(lir::Jump(new NativeBasicBlock(decoded_pc)));
-      delete dinstr;
       return;
     }
     instr = instr->InsertAfter(std::unique_ptr<Instruction>(
-        MakeInstruction(context, dinstr)));
+        MakeInstruction(context, &dinstr)));
     context->AnnotateInstruction(instr);
   }
   AddFallThroughInstruction(&decoder, instr, pc);
@@ -128,7 +127,6 @@ void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
     auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
     if (meta_block) {
       meta_block->cached_meta_hash = HashMetaData(hasher, meta_block);
-
       auto direct_block = DynamicCast<DirectBasicBlock *>(block);
       if (!direct_block) {
         meta_data_filter.Add({meta_block->cached_meta_hash});

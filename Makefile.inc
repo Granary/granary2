@@ -21,7 +21,7 @@ GRANARY_LINT_CODE ?= 1# 0, 1
 # Force Granary into stand-alone mode in user space if we're making a test
 # build.
 ifeq (test,$(GRANARY_TARGET))
-	GRANARY_TARGET := user
+	GRANARY_WHERE := user
 endif
 
 GRANARY_KERNEL_VERSION = $(shell uname -r)
@@ -82,6 +82,7 @@ endif
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
 GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR) -DGRANARY_NAME=$(GRANARY_NAME)
+GRANARY_COMMON_FLAGS += -DGRANARY_WHERE_$(GRANARY_WHERE)
 
 # Use GNU C99 and standard C++11.
 GRANARY_CC_FLAGS += -std=gnu99

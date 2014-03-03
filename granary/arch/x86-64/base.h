@@ -18,6 +18,10 @@ enum {
   ADDRESS_SIZE_BYTES = 8,
   ADDRESS_SIZE_BITS = 64,
 
+  // Size of widest general purpose registers.
+  GPR_WIDTH_BYTES = ADDRESS_SIZE_BYTES,
+  GPR_WIDTH_BITS = ADDRESS_SIZE_BITS,
+
   // Excludes %rsp, excludes %rip
   NUM_GENERAL_PURPOSE_REGISTERS = 14,
 

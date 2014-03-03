@@ -5,7 +5,7 @@
 #include "granary/base/list.h"
 #include "granary/base/string.h"
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 
 #include "granary/breakpoint.h"
 #include "granary/context.h"

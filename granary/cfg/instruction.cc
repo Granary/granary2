@@ -6,7 +6,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/breakpoint.h"
-#include "granary/driver.h"
+
 
 namespace granary {
 
@@ -102,69 +102,69 @@ bool AnnotationInstruction::IsBranchTarget(void) const {
   return LABEL == annotation && nullptr != data;
 }
 
-NativeInstruction::NativeInstruction(driver::Instruction *instruction_)
-    : instruction(instruction_) {}
+NativeInstruction::NativeInstruction(const driver::Instruction *instruction_)
+    : instruction(*instruction_) {}
 
 NativeInstruction::~NativeInstruction(void) {}
 
 // Get the length of the instruction.
 int NativeInstruction::Length(void) const {
-  return instruction->Length();
+  return instruction.Length();
 }
 
 // Returns true if this instruction is essentially a no-op, i.e. it does
 // nothing and has no observable side-effects.
 bool NativeInstruction::IsNoOp(void) const {
-  return instruction->IsNoOp();
+  return instruction.IsNoOp();
 }
 
 bool NativeInstruction::IsFunctionCall(void) const {
-  return instruction->IsFunctionCall();
+  return instruction.IsFunctionCall();
 }
 
 bool NativeInstruction::IsFunctionReturn(void) const {
-  return instruction->IsFunctionReturn();
+  return instruction.IsFunctionReturn();
 }
 
 bool NativeInstruction::IsInterruptCall(void) const {
-  return instruction->IsInterruptCall();
+  return instruction.IsInterruptCall();
 }
 
 bool NativeInstruction::IsInterruptReturn(void) const {
-  return instruction->IsInterruptReturn();
+  return instruction.IsInterruptReturn();
 }
 
 bool NativeInstruction::IsSystemCall(void) const {
-  return instruction->IsSystemCall();
+  return instruction.IsSystemCall();
 }
 
 bool NativeInstruction::IsSystemReturn(void) const {
-  return instruction->IsSystemReturn();
+  return instruction.IsSystemReturn();
 }
 
 bool NativeInstruction::IsJump(void) const {
-  return instruction->IsJump();
+  return instruction.IsJump();
 }
 
 bool NativeInstruction::IsUnconditionalJump(void) const {
-  return instruction->IsUnconditionalJump();
+  return instruction.IsUnconditionalJump();
 }
 
 bool NativeInstruction::IsConditionalJump(void) const {
-  return instruction->IsConditionalJump();
+  return instruction.IsConditionalJump();
 }
 
 bool NativeInstruction::HasIndirectTarget(void) const {
-  return instruction->HasIndirectTarget();
+  return instruction.HasIndirectTarget();
 }
 
 bool NativeInstruction::IsAppInstruction(void) const {
-  return nullptr != instruction->GetAppPC();
+  return nullptr != instruction.GetAppPC();
 }
 
 // Encode this instruction at `cache_pc`.
 bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
-  return encoder->Encode(instruction.get(), cache_pc);
+  return encoder->Encode(&instruction, cache_pc);
 }
 
 // Return the targeted instruction of this branch.
@@ -174,7 +174,7 @@ const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    driver::Instruction *instruction_, BasicBlock *target_)
+    const driver::Instruction *instruction_, BasicBlock *target_)
       : NativeInstruction(instruction_),
         target(target_) {
   target->Acquire();
@@ -204,11 +204,11 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
 bool ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
   if (IsA<InstrumentedBasicBlock *>(target) &&
       !IsA<IndirectBasicBlock *>(target)) {
-    instruction->SetBranchTarget(target->StartCachePC());
+    instruction.SetBranchTarget(target->StartCachePC());
   } else if (IsA<NativeBasicBlock *>(target)) {
-    instruction->SetBranchTarget(target->StartAppPC());
+    instruction.SetBranchTarget(target->StartAppPC());
   }
-  return encoder->Encode(instruction.get(), cache_pc);
+  return encoder->Encode(&instruction, cache_pc);
 }
 
 // Change the target of a control-flow instruction. This can involve an
@@ -222,8 +222,8 @@ void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
 
 // Encode this instruction at `cache_pc`.
 bool BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
-  instruction->SetBranchTarget(target->StartCachePC());
-  return encoder->Encode(instruction.get(), cache_pc);
+  instruction.SetBranchTarget(target->StartCachePC());
+  return encoder->Encode(&instruction, cache_pc);
 }
 
 }  // namespace granary

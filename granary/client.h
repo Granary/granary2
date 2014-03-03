@@ -10,8 +10,7 @@ namespace granary {
 // Initialize a client.
 #define GRANARY_CLIENT_INIT(...) \
   extern "C" { \
-  __attribute__ ((visibility ("default"))) \
-  void GRANARY_CLIENT_INIT_FUNC_NAME(void) { \
+  GRANARY_EXPORT void GRANARY_CLIENT_INIT_FUNC_NAME(void) { \
     GRANARY_USING_NAMESPACE granary; \
     __VA_ARGS__ \
   } \

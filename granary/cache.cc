@@ -6,7 +6,7 @@
 
 #include "granary/base/option.h"
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 
 GRANARY_DEFINE_positive_int(code_cache_slab_size, 8,
     "The number of pages allocated at once to store cache code. Each "
@@ -16,7 +16,8 @@ GRANARY_DEFINE_positive_int(code_cache_slab_size, 8,
 namespace granary {
 
 CodeCache::CodeCache(int slab_size)
-    : allocator(0 >= slab_size ? FLAG_code_cache_slab_size : slab_size) {}
+    : lock(),
+      allocator(0 >= slab_size ? FLAG_code_cache_slab_size : slab_size) {}
 
 // Allocate a block of code from this code cache.
 CachePC CodeCache::AllocateBlock(int size) {
@@ -30,6 +31,20 @@ CachePC CodeCache::AllocateBlock(int size) {
   } else {
     return allocator.Allocate(arch::CACHE_LINE_SIZE_BYTES, size);
   }
+}
+
+// Begin a transaction that will read or write to the code cache.
+//
+// Note: Transactions are distinct from allocations. Therefore, many threads/
+//       cores can simultaneously allocate from a code cache, but only one
+//       should be able to read/write data to the cache at a given time.
+void CodeCache::BeginTransaction(void) {
+  lock.Acquire();
+}
+
+// End a transaction that will read or write to the code cache.
+void CodeCache::EndTransaction(void) {
+  lock.Release();
 }
 
 }  // namespace granary

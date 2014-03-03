@@ -10,7 +10,7 @@
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 
 #include "granary/context.h"
 #include "granary/metadata.h"

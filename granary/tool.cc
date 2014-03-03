@@ -117,8 +117,9 @@ void ToolManager::Register(const char *name) {
   GRANARY_ASSERT(!is_finalized);
   auto desc = FindDescByName(name);
   if (desc) {
+    is_registered[desc->id] = true;
     Register(desc);
-    descriptions[desc->id] = desc;
+    descriptions[num_registed++] = desc;
     max_size = GRANARY_MAX(max_size, desc->size);
     max_align = GRANARY_MAX(max_align, desc->align);
   }

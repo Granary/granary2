@@ -4,7 +4,6 @@
 #define GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
 
 #include "granary/base/base.h"
-#include "granary/base/new.h"
 #include "granary/base/pc.h"
 
 #include "granary/driver/xed2-intel64/xed.h"
@@ -61,6 +60,9 @@ static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, rel.pc),
 // of `Instruction` to `xed_encoder_request_t`.
 class Instruction {
  public:
+  Instruction(void);
+  Instruction(const Instruction &that);
+
   PC BranchTarget(void) const;
   void SetBranchTarget(PC);
 
@@ -138,11 +140,6 @@ class Instruction {
     CachePC encoded_pc;
     PC pc;
   } __attribute__((packed));
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(Instruction, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
-  })
 } __attribute__((packed));
 
 }  // namespace driver

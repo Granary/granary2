@@ -7,7 +7,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 
 // Implements a mock Granary `CodeCache`.
 class MockCodeCache : public granary::CodeCacheInterface {
@@ -18,6 +18,10 @@ class MockCodeCache : public granary::CodeCacheInterface {
   // Allocate a block of code from this code cache.
   MOCK_METHOD1(AllocateBlock,
                granary::CachePC(int size));
+
+  // Lock the code cache.
+  MOCK_METHOD0(BeginTransaction, void());
+  MOCK_METHOD0(EndTransaction, void());
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockCodeCache);

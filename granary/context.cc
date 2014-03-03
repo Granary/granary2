@@ -6,7 +6,7 @@
 
 #include "granary/cfg/control_flow_graph.h"
 
-#include "granary/code/cache.h"
+#include "granary/cache.h"
 #include "granary/code/assemble.h"
 #include "granary/code/instrument.h"
 
