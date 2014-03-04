@@ -33,7 +33,8 @@ void VirtualRegister::DecodeArchRegister(uint64_t reg_) {
 
   // Non-general-purpose registers are treated as "fixed" architectural
   // registers.
-  if (XED_REG_RAX > widest_reg || XED_REG_R15 < widest_reg) {
+  if (XED_REG_RAX > widest_reg || XED_REG_R15 < widest_reg ||
+      XED_REG_RSP == widest_reg) {
     kind = VR_KIND_ARCH_FIXED;
     reg_num = static_cast<decltype(reg_num)>(reg_);
     return;
