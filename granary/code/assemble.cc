@@ -70,7 +70,7 @@ static void RemoveUnreachableInstructions(DecodedBasicBlock *block) {
     }
   }
 }
-
+/*
 // Relativizie instructions within a basic block. Instructions with relative
 // components might not be safe because the code cache's placement might place
 // them too far away. This is typical in user space on x86 with 32-bit relative
@@ -87,7 +87,7 @@ static void RelativizeInstructions(CodeCacheInterface *cache,
       relativizer.Relativize(native_instr);
     }
   }
-}
+}*/
 
 // Preprocess the blocks. This involves removing unreachable instructions and
 // making native instructions with relative components (e.g. RIP-relative
@@ -98,7 +98,9 @@ static void PreprocessBlocks(CodeCacheInterface *cache,
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
       RemoveUnreachableInstructions(decoded_block);
-      RelativizeInstructions(cache, decoded_block);
+
+      GRANARY_UNUSED(cache);
+      //RelativizeInstructions(cache, decoded_block);  // TODO(pag): ??
     }
   }
 }
@@ -148,7 +150,7 @@ static CachePC StageEncode(DecodedBasicBlock *block, CachePC cache_pc) {
   }
   return cache_pc;
 }
-
+/*
 // Returns the target of a control-flow or branch instruction.
 static PC TargetPC(const Instruction *instr) {
   if (IsA<const ControlFlowInstruction *>(instr)) {
@@ -166,18 +168,21 @@ static PC TargetPC(const Instruction *instr) {
     return target->StartCachePC();
   }
   return nullptr;
-}
+}*/
 
 // Returns true if an instruction can be removed. The first test is jumping to
 // the next instruction.
 static bool CanRemoveInstruction(const Instruction *instr) {
+  /*
   auto instr_pc = instr->StartCachePC();
   auto target_pc = TargetPC(instr);
   if (target_pc) {
-    return (instr_pc + instr->Length()) == target_pc;
+    return (instr_pc + instr->DecodedLength()) == target_pc;
   }
   auto native_instr = DynamicCast<const NativeInstruction *>(instr);
-  return native_instr && native_instr->IsNoOp();
+  return native_instr && native_instr->IsNoOp();*/
+  GRANARY_UNUSED(instr);  // TODO(pag): Implement me!
+  return false;
 }
 
 // Returns true if the encoding of a particular instruction can be shrunk.

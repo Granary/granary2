@@ -31,15 +31,10 @@ Instruction *Instruction::Previous(void) {
   return list.GetPrevious(this);
 }
 
-// By default, non-native instructions are treated as having zero length.
-int Instruction::Length(void) const {
-  return 0;
-}
-
 // Pretend to encode this instruction at address `cache_pc`.
 CachePC Instruction::StageEncode(CachePC cache_pc_) {
   cache_pc = cache_pc_;
-  return cache_pc + this->Length();
+  return cache_pc;  // TODO(pag): Implement me.
 }
 
 // Encode this instruction at `cache_pc`.
@@ -108,8 +103,8 @@ NativeInstruction::NativeInstruction(const driver::Instruction *instruction_)
 NativeInstruction::~NativeInstruction(void) {}
 
 // Get the length of the instruction.
-int NativeInstruction::Length(void) const {
-  return instruction.Length();
+int NativeInstruction::DecodedLength(void) const {
+  return instruction.DecodedLength();
 }
 
 // Returns true if this instruction is essentially a no-op, i.e. it does

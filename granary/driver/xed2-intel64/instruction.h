@@ -8,14 +8,19 @@
 
 #include "granary/driver/xed2-intel64/xed.h"
 
+#include "granary/register/register.h"
+
 namespace granary {
 namespace driver {
 
-// Basically a `xed_encoder_operand_t`, but where if the instruction contains
-// a PC-relative operand (e.g. CALL/JMP/Jcc/LEA) then we maintain the resolved
-// address in `rel_imm`/`rel_pc`.
 class Operand {
  public:
+  Operand(void)
+      : type(XED_ENCODER_OPERAND_TYPE_INVALID),
+        width(0),
+        rw(XED_OPERAND_ACTION_INVALID),
+        is_sticky(false) {}
+
   inline bool IsRead(void) const {
     return xed_operand_action_read(rw);
   }
@@ -32,89 +37,145 @@ class Operand {
     return xed_operand_action_conditional_write(rw);
   }
 
-  xed_encoder_operand_type_t type;
-  int8_t width;  // Operand width in bits.
-  xed_operand_action_enum_t rw;  // Readable, writable, etc.
-
   union {
-    decltype(xed_encoder_operand_t().u) u;
+    // Branch target.
     union {
-      intptr_t imm;
-      PC pc;
-      AppPC app_pc;
-      CachePC cache_pc;
-    } __attribute__((packed)) rel;
+      intptr_t as_int;
+      uintptr_t as_uint;
+      PC as_pc;
+      AppPC as_app_pc;
+      CachePC as_cache_pc;
+    } branch_target;
+
+    // Immediate constant.
+    union {
+      intptr_t as_int;
+      uintptr_t as_uint;
+    } imm;
+
+    // Direct memory address.
+    union {
+      const void *as_ptr;
+      intptr_t as_int;
+      uintptr_t as_uint;
+      PC as_pc;
+    } addr;
+
+    // Register. If this is a memory operand then this implies a de-reference
+    // of this register.
+    VirtualRegister reg;
   } __attribute__((packed));
+
+  xed_encoder_operand_type_t type:8;
+  int8_t width;  // Operand width in bits.
+  xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
+  bool is_sticky;  // This operand cannot be changed.
+
 } __attribute__((packed));
 
-// Make sure these two fields overlap so that we can treat relative immediates
-// (signed) just like immediates (unsigned).
-static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, u.imm0),
-    "Bad packing of `Operand::rel::imm`. Does not overlap `Operand::u::imm0`.");
-static_assert(offsetof(Operand, rel.imm) == offsetof(Operand, rel.pc),
-    "Bad packing of `Operand::rel::imm`. Does not overlap `Operand::rel::pc`.");
+static_assert(sizeof(Operand) <= 16,
+    "Invalid structure packing of `granary::driver::Operand`.");
 
 // Represents a high-level API to the XED encoder/decoder. This API represents
 // instructions at the granularity of instruction classes, and supports
 // de-selection of `xed_decoded_inst_t` to `Instruction` and selections
 // of `Instruction` to `xed_encoder_request_t`.
+//
+// An interesting side-effect of using virtual register operands is that
+// instructions have no real "length". That is, it is only when the virtual
+// register pass has replaced everything and these IR instructions have been
+// lowered into `xed_encoder_request_t` (and then to `xed_decoded_inst_t`) that
+// the length of a particular instruction becomes meaningful.
 class Instruction {
  public:
   Instruction(void);
   Instruction(const Instruction &that);
 
-  PC BranchTarget(void) const;
-  void SetBranchTarget(PC);
+  // Get the decoded length of this instruction.
+  inline int DecodedLength(void) const {
+    return static_cast<int>(decoded_length);
+  }
 
-  bool IsFunctionCall(void) const;
-  bool IsFunctionReturn(void) const;
-  bool IsInterruptCall(void) const;
-  bool IsInterruptReturn(void) const;
-  bool IsSystemCall(void) const;
-  bool IsSystemReturn(void) const;
-  bool IsJump(void) const;
-  bool IsUnconditionalJump(void) const;
-  bool IsConditionalJump(void) const;
+  // Get the PC-relative branch target.
+  inline PC BranchTarget(void) const {
+    return ops[0].branch_target.as_pc;  // TODO(pag): CALL_/JMP_FAR
+  }
+
+  // Set the PC-relative branch target.
+  inline void SetBranchTarget(PC pc) {
+    ops[0].branch_target.as_pc = pc;
+  }
+
+  inline bool IsFunctionCall(void) const {
+    return XED_CATEGORY_CALL == category;
+  }
+
+  inline bool IsFunctionReturn(void) const {
+    return XED_ICLASS_RET_FAR == iclass || XED_ICLASS_RET_NEAR == iclass;
+  }
+
+  inline bool IsInterruptCall(void) const {
+    return XED_CATEGORY_INTERRUPT == category;
+  }
+
+  inline bool IsInterruptReturn(void) const {
+    return XED_ICLASS_IRET == iclass || XED_ICLASS_IRETD == iclass ||
+           XED_ICLASS_IRETQ == iclass;
+  }
+
+  inline bool IsSystemCall(void) const {
+    return XED_CATEGORY_SYSCALL == category;
+  }
+
+  inline bool IsSystemReturn(void) const {
+    return XED_CATEGORY_SYSRET == category;
+  }
+
+  inline bool IsConditionalJump(void) const {
+    return XED_CATEGORY_COND_BR == category;
+  }
+
+  inline bool IsUnconditionalJump(void) const {
+    // TODO(pag): XABORT is included in this op category.
+    return XED_CATEGORY_UNCOND_BR == category;
+  }
+
+  inline bool IsJump(void) const {
+    return IsUnconditionalJump() || IsConditionalJump();
+  }
+
   bool HasIndirectTarget(void) const;
 
   inline AppPC GetAppPC(void) const {
     return decoded_pc;
   }
 
-  int Length(void) const;
-  bool IsNoOp(void) const;
+  inline bool IsNoOp(void) const {
+    return XED_CATEGORY_NOP == category;
+  }
+
+  // Where was this instruction encoded/decoded.
+  union {
+    AppPC decoded_pc;
+    uintptr_t decoded_addr;
+  } __attribute__((packed));
 
   // Instruction class. This roughly corresponds to an opcode.
-  xed_iclass_enum_t iclass;
-  xed_category_enum_t category;
-  xed_encoder_prefixes_t prefixes;
+  xed_iclass_enum_t iclass:16;
+  xed_category_enum_t category:8;
 
-  // Length of the instruction in bytes. Invalid if `needs_encoding` is true.
-  int8_t length;
+  // Decoded length of this instruction, or 0 if it wasn't decoded.
+  uint8_t decoded_length;
 
-  // Number of explicit operands.
-  int8_t num_explicit_ops;
-
-  // Total number of operands.
-  int8_t num_ops;
-
-  // The effective operand width at decode time, or -1 if unknown.
-  int8_t effective_operand_width;
-
-  // This instruction has been changed since being decoded, or was created and
-  // so has never been encoded/decoded.
-  bool needs_encoding:1;
-
-  // Does this instruction have a PC-relative operand? This is used by
-  // `granary/drivers/xed2-intel64/relativize.cc` to more quickly figure out
-  // if an instruction is of interest.
+  // Instruction prefixes.
   //
-  // This behaves a bit like `needs_encoding`, because if we have a PC-relative
-  // operand then it's treated as requiring relativization.
-  bool has_pc_rel_op:1;
-
-  // Does this instruction have a fixed, known length?
-  bool has_fixed_length:1;
+  // TODO(pag): Remove branch hints? Might be needed for special non-
+  //            control-flow instructions.
+  bool has_prefix_rep:1;
+  bool has_prefix_repne:1;
+  bool has_prefix_lock:1;
+  bool has_prefix_br_hint_taken:1;
+  bool has_prefix_br_hint_not_taken:1;
 
   // Is this an atomic operation?
   bool is_atomic:1;
@@ -122,24 +183,19 @@ class Instruction {
   // Does this instruction have a memory operand?
   bool has_memory_op:1;
 
-  // Does this instruction have a virtual register operand?
-  bool has_virtual_reg_op:1;
+  // Number of explicit operands.
+  uint8_t num_explicit_ops:4;
 
-  // Raw bytes of this instruction. When decoding an instruction, we copy the
-  // decoded bytes into here. When encoding an instruction, we overwrite these
-  // bytes.
-  uint8_t encode_buffer[XED_MAX_INSTRUCTION_BYTES];
+  // Total number of operands.
+  uint8_t num_ops:4;
+
+  // The effective operand width at decode time, or -1 if unknown.
+  int8_t effective_operand_width;
 
   // Explicit operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
   Operand ops[XED_ENCODER_OPERANDS_MAX];
 
-  // Where was this instruction encoded/decoded.
-  union {
-    AppPC decoded_pc;
-    CachePC encoded_pc;
-    PC pc;
-  } __attribute__((packed));
 } __attribute__((packed));
 
 }  // namespace driver

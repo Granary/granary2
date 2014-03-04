@@ -82,4 +82,14 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   }
 }
 
+// Allocate a new virtual register.
+VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(
+    VirtualRegisterKind kind, int num_bytes) {
+  GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
+  GRANARY_ASSERT((1 << 16) > num_virtual_regs);
+  return VirtualRegister(kind,
+                         static_cast<uint8_t>(num_bytes),
+                         static_cast<uint16_t>(num_virtual_regs++));
+}
+
 }  // namespace granary

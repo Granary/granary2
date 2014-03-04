@@ -9,7 +9,6 @@
 
 #include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
-#include "granary/driver/xed2-intel64/relativize.h"
 
 namespace granary {
 

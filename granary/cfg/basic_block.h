@@ -4,6 +4,7 @@
 #define GRANARY_CFG_BASIC_BLOCK_H_
 
 #include "granary/arch/base.h"
+
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
 #include "granary/base/list.h"
@@ -11,7 +12,12 @@
 #include "granary/base/refcount.h"
 #include "granary/base/pc.h"
 #include "granary/base/type_trait.h"
+
 #include "granary/cfg/iterator.h"
+
+#ifdef GRANARY_INTERNAL
+# include "granary/register/register.h"
+#endif
 
 namespace granary {
 
@@ -201,9 +207,15 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   virtual ~DecodedBasicBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  explicit DecodedBasicBlock(BlockMetaData *meta_);
+  explicit DecodedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
 
+  // Return an iterator of the successor blocks of this basic block.
   virtual detail::SuccessorBlockIterator Successors(void) const override;
+
+  // Allocates a new temporary virtual register for use by instructions within
+  // this basic block.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister AllocateVirtualRegister(int num_bytes=arch::GPR_WIDTH_BYTES);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(DecodedBasicBlock, {
@@ -226,8 +238,14 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   // Return an iterator for the application instructions of a basic block.
   AppInstructionIterator AppInstructions(void) const;
 
+  // Add a new instruction to the beginning of the instruction list.
+  void PrependInstruction(std::unique_ptr<Instruction> instr);
+
+  // Add a new instruction to the end of the instruction list.
+  void AppendInstruction(std::unique_ptr<Instruction> instr);
+
   // Used to find the next scheduled decoded basic block. This field is only
-  // updated at assembly time.
+  // updated at assembly/block scheduling time.
   GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *next;
 
  private:
@@ -237,6 +255,9 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
 
   GRANARY_INTERNAL_DEFINITION
   void FreeInstructionList(void);
+
+  // The local control-flow graph to which this block belongs.
+  GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph * const cfg;
 
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.

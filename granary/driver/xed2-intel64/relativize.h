@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #ifndef GRANARY_DRIVER_XED2_INTEL64_RELATIVIZE_H_
 #define GRANARY_DRIVER_XED2_INTEL64_RELATIVIZE_H_
 
@@ -49,5 +49,5 @@ class InstructionRelativizer {
 }  // namespace driver
 }  // namespace granary
 
-
+#endif
 #endif  // GRANARY_DRIVER_XED2_INTEL64_RELATIVIZE_H_

@@ -26,19 +26,13 @@ static driver::Instruction *MakeCFI(driver::Instruction *instr,
 
   instr->iclass = iclass;
   instr->category = category;
-  if (XED_CATEGORY_COND_BR == category) {
-    instr->length = 6; // rel32 Jcc.
-  } else {
-    instr->length = 5; // rel32 CALL/JMP.
-  }
-
   instr->num_explicit_ops = 1;
-  instr->needs_encoding = false;  // Special case!
-  instr->has_pc_rel_op = true;
+
+  // TODO(pag): Re-do me!!
 
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  instr->ops[0].width = arch::ADDRESS_SIZE_BITS;
-  instr->ops[0].rel.pc = target;
+  instr->ops[0].width = arch::ADDRESS_WIDTH_BITS;
+  instr->ops[0].addr.as_pc = target;
   instr->ops[0].rw = XED_OPERAND_ACTION_R;
 
   return instr;

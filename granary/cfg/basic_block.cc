@@ -3,8 +3,10 @@
 #define GRANARY_INTERNAL
 
 #include "granary/cfg/basic_block.h"
-#include "granary/cfg/instruction.h"
+#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
+#include "granary/cfg/instruction.h"
+
 #include "granary/module.h"
 #include "granary/util.h"
 
@@ -94,9 +96,11 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 
 
 // Initialize a decoded basic block.
-DecodedBasicBlock::DecodedBasicBlock(BlockMetaData *meta_)
+DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
+                                     BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       next(nullptr),
+      cfg(cfg_),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
       last(new AnnotationInstruction(END_BASIC_BLOCK)) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
@@ -112,10 +116,16 @@ InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
   }
 }
 
-// Return an iterator of the successors of a basic block.
+// Return an iterator of the successor blocks of this basic block.
 detail::SuccessorBlockIterator DecodedBasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator(
       internal::FindNextSuccessorInstruction(first));
+}
+
+// Allocates a new temporary virtual register for use by instructions within
+// this basic block.
+VirtualRegister DecodedBasicBlock::AllocateVirtualRegister(int num_bytes) {
+  return cfg->AllocateVirtualRegister(VR_KIND_TEMPORARY_VIRTUAL, num_bytes);
 }
 
 // Return the first instruction in the basic block.
@@ -142,6 +152,16 @@ DecodedBasicBlock::ReversedInstructions(void) const {
 // Return an iterator for the application instructions of a basic block.
 AppInstructionIterator DecodedBasicBlock::AppInstructions(void) const {
   return AppInstructionIterator(first);
+}
+
+// Add a new instruction to the beginning of the instruction list.
+void DecodedBasicBlock::PrependInstruction(std::unique_ptr<Instruction> instr) {
+  FirstInstruction()->InsertAfter(std::move(instr));
+}
+
+// Add a new instruction to the end of the instruction list.
+void DecodedBasicBlock::AppendInstruction(std::unique_ptr<Instruction> instr) {
+  LastInstruction()->InsertBefore(std::move(instr));
 }
 
 // Free all of the instructions in the basic block. This is invoked by

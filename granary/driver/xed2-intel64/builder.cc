@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-
+#if 0
 #include "granary/cfg/instruction.h"
 
 #define GRANARY_DEFINE_XED_REG(mnemonic) \
@@ -81,7 +81,7 @@ void ImportOperand(Instruction *instr, Operand *op,
     }
   }
   op->rel.imm = addr.addr;
-  op->width = arch::ADDRESS_SIZE_BITS;
+  op->width = arch::ADDRESS_WIDTH_BITS;
   op->rw = rw;
   instr->has_pc_rel_op = true;
 }
@@ -101,3 +101,4 @@ void ImportOperand(Instruction *, Operand *op, xed_operand_action_enum_t rw,
 
 }  // namespace driver
 }  // namespace granary
+#endif

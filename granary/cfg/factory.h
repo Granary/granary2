@@ -103,12 +103,13 @@ class BlockFactory {
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION
   void AddFallThroughInstruction(driver::InstructionDecoder *decoder,
+                                 DecodedBasicBlock *block,
                                  Instruction *last_instr, AppPC pc);
 
   // Decode an instruction list starting at `pc` and link the decoded
   // instructions into the instruction list beginning with `instr`.
   GRANARY_INTERNAL_DEFINITION
-  void DecodeInstructionList(Instruction *instr, AppPC pc);
+  void DecodeInstructionList(DecodedBasicBlock *block);
 
   // Hash the meta data of all basic blocks.
   GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);

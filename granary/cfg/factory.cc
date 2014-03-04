@@ -82,7 +82,8 @@ static uint32_t HashMetaData(HashFunction *hasher,
 
 // Add the fall-through instruction for a block.
 void BlockFactory::AddFallThroughInstruction(
-    driver::InstructionDecoder *decoder, Instruction *last_instr, AppPC pc) {
+    driver::InstructionDecoder *decoder, DecodedBasicBlock *block,
+    Instruction *last_instr, AppPC pc) {
 
   auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
   if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
@@ -91,33 +92,35 @@ void BlockFactory::AddFallThroughInstruction(
     // a fall-through to native, and if it's neither then just add in a LIR
     // instruction for the fall-through.
     driver::Instruction dinstr;
-    if (!decoder->Decode(&dinstr, pc)) {
-      last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
+    if (!decoder->Decode(block, &dinstr, pc)) {
+      block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
-      last_instr->InsertAfter(std::unique_ptr<Instruction>(
+      block->AppendInstruction(std::unique_ptr<Instruction>(
           MakeInstruction(context, &dinstr)));
     } else {
-      last_instr->InsertAfter(lir::Jump(this, pc));
+      block->AppendInstruction(lir::Jump(this, pc));
     }
   }
 }
 
 // Decode an instruction list starting at `pc` and link the decoded
 // instructions into the instruction list beginning with `instr`.
-void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
+void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
+  auto pc = block->StartAppPC();
   driver::InstructionDecoder decoder;
-  for (; !IsA<ControlFlowInstruction *>(instr); ) {
+  Instruction *instr(nullptr);
+  do {
     auto decoded_pc = pc;
     driver::Instruction dinstr;
-    if (!decoder.DecodeNext(&dinstr, &pc)) {
-      instr->InsertAfter(lir::Jump(new NativeBasicBlock(decoded_pc)));
+    if (!decoder.DecodeNext(block, &dinstr, &pc)) {
+      block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
-    instr = instr->InsertAfter(std::unique_ptr<Instruction>(
-        MakeInstruction(context, &dinstr)));
+    instr = MakeInstruction(context, &dinstr);
+    block->AppendInstruction(std::unique_ptr<Instruction>(instr));
     context->AnnotateInstruction(instr);
-  }
-  AddFallThroughInstruction(&decoder, instr, pc);
+  } while (!IsA<ControlFlowInstruction *>(instr));
+  AddFallThroughInstruction(&decoder, block, instr, pc);
 }
 
 // Hash the meta data of all basic blocks. This resets the `materialized_block`
@@ -237,10 +240,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
         // Fall-through.
 
       case REQUEST_NOW: {
-        auto decoded_block = new DecodedBasicBlock(block->meta);
+        auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
         block->meta = nullptr;  // Steal.
-        DecodeInstructionList(decoded_block->FirstInstruction(),
-                              block->StartAppPC());
+        DecodeInstructionList(decoded_block);
         cfg->AddBlock(decoded_block);
         block->materialized_block = decoded_block;
         return true;
@@ -271,9 +273,8 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 // Materialize the initial basic block.
 void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
   GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
-  auto decoded_block = new DecodedBasicBlock(meta);
-  DecodeInstructionList(decoded_block->FirstInstruction(),
-                        decoded_block->StartAppPC());
+  auto decoded_block = new DecodedBasicBlock(cfg, meta);
+  DecodeInstructionList(decoded_block);
   cfg->AddBlock(decoded_block);
 }
 

@@ -9,6 +9,10 @@
 #include "granary/driver/xed2-intel64/xed.h"
 
 namespace granary {
+
+// Forward declarations.
+class DecodedBasicBlock;
+
 namespace driver {
 
 // Forward declarations.
@@ -22,18 +26,18 @@ class InstructionDecoder {
   // Decode/Encode an instruction, and update the program counter by reference
   // to point to the next logical instruction. Returns `true` if the
   // instruction was successfully decoded/encoded.
-  bool DecodeNext(Instruction *, AppPC *);
+  bool DecodeNext(DecodedBasicBlock *block, Instruction *, AppPC *);
   bool EncodeNext(Instruction *, CachePC *);
 
   // Decode/Encode an instruction. Returns `true` if the instruction was
   // successfully decoded/encoded.
-  bool Decode(Instruction *, AppPC);
+  bool Decode(DecodedBasicBlock *block, Instruction *, AppPC);
   bool Encode(Instruction *, CachePC);
 
  private:
   // Internal APIs for encoding and decoding instructions. These APIs directly
-  // interact with the DynamoRIO driver.
-  AppPC DecodeInternal(Instruction *, AppPC);
+  // interact with the driver.
+  AppPC DecodeInternal(DecodedBasicBlock *block, Instruction *, AppPC);
   CachePC EncodeInternal(Instruction *, CachePC);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);

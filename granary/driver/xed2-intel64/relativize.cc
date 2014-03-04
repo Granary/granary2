@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-
+#if 0
 #include "granary/base/new.h"
 
 #include "granary/cfg/instruction.h"
@@ -148,3 +148,4 @@ void InstructionRelativizer::RelativizeMemOP(void) {
 
 }  // namespace driver
 }  // namespace granary
+#endif

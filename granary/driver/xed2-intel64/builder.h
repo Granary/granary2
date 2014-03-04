@@ -2,7 +2,7 @@
 
 #ifndef GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
 #define GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
-
+#if 0
 #include "granary/base/base.h"
 #include "granary/base/type_trait.h"
 
@@ -202,5 +202,5 @@ GRANARY_DEFINE_XED_REG(BH);
 
 // Bring in the auto-generated instruction builder API.
 #include "generated/xed2-intel64/instruction_builder.cc"
-
+#endif
 #endif  // GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_

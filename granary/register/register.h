@@ -7,6 +7,8 @@
 # error "This code is internal to Granary."
 #endif
 
+#include "granary/base/base.h"
+
 namespace granary {
 
 enum VirtualRegisterKind : uint8_t {
@@ -34,14 +36,45 @@ union VirtualRegister {
   inline VirtualRegister(void)
       : value(0) {}
 
+  // Initialize a non-ARCH-specific virtual register.
+  inline VirtualRegister(VirtualRegisterKind kind_, uint8_t num_bytes_,
+                         uint16_t reg_num_)
+      : reg_num(reg_num_),
+        kind(kind_),
+        num_bytes(num_bytes_),
+        byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
+        preserved_byte_mask(0) {}
+
+  // Copy constructor.
+  inline VirtualRegister(const VirtualRegister &that)
+      : value(that.value) {}
+
   // Convert an architectural register into a virtual register.
   //
   // Note: This has a driver-specific implementation. See
   //       `granary/driver/*/register.cc` for the implementation.
   void DecodeArchRegister(uint64_t arch_reg_id);
 
+  // Returns a new virtual register that was created from an architectural
+  // register.
+  static VirtualRegister FromArchRegister(uint64_t arch_reg_id) {
+    VirtualRegister reg;
+    reg.DecodeArchRegister(arch_reg_id);
+    return reg;
+  }
+
   // Convert a virtual register into its associated architectural register.
   uint64_t EncodeArchRegister(void) const;
+
+  // Return the width (in bits) of this register.
+  inline int BitWidth(void) const {
+    return static_cast<int>(num_bytes) * 8;
+  }
+
+  // Return the width (in bytes) of this register.
+  inline int ByteWidth(void) const {
+    return static_cast<int>(num_bytes);
+  }
 
  private:
   struct {
@@ -69,11 +102,6 @@ union VirtualRegister {
     // if `byte_mask == (byte_mask | preserved_byte_mask)`, i.e. if all bytes
     // not represented by the register are not preserved.
     uint8_t preserved_byte_mask;
-
-    // `false` if the register can be freely changed, and `true` otherwise. An
-    // example is that some instructions have implicit/suppressed operands that
-    // reference specific registers.
-    bool is_sticky;
   } __attribute__((packed));
 
   uint64_t value;

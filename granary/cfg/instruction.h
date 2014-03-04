@@ -37,7 +37,6 @@ class Instruction {
 
   Instruction *Next(void);
   Instruction *Previous(void);
-  virtual int Length(void) const;
 
   // Pretend to encode this instruction at address `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
@@ -152,7 +151,11 @@ class NativeInstruction : public Instruction {
   GRANARY_INTERNAL_DEFINITION
   explicit NativeInstruction(const driver::Instruction *instruction_);
 
-  virtual int Length(void) const;
+  // Get the decoded length of the instruction. This is independent from the
+  // length of the encoded instruction, which could be wildly different as a
+  // single decoded instruction might map to many encoded instructions. If the
+  // instruction was not decoded then this returns 0.
+  int DecodedLength(void) const;
 
   // Returns true if this instruction is essentially a no-op, i.e. it does
   // nothing and has no observable side-effects.
@@ -202,7 +205,6 @@ class NativeInstruction : public Instruction {
 
  private:
   friend class ControlFlowInstruction;
-  friend class driver::InstructionRelativizer;
 
   NativeInstruction(void) = delete;
 
@@ -235,8 +237,6 @@ class BranchInstruction final : public NativeInstruction {
   })
 
  private:
-  friend class driver::InstructionRelativizer;
-
   BranchInstruction(void) = delete;
 
   // Instruction targeted by this branch. Assumed to be within the same
@@ -274,7 +274,6 @@ class ControlFlowInstruction final : public NativeInstruction {
 
  private:
   friend class BlockFactory;
-  friend class driver::InstructionRelativizer;
 
   ControlFlowInstruction(void) = delete;
 
