@@ -14,13 +14,13 @@ namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (BasicBlock, 2),
-    (NativeBasicBlock, 2 * 3),
-    (InstrumentedBasicBlock, 2 * 5),
-    (CachedBasicBlock, 2 * 5 * 7),
-    (DecodedBasicBlock, 2 * 5 * 11),
-    (DirectBasicBlock, 2 * 5 * 13),
-    (IndirectBasicBlock, 2 * 5 * 17),
-    (ReturnBasicBlock, 2 * 19))
+      (NativeBasicBlock, 2 * 3),
+      (InstrumentedBasicBlock, 2 * 5),
+        (CachedBasicBlock, 2 * 5 * 7),
+        (DecodedBasicBlock, 2 * 5 * 11),
+        (DirectBasicBlock, 2 * 5 * 13),
+        (IndirectBasicBlock, 2 * 5 * 17),
+      (ReturnBasicBlock, 2 * 19))
 
 GRANARY_DEFINE_BASE_CLASS(BasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
@@ -62,7 +62,8 @@ void SuccessorBlockIterator::operator++(void) {
 
 BasicBlock::BasicBlock(void)
     : UnownedCountedObject(),
-      list() {}
+      list(),
+      id(-1) {}
 
 detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
@@ -71,6 +72,12 @@ detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
 // Returns the number of predecessors of this basic block within the LCFG.
 int BasicBlock::NumLocalPredecessors(void) const {
   return this->NumReferences();
+}
+
+// Retunrs a unique ID for this basic block within the LCFG. This can be
+// useful for client tools to implement data flow passes.
+int BasicBlock::Id(void) const {
+  return id;
 }
 
 // Get this basic block's meta-data.
@@ -99,7 +106,6 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
                                      BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
-      next(nullptr),
       cfg(cfg_),
       first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
       last(new AnnotationInstruction(END_BASIC_BLOCK)) {

@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_REGISTER_REGISTER_H_
-#define GRANARY_REGISTER_REGISTER_H_
+#ifndef GRANARY_CODE_REGISTER_H_
+#define GRANARY_CODE_REGISTER_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -113,4 +113,4 @@ static_assert(sizeof(uint64_t) == sizeof(VirtualRegister),
 
 }  // namespace granary
 
-#endif  // GRANARY_REGISTER_REGISTER_H_
+#endif  // GRANARY_CODE_REGISTER_H_

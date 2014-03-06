@@ -16,7 +16,7 @@
 #include "granary/cfg/iterator.h"
 
 #ifdef GRANARY_INTERNAL
-# include "granary/register/register.h"
+# include "granary/code/register.h"
 #endif
 
 namespace granary {
@@ -128,18 +128,26 @@ class BasicBlock : protected UnownedCountedObject {
   // Returns the number of predecessors of this basic block within the LCFG.
   int NumLocalPredecessors(void) const;
 
+  // Retunrs a unique ID for this basic block within the LCFG. This can be
+  // useful for client tools to implement data flow passes.
+  int Id(void) const;
+
   GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
  private:
   friend class BasicBlockIterator;
   friend class ControlFlowInstruction;
-  friend class LocalControlFlowGraph;
+  friend class LocalControlFlowGraph;  // For `list` and `id`.
   friend class BlockFactory;
 
   GRANARY_IF_EXTERNAL( BasicBlock(void) = delete; )
 
   // Connects together lists of basic blocks in the LCFG.
   GRANARY_INTERNAL_DEFINITION ListHead list;
+
+  // Unique ID for this block within its local control-flow graph. Defaults to
+  // `-1` if the block does not belong to an LCFG.
+  int id;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
@@ -243,10 +251,6 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
 
   // Add a new instruction to the end of the instruction list.
   void AppendInstruction(std::unique_ptr<Instruction> instr);
-
-  // Used to find the next scheduled decoded basic block. This field is only
-  // updated at assembly/block scheduling time.
-  GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *next;
 
  private:
   friend class LocalControlFlowGraph;

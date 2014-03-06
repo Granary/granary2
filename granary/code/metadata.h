@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_REGISTER_METADATA_H_
-#define GRANARY_REGISTER_METADATA_H_
+#ifndef GRANARY_CODE_METADATA_H_
+#define GRANARY_CODE_METADATA_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -107,4 +107,4 @@ class BackendMetaData : public UnifiableMetaData<BackendMetaData> {
 
 }  // namespace granary
 
-#endif  // GRANARY_REGISTER_METADATA_H_
+#endif  // GRANARY_CODE_METADATA_H_

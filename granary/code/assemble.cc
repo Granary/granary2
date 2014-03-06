@@ -7,21 +7,28 @@
 #include "granary/base/base.h"
 #include "granary/base/list.h"
 
-#include "granary/cfg/control_flow_graph.h"
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/instruction.h"
+//#include "granary/cfg/control_flow_graph.h"
+//#include "granary/cfg/basic_block.h"
+//#include "granary/cfg/instruction.h"
+
+
+#include "granary/code/assemble.h"
+//#include "granary/code/edge.h"
+
+#include "granary/code/fragment.h"
 
 #include "granary/cache.h"
-#include "granary/code/assemble.h"
-#include "granary/code/edge.h"
-
 #include "granary/driver.h"
 #include "granary/util.h"
+
+#include "granary/logging.h"
 
 namespace granary {
 
 // Iterator over decoded basic blocks.
 typedef LinkedListIterator<DecodedBasicBlock> DecodedBlockIterator;
+
+#if 0
 
 namespace {
 
@@ -281,6 +288,50 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   auto code = code_cache->AllocateBlock(relaxed_size);
   CodeCacheTransaction transaction(code_cache);
   Encode(blocks, code);
+}
+#endif
+
+static void PrintFragmentEdge(Fragment *pred, Fragment *frag) {
+  Log(LogWarning, "f%p -> f%p;\n", reinterpret_cast<void *>(pred),
+                                   reinterpret_cast<void *>(frag));
+}
+
+static void PrintFragmentEdges(Fragment *frag) {
+  if (frag->fall_through_target) {
+    PrintFragmentEdge(frag, frag->fall_through_target);
+  }
+  if (frag->branch_target) {
+    PrintFragmentEdge(frag, frag->branch_target);
+  }
+}
+
+static void PrintFragmentInstructions(Fragment *frag) {
+  Log(LogWarning, "f%p [label=<%d | X",
+      reinterpret_cast<void *>(frag),
+      frag->id);
+  for (auto instr : ForwardInstructionIterator(frag->first)) {
+    GRANARY_UNUSED(instr);
+  }
+  Log(LogWarning, ">];\n");
+}
+
+// Assemble the local control-flow graph.
+void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
+              LocalControlFlowGraph* cfg) {
+  auto frag_list = BuildFragmentList(cfg);
+
+  Log(LogWarning, "digraph {\n");
+  Log(LogWarning, "node [fontname=Courier shape=record nojustify=false labeljust=l];\n");
+  Log(LogWarning, "f0 [color=white fontcolor=white];\n");
+  PrintFragmentEdge(nullptr, frag_list);
+  for (auto frag : FragmentIterator(frag_list)) {
+    PrintFragmentEdges(frag);
+    PrintFragmentInstructions(frag);
+  }
+  Log(LogWarning, "}\n");
+
+  GRANARY_UNUSED(env);
+  GRANARY_UNUSED(code_cache);
 }
 
 }  // namespace granary

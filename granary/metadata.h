@@ -123,7 +123,7 @@ struct IsMetaData {
 template <typename T>
 struct IsMetaDataPointer {
   static_assert(
-      IsPointer<T>::RESULT,
+      IsPointer<T>(),
       "`MetaDataCast` can only cast to pointer types.");
   typedef typename RemovePointer<T>::Type PointedT0;
   typedef typename RemoveConst<PointedT0>::Type PointedT;

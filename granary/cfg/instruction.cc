@@ -12,13 +12,15 @@ namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (Instruction, 2),
-    (AnnotationInstruction, 2 * 3),
-    (NativeInstruction, 2 * 5),
-    (BranchInstruction, 2 * 5 * 7),
-    (ControlFlowInstruction, 2 * 5 * 11))
+      (AnnotationInstruction, 2 * 3),
+        (LabelInstruction, 2 * 3 * 5),
+      (NativeInstruction, 2 * 7),
+        (BranchInstruction, 2 * 7 * 11),
+        (ControlFlowInstruction, 2 * 7 * 13))
 
 GRANARY_DEFINE_BASE_CLASS(Instruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
@@ -42,6 +44,16 @@ bool Instruction::Encode(driver::InstructionDecoder *) {
   return true;
 }
 
+// Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
+uintptr_t Instruction::GetMetaData(void) const {
+  return transient_meta;
+}
+
+// Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
+void Instruction::SetMetaData(uintptr_t meta) {
+  transient_meta = meta;
+}
+
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
   Instruction *instr(that.release());
   list.SetPrevious(this, instr);
@@ -56,8 +68,7 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
 
 // Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  granary_break_on_fault_if(
-      GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr)));
+  GRANARY_ASSERT(!IsA<AnnotationInstruction *>(instr));
   instr->list.Unlink();
 
   // If we're unlinking a branch then make sure that the target itself does
@@ -68,6 +79,15 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   }
 
   return std::unique_ptr<Instruction>(instr);
+}
+
+// Unlink an instruction in an unsafe way. The normal unlink process exists
+// for ensuring some amount of safety, whereas this is meant to be used only
+// in internal cases where Granary is safely doing an "unsafe" thing (e.g.
+// when it's stealing instructions for `Fragment`s.
+std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
+  list.Unlink();
+  return std::unique_ptr<Instruction>(this);
 }
 
 #ifdef GRANARY_DEBUG
@@ -96,6 +116,9 @@ bool AnnotationInstruction::IsLabel(void) const {
 bool AnnotationInstruction::IsBranchTarget(void) const {
   return LABEL == annotation && nullptr != data;
 }
+
+LabelInstruction::LabelInstruction(void)
+    : AnnotationInstruction(LABEL) {}
 
 NativeInstruction::NativeInstruction(const driver::Instruction *instruction_)
     : instruction(*instruction_) {}
@@ -163,7 +186,7 @@ bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
 }
 
 // Return the targeted instruction of this branch.
-const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
+LabelInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;
 }
 
@@ -209,6 +232,8 @@ bool ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
+  GRANARY_ASSERT(new_target->list.IsAttached());
+  GRANARY_ASSERT(-1 != new_target->Id());
   auto old_target = target;
   new_target->Acquire();
   target = new_target;

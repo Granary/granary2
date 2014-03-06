@@ -8,6 +8,7 @@
 #include "granary/base/list.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
+#include "granary/base/type_trait.h"
 
 #ifdef GRANARY_INTERNAL
 # include "granary/driver.h"
@@ -55,7 +56,47 @@ class Instruction {
   }
 
   // Encode this instruction at `cache_pc`.
+  //
+  // TODO(pag): Remove me?
   GRANARY_INTERNAL_DEFINITION virtual bool Encode(driver::InstructionDecoder *);
+
+  // Get the transient, tool-specific instruction meta-data as an arbitrary,
+  // `uintptr_t`-sized type.
+  template <
+    typename T,
+    typename EnableIf<!TypesAreEqual<T, uintptr_t>()>::Type=0
+  >
+  T GetMetaData(void) const {
+    static_assert(sizeof(T) == sizeof(uintptr_t),
+        "Transient meta-data type is too big. Client tools can only store "
+        "a pointer-sized object as meta-data inside of an instruction.");
+    return UnsafeCast<T>(GetMetaData());
+  }
+
+  // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
+  uintptr_t GetMetaData(void) const;
+
+  // Set the transient, tool-specific instruction meta-data as an arbitrary,
+  // `uintptr_t`-sized type.
+  template <
+    typename T,
+    typename EnableIf<!TypesAreEqual<T,uintptr_t>()>::Type=0
+  >
+  void SetMetaData(T meta) {
+    static_assert(sizeof(T) == sizeof(uintptr_t),
+        "Transient meta-data type is too big. Client tools can only store "
+        "a pointer-sized object as meta-data inside of an instruction.");
+    return SetMetaData(UnsafeCast<uintptr_t>(meta));
+  }
+
+  // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
+  void SetMetaData(uintptr_t meta);
+
+  // Clear out the meta-data. This should be done by tools using instruction-
+  // specific meta-data before they instrument instructions.
+  inline void ClearMetaData(void) {
+    SetMetaData(0UL);
+  }
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
@@ -68,6 +109,13 @@ class Instruction {
   // Unlink an instruction from an instruction list.
   static std::unique_ptr<Instruction> Unlink(Instruction *);
 
+  // Unlink an instruction in an unsafe way. The normal unlink process exists
+  // for ensuring some amount of safety, whereas this is meant to be used only
+  // in internal cases where Granary is safely doing an "unsafe" thing (e.g.
+  // when it's stealing instructions for `Fragment`s.
+  GRANARY_INTERNAL_DEFINITION
+  std::unique_ptr<Instruction> UnsafeUnlink(void);
+
   // Used to put instructions into lists.
   GRANARY_INTERNAL_DEFINITION ListHead list;
 
@@ -75,7 +123,12 @@ class Instruction {
   // Where has this instruction been encoded?
   GRANARY_INTERNAL_DEFINITION CachePC cache_pc;
 
+  // Transient, tool-specific meta-data stored in this instruction. The lifetime
+  // of this meta-data is the
+  GRANARY_INTERNAL_DEFINITION uintptr_t transient_meta;
+
  private:
+
   GRANARY_IF_EXTERNAL( Instruction(void) = delete; )
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
@@ -107,7 +160,7 @@ enum InstructionAnnotation {
 // are used to mark those boundaries (e.g. by having an annotation that begins
 // a faultable sequence of instructions and an annotation that ends it).
 // Annotation instructions should not be removed by instrumentation.
-class AnnotationInstruction final : public Instruction {
+class AnnotationInstruction : public Instruction {
  public:
   virtual ~AnnotationInstruction(void) = default;
 
@@ -141,6 +194,21 @@ class AnnotationInstruction final : public Instruction {
   AnnotationInstruction(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(AnnotationInstruction);
+};
+
+// A label instruction. Just a specialized annotation instruction. Enforces at
+// the type leven that local control-flow instructions (within a block) must
+// target a label. This makes it easier to identify fragment heads down the
+// line when doing register allocation and assembling.
+class LabelInstruction final : public AnnotationInstruction {
+ public:
+  GRANARY_INTERNAL_DEFINITION LabelInstruction(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
+  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
 };
 
 // An instruction containing an driver-specific decoded instruction.
@@ -219,12 +287,12 @@ class BranchInstruction final : public NativeInstruction {
 
   GRANARY_INTERNAL_DEFINITION
   inline BranchInstruction(const driver::Instruction *instruction_,
-                           const AnnotationInstruction *target_)
+                           LabelInstruction *target_)
       : NativeInstruction(instruction_),
         target(target_) {}
 
   // Return the targeted instruction of this branch.
-  const AnnotationInstruction *TargetInstruction(void) const;
+  LabelInstruction *TargetInstruction(void) const;
 
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
@@ -241,7 +309,7 @@ class BranchInstruction final : public NativeInstruction {
 
   // Instruction targeted by this branch. Assumed to be within the same
   // basic block as this instruction.
-  GRANARY_INTERNAL_DEFINITION const AnnotationInstruction * const target;
+  GRANARY_INTERNAL_DEFINITION LabelInstruction * const target;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BranchInstruction);
 };

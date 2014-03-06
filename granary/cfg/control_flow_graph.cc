@@ -57,8 +57,11 @@ BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
 // added, then add those too.
 void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   if (block->list.IsAttached()) {
+    GRANARY_ASSERT(-1 != block->Id());
     return;  // Already in the CFG.
   }
+
+  block->id = num_basic_blocks++;
 
   // The control-flow graph has sole ownership over the initial basic block.
   // All other basic blocks are owned by control-transfer instructions.

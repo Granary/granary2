@@ -27,8 +27,8 @@ std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc);
 // basic block.
 std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc);
 
-std::unique_ptr<Instruction> Jump(LocalControlFlowGraph *cfg,
-                                  const AnnotationInstruction *target_instr);
+std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
+
 }  // namespace lir
 }  // namespace granary
 

@@ -58,9 +58,8 @@ static Instruction *MakeInstruction(ContextInterface *context,
         instr->IsInterruptReturn() ||
         instr->IsSystemReturn()) {
       return new ControlFlowInstruction(instr, new ReturnBasicBlock);
-    } else {
-      auto meta = context->AllocateEmptyBlockMetaData();
-      return new ControlFlowInstruction(instr, new IndirectBasicBlock(meta));
+    } else {  // System call, tnterrupt call.
+      return new ControlFlowInstruction(instr, new NativeBasicBlock(nullptr));
     }
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
     auto meta = context->AllocateBlockMetaData(instr->BranchTarget());

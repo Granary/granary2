@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/register/metadata.h"
+#include "granary/code/metadata.h"
 
 namespace granary {
 

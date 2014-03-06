@@ -8,7 +8,7 @@
 
 #include "granary/driver/xed2-intel64/xed.h"
 
-#include "granary/register/register.h"
+#include "granary/code/register.h"
 
 namespace granary {
 namespace driver {

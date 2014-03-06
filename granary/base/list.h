@@ -26,7 +26,7 @@ class ListHead {
     const void *next_obj_ptr(object + 1);
     const void *this_ptr(this);
     const void *next_this_ptr(this + 1);
-    granary_break_on_fault_if(!(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr));
+    GRANARY_ASSERT(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr);
   }
 #endif
 
@@ -190,11 +190,11 @@ class LinkedListZipperElement {
 
   // Unlink the current element. This will return the unlinked list element and
   // invalidate this zipper element (but not the zipper itself).
-  inline T *Unlink(void) {
+  inline std::unique_ptr<T> Unlink(void) {
     auto old_curr = curr;
     *curr_ptr = curr->next;  // Invalidates `curr_cache` in `LinkedListZipper`.
     curr = nullptr;  // Invalidates this `LinkedListZipperElement` element.
-    return old_curr;
+    return std::unique_ptr<T>(old_curr);
   }
 
   inline T *Get(void) {

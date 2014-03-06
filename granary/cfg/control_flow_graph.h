@@ -5,7 +5,7 @@
 
 #ifdef GRANARY_INTERNAL
 # include "granary/arch/base.h"
-# include "granary/register/register.h"
+# include "granary/code/register.h"
 #endif
 
 #include "granary/base/base.h"
@@ -28,7 +28,8 @@ class LocalControlFlowGraph final {
       : first_block(nullptr),
         last_block(nullptr),
         first_new_block(nullptr),
-        num_virtual_regs(0) {}
+        num_virtual_regs(0),
+        num_basic_blocks(0) {}
 
   // Destroy the CFG and all basic blocks in the CFG.
   ~LocalControlFlowGraph(void);
@@ -73,6 +74,10 @@ class LocalControlFlowGraph final {
 
   // Counter of how many virtual registers were allocated within this LCFG.
   GRANARY_INTERNAL_DEFINITION int num_virtual_regs;
+
+  // Counter of how many basic blocks were added to this LCFG. This does not
+  // necessarily track the exact number of blocks present at any one time.
+  GRANARY_INTERNAL_DEFINITION int num_basic_blocks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LocalControlFlowGraph);
 };
