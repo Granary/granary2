@@ -58,7 +58,7 @@ static Instruction *MakeInstruction(ContextInterface *context,
         instr->IsInterruptReturn() ||
         instr->IsSystemReturn()) {
       return new ControlFlowInstruction(instr, new ReturnBasicBlock);
-    } else {  // System call, tnterrupt call.
+    } else {  // System call, interrupt call.
       return new ControlFlowInstruction(instr, new NativeBasicBlock(nullptr));
     }
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
@@ -85,7 +85,8 @@ void BlockFactory::AddFallThroughInstruction(
     Instruction *last_instr, AppPC pc) {
 
   auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
+  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump() ||
+              cti->IsSystemCall() || cti->IsInterruptCall())) {
     // Unconditionally decode the next instruction. If it's a jump then we'll
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR

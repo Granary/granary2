@@ -18,6 +18,10 @@
 #include "granary/init.h"
 #include "granary/logging.h"
 
+GRANARY_DEFINE_bool(gdb, true,
+    "Should a GDB process attacher helper be printed out on startup? Default "
+    "is yes.")
+
 namespace granary {
 namespace {
 
@@ -34,12 +38,12 @@ namespace {
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
 static void InitDebug(void) {
-#ifdef GRANARY_DEBUG
-  char buff[2];
-  Log(LogOutput, "Process ID for attaching GDB: %d\n", getpid());
-  Log(LogOutput, "Press enter to continue.\n");
-  read(0, buff, 1);
-#endif
+  if (FLAG_gdb) {
+    char buff[2];
+    Log(LogOutput, "Process ID for attaching GDB: %d\n", getpid());
+    Log(LogOutput, "Press enter to continue.\n");
+    read(0, buff, 1);
+  }
 }
 
 #ifdef GRANARY_STANDALONE
@@ -73,8 +77,8 @@ static const char *GetGranaryPath(const char *granary_exe_path) {
 
 extern "C" {
 int main(int argc, const char *argv[]) {
-  granary::InitDebug();
   granary::InitOptions(argc, argv);
+  granary::InitDebug();
   granary::Init(granary::GetGranaryPath(argv[0]));
   return 0;
 }
@@ -82,8 +86,8 @@ int main(int argc, const char *argv[]) {
 #else
 
 GRANARY_INIT({
-  granary::InitDebug();
   granary::InitOptions(getenv("GRANARY_OPTIONS"));
+  granary::InitDebug();
   granary::Init(getenv("GRANARY_PATH"));
 })
 
