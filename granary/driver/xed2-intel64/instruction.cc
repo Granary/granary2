@@ -32,5 +32,10 @@ bool Instruction::HasIndirectTarget(void) const {
          IsSystemCall() || IsSystemReturn();
 }
 
+// Get the opcode name.
+const char *Instruction::OpCodeName(void) const {
+  return xed_iclass_enum_t2str(iclass);
+}
+
 }  // namespace driver
 }  // namespace granary

@@ -144,6 +144,8 @@ class Instruction {
     return IsUnconditionalJump() || IsConditionalJump();
   }
 
+  // Returns true if this instruction is a control-flow instruction with an
+  // indirect target.
   bool HasIndirectTarget(void) const;
 
   inline AppPC GetAppPC(void) const {
@@ -153,6 +155,9 @@ class Instruction {
   inline bool IsNoOp(void) const {
     return XED_CATEGORY_NOP == category;
   }
+
+  // Get the opcode name.
+  const char *OpCodeName(void) const;
 
   // Where was this instruction encoded/decoded.
   union {

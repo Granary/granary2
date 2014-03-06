@@ -242,6 +242,9 @@ class NativeInstruction : public Instruction {
   bool HasIndirectTarget(void) const;
   bool IsAppInstruction(void) const;
 
+  // Get the opcode name.
+  const char *OpCodeName(void) const;
+
   // Try to match and bind one or more operands from this instruction.
   //
   // Note: Matches are attempted in order!

@@ -180,6 +180,11 @@ bool NativeInstruction::IsAppInstruction(void) const {
   return nullptr != instruction.GetAppPC();
 }
 
+// Get the opcode name.
+const char *NativeInstruction::OpCodeName(void) const {
+  return instruction.OpCodeName();
+}
+
 // Encode this instruction at `cache_pc`.
 bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
   return encoder->Encode(&instruction, cache_pc);

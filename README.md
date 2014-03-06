@@ -16,7 +16,7 @@ Setup
 If you are compiling Granary for user space, run:
 
 ```basemake
-make clean ; make all
+make clean all
 ```
 
 To run Granary on a binary, e.g. `ls`, do:

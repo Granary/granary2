@@ -9,7 +9,7 @@
 
 //#include "granary/cfg/control_flow_graph.h"
 //#include "granary/cfg/basic_block.h"
-//#include "granary/cfg/instruction.h"
+#include "granary/cfg/instruction.h"
 
 
 #include "granary/code/assemble.h"
@@ -306,11 +306,15 @@ static void PrintFragmentEdges(Fragment *frag) {
 }
 
 static void PrintFragmentInstructions(Fragment *frag) {
-  Log(LogWarning, "f%p [label=<%d | X",
+  Log(LogWarning, "f%p [label=<%d |",
       reinterpret_cast<void *>(frag),
       frag->id);
   for (auto instr : ForwardInstructionIterator(frag->first)) {
-    GRANARY_UNUSED(instr);
+    auto ninstr = DynamicCast<NativeInstruction *>(instr);
+    if (!ninstr) {
+      continue;
+    }
+    Log(LogWarning, "%s <BR/>", ninstr->OpCodeName());
   }
   Log(LogWarning, ">];\n");
 }
