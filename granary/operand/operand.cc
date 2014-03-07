@@ -8,27 +8,60 @@
 
 namespace granary {
 
+bool Operand::IsMemory(void) const {
+  return op && OP_MEMORY == kind;
+}
+
+bool Operand::IsRegister(void) const {
+  return op && OP_REGISTER == kind;
+}
+
+bool Operand::IsImmediate(void) const {
+  return op && OP_IMMEDIATE == kind;
+}
+
 bool Operand::IsRead(void) const {
-  return driver_op && driver_op->IsRead();
+  return op && op->IsRead();
 }
 
 bool Operand::IsWrite(void) const {
-  return driver_op && driver_op->IsWrite();
+  return op && op->IsWrite();
 }
 
 bool Operand::IsConditionalRead(void) const {
-  return driver_op && driver_op->IsConditionalRead();
+  return op && op->IsConditionalRead();
 }
 
 bool Operand::IsConditionalWrite(void) const {
-  return driver_op && driver_op->IsConditionalWrite();
+  return op && op->IsConditionalWrite();
 }
 
 // Initialize an empty operand.
-Operand::Operand(void)
-    : native_instr(nullptr),
-      driver_instr(nullptr),
-      driver_op(nullptr),
-      kind(OP_UNDEFINED) {}
+Operand::Operand(driver::Instruction *instr_,
+                 driver::Operand *op_,
+                 OperandKind kind_)
+    : instr(instr_),
+      op(op_),
+      kind(kind_) {}
+
+MemoryOperand::MemoryOperand(void)
+    : Operand(nullptr, nullptr, OP_MEMORY) {}
+
+MemoryOperand::MemoryOperand(driver::Instruction *instr_, driver::Operand *op_)
+    : Operand(instr_, op_, OP_MEMORY) {}
+
+RegisterOperand::RegisterOperand(void)
+    : Operand(nullptr, nullptr, OP_REGISTER) {}
+
+RegisterOperand::RegisterOperand(driver::Instruction *instr_,
+                                 driver::Operand *op_)
+    : Operand(instr_, op_, OP_REGISTER) {}
+
+ImmediateOperand::ImmediateOperand(void)
+    : Operand(nullptr, nullptr, OP_IMMEDIATE) {}
+
+ImmediateOperand::ImmediateOperand(driver::Instruction *instr_,
+                                   driver::Operand *op_)
+    : Operand(instr_, op_, OP_IMMEDIATE) {}
 
 }  // namespace granary

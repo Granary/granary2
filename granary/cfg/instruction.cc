@@ -190,6 +190,12 @@ bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
   return encoder->Encode(&instruction, cache_pc);
 }
 
+// Invoke a function on every operand.
+void NativeInstruction::ForEachOperandImpl(
+    std::function<void(Operand *)> func) {
+  return instruction.ForEachOperand(func);
+}
+
 // Return the targeted instruction of this branch.
 LabelInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;

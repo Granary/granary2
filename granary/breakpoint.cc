@@ -13,6 +13,7 @@ void granary_break_on_fault(void) {
 GRANARY_DISABLE_OPTIMIZER
 void granary_break_on_unreachable_code(void) {
   GRANARY_INLINE_ASSEMBLY("");
+  granary_break_on_fault();
 }
 
 GRANARY_DISABLE_OPTIMIZER

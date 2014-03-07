@@ -13,9 +13,9 @@
 
 
 #include "granary/code/assemble.h"
-//#include "granary/code/edge.h"
-
 #include "granary/code/fragment.h"
+
+#include "granary/operand/operand.h"
 
 #include "granary/cache.h"
 #include "granary/driver.h"
@@ -306,7 +306,7 @@ static void PrintFragmentEdges(Fragment *frag) {
 }
 
 static void PrintFragmentInstructions(Fragment *frag) {
-  Log(LogWarning, "f%p [label=<%d |",
+  Log(LogWarning, "f%p [label=<%d|",
       reinterpret_cast<void *>(frag),
       frag->id);
   for (auto instr : ForwardInstructionIterator(frag->first)) {
@@ -314,7 +314,17 @@ static void PrintFragmentInstructions(Fragment *frag) {
     if (!ninstr) {
       continue;
     }
-    Log(LogWarning, "%s <BR/>", ninstr->OpCodeName());
+    Log(LogWarning, "%s", ninstr->OpCodeName());
+    ninstr->ForEachOperand([] (Operand *op) {
+      if (op->IsImmediate()) {
+        Log(LogWarning, " imm");
+      } else if (op->IsRegister()) {
+        Log(LogWarning, " reg");
+      } else if (op->IsMemory()) {
+        Log(LogWarning, " mem");
+      }
+    });
+    Log(LogWarning, "<BR ALIGN=\"LEFT\"/>");
   }
   Log(LogWarning, ">];\n");
 }

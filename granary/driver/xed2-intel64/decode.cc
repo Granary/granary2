@@ -213,14 +213,13 @@ static void ConvertLoadEffectiveAddress(Instruction *instr,
   if (RegIsInstructionPointer(base_reg)) {
     instr->num_ops = 2;
     auto instr_op = &(instr->ops[1]);
-    instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
+    instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, 0);
     instr_op->width = static_cast<int8_t>(
         xed3_operand_get_mem_width(xedd) * 8); // Width of addressed memory.
     instr_op->rw = XED_OPERAND_ACTION_R;
     instr_op->is_sticky = true;
   } else {
-
     DecodeLEAReg(instr, xed_decoded_inst_get_seg_reg(xedd, 0), false);
     DecodeLEAImm(instr, xed_decoded_inst_get_memory_displacement(xedd, 0),
                  false);

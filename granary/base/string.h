@@ -168,6 +168,28 @@ __attribute__ ((format(scanf, 2, 3)))
 int DeFormat(const char * __restrict buffer,
              const char * __restrict format, ...);
 
+// Represents a fixed-length C-string. This is appropriate for returning a
+// temporary string of a maximum length from a function.
+template <unsigned long kLen>
+class FixedLengthString {
+ public:
+  static_assert(kLen > 0,
+      "The length of a fixed-length string must be at least `1`.");
+
+  FixedLengthString(void) {
+    str[0] = '\0';
+  }
+
+  char &operator[](unsigned long i) {
+    return str[i];
+  }
+  operator char *(void) const {
+    return &(str[0]);
+  }
+ private:
+  char str[kLen];
+};
+
 // Apply a functor to each comma-separated value. This will remove leading
 // and trailing spaces.
 template <unsigned long kBufferLen, typename F>

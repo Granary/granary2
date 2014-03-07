@@ -7,16 +7,14 @@
 // accidentally include any system headers in the export.
 #if defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)
 # include <atomic>
-# include <cstddef>
-# include <cstdarg>
-# include <memory>
-# include <initializer_list>
-# include <type_traits>
-# ifndef __STDC_LIMIT_MACROS
-#   define __STDC_LIMIT_MACROS
-# endif
-# include <cstdint>
 # include <climits>
+# include <cstdarg>
+# include <cstddef>
+# include <cstdint>
+# include <functional>
+# include <initializer_list>
+# include <memory>
+# include <type_traits>
 #endif
 
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))

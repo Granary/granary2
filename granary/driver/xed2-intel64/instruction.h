@@ -11,6 +11,10 @@
 #include "granary/code/register.h"
 
 namespace granary {
+
+// Forward declaration.
+class Operand;   // For `granary/operand/operand.h`.
+
 namespace driver {
 
 class Operand {
@@ -158,6 +162,9 @@ class Instruction {
 
   // Get the opcode name.
   const char *OpCodeName(void) const;
+
+  // Invoke a function on every operand.
+  void ForEachOperand(std::function<void(granary::Operand *)> func);
 
   // Where was this instruction encoded/decoded.
   union {

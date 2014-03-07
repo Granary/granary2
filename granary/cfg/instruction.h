@@ -22,6 +22,7 @@ namespace granary {
 class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
+class Operand;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -261,6 +262,12 @@ class NativeInstruction : public Instruction {
         detail::TryMatchAndBindOperands(this, {matchers...}));
   }
 
+  // Invoke a function on every operand.
+  template <typename FuncT>
+  inline void ForEachOperand(FuncT func) {
+    ForEachOperandImpl(std::ref(func));
+  }
+
   // Encode this instruction at `cache_pc`.
   GRANARY_INTERNAL_DEFINITION
   virtual bool Encode(driver::InstructionDecoder *) override;
@@ -278,6 +285,9 @@ class NativeInstruction : public Instruction {
   friend class ControlFlowInstruction;
 
   NativeInstruction(void) = delete;
+
+  // Invoke a function on every operand.
+  void ForEachOperandImpl(std::function<void(granary::Operand *)> func);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeInstruction);
 };
