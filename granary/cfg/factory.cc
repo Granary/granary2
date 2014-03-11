@@ -54,13 +54,23 @@ namespace {
 static Instruction *MakeInstruction(ContextInterface *context,
                                     driver::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
-    if (instr->IsFunctionReturn() ||
-        instr->IsInterruptReturn() ||
-        instr->IsSystemReturn()) {
-      return new ControlFlowInstruction(instr, new ReturnBasicBlock);
-    } else {  // System call, interrupt call.
+
+    // Indirect jump/call.
+    if (instr->IsJump() || instr->IsFunctionCall()) {
+      return new ControlFlowInstruction(
+          instr,
+          new IndirectBasicBlock(context->AllocateEmptyBlockMetaData()));
+
+    // Return, with default empty meta-data.
+    } else if (instr->IsFunctionReturn()) {
+      return new ControlFlowInstruction(
+          instr, new ReturnBasicBlock(context->AllocateEmptyBlockMetaData()));
+
+    // System call/return, interrupt call/return.
+    } else {
       return new ControlFlowInstruction(instr, new NativeBasicBlock(nullptr));
     }
+
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
     auto meta = context->AllocateBlockMetaData(instr->BranchTarget());
     return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));

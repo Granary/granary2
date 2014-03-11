@@ -162,7 +162,7 @@ class InstrumentedBasicBlock : public BasicBlock {
   virtual ~InstrumentedBasicBlock(void);
 
   // Return this basic block's meta-data.
-  BlockMetaData *MetaData(void);
+  virtual BlockMetaData *MetaData(void);
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;
@@ -173,14 +173,17 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
+ GRANARY_PROTECTED:
+
+  // The meta-data associated with this basic block. Points to some (usually)
+  // interned meta-data that is valid on entry to this basic block.
+  GRANARY_INTERNAL_DEFINITION BlockMetaData *meta;
+
  private:
   friend class BlockFactory;
 
   InstrumentedBasicBlock(void) = delete;
 
-  // The meta-data associated with this basic block. Points to some (usually)
-  // interned meta-data that is valid on entry to this basic block.
-  GRANARY_INTERNAL_DEFINITION BlockMetaData *meta;
   GRANARY_INTERNAL_DEFINITION uint32_t cached_meta_hash;
 
   // The starting PC of this basic block, if any.
@@ -327,10 +330,20 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
 
 // A basic block that has not yet been decoded, and which we don't know about
 // at this time because it's the target of an indirect jump/call.
-class ReturnBasicBlock final : public BasicBlock {
+class ReturnBasicBlock final : public InstrumentedBasicBlock {
  public:
-  GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(void);
+  GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(BlockMetaData *meta_);
   virtual ~ReturnBasicBlock(void) = default;
+
+  // Returns true if this return basic block has meta-data. If it has meta-data
+  // then the way that the branch is resolved is slightly more complicated.
+  GRANARY_INTERNAL_DEFINITION inline bool UsesMetaData(void) const {
+    return nullptr != meta;
+  }
+
+  // Return this basic block's meta-data. Accessing a return basic block's meta-
+  // data will "create" it for the block.
+  virtual BlockMetaData *MetaData(void);
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;
@@ -346,7 +359,14 @@ class ReturnBasicBlock final : public BasicBlock {
   })
 
  private:
-  GRANARY_IF_EXTERNAL( ReturnBasicBlock(void) = delete; )
+  ReturnBasicBlock(void) = delete;
+
+  // The meta-data of this block, but where we only assign the `lazy_meta` to
+  // `BasicBlock::meta` when a request of `MetaData` is made. This is so that
+  // the default behavior is to not propagate meta-data through function
+  // returns.
+  GRANARY_INTERNAL_DEFINITION BlockMetaData *lazy_meta;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ReturnBasicBlock);
 };
 

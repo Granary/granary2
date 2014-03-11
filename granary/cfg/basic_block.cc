@@ -20,7 +20,7 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
         (DecodedBasicBlock, 2 * 5 * 11),
         (DirectBasicBlock, 2 * 5 * 13),
         (IndirectBasicBlock, 2 * 5 * 17),
-      (ReturnBasicBlock, 2 * 19))
+        (ReturnBasicBlock, 2 * 5 * 19))
 
 GRANARY_DEFINE_BASE_CLASS(BasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
@@ -89,7 +89,8 @@ BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
 InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
     : meta(meta_),
       cached_meta_hash(0),
-      native_pc(MetaDataCast<ModuleMetaData *>(meta)->start_pc) {}
+      native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
+                     : nullptr) {}
 
 // Returns the starting PC of this basic block.
 AppPC InstrumentedBasicBlock::StartAppPC(void) const {
@@ -201,8 +202,15 @@ CachePC IndirectBasicBlock::StartCachePC(void) const {
 }
 
 // Initialize a return basic block.
-ReturnBasicBlock::ReturnBasicBlock(void)
-    : BasicBlock() {}
+ReturnBasicBlock::ReturnBasicBlock(BlockMetaData *meta_)
+    : InstrumentedBasicBlock(nullptr),
+      lazy_meta(meta_) {}
+
+// Return this basic block's meta-data. Accessing a return basic block's meta-
+// data will "create" it for the block.
+BlockMetaData *ReturnBasicBlock::MetaData(void) {
+  return meta = lazy_meta;
+}
 
 // Returns the starting PC of this basic block.
 AppPC ReturnBasicBlock::StartAppPC(void) const {

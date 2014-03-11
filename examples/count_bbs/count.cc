@@ -12,7 +12,7 @@ GRANARY_DEFINE_bool(count_execs, false,
 namespace {
 
 // Runtime block execution counter.
-class BlockCounter : public MutableMetaData {
+class BlockCounter : public MutableMetaData<BlockCounter> {
  public:
   BlockCounter(void)
       : count(0) {}
