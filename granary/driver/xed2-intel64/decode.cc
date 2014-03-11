@@ -78,7 +78,7 @@ static xed_error_enum_t DecodeBytes(xed_decoded_inst_t *xedd, PC pc) {
 // Fill in an operand as if it's a register operand.
 static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  instr_op->reg.DecodeArchRegister(reg);
+  instr_op->reg.DecodeFromNative(reg);
   instr_op->width = static_cast<int8_t>(instr_op->reg.BitWidth());
 }
 
@@ -88,7 +88,7 @@ static void ConvertRegisterOperand(Operand *instr_op,
                                    xed_operand_enum_t op_name) {
   auto reg = xed_decoded_inst_get_reg(xedd, op_name);
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  instr_op->reg.DecodeArchRegister(reg);
+  instr_op->reg.DecodeFromNative(reg);
   instr_op->width = static_cast<int8_t>(xed_get_register_width_bits64(reg));
 }
 
@@ -128,6 +128,7 @@ static bool RegIsInstructionPointer(xed_reg_enum_t reg) {
 static void DecodeLEAImm(Instruction *lea, intptr_t imm, bool is_sticky) {
   if (imm) {
     auto op = &(lea->ops[lea->num_ops++]);
+    op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
     op->imm.as_int = imm;
     op->rw = XED_OPERAND_ACTION_R;
     op->is_sticky = is_sticky;
@@ -138,7 +139,13 @@ static void DecodeLEAImm(Instruction *lea, intptr_t imm, bool is_sticky) {
 static void DecodeLEAReg(Instruction *lea, xed_reg_enum_t reg, bool is_sticky) {
   if (XED_REG_INVALID != reg) {
     auto op = &(lea->ops[lea->num_ops++]);
-    op->reg.DecodeArchRegister(reg);
+
+    if (XED_REG_CS <= reg && XED_REG_GS >= reg) {
+      op->type = XED_ENCODER_OPERAND_TYPE_SEG0;
+    } else {
+      op->type = XED_ENCODER_OPERAND_TYPE_REG;
+    }
+    op->reg.DecodeFromNative(reg);
     op->rw = XED_OPERAND_ACTION_R;
     op->is_sticky = is_sticky;
   }
@@ -164,9 +171,9 @@ static VirtualRegister LoadMemoryOperand(DecodedBasicBlock *block,
   if (XED_REG_INVALID == segment_reg && 0 == disp && 1 >= scale &&
       (XED_REG_INVALID == base_reg || XED_REG_INVALID == index_reg)) {
     if (XED_REG_INVALID != base_reg) {
-      return VirtualRegister::FromArchRegister(base_reg);
+      return VirtualRegister::FromNative(base_reg);
     } else {
-      return VirtualRegister::FromArchRegister(index_reg);
+      return VirtualRegister::FromNative(index_reg);
     }
 
   } else {

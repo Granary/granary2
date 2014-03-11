@@ -170,6 +170,9 @@ int DeFormat(const char * __restrict buffer,
 
 // Represents a fixed-length C-string. This is appropriate for returning a
 // temporary string of a maximum length from a function.
+//
+// kLen represents the maximum length of the C-string, absent the NUL-
+// terminator.
 template <unsigned long kLen>
 class FixedLengthString {
  public:
@@ -180,14 +183,24 @@ class FixedLengthString {
     str[0] = '\0';
   }
 
-  char &operator[](unsigned long i) {
-    return str[i];
+  inline char &operator[](unsigned long i) {
+    return i < kLen ? str[i] : str[kLen];
   }
-  operator char *(void) const {
+
+  operator const char *(void) {
+    str[kLen] = '\0';
+    return &(str[0]);
+  }
+
+  inline unsigned long MaxLength(void) const {
+    return kLen;
+  }
+
+  inline char *Buffer(void) {
     return &(str[0]);
   }
  private:
-  char str[kLen];
+  char str[kLen + 1];
 };
 
 // Apply a functor to each comma-separated value. This will remove leading

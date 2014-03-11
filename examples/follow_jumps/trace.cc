@@ -15,9 +15,14 @@ class JumpFollower : public Tool {
       if (IsA<IndirectBasicBlock *>(block) || IsA<ReturnBasicBlock *>(block)) {
         continue;
       }
+
+      // TODO(pag): Intel optimization manual says that a conditional jump
+      //            that's a back-edge is predicted taken. Use this to guide
+      //            the block requests.
+
       for (auto succ : block->Successors()) {
         if (succ.cti->IsJump() &&
-            //!succ.cti->IsConditionalJump() &&
+            !succ.cti->IsConditionalJump() &&
             !succ.cti->HasIndirectTarget()) {
           factory->RequestBlock(succ.block);
         }

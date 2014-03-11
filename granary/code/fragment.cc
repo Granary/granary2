@@ -45,7 +45,7 @@ class FragmentBuilder {
   // Get the list of fragments associated with a basic block.
   Fragment *FragmentForBlock(DecodedBasicBlock *block) {
     auto first_instr = block->FirstInstruction();
-    auto frag = first_instr->GetMetaData<Fragment *>();
+    Fragment *frag = first_instr->GetMetaData<Fragment *>();
     if (!frag) {
       auto label = new LabelInstruction;
       frag = MakeFragment();
@@ -154,16 +154,9 @@ class FragmentBuilder {
     }
   }
 
-  // Split a fragment at a non-local control-flow instruction.
-  void SplitFragmentAtCFI(Fragment *frag, DecodedBasicBlock *block,
-                          Instruction *instr) {
-    auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
-    auto next = instr->Next();
-    auto target_block = cfi->TargetBlock();
-
-    frag->Append(std::move(instr->UnsafeUnlink()));
-    frag->branch_instr = cfi;
-
+  // Return the fragment for a block that is targeted by a control-flow
+  // instruction.
+  Fragment *FragmentForTargetBlock(BasicBlock *block) {
     // Function/interrupt/system return. We can never be sure in any of
     // these cases if execution returns to the code cache, and even then,
     // meta-data doesn't flow to the targets of returns because it's never
@@ -173,37 +166,57 @@ class FragmentBuilder {
     //
     // Direct call/jump to native; interrupt call, system call. All regs
     // must be homed on exit of this block lets things really screw up.
-    if (IsA<ReturnBasicBlock *>(target_block) ||
-        IsA<NativeBasicBlock *>(target_block)) {
-      frag->branch_target = MakeNativeFragment();
+    if (IsA<ReturnBasicBlock *>(block) ||
+        IsA<NativeBasicBlock *>(block)) {
+      return MakeNativeFragment();
 
     // Indirect call/jump, or direct call/jump/conditional jump
     // to a future block.
-    } else if (IsA<IndirectBasicBlock *>(target_block) ||
-               IsA<DirectBasicBlock *>(target_block)) {
-      frag->branch_target = MakeFutureBlockFragment(
-            DynamicCast<InstrumentedBasicBlock *>(target_block));
+    } else if (IsA<IndirectBasicBlock *>(block) ||
+               IsA<DirectBasicBlock *>(block)) {
+      return MakeFutureBlockFragment(
+            DynamicCast<InstrumentedBasicBlock *>(block));
 
     // Direct call/jump/conditional jump to a decoded block.
-    } else if (IsA<DecodedBasicBlock *>(target_block)) {
-      frag->branch_target = FragmentForBlock(
-          DynamicCast<DecodedBasicBlock *>(target_block));
+    } else if (IsA<DecodedBasicBlock *>(block)) {
+      return FragmentForBlock(DynamicCast<DecodedBasicBlock *>(block));
 
     // Direct call/jump/conditional jump to a cached block.
     } else {
-      frag->branch_target = MakeCachedFragment(
-          DynamicCast<CachedBasicBlock *>(target_block));
+      return MakeCachedFragment(DynamicCast<CachedBasicBlock *>(block));
     }
+  }
+
+  // Split a fragment at a non-local control-flow instruction.
+  void SplitFragmentAtCFI(Fragment *frag, DecodedBasicBlock *block,
+                          Instruction *instr) {
+    auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
+    auto next = instr->Next();
+    auto target_block = cfi->TargetBlock();
+
+    frag->Append(std::move(instr->UnsafeUnlink()));
+    frag->branch_instr = cfi;
+    frag->branch_target = FragmentForTargetBlock(target_block);
 
     // If this was a call or a conditional jump then add a fall-through
     // fragment.
     if (cfi->IsFunctionCall() || cfi->IsInterruptCall() ||
         cfi->IsSystemCall() || cfi->IsConditionalJump()) {
-      auto label = new LabelInstruction;
-      frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-      frag = frag->fall_through_target;
-      label->SetMetaData<Fragment *>(frag);
-      ExtendFragment(frag, block, next);
+
+      // Try to be smarter about the fall-through to avoid making "useless"
+      // intermediate fragments containing only a single unconditional
+      // jump.
+      auto next_cfi = DynamicCast<ControlFlowInstruction *>(next);
+      if (next_cfi && next_cfi->IsUnconditionalJump()) {
+        target_block = next_cfi->TargetBlock();
+        frag->fall_through_target = FragmentForTargetBlock(target_block);
+      } else {
+        auto label = new LabelInstruction;
+        frag->fall_through_target = MakeEmptyLabelFragment(block, label);
+        frag = frag->fall_through_target;
+        label->SetMetaData<Fragment *>(frag);
+        ExtendFragment(frag, block, next);
+      }
     }
   }
 

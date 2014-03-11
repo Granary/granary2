@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_OPERAND_MATCH_H_
-#define GRANARY_OPERAND_MATCH_H_
+#ifndef GRANARY_CODE_MATCH_OPERAND_H_
+#define GRANARY_CODE_MATCH_OPERAND_H_
 
 #include "granary/base/base.h"
 
@@ -63,4 +63,4 @@ static inline bool MatchAndBindOperands(
 }  // namespace detail
 }  // namespace granary
 
-#endif  // GRANARY_OPERAND_MATCH_H_
+#endif  // GRANARY_CODE_MATCH_OPERAND_H_

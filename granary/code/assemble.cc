@@ -15,7 +15,7 @@
 #include "granary/code/assemble.h"
 #include "granary/code/fragment.h"
 
-#include "granary/operand/operand.h"
+#include "granary/code/operand.h"
 
 #include "granary/cache.h"
 #include "granary/driver.h"
@@ -315,13 +315,22 @@ static void PrintFragmentInstructions(Fragment *frag) {
       continue;
     }
     Log(LogWarning, "%s", ninstr->OpCodeName());
-    ninstr->ForEachOperand([] (Operand *op) {
-      if (op->IsImmediate()) {
-        Log(LogWarning, " imm");
-      } else if (op->IsRegister()) {
-        Log(LogWarning, " reg");
-      } else if (op->IsMemory()) {
-        Log(LogWarning, " mem");
+    const char *sep = " ";
+    ninstr->ForEachOperand([&] (Operand *op) {
+      if (!op->IsWrite()) {
+        OperandString op_str;
+        op->EncodeToString(&op_str);
+        Log(LogWarning, "%s%s", sep, static_cast<const char *>(op_str));
+        sep = ", ";
+      }
+    });
+    sep = " -&gt; ";
+    ninstr->ForEachOperand([&] (Operand *op) {
+      if (op->IsWrite()) {
+        OperandString op_str;
+        op->EncodeToString(&op_str);
+        Log(LogWarning, "%s%s", sep, static_cast<const char *>(op_str));
+        sep = ", ";
       }
     });
     Log(LogWarning, "<BR ALIGN=\"LEFT\"/>");

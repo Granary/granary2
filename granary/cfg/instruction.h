@@ -14,7 +14,7 @@
 # include "granary/driver.h"
 #endif
 
-#include "granary/operand/match.h"
+#include "granary/code/match_operand.h"
 
 namespace granary {
 
@@ -31,7 +31,8 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
-        cache_pc(nullptr) {}
+        cache_pc(nullptr),
+        transient_meta(0) {}
 
   virtual ~Instruction(void) = default;
 

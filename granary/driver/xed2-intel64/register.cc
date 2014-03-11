@@ -24,7 +24,7 @@ enum {
 };
 
 // Convert an architectural register into a virtual register.
-void VirtualRegister::DecodeArchRegister(uint64_t reg_) {
+void VirtualRegister::DecodeFromNative(int reg_) {
   value = 0;  // Reset.
 
   auto reg = static_cast<xed_reg_enum_t>(reg_);
@@ -84,9 +84,9 @@ void VirtualRegister::DecodeArchRegister(uint64_t reg_) {
 }
 
 // Convert a virtual register into its associated architectural register.
-uint64_t VirtualRegister::EncodeArchRegister(void) const {
+int VirtualRegister::EncodeToNative(void) const {
   if (VR_KIND_ARCH_FIXED == kind) {
-    return static_cast<uint64_t>(reg_num);
+    return static_cast<int>(reg_num);
   } else if (VR_KIND_ARCH_VIRTUAL != kind) {
     return XED_REG_INVALID;
   }

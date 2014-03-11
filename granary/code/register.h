@@ -17,7 +17,7 @@ enum VirtualRegisterKind : uint8_t {
   // Architectural register that cannot be re-scheduled.
   VR_KIND_ARCH_FIXED,
 
-  // Archtectural register that can potentially be re-scheduled.
+  // Architectural register that can potentially be re-scheduled.
   VR_KIND_ARCH_VIRTUAL,
 
   // Temporary virtual register, treated as single-def, multiple use.
@@ -53,18 +53,18 @@ union VirtualRegister {
   //
   // Note: This has a driver-specific implementation. See
   //       `granary/driver/*/register.cc` for the implementation.
-  void DecodeArchRegister(uint64_t arch_reg_id);
+  void DecodeFromNative(int arch_reg_id);
 
   // Returns a new virtual register that was created from an architectural
   // register.
-  static VirtualRegister FromArchRegister(uint64_t arch_reg_id) {
+  static VirtualRegister FromNative(int arch_reg_id) {
     VirtualRegister reg;
-    reg.DecodeArchRegister(arch_reg_id);
+    reg.DecodeFromNative(arch_reg_id);
     return reg;
   }
 
   // Convert a virtual register into its associated architectural register.
-  uint64_t EncodeArchRegister(void) const;
+  int EncodeToNative(void) const;
 
   // Return the width (in bits) of this register.
   inline int BitWidth(void) const {
@@ -74,6 +74,21 @@ union VirtualRegister {
   // Return the width (in bytes) of this register.
   inline int ByteWidth(void) const {
     return static_cast<int>(num_bytes);
+  }
+
+  // Is this an architectural register?
+  inline bool IsNative(void) const {
+    return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_VIRTUAL == kind;
+  }
+
+  // Is this a virtual register?
+  inline bool IsVirtual(void) const {
+    return VR_KIND_TEMPORARY_VIRTUAL == kind || VR_KIND_GENERIC_VIRTUAL == kind;
+  }
+
+  // Returns this register's internal number.
+  inline int Number(void) const {
+    return static_cast<int>(reg_num);
   }
 
  private:
