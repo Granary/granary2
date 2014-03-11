@@ -3,6 +3,10 @@
 #ifndef GRANARY_CODE_INSTRUMENT_H_
 #define GRANARY_CODE_INSTRUMENT_H_
 
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
+
 namespace granary {
 
 // Forward declarations.

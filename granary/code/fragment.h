@@ -42,14 +42,12 @@ class Fragment {
   Fragment *branch_target;
   NativeInstruction *branch_instr;
 
-  // All fragments are chained together into a list.
+  // All fragments are chained together into a list for simple iteration,
+  // freeing, etc.
   Fragment *next;
 
-  // ID of this fragment.
+  // Unique ID of this fragment.
   const int id;
-
-  // Source basic block info.
-  BlockMetaData *block_meta;
 
   // Is this block the first fragment in a decoded basic block?
   bool is_block_head;
@@ -60,6 +58,9 @@ class Fragment {
   // Is this an exit block? An exit block is a future block, or a block that
   // ends in some kind of return.
   bool is_exit;
+
+  // Source basic block info.
+  BlockMetaData *block_meta;
 
   // Instruction list.
   Instruction *first;

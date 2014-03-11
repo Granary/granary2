@@ -17,10 +17,10 @@ Fragment::Fragment(int id_)
       branch_instr(nullptr),
       next(nullptr),
       id(id_),
-      block_meta(nullptr),
       is_block_head(false),
       is_future_block_head(true),
       is_exit(false),
+      block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}
 
@@ -67,6 +67,7 @@ class FragmentBuilder {
     return frag;
   }
 
+  // Make a fragment for a native basic block.
   Fragment *MakeNativeFragment(void) {
     if (!native_fragment) {
       native_fragment = MakeFragment();
@@ -108,7 +109,7 @@ class FragmentBuilder {
   // Get or make the fragment starting at a label.
   Fragment *GetOrMakeLabelFragment(DecodedBasicBlock *block,
                                    LabelInstruction *label) {
-    auto frag = label->GetMetaData<Fragment *>();
+    Fragment *frag = label->GetMetaData<Fragment *>();
     if (!frag) {
       auto next = label->Next();
       frag = MakeEmptyLabelFragment(block, label);
@@ -124,7 +125,7 @@ class FragmentBuilder {
   // add the instructions following the label into the new fragment.
   void SplitFragmentAtLabel(Fragment *frag, DecodedBasicBlock *block,
                             Instruction *instr) {
-    auto label_fragment = instr->GetMetaData<Fragment *>();
+    Fragment *label_fragment = instr->GetMetaData<Fragment *>();
     if (label_fragment) {  // Already processed this fragment.
       frag->fall_through_target = label_fragment;
     } else {

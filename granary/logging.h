@@ -5,12 +5,12 @@
 
 namespace granary {
 
-typedef enum {
+enum LogLevel : int {
   LogOutput = 0,
   LogWarning = 1,
   LogError = 2,
   LogFatalError = 3
-} LogLevel;
+};
 
 int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 
