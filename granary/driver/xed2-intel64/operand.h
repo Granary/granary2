@@ -3,12 +3,17 @@
 #ifndef GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_
 #define GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_
 
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
+
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
 #include "granary/code/operand.h"
 #include "granary/code/register.h"
 
+#include "granary/driver/operand.h"
 #include "granary/driver/xed2-intel64/xed.h"
 
 namespace granary {
@@ -18,7 +23,7 @@ class Operand;   // For `granary/code/operand.h`.
 
 namespace driver {
 
-class Operand {
+class Operand : public OperandInterface {
  public:
   Operand(void)
       : type(XED_ENCODER_OPERAND_TYPE_INVALID),

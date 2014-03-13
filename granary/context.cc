@@ -8,7 +8,7 @@
 
 #include "granary/cache.h"
 #include "granary/code/assemble.h"
-#include "granary/code/instrument.h"
+#include "granary/instrument.h"
 
 #include "granary/context.h"
 #include "granary/metadata.h"

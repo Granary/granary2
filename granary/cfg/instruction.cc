@@ -7,7 +7,6 @@
 #include "granary/cfg/instruction.h"
 #include "granary/breakpoint.h"
 
-
 namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
@@ -31,17 +30,6 @@ Instruction *Instruction::Next(void) {
 
 Instruction *Instruction::Previous(void) {
   return list.GetPrevious(this);
-}
-
-// Pretend to encode this instruction at address `cache_pc`.
-CachePC Instruction::StageEncode(CachePC cache_pc_) {
-  cache_pc = cache_pc_;
-  return cache_pc;  // TODO(pag): Implement me.
-}
-
-// Encode this instruction at `cache_pc`.
-bool Instruction::Encode(driver::InstructionDecoder *) {
-  return true;
 }
 
 // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
@@ -177,17 +165,12 @@ bool NativeInstruction::HasIndirectTarget(void) const {
 }
 
 bool NativeInstruction::IsAppInstruction(void) const {
-  return nullptr != instruction.GetAppPC();
+  return nullptr != instruction.DecodedPC();
 }
 
 // Get the opcode name.
 const char *NativeInstruction::OpCodeName(void) const {
   return instruction.OpCodeName();
-}
-
-// Encode this instruction at `cache_pc`.
-bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
-  return encoder->Encode(&instruction, cache_pc);
 }
 
 // Invoke a function on every operand.
@@ -229,17 +212,6 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
   return target;
 }
 
-// Encode this instruction at `cache_pc`.
-bool ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
-  if (IsA<InstrumentedBasicBlock *>(target) &&
-      !IsA<IndirectBasicBlock *>(target)) {
-    instruction.SetBranchTarget(target->StartCachePC());
-  } else if (IsA<NativeBasicBlock *>(target)) {
-    instruction.SetBranchTarget(target->StartAppPC());
-  }
-  return encoder->Encode(&instruction, cache_pc);
-}
-
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
@@ -249,12 +221,6 @@ void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
   new_target->Acquire();
   target = new_target;
   old_target->Release();
-}
-
-// Encode this instruction at `cache_pc`.
-bool BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
-  instruction.SetBranchTarget(target->StartCachePC());
-  return encoder->Encode(&instruction, cache_pc);
 }
 
 }  // namespace granary

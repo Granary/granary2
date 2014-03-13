@@ -6,8 +6,9 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
+#include "granary/driver/init.h"
+
 #include "granary/client.h"
-#include "granary/driver.h"
 #include "granary/environment.h"
 #include "granary/init.h"
 #include "granary/logging.h"

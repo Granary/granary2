@@ -9,9 +9,10 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
 
+#include "granary/driver/driver.h"
+
 #include "granary/ir/lir.h"
 
-#include "granary/driver.h"
 #include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"

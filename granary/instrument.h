@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_CODE_INSTRUMENT_H_
-#define GRANARY_CODE_INSTRUMENT_H_
+#ifndef GRANARY_INSTRUMENT_H_
+#define GRANARY_INSTRUMENT_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -22,4 +22,4 @@ void Instrument(ContextInterface *env, LocalControlFlowGraph *cfg,
 
 }  // namespace granary
 
-#endif  // GRANARY_CODE_INSTRUMENT_H_
+#endif  // GRANARY_INSTRUMENT_H_

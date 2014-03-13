@@ -11,7 +11,7 @@
 #include "granary/base/type_trait.h"
 
 #ifdef GRANARY_INTERNAL
-# include "granary/driver.h"
+# include "granary/driver/driver.h"
 #endif
 
 #include "granary/code/match_operand.h"
@@ -23,6 +23,7 @@ class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
+GRANARY_INTERNAL_DEFINITION class InstructionRelativizer;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -41,10 +42,6 @@ class Instruction {
   Instruction *Next(void);
   Instruction *Previous(void);
 
-  // Pretend to encode this instruction at address `cache_pc`.
-  GRANARY_INTERNAL_DEFINITION
-  CachePC StageEncode(CachePC cache_pc_);
-
   // Return the encoded location of this instruction.
   GRANARY_INTERNAL_DEFINITION
   inline CachePC StartCachePC(void) const {
@@ -56,11 +53,6 @@ class Instruction {
   inline void SetStartCachePC(CachePC cache_pc_) {
     cache_pc = cache_pc_;
   }
-
-  // Encode this instruction at `cache_pc`.
-  //
-  // TODO(pag): Remove me?
-  GRANARY_INTERNAL_DEFINITION virtual bool Encode(driver::InstructionDecoder *);
 
   // Get the transient, tool-specific instruction meta-data as an arbitrary,
   // `uintptr_t`-sized type.
@@ -269,10 +261,6 @@ class NativeInstruction : public Instruction {
     ForEachOperandImpl(std::ref(func));
   }
 
-  // Encode this instruction at `cache_pc`.
-  GRANARY_INTERNAL_DEFINITION
-  virtual bool Encode(driver::InstructionDecoder *) override;
-
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(NativeInstruction, {
     SHARED = true,
@@ -284,6 +272,7 @@ class NativeInstruction : public Instruction {
 
  private:
   friend class ControlFlowInstruction;
+  friend class InstructionRelativizer;
 
   NativeInstruction(void) = delete;
 
@@ -307,10 +296,6 @@ class BranchInstruction final : public NativeInstruction {
 
   // Return the targeted instruction of this branch.
   LabelInstruction *TargetInstruction(void) const;
-
-  // Encode this instruction at `cache_pc`.
-  GRANARY_INTERNAL_DEFINITION
-  virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
@@ -343,10 +328,6 @@ class ControlFlowInstruction final : public NativeInstruction {
 
   // Return the target block of this CFI.
   BasicBlock *TargetBlock(void) const;
-
-  // Encode this instruction at `cache_pc`.
-  GRANARY_INTERNAL_DEFINITION
-  virtual bool Encode(driver::InstructionDecoder *) override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {

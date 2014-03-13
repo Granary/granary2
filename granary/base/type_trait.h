@@ -5,8 +5,18 @@
 
 namespace granary {
 
-class TrueType : public std::true_type {};
-class FalseType : public std::false_type {};
+class TrueType : public std::true_type {
+ public:
+  enum {
+    RESULT = true
+  };
+};
+class FalseType : public std::false_type {
+ public:
+  enum {
+    RESULT = false
+  };
+};
 
 template <typename T>
 struct RemoveReference {

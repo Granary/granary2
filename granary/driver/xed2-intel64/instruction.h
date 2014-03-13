@@ -3,6 +3,11 @@
 #ifndef GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
 #define GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
 
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
+
+#include "granary/driver/instruction.h"
 #include "granary/driver/xed2-intel64/operand.h"
 
 namespace granary {
@@ -18,14 +23,22 @@ namespace driver {
 // register pass has replaced everything and these IR instructions have been
 // lowered into `xed_encoder_request_t` (and then to `xed_decoded_inst_t`) that
 // the length of a particular instruction becomes meaningful.
-class Instruction {
+class Instruction : public InstructionInterface {
  public:
+  enum {
+    MAX_NUM_OPS = 11
+  };
+
   Instruction(void);
   Instruction(const Instruction &that);
 
   // Get the decoded length of this instruction.
   inline int DecodedLength(void) const {
     return static_cast<int>(decoded_length);
+  }
+
+  inline AppPC DecodedPC(void) const {
+    return decoded_pc;
   }
 
   // Get the PC-relative branch target.
@@ -80,10 +93,6 @@ class Instruction {
   // indirect target.
   bool HasIndirectTarget(void) const;
 
-  inline AppPC GetAppPC(void) const {
-    return decoded_pc;
-  }
-
   inline bool IsNoOp(void) const {
     return XED_CATEGORY_NOP == category;
   }
@@ -132,9 +141,10 @@ class Instruction {
   // The effective operand width at decode time, or -1 if unknown.
   int8_t effective_operand_width;
 
-  // Explicit operands. The order between these and those referenced via
+  // All operands that Granary can make sense of. This includes implicit and
+  // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
-  Operand ops[XED_ENCODER_OPERANDS_MAX];
+  Operand ops[MAX_NUM_OPS];
 
 } __attribute__((packed));
 

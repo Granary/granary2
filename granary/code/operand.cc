@@ -4,7 +4,7 @@
 
 #include "granary/code/operand.h"
 
-#include "granary/driver.h"
+#include "granary/driver/driver.h"
 
 namespace granary {
 

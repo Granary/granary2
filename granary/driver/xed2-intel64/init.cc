@@ -1,5 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/driver/xed2-intel64/xed.h"
 
 namespace granary {

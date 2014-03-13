@@ -123,7 +123,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename PointerT,
   typename BaseT,
-  typename EnableIf<!!IsPointer<PointerT>()>::Type=0
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
 >
 inline PointerT DynamicCast(const BaseT *ptr) {
   if (!ptr) {
@@ -141,7 +141,7 @@ inline PointerT DynamicCast(const BaseT *ptr) {
 template <
   typename PointerT,
   typename BaseT,
-  typename EnableIf<!!IsPointer<PointerT>()>::Type=0
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
 >
 inline bool IsA(const BaseT *ptr) {
   typedef typename RemoveConst<

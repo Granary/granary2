@@ -8,8 +8,9 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/factory.h"
 
-#include "granary/code/instrument.h"
+#include "granary/instrument.h"
 
+#include "granary/breakpoint.h"
 #include "granary/context.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
@@ -84,7 +85,7 @@ void Instrument(ContextInterface *context,
 
   // Verify that the indexable meta-data for the entry basic block has not
   // changed during the instrumentation process.
-  granary_break_on_fault_if(HashMetaData(meta) != meta_hash);
+  GRANARY_ASSERT(HashMetaData(meta) == meta_hash);
 }
 
 }  // namespace granary

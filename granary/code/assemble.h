@@ -16,7 +16,7 @@ class LocalControlFlowGraph;
 
 // Assemble the local control-flow graph.
 void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
-              LocalControlFlowGraph* cfg);
+              LocalControlFlowGraph *cfg);
 }  // namespace granary
 
 #endif  // GRANARY_CODE_ASSEMBLE_H_

@@ -3,14 +3,10 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/string.h"
-#include "granary/base/pc.h"
 
-#include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
 
 #include "granary/code/operand.h"
-
-#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -48,10 +44,10 @@ void Operand::EncodeToString(OperandString *str) const {
       Format(str->Buffer(), str->MaxLength(), "%%");
       if (reg.IsNative()) {
         auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        Format(str->Buffer(), str->MaxLength(), "%s%%%s%s",
+        Format(str->Buffer(), str->MaxLength(), "%s%s%s",
                prefix, xed_reg_enum_t2str(arch_reg), suffix);
       } else if (reg.IsVirtual()) {
-        Format(str->Buffer(), str->MaxLength(), "%s%%vr%u%s",
+        Format(str->Buffer(), str->MaxLength(), "%s%%%u%s",
                prefix, reg.Number(), suffix);
       } else {
         Format(str->Buffer(), str->MaxLength(), "%s%%?%s", prefix, suffix);

@@ -3,8 +3,11 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
+
 #include "granary/driver/xed2-intel64/xed.h"
+
 #include "granary/code/register.h"
+
 #include "granary/breakpoint.h"
 
 namespace granary {

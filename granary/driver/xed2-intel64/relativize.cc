@@ -1,151 +1,179 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-#if 0
+
+#include "granary/base/base.h"
 #include "granary/base/new.h"
 
 #include "granary/cfg/instruction.h"
 
+#include "granary/driver/relativize.h"
 #include "granary/driver/xed2-intel64/builder.h"
-#include "granary/driver/xed2-intel64/relativize.h"
+#include "granary/driver/xed2-intel64/xed.h"
+
+#include "granary/breakpoint.h"
 
 namespace granary {
 namespace driver {
 
-// Make a native instruction safe to execute from within the code cache.
-// This sometimes results in additional instructions being
-void InstructionRelativizer::Relativize(NativeInstruction *native_instr_) {
-  native_instr = native_instr_;
-  instr = &(native_instr->instruction);
-  if (instr->has_pc_rel_op) {
-    switch (instr->iclass) {
-      case XED_ICLASS_LEA: return RelativizeLEA();
-      case XED_ICLASS_PUSH: return RelativizePUSH();
-      case XED_ICLASS_POP: return RelativizePOP();
-      case XED_ICLASS_JMP:
-      case XED_ICLASS_JMP_FAR:
-      case XED_ICLASS_CALL_FAR:
-      case XED_ICLASS_CALL_NEAR: return RelativizeCFI();
-      default:
-        if (instr->has_memory_op) {
-          RelativizeMemOP();
-        }
-    }
-  }
-}
+// Represents an allocated address that is nearby the code cache and can be used
+// to indirectly resolve the problem of PC-relative targets being too far away.
+//
+// TODO(pag): Need a mechanism of garbage collecting these on cache flushes.
+union NativeAddress {
+ public:
+  NativeAddress(PC pc_)
+      : pc(pc_) {}
 
-namespace {
-enum {
-  _3_75_GB = 4026531840L
-};
-
-// Returns true if an address needs relativizing.
-static bool AddressNeedsRelativizing(PC relative_pc, PC cache_pc) {
-  auto signed_diff = relative_pc - cache_pc;
-  auto diff = 0 > signed_diff ? -signed_diff : signed_diff;
-  return _3_75_GB < diff;
-}
-}  // namespace
-
-#define INSERT_BEFORE(...) \
-  do { \
-    Instruction ir_; \
-    auto ir = &ir_; \
-    __VA_ARGS__ ; \
-    auto ir_instr = new NativeInstruction(ir); \
-    native_instr->InsertBefore( \
-        std::move(std::unique_ptr<granary::Instruction>(ir_instr))); \
-  } while (0)
-
-// Convert a RIP-relative LEA into a MOV <imm64>, reg.
-void InstructionRelativizer::RelativizeLEA(void) {
-  auto rel_pc = instr->ops[1].rel.pc;  // LEA_GPRv_AGEN
-  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
-    auto rel_ptr = reinterpret_cast<uintptr_t>(rel_pc);
-    auto dest_reg = instr->ops[0].u.reg;
-    MOV_GPRv_IMMv(instr, Register(dest_reg), Immediate(rel_ptr));
-  }
-}
-
-// Relativize a `PUSH X(%RIP)` instruction if the native instruction pointer
-// is too far away from the code cache.
-void InstructionRelativizer::RelativizePUSH(void) {
-  auto rel_pc = instr->ops[0].rel.pc;  // PUSH_MEMv
-  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
-    INSERT_BEFORE(LEA_GPRv_AGEN(ir, REG_RSP, REG_RSP[-8]));
-    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RAX));
-    INSERT_BEFORE(MOV_GPRv_IMMv(ir, REG_RAX, Immediate(rel_pc)));
-    INSERT_BEFORE(MOV_GPRv_MEMv(ir, REG_RAX, *REG_RAX));
-    INSERT_BEFORE(MOV_MEMv_GPRv(ir, REG_RSP[8], REG_RAX));
-    POP_GPRv_51(instr, REG_RAX);
-  }
-}
-
-// Relativize a `POP X(%RIP)` instruction if the native instruction pointer
-// is too far away from the code cache.
-void InstructionRelativizer::RelativizePOP(void) {
-  auto rel_pc = instr->ops[0].rel.pc;  // POP_MEMv
-  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
-    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RAX));
-    INSERT_BEFORE(PUSH_GPRv_50(ir, REG_RBX));
-    INSERT_BEFORE(MOV_GPRv_IMMv(ir, REG_RAX, Immediate(rel_pc)));
-    INSERT_BEFORE(MOV_GPRv_MEMv(ir, REG_RBX, REG_RSP[16]));
-    INSERT_BEFORE(MOV_MEMv_GPRv(ir, *REG_RAX, REG_RBX));
-    INSERT_BEFORE(POP_GPRv_51(ir, REG_RBX));
-    INSERT_BEFORE(POP_GPRv_51(ir, REG_RAX));
-    LEA_GPRv_AGEN(instr, REG_RSP, REG_RSP[8]);
-  }
-}
-
-namespace {
-// Represents a far-away program counter.
-struct FarPC {
+  const void *addr;
   PC pc;
-  GRANARY_DEFINE_NEW_ALLOCATOR(FarPC, {
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(NativeAddress, {
     SHARED = true,
     ALIGNMENT = 8
   })
+
+ private:
+  NativeAddress(void) = delete;
+} __attribute__((packed));
+
+static_assert(sizeof(NativeAddress) == sizeof(void *),
+    "Invalid packing of `union NativeAddress`. Must be pointer-sized.");
+
+namespace {
+
+// Instruction iclass reversers for conditional branches, indexed by
+// `instr->iclass - XED_ICLASS_JB`.
+const xed_iclass_enum_t kReversedConditionalCFIs[] = {
+  XED_ICLASS_JNB,
+  XED_ICLASS_JNBE,
+  XED_ICLASS_JNL,
+  XED_ICLASS_JNLE,
+  XED_ICLASS_INVALID,
+  XED_ICLASS_INVALID,
+  XED_ICLASS_JB,
+  XED_ICLASS_JBE,
+  XED_ICLASS_JL,
+  XED_ICLASS_JLE,
+  XED_ICLASS_JO,
+  XED_ICLASS_JP,
+  XED_ICLASS_JS,
+  XED_ICLASS_JZ,
+  XED_ICLASS_JNO,
+  XED_ICLASS_JNP,
+  XED_ICLASS_INVALID,
+  XED_ICLASS_JNS,
+  XED_ICLASS_JNZ,
 };
-}  // namespace
 
-// Convert a RIP-relative CALL/JMP to some far-off location.
-void InstructionRelativizer::RelativizeCFI(void) {
-  Operand &op(instr->ops[0]);
-  auto rel_pc = op.rel.pc;
-  if (AddressNeedsRelativizing(rel_pc, cache_pc)) {
-    if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
-      // TODO(pag): Use virtual reg.
+// Instruction builders for conditional branches, indexed by
+// `instr->iclass - XED_ICLASS_JB`.
+typedef void (CFIBuilder)(Instruction *, PC);
+CFIBuilder * const kConditionalCFIBuilders[] = {
+  JB_RELBRd<PC>,
+  JBE_RELBRd<PC>,
+  JL_RELBRd<PC>,
+  JLE_RELBRd<PC>,
+  nullptr,
+  nullptr,
+  JNB_RELBRd<PC>,
+  JNBE_RELBRd<PC>,
+  JNL_RELBRd<PC>,
+  JNLE_RELBRd<PC>,
+  JNO_RELBRd<PC>,
+  JNP_RELBRd<PC>,
+  JNS_RELBRd<PC>,
+  JNZ_RELBRd<PC>,
+  JO_RELBRd<PC>,
+  JP_RELBRd<PC>,
+  nullptr,
+  JS_RELBRd<PC>,
+  JZ_RELBRd<PC>
+};
 
-    } else if (XED_ENCODER_OPERAND_TYPE_BRDISP) {
-      granary_break_on_fault_if(instr->IsConditionalJump());
-      op.type = XED_ENCODER_OPERAND_TYPE_PTR;
-      op.rel.imm = reinterpret_cast<intptr_t>(new FarPC{rel_pc});
-    } else {
-      granary_break_on_fault();
-    }
-  }
+// Relativize a conditional branch by turning it into an indirect jump through
+// a `NativeAddress`, then add instructions around the new indirect jump to
+// jump around the indirect jump when the original condition is not satisfied.
+static void RelativizeConditionalBranch(ControlFlowInstruction *cfi,
+                                        Instruction *instr, PC target_pc) {
+  auto iclass = kReversedConditionalCFIs[instr->iclass - XED_ICLASS_JB];
+  auto iclass_builder = kConditionalCFIBuilders[iclass - XED_ICLASS_JB];
+
+  Instruction neg_bri;
+  iclass_builder(&neg_bri, static_cast<PC>(nullptr));
+
+  auto label = new LabelInstruction;
+  auto neg_br = new BranchInstruction(&neg_bri, label);
+
+  instr->iclass = XED_ICLASS_JMP;
+  instr->category = XED_CATEGORY_UNCOND_BR;
+
+  // Have a negated conditional branch jump around the old conditional branch.
+  cfi->InsertBefore(std::unique_ptr<granary::Instruction>(neg_br));
+  cfi->InsertAfter(std::unique_ptr<granary::Instruction>(label));
+
+  // Overwrite the conditional branch with an indirect JMP.
+  JMP_MEMv(instr, new NativeAddress(target_pc));
 }
 
-// Relativize a memory operation with a RIP-relative memory operand.
-void InstructionRelativizer::RelativizeMemOP(void) {
-  auto op_num = 0;
-  for (Operand &op : instr->ops) {
-    if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
-      break;
-    }
-    ++op_num;
+// Relativize a loop instruction. This turns an instruction like `jecxz <foo>`
+// or `loop <foo>` into:
+//                    jmp   <try_loop>
+//        do_loop:    jmp   <foo>
+//        try_loop:   loop  <do_loop>
+static void RelativizeLoop(ControlFlowInstruction *cfi, Instruction *instr,
+                           PC target_pc, bool target_is_far_away) {
+  Instruction jmp_try_loop;
+  Instruction loop_do_loop;
+
+  memcpy(&loop_do_loop, instr, sizeof loop_do_loop);
+  loop_do_loop.SetBranchTarget(nullptr);
+
+  JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
+
+  if (target_is_far_away) {
+    JMP_MEMv(instr, new NativeAddress(target_pc));
+  } else {
+    JMP_RELBRd<PC>(instr, target_pc);
   }
 
-  Operand &op(instr->ops[op_num]);
-  if (xed_operand_action_written(op.rw)) {
-    // TODO(pag): Use virtual reg.
-  } else if (xed_operand_action_read(op.rw)) {
-    // TODO(pag): Use virtual reg.
+  auto do_loop = new LabelInstruction;
+  auto try_loop = new LabelInstruction;
+
+  do_loop->InsertBefore(std::unique_ptr<granary::Instruction>(
+      new BranchInstruction(&jmp_try_loop, try_loop)));
+  cfi->InsertBefore(std::unique_ptr<granary::Instruction>(do_loop));
+  cfi->InsertAfter(std::unique_ptr<granary::Instruction>(try_loop));
+  try_loop->InsertAfter(std::unique_ptr<granary::Instruction>(
+      new BranchInstruction(&loop_do_loop, do_loop)));
+}
+
+}  // namespace
+
+// Relativize a control-flow instruction.
+void RelativizeCFI(ControlFlowInstruction *cfi, Instruction *instr,
+                   PC target_pc, bool target_is_far_away) {
+  auto iclass = instr->iclass;
+  if (XED_ICLASS_CALL_NEAR == iclass) {
+    if (target_is_far_away) CALL_NEAR_MEMv(instr, new NativeAddress(target_pc));
+
+  } else if (XED_ICLASS_JMP == iclass) {
+    if (target_is_far_away) JMP_MEMv(instr, new NativeAddress(target_pc));
+
+  // Always need to mangle this.
+  } else if (XED_ICLASS_JRCXZ == iclass ||
+             (XED_ICLASS_LOOP <= iclass && XED_ICLASS_LOOPNE >= iclass)) {
+    RelativizeLoop(cfi, instr, target_pc, target_is_far_away);
+
+  // Conditional jumps. We translate these by converting them into a negated
+  // conditional jump around an indirect jump to the far-away instruction.
+  } else if (instr->IsConditionalJump()) {
+    if (target_is_far_away) RelativizeConditionalBranch(cfi, instr, target_pc);
+
   } else {
-    granary_break_on_fault();  // TODO(pag): Implement this. CMPXCHG?
+    GRANARY_ASSERT(false);
   }
 }
 
 }  // namespace driver
 }  // namespace granary
-#endif

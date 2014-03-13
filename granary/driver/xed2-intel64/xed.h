@@ -3,6 +3,10 @@
 #ifndef GRANARY_DRIVER_XED2_INTEL64_XED_H_
 #define GRANARY_DRIVER_XED2_INTEL64_XED_H_
 
+#ifndef GRANARY_INTERNAL
+# error "This code is internal to Granary."
+#endif
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"

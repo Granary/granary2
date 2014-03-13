@@ -10,8 +10,9 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/driver/xed2-intel64/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
+#include "granary/driver/xed2-intel64/xed.h"
+#include "granary/driver/decode.h"
 
 #include "granary/breakpoint.h"
 
@@ -25,6 +26,9 @@ extern xed_state_t XED_STATE;
 // initializes a number of the internal `Instruction` fields to sane defaults.
 void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                      xed_category_enum_t category, int8_t num_ops);
+
+// Initialize the instruction decoder.
+InstructionDecoder::InstructionDecoder(void) {}
 
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
@@ -198,7 +202,7 @@ static VirtualRegister LoadMemoryOperand(DecodedBasicBlock *block,
 
     lea.num_explicit_ops = lea.num_ops;
 
-    GRANARY_ASSERT(XED_ENCODER_OPERANDS_MAX >= lea.num_ops);
+    GRANARY_ASSERT(Instruction::MAX_NUM_OPS >= lea.num_ops);
 
     // Add the instruction into the block.
     auto instr = new NativeInstruction(&lea);
@@ -473,147 +477,5 @@ AppPC InstructionDecoder::DecodeInternal(DecodedBasicBlock *block,
   return nullptr;
 }
 
-#if 0
-namespace {
-
-// Convert a Granary relative branch operand into a XED encoder one. Granary's
-// `Operand` structure maintains the actual target, and then when we know where
-// the instruction will be encoded, we calculate the relative displacement. Here
-// we dependend on `instr->length` because we know ahead of time how long
-// the various jumps are. In other cases, `instr->length` is not safe to use.
-static void SelectRelBranchOperand(const Instruction *instr,
-                                    const Operand *op,
-                                    xed_encoder_operand_t *ir_op) {
-  ir_op->width = 32;
-  if (instr->encoded_pc) {
-    ir_op->u.brdisp = static_cast<decltype(ir_op->u.brdisp)>(
-        op->rel.app_pc - (instr->encoded_pc + instr->length));
-  } else {
-    ir_op->u.brdisp = 0;
-  }
-}
-
-enum {
-  RIP_REL32_LEA_LEN = 7  // 48 (rex.W) 8d (opcode) 00 (sib) 00 00 00 00 (disp)
-};
-
-// Convert a Granary LEA operand into a XED_ENCODER_OPERAND_TYPE_MEM operand.
-static void SelectMemoryOperand(const Instruction *instr,
-                                const Operand *op,
-                                xed_encoder_operand_t *ir_op) {
-  if (instr->has_pc_rel_op) {
-    ir_op->width = arch::ADDRESS_WIDTH_BITS;
-    ir_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-    ir_op->u.mem.seg = XED_REG_INVALID;
-    ir_op->u.mem.base = XED_REG_RIP;
-    ir_op->u.mem.index = XED_REG_INVALID;
-    ir_op->u.mem.scale = 0;
-    ir_op->u.mem.disp.displacement_width = 32;
-    ir_op->u.mem.disp.displacement =
-        static_cast<decltype(ir_op->u.mem.disp.displacement)>(
-            op->rel.pc - (instr->encoded_pc + RIP_REL32_LEA_LEN));
-  } else {
-    ir_op->width = static_cast<decltype(ir_op->width)>(op->width);
-    ir_op->u = op->u;
-  }
-}
-
-// Convert an `Operand` into a `xed_encoder_operand_t`.
-static void SelectOperand(const Instruction *instr, const Operand *op,
-                          xed_encoder_operand_t *ir_op, int8_t *max_width) {
-  ir_op->type = op->type;
-  if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_BRDISP == op->type) {
-    SelectRelBranchOperand(instr, op, ir_op);
-  } else if (instr->has_pc_rel_op && XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
-    SelectMemoryOperand(instr, op, ir_op);
-  } else {
-    ir_op->width = static_cast<decltype(ir_op->width)>(op->width);
-    ir_op->u = op->u;
-  }
-
-  // Set the effective operand width to max width of all operands.
-  if (op->width > *max_width) {
-    *max_width = op->width;
-  }
-}
-
-// Adjust the effective operand width. This is a special case for return
-// instructions.
-//
-// TODO(pag): Is the effective operand width for `RET <imm>` also
-//            GRANARY_ARCH_ADDRESS_WIDTH?
-static void AdjustEffectiveOperandWidth(xed_encoder_instruction_t *ir) {
-  if (!ir->effective_operand_width) {
-    if (XED_ICLASS_RET_NEAR == ir->iclass ||
-        XED_ICLASS_RET_FAR == ir->iclass) {
-      ir->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
-    }
-  }
-}
-
-// Tries to figure out the effective operand width for this instruction.
-static uint32_t GetEffectiveOperandWidth(const Instruction *instr,
-                                         int8_t width) {
-  if (0 >= instr->effective_operand_width) {
-    return static_cast<uint32_t>(width);
-  } else {
-    return static_cast<uint32_t>(instr->effective_operand_width);
-  }
-}
-
-// Convert an `Instruction` instances into an `xed_encoder_instruction_t`.
-static void SelectInstruction(const Instruction *instr,
-                              xed_encoder_instruction_t *ir) {
-  int8_t width = 0;
-  ir->mode = XED_STATE;
-  ir->iclass = instr->iclass;
-  ir->prefixes = instr->prefixes;
-  ir->noperands = static_cast<decltype(ir->noperands)>(instr->num_explicit_ops);
-  for (int8_t i(0); i < instr->num_explicit_ops; ++i) {
-    SelectOperand(instr, &(instr->ops[i]), &(ir->operands[i]), &width);
-  }
-  ir->effective_operand_width = GetEffectiveOperandWidth(instr, width);
-  ir->effective_address_width = instr->has_memory_op ?
-      GRANARY_ARCH_ADDRESS_WIDTH : 0;
-  AdjustEffectiveOperandWidth(ir);
-}
-
-// Encode an instruction into the instruction's encode buffer.
-static void EncodeInstruction(Instruction *instr, CachePC pc) {
-  if (pc) {
-    instr->encoded_pc = pc;
-  }
-  xed_encoder_request_t xedd;
-  xed_encoder_instruction_t ir;
-  SelectInstruction(instr, &ir);
-  xed_encoder_request_zero_set_mode(&xedd, &XED_STATE);
-  xed_encoder_request_set_iclass(&xedd, instr->iclass);
-  granary_break_on_fault_if(!xed_convert_to_encoder_request(&xedd, &ir));
-  unsigned encoded_len(0);
-  auto encode_status = xed_encode(&xedd, &(instr->encode_buffer[0]),
-                                  XED_MAX_INSTRUCTION_BYTES, &encoded_len);
-  granary_break_on_fault_if(XED_ERROR_NONE != encode_status);
-  instr->length = static_cast<decltype(instr->length)>(encoded_len);
-}
-
-// Copy the encoded instruction buffer to the encode location.
-static void CopyEncodedBytes(Instruction *instr, CachePC pc) {
-  if (pc) {
-    memcpy(pc, &(instr->encode_buffer[0]), static_cast<size_t>(instr->length));
-  }
-}
-}  // namespace
-
-// Encode a XED instruction intermediate representation into an x86
-// instruction.
-CachePC InstructionDecoder::EncodeInternal(Instruction *instr, CachePC pc) {
-  if (instr->needs_encoding || instr->has_pc_rel_op) {
-    EncodeInstruction(instr, pc);
-    instr->needs_encoding = false;
-  }
-  CopyEncodedBytes(instr, pc);
-  return pc + instr->length;
-}
-#endif
 }  // namespace driver
 }  // namespace granary

@@ -2,7 +2,9 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/driver/xed2-intel64/decode.h"
+#include "granary/code/operand.h"
+
+#include "granary/driver/decode.h"
 #include "granary/driver/xed2-intel64/instruction.h"
 
 namespace granary {

@@ -11,6 +11,7 @@
 #include "granary/code/operand.h"
 
 #include "granary/logging.h"
+#include "granary/module.h"
 
 namespace granary {
 
@@ -35,6 +36,14 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
   Log(level, "f%p [label=<%d|",
       reinterpret_cast<void *>(frag),
       frag->id);
+
+  auto print_as_sub_record = false;
+  if (frag->block_meta && (frag->is_block_head || frag->is_future_block_head)) {
+    auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);
+    Log(level, "{%p|{", meta->start_pc);
+    print_as_sub_record = true;
+  }
+
   for (auto instr : ForwardInstructionIterator(frag->first)) {
     auto ninstr = DynamicCast<NativeInstruction *>(instr);
     if (!ninstr) {
@@ -67,6 +76,11 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
     });
     Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
   }
+
+  if (print_as_sub_record) {
+    Log(level, "}}");
+  }
+
   Log(level, ">];\n");
 }
 
