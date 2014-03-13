@@ -18,7 +18,7 @@
 #include "granary/init.h"
 #include "granary/logging.h"
 
-GRANARY_DEFINE_bool(gdb, true,
+GRANARY_DEFINE_bool(gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
     "is yes.")
 
@@ -38,7 +38,7 @@ namespace {
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
 static void InitDebug(void) {
-  if (FLAG_gdb) {
+  if (FLAG_gdb_prompt) {
     char buff[2];
     Log(LogOutput, "Process ID for attaching GDB: %d\n", getpid());
     Log(LogOutput, "Press enter to continue.\n");

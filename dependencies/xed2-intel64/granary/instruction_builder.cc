@@ -111,10 +111,10 @@ static void GenerateImplicitOperandBuilder(InstructionInfo *info,
                                            const xed_operand_t *op) {
   auto op_name = xed_operand_name(op);
   auto op_type = xed_operand_type(op);
-  if (xed_operand_is_register(op_name)) {
-    GenerateImplicitRegisterBuilder(xed_operand_reg(op), xed_operand_rw(op));
-  } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {
+  if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {
     ConvertNonTerminalOperand(op);
+  } else if (xed_operand_is_register(op_name)) {
+      GenerateImplicitRegisterBuilder(xed_operand_reg(op), xed_operand_rw(op));
 
   } else if (XED_OPERAND_IMM0SIGNED == op_name) {
     std::cout << INDENT << "ImmediateBuilder(" << xed_operand_imm(op)
@@ -168,7 +168,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
     auto op = xed_inst_operand(instr, i);
     if (i < num_explicit_ops) {
       GenerateExplicitOperandBuilder(info, instr, op, i);
-    } else if (IsAmbiguousOperand(instr, i)) {
+    } else {
       GenerateImplicitOperandBuilder(info, instr, op);
     }
   }
