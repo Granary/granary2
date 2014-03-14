@@ -5,6 +5,7 @@
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 
+#include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/driver/relativize.h"
@@ -109,8 +110,8 @@ static void RelativizeConditionalBranch(ControlFlowInstruction *cfi,
   instr->category = XED_CATEGORY_UNCOND_BR;
 
   // Have a negated conditional branch jump around the old conditional branch.
-  cfi->InsertBefore(std::unique_ptr<granary::Instruction>(neg_br));
-  cfi->InsertAfter(std::unique_ptr<granary::Instruction>(label));
+  cfi->UnsafeInsertBefore(neg_br);
+  cfi->UnsafeInsertAfter(label);
 
   // Overwrite the conditional branch with an indirect JMP.
   JMP_MEMv(instr, new NativeAddress(target_pc));
@@ -140,19 +141,17 @@ static void RelativizeLoop(ControlFlowInstruction *cfi, Instruction *instr,
   auto do_loop = new LabelInstruction;
   auto try_loop = new LabelInstruction;
 
-  do_loop->InsertBefore(std::unique_ptr<granary::Instruction>(
-      new BranchInstruction(&jmp_try_loop, try_loop)));
-  cfi->InsertBefore(std::unique_ptr<granary::Instruction>(do_loop));
-  cfi->InsertAfter(std::unique_ptr<granary::Instruction>(try_loop));
-  try_loop->InsertAfter(std::unique_ptr<granary::Instruction>(
-      new BranchInstruction(&loop_do_loop, do_loop)));
+  do_loop->UnsafeInsertBefore(new BranchInstruction(&jmp_try_loop, try_loop));
+  cfi->UnsafeInsertBefore(do_loop);
+  cfi->UnsafeInsertAfter(try_loop);
+  try_loop->UnsafeInsertAfter(new BranchInstruction(&loop_do_loop, do_loop));
 }
 
 }  // namespace
 
-// Relativize a control-flow instruction.
-void RelativizeCFI(ControlFlowInstruction *cfi, Instruction *instr,
-                   PC target_pc, bool target_is_far_away) {
+// Relativize a direct control-flow instruction.
+void RelativizeDirectCFI(ControlFlowInstruction *cfi, Instruction *instr,
+                         PC target_pc, bool target_is_far_away) {
   auto iclass = instr->iclass;
   if (XED_ICLASS_CALL_NEAR == iclass) {
     if (target_is_far_away) CALL_NEAR_MEMv(instr, new NativeAddress(target_pc));
@@ -173,6 +172,20 @@ void RelativizeCFI(ControlFlowInstruction *cfi, Instruction *instr,
   } else {
     GRANARY_ASSERT(false);
   }
+}
+
+// Relativize a instruction with a memory operand, where the operand loads some
+// value from `mem_addr`
+void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
+                     const MemoryOperand &mloc, const void *mem_addr) {
+  Instruction lea;
+  auto addr_reg = block->AllocateVirtualRegister(arch::ADDRESS_WIDTH_BYTES);
+  LEA_GPRv_IMMv(&lea, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
+  ninstr->UnsafeInsertBefore(new NativeInstruction(&lea));
+
+  MemoryOperand rel_mloc(addr_reg, mloc.Width());
+  GRANARY_IF_DEBUG(auto replaced = ) mloc.Ref().ReplaceWith(rel_mloc);
+  GRANARY_ASSERT(replaced);
 }
 
 }  // namespace driver

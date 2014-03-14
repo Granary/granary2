@@ -8,7 +8,7 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/code/operand.h"
+#include "granary/cfg/operand.h"
 
 namespace granary {
 namespace driver {
@@ -17,13 +17,17 @@ namespace driver {
 // interface class cannot be used as-is as the methods don't exist.
 class OperandInterface {
  public:
-  inline bool IsRead(void) const;
+  bool IsRead(void) const;
 
-  inline bool IsWrite(void) const;
+  bool IsWrite(void) const;
 
-  inline bool IsConditionalRead(void) const;
+  bool IsConditionalRead(void) const;
 
-  inline bool IsConditionalWrite(void) const;
+  bool IsConditionalWrite(void) const;
+
+  bool IsRegister(void) const;
+  bool IsMemory(void) const;
+  bool IsImmediate(void) const;
 
   void EncodeToString(OperandString *str) const;
 };

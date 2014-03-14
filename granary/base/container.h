@@ -39,6 +39,50 @@ class Container {
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(Container, (T));
 };
 
+// Semi-generic container for an internal Granary+ type, where the specifics
+// of that type are not published to non-`GRANARY_INTERNAL` code.
+template <typename T, unsigned long kSize, unsigned long kAlign=8>
+class OpaqueContainer {
+ public:
+  typedef OpaqueContainer<T, kSize, kAlign> SelfT;
+
+  OpaqueContainer(void) = default;
+  OpaqueContainer(const SelfT &that) = default;  // NOLINT
+  OpaqueContainer(SelfT &&that) = default;  // NOLINT
+
+#ifdef GRANARY_INTERNAL
+  // Copy construct the contained object.
+  explicit OpaqueContainer(const T &that) {
+    new (operator->()) T(that);
+  }
+
+  // Construct the contained object.
+  template <typename... Args>
+  void Construct(Args... args) {
+    new (operator->()) T(args...);
+  }
+
+  inline T *AddressOf(void) {
+    return reinterpret_cast<T *>(&(storage[0]));
+  }
+
+  inline const T *AddressOf(void) const {
+    return reinterpret_cast<const T *>(&(storage[0]));
+  }
+
+  inline T *operator->(void) {
+    return reinterpret_cast<T *>(&(storage[0]));
+  }
+
+  inline const T *operator->(void) const {
+    return reinterpret_cast<const T *>(&(storage[0]));
+  }
+#endif  // GRANARY_INTERNAL
+
+ private:
+  alignas(kAlign) uint8_t storage[kSize];
+};
+
 }  // namespace granary
 
 #endif  // GRANARY_BASE_CONTAINER_H_

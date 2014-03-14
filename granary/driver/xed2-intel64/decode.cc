@@ -185,7 +185,6 @@ static VirtualRegister LoadMemoryOperand(DecodedBasicBlock *block,
     lea.iclass = XED_ICLASS_LEA;
     lea.category = XED_CATEGORY_MISC;
     lea.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
-    lea.has_memory_op = false;
     lea.num_ops = 1;
 
     lea.ops[0].reg = block->AllocateVirtualRegister();
@@ -268,7 +267,6 @@ static void ConverMemoryOperand(DecodedBasicBlock *block, Instruction *instr,
 static void ConvertBaseDisp(DecodedBasicBlock *block, Instruction *instr,
                             Operand *instr_op, const xed_decoded_inst_t *xedd,
                             unsigned index) {
-  instr->has_memory_op = true;
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);

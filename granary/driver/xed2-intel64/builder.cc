@@ -41,6 +41,17 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->category = category;
   instr->num_explicit_ops = num_explicit_ops;
 
+  // These are only really atomic if there's a memory op.
+  //
+  // TODO(pag): There might be other categories of atomic operations (with
+  //            XED_ATTRIBUTE_HLE_ACQ_ABLE andXED_ATTRIBUTE_HLE_REL_ABLE, but
+  //            only if they have memory operations. This might come up where
+  //            an instruction is initially not atomic (e.g. reg->reg), but then
+  //            is modified by a tool to be mem->reg or reg->mem, thus making it
+  //            atomic.
+  instr->is_atomic = XED_ICLASS_XCHG == iclass ||
+                     XED_CATEGORY_SEMAPHORE == category;
+
   // Make all implicit / suppressed operands sticky.
   for (uint8_t i = num_explicit_ops; i < Instruction::MAX_NUM_OPS; ++i) {
     instr->ops[i].is_sticky = true;

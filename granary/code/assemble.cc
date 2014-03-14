@@ -7,9 +7,10 @@
 #include "granary/base/base.h"
 #include "granary/base/list.h"
 
-#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
+#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/operand.h"
 
 #include "granary/code/assemble.h"
 #include "granary/code/fragment.h"
@@ -52,6 +53,10 @@ class InstructionRelativizer {
   explicit InstructionRelativizer(PC estimated_encode_loc)
       : cache_pc(estimated_encode_loc) {}
 
+  inline bool AddressNeedsRelativizing(const void *ptr) const {
+    return AddressNeedsRelativizing(reinterpret_cast<PC>(ptr));
+  }
+
   // Returns true if an address needs relativizing.
   bool AddressNeedsRelativizing(PC relative_pc) const {
     auto signed_diff = relative_pc - cache_pc;
@@ -59,7 +64,31 @@ class InstructionRelativizer {
     return MAX_BRANCH_OFFSET < diff;
   }
 
-  void RelativizeCFI(ControlFlowInstruction *cfi) {
+  // Relativize a particular memory optation within a memory instruction.
+  void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *instr,
+                       const MemoryOperand &mloc) {
+    const void *mptr(nullptr);
+    if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
+      driver::RelativizeMemOp(block, instr, mloc, mptr);
+    }
+  }
+
+  // Relativize a memory instruction.
+  void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *instr) {
+    MemoryOperand mloc1;
+    MemoryOperand mloc2;
+    auto count = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
+                                             ReadOrWriteTo(mloc2));
+    if (2 == count) {
+      RelativizeMemOp(block, instr, mloc1);
+      RelativizeMemOp(block, instr, mloc2);
+    } else if (1 == count) {
+      RelativizeMemOp(block, instr, mloc1);
+    }
+  }
+
+  // Relativize a control-flow instruction.
+  void RelativizeCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
     auto target_block = cfi->TargetBlock();
     if (IsA<NativeBasicBlock *>(target_block)) {
       auto target_pc = target_block->StartAppPC();
@@ -68,8 +97,15 @@ class InstructionRelativizer {
       // instructions need to be relativized regardless of whether or not the
       // target PC is far away. For example, on x86, the `LOOP rel8`
       // instructions must always be relativized.
-      driver::RelativizeCFI(cfi, &(cfi->instruction), target_pc,
-                            AddressNeedsRelativizing(target_pc));
+      driver::RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
+                                  AddressNeedsRelativizing(target_pc));
+
+    // Indirect CFIs might read their target from a PC-relative address.
+    } else if (IsA<IndirectBasicBlock *>(target_block)) {
+      MemoryOperand mloc;
+      if (cfi->MatchOperands(ReadFrom(mloc))) {
+        RelativizeMemOp(block, cfi, mloc);
+      }
     }
   }
 
@@ -80,18 +116,17 @@ class InstructionRelativizer {
   void RelativizeInstruction(DecodedBasicBlock *block,
                              NativeInstruction *instr) {
     if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-      RelativizeCFI(cfi);
+      RelativizeCFI(block, cfi);
+    } else {
+      RelativizeMemOp(block, instr);
     }
-
-    GRANARY_UNUSED(block);
   }
 
   // Relativizes instructions that use PC-relative operands that are too far
   // away from our estimate of where this block will be encoded.
   void RelativizeBlock(DecodedBasicBlock *block) {
     for (auto instr : block->Instructions()) {
-      auto native_instr = DynamicCast<NativeInstruction *>(instr);
-      if (native_instr) {
+      if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
         RelativizeInstruction(block, native_instr);
       }
     }

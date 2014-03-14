@@ -33,6 +33,11 @@ class RegisterBuilder {
     reg.DecodeFromNative(reg_);
   }
 
+  inline RegisterBuilder(VirtualRegister reg_,
+                         xed_operand_action_enum_t action_)
+      : reg(reg_),
+        action(action_) {}
+
   // Add this register as an operand to the instruction `instr`.
   void Build(Instruction *instr);
 
@@ -130,10 +135,28 @@ class BranchTargetBuilder {
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_category_enum_t category, uint8_t num_explicit_ops);
 
+// Custom LEA instruction builder for source register operands.
+template <typename A0, typename A1>
+inline static void LEA_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1) {
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC, 2);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
+  RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
+// Custom LEA instruction builder for source immediate operands.
+template <typename A0, typename A1>
+inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC, 2);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
+  ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);
+}
+
 }  // namespace driver
 }  // namespace granary
 
 // Bring in the auto-generated instruction builder API.
 #include "generated/xed2-intel64/instruction_builder.cc"
+
+
 
 #endif  // GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_

@@ -10,8 +10,8 @@
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
-#include "granary/code/operand.h"
-#include "granary/code/register.h"
+#include "granary/cfg/operand.h"  // For `OperandString`.
+#include "granary/code/register.h"  // For `VirtualRegister`.
 
 #include "granary/driver/operand.h"
 #include "granary/driver/xed2-intel64/xed.h"
@@ -23,6 +23,7 @@ class Operand;   // For `granary/code/operand.h`.
 
 namespace driver {
 
+// Represents an operand to an x86-64 instruction.
 class Operand : public OperandInterface {
  public:
   Operand(void)
@@ -30,6 +31,8 @@ class Operand : public OperandInterface {
         width(0),
         rw(XED_OPERAND_ACTION_INVALID),
         is_sticky(false) {}
+
+  Operand(const Operand &op);
 
   inline bool IsRead(void) const {
     return xed_operand_action_read(rw);
@@ -45,6 +48,24 @@ class Operand : public OperandInterface {
 
   inline bool IsConditionalWrite(void) const {
     return xed_operand_action_conditional_write(rw);
+  }
+
+  inline bool IsRegister(void) const {
+    return XED_ENCODER_OPERAND_TYPE_REG == type ||
+           XED_ENCODER_OPERAND_TYPE_SEG0 == type ||
+           XED_ENCODER_OPERAND_TYPE_SEG1 == type;
+  }
+
+  inline bool IsMemory(void) const {
+    return XED_ENCODER_OPERAND_TYPE_MEM == type ||
+           XED_ENCODER_OPERAND_TYPE_PTR == type;
+  }
+
+  inline bool IsImmediate(void) const {
+    return XED_ENCODER_OPERAND_TYPE_BRDISP == type ||
+           XED_ENCODER_OPERAND_TYPE_IMM0 == type ||
+           XED_ENCODER_OPERAND_TYPE_SIMM0 == type ||
+           XED_ENCODER_OPERAND_TYPE_IMM1 == type;
   }
 
   void EncodeToString(OperandString *str) const;
@@ -81,7 +102,9 @@ class Operand : public OperandInterface {
   xed_encoder_operand_type_t type:8;
   int8_t width;  // Operand width in bits.
   xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
-  bool is_sticky;  // This operand cannot be changed.
+
+  // This operand cannot be changed.
+  bool is_sticky;
 
 } __attribute__((packed));
 

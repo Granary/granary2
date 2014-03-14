@@ -6,9 +6,10 @@
 
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
+#include "granary/cfg/operand.h"
 
 #include "granary/code/fragment.h"
-#include "granary/code/operand.h"
+
 
 #include "granary/logging.h"
 #include "granary/module.h"
@@ -58,7 +59,8 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
       if (!op->IsWrite()) {
         OperandString op_str;
         op->EncodeToString(&op_str);
-        Log(level, "%s%s", sep, static_cast<const char *>(op_str));
+        auto prefix = op->IsConditionalRead() ? "cr " : "";
+        Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
         sep = ", ";
       }
     });
@@ -67,7 +69,9 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
     sep = " -&gt; ";
     ninstr->ForEachOperand([&] (Operand *op) {
       if (op->IsWrite()) {
-        auto prefix = op->IsRead() ? "r/w " : "";
+        auto prefix = op->IsRead() ?
+                      (op->IsConditionalWrite() ? "r/cw " : "r/w ") :
+                      (op->IsConditionalWrite() ? "cw " : "");
         OperandString op_str;
         op->EncodeToString(&op_str);
         Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));

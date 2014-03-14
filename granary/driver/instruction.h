@@ -7,14 +7,12 @@
 # error "This code is internal to Granary."
 #endif
 
+#include "granary/cfg/operand.h"
+
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
 namespace granary {
-
-// Forward declarations.
-class Operand;
-
 namespace driver {
 
 // Documents the methods that must be provided by driver instructions. This
@@ -56,7 +54,12 @@ class InstructionInterface {
 
   const char *OpCodeName(void) const;
 
-  void ForEachOperand(std::function<void(granary::Operand *)> func);
+  // Apply a function to every operand.
+  void ForEachOperand(std::function<void(granary::Operand *)> &&func);
+
+  // Operand matcher for multiple arguments. Returns the number of matched
+  // arguments, starting from the first argument.
+  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
 };
 
 }  // namespace driver

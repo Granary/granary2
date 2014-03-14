@@ -100,8 +100,12 @@ class Instruction : public InstructionInterface {
   // Get the opcode name.
   const char *OpCodeName(void) const;
 
-  // Invoke a function on every operand.
-  void ForEachOperand(std::function<void(granary::Operand *)> func);
+  // Apply a function on every operand.
+  void ForEachOperand(std::function<void(granary::Operand *)> &&func);
+
+  // Operand matcher for multiple arguments. Returns the number of matched
+  // arguments, starting from the first argument.
+  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
 
   // Where was this instruction encoded/decoded.
   union {
@@ -129,9 +133,6 @@ class Instruction : public InstructionInterface {
   // Is this an atomic operation?
   bool is_atomic:1;
 
-  // Does this instruction have a memory operand?
-  bool has_memory_op:1;
-
   // Number of explicit operands.
   uint8_t num_explicit_ops:4;
 
@@ -144,6 +145,9 @@ class Instruction : public InstructionInterface {
   // All operands that Granary can make sense of. This includes implicit and
   // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
+  //
+  // TODO(pag): Could optimize space by only storing explicit operands, and then
+  //            using `iclass` to look-up implicit/suppressed operands.
   Operand ops[MAX_NUM_OPS];
 
 } __attribute__((packed));

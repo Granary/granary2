@@ -2,23 +2,89 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/base.h"
 #include "granary/base/string.h"
-
+#include "granary/cfg/operand.h"
 #include "granary/driver/xed2-intel64/instruction.h"
-
-#include "granary/code/operand.h"
+#include "granary/breakpoint.h"
 
 namespace granary {
+namespace {
+static driver::Operand * const TOMBSTONE = \
+    reinterpret_cast<driver::Operand *>(0x1ULL);
+}  // namespace
+
+// Try to replace the referenced operand with a concrete operand. Returns
+// false if the referenced operand is not allowed to be replaced. For example,
+// suppressed and implicit operands cannot be replaced.
+bool OperandRef::ReplaceWith(const Operand &repl_op) {
+  GRANARY_ASSERT(op && TOMBSTONE != op && repl_op.op_ptr);
+  if (GRANARY_UNLIKELY(op->is_sticky)) {
+    return false;
+  } else {
+    auto rw = op->rw;
+    auto width = op->width;
+    *op = *(repl_op.op.AddressOf());
+    op->rw = rw;
+    op->width = width;
+    return true;
+  }
+}
 
 bool RegisterOperand::IsNative(void) const {
-  return op && op->reg.IsNative();
+  return op->reg.IsNative();
 }
 
 bool RegisterOperand::IsVirtual(void) const {
-  return op && op->reg.IsNative();
+  return op->reg.IsNative();
+}
+
+// Initialize a new memory operand from a virtual register, where the
+// referenced memory has a width of `num_bits`.
+MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bits) {
+  op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op->width = static_cast<int8_t>(num_bits);
+  op->reg = ptr_reg;
+  op->rw = XED_OPERAND_ACTION_INVALID;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Initialize a new memory operand from a pointer, where the
+// referenced memory has a width of `num_bits`.
+MemoryOperand::MemoryOperand(const void *ptr, int num_bits) {
+  op->type = XED_ENCODER_OPERAND_TYPE_PTR;
+  op->width = static_cast<int8_t>(num_bits);
+  op->addr.as_ptr = ptr;
+  op->rw = XED_OPERAND_ACTION_INVALID;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Try to match this memory operand as a pointer value.
+bool MemoryOperand::MatchPointer(const void *&ptr) const {
+  if (XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
+    ptr = op->addr.as_ptr;
+    return true;
+  }
+  return false;
+}
+
+// Try to match this memory operand as a register value. That is, the address
+// is stored in the matched register.
+bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
+  if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
+    reg = op->reg;
+    return true;
+  }
+  return false;
 }
 
 namespace driver {
+
+Operand::Operand(const Operand &op) {
+  memcpy(this, &op, sizeof op);
+}
 
 void Operand::EncodeToString(OperandString *str) const {
   auto prefix = "";

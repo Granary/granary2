@@ -34,6 +34,20 @@ GRANARY_EARLY_GLOBAL static Container<Environment> envs[2];
 
 }  // namespace
 
+namespace {
+
+static void bar(void) { }
+
+static void (*bar_ptr)(void) = &bar;
+
+static void foo() {
+  if (GRANARY_LIKELY(nullptr != bar_ptr)) {
+    bar_ptr();
+  }
+}
+
+}  // namespace
+
 // Initialize Granary.
 void Init(const char *granary_path) {
 
@@ -54,7 +68,7 @@ void Init(const char *granary_path) {
   env.Construct();
 
   // TODO(pag): Remove me.
-  auto pc = UnsafeCast<AppPC>(&Log);
+  AppPC pc(UnsafeCast<AppPC>(&foo));
 
   env->Setup();
   env->AttachToAppPC(pc);

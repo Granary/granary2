@@ -14,7 +14,7 @@
 # include "granary/driver/driver.h"
 #endif
 
-#include "granary/code/match_operand.h"
+#include "granary/cfg/operand.h"
 
 namespace granary {
 
@@ -58,7 +58,7 @@ class Instruction {
   // `uintptr_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T, uintptr_t>()>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
   >
   T GetMetaData(void) const {
     static_assert(sizeof(T) == sizeof(uintptr_t),
@@ -74,7 +74,7 @@ class Instruction {
   // `uintptr_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T,uintptr_t>()>::Type=0
+    typename EnableIf<!TypesAreEqual<T,uintptr_t>::RESULT>::Type=0
   >
   void SetMetaData(T meta) {
     static_assert(sizeof(T) == sizeof(uintptr_t),
@@ -90,6 +90,18 @@ class Instruction {
   // specific meta-data before they instrument instructions.
   inline void ClearMetaData(void) {
     SetMetaData(0UL);
+  }
+
+  // Inserts an instruction before/after the current instruction. Returns an
+  // (unowned) pointer to the inserted instruction.
+  GRANARY_INTERNAL_DEFINITION
+  inline Instruction *UnsafeInsertBefore(Instruction *instr) {
+    return InsertBefore(std::unique_ptr<Instruction>(instr));
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  inline Instruction *UnsafeInsertAfter(Instruction *instr) {
+    return InsertAfter(std::unique_ptr<Instruction>(instr));
   }
 
   // Inserts an instruction before/after the current instruction. Returns an
@@ -244,15 +256,14 @@ class NativeInstruction : public Instruction {
   // Note: Matches are attempted in order!
   template <typename... OperandMatchers>
   inline bool MatchOperands(OperandMatchers... matchers) {
-    return detail::MatchAndBindOperands(this, {matchers...});
+    return sizeof...(matchers) == CountMatchedOperandsImpl({matchers...});
   }
 
   // Try to match and bind one or more operands from this instruction. Returns
   // the number of operands matched, starting from the first operand.
   template <typename... OperandMatchers>
-  inline int CountMatchedOperands(OperandMatchers... matchers) {
-    return static_cast<int>(
-        detail::TryMatchAndBindOperands(this, {matchers...}));
+  inline size_t CountMatchedOperands(OperandMatchers... matchers) {
+    return CountMatchedOperandsImpl({matchers...});
   }
 
   // Invoke a function on every operand.
@@ -278,6 +289,11 @@ class NativeInstruction : public Instruction {
 
   // Invoke a function on every operand.
   void ForEachOperandImpl(std::function<void(granary::Operand *)> func);
+
+  // Try to match and bind one or more operands from this instruction. Returns
+  // the number of operands matched, starting from the first operand.
+  size_t CountMatchedOperandsImpl(
+      std::initializer_list<OperandMatcher> &&matchers);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeInstruction);
 };
