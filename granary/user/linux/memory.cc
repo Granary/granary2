@@ -25,7 +25,7 @@ namespace granary {
 void *AllocatePages(int num, MemoryIntent) {
   void *ret(mmap(
       nullptr,
-      static_cast<size_t>(GRANARY_ARCH_PAGE_FRAME_SIZE * num),
+      static_cast<size_t>(arch::PAGE_SIZE_BYTES * num),
       PROT_READ | PROT_WRITE,
       MAP_PRIVATE | MAP_ANONYMOUS,
       -1,
@@ -36,7 +36,7 @@ void *AllocatePages(int num, MemoryIntent) {
 
 // Frees `num` pages back to the OS.
 void FreePages(void *addr, int num, MemoryIntent) {
-  munmap(addr, static_cast<size_t>(GRANARY_ARCH_PAGE_FRAME_SIZE * num));
+  munmap(addr, static_cast<size_t>(arch::PAGE_SIZE_BYTES * num));
 }
 
 // Changes the memory protection of some pages.
@@ -53,7 +53,7 @@ void ProtectPages(void *addr, int num, MemoryProtection prot) {
   }
   mprotect(
       addr,
-      static_cast<size_t>(GRANARY_ARCH_PAGE_FRAME_SIZE * num),
+      static_cast<size_t>(arch::PAGE_SIZE_BYTES * num),
       prot_bits);
 }
 

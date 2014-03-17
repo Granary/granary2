@@ -115,8 +115,7 @@ size_t Instruction::CountMatchedOperands(
           (op.IsMemory() && IsA<MemoryOperand *>(m.op)) ||
           (op.IsImmediate() && IsA<ImmediateOperand *>(m.op))) {
         m.op->UnsafeReplace(&op);
-        matched = true;
-        was_matched[i] = true;
+        was_matched[i] = matched = true;
         ++num_matched;
         break;
       }

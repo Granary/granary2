@@ -15,14 +15,14 @@ namespace granary {
 // See `http://sandpile.org/x86/gpr.htm` for more details on general-purpose
 // registers in x86-64.
 enum {
-  LOW_BYTE = 0x1,
-  BYTE_2 = 0x2,
-  LOW_2_BYTES = 0x3,
-  LOW_4_BYTES = 0xF,
-  ALL_8_BYTES = 0xFF,
+  LOW_BYTE          = 0x1,
+  BYTE_2            = 0x2,
+  LOW_2_BYTES       = 0x3,
+  LOW_4_BYTES       = 0xF,
+  ALL_8_BYTES       = 0xFF,
 
-  HIGH_6_BYTES = 0xFC,
-  HIGH_7_BYTES = 0xFE,
+  HIGH_6_BYTES      = 0xFC,
+  HIGH_7_BYTES      = 0xFE,
   HIGH_6_LOW_1_BYTE = 0xFD
 };
 

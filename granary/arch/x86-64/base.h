@@ -12,6 +12,8 @@ namespace granary {
 namespace arch {
 
 enum {
+  PAGE_SIZE_BYTES = 4096,
+
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,
 

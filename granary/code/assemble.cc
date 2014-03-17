@@ -64,7 +64,7 @@ class InstructionRelativizer {
     return MAX_BRANCH_OFFSET < diff;
   }
 
-  // Relativize a particular memory optation within a memory instruction.
+  // Relativize a particular memory operation within a memory instruction.
   void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *instr,
                        const MemoryOperand &mloc) {
     const void *mptr(nullptr);
@@ -150,8 +150,7 @@ static void RelativizeLCFG(CodeCacheInterface *code_cache,
   auto estimated_encode_loc = code_cache->AllocateBlock(0);
   InstructionRelativizer rel(estimated_encode_loc);
   for (auto block : cfg->Blocks()) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    if (decoded_block) {
+    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
       rel.RelativizeBlock(decoded_block);
     }
   }
