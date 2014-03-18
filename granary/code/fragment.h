@@ -62,6 +62,9 @@ class Fragment {
   // Did the previous current data-flow pass change anything?
   bool data_flow_changed;
 
+  // Does the last instruction in this fragment change the stack pointer?
+  bool changes_stack_pointer;
+
   // Source basic block info.
   BlockMetaData *block_meta;
 

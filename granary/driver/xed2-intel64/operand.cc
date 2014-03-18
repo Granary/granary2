@@ -36,7 +36,7 @@ bool RegisterOperand::IsNative(void) const {
 }
 
 bool RegisterOperand::IsVirtual(void) const {
-  return op->reg.IsNative();
+  return op->reg.IsVirtual();
 }
 
 // Extract the register.

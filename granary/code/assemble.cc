@@ -221,8 +221,8 @@ static void FindLiveEntryRegsToFrags(Fragment *frags) {
 }
 
 #if 0
-
-class RegisterInfo {
+// Info tracker about an individual virtual register.
+class VirtualRegisterInfo {
 
   bool used_after_change_sp:1;
   bool used_after_change_ip:1;
@@ -230,6 +230,7 @@ class RegisterInfo {
   bool used_as_address:1;
   bool depends_on_sp:1;
 
+  // Semi-saturating counters.
   uint8_t num_defs;
   uint8_t num_uses;
 
@@ -241,18 +242,16 @@ class RegisterInfo {
 } __attribute__((packed));
 
 // Table that records all info about virtual register usage.
-class RegisterTable {
+class VirtualRegisterTable {
  public:
   void Visit(NativeInstruction *instr) {
 
   }
 
  private:
-  BigVector<RegisterInfo> regs;
+  BigVector<VirtualRegisterInfo> regs;
 };
-
 #endif
-
 }  // namespace
 
 // Assemble the local control-flow graph.

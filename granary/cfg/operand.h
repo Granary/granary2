@@ -7,6 +7,8 @@
 #include "granary/base/container.h"
 #include "granary/base/string.h"
 
+#include "granary/code/register.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -16,7 +18,6 @@ class Operand;
 class MemoryOperand;
 class RegisterOperand;
 class ImmediateOperand;
-union VirtualRegister;
 
 namespace driver {
 class Operand;
@@ -244,22 +245,22 @@ class OperandMatcher {
 };
 
 // Returns an operand matcher against an operand that is read.
-inline static OperandMatcher CanReadFrom(Operand &op) {
+inline static OperandMatcher ReadFrom(Operand &op) {
   return {&op, OperandAction::READ};
 }
 
 // Returns an operand matcher against an operand that is only read.
-inline static OperandMatcher ReadFrom(Operand &op) {
+inline static OperandMatcher ReadOnlyFrom(Operand &op) {
   return {&op, OperandAction::READ_ONLY};
 }
 
 // Returns an operand matcher against an operand that is written.
-inline static OperandMatcher CanWriteTo(Operand &op) {
+inline static OperandMatcher WriteTo(Operand &op) {
   return {&op, OperandAction::WRITE};
 }
 
 // Returns an operand matcher against an operand that is only written.
-inline static OperandMatcher WriteTo(Operand &op) {
+inline static OperandMatcher WriteOnlyTo(Operand &op) {
   return {&op, OperandAction::WRITE_ONLY};
 }
 

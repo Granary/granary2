@@ -21,6 +21,7 @@ Fragment::Fragment(int id_)
       is_future_block_head(true),
       is_exit(false),
       data_flow_changed(false),
+      changes_stack_pointer(false),
       block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}
@@ -222,6 +223,33 @@ class FragmentBuilder {
     }
   }
 
+  // Split a fragment at a stack pointer-changing instruction.
+  void SplitFragmentAtStackChange(Fragment *frag, DecodedBasicBlock *block,
+                                  Instruction *next) {
+    auto label = new LabelInstruction;
+    frag->fall_through_target = MakeEmptyLabelFragment(block, label);
+    frag = frag->fall_through_target;
+    label->SetMetaData<Fragment *>(frag);
+    ExtendFragment(frag, block, next);
+  }
+
+  // Returns true if an instruction writes to the stack pointer.
+  bool WritesToStackPointer(Instruction *instr) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      RegisterOperand reg1;
+      RegisterOperand reg2;
+      RegisterOperand reg3;
+
+      // TODO(pag): This isn't sufficient for something like `POPA` on
+      //            x86.
+      ninstr->MatchOperands(WriteTo(reg1), WriteTo(reg2), WriteTo(reg3));
+      return reg1.Register().IsStackPointer() ||
+             reg2.Register().IsStackPointer() ||
+             reg3.Register().IsStackPointer();
+    }
+    return false;
+  }
+
   // Extend a fragment with the instructions from a particular basic block.
   // This might end up generating many more fragments.
   void ExtendFragment(Fragment *frag, DecodedBasicBlock *block,
@@ -241,11 +269,18 @@ class FragmentBuilder {
       } else if (IsA<ControlFlowInstruction *>(instr)) {
         return SplitFragmentAtCFI(frag, block, instr);
 
-      // Extend block with this instruction and move to the next instruction.
       } else {
+        // Extend block with this instruction and move to the next instruction.
         auto next = instr->Next();
         frag->Append(std::move(instr->UnsafeUnlink()));
-        instr = next;
+
+        // Break this fragment if it changes the stack pointer.
+        if (WritesToStackPointer(instr)) {
+          frag->changes_stack_pointer = true;
+          return SplitFragmentAtStackChange(frag, block, next);
+        } else {
+          instr = next;
+        }
       }
     }
   }
