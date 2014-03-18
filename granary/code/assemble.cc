@@ -5,6 +5,7 @@
 #include "granary/arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/big_vector.h"
 #include "granary/base/list.h"
 
 #include "granary/cfg/basic_block.h"
@@ -15,6 +16,7 @@
 #include "granary/code/assemble.h"
 #include "granary/code/fragment.h"
 #include "granary/code/logging.h"
+#include "granary/code/register.h"
 
 #include "granary/driver/driver.h"
 
@@ -156,6 +158,101 @@ static void RelativizeLCFG(CodeCacheInterface *code_cache,
   }
 }
 
+// Update a register usage set with another fragment. Returns true if we
+// expect to find any local changes in our current fragment's register
+// liveness set based on the successor having a change in the last data flow
+// iteration.
+static bool UpdateRegUsageFromSuccessor(Fragment *succ,
+                                        RegisterUsageTracker *regs) {
+  if (succ) {
+    regs->Union(succ->entry_regs_live);
+    return succ->data_flow_changed;
+  } else {
+    return false;
+  }
+}
+
+// Calculate the live registers on entry to a fragment.
+static void FindLiveEntryRegsToFrag(Fragment *frag,
+                                    RegisterUsageTracker *regs) {
+  for (auto instr : BackwardInstructionIterator(frag->last)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      regs->Visit(ninstr);
+    }
+  }
+}
+
+// Calculate the live registers on entry to every fragment.
+static void FindLiveEntryRegsToFrags(Fragment *frags) {
+  for (auto frag : FragmentIterator(frags)) {
+    if (frag->is_exit || frag->is_future_block_head) {
+      frag->entry_regs_live.ReviveAll();
+      frag->data_flow_changed = false;
+    } else {
+      frag->entry_regs_live.KillAll();
+      frag->data_flow_changed = true;
+    }
+  }
+
+  for (bool data_flow_changed = true; data_flow_changed; ) {
+    data_flow_changed = false;
+
+    for (auto frag : FragmentIterator(frags)) {
+      if (frag->is_exit || frag->is_future_block_head) {
+        continue;
+      }
+
+      RegisterUsageTracker regs;
+      regs.KillAll();
+      auto e1 = UpdateRegUsageFromSuccessor(frag->fall_through_target, &regs);
+      auto e2 = UpdateRegUsageFromSuccessor(frag->branch_target, &regs);
+
+      if (!(e1 || e2)) {
+        frag->data_flow_changed = false;
+        continue;
+      }
+
+      FindLiveEntryRegsToFrag(frag, &regs);
+      frag->data_flow_changed = !regs.Equals(frag->entry_regs_live);
+      data_flow_changed = data_flow_changed || frag->data_flow_changed;
+      frag->entry_regs_live = regs;
+    }
+  }
+}
+
+#if 0
+
+class RegisterInfo {
+
+  bool used_after_change_sp:1;
+  bool used_after_change_ip:1;
+  bool defines_constant:1;
+  bool used_as_address:1;
+  bool depends_on_sp:1;
+
+  uint8_t num_defs;
+  uint8_t num_uses;
+
+  // This is fairly rough constraint. This only really meaningful for introduced
+  // `LEA` instructions that defined virtual registers as a combination of
+  // several other non-virtual registers.
+  RegisterUsageTracker depends_on;
+
+} __attribute__((packed));
+
+// Table that records all info about virtual register usage.
+class RegisterTable {
+ public:
+  void Visit(NativeInstruction *instr) {
+
+  }
+
+ private:
+  BigVector<RegisterInfo> regs;
+};
+
+#endif
+
 }  // namespace
 
 // Assemble the local control-flow graph.
@@ -174,6 +271,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // complicated, so to simplify things we re-split up the blocks into fragments
   // that represent the "true" basic blocks.
   auto frags = BuildFragmentList(cfg);
+
+  // Find the live registers on entry to the fragments.
+  FindLiveEntryRegsToFrags(frags);
+
   Log(LogWarning, frags);
 
   GRANARY_UNUSED(env);

@@ -65,6 +65,15 @@ void RegisterBuilder::Build(Instruction *instr) {
   op.reg = reg;
   op.rw = action;
   op.width = static_cast<int8_t>(reg.BitWidth());
+
+  // Registers AH through BH are tricky to handle due to their location, so we
+  // treat them as hard requirements for virtual register scheduling.
+  if (reg.IsNative()) {
+    auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
+    if (XED_REG_AH <= arch_reg && arch_reg <= XED_REG_BH) {
+      op.is_sticky = true;
+    }
+  }
 }
 
 // Add this immediate as an operand to the instruction `instr`.

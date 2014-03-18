@@ -18,8 +18,9 @@
 
 namespace granary {
 
-// Forward declaration.
-class Operand;   // For `granary/code/operand.h`.
+// Forward declarations.
+class Operand;
+class NativeInstruction;
 
 namespace driver {
 
@@ -97,6 +98,10 @@ class Operand : public OperandInterface {
     // Register. If this is a memory operand then this implies a de-reference
     // of this register.
     VirtualRegister reg;
+
+    // Indirect register reference via a created LEA instruction.
+    NativeInstruction *reg_indirect;
+
   } __attribute__((packed));
 
   xed_encoder_operand_type_t type:8;

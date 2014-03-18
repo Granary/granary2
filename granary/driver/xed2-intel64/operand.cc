@@ -39,6 +39,11 @@ bool RegisterOperand::IsVirtual(void) const {
   return op->reg.IsNative();
 }
 
+// Extract the register.
+VirtualRegister RegisterOperand::Register(void) const {
+  return op->reg;
+}
+
 // Initialize a new memory operand from a virtual register, where the
 // referenced memory has a width of `num_bits`.
 MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bits) {

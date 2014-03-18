@@ -3,14 +3,21 @@
 #ifndef GRANARY_CODE_REGISTER_H_
 #define GRANARY_CODE_REGISTER_H_
 
-#ifndef GRANARY_INTERNAL
-# error "This code is internal to Granary."
-#endif
+#include "granary/arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/bitset.h"
 
 namespace granary {
 
+// Forward declarations.
+class NativeInstruction;
+
+GRANARY_INTERNAL_DEFINITION namespace driver {
+class Instruction;
+}  // namespace driver
+
+// The kind of a virtual register.
 enum VirtualRegisterKind : uint8_t {
   VR_KIND_UNKNOWN = 0,
 
@@ -20,14 +27,7 @@ enum VirtualRegisterKind : uint8_t {
   // Architectural register that can potentially be re-scheduled.
   VR_KIND_ARCH_VIRTUAL,
 
-  // Temporary virtual register, treated as single-def, multiple use.
-  VR_KIND_TEMPORARY_VIRTUAL,
-
-  // Generic virtual register that can be multiply defined and used. The
-  // restriction here is that it can only be used within a local control-flow
-  // graph. In different blocks, the register can have different backing, but
-  // the end
-  VR_KIND_GENERIC_VIRTUAL
+  VR_KIND_VIRTUAL
 };
 
 // Defines the different types of virtual registers.
@@ -76,6 +76,13 @@ union VirtualRegister {
     return static_cast<int>(num_bytes);
   }
 
+  // Returns true if this register preserves any of the bytes of the backing
+  // GPR on a write, or if all bytes of the register are overwritten.
+  inline bool PreservesBytesOnWrite(void) const {
+    return VR_KIND_ARCH_VIRTUAL == kind &&
+           0xFF == (byte_mask | preserved_byte_mask);
+  }
+
   // Is this an architectural register?
   inline bool IsNative(void) const {
     return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_VIRTUAL == kind;
@@ -83,8 +90,18 @@ union VirtualRegister {
 
   // Is this a virtual register?
   inline bool IsVirtual(void) const {
-    return VR_KIND_TEMPORARY_VIRTUAL == kind || VR_KIND_GENERIC_VIRTUAL == kind;
+    return VR_KIND_VIRTUAL == kind;
   }
+
+  // Is this the stack pointer?
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsStackPointer(void) const;
+
+  // Is this the instruction pointer?
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsInstructionPointer(void) const;
 
   // Returns this register's internal number.
   inline int Number(void) const {
@@ -123,8 +140,57 @@ union VirtualRegister {
 
 } __attribute__((packed));
 
-static_assert(sizeof(uint64_t) == sizeof(VirtualRegister),
+static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
+
+// A class that tracks live, general purpose architectural registers within a
+// straight-line sequence of instructions.
+class RegisterUsageTracker
+    : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
+ public:
+  // Initialize the register tracker.
+  RegisterUsageTracker(void);
+
+  // Update this register tracker by visiting the operands of an instruction.
+  void Visit(NativeInstruction *instr);
+
+  // Kill all registers.
+  inline void KillAll(void) {
+    SetAll(false);
+  }
+
+  // Revive all registers.
+  inline void ReviveAll(void) {
+    SetAll(true);
+  }
+
+  // Kill a specific register.
+  inline void Kill(int num) {
+    Set(static_cast<unsigned>(num), false);
+  }
+
+  // Revive a specific register.
+  inline void Revive(int num) {
+    Set(static_cast<unsigned>(num), true);
+  }
+
+  // Union some other live register set with the current live register set.
+  // Returns true if there was a change in the set of live registers.
+  bool Union(const RegisterUsageTracker &that);
+
+  // Returns true if two register usage tracker sets are equivalent.
+  bool Equals(const RegisterUsageTracker &that) const;
+
+  // Overwrites one register usage tracker with another.
+  RegisterUsageTracker &operator=(const RegisterUsageTracker &that) {
+    if (this != &that) {
+      this->Copy(that);
+    }
+    return *this;
+  }
+
+ private:
+};
 
 }  // namespace granary
 

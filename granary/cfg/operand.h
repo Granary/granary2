@@ -98,6 +98,11 @@ class Operand {
     return IsRead() && IsWrite();
   }
 
+  // Returns whether or not this operand can be replaced / modified.
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsModifiable(void) const;
+
   // Return the width (in bits) of this operand, or -1 if its width is not
   // known.
   //
@@ -190,6 +195,9 @@ class RegisterOperand : public Operand {
   // Driver-specific implementations.
   bool IsNative(void) const;
   bool IsVirtual(void) const;
+
+  // Extract the register.
+  VirtualRegister Register(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, RegisterOperand)
 };

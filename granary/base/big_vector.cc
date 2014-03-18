@@ -1,5 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#define GRANARY_INTERNAL
+
 #include "granary/arch/base.h"
 
 #include "granary/base/big_vector.h"
@@ -23,7 +25,7 @@ namespace detail {
 // The backing data behind a big vector.
 class BigVectorSlab {
  public:
-  BigVectorSlab(size_t align, size_t size);
+  explicit BigVectorSlab(size_t align);
 
   BigVectorSlab *next;
   void *first;
@@ -32,7 +34,7 @@ class BigVectorSlab {
 typedef LinkedListIterator<BigVectorSlab> SlabIterator;
 
 // Initialize a big vector slab, with the number of pages
-BigVectorSlab::BigVectorSlab(size_t align, size_t size)
+BigVectorSlab::BigVectorSlab(size_t align)
     : next(nullptr) {
   auto this_addr = reinterpret_cast<uintptr_t>(this);
   auto begin_addr = this_addr + sizeof(*this);
@@ -55,8 +57,8 @@ BigVectorImpl::BigVectorImpl(size_t align_, size_t size_)
 
 // Free all backing slabs.
 BigVectorImpl::~BigVectorImpl(void) {
-  for (BigVectorSlab *next_slab(nullptr); slabs; slabs = next_slab) {
-    next_slab = slabs->next;
+  for (BigVectorSlab *next(nullptr); slabs; slabs = next) {
+    next = slabs->next;
     FreePages(slabs, 1, MemoryIntent::READ_WRITE);
   }
 }
@@ -81,7 +83,7 @@ void *BigVectorImpl::FindObjectPointer(size_t index) {
 void BigVectorImpl::AllocateSlab(void) {
   auto mem = AllocatePages(1, MemoryIntent::READ_WRITE);
   memset(mem, 0, arch::PAGE_SIZE_BYTES);
-  auto slab = new (mem) detail::BigVectorSlab(align, size);
+  auto slab = new (mem) detail::BigVectorSlab(align);
 
   // Chain it in.
   *next_slab = slab;

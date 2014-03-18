@@ -43,7 +43,7 @@ class PackedArray {
     memcpy(&(storage[0]), &(that.storage[0]), sizeof storage);
   }
 
- private:
+ protected:
   enum {
     SIZE = GRANARY_ALIGN_TO(kSizeBits, 2),
     NUM_ELEMS = GRANARY_ALIGN_TO(kNumElems, 8),

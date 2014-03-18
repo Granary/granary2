@@ -7,9 +7,17 @@
 
 namespace granary {
 
+// Represents a packed bitset of a fixed size.
 template <unsigned long kNumBits>
-using BitSet = PackedArray<bool, 1, kNumBits>;
+class BitSet : public PackedArray<bool, 1, kNumBits> {
+ public:
 
-}
+  // Set all bits in the bitset to true or false.
+  inline void SetAll(bool val) {
+    memset(&(this->storage[0]), val ? 0xFF : 0, sizeof this->storage);
+  }
+};
+
+}  // namespace granary
 
 #endif  // GRANARY_BASE_BITSET_H_

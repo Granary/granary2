@@ -84,6 +84,12 @@ static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
   instr_op->width = static_cast<int8_t>(instr_op->reg.BitWidth());
+
+  // These registers are tricky due to their placement, so we treat them as
+  // sticky.
+  if (XED_REG_AH <= reg && reg <= XED_REG_BH) {
+    instr_op->is_sticky = true;
+  }
 }
 
 // Pull out a register operand from the XED instruction.

@@ -132,7 +132,7 @@ detail::SuccessorBlockIterator DecodedBasicBlock::Successors(void) const {
 // Allocates a new temporary virtual register for use by instructions within
 // this basic block.
 VirtualRegister DecodedBasicBlock::AllocateVirtualRegister(int num_bytes) {
-  return cfg->AllocateVirtualRegister(VR_KIND_TEMPORARY_VIRTUAL, num_bytes);
+  return cfg->AllocateVirtualRegister(num_bytes);
 }
 
 // Return the first instruction in the basic block.

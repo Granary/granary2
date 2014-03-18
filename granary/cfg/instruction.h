@@ -24,6 +24,7 @@ class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class InstructionRelativizer;
+GRANARY_INTERNAL_DEFINITION class RegisterUsageTracker;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -284,6 +285,7 @@ class NativeInstruction : public Instruction {
  private:
   friend class ControlFlowInstruction;
   friend class InstructionRelativizer;
+  friend class RegisterUsageTracker;
 
   NativeInstruction(void) = delete;
 

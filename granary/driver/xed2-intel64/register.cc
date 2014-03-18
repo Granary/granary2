@@ -110,4 +110,16 @@ int VirtualRegister::EncodeToNative(void) const {
   }
 }
 
+// Is this the stack pointer?
+bool VirtualRegister::IsStackPointer(void) const {
+  return XED_REG_RSP == reg_num || XED_REG_ESP == reg_num ||
+         XED_REG_SP == reg_num || XED_REG_SPL == reg_num;
+}
+
+// Is this the instruction pointer?
+bool VirtualRegister::IsInstructionPointer(void) const {
+  return XED_REG_RIP == reg_num || XED_REG_EIP == reg_num ||
+         XED_REG_IP == reg_num;
+}
+
 }  // namespace granary

@@ -56,8 +56,11 @@ class Fragment {
   bool is_future_block_head;
 
   // Is this an exit block? An exit block is a future block, or a block that
-  // ends in some kind of return.
+  // ends in some kind of return, or a native block.
   bool is_exit;
+
+  // Did the previous current data-flow pass change anything?
+  bool data_flow_changed;
 
   // Source basic block info.
   BlockMetaData *block_meta;
@@ -66,13 +69,8 @@ class Fragment {
   Instruction *first;
   Instruction *last;
 
-  // Potentially virtual (or physical if there is a hard constraint) for every
-  // architectural register.
-  //
-  // Process for filling this set:
-  //      Do backward pass over fragment instructions
-  VirtualRegister entry_regs[arch::NUM_GENERAL_PURPOSE_REGISTERS];
-  BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> entry_reg_is_sticky;
+  // Which physical registers are live on entry to this block.
+  RegisterUsageTracker entry_regs_live;
 
  private:
   friend class FragmentBuilder;

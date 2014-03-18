@@ -20,6 +20,7 @@ Fragment::Fragment(int id_)
       is_block_head(false),
       is_future_block_head(true),
       is_exit(false),
+      data_flow_changed(false),
       block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}

@@ -100,6 +100,13 @@ bool Operand::IsConditionalWrite(void) const {
   return op_ptr && op->IsConditionalWrite();
 }
 
+// Returns whether or not this operand can be replaced / modified.
+//
+// Note: This has a driver-specific implementation.
+bool Operand::IsModifiable(void) const {
+  return !op->is_sticky;
+}
+
 // Return the width (in bits) of this operand, or -1 if its width is not
 // known.
 //
