@@ -31,7 +31,8 @@ class Operand : public OperandInterface {
       : type(XED_ENCODER_OPERAND_TYPE_INVALID),
         width(0),
         rw(XED_OPERAND_ACTION_INVALID),
-        is_sticky(false) {}
+        is_sticky(false),
+        is_explicit(false) {}
 
   Operand(const Operand &op);
 
@@ -69,6 +70,10 @@ class Operand : public OperandInterface {
            XED_ENCODER_OPERAND_TYPE_IMM1 == type;
   }
 
+  inline bool IsExplicit(void) const {
+    return is_explicit;
+  }
+
   void EncodeToString(OperandString *str) const;
 
   union {
@@ -99,8 +104,14 @@ class Operand : public OperandInterface {
     // of this register.
     VirtualRegister reg;
 
-    // Indirect register reference via a created LEA instruction.
-    NativeInstruction *reg_indirect;
+    // Combined memory operation. Used as part of encoding.
+    struct {
+      int32_t disp;
+      int8_t reg_seg;
+      int8_t reg_base;
+      int8_t reg_index;
+      int8_t scale;
+    } __attribute__((packed)) mem;
 
   } __attribute__((packed));
 
@@ -109,7 +120,8 @@ class Operand : public OperandInterface {
   xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
 
   // This operand cannot be changed.
-  bool is_sticky;
+  bool is_sticky:1;
+  bool is_explicit:1;
 
 } __attribute__((packed));
 

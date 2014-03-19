@@ -34,6 +34,46 @@ const char *Instruction::OpCodeName(void) const {
   return xed_iclass_enum_t2str(iclass);
 }
 
+namespace {
+// Invoke a function on a `driver::Operand` that has been converted into a
+// `granary::Operand`.
+static void CallWithOperand(
+    Operand *op, const std::function<void(granary::Operand *)> &func) {
+  switch (op->type) {
+    case XED_ENCODER_OPERAND_TYPE_REG:
+    case XED_ENCODER_OPERAND_TYPE_SEG0:
+    case XED_ENCODER_OPERAND_TYPE_SEG1: {
+      RegisterOperand reg(op);
+      func(reinterpret_cast<granary::Operand *>(&reg));
+      break;
+    }
+
+    case XED_ENCODER_OPERAND_TYPE_BRDISP:
+    case XED_ENCODER_OPERAND_TYPE_IMM0:
+    case XED_ENCODER_OPERAND_TYPE_SIMM0:
+    case XED_ENCODER_OPERAND_TYPE_IMM1: {
+      ImmediateOperand imm(op);
+      func(reinterpret_cast<granary::Operand *>(&imm));
+      break;
+    }
+    case XED_ENCODER_OPERAND_TYPE_MEM:
+    case XED_ENCODER_OPERAND_TYPE_PTR: {
+      MemoryOperand mem(op);
+      func(reinterpret_cast<granary::Operand *>(&mem));
+      break;
+    }
+    default: break;  // TODO(pag): Implement others.
+  }
+}
+}  // namespace
+
+// Invoke a function on the branch target, where the branch target is treated
+// as a `granary::Operand`.
+void Instruction::WithBranchTargetOperand(
+    const std::function<void(granary::Operand *)> &func) {
+  CallWithOperand(&(ops[0]), func);
+}
+
 // Invoke a function on every operand.
 void Instruction::ForEachOperand(
     const std::function<void(granary::Operand *)> &func) {
@@ -41,31 +81,7 @@ void Instruction::ForEachOperand(
     if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
       break;
     }
-    switch (op.type) {
-      case XED_ENCODER_OPERAND_TYPE_REG:
-      case XED_ENCODER_OPERAND_TYPE_SEG0:
-      case XED_ENCODER_OPERAND_TYPE_SEG1: {
-        RegisterOperand reg(&op);
-        func(reinterpret_cast<granary::Operand *>(&reg));
-        break;
-      }
-
-      case XED_ENCODER_OPERAND_TYPE_BRDISP:
-      case XED_ENCODER_OPERAND_TYPE_IMM0:
-      case XED_ENCODER_OPERAND_TYPE_SIMM0:
-      case XED_ENCODER_OPERAND_TYPE_IMM1: {
-        ImmediateOperand imm(&op);
-        func(reinterpret_cast<granary::Operand *>(&imm));
-        break;
-      }
-      case XED_ENCODER_OPERAND_TYPE_MEM:
-      case XED_ENCODER_OPERAND_TYPE_PTR: {
-        MemoryOperand mem(&op);
-        func(reinterpret_cast<granary::Operand *>(&mem));
-        break;
-      }
-      default: break;  // TODO(pag): Implement others.
-    }
+    CallWithOperand(&op, func);
   }
 }
 

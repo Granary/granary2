@@ -51,13 +51,69 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 
 namespace {
 
-// Convert a decoded instruction into the internal Granary instruction IR.
-static Instruction *MakeInstruction(ContextInterface *context,
-                                    driver::Instruction *instr) {
-  if (instr->HasIndirectTarget()) {
+// Hash some basic block meta-data.
+static uint32_t HashMetaData(HashFunction *hasher,
+                             InstrumentedBasicBlock *block) {
+  hasher->Reset();
+  block->MetaData()->Hash(hasher);
+  hasher->Finalize();
+  return hasher->Extract32();
+}
+}  // namespace
 
-    // Indirect jump/call.
-    if (instr->IsJump() || instr->IsFunctionCall()) {
+
+// Convert an indirect call into a direct call that jumps to an intermediate
+// block that does an indirect jump. This exists so that the lookup process
+// for the indirect target is done after the stack size change, and so that
+// it can also be instrumented.
+Instruction *BlockFactory::MakeIndirectCall(Instruction *prev_instr,
+                                            Instruction *last_instr,
+                                            driver::Instruction *instr) {
+  auto intermediate_block = new DecodedBasicBlock(cfg,
+       context->AllocateEmptyBlockMetaData());
+  auto target_block = new IndirectBasicBlock(
+      context->AllocateEmptyBlockMetaData());
+  auto decoded_pc = instr->DecodedPC();
+
+  // Pop off instructions that were created as part of the decoding of `instr`.
+  for (auto pop_instr = prev_instr->Next(); pop_instr != last_instr; ) {
+    auto next_instr = prev_instr->Next();
+    intermediate_block->AppendInstruction(Instruction::Unlink(pop_instr));
+    pop_instr = next_instr;
+  }
+
+  // Add in the indirect jump.
+  auto func = [&] (Operand *op) {
+    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
+      intermediate_block->AppendInstruction(
+          lir::IndirectJump(target_block, *mloc));
+    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
+      intermediate_block->AppendInstruction(
+          lir::IndirectJump(target_block, *rloc));
+    } else {
+      GRANARY_ASSERT(false);
+    }
+  };
+
+  instr->WithBranchTargetOperand(std::cref(func));
+
+  // Make sure this indirect jump looks like an application instruction.
+  auto jump = DynamicCast<ControlFlowInstruction *>(
+      intermediate_block->LastInstruction()->Previous());
+  jump->MakeAppInstruction(decoded_pc);
+
+  return lir::Call(intermediate_block).release();
+}
+
+// Convert a decoded instruction into the internal Granary instruction IR.
+Instruction *BlockFactory::MakeInstruction(Instruction *prev_instr,
+                                           Instruction *last_instr,
+                                           driver::Instruction *instr) {
+  if (instr->HasIndirectTarget()) {
+    if (instr->IsFunctionCall()) {  // Indirect call.
+      return MakeIndirectCall(prev_instr, last_instr, instr);
+
+    } else if (instr->IsJump()) {  // Indirect jump/call.
       return new ControlFlowInstruction(
           instr,
           new IndirectBasicBlock(context->AllocateEmptyBlockMetaData()));
@@ -73,22 +129,13 @@ static Instruction *MakeInstruction(ContextInterface *context,
     }
 
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    auto meta = context->AllocateBlockMetaData(instr->BranchTarget());
+    auto meta = context->AllocateBlockMetaData(instr->BranchTargetPC());
     return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));
   } else {
     return new NativeInstruction(instr);
   }
 }
 
-// Hash some basic block meta-data.
-static uint32_t HashMetaData(HashFunction *hasher,
-                             InstrumentedBasicBlock *block) {
-  hasher->Reset();
-  block->MetaData()->Hash(hasher);
-  hasher->Finalize();
-  return hasher->Extract32();
-}
-}  // namespace
 
 // Add the fall-through instruction for a block.
 void BlockFactory::AddFallThroughInstruction(
@@ -107,7 +154,7 @@ void BlockFactory::AddFallThroughInstruction(
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
       block->AppendInstruction(std::unique_ptr<Instruction>(
-          MakeInstruction(context, &dinstr)));
+          MakeInstruction(nullptr, nullptr, &dinstr)));
     } else {
       block->AppendInstruction(lir::Jump(this, pc));
     }
@@ -118,16 +165,18 @@ void BlockFactory::AddFallThroughInstruction(
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto pc = block->StartAppPC();
+  auto last_instr = block->LastInstruction();
   driver::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
     auto decoded_pc = pc;
     driver::Instruction dinstr;
+    auto prev_instr = last_instr->Previous();
     if (!decoder.DecodeNext(block, &dinstr, &pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
-    instr = MakeInstruction(context, &dinstr);
+    instr = MakeInstruction(prev_instr, last_instr, &dinstr);
     block->AppendInstruction(std::unique_ptr<Instruction>(instr));
     context->AnnotateInstruction(instr);
   } while (!IsA<ControlFlowInstruction *>(instr));

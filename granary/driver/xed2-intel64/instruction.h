@@ -37,14 +37,23 @@ class Instruction : public InstructionInterface {
     return static_cast<int>(decoded_length);
   }
 
-  inline AppPC DecodedPC(void) const {
+  inline PC DecodedPC(void) const {
     return decoded_pc;
   }
 
+  inline void SetDecodedPC(PC decoded_pc_) {
+    decoded_pc = decoded_pc_;
+  }
+
   // Get the PC-relative branch target.
-  inline PC BranchTarget(void) const {
+  inline PC BranchTargetPC(void) const {
     return ops[0].branch_target.as_pc;  // TODO(pag): CALL_/JMP_FAR
   }
+
+  // Invoke a function on the branch target, where the branch target is treated
+  // as a `granary::Operand`.
+  void WithBranchTargetOperand(
+      const std::function<void(granary::Operand *)> &func);
 
   // Set the PC-relative branch target.
   inline void SetBranchTarget(PC pc) {

@@ -12,8 +12,13 @@ class BlockFactory;
 class BasicBlock;
 class Instruction;
 class AnnotationInstruction;
+class Operand;
 
 namespace lir {
+
+// Indirect jump to an existing basic block.
+std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
+                                          const Operand &op);
 
 // Call / jump to existing basic blocks.
 std::unique_ptr<Instruction> Call(BasicBlock *target_block);

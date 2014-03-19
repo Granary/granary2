@@ -53,8 +53,12 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                      XED_CATEGORY_SEMAPHORE == category;
 
   // Make all implicit / suppressed operands sticky.
-  for (uint8_t i = num_explicit_ops; i < Instruction::MAX_NUM_OPS; ++i) {
-    instr->ops[i].is_sticky = true;
+  for (uint8_t i = 0; i < Instruction::MAX_NUM_OPS; ++i) {
+    if (i < num_explicit_ops) {
+      instr->ops[i].is_explicit = true;
+    } else {
+      instr->ops[i].is_sticky = true;
+    }
   }
 }
 

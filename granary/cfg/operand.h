@@ -104,6 +104,13 @@ class Operand {
   // Note: This has a driver-specific implementation.
   bool IsModifiable(void) const;
 
+  // Returns whether or not this operand is explicit.
+  //
+  // Note: This is only valid on operands matched from instructions and not on
+  //       manually created operands.
+  // Note: This has a driver-specific implementation.
+  bool IsExplicit(void) const;
+
   // Return the width (in bits) of this operand, or -1 if its width is not
   // known.
   //

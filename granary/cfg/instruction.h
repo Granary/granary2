@@ -248,6 +248,7 @@ class NativeInstruction : public Instruction {
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
   bool IsAppInstruction(void) const;
+  GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
 
   // Get the opcode name.
   const char *OpCodeName(void) const;

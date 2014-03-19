@@ -21,7 +21,9 @@ Fragment::Fragment(int id_)
       is_future_block_head(false),
       is_exit(false),
       data_flow_changed(false),
-      changes_stack_pointer(false),
+      writes_stack_pointer(false),
+      reads_stack_pointer(false),
+      stack_id(-1),
       block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}
@@ -233,6 +235,23 @@ class FragmentBuilder {
     ExtendFragment(frag, block, next);
   }
 
+  // Returns true if an instruction reads from the stack pointer.
+  bool ReadsFromStackPointer(Instruction *instr) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      RegisterOperand reg1;
+      RegisterOperand reg2;
+      RegisterOperand reg3;
+
+      // TODO(pag): This isn't sufficient for something like `PUSHA` on
+      //            x86.
+      ninstr->MatchOperands(ReadFrom(reg1), ReadFrom(reg2), ReadFrom(reg3));
+      return reg1.Register().IsStackPointer() ||
+             reg2.Register().IsStackPointer() ||
+             reg3.Register().IsStackPointer();
+    }
+    return false;
+  }
+
   // Returns true if an instruction writes to the stack pointer.
   bool WritesToStackPointer(Instruction *instr) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -275,9 +294,11 @@ class FragmentBuilder {
         frag->Append(std::move(instr->UnsafeUnlink()));
 
         // Break this fragment if it changes the stack pointer.
-        if (WritesToStackPointer(instr)) {
-          frag->changes_stack_pointer = true;
+        frag->writes_stack_pointer = WritesToStackPointer(instr);
+        if (frag->writes_stack_pointer) {
+          frag->reads_stack_pointer = ReadsFromStackPointer(instr);
           return SplitFragmentAtStackChange(frag, block, next);
+
         } else {
           instr = next;
         }

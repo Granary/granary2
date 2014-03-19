@@ -168,6 +168,10 @@ bool NativeInstruction::IsAppInstruction(void) const {
   return nullptr != instruction.DecodedPC();
 }
 
+void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
+  instruction.SetDecodedPC(decoded_pc);
+}
+
 // Get the opcode name.
 const char *NativeInstruction::OpCodeName(void) const {
   return instruction.OpCodeName();

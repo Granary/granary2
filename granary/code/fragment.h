@@ -50,20 +50,34 @@ class Fragment {
   const int id;
 
   // Is this block the first fragment in a decoded basic block?
-  bool is_block_head;
+  bool is_block_head:1;
 
   // Is this a future basic block?
-  bool is_future_block_head;
+  bool is_future_block_head:1;
 
   // Is this an exit block? An exit block is a future block, or a block that
   // ends in some kind of return, or a native block.
-  bool is_exit;
+  bool is_exit:1;
 
   // Did the previous current data-flow pass change anything?
-  bool data_flow_changed;
+  bool data_flow_changed:1;
 
-  // Does the last instruction in this fragment change the stack pointer?
-  bool changes_stack_pointer;
+  // Does the last instruction in this fragment change the stack pointer? If so,
+  // the we consider the stack to be valid in this fragment if the stack pointer
+  // is also read during the operation. Otherwise, it's treated as a strict
+  // stack switch, where the stack might not be valid.
+  bool writes_stack_pointer:1;
+  bool reads_stack_pointer:1;
+
+  // Identifier of a "stack region". This is a very coarse grained concept,
+  // where we color fragments according to:
+  //    -1:       The stack pointer doesn't point to a valid stack.
+  //    N:        The stack pointer points to some valid stack.
+  //
+  // The number is such that if fragment F2 is a successor of F1, and F1 has
+  // stack id M != -1, and F1 changes the stack pointer at the end of the
+  // block, then F2 will either have a stack id of -1 or N != M.
+  int stack_id;
 
   // Source basic block info.
   BlockMetaData *block_meta;

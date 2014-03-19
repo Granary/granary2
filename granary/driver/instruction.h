@@ -23,8 +23,14 @@ class InstructionInterface {
   int DecodedLength(void) const;
 
   PC DecodedPC(void) const;
+  void SetDecodedPC(PC decoded_pc_);
 
-  PC BranchTarget(void) const;
+  PC BranchTargetPC(void) const;
+
+  // Invoke a function on the branch target, where the branch target is treated
+  // as a `granary::Operand`.
+  void WithBranchTargetOperand(
+      const std::function<void(granary::Operand *)> &func);
 
   void SetBranchTarget(PC pc);
 

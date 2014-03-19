@@ -224,19 +224,28 @@ static void FindLiveEntryRegsToFrags(Fragment *frags) {
   }
 }
 
+// Backward data-flow pass to partition the set of fragments into groups, where
+// two fragments are in the same group if they are labeled with the same stack
+// ID.
+//
+// A virtual register can only be defined/used in fragments in the same group.
+
+
+
 #if 0
 // Info tracker about an individual virtual register.
 class VirtualRegisterInfo {
-
+ public:
+  /*
   bool used_after_change_sp:1;
   bool used_after_change_ip:1;
   bool defines_constant:1;
   bool used_as_address:1;
   bool depends_on_sp:1;
+  */
 
-  // Semi-saturating counters.
-  uint8_t num_defs;
-  uint8_t num_uses;
+  unsigned num_defs;
+  unsigned num_uses;
 
   // This is fairly rough constraint. This only really meaningful for introduced
   // `LEA` instructions that defined virtual registers as a combination of
@@ -249,13 +258,27 @@ class VirtualRegisterInfo {
 class VirtualRegisterTable {
  public:
   void Visit(NativeInstruction *instr) {
-
+    instr->ForEachOperand([] (Operand *op) {
+      const auto reg_op = DynamicCast<const RegisterOperand *>(op);
+      if (!reg_op || !reg_op->IsVirtual()) {
+        return;
+      }
+      const auto reg = reg_op->Register();
+      auto &reg_info(regs[reg.Number()]);
+      if (reg_op->IsRead() || reg_op->IsConditionalWrite()) {
+        ++reg_info.num_uses;
+      }
+      if (reg_op->IsWrite()) {
+        ++reg_info.num_defs;
+      }
+    });
   }
 
  private:
   BigVector<VirtualRegisterInfo> regs;
 };
 #endif
+
 }  // namespace
 
 // Assemble the local control-flow graph.
@@ -277,6 +300,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
 
   // Find the live registers on entry to the fragments.
   FindLiveEntryRegsToFrags(frags);
+
+  // Try to figure out the stack frame size on entry to / exit from every
+  // fragment.
+  //FindStackSizesOfFrags(frags);
 
   Log(LogWarning, frags);
 

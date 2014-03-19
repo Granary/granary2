@@ -390,6 +390,7 @@ static void ConvertDecodedOperand(DecodedBasicBlock *block, Instruction *instr,
 
   instr_op->rw = xed_operand_rw(op);
   instr_op->is_sticky = !is_explicit;
+  instr_op->is_explicit = true;
 
   if (xed_operand_is_register(op_name)) {
     ConvertRegisterOperand(instr_op, xedd, op_name);
