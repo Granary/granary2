@@ -41,8 +41,10 @@ static void bar(void) { }
 static void (*bar_ptr)(void) = &bar;
 
 static void foo() {
-  if (GRANARY_LIKELY(nullptr != bar_ptr)) {
-    bar_ptr();
+  for (auto i = 0; i < 10; ++i) {
+    if (GRANARY_LIKELY(nullptr != bar_ptr)) {
+      bar_ptr();
+    }
   }
 }
 

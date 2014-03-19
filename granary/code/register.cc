@@ -8,12 +8,6 @@
 
 namespace granary {
 
-// Initialize the register tracker.
-RegisterUsageTracker::RegisterUsageTracker(void) {
-  ReviveAll();
-}
-
-namespace {
 // Get a virtual register out of an operand.
 VirtualRegister GetRegister(const Operand *op) {
   VirtualRegister vr;
@@ -24,19 +18,24 @@ VirtualRegister GetRegister(const Operand *op) {
   }
   return vr;
 }
-}  // namespace
+
+// Initialize the register tracker.
+RegisterUsageTracker::RegisterUsageTracker(void) {
+  ReviveAll();
+}
 
 // Update this register tracker by visiting the operands of an instruction.
 void RegisterUsageTracker::Visit(NativeInstruction *instr) {
-  instr->ForEachOperand([&] (Operand *op) {
-    auto reg = GetRegister(op);
-    if (reg.IsNative()) {
+  instr->ForEachOperand([=] (Operand *op) {
+    const auto reg = GetRegister(op);
+    if (reg.IsNative() && reg.IsGeneralPurpose()) {
       auto num = reg.Number();
       if (op->IsRead() || op->IsConditionalWrite()) {
         Revive(num);  // Read, read/write, and conditional write.
       } else if (op->IsWrite()) {  // Write-only.
         Set(static_cast<unsigned>(num), reg.PreservesBytesOnWrite());
       }
+      GRANARY_UNUSED(num);
     }
   });
 }

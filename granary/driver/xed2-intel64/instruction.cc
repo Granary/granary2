@@ -36,7 +36,7 @@ const char *Instruction::OpCodeName(void) const {
 
 // Invoke a function on every operand.
 void Instruction::ForEachOperand(
-    std::function<void(granary::Operand *)> &&func) {
+    const std::function<void(granary::Operand *)> &func) {
   for (auto &op : ops) {
     if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
       break;

@@ -270,7 +270,7 @@ class NativeInstruction : public Instruction {
   // Invoke a function on every operand.
   template <typename FuncT>
   inline void ForEachOperand(FuncT func) {
-    ForEachOperandImpl(std::ref(func));
+    ForEachOperandImpl(std::cref(func));
   }
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
@@ -287,10 +287,10 @@ class NativeInstruction : public Instruction {
   friend class InstructionRelativizer;
   friend class RegisterUsageTracker;
 
-  NativeInstruction(void) = delete;
-
   // Invoke a function on every operand.
-  void ForEachOperandImpl(std::function<void(granary::Operand *)> func);
+  void ForEachOperandImpl(const std::function<void(Operand *)> &func);
+
+  NativeInstruction(void) = delete;
 
   // Try to match and bind one or more operands from this instruction. Returns
   // the number of operands matched, starting from the first operand.

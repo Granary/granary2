@@ -72,7 +72,7 @@ static uint32_t HashMetaData(BlockMetaData *meta) {
 void Instrument(ContextInterface *context,
                 LocalControlFlowGraph *cfg,
                 BlockMetaData *meta) {
-  auto meta_hash = HashMetaData(meta);
+  GRANARY_IF_DEBUG( auto meta_hash = ) HashMetaData(meta);
 
   BlockFactory factory(context, cfg);
   factory.MaterializeInitialBlock(meta);

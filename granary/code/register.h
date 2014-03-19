@@ -12,6 +12,7 @@ namespace granary {
 
 // Forward declarations.
 class NativeInstruction;
+class Operand;
 
 GRANARY_INTERNAL_DEFINITION namespace driver {
 class Instruction;
@@ -79,13 +80,17 @@ union VirtualRegister {
   // Returns true if this register preserves any of the bytes of the backing
   // GPR on a write, or if all bytes of the register are overwritten.
   inline bool PreservesBytesOnWrite(void) const {
-    return VR_KIND_ARCH_VIRTUAL == kind &&
-           0xFF == (byte_mask | preserved_byte_mask);
+    return VR_KIND_ARCH_VIRTUAL == kind && 0 != preserved_byte_mask;
   }
 
   // Is this an architectural register?
   inline bool IsNative(void) const {
     return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_VIRTUAL == kind;
+  }
+
+  // Is this a general purpose register?
+  inline bool IsGeneralPurpose(void) const {
+    return VR_KIND_ARCH_VIRTUAL == kind || VR_KIND_VIRTUAL == kind;
   }
 
   // Is this a virtual register?
@@ -143,6 +148,9 @@ union VirtualRegister {
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
 
+// Get a virtual register out of an operand.
+VirtualRegister GetRegister(const Operand *op);
+
 // A class that tracks live, general purpose architectural registers within a
 // straight-line sequence of instructions.
 class RegisterUsageTracker
@@ -169,9 +177,19 @@ class RegisterUsageTracker
     Set(static_cast<unsigned>(num), false);
   }
 
+  // Returns true if a register is dead.
+  inline bool IsDead(int num) {
+    return !Get(static_cast<unsigned>(num));
+  }
+
   // Revive a specific register.
   inline void Revive(int num) {
     Set(static_cast<unsigned>(num), true);
+  }
+
+  // Returns true if a register is live.
+  inline bool IsLive(int num) {
+    return Get(static_cast<unsigned>(num));
   }
 
   // Union some other live register set with the current live register set.

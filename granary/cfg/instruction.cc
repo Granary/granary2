@@ -175,8 +175,8 @@ const char *NativeInstruction::OpCodeName(void) const {
 
 // Invoke a function on every operand.
 void NativeInstruction::ForEachOperandImpl(
-    std::function<void(Operand *)> func) {
-  return instruction.ForEachOperand(std::move(func));
+    const std::function<void(Operand *)> &func) {
+  instruction.ForEachOperand(func);
 }
 
 // Try to match and bind one or more operands from this instruction. Returns

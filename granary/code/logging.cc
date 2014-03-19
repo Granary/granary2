@@ -34,17 +34,31 @@ static void LogFragmentEdges(LogLevel level, Fragment *frag) {
 
 // Log the instructions of a fragment.
 static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
-  Log(level, "f%p [label=<%d|",
+  Log(level, "f%p [label=<%d|{",
       reinterpret_cast<void *>(frag),
       frag->id);
 
-  auto print_as_sub_record = false;
   if (frag->block_meta && (frag->is_block_head || frag->is_future_block_head)) {
     auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);
-    Log(level, "{%p|{", meta->start_pc);
-    print_as_sub_record = true;
+    Log(level, "%p|", meta->start_pc);
   }
 
+  // Log out the dead registers on entry to the block.
+  const char *sep = "";
+  auto printed_dead = false;
+  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    if (frag->entry_regs_live.IsDead(i)) {
+      VirtualRegister reg(VR_KIND_ARCH_VIRTUAL, 8, static_cast<uint16_t>(i));
+      RegisterOperand rop(reg);
+      OperandString op_str;
+      rop.EncodeToString(&op_str);
+      Log(level, "%s%s", sep, op_str.Buffer());
+      sep = ",";
+      printed_dead = true;
+    }
+  }
+
+  Log(level, "%s{", printed_dead ? "|" : "");
   for (auto instr : ForwardInstructionIterator(frag->first)) {
     auto ninstr = DynamicCast<NativeInstruction *>(instr);
     if (!ninstr) {
@@ -54,7 +68,7 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
     Log(level, "%s", ninstr->OpCodeName());
 
     // Log the input operands.
-    const char *sep = " ";
+    sep = " ";
     ninstr->ForEachOperand([&] (Operand *op) {
       if (!op->IsWrite()) {
         OperandString op_str;
@@ -81,11 +95,7 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
     Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
   }
 
-  if (print_as_sub_record) {
-    Log(level, "}}");
-  }
-
-  Log(level, ">];\n");
+  Log(level, "}}>];\n");
 }
 
 // Log a list of fragments as a DOT digraph.

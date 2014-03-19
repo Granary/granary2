@@ -191,6 +191,11 @@ class RegisterOperand : public Operand {
   inline RegisterOperand(void)
       : Operand() {}
 
+  // Initialize a new register operand from a virtual register.
+  //
+  // Note: This has a driver-specific implementation.
+  explicit RegisterOperand(const VirtualRegister &reg);
+
   virtual ~RegisterOperand(void) = default;
 
   // Driver-specific implementations.

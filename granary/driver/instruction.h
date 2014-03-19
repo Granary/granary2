@@ -55,7 +55,7 @@ class InstructionInterface {
   const char *OpCodeName(void) const;
 
   // Apply a function to every operand.
-  void ForEachOperand(std::function<void(granary::Operand *)> &&func);
+  void ForEachOperand(const std::function<void(granary::Operand *)> &func);
 
   // Operand matcher for multiple arguments. Returns the number of matched
   // arguments, starting from the first argument.

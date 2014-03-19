@@ -85,6 +85,16 @@ bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
   return false;
 }
 
+// Initialize a new register operand from a virtual register.
+RegisterOperand::RegisterOperand(const VirtualRegister &reg) {
+  op->type = XED_ENCODER_OPERAND_TYPE_REG;
+  op->width = static_cast<int8_t>(reg.BitWidth());
+  op->reg = reg;
+  op->rw = XED_OPERAND_ACTION_INVALID;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
 namespace driver {
 
 Operand::Operand(const Operand &op) {

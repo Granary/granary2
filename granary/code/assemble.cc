@@ -182,8 +182,8 @@ static void FindLiveEntryRegsToFrag(Fragment *frag,
   }
 }
 
-// Calculate the live registers on entry to every fragment.
-static void FindLiveEntryRegsToFrags(Fragment *frags) {
+// Initialize the live entry regs as a data flow problem.
+static void InitLiveEntryRegsToFrags(Fragment *frags) {
   for (auto frag : FragmentIterator(frags)) {
     if (frag->is_exit || frag->is_future_block_head) {
       frag->entry_regs_live.ReviveAll();
@@ -193,10 +193,14 @@ static void FindLiveEntryRegsToFrags(Fragment *frags) {
       frag->data_flow_changed = true;
     }
   }
+}
+
+// Calculate the live registers on entry to every fragment.
+static void FindLiveEntryRegsToFrags(Fragment *frags) {
+  InitLiveEntryRegsToFrags(frags);
 
   for (bool data_flow_changed = true; data_flow_changed; ) {
     data_flow_changed = false;
-
     for (auto frag : FragmentIterator(frags)) {
       if (frag->is_exit || frag->is_future_block_head) {
         continue;
