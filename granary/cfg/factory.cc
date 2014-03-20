@@ -55,7 +55,9 @@ namespace {
 static uint32_t HashMetaData(HashFunction *hasher,
                              InstrumentedBasicBlock *block) {
   hasher->Reset();
-  block->MetaData()->Hash(hasher);
+  if (auto meta = block->UnsafeMetaData()) {
+    meta->Hash(hasher);
+  }
   hasher->Finalize();
   return hasher->Extract32();
 }
@@ -187,8 +189,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
 // of any `DirectBasicBlock` from prior materialization runs.
 void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
   for (auto block : cfg->Blocks()) {
-    auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
-    if (meta_block) {
+    if (auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
       meta_block->cached_meta_hash = HashMetaData(hasher, meta_block);
       auto direct_block = DynamicCast<DirectBasicBlock *>(block);
       if (!direct_block) {

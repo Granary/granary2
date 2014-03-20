@@ -16,6 +16,7 @@
 #include "granary/code/assemble.h"
 #include "granary/code/fragment.h"
 #include "granary/code/logging.h"
+#include "granary/code/metadata.h"
 #include "granary/code/register.h"
 
 #include "granary/driver/driver.h"
@@ -224,12 +225,154 @@ static void FindLiveEntryRegsToFrags(Fragment *frags) {
   }
 }
 
-// Backward data-flow pass to partition the set of fragments into groups, where
-// two fragments are in the same group if they are labeled with the same stack
-// ID.
-//
-// A virtual register can only be defined/used in fragments in the same group.
+// Tracks the stack ID / color of a fragment.
+class FragmentColorer {
+ public:
+  FragmentColorer(void)
+      : next_invalid_id(-1),
+        next_valid_id(1) {}
 
+  void MarkAsValid(Fragment *frag) {
+    if (frag) {
+      GRANARY_ASSERT(0 <= frag->stack_id);
+      if (!frag->stack_id) {
+        frag->stack_id = next_valid_id++;
+      }
+    }
+  }
+
+  void MarkAsInvalid(Fragment *frag) {
+    if (frag) {
+      GRANARY_ASSERT(0 >= frag->stack_id);
+      if (!frag->stack_id) {
+        frag->stack_id = next_invalid_id--;
+      }
+    }
+  }
+
+  // Try to use information known about the last instruction of the fragment
+  // being a control-flow instruction to color a fragment.
+  void ColorFragmentByCFI(Fragment *frag) {
+    if (auto instr = DynamicCast<ControlFlowInstruction *>(frag->last)) {
+
+      // Assumes that interrupt return, like a function return, reads its
+      // target off of the stack.
+      if (instr->IsInterruptReturn()) {
+        MarkAsValid(frag);
+        MarkAsInvalid(frag->fall_through_target);
+
+      // Target block of a system return has an invalid stack.
+      } else if (instr->IsSystemReturn()) {
+        MarkAsInvalid(frag);
+        MarkAsInvalid(frag->fall_through_target);
+
+      // Assumes that function calls/returns push/pop return addresses on the
+      // stack. This also makes the assumption that function calls actually
+      // lead to returns.
+      } else if (instr->IsFunctionCall() || instr->IsFunctionReturn()) {
+        MarkAsValid(frag);
+        MarkAsValid(frag->branch_target);
+        MarkAsValid(frag->fall_through_target);
+      }
+    }
+  }
+
+  // If this fragment is cached then check its meta-data. Mostly we actually
+  // care not about this fragment, but about fragments targeting this
+  // fragment.
+  void ColorFragmentByMetaData(Fragment *frag) {
+    auto cache_meta = MetaDataCast<CacheMetaData *>(frag->block_meta);
+    auto stack_meta = MetaDataCast<StackMetaData *>(frag->block_meta);
+    if (cache_meta->cache_pc) {
+      if (stack_meta->stack_is_safe) {
+        MarkAsValid(frag);
+      } else {
+        MarkAsInvalid(frag);
+      }
+    }
+  }
+
+  // Initialize the fragment coloring.
+  void InitColoring(Fragment *frags) {
+    for (auto frag : FragmentIterator(frags)) {
+      if (frag->reads_stack_pointer) {  // Reads & writes the stack pointer.
+        MarkAsValid(frag);
+      } else if (frag->block_meta && frag->is_exit) {
+        ColorFragmentByMetaData(frag);
+      }
+      ColorFragmentByCFI(frag);
+    }
+  }
+
+  bool PropagateColor(Fragment *source, Fragment *dest) {
+    if (dest && !dest->stack_id) {
+      if (source->block_meta == dest->block_meta) {
+        dest->stack_id = source->stack_id;
+      } else if (source->stack_id > 0) {
+        MarkAsValid(dest);
+      } else {
+        MarkAsInvalid(dest);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // Perform a backward data-flow pass on the fragment stack ID colorings.
+  bool BackPropagate(Fragment *frags) {
+    auto global_changed = false;
+    for (auto changed = true; changed; ) {
+      changed = false;
+      for (auto frag : FragmentIterator(frags)) {
+        if (!frag->stack_id &&
+            !frag->writes_stack_pointer &&
+            frag->fall_through_target &&
+            frag->fall_through_target->stack_id) {
+          changed = PropagateColor(frag->fall_through_target, frag) || changed;
+        }
+      }
+      global_changed = global_changed || changed;
+    }
+    return global_changed;
+  }
+
+  // Perform a forward data-flow pass on the fragment stack ID colorings.
+  bool ForwardPropagate(Fragment *frags) {
+    auto global_changed = false;
+    for (auto changed = true; changed; ) {
+      changed = false;
+      for (auto frag : FragmentIterator(frags)) {
+        if (!frag->stack_id || frag->writes_stack_pointer) {
+          continue;
+        }
+        changed = PropagateColor(frag, frag->branch_target) || changed;
+        changed = PropagateColor(frag, frag->fall_through_target) || changed;
+      }
+      global_changed = global_changed || changed;
+    }
+    return global_changed;
+  }
+
+ private:
+  int next_invalid_id;
+  int next_valid_id;
+};
+
+// Partition the fragments into groups, where each group is labeled/colored by
+// their `stack_id` field.
+static void PartitionFragmentsByStack(Fragment *frags) {
+  FragmentColorer colorer;
+  colorer.InitColoring(frags);
+  for (auto changed = true; changed; ) {
+    changed = colorer.ForwardPropagate(frags);
+    changed = colorer.BackPropagate(frags) || changed;
+  }
+  for (auto frag : FragmentIterator(frags)) {
+    if (!frag->stack_id) {
+      colorer.MarkAsInvalid(frag);
+    }
+  }
+}
 
 
 #if 0
@@ -303,7 +446,7 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
 
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
-  //FindStackSizesOfFrags(frags);
+  PartitionFragmentsByStack(frags);
 
   Log(LogWarning, frags);
 

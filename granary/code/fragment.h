@@ -71,12 +71,15 @@ class Fragment {
 
   // Identifier of a "stack region". This is a very coarse grained concept,
   // where we color fragments according to:
-  //    -1:       The stack pointer doesn't point to a valid stack.
-  //    N:        The stack pointer points to some valid stack.
+  //    -N:   The stack pointer doesn't point to a valid stack.
+  //    N:    The stack pointer points to some valid stack.
   //
-  // The number is such that if fragment F2 is a successor of F1, and F1 has
-  // stack id M != -1, and F1 changes the stack pointer at the end of the
-  // block, then F2 will either have a stack id of -1 or N != M.
+  // The numbering partitions fragments into two coarse grained groups:
+  // invalid code execution on an unsafe stack (negative id), or code executing
+  // on a safe stack (positive id). The numbering sub-divides fragments into
+  // finer-grained colors based, where two or more fragments have the same
+  // color if they are connected through control flow, and if there are no
+  // changes to the stack pointer within the basic blocks.
   int stack_id;
 
   // Source basic block info.

@@ -5,7 +5,7 @@
 #include "granary/code/metadata.h"
 
 namespace granary {
-
+#if 0
 enum : uint8_t {
   DEFAULT_AVAILABLE_BACKENDS = (1 << REG_BACKEND_GPR)
                                GRANARY_IF_USER( | (1 << REG_BACKEND_TLS)),
@@ -72,6 +72,16 @@ UnificationStatus BackendMetaData::CanUnifyWith(
   }
 
   return UnificationStatus::ACCEPT;
+}
+#endif
+
+void StackMetaData::Hash(HashFunction *hasher) const {
+  hasher->Accumulate(*this);
+}
+
+bool StackMetaData::Equals(const StackMetaData *that) const {
+  return stack_is_safe == that->stack_is_safe &&
+         redzone_size == that->redzone_size;
 }
 
 }  // namespace granary

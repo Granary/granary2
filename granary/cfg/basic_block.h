@@ -164,6 +164,9 @@ class InstrumentedBasicBlock : public BasicBlock {
   // Return this basic block's meta-data.
   virtual BlockMetaData *MetaData(void);
 
+  // Return this basic block's meta-data.
+  BlockMetaData *UnsafeMetaData(void);
+
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;
 

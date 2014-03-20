@@ -16,7 +16,8 @@ class HashFunction {
 
   template <typename T>
   inline void Accumulate(const T &bytes_) {
-    AccumulateBytes(const_cast<void *>(&bytes_), static_cast<int>(sizeof(T)));
+    AccumulateBytes(reinterpret_cast<void *>(const_cast<T *>(&bytes_)),
+                    static_cast<int>(sizeof(T)));
   }
 
   // Accumulate a sequence of bytes (where the sequence has type `T`) into the

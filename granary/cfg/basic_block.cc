@@ -85,6 +85,11 @@ BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
   return meta;
 }
 
+// Get this basic block's meta-data.
+BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
+  return meta;
+}
+
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
     : meta(meta_),

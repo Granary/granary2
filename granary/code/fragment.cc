@@ -23,7 +23,7 @@ Fragment::Fragment(int id_)
       data_flow_changed(false),
       writes_stack_pointer(false),
       reads_stack_pointer(false),
-      stack_id(-1),
+      stack_id(0),
       block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}
@@ -84,7 +84,7 @@ class FragmentBuilder {
   // Make a block head fragment for some kind of future basic block.
   Fragment *MakeFutureBlockFragment(InstrumentedBasicBlock *block) {
     auto frag = MakeFragment();
-    frag->block_meta = block->MetaData();
+    frag->block_meta = block->UnsafeMetaData();
     frag->is_exit = true;
     frag->is_future_block_head = true;
     return frag;
@@ -171,13 +171,13 @@ class FragmentBuilder {
     //
     // Direct call/jump to native; interrupt call, system call. All regs
     // must be homed on exit of this block lets things really screw up.
-    if (IsA<ReturnBasicBlock *>(block) ||
-        IsA<NativeBasicBlock *>(block)) {
+    if (IsA<NativeBasicBlock *>(block)) {
       return MakeNativeFragment();
 
     // Indirect call/jump, or direct call/jump/conditional jump
     // to a future block.
-    } else if (IsA<IndirectBasicBlock *>(block) ||
+    } else if (IsA<ReturnBasicBlock *>(block) ||
+               IsA<IndirectBasicBlock *>(block) ||
                IsA<DirectBasicBlock *>(block)) {
       return MakeFutureBlockFragment(
             DynamicCast<InstrumentedBasicBlock *>(block));
@@ -198,15 +198,24 @@ class FragmentBuilder {
     auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
     auto next = instr->Next();
     auto target_block = cfi->TargetBlock();
+    auto is_direct_jump = cfi->IsUnconditionalJump() &&
+                          !cfi->HasIndirectTarget();
 
-    frag->Append(std::move(instr->UnsafeUnlink()));
-    frag->branch_instr = cfi;
-    frag->branch_target = FragmentForTargetBlock(target_block);
+    if (!is_direct_jump) {
+      frag->Append(std::move(instr->UnsafeUnlink()));
+      frag->branch_instr = cfi;
+      frag->branch_target = FragmentForTargetBlock(target_block);
+
+    // Pretend that direct jumps are just fall-throughs.
+    } else {
+      next = instr;
+    }
 
     // If this was a call or a conditional jump then add a fall-through
     // fragment.
     if (cfi->IsFunctionCall() || cfi->IsInterruptCall() ||
-        cfi->IsSystemCall() || cfi->IsConditionalJump()) {
+        cfi->IsSystemCall() || cfi->IsConditionalJump() ||
+        is_direct_jump) {
 
       // Try to be smarter about the fall-through to avoid making "useless"
       // intermediate fragments containing only a single unconditional

@@ -10,7 +10,6 @@
 
 #include "granary/code/fragment.h"
 
-
 #include "granary/logging.h"
 #include "granary/module.h"
 
@@ -32,11 +31,47 @@ static void LogFragmentEdges(LogLevel level, Fragment *frag) {
   }
 }
 
+static const char *colors[] = {
+  "aliceblue",
+  //"antiquewhite",
+  //"antiquewhite3",
+  //"antiquewhite4",
+  "aquamarine",
+  "aquamarine3",
+  "bisque2",
+  "brown1",
+  "burlywood1",
+  "cadetblue1",
+  "chartreuse1",
+  "chocolate1",
+  "darkolivegreen3",
+  "darkorchid2"
+};
+
 // Log the instructions of a fragment.
 static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
-  Log(level, "f%p [label=<%d|{",
+
+  enum {
+    NUM_COLORS = sizeof colors / sizeof colors[0]
+  };
+
+  // Color the block according to the stack. Red means we haven't determined
+  // a suitable stack status, grey means that the stack is treated as invalid,
+  // and other colors represent different partitionings.
+  const char *stack_color = "white";  // Unknown.
+  if (0 < frag->stack_id) {
+    auto stack_id = static_cast<size_t>(frag->stack_id);
+    stack_color = colors[stack_id % NUM_COLORS];
+  } else if (0 > frag->stack_id) {
+    stack_color = "grey";
+  }
+
+  // A thick black border on a fragment also means that the stack is valid.
+  auto pen = 0 < frag->stack_id ? " penwidth=2" : "";
+
+  Log(level, "f%p [fillcolor=%s%s label=<%d<BR/> <BR/>[%d]|{",
       reinterpret_cast<void *>(frag),
-      frag->id);
+      stack_color, pen, frag->id, frag->stack_id);
 
   if (frag->block_meta && (frag->is_block_head || frag->is_future_block_head)) {
     auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);
@@ -102,7 +137,7 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
 void Log(LogLevel level, Fragment *frags) {
   Log(level, "digraph {\n"
              "node [fontname=Courier shape=record"
-             " nojustify=false labeljust=l];\n"
+             " nojustify=false labeljust=l style=filled];\n"
              "f0 [color=white fontcolor=white];\n");
   LogFragmentEdge(level, nullptr, frags);
   for (auto frag : FragmentIterator(frags)) {

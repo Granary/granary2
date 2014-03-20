@@ -13,6 +13,7 @@
 
 namespace granary {
 
+#if 0
 // Forward declarations.
 class BackendMetaData;
 class StackMetaData;
@@ -102,6 +103,20 @@ class BackendMetaData : public UnifiableMetaData<BackendMetaData> {
   //
   // Note: This is only meaningful if the stack backend is available.
   uint8_t offset_from_logical_sp;
+
+} __attribute__((packed));
+#endif
+
+class StackMetaData : public IndexableMetaData<StackMetaData> {
+ public:
+  // Is the safe stack on entry to this basic block?
+  bool stack_is_safe;
+
+  // What is the size of the redzone on entry to this basic block?
+  int8_t redzone_size;
+
+  void Hash(HashFunction *hasher) const;
+  bool Equals(const StackMetaData *that) const;
 
 } __attribute__((packed));
 

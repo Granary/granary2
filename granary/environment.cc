@@ -5,6 +5,8 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
+#include "granary/code/metadata.h"
+
 #include "granary/environment.h"
 
 GRANARY_DEFINE_string(tools, "",
@@ -36,6 +38,7 @@ void Environment::Setup(void) {
   // Register internal metadata.
   metadata_manager.Register<ModuleMetaData>();
   metadata_manager.Register<CacheMetaData>();
+  metadata_manager.Register<StackMetaData>();
 
   // Tell this environment about all loaded modules.
   module_manager.RegisterAllBuiltIn();
@@ -43,7 +46,7 @@ void Environment::Setup(void) {
   // Tell Granary about all loaded tools.
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
       FLAG_tools,
-      [&](const char *tool_name) {
+      [&] (const char *tool_name) {
         tool_manager.Register(tool_name);
       });
 }
