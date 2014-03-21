@@ -107,16 +107,48 @@ class BackendMetaData : public UnifiableMetaData<BackendMetaData> {
 } __attribute__((packed));
 #endif
 
-class StackMetaData : public IndexableMetaData<StackMetaData> {
+class StackMetaData : public UnifiableMetaData<StackMetaData> {
  public:
-  // Is the safe stack on entry to this basic block?
-  bool stack_is_safe;
+  // Can we depend on the stack hint being setup?
+  bool has_stack_hint:1;
 
-  // What is the size of the redzone on entry to this basic block?
-  int8_t redzone_size;
+  // Is the stack pointer being used in a way that is consistent with a
+  // C-style call stack?
+  bool behaves_like_callstack:1;
 
-  void Hash(HashFunction *hasher) const;
-  bool Equals(const StackMetaData *that) const;
+  // Does this basic block look like it's part of a leaf function? That is,
+  // have we accesses below the current stack pointer.
+  bool is_leaf_function:1;
+
+  // Initialize the stack meta-data.
+  inline StackMetaData(void)
+      : has_stack_hint(false),
+        behaves_like_callstack(false),
+        is_leaf_function(false) {}
+
+  // Tells us if we can unify our (uncommitted) meta-data with some existing
+  // meta-data.
+  UnificationStatus CanUnifyWith(const StackMetaData *that) const {
+
+    // If our block has no information, then just blindly accept the other
+    // block. In this case, we don't want to generate excessive numbers of
+    // versions of the block.
+    //
+    // The concern here is this can lead to undefined behavior if, at assembly
+    // time, the fragment colorer decides that a successor to the block with
+    // this meta-data is using an undefined stack, and this block is using a
+    // defined one. In this case, we hope for the best.
+    if (!has_stack_hint) {
+      return UnificationStatus::ACCEPT;
+
+    // Be conservative about all else.
+    } else if (behaves_like_callstack == that->behaves_like_callstack &&
+               is_leaf_function == that->is_leaf_function) {
+      return UnificationStatus::ACCEPT;
+    } else {
+      return UnificationStatus::REJECT;
+    }
+  }
 
 } __attribute__((packed));
 

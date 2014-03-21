@@ -75,13 +75,4 @@ UnificationStatus BackendMetaData::CanUnifyWith(
 }
 #endif
 
-void StackMetaData::Hash(HashFunction *hasher) const {
-  hasher->Accumulate(*this);
-}
-
-bool StackMetaData::Equals(const StackMetaData *that) const {
-  return stack_is_safe == that->stack_is_safe &&
-         redzone_size == that->redzone_size;
-}
-
 }  // namespace granary

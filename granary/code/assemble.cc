@@ -232,6 +232,8 @@ class FragmentColorer {
       : next_invalid_id(-1),
         next_valid_id(1) {}
 
+  // Mark a fragment as having a stack pointer that appears to behave like
+  // a C-style call stack.
   void MarkAsValid(Fragment *frag) {
     if (frag) {
       GRANARY_ASSERT(0 <= frag->stack_id);
@@ -241,6 +243,8 @@ class FragmentColorer {
     }
   }
 
+  // Mark a fragment as having a stack pointer that doesn't necessarily
+  // behave like a callstack.
   void MarkAsInvalid(Fragment *frag) {
     if (frag) {
       GRANARY_ASSERT(0 >= frag->stack_id);
@@ -280,16 +284,21 @@ class FragmentColorer {
   // If this fragment is cached then check its meta-data. Mostly we actually
   // care not about this fragment, but about fragments targeting this
   // fragment.
-  void ColorFragmentByMetaData(Fragment *frag) {
-    auto cache_meta = MetaDataCast<CacheMetaData *>(frag->block_meta);
+  //
+  // We check against the first fragment because we don't want to penalize
+  // the first fragment into a different color if back propagation can give
+  // it a color on its own.
+  bool ColorFragmentByMetaData(Fragment *frag, Fragment *first_frag) {
     auto stack_meta = MetaDataCast<StackMetaData *>(frag->block_meta);
-    if (cache_meta->cache_pc) {
-      if (stack_meta->stack_is_safe) {
+    if (frag != first_frag && stack_meta->has_stack_hint) {
+      if (stack_meta->behaves_like_callstack) {
         MarkAsValid(frag);
       } else {
         MarkAsInvalid(frag);
       }
+      return true;
     }
+    return false;
   }
 
   // Initialize the fragment coloring.
@@ -298,12 +307,14 @@ class FragmentColorer {
       if (frag->reads_stack_pointer) {  // Reads & writes the stack pointer.
         MarkAsValid(frag);
       } else if (frag->block_meta && frag->is_exit) {
-        ColorFragmentByMetaData(frag);
+        ColorFragmentByMetaData(frag, frags);
       }
       ColorFragmentByCFI(frag);
     }
   }
 
+  // Propagate the coloring from a source fragment to a dest fragment. This
+  // can be used for either a successor or predecessor relationship.
   bool PropagateColor(Fragment *source, Fragment *dest) {
     if (dest && !dest->stack_id) {
       if (source->block_meta == dest->block_meta) {
@@ -364,8 +375,15 @@ static void PartitionFragmentsByStack(Fragment *frags) {
   FragmentColorer colorer;
   colorer.InitColoring(frags);
   for (auto changed = true; changed; ) {
-    changed = colorer.ForwardPropagate(frags);
-    changed = colorer.BackPropagate(frags) || changed;
+    changed = colorer.BackPropagate(frags);
+    changed = colorer.ForwardPropagate(frags) || changed;
+
+    // If we haven't made progress, then try to take a hint from the meta-data
+    // of the entry fragment and propagate it forward (assuming that we have
+    // not already deduced the safety of its stack).
+    if (!changed && !frags->stack_id) {
+      changed = colorer.ColorFragmentByMetaData(frags, nullptr);
+    }
   }
   for (auto frag : FragmentIterator(frags)) {
     if (!frag->stack_id) {
