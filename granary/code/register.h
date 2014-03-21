@@ -178,7 +178,7 @@ class RegisterUsageTracker
   }
 
   // Returns true if a register is dead.
-  inline bool IsDead(int num) {
+  inline bool IsDead(int num) const {
     return !Get(static_cast<unsigned>(num));
   }
 
@@ -188,7 +188,7 @@ class RegisterUsageTracker
   }
 
   // Returns true if a register is live.
-  inline bool IsLive(int num) {
+  inline bool IsLive(int num) const {
     return Get(static_cast<unsigned>(num));
   }
 

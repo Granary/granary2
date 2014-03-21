@@ -110,15 +110,15 @@ class BackendMetaData : public UnifiableMetaData<BackendMetaData> {
 class StackMetaData : public UnifiableMetaData<StackMetaData> {
  public:
   // Can we depend on the stack hint being setup?
-  bool has_stack_hint:1;
+  mutable bool has_stack_hint:1;
 
   // Is the stack pointer being used in a way that is consistent with a
   // C-style call stack?
-  bool behaves_like_callstack:1;
+  mutable bool behaves_like_callstack:1;
 
   // Does this basic block look like it's part of a leaf function? That is,
   // have we accesses below the current stack pointer.
-  bool is_leaf_function:1;
+  mutable bool is_leaf_function:1;
 
   // Initialize the stack meta-data.
   inline StackMetaData(void)
@@ -139,6 +139,12 @@ class StackMetaData : public UnifiableMetaData<StackMetaData> {
     // this meta-data is using an undefined stack, and this block is using a
     // defined one. In this case, we hope for the best.
     if (!has_stack_hint) {
+      // Steal the other information as it's "free" data-flow info :-D
+      if (that->has_stack_hint) {
+        has_stack_hint = true;
+        behaves_like_callstack = that->behaves_like_callstack;
+        is_leaf_function = that->is_leaf_function;
+      }
       return UnificationStatus::ACCEPT;
 
     // Be conservative about all else.

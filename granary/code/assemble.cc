@@ -163,13 +163,10 @@ static void RelativizeLCFG(CodeCacheInterface *code_cache,
 // expect to find any local changes in our current fragment's register
 // liveness set based on the successor having a change in the last data flow
 // iteration.
-static bool UpdateRegUsageFromSuccessor(Fragment *succ,
+static void UpdateRegUsageFromSuccessor(Fragment *succ,
                                         RegisterUsageTracker *regs) {
   if (succ) {
     regs->Union(succ->entry_regs_live);
-    return succ->data_flow_changed;
-  } else {
-    return false;
   }
 }
 
@@ -188,11 +185,10 @@ static void InitLiveEntryRegsToFrags(Fragment *frags) {
   for (auto frag : FragmentIterator(frags)) {
     if (frag->is_exit || frag->is_future_block_head) {
       frag->entry_regs_live.ReviveAll();
-      frag->data_flow_changed = false;
     } else {
       frag->entry_regs_live.KillAll();
-      frag->data_flow_changed = true;
     }
+    frag->exit_regs_live.KillAll();
   }
 }
 
@@ -209,18 +205,18 @@ static void FindLiveEntryRegsToFrags(Fragment *frags) {
 
       RegisterUsageTracker regs;
       regs.KillAll();
-      auto e1 = UpdateRegUsageFromSuccessor(frag->fall_through_target, &regs);
-      auto e2 = UpdateRegUsageFromSuccessor(frag->branch_target, &regs);
-
-      if (!(e1 || e2)) {
-        frag->data_flow_changed = false;
+      UpdateRegUsageFromSuccessor(frag->fall_through_target, &regs);
+      UpdateRegUsageFromSuccessor(frag->branch_target, &regs);
+      if (regs.Equals(frag->exit_regs_live)) {
         continue;
       }
 
+      frag->exit_regs_live = regs;
       FindLiveEntryRegsToFrag(frag, &regs);
-      frag->data_flow_changed = !regs.Equals(frag->entry_regs_live);
-      data_flow_changed = data_flow_changed || frag->data_flow_changed;
-      frag->entry_regs_live = regs;
+      if (!regs.Equals(frag->entry_regs_live)) {
+        frag->entry_regs_live = regs;
+        data_flow_changed = true;
+      }
     }
   }
 }

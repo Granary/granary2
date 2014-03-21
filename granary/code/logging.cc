@@ -48,9 +48,26 @@ static const char *colors[] = {
   "darkorchid2"
 };
 
+// Log out the dead registers.
+static bool LogDeadRegs(LogLevel level, const RegisterUsageTracker &regs) {
+  const char *sep = "";
+  auto printed_dead = false;
+  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    if (regs.IsDead(i)) {
+      VirtualRegister reg(VR_KIND_ARCH_VIRTUAL, 8, static_cast<uint16_t>(i));
+      RegisterOperand rop(reg);
+      OperandString op_str;
+      rop.EncodeToString(&op_str);
+      Log(level, "%s%s", sep, op_str.Buffer());
+      sep = ",";
+      printed_dead = true;
+    }
+  }
+  return printed_dead;
+}
+
 // Log the instructions of a fragment.
 static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
-
   enum {
     NUM_COLORS = sizeof colors / sizeof colors[0]
   };
@@ -78,59 +95,56 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
     Log(level, "%p|", meta->start_pc);
   }
 
-  // Log out the dead registers on entry to the block.
-  const char *sep = "";
-  auto printed_dead = false;
-  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-    if (frag->entry_regs_live.IsDead(i)) {
-      VirtualRegister reg(VR_KIND_ARCH_VIRTUAL, 8, static_cast<uint16_t>(i));
-      RegisterOperand rop(reg);
-      OperandString op_str;
-      rop.EncodeToString(&op_str);
-      Log(level, "%s%s", sep, op_str.Buffer());
-      sep = ",";
-      printed_dead = true;
+  auto printed_dead = LogDeadRegs(level, frag->entry_regs_live);
+
+  if (!frag->is_exit && !frag->is_future_block_head) {
+    Log(level, "%s", printed_dead ? "|" : "");
+    for (auto instr : ForwardInstructionIterator(frag->first)) {
+      auto ninstr = DynamicCast<NativeInstruction *>(instr);
+      if (!ninstr) {
+        continue;
+      }
+
+      Log(level, "%s", ninstr->OpCodeName());
+
+      // Log the input operands.
+      auto sep = " ";
+      ninstr->ForEachOperand([&] (Operand *op) {
+        if (!op->IsWrite()) {
+          OperandString op_str;
+          op->EncodeToString(&op_str);
+          auto prefix = op->IsConditionalRead() ? "cr " : "";
+          Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
+          sep = ", ";
+        }
+      });
+
+      // Log the output operands.
+      sep = " -&gt; ";
+      ninstr->ForEachOperand([&] (Operand *op) {
+        if (op->IsWrite()) {
+          auto prefix = op->IsRead() ?
+                        (op->IsConditionalWrite() ? "r/cw " : "r/w ") :
+                        (op->IsConditionalWrite() ? "cw " : "");
+          OperandString op_str;
+          op->EncodeToString(&op_str);
+          Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
+          sep = ", ";
+        }
+      });
+      Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
+    }
+    Log(level, "}");
+
+    RegisterUsageTracker all_live;
+    all_live.ReviveAll();
+    if (!all_live.Equals(frag->exit_regs_live)) {
+      Log(level, "|");
+      LogDeadRegs(level, frag->exit_regs_live);
     }
   }
 
-  Log(level, "%s{", printed_dead ? "|" : "");
-  for (auto instr : ForwardInstructionIterator(frag->first)) {
-    auto ninstr = DynamicCast<NativeInstruction *>(instr);
-    if (!ninstr) {
-      continue;
-    }
-
-    Log(level, "%s", ninstr->OpCodeName());
-
-    // Log the input operands.
-    sep = " ";
-    ninstr->ForEachOperand([&] (Operand *op) {
-      if (!op->IsWrite()) {
-        OperandString op_str;
-        op->EncodeToString(&op_str);
-        auto prefix = op->IsConditionalRead() ? "cr " : "";
-        Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
-        sep = ", ";
-      }
-    });
-
-    // Log the output operands.
-    sep = " -&gt; ";
-    ninstr->ForEachOperand([&] (Operand *op) {
-      if (op->IsWrite()) {
-        auto prefix = op->IsRead() ?
-                      (op->IsConditionalWrite() ? "r/cw " : "r/w ") :
-                      (op->IsConditionalWrite() ? "cw " : "");
-        OperandString op_str;
-        op->EncodeToString(&op_str);
-        Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
-        sep = ", ";
-      }
-    });
-    Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
-  }
-
-  Log(level, "}}>];\n");
+  Log(level, "}>];\n");
 }
 
 // Log a list of fragments as a DOT digraph.

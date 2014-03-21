@@ -59,9 +59,6 @@ class Fragment {
   // ends in some kind of return, or a native block.
   bool is_exit:1;
 
-  // Did the previous current data-flow pass change anything?
-  bool data_flow_changed:1;
-
   // Does the last instruction in this fragment change the stack pointer? If so,
   // the we consider the stack to be valid in this fragment if the stack pointer
   // is also read during the operation. Otherwise, it's treated as a strict
@@ -91,6 +88,7 @@ class Fragment {
 
   // Which physical registers are live on entry to this block.
   RegisterUsageTracker entry_regs_live;
+  RegisterUsageTracker exit_regs_live;
 
  private:
   friend class FragmentBuilder;
