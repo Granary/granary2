@@ -53,7 +53,7 @@ union VirtualRegister {
   // Convert an architectural register into a virtual register.
   //
   // Note: This has a driver-specific implementation. See
-  //       `granary/driver/*/register.cc` for the implementation.
+  //       `granary/arch/*/register.cc` for the implementation.
   void DecodeFromNative(int arch_reg_id);
 
   // Returns a new virtual register that was created from an architectural

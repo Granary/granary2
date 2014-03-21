@@ -5,7 +5,7 @@
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 #include "granary/cfg/operand.h"
-#include "granary/driver/xed2-intel64/instruction.h"
+#include "granary/arch/x86-64/instruction.h"
 #include "granary/breakpoint.h"
 
 namespace granary {

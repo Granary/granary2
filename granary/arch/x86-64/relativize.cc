@@ -8,9 +8,9 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/driver/relativize.h"
-#include "granary/driver/xed2-intel64/builder.h"
-#include "granary/driver/xed2-intel64/xed.h"
+#include "granary/arch/relativize.h"
+#include "granary/arch/x86-64/builder.h"
+#include "granary/arch/x86-64/xed.h"
 
 #include "granary/breakpoint.h"
 

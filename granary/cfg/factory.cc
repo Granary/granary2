@@ -9,7 +9,7 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
 
-#include "granary/driver/driver.h"
+#include "granary/arch/driver.h"
 
 #include "granary/ir/lir.h"
 

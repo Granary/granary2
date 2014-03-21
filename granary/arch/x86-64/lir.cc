@@ -9,7 +9,7 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"
 
-#include "granary/driver/xed2-intel64/builder.h"
+#include "granary/arch/x86-64/builder.h"
 
 #include "granary/ir/lir.h"
 

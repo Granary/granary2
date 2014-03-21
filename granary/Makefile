@@ -28,15 +28,11 @@ GRANARY_OTHER_OBJ_FILES := $(filter-out $(GRANARY_MERGED_LL_LL),$(GRANARY_OTHER_
 GRANARY_EXCLUDE_FIND = 
 GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/$(GRANARY_NOT_WHERE)/*"
 GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/arch/*"
-GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/driver/*"
+GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/arch/*"
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.cc' $(GRANARY_EXCLUDE_FIND))
 GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.ll))
-
-# Find driver (i.e. encoder/decoder-specific files).
-DRIVER_CC_SRC_FILES = $(shell find $(GRANARY_DRIVER_SRC_DIR) -type f -name '*.cc')
-DRIVER_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(DRIVER_CC_SRC_FILES:.cc=.ll))
 
 # Find assembly files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_ASM_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.asm')
@@ -47,9 +43,7 @@ ARCH_CC_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.cc')
 ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_FILES:.cc=.ll))
 
 # All object files to be compiled.
-GRANARY_OBJ_FILES =
-GRANARY_OBJ_FILES += $(GRANARY_CC_OBJ_FILES) $(DRIVER_OBJ_FILES)
-GRANARY_OBJ_FILES += $(ARCH_CC_OBJ_FILES)
+GRANARY_OBJ_FILES = $(GRANARY_CC_OBJ_FILES) $(ARCH_CC_OBJ_FILES)
 
 GRANARY_TOOL_OBJ_DEPS =
 GRANARY_TOOL_OBJ_DEPS += $(GRANARY_ARCH_BIN_DIR)/asm/string.o

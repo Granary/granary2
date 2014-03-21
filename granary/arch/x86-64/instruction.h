@@ -7,8 +7,8 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/driver/instruction.h"
-#include "granary/driver/xed2-intel64/operand.h"
+#include "granary/arch/instruction.h"
+#include "granary/arch/x86-64/operand.h"
 
 namespace granary {
 namespace driver {

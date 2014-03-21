@@ -4,7 +4,7 @@
 
 #include "granary/base/base.h"
 #include "granary/cfg/operand.h"
-#include "granary/driver/driver.h"
+#include "granary/arch/driver.h"
 #include "granary/breakpoint.h"
 
 namespace granary {

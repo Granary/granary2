@@ -13,8 +13,8 @@
 #include "granary/cfg/operand.h"  // For `OperandString`.
 #include "granary/code/register.h"  // For `VirtualRegister`.
 
-#include "granary/driver/operand.h"
-#include "granary/driver/xed2-intel64/xed.h"
+#include "granary/arch/operand.h"
+#include "granary/arch/x86-64/xed.h"
 
 namespace granary {
 

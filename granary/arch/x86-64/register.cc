@@ -4,7 +4,7 @@
 
 #include "granary/base/base.h"
 
-#include "granary/driver/xed2-intel64/xed.h"
+#include "granary/arch/x86-64/xed.h"
 
 #include "granary/code/register.h"
 

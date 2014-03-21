@@ -4,8 +4,8 @@
 
 #include "granary/arch/base.h"
 
-#include "granary/driver/xed2-intel64/builder.h"
-#include "granary/driver/xed2-intel64/instruction.h"
+#include "granary/arch/x86-64/builder.h"
+#include "granary/arch/x86-64/instruction.h"
 
 namespace granary {
 namespace driver {

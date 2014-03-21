@@ -19,7 +19,7 @@
 #include "granary/code/metadata.h"
 #include "granary/code/register.h"
 
-#include "granary/driver/driver.h"
+#include "granary/arch/driver.h"
 
 #include "granary/cache.h"
 #include "granary/logging.h"
