@@ -135,13 +135,9 @@ static unsigned long DeFormatGenericInt(const char *buffer, void *data,
 
 }  // namespace
 
-// Similar to `snprintf`. Returns the number of formatted characters.
-__attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char * __restrict buffer, unsigned long len,
-                     const char * __restrict format, ...) {
-  va_list args;
-  va_start(args, format);
-
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+unsigned long VarFormat(char * __restrict buffer, unsigned long len,
+                        const char * __restrict format, va_list args) {
   if (!buffer || !format || !len) {
     return 0;
   }
@@ -221,6 +217,17 @@ unsigned long Format(char * __restrict buffer, unsigned long len,
   }
   buff.Finalize();
   return buff.NumCharsWritten();
+}
+
+// Similar to `snprintf`. Returns the number of formatted characters.
+__attribute__ ((format(printf, 3, 4)))
+unsigned long Format(char * __restrict buffer, unsigned long len,
+                     const char * __restrict format, ...) {
+  va_list args;
+  va_start(args, format);
+  auto ret = VarFormat(buffer, len, format, args);
+  va_end(args);
+  return ret;
 }
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.

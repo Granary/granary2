@@ -158,6 +158,10 @@ unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);
 
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+unsigned long VarFormat(char * __restrict buffer, unsigned long len,
+                        const char * __restrict format, va_list args);
+
 // Similar to `snprintf`. Returns the number of formatted characters.
 __attribute__ ((format(printf, 3, 4)))
 unsigned long Format(char * __restrict buffer, unsigned long len,
@@ -179,12 +183,19 @@ class FixedLengthString {
   static_assert(kLen > 0,
       "The length of a fixed-length string must be at least `1`.");
 
-  FixedLengthString(void) {
+  FixedLengthString(void)
+      : len(0) {
     str[0] = '\0';
   }
 
   inline char &operator[](unsigned long i) {
-    return i < kLen ? str[i] : str[kLen];
+    if (i < kLen) {
+      len = i;
+      return str[i];
+    } else {
+      i = kLen;
+      return str[kLen];
+    }
   }
 
   operator const char *(void) {
@@ -199,8 +210,36 @@ class FixedLengthString {
   inline char *Buffer(void) {
     return &(str[0]);
   }
+
+  inline unsigned long RemainingLength(void) const {
+    return kLen - len;
+  }
+
+  inline char *RemainingBuffer(void) {
+    return &(str[len]);
+  }
+
+  // Similar to `snprintf`.
+  __attribute__ ((format(printf, 2, 3)))
+  void Format(const char * __restrict format, ...) {
+    va_list args;
+    va_start(args, format);
+    len = VarFormat(Buffer(), MaxLength(), format, args);
+    va_end(args);
+  }
+
+  // Similar to `snprintf`. This appends to the end of the string
+  __attribute__ ((format(printf, 2, 3)))
+  void UpdateFormat(const char * __restrict format, ...) {
+    va_list args;
+    va_start(args, format);
+    len += VarFormat(RemainingBuffer(), RemainingLength(), format, args);
+    va_end(args);
+  }
+
  private:
   char str[kLen + 1];
+  unsigned long len;
 };
 
 // Apply a functor to each comma-separated value. This will remove leading

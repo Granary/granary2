@@ -64,6 +64,7 @@ static uint32_t HashMetaData(HashFunction *hasher,
 }  // namespace
 
 
+#if 0
 // Convert an indirect call into a direct call that jumps to an intermediate
 // block that does an indirect jump. This exists so that the lookup process
 // for the indirect target is done after the stack size change, and so that
@@ -106,16 +107,23 @@ Instruction *BlockFactory::MakeIndirectCall(Instruction *prev_instr,
 
   return lir::Call(intermediate_block).release();
 }
+#endif
 
 // Convert a decoded instruction into the internal Granary instruction IR.
 Instruction *BlockFactory::MakeInstruction(Instruction *prev_instr,
                                            Instruction *last_instr,
                                            driver::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
+#if 0
     if (instr->IsFunctionCall()) {  // Indirect call.
       return MakeIndirectCall(prev_instr, last_instr, instr);
 
-    } else if (instr->IsJump()) {  // Indirect jump/call.
+    } else
+#endif
+    GRANARY_UNUSED(prev_instr);
+    GRANARY_UNUSED(last_instr);
+
+    if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
       return new ControlFlowInstruction(
           instr,
           new IndirectBasicBlock(context->AllocateEmptyBlockMetaData()));

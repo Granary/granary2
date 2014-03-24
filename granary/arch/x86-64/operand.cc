@@ -101,51 +101,80 @@ Operand::Operand(const Operand &op) {
   memcpy(this, &op, sizeof op);
 }
 
+namespace {
+// Encode a compressed memory operand into a string.
+static void EncodeMemOpToString(const Operand *op, OperandString *str) {
+  if (op->mem.reg_seg) {
+    str->UpdateFormat("%s:", xed_reg_enum_t2str(op->mem.reg_seg));
+  }
+  str->UpdateFormat("[");
+  if (op->mem.reg_base) {
+    str->UpdateFormat("%s%s", xed_reg_enum_t2str(op->mem.reg_base),
+                      op->mem.reg_index ? " + " : "");
+  }
+  if (op->mem.reg_index) {
+    str->UpdateFormat("%s * %u", xed_reg_enum_t2str(op->mem.reg_index),
+                      op->mem.scale);
+  }
+  if (op->mem.disp) {
+    if (op->mem.disp > 0) {
+      str->UpdateFormat(" + %d", op->mem.disp);
+    } else {
+      str->UpdateFormat(" - %d", -op->mem.disp);
+    }
+  }
+  str->UpdateFormat("]");
+}
+}  // namespace
+
 void Operand::EncodeToString(OperandString *str) const {
   auto prefix = "";
   auto suffix = "";
   switch (type) {
     case XED_ENCODER_OPERAND_TYPE_OTHER:
+      str->Format("?other?");
+      break;
     case XED_ENCODER_OPERAND_TYPE_INVALID:
-      Format(str->Buffer(), str->MaxLength(), "?");
+      str->Format("?invalid?");
       break;
 
     case XED_ENCODER_OPERAND_TYPE_BRDISP:
-      Format(str->Buffer(), str->MaxLength(), "0x%lx", addr.as_uint);
+      str->Format("0x%lx", addr.as_uint);
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
-      prefix = "[";
-      suffix = "]";
-      // Fall-through.
+      if (is_compressed) {
+        EncodeMemOpToString(this, str);
+        break;
+      } else {
+        prefix = "[";
+        suffix = "]";  // Fall-through.
+      }
 
     case XED_ENCODER_OPERAND_TYPE_REG:
     case XED_ENCODER_OPERAND_TYPE_SEG0:
     case XED_ENCODER_OPERAND_TYPE_SEG1:
-      Format(str->Buffer(), str->MaxLength(), "%%");
       if (reg.IsNative()) {
         auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        Format(str->Buffer(), str->MaxLength(), "%s%s%s",
-               prefix, xed_reg_enum_t2str(arch_reg), suffix);
+        str->Format("%s%s%s", prefix, xed_reg_enum_t2str(arch_reg), suffix);
       } else if (reg.IsVirtual()) {
-        Format(str->Buffer(), str->MaxLength(), "%s%%%u%s",
-               prefix, reg.Number(), suffix);
+        str->Format("%s%%%u%s", prefix, reg.Number(), suffix);
       } else {
-        Format(str->Buffer(), str->MaxLength(), "%s%%?%s", prefix, suffix);
+        str->Format("%s?reg?%s", prefix, suffix);
       }
       break;
 
     case XED_ENCODER_OPERAND_TYPE_IMM0:
     case XED_ENCODER_OPERAND_TYPE_IMM1:
-      Format(str->Buffer(), str->MaxLength(), "%lu", imm.as_uint);
+      str->Format("%lu", imm.as_uint);
       break;
 
     case XED_ENCODER_OPERAND_TYPE_SIMM0:
-      Format(str->Buffer(), str->MaxLength(), "%ld", imm.as_int);
+      str->Format("%ld", imm.as_int);
       break;
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
-      Format(str->Buffer(), str->MaxLength(), "[0x%lx]", addr.as_uint);
+      str->Format("[0x%lx]", addr.as_uint);
       break;
   }
 }

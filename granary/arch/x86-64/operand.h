@@ -107,10 +107,10 @@ class Operand : public OperandInterface {
     // Combined memory operation. Used as part of encoding.
     struct {
       int32_t disp;
-      int8_t reg_seg;
-      int8_t reg_base;
-      int8_t reg_index;
-      int8_t scale;
+      xed_reg_enum_t reg_seg:8;
+      xed_reg_enum_t reg_base:8;
+      xed_reg_enum_t reg_index:8;
+      uint8_t scale;
     } __attribute__((packed)) mem;
 
   } __attribute__((packed));
@@ -121,7 +121,12 @@ class Operand : public OperandInterface {
 
   // This operand cannot be changed.
   bool is_sticky:1;
+
+  // This is an explicit operand.
   bool is_explicit:1;
+
+  // This is a compressed memory operand (base/displacement).
+  bool is_compressed;
 
 } __attribute__((packed));
 

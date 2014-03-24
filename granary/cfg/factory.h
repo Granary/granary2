@@ -100,6 +100,7 @@ class BlockFactory {
  private:
   BlockFactory(void) = delete;
 
+#if 0
   // Convert an indirect call into a direct call that jumps to an intermediate
   // block that does an indirect jump. This exists so that the lookup process
   // for the indirect target is done after the stack size change, and so that
@@ -108,6 +109,7 @@ class BlockFactory {
   Instruction *MakeIndirectCall(Instruction *prev_instr,
                                 Instruction *last_instr,
                                 driver::Instruction *instr);
+#endif
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION

@@ -26,27 +26,15 @@ GRANARY_DEFINE_string(attach_to, "*",
     "\t--attach_to=libc\t\tOnly attach to `libc`.")
 #endif  // GRANARY_STANDALONE
 
+extern "C" {
+void granary_test_mangle(void);
+}
+
 namespace granary {
 namespace {
 
 static int curr_env = 0;
 GRANARY_EARLY_GLOBAL static Container<Environment> envs[2];
-
-}  // namespace
-
-namespace {
-
-static void bar(void) { }
-
-static void (*bar_ptr)(void) = &bar;
-
-static void foo() {
-  for (auto i = 0; i < 10; ++i) {
-    if (GRANARY_LIKELY(nullptr != bar_ptr)) {
-      bar_ptr();
-    }
-  }
-}
 
 }  // namespace
 
@@ -70,7 +58,7 @@ void Init(const char *granary_path) {
   env.Construct();
 
   // TODO(pag): Remove me.
-  AppPC pc(UnsafeCast<AppPC>(&foo));
+  AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
   env->Setup();
   env->AttachToAppPC(pc);

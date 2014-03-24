@@ -134,7 +134,6 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
       });
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
     }
-    Log(level, "}");
 
     RegisterUsageTracker all_live;
     all_live.ReviveAll();
@@ -142,6 +141,8 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
       Log(level, "|");
       LogDeadRegs(level, frag->exit_regs_live);
     }
+
+    Log(level, "}");
   }
 
   Log(level, "}>];\n");

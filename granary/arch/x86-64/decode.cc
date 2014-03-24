@@ -149,7 +149,6 @@ static void DecodeLEAImm(Instruction *lea, intptr_t imm, bool is_sticky) {
 static void DecodeLEAReg(Instruction *lea, xed_reg_enum_t reg, bool is_sticky) {
   if (XED_REG_INVALID != reg) {
     auto op = &(lea->ops[lea->num_ops++]);
-
     if (XED_REG_CS <= reg && XED_REG_GS >= reg) {
       op->type = XED_ENCODER_OPERAND_TYPE_SEG0;
     } else {
@@ -161,6 +160,7 @@ static void DecodeLEAReg(Instruction *lea, xed_reg_enum_t reg, bool is_sticky) {
   }
 }
 
+#if 0
 // Decode a single memory operand into a pseudo LEA instruction that writes to
 // a temporary virtual register.
 //
@@ -215,6 +215,7 @@ static VirtualRegister LoadMemoryOperand(DecodedBasicBlock *block,
     return lea.ops[0].reg;
   }
 }
+#endif
 
 // Decode a load effective address (LEA) instruction. We don't decode it
 // it according to our typical pattern because of
@@ -236,6 +237,8 @@ static void ConvertLoadEffectiveAddress(Instruction *instr,
     instr_op->rw = XED_OPERAND_ACTION_R;
     instr_op->is_sticky = true;
   } else {
+    // TODO(pag): This is ugly.
+
     DecodeLEAReg(instr, xed_decoded_inst_get_seg_reg(xedd, 0), false);
     DecodeLEAImm(instr, xed_decoded_inst_get_memory_displacement(xedd, 0),
                  false);
@@ -251,17 +254,26 @@ static void ConvertLoadEffectiveAddress(Instruction *instr,
 }
 
 // Convert a memory operand into an `Operand`.
-static void ConverMemoryOperand(DecodedBasicBlock *block, Instruction *instr,
-                                Operand *instr_op,
+static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
                                 const xed_decoded_inst_t *xedd,
                                 unsigned index) {
   auto is_sticky = instr->has_prefix_rep || instr->has_prefix_repne ||
                    XED_ICLASS_XLAT == instr->iclass;
+  auto disp = xed_decoded_inst_get_memory_displacement(xedd, index);
+  auto scale = xed_decoded_inst_get_scale(xedd, index);
+  auto segment_reg = xed_decoded_inst_get_seg_reg(xedd, index);
+  auto base_reg = xed_decoded_inst_get_base_reg(xedd, index);
+  auto index_reg = xed_decoded_inst_get_index_reg(xedd, index);
 
   instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  instr_op->reg = LoadMemoryOperand(block, xedd, index, is_sticky);
+  instr_op->mem.disp = static_cast<int32_t>(disp);
+  instr_op->mem.reg_base = base_reg;
+  instr_op->mem.reg_index = index_reg;
+  instr_op->mem.reg_seg = segment_reg;
+  instr_op->mem.scale = static_cast<uint8_t>(scale);
   instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
-  instr_op->is_sticky = is_sticky;
+  instr_op->is_sticky = instr_op->is_sticky || is_sticky;
+  instr_op->is_compressed = true;
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually
@@ -270,16 +282,15 @@ static void ConverMemoryOperand(DecodedBasicBlock *block, Instruction *instr,
 //
 // Note: XED_OPERAND_AGEN's memory operand index is 0. See docs for function
 //       `xed_agen`.
-static void ConvertBaseDisp(DecodedBasicBlock *block, Instruction *instr,
-                            Operand *instr_op, const xed_decoded_inst_t *xedd,
-                            unsigned index) {
+static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
+                            const xed_decoded_inst_t *xedd, unsigned index) {
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
     instr_op->width = static_cast<int8_t>(
         xed3_operand_get_mem_width(xedd) * 8); // Width of addressed memory.
   } else {
-    ConverMemoryOperand(block, instr, instr_op, xedd, index);
+    ConverMemoryOperand(instr, instr_op, xedd, index);
   }
 }
 
@@ -376,7 +387,7 @@ static bool IsAmbiguousOperand(xed_iclass_enum_t iclass, xed_iform_enum_t iform,
 // Convert a `xed_operand_t` into an `Operand`. This operates on explicit
 // operands only, and when an increments `instr->num_ops` when a new explicit
 // operand is found.
-static void ConvertDecodedOperand(DecodedBasicBlock *block, Instruction *instr,
+static void ConvertDecodedOperand(Instruction *instr,
                                   const xed_decoded_inst_t *xedd,
                                   unsigned op_num) {
   auto xedi = xed_decoded_inst_inst(xedd);
@@ -397,9 +408,9 @@ static void ConvertDecodedOperand(DecodedBasicBlock *block, Instruction *instr,
   } else if (XED_OPERAND_RELBR == op_name) {
     ConvertRelativeBranch(instr, instr_op, xedd);
   } else if (XED_OPERAND_MEM0 == op_name) {
-    ConvertBaseDisp(block, instr, instr_op, xedd, 0);
+    ConvertBaseDisp(instr, instr_op, xedd, 0);
   } else if (XED_OPERAND_MEM1 == op_name) {
-    ConvertBaseDisp(block, instr, instr_op, xedd, 1);
+    ConvertBaseDisp(instr, instr_op, xedd, 1);
   } else if (XED_OPERAND_TYPE_IMM == op_type ||
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr_op, xedd, op_name);
@@ -416,17 +427,15 @@ static void ConvertDecodedOperand(DecodedBasicBlock *block, Instruction *instr,
 
   if (is_explicit) {
     ++instr->num_explicit_ops;
-  } else {
-
   }
 }
 
 // Convert the operands of a `xed_decoded_inst_t` to `Operand` types.
-static void ConvertDecodedOperands(DecodedBasicBlock *block, Instruction *instr,
+static void ConvertDecodedOperands(Instruction *instr,
                                    const xed_decoded_inst_t *xedd) {
   auto num_ops = static_cast<unsigned>(instr->num_ops);
   for (auto o = 0U; o < num_ops; ++o) {
-    ConvertDecodedOperand(block, instr, xedd, o);
+    ConvertDecodedOperand(instr, xedd, o);
   }
 }
 
@@ -442,8 +451,7 @@ static void ConvertDecodedPrefixes(Instruction *instr,
 }
 
 // Convert a `xed_decoded_inst_t` into an `Instruction`.
-static void ConvertDecodedInstruction(DecodedBasicBlock *block,
-                                      Instruction *instr,
+static void ConvertDecodedInstruction(Instruction *instr,
                                       const xed_decoded_inst_t *xedd,
                                       AppPC pc) {
   auto xedi = xed_decoded_inst_inst(xedd);
@@ -463,19 +471,19 @@ static void ConvertDecodedInstruction(DecodedBasicBlock *block,
   if (GRANARY_UNLIKELY(XED_ICLASS_LEA == instr->iclass)) {
     ConvertLoadEffectiveAddress(instr, xedd);
   } else {
-    ConvertDecodedOperands(block, instr, xedd);
+    ConvertDecodedOperands(instr, xedd);
   }
 }
 }  // namespace
 
 // Decode an x86-64 instruction into a Granary `Instruction`, by first going
 // through XED's `xed_decoded_inst_t` IR.
-AppPC InstructionDecoder::DecodeInternal(DecodedBasicBlock *block,
+AppPC InstructionDecoder::DecodeInternal(DecodedBasicBlock *,  // TODO(pag):!!
                                          Instruction *instr, AppPC pc) {
   if (pc) {
     xed_decoded_inst_t xedd;
     if (XED_ERROR_NONE == DecodeBytes(&xedd, pc)) {
-      ConvertDecodedInstruction(block, instr, &xedd, pc);
+      ConvertDecodedInstruction(instr, &xedd, pc);
       return pc + instr->decoded_length;
     }
   }
