@@ -17,7 +17,7 @@ class ControlFlowInstruction;
 class NativeInstruction;
 class MemoryOperand;
 
-namespace driver {
+namespace arch {
 
 class Instruction;
 
@@ -34,7 +34,7 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
 //void RelativizeMemOp(NativeInstruction)
 
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_RELATIVIZE_H_

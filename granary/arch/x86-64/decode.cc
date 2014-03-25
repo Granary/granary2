@@ -17,7 +17,7 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Decoder state that sets the mode to 64-bit.
 extern xed_state_t XED_STATE;
@@ -490,5 +490,5 @@ AppPC InstructionDecoder::DecodeInternal(DecodedBasicBlock *,  // TODO(pag):!!
   return nullptr;
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

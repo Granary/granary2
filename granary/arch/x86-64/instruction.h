@@ -11,7 +11,7 @@
 #include "granary/arch/x86-64/operand.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Represents a high-level API to the XED encoder/decoder. This API represents
 // instructions at the granularity of instruction classes, and supports
@@ -161,7 +161,7 @@ class Instruction : public InstructionInterface {
 
 } __attribute__((packed));
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_

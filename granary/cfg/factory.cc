@@ -64,7 +64,7 @@ static uint32_t HashMetaData(HashFunction *hasher,
 }  // namespace
 
 // Convert a decoded instruction into the internal Granary instruction IR.
-Instruction *BlockFactory::MakeInstruction(driver::Instruction *instr) {
+Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
       return new ControlFlowInstruction(
@@ -92,7 +92,7 @@ Instruction *BlockFactory::MakeInstruction(driver::Instruction *instr) {
 
 // Add the fall-through instruction for a block.
 void BlockFactory::AddFallThroughInstruction(
-    driver::InstructionDecoder *decoder, DecodedBasicBlock *block,
+    arch::InstructionDecoder *decoder, DecodedBasicBlock *block,
     Instruction *last_instr, AppPC pc) {
 
   auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
@@ -102,7 +102,7 @@ void BlockFactory::AddFallThroughInstruction(
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR
     // instruction for the fall-through.
-    driver::Instruction dinstr;
+    arch::Instruction dinstr;
     if (!decoder->Decode(block, &dinstr, pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
@@ -117,11 +117,11 @@ void BlockFactory::AddFallThroughInstruction(
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto pc = block->StartAppPC();
-  driver::InstructionDecoder decoder;
+  arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
     auto decoded_pc = pc;
-    driver::Instruction dinstr;
+    arch::Instruction dinstr;
     if (!decoder.DecodeNext(block, &dinstr, &pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;

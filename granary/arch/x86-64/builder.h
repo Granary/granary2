@@ -17,7 +17,7 @@
 #include "granary/arch/x86-64/xed.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Forward declarations.
 class Instruction;
@@ -130,7 +130,7 @@ class BranchTargetBuilder {
   PC pc;
 };
 
-// Initialize an emptry Granary `driver::Instruction` from a XED iclass,
+// Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_category_enum_t category, uint8_t num_explicit_ops);
@@ -151,7 +151,7 @@ inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
   ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 // Bring in the auto-generated instruction builder API.

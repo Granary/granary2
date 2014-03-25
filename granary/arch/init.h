@@ -8,12 +8,12 @@
 #endif
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Initialize the driver (instruction encoder/decoder).
 void Init(void);
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_INIT_H_

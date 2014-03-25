@@ -22,7 +22,7 @@ namespace granary {
 class Operand;
 class NativeInstruction;
 
-namespace driver {
+namespace arch {
 
 // Represents an operand to an x86-64 instruction.
 class Operand : public OperandInterface {
@@ -132,9 +132,9 @@ class Operand : public OperandInterface {
 } __attribute__((packed));
 
 static_assert(sizeof(Operand) <= 16,
-    "Invalid structure packing of `granary::driver::Operand`.");
+    "Invalid structure packing of `granary::arch::Operand`.");
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_

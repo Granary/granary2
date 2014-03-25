@@ -21,8 +21,8 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, RegisterOperand)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
 
 namespace {
-static driver::Operand * const TOMBSTONE = \
-    reinterpret_cast<driver::Operand *>(0x1ULL);
+static arch::Operand * const TOMBSTONE = \
+    reinterpret_cast<arch::Operand *>(0x1ULL);
 }  // namespace
 
 // Returns true if this `OperandRef` references a memory operand, and if so,
@@ -74,13 +74,13 @@ Operand::Operand(const Operand &that)
       op_ptr(TOMBSTONE) {}
 
 // Initialize an empty operand.
-Operand::Operand(driver::Operand *op_)
+Operand::Operand(arch::Operand *op_)
     : op(*op_),
       op_ptr(op_) {}
 
 // Replace the internal operand memory.
-void Operand::UnsafeReplace(driver::Operand *op_) {
-  op.Construct<driver::Operand &>(*op_);
+void Operand::UnsafeReplace(arch::Operand *op_) {
+  op.Construct<arch::Operand &>(*op_);
   op_ptr = op_;
 }
 

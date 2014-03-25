@@ -224,7 +224,7 @@ class NativeInstruction : public Instruction {
   virtual ~NativeInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit NativeInstruction(const driver::Instruction *instruction_);
+  explicit NativeInstruction(const arch::Instruction *instruction_);
 
   // Get the decoded length of the instruction. This is independent from the
   // length of the encoded instruction, which could be wildly different as a
@@ -281,7 +281,7 @@ class NativeInstruction : public Instruction {
   })
 
  protected:
-  GRANARY_INTERNAL_DEFINITION driver::Instruction instruction;
+  GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
 
  private:
   friend class ControlFlowInstruction;
@@ -308,7 +308,7 @@ class BranchInstruction final : public NativeInstruction {
   virtual ~BranchInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline BranchInstruction(const driver::Instruction *instruction_,
+  inline BranchInstruction(const arch::Instruction *instruction_,
                            LabelInstruction *target_)
       : NativeInstruction(instruction_),
         target(target_) {}
@@ -342,7 +342,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   virtual ~ControlFlowInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
-  ControlFlowInstruction(const driver::Instruction *instruction_,
+  ControlFlowInstruction(const arch::Instruction *instruction_,
                          BasicBlock *target_);
 
   // Return the target block of this CFI.

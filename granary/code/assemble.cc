@@ -72,7 +72,7 @@ class InstructionRelativizer {
                        const MemoryOperand &mloc) {
     const void *mptr(nullptr);
     if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
-      driver::RelativizeMemOp(block, instr, mloc, mptr);
+      arch::RelativizeMemOp(block, instr, mloc, mptr);
     }
   }
 
@@ -100,7 +100,7 @@ class InstructionRelativizer {
       // instructions need to be relativized regardless of whether or not the
       // target PC is far away. For example, on x86, the `LOOP rel8`
       // instructions must always be relativized.
-      driver::RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
+      arch::RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
                                   AddressNeedsRelativizing(target_pc));
 
     // Indirect CFIs might read their target from a PC-relative address.

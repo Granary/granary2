@@ -5,7 +5,7 @@
 #include "granary/arch/x86-64/xed.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Decoder state that sets the mode to 64-bit.
 xed_state_t XED_STATE;
@@ -18,5 +18,5 @@ void Init(void) {
                  XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

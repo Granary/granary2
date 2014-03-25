@@ -21,7 +21,7 @@ namespace lir {
 // Indirect jump to an existing basic block.
 std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
                                           const granary::Operand &op) {
-  driver::Instruction instr;
+  arch::Instruction instr;
   if (auto mem = DynamicCast<granary::MemoryOperand *>(&op)) {
     const void *ptr(nullptr);
     VirtualRegister reg;
@@ -43,7 +43,7 @@ std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
 
 // Call to an existing basic block.
 std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
-  driver::Instruction instr;
+  arch::Instruction instr;
   CALL_NEAR_RELBRd(&instr, target_block->StartAppPC());
   return std::unique_ptr<Instruction>(
       new ControlFlowInstruction(&instr, target_block));
@@ -51,7 +51,7 @@ std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
 
 // Jump to an existing basic block.
 std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
-  driver::Instruction instr;
+  arch::Instruction instr;
   JMP_RELBRd(&instr, target_block->StartAppPC());
   return std::unique_ptr<Instruction>(
       new ControlFlowInstruction(&instr, target_block));

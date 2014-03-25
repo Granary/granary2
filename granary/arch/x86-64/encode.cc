@@ -12,7 +12,7 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Encode t an instruction IR at `*pc` and update `pc`.
 bool InstructionEncoder::EncodeNext(Instruction *instr, CachePC *pc) {
@@ -34,5 +34,5 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   return pc;
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

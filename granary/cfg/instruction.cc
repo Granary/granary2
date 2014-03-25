@@ -108,7 +108,7 @@ bool AnnotationInstruction::IsBranchTarget(void) const {
 LabelInstruction::LabelInstruction(void)
     : AnnotationInstruction(LABEL) {}
 
-NativeInstruction::NativeInstruction(const driver::Instruction *instruction_)
+NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_) {}
 
 NativeInstruction::~NativeInstruction(void) {}
@@ -197,7 +197,7 @@ LabelInstruction *BranchInstruction::TargetInstruction(void) const {
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    const driver::Instruction *instruction_, BasicBlock *target_)
+    const arch::Instruction *instruction_, BasicBlock *target_)
       : NativeInstruction(instruction_),
         target(target_) {
   target->Acquire();

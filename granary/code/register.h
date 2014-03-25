@@ -14,9 +14,9 @@ namespace granary {
 class NativeInstruction;
 class Operand;
 
-GRANARY_INTERNAL_DEFINITION namespace driver {
+GRANARY_INTERNAL_DEFINITION namespace arch {
 class Instruction;
-}  // namespace driver
+}  // namespace arch
 
 // The kind of a virtual register.
 enum VirtualRegisterKind : uint8_t {

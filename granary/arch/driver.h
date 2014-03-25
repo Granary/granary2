@@ -14,7 +14,7 @@
 #include "granary/arch/relativize.h"
 
 // Include "documentation" driver interfaces (for example:
-// `driver::InstructionInterface`and `driver::OperandInterface`). These serve
+// `arch::InstructionInterface`and `arch::OperandInterface`). These serve
 // only to document what methods are publicly available on driver classes, as
 // well as what methods must be implemented by people porting Granary+ to a new
 // architecture/driver.

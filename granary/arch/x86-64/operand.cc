@@ -10,8 +10,8 @@
 
 namespace granary {
 namespace {
-static driver::Operand * const TOMBSTONE = \
-    reinterpret_cast<driver::Operand *>(0x1ULL);
+static arch::Operand * const TOMBSTONE = \
+    reinterpret_cast<arch::Operand *>(0x1ULL);
 }  // namespace
 
 // Try to replace the referenced operand with a concrete operand. Returns
@@ -137,7 +137,7 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg) {
   op_ptr = TOMBSTONE;
 }
 
-namespace driver {
+namespace arch {
 
 Operand::Operand(const Operand &op) {
   memcpy(this, &op, sizeof op);
@@ -221,5 +221,5 @@ void Operand::EncodeToString(OperandString *str) const {
   }
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

@@ -15,7 +15,7 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Represents an allocated address that is nearby the code cache and can be used
 // to indirectly resolve the problem of PC-relative targets being too far away.
@@ -188,5 +188,5 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
   GRANARY_ASSERT(replaced);
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

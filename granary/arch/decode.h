@@ -15,7 +15,7 @@ namespace granary {
 // Forward declarations.
 class DecodedBasicBlock;
 
-namespace driver {
+namespace arch {
 
 // Forward declarations.
 class Instruction;
@@ -43,7 +43,7 @@ class InstructionDecoder {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_DECODE_H_

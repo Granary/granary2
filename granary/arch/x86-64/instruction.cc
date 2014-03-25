@@ -6,7 +6,7 @@
 #include "granary/arch/x86-64/instruction.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 Instruction::Instruction(void) {
   memset(this, 0, sizeof *this);
@@ -36,7 +36,7 @@ const char *Instruction::OpCodeName(void) const {
 
 namespace {
 
-// Invoke a function on a `driver::Operand` that has been converted into a
+// Invoke a function on a `arch::Operand` that has been converted into a
 // `granary::Operand`.
 static void CallWithOperand(
     Operand *op, const std::function<void(granary::Operand *)> &func) {
@@ -146,5 +146,5 @@ size_t Instruction::CountMatchedOperands(
   return num_matched;
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary

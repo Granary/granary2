@@ -13,7 +13,7 @@
 #include "granary/base/pc.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Documents the methods that must be provided by driver instructions. This
 // interface class cannot be used as-is as the methods don't exist.
@@ -68,7 +68,7 @@ class InstructionInterface {
   size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
 };
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_INSTRUCTION_H_

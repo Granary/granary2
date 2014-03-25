@@ -11,7 +11,7 @@
 #include "granary/cfg/operand.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 // Documents the methods that must be provided by driver operands. This
 // interface class cannot be used as-is as the methods don't exist.
@@ -32,7 +32,7 @@ class OperandInterface {
   void EncodeToString(OperandString *str) const;
 };
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
 
 #endif  // GRANARY_DRIVER_OPERAND_H_

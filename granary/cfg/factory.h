@@ -18,7 +18,7 @@ class BlockMetaData;
 class HashFunction;
 
 #ifdef GRANARY_INTERNAL
-namespace driver {
+namespace arch {
 class InstructionDecoder;
 }
 #endif  // GRANARY_INTERNAL
@@ -108,16 +108,16 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION
   Instruction *MakeIndirectCall(Instruction *prev_instr,
                                 Instruction *last_instr,
-                                driver::Instruction *instr);
+                                arch::Instruction *instr);
 #endif
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
-  Instruction *MakeInstruction(driver::Instruction *instr);
+  Instruction *MakeInstruction(arch::Instruction *instr);
 
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION
-  void AddFallThroughInstruction(driver::InstructionDecoder *decoder,
+  void AddFallThroughInstruction(arch::InstructionDecoder *decoder,
                                  DecodedBasicBlock *block,
                                  Instruction *last_instr, AppPC pc);
 

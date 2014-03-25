@@ -44,7 +44,7 @@ void Init(const char *granary_path) {
   // Initialize the driver (e.g. DynamoRIO). This usually performs from
   // architecture-specific checks to determine which architectural features
   // are enabled.
-  driver::Init();
+  arch::Init();
 
   // Dynamically load in zero or more clients. In user space, clients are
   // specified on the command-line. In kernel-space, clients are compiled in

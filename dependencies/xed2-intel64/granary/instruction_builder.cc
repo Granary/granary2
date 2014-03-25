@@ -238,10 +238,10 @@ int main(void) {
   std::cout << "#ifndef DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "#define DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "namespace granary {\n"
-            << "namespace driver {\n"
+            << "namespace arch {\n"
             << "class Instruction;\n";
   GenerateInstructionBuilders();
-  std::cout << "}  // namespace driver\n"
+  std::cout << "}  // namespace arch\n"
             << "}  // namespace granary\n"
             << "#endif  // DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n";
 }

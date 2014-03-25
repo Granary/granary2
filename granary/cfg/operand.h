@@ -20,9 +20,9 @@ class MemoryOperand;
 class RegisterOperand;
 class ImmediateOperand;
 
-namespace driver {
+namespace arch {
 class Operand;
-}  // namespace driver
+}  // namespace arch
 
 // Type of a string that can be used to convert an operand to a string.
 typedef FixedLengthString<31> OperandString;
@@ -34,7 +34,7 @@ typedef FixedLengthString<31> OperandString;
 class OperandRef {
  public:
   // Initialize this operand.
-  GRANARY_INTERNAL_DEFINITION inline OperandRef(driver::Operand *op_)
+  GRANARY_INTERNAL_DEFINITION inline OperandRef(arch::Operand *op_)
       : op(op_) {}
 
   // Returns true if this `OperandRef` references a memory operand, and if so,
@@ -68,7 +68,7 @@ class OperandRef {
  private:
   OperandRef(void) = delete;
 
-  GRANARY_POINTER(driver::Operand) * GRANARY_CONST op;
+  GRANARY_POINTER(arch::Operand) * GRANARY_CONST op;
 };
 
 // A generic operand from a native instruction. A generic interface is provided
@@ -86,7 +86,7 @@ class Operand {
   Operand(Operand &&that) = default;
 
   // Initialize this operand.
-  GRANARY_INTERNAL_DEFINITION Operand(driver::Operand *op_);
+  GRANARY_INTERNAL_DEFINITION Operand(arch::Operand *op_);
 
   virtual ~Operand(void) = default;
 
@@ -133,12 +133,12 @@ class Operand {
   // Replace the internal operand memory. This method is "unsafe" insofar
   // as it assumes the caller is maintaining the invariant that the current
   // operand is being replaced with one that has the correct type.
-  GRANARY_INTERNAL_DEFINITION void UnsafeReplace(driver::Operand *op_);
+  GRANARY_INTERNAL_DEFINITION void UnsafeReplace(arch::Operand *op_);
 
   GRANARY_DECLARE_BASE_CLASS(Operand)
 
  GRANARY_PROTECTED:
-  GRANARY_CONST OpaqueContainer<driver::Operand, 16> op;
+  GRANARY_CONST OpaqueContainer<arch::Operand, 16> op;
 
   friend class OperandRef;
 
@@ -149,7 +149,7 @@ class Operand {
   // replace the backing operand.
   //
   // This might point to a special tombstone operand that can't validly be
-  GRANARY_POINTER(driver::Operand) * GRANARY_CONST op_ptr;
+  GRANARY_POINTER(arch::Operand) * GRANARY_CONST op_ptr;
 };
 
 // Represents a memory operand. Memory operands are either pointers (i.e.

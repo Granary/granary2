@@ -8,7 +8,7 @@
 #include "granary/arch/x86-64/instruction.h"
 
 namespace granary {
-namespace driver {
+namespace arch {
 
 namespace {
 // Returns the bit width of an immediate integer. This is to calculate operand
@@ -32,7 +32,7 @@ static int ImmediateWidthBits(uint64_t imm) {
 }
 }  // namespace
 
-// Initialize an emptry Granary `driver::Instruction` from a XED iclass,
+// Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_category_enum_t category, uint8_t num_explicit_ops) {
@@ -113,5 +113,5 @@ void BranchTargetBuilder::Build(Instruction *instr) {
   op.width = arch::ADDRESS_WIDTH_BITS;
 }
 
-}  // namespace driver
+}  // namespace arch
 }  // namespace granary
