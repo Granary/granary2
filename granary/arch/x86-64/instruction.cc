@@ -35,6 +35,7 @@ const char *Instruction::OpCodeName(void) const {
 }
 
 namespace {
+
 // Invoke a function on a `driver::Operand` that has been converted into a
 // `granary::Operand`.
 static void CallWithOperand(
@@ -47,7 +48,6 @@ static void CallWithOperand(
       func(reinterpret_cast<granary::Operand *>(&reg));
       break;
     }
-
     case XED_ENCODER_OPERAND_TYPE_BRDISP:
     case XED_ENCODER_OPERAND_TYPE_IMM0:
     case XED_ENCODER_OPERAND_TYPE_SIMM0:

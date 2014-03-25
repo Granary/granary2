@@ -113,9 +113,7 @@ class BlockFactory {
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
-  Instruction *MakeInstruction(Instruction *prev_instr,
-                               Instruction *last_instr,
-                               driver::Instruction *instr);
+  Instruction *MakeInstruction(driver::Instruction *instr);
 
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION

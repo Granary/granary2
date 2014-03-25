@@ -99,6 +99,7 @@ void MemoryBuilder::Build(Instruction *instr) {
     op.type = XED_ENCODER_OPERAND_TYPE_MEM;
     op.reg = reg;
   }
+  op.is_compound = false;
   op.rw = action;
   op.width = -1;  // Unknown.
 }

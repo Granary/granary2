@@ -52,6 +52,7 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bits) {
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
+  op->is_compound = false;
   op_ptr = TOMBSTONE;
 }
 
@@ -63,7 +64,16 @@ MemoryOperand::MemoryOperand(const void *ptr, int num_bits) {
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
+  op->is_compound = false;
   op_ptr = TOMBSTONE;
+}
+
+// Returns true if this is a compound memory operation. Compound memory
+// operations can have multiple smaller operands (e.g. registers) inside of
+// them. An example of a compound memory operand is a `base + index * scale`
+// (i.e. base/displacement) operand on x86.
+bool MemoryOperand::IsCompound(void) const {
+  return XED_ENCODER_OPERAND_TYPE_MEM == op->type && op->is_compound;
 }
 
 // Try to match this memory operand as a pointer value.
@@ -78,15 +88,47 @@ bool MemoryOperand::MatchPointer(const void *&ptr) const {
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.
 bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
-  if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
+  if (XED_ENCODER_OPERAND_TYPE_MEM == op->type && !op->is_compound) {
     reg = op->reg;
     return true;
   }
   return false;
 }
 
+namespace {
+// Match the next register in the compound memory operand.
+static void MatchNextRegister(xed_reg_enum_t reg,
+                              std::initializer_list<VirtualRegister *> regs,
+                              size_t *next) {
+  if (XED_REG_INVALID != reg && *next < regs.size()) {
+    regs.begin()[*next]->DecodeFromNative(static_cast<int>(reg));
+    *next += 1;
+  }
+}
+}
+
+// Try to match this memory operand as a register value. That is, the address
+// is stored in the matched register.
+//
+// Note: This has a driver-specific implementation.
+size_t MemoryOperand::CountMatchedRegisters(
+    std::initializer_list<VirtualRegister *> regs) const {
+  size_t num_matched(0);
+  if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
+    if (op->is_compound) {
+      MatchNextRegister(op->mem.reg_seg, regs, &num_matched);
+      MatchNextRegister(op->mem.reg_base, regs, &num_matched);
+      MatchNextRegister(op->mem.reg_index, regs, &num_matched);
+    } else if (0 < regs.size()) {
+      *(regs.begin()[0]) = op->reg;
+      num_matched = 1;
+    }
+  }
+  return num_matched;
+}
+
 // Initialize a new register operand from a virtual register.
-RegisterOperand::RegisterOperand(const VirtualRegister &reg) {
+RegisterOperand::RegisterOperand(const VirtualRegister reg) {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
   op->width = static_cast<int8_t>(reg.BitWidth());
   op->reg = reg;
@@ -143,7 +185,7 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
-      if (is_compressed) {
+      if (is_compound) {
         EncodeMemOpToString(this, str);
         break;
       } else {

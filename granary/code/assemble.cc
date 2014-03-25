@@ -171,7 +171,7 @@ static void UpdateRegUsageFromSuccessor(Fragment *succ,
 }
 
 // Calculate the live registers on entry to a fragment.
-static void FindLiveEntryRegsToFrag(Fragment *frag,
+static void FindLiveEntryRegsToFrag(Fragment * const frag,
                                     RegisterUsageTracker *regs) {
   for (auto instr : BackwardInstructionIterator(frag->last)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -181,7 +181,7 @@ static void FindLiveEntryRegsToFrag(Fragment *frag,
 }
 
 // Initialize the live entry regs as a data flow problem.
-static void InitLiveEntryRegsToFrags(Fragment *frags) {
+static void InitLiveEntryRegsToFrags(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
     if (frag->is_exit || frag->is_future_block_head) {
       frag->entry_regs_live.ReviveAll();
@@ -193,7 +193,7 @@ static void InitLiveEntryRegsToFrags(Fragment *frags) {
 }
 
 // Calculate the live registers on entry to every fragment.
-static void FindLiveEntryRegsToFrags(Fragment *frags) {
+static void FindLiveEntryRegsToFrags(Fragment * const frags) {
   InitLiveEntryRegsToFrags(frags);
 
   for (bool data_flow_changed = true; data_flow_changed; ) {

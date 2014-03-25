@@ -63,66 +63,9 @@ static uint32_t HashMetaData(HashFunction *hasher,
 }
 }  // namespace
 
-
-#if 0
-// Convert an indirect call into a direct call that jumps to an intermediate
-// block that does an indirect jump. This exists so that the lookup process
-// for the indirect target is done after the stack size change, and so that
-// it can also be instrumented.
-Instruction *BlockFactory::MakeIndirectCall(Instruction *prev_instr,
-                                            Instruction *last_instr,
-                                            driver::Instruction *instr) {
-  auto intermediate_block = new DecodedBasicBlock(cfg,
-       context->AllocateEmptyBlockMetaData());
-  auto target_block = new IndirectBasicBlock(
-      context->AllocateEmptyBlockMetaData());
-  auto decoded_pc = instr->DecodedPC();
-
-  // Pop off instructions that were created as part of the decoding of `instr`.
-  for (auto pop_instr = prev_instr->Next(); pop_instr != last_instr; ) {
-    auto next_instr = prev_instr->Next();
-    intermediate_block->AppendInstruction(Instruction::Unlink(pop_instr));
-    pop_instr = next_instr;
-  }
-
-  // Add in the indirect jump.
-  auto func = [&] (Operand *op) {
-    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      intermediate_block->AppendInstruction(
-          lir::IndirectJump(target_block, *mloc));
-    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
-      intermediate_block->AppendInstruction(
-          lir::IndirectJump(target_block, *rloc));
-    } else {
-      GRANARY_ASSERT(false);
-    }
-  };
-
-  instr->WithBranchTargetOperand(std::cref(func));
-
-  // Make sure this indirect jump looks like an application instruction.
-  auto jump = DynamicCast<ControlFlowInstruction *>(
-      intermediate_block->LastInstruction()->Previous());
-  jump->MakeAppInstruction(decoded_pc);
-
-  return lir::Call(intermediate_block).release();
-}
-#endif
-
 // Convert a decoded instruction into the internal Granary instruction IR.
-Instruction *BlockFactory::MakeInstruction(Instruction *prev_instr,
-                                           Instruction *last_instr,
-                                           driver::Instruction *instr) {
+Instruction *BlockFactory::MakeInstruction(driver::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
-#if 0
-    if (instr->IsFunctionCall()) {  // Indirect call.
-      return MakeIndirectCall(prev_instr, last_instr, instr);
-
-    } else
-#endif
-    GRANARY_UNUSED(prev_instr);
-    GRANARY_UNUSED(last_instr);
-
     if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
       return new ControlFlowInstruction(
           instr,
@@ -163,8 +106,7 @@ void BlockFactory::AddFallThroughInstruction(
     if (!decoder->Decode(block, &dinstr, pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
-      block->AppendInstruction(std::unique_ptr<Instruction>(
-          MakeInstruction(nullptr, nullptr, &dinstr)));
+      block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
       block->AppendInstruction(lir::Jump(this, pc));
     }
@@ -175,19 +117,17 @@ void BlockFactory::AddFallThroughInstruction(
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto pc = block->StartAppPC();
-  auto last_instr = block->LastInstruction();
   driver::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
     auto decoded_pc = pc;
     driver::Instruction dinstr;
-    auto prev_instr = last_instr->Previous();
     if (!decoder.DecodeNext(block, &dinstr, &pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
-    instr = MakeInstruction(prev_instr, last_instr, &dinstr);
-    block->AppendInstruction(std::unique_ptr<Instruction>(instr));
+    instr = MakeInstruction(&dinstr);
+    block->UnsafeAppendInstruction(instr);
     context->AnnotateInstruction(instr);
   } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(&decoder, block, instr, pc);

@@ -8,17 +8,6 @@
 
 namespace granary {
 
-// Get a virtual register out of an operand.
-VirtualRegister GetRegister(const Operand *op) {
-  VirtualRegister vr;
-  if (auto reg = DynamicCast<RegisterOperand *>(op)) {
-    vr = reg->Register();
-  } else if (auto mem = DynamicCast<MemoryOperand *>(op)) {
-    mem->MatchRegister(vr);
-  }
-  return vr;
-}
-
 // Initialize the register tracker.
 RegisterUsageTracker::RegisterUsageTracker(void) {
   ReviveAll();
@@ -27,15 +16,23 @@ RegisterUsageTracker::RegisterUsageTracker(void) {
 // Update this register tracker by visiting the operands of an instruction.
 void RegisterUsageTracker::Visit(NativeInstruction *instr) {
   instr->ForEachOperand([=] (Operand *op) {
-    const auto reg = GetRegister(op);
-    if (reg.IsNative() && reg.IsGeneralPurpose()) {
-      auto num = reg.Number();
-      if (op->IsRead() || op->IsConditionalWrite()) {
-        Revive(num);  // Read, read/write, and conditional write.
-      } else if (op->IsWrite()) {  // Write-only.
-        Set(static_cast<unsigned>(num), reg.PreservesBytesOnWrite());
+    // All registers participating in a memory operand are reads, because
+    // they are used to compute the effective address of the memory operand.
+    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
+      VirtualRegister r1, r2, r3;
+      mloc->CountMatchedRegisters({&r1, &r2, &r3});
+      Revive(r1);
+      Revive(r2);
+      Revive(r3);
+    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
+      auto reg = rloc->Register();
+      if (reg.IsNative() && reg.IsGeneralPurpose()) {
+        if (op->IsRead() || op->IsConditionalWrite()) {
+          Revive(reg);  // Read, read/write, and conditional write.
+        } else if (op->IsWrite()) {  // Write-only.
+          WriteKill(reg);
+        }
       }
-      GRANARY_UNUSED(num);
     }
   });
 }

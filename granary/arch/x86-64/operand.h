@@ -32,7 +32,8 @@ class Operand : public OperandInterface {
         width(0),
         rw(XED_OPERAND_ACTION_INVALID),
         is_sticky(false),
-        is_explicit(false) {}
+        is_explicit(false),
+        is_compound(false) {}
 
   Operand(const Operand &op);
 
@@ -125,8 +126,8 @@ class Operand : public OperandInterface {
   // This is an explicit operand.
   bool is_explicit:1;
 
-  // This is a compressed memory operand (base/displacement).
-  bool is_compressed;
+  // This is a compound memory operand (base/displacement).
+  bool is_compound;
 
 } __attribute__((packed));
 

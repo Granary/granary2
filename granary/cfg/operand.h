@@ -6,6 +6,7 @@
 #include "granary/base/cast.h"
 #include "granary/base/container.h"
 #include "granary/base/string.h"
+#include "granary/base/type_trait.h"
 
 #include "granary/code/register.h"
 
@@ -173,6 +174,14 @@ class MemoryOperand : public Operand {
   // Note: This has a driver-specific implementation.
   MemoryOperand(const void *ptr, int num_bits);
 
+  // Returns true if this is a compound memory operation. Compound memory
+  // operations can have multiple smaller operands (e.g. registers) inside of
+  // them. An example of a compound memory operand is a `base + index * scale`
+  // (i.e. base/displacement) operand on x86.
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsCompound(void) const;
+
   virtual ~MemoryOperand(void) = default;
 
   // Try to match this memory operand as a pointer value.
@@ -185,6 +194,14 @@ class MemoryOperand : public Operand {
   //
   // Note: This has a driver-specific implementation.
   bool MatchRegister(VirtualRegister &reg) const;
+
+  // Try to match several registers from the memory operand. This is applicable
+  // when this is a compound memory operand, e.g. `base + index * scale`. This
+  // also works when the memory operand is not compound.
+  //
+  // Note: This has a driver-specific implementation.
+  size_t CountMatchedRegisters(
+      std::initializer_list<VirtualRegister *> regs) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, MemoryOperand)
 };
@@ -201,7 +218,7 @@ class RegisterOperand : public Operand {
   // Initialize a new register operand from a virtual register.
   //
   // Note: This has a driver-specific implementation.
-  explicit RegisterOperand(const VirtualRegister &reg);
+  explicit RegisterOperand(const VirtualRegister reg);
 
   virtual ~RegisterOperand(void) = default;
 

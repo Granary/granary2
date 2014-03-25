@@ -258,6 +258,14 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   // Add a new instruction to the end of the instruction list.
   void AppendInstruction(std::unique_ptr<Instruction> instr);
 
+  // Add a new instruction to the beginning of the instruction list.
+  GRANARY_INTERNAL_DEFINITION
+  void UnsafePrependInstruction(Instruction *instr);
+
+  // Add a new instruction to the end of the instruction list.
+  GRANARY_INTERNAL_DEFINITION
+  void UnsafeAppendInstruction(Instruction *instr);
+
  private:
   friend class LocalControlFlowGraph;
 

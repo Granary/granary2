@@ -148,9 +148,6 @@ union VirtualRegister {
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
 
-// Get a virtual register out of an operand.
-VirtualRegister GetRegister(const Operand *op);
-
 // A class that tracks live, general purpose architectural registers within a
 // straight-line sequence of instructions.
 class RegisterUsageTracker
@@ -177,6 +174,26 @@ class RegisterUsageTracker
     Set(static_cast<unsigned>(num), false);
   }
 
+  // Kill a specific register.
+  inline void Kill(VirtualRegister reg) {
+    if (reg.IsNative() && reg.IsGeneralPurpose()) {
+      Kill(reg.Number());
+    }
+  }
+
+  // Kill a specific register, where we treat this register is being part of
+  // a write. This takes into account the fact that two or more registers might
+  // alias the same data.
+  inline void WriteKill(VirtualRegister reg) {
+    if (reg.IsNative() && reg.IsGeneralPurpose()) {
+      if (reg.PreservesBytesOnWrite()) {
+        Revive(reg.Number());
+      } else {
+        Kill(reg.Number());
+      }
+    }
+  }
+
   // Returns true if a register is dead.
   inline bool IsDead(int num) const {
     return !Get(static_cast<unsigned>(num));
@@ -185,6 +202,13 @@ class RegisterUsageTracker
   // Revive a specific register.
   inline void Revive(int num) {
     Set(static_cast<unsigned>(num), true);
+  }
+
+  // Kill a specific register.
+  inline void Revive(VirtualRegister reg) {
+    if (reg.IsNative() && reg.IsGeneralPurpose()) {
+      Revive(reg.Number());
+    }
   }
 
   // Returns true if a register is live.
@@ -206,8 +230,6 @@ class RegisterUsageTracker
     }
     return *this;
   }
-
- private:
 };
 
 }  // namespace granary

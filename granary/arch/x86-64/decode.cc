@@ -273,7 +273,7 @@ static void ConverMemoryOperand(Instruction *instr, Operand *instr_op,
   instr_op->mem.scale = static_cast<uint8_t>(scale);
   instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
-  instr_op->is_compressed = true;
+  instr_op->is_compound = true;
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually

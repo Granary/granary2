@@ -176,6 +176,16 @@ void DecodedBasicBlock::AppendInstruction(std::unique_ptr<Instruction> instr) {
   LastInstruction()->InsertBefore(std::move(instr));
 }
 
+// Add a new instruction to the beginning of the instruction list.
+void DecodedBasicBlock::UnsafePrependInstruction(Instruction *instr) {
+  PrependInstruction(std::move(std::unique_ptr<Instruction>(instr)));
+}
+
+// Add a new instruction to the end of the instruction list.
+void DecodedBasicBlock::UnsafeAppendInstruction(Instruction *instr) {
+  AppendInstruction(std::move(std::unique_ptr<Instruction>(instr)));
+}
+
 // Free all of the instructions in the basic block. This is invoked by
 // LocalControlFlowGraph::~LocalControlFlowGraph, as the freeing of instructions
 // interacts with the ownership model of basic blocks inside of basic block
