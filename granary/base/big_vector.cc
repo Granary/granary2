@@ -48,10 +48,8 @@ BigVectorImpl::BigVectorImpl(size_t align_, size_t size_)
       next_slab(&slabs),
       align(align_),
       size(size_) {
-
   auto begin = GRANARY_ALIGN_TO(sizeof(BigVectorSlab), align);
   auto remaining = arch::PAGE_SIZE_BYTES - begin;
-
   num_objs_per_slab = remaining / size;
 }
 

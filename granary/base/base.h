@@ -64,6 +64,12 @@
 # define GRANARY_ASSERT(...)
 #endif
 
+#ifdef GRANARY_ARCH_INTERNAL
+# define GRANARY_ARCH_PUBLIC public
+#else
+# define GRANARY_ARCH_PUBLIC private
+#endif
+
 // Marks some pointers as being internal, and convertible to void for exports.
 #ifdef GRANARY_INTERNAL
 # define GRANARY_MUTABLE mutable

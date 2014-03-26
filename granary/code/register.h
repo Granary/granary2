@@ -52,7 +52,7 @@ union VirtualRegister {
 
   // Convert an architectural register into a virtual register.
   //
-  // Note: This has a driver-specific implementation. See
+  // Note: This has a architecture-specific implementation. See
   //       `granary/arch/*/register.cc` for the implementation.
   void DecodeFromNative(int arch_reg_id);
 
@@ -65,6 +65,8 @@ union VirtualRegister {
   }
 
   // Convert a virtual register into its associated architectural register.
+  //
+  // Note: This has an architecture-specific implementation.
   int EncodeToNative(void) const;
 
   // Return the width (in bits) of this register.
@@ -100,18 +102,21 @@ union VirtualRegister {
 
   // Is this the stack pointer?
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has an architecture-specific implementation.
   bool IsStackPointer(void) const;
 
   // Is this the instruction pointer?
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has an architecture-specific implementation.
   bool IsInstructionPointer(void) const;
 
   // Returns this register's internal number.
   inline int Number(void) const {
     return static_cast<int>(reg_num);
   }
+
+  // Widen this virtual register to a specific bit width.
+  void Widen(int dest_byte_width);
 
  private:
   struct {
@@ -155,6 +160,10 @@ class RegisterUsageTracker
  public:
   // Initialize the register tracker.
   RegisterUsageTracker(void);
+
+  RegisterUsageTracker(const RegisterUsageTracker &that) {
+    Copy(that);
+  }
 
   // Update this register tracker by visiting the operands of an instruction.
   void Visit(NativeInstruction *instr);
@@ -217,8 +226,16 @@ class RegisterUsageTracker
   }
 
   // Union some other live register set with the current live register set.
-  // Returns true if there was a change in the set of live registers.
+  // Returns true if there was a change in the set of live registers. This is
+  // useful when we want to be conservative about the potentially live
+  // registers out of a specific block.
   bool Union(const RegisterUsageTracker &that);
+
+  // Intersect some other live register set with the current live register set.
+  // Returns true if there was a change in the set of live registers. This is
+  // useful when we want to be conservative about the potentially dead registers
+  // out of a specific block.
+  bool Intersect(const RegisterUsageTracker &that);
 
   // Returns true if two register usage tracker sets are equivalent.
   bool Equals(const RegisterUsageTracker &that) const;

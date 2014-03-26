@@ -89,7 +89,16 @@ class Fragment {
 
   // Which physical registers are live on entry to and exit from this block.
   RegisterUsageTracker entry_regs_live;
+
+  // Live registers on exit, but where we're being conservative about the set
+  // of live registers (i.e. if a register is live in any successor, then treat
+  // it as live).
   RegisterUsageTracker exit_regs_live;
+
+  // Live registers on exit, but where we're being conservative about the set
+  // of dead registers (i.e. if a register is dead in any successor, then treat
+  // it as dead).
+  RegisterUsageTracker exit_regs_dead;
 
  private:
   friend class FragmentBuilder;
@@ -105,7 +114,10 @@ class Fragment {
   })
 
   // Append an instruction into the fragment.
-  void Append(std::unique_ptr<Instruction> instr);
+  void AppendInstruction(std::unique_ptr<Instruction> instr);
+
+  // Remove an instruction.
+  std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
 };
 
 typedef LinkedListIterator<Fragment> FragmentIterator;

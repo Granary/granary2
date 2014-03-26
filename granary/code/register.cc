@@ -3,10 +3,21 @@
 #define GRANARY_INTERNAL
 
 #include "granary/cfg/instruction.h"
-
 #include "granary/code/register.h"
+#include "granary/breakpoint.h"
 
 namespace granary {
+
+// Widen this virtual register to a specific bit width.
+void VirtualRegister::Widen(int dest_byte_width) {
+  switch (dest_byte_width) {
+    case 1: num_bytes = 1; return;
+    case 2: num_bytes = 2; return;
+    case 4: num_bytes = 4; return;
+    case 8: num_bytes = 5; return;
+    default: GRANARY_ASSERT(false);
+  }
+}
 
 // Initialize the register tracker.
 RegisterUsageTracker::RegisterUsageTracker(void) {
@@ -15,6 +26,9 @@ RegisterUsageTracker::RegisterUsageTracker(void) {
 
 // Update this register tracker by visiting the operands of an instruction.
 void RegisterUsageTracker::Visit(NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) {
+    return;
+  }
   instr->ForEachOperand([=] (Operand *op) {
     // All registers participating in a memory operand are reads, because
     // they are used to compute the effective address of the memory operand.
@@ -38,11 +52,27 @@ void RegisterUsageTracker::Visit(NativeInstruction *instr) {
 }
 
 // Union some other live register set with the current live register set.
-// Returns true if there was a change in the set of live registers.
+// Returns true if there was a change in the set of live registers. This is
+// useful when we want to be conservative about the potentially live
+// registers out of a specific block.
 bool RegisterUsageTracker::Union(const RegisterUsageTracker &that) {
   bool changed = false;
   for (size_t i = 0; i < sizeof storage; ++i) {
     uint8_t new_byte = storage[i] | that.storage[i];
+    changed = changed || new_byte != storage[i];
+    storage[i] = new_byte;
+  }
+  return changed;
+}
+
+// Intersect some other live register set with the current live register set.
+// Returns true if there was a change in the set of live registers. This is
+// useful when we want to be conservative about the potentially dead registers
+// out of a specific block.
+bool RegisterUsageTracker::Intersect(const RegisterUsageTracker &that) {
+  bool changed = false;
+  for (size_t i = 0; i < sizeof storage; ++i) {
+    uint8_t new_byte = storage[i] & that.storage[i];
     changed = changed || new_byte != storage[i];
     storage[i] = new_byte;
   }

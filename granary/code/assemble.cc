@@ -11,6 +11,8 @@
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_find_live_arch_registers.h"
 #include "granary/code/assemble/4_partition_fragments.h"
+#include "granary/code/assemble/5_add_partition_entry_exit_fragments.h"
+#include "granary/code/assemble/6_schedule_registers.h"
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -24,50 +26,7 @@ namespace granary {
 namespace {
 
 #if 0
-// Info tracker about an individual virtual register.
-class VirtualRegisterInfo {
- public:
-  /*
-  bool used_after_change_sp:1;
-  bool used_after_change_ip:1;
-  bool defines_constant:1;
-  bool used_as_address:1;
-  bool depends_on_sp:1;
-  */
 
-  unsigned num_defs;
-  unsigned num_uses;
-
-  // This is fairly rough constraint. This only really meaningful for introduced
-  // `LEA` instructions that defined virtual registers as a combination of
-  // several other non-virtual registers.
-  RegisterUsageTracker depends_on;
-
-} __attribute__((packed));
-
-// Table that records all info about virtual register usage.
-class VirtualRegisterTable {
- public:
-  void Visit(NativeInstruction *instr) {
-    instr->ForEachOperand([] (Operand *op) {
-      const auto reg_op = DynamicCast<const RegisterOperand *>(op);
-      if (!reg_op || !reg_op->IsVirtual()) {
-        return;
-      }
-      const auto reg = reg_op->Register();
-      auto &reg_info(regs[reg.Number()]);
-      if (reg_op->IsRead() || reg_op->IsConditionalWrite()) {
-        ++reg_info.num_uses;
-      }
-      if (reg_op->IsWrite()) {
-        ++reg_info.num_defs;
-      }
-    });
-  }
-
- private:
-  BigVector<VirtualRegisterInfo> regs;
-};
 #endif
 
 }  // namespace
@@ -95,6 +54,9 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
   PartitionFragmentsByStackUse(frags);
+
+  // Schedule the virtual registers.
+  ScheduleVirtualRegisters(frags);
 
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, frags);

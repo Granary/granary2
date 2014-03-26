@@ -33,7 +33,7 @@ Instruction *Instruction::Previous(void) {
 }
 
 // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-uintptr_t Instruction::GetMetaData(void) const {
+uintptr_t Instruction::MetaData(void) const {
   return transient_meta;
 }
 

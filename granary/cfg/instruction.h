@@ -62,15 +62,15 @@ class Instruction {
     typename T,
     typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
   >
-  T GetMetaData(void) const {
+  T MetaData(void) const {
     static_assert(sizeof(T) == sizeof(uintptr_t),
         "Transient meta-data type is too big. Client tools can only store "
         "a pointer-sized object as meta-data inside of an instruction.");
-    return UnsafeCast<T>(GetMetaData());
+    return UnsafeCast<T>(MetaData());
   }
 
   // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-  uintptr_t GetMetaData(void) const;
+  uintptr_t MetaData(void) const;
 
   // Set the transient, tool-specific instruction meta-data as an arbitrary,
   // `uintptr_t`-sized type.
@@ -281,7 +281,7 @@ class NativeInstruction : public Instruction {
     ALIGNMENT = 1
   })
 
- protected:
+ GRANARY_ARCH_PUBLIC:
   GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
 
  private:

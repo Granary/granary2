@@ -48,12 +48,28 @@ static void InitLiveEntryRegsToFrags(Fragment * const frags) {
   }
 }
 
+// Find dead registers on exit of a fragment. This information is used in a
+// later stage, when we're looking at definitions of virtual registers based on
+// physical registers, to see if the physical registers have changed before they
+// are used.
+static void FindDeadExitRegsFromFrag(Fragment * const frags) {
+  for (auto frag : FragmentIterator(frags)) {
+    frag->exit_regs_dead.ReviveAll();
+    if (frag->fall_through_target) {
+      frag->exit_regs_dead.Intersect(
+          frag->fall_through_target->entry_regs_live);
+    }
+    if (frag->branch_target) {
+      frag->exit_regs_dead.Intersect(frag->branch_target->entry_regs_live);
+    }
+  }
+}
+
 }  // namespace
 
 // Calculate the live registers on entry to every fragment.
 void FindLiveEntryRegsToFrags(Fragment * const frags) {
   InitLiveEntryRegsToFrags(frags);
-
   for (bool data_flow_changed = true; data_flow_changed; ) {
     data_flow_changed = false;
     for (auto frag : FragmentIterator(frags)) {
@@ -77,6 +93,7 @@ void FindLiveEntryRegsToFrags(Fragment * const frags) {
       }
     }
   }
+  FindDeadExitRegsFromFrag(frags);
 }
 
 

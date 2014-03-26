@@ -51,24 +51,24 @@ class BigVectorImpl {
 // backing addresses of elements, so taking a pointer of an element is a
 // valid operation.
 //
-// This is only for plain-old-data types or data types with trivial constructors
-// and data-structures. The assumption is that zero-initialization is sufficient
-// to initialize an instance of the type `T`.
+// Note: This is only for plain-old-data types or data types with trivial
+//       constructors and data-structures. The assumption is that zero-
+//       initialization is sufficient to initialize an instance of the type `T`.
 template <typename T>
 class BigVector : protected detail::BigVectorImpl {
  public:
-  static_assert(std::is_pod<T>() ||
-                (std::has_trivial_default_constructor<T>() &&
-                 std::is_trivially_destructible<T>()),
-      "`BigVector<T>` is only applicable to PODs or trivially constructible "
-      "and destructible objects that are assumed to be zero-initializable.");
-
   inline BigVector(void)
       : detail::BigVectorImpl(alignof(T), sizeof(T)) {}
 
   // Access the element at index `index`.
   inline T &operator[](size_t index) {
     return *reinterpret_cast<T *>(FindObjectPointer(index));
+  }
+
+  // Access the element at index `index`.
+  inline T &operator[](int index) {
+    return *reinterpret_cast<T *>(
+        FindObjectPointer(static_cast<size_t>(index)));
   }
 
  private:

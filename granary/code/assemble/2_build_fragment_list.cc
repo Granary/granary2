@@ -9,33 +9,9 @@
 #include "granary/code/assemble/fragment.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 
+#include "granary/util.h"
+
 namespace granary {
-
-// Initialize the fragment from a basic block.
-Fragment::Fragment(int id_)
-    : fall_through_target(nullptr),
-      branch_target(nullptr),
-      branch_instr(nullptr),
-      next(nullptr),
-      id(id_),
-      is_decoded_block_head(false),
-      is_future_block_head(false),
-      is_exit(false),
-      writes_to_stack_pointer(false),
-      reads_from_stack_pointer(false),
-      partition_id(0),
-      block_meta(nullptr),
-      first(nullptr),
-      last(nullptr) {}
-
-// Append an instruction into the fragment.
-void Fragment::Append(std::unique_ptr<Instruction> instr) {
-  if (last) {
-    last = last->InsertAfter(std::move(instr));
-  } else {
-    last = first = instr.release();
-  }
-}
 
 // Wraps up state that is used to build fragments.
 class FragmentBuilder {
@@ -49,15 +25,15 @@ class FragmentBuilder {
   // Get the list of fragments associated with a basic block.
   Fragment *FragmentForBlock(DecodedBasicBlock *block) {
     auto first_instr = block->FirstInstruction();
-    Fragment *frag = first_instr->GetMetaData<Fragment *>();
+    Fragment *frag = GetMetaData<Fragment *>(first_instr);
     if (!frag) {
       auto label = new LabelInstruction;
       frag = MakeFragment();
       frag->block_meta = block->MetaData();
       frag->is_decoded_block_head = true;
       frag->first = frag->last = label;
-      label->SetMetaData<Fragment *>(frag);
-      first_instr->SetMetaData<Fragment *>(frag);
+      SetMetaData(label, frag);
+      SetMetaData(first_instr, frag);
       ExtendFragment(frag, block, first_instr->Next());
     }
     return frag;
@@ -105,15 +81,15 @@ class FragmentBuilder {
                                    LabelInstruction *label) {
     auto frag = MakeFragment();
     frag->block_meta = block->MetaData();
-    frag->Append(label->UnsafeUnlink());
-    label->SetMetaData<Fragment *>(frag);
+    frag->AppendInstruction(label->UnsafeUnlink());
+    SetMetaData(label, frag);
     return frag;
   }
 
   // Get or make the fragment starting at a label.
   Fragment *GetOrMakeLabelFragment(DecodedBasicBlock *block,
                                    LabelInstruction *label) {
-    Fragment *frag = label->GetMetaData<Fragment *>();
+    Fragment *frag = GetMetaData<Fragment *>(label);
     if (!frag) {
       auto next = label->Next();
       frag = MakeEmptyLabelFragment(block, label);
@@ -129,7 +105,7 @@ class FragmentBuilder {
   // add the instructions following the label into the new fragment.
   void SplitFragmentAtLabel(Fragment *frag, DecodedBasicBlock *block,
                             Instruction *instr) {
-    Fragment *label_fragment = instr->GetMetaData<Fragment *>();
+    Fragment *label_fragment = GetMetaData<Fragment *>(instr);
     if (label_fragment) {  // Already processed this fragment.
       frag->fall_through_target = label_fragment;
     } else {
@@ -149,7 +125,7 @@ class FragmentBuilder {
     auto branch = DynamicCast<BranchInstruction *>(instr);
     auto label = branch->TargetInstruction();
     auto next = instr->Next();
-    frag->Append(std::move(instr->UnsafeUnlink()));
+    frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
     frag->branch_target = GetOrMakeLabelFragment(block, label);
     frag->branch_instr = branch;
     if (branch->IsConditionalJump()) {
@@ -202,7 +178,7 @@ class FragmentBuilder {
                           !cfi->HasIndirectTarget();
 
     if (!is_direct_jump) {
-      frag->Append(std::move(instr->UnsafeUnlink()));
+      frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
       frag->branch_instr = cfi;
       frag->branch_target = FragmentForTargetBlock(target_block);
 
@@ -228,7 +204,7 @@ class FragmentBuilder {
         auto label = new LabelInstruction;
         frag->fall_through_target = MakeEmptyLabelFragment(block, label);
         frag = frag->fall_through_target;
-        label->SetMetaData<Fragment *>(frag);
+        SetMetaData(label, frag);
         ExtendFragment(frag, block, next);
       }
     }
@@ -240,7 +216,7 @@ class FragmentBuilder {
     auto label = new LabelInstruction;
     frag->fall_through_target = MakeEmptyLabelFragment(block, label);
     frag = frag->fall_through_target;
-    label->SetMetaData<Fragment *>(frag);
+    SetMetaData<Fragment *>(label, frag);
     ExtendFragment(frag, block, next);
   }
 
@@ -266,7 +242,7 @@ class FragmentBuilder {
       } else {
         // Extend block with this instruction and move to the next instruction.
         auto next = instr->Next();
-        frag->Append(std::move(instr->UnsafeUnlink()));
+        frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
 
         // Break this fragment if it changes the stack pointer.
         auto ninstr = DynamicCast<NativeInstruction *>(instr);
