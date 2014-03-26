@@ -65,14 +65,26 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Instruction *instr) {
   for (auto &op : instr->ops) {
     if (!op.is_explicit || XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
       break;
-    } else if (XED_ENCODER_OPERAND_TYPE_MEM != op.type || !op.is_compound ||
-               op.is_sticky) {
+    } else if (XED_ENCODER_OPERAND_TYPE_MEM != op.type || !op.is_compound) {
       continue;
     }
-    auto mem_reg = block->AllocateVirtualRegister();
-    APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
-    op.is_compound = false;
-    op.reg = mem_reg;
+
+    // All built-in memory operands, other than `XLAT`, a simple dereferences
+    // of a single base register. We will convert most into non-compound
+    // operands to make them easier to manipulate from the instrumentation
+    // side of things.
+    if (op.is_sticky) {
+      if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index &&
+          XED_REG_RSP != op.mem.reg_base) {
+        op.is_compound = false;
+        op.reg.DecodeFromNative(static_cast<int>(op.mem.reg_base));
+      }
+    } else {
+      auto mem_reg = block->AllocateVirtualRegister();
+      APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
+      op.is_compound = false;
+      op.reg = mem_reg;
+    }
   }
 }
 
@@ -107,6 +119,9 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
 // another copy (located just below [on the stack] the copy being overwritten).
 //
 // See `arch/x86/kernel/entry_64.S` in the Linux kernel source code.
+//
+// TODO(pag): This mangling wouldn't actually work for `repeat_nmi` because its
+//            `PUSH`es could overwrite some important data.
 static void ManglePushFromRedZone(DecodedBasicBlock *block, Instruction *instr,
                                   Operand op) {
   auto decoded_pc = instr->decoded_pc;
@@ -221,6 +236,20 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   }
 }
 
+// Mangle an `XLAT` instruction to use virtual registers. This is to avoid the
+// issue where `XLAT` is really the only instruction where two differently sized
+// registers are used as a base and index register.
+static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  auto addr = block->AllocateVirtualRegister();
+  auto decoded_pc = instr->decoded_pc;
+  APP(MOVZX_GPRv_GPR8(&ni, addr, XED_REG_AL));
+  APP(LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX));
+  MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
+  instr->decoded_pc = decoded_pc;
+  instr->ops[1].width = 8;
+}
+
 }  // namespace
 
 // Perform "early" mangling of some instructions. This is primary to make the
@@ -240,6 +269,8 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr) {
       return ManglePushMemOp(block, instr);
     case XED_ICLASS_POP:
       return ManglePopMemOp(block, instr);
+    case XED_ICLASS_XLAT:
+      return MangleXLAT(block, instr);
     default:
       return MangleExplicitMemOp(block, instr);
   }

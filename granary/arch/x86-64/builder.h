@@ -147,6 +147,16 @@ inline static void LEA_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1) {
   RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
 
+// Custom LEA instruction builder for source register operands. This is like
+// doing `dest = src1 + src2`.
+template <typename A0, typename A1, typename A2>
+inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC, 3);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
+  RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
+}
+
 // Custom LEA instruction builder for source immediate operands.
 template <typename A0, typename A1>
 inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {

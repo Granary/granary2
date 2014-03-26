@@ -21,7 +21,7 @@ DEFINE_FUNC(granary_test_mangle)
 
     lea -0x8(%rsp), %rax;
     mov %rax, 0x8(%rbp);
-
+    xlat;
     mov $0, %rax;
 
 .Lloop_call_through_stack:

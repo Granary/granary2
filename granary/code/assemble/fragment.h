@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_CODE_FRAGMENT_H_
-#define GRANARY_CODE_FRAGMENT_H_
+#ifndef GRANARY_CODE_ASSEMBLE_FRAGMENT_H_
+#define GRANARY_CODE_ASSEMBLE_FRAGMENT_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -50,7 +50,7 @@ class Fragment {
   const int id;
 
   // Is this block the first fragment in a decoded basic block?
-  bool is_block_head:1;
+  bool is_decoded_block_head:1;
 
   // Is this a future basic block?
   bool is_future_block_head:1;
@@ -69,6 +69,7 @@ class Fragment {
   // Identifier of a "stack region". This is a very coarse grained concept,
   // where we color fragments according to:
   //    -N:   The stack pointer doesn't point to a valid stack.
+  //    0:    We don't know yet.
   //    N:    The stack pointer points to some valid stack.
   //
   // The numbering partitions fragments into two coarse grained groups:
@@ -77,7 +78,7 @@ class Fragment {
   // finer-grained colors based, where two or more fragments have the same
   // color if they are connected through control flow, and if there are no
   // changes to the stack pointer within the basic blocks.
-  int stack_id;
+  int partition_id;
 
   // Source basic block info.
   BlockMetaData *block_meta;
@@ -86,7 +87,7 @@ class Fragment {
   Instruction *first;
   Instruction *last;
 
-  // Which physical registers are live on entry to this block.
+  // Which physical registers are live on entry to and exit from this block.
   RegisterUsageTracker entry_regs_live;
   RegisterUsageTracker exit_regs_live;
 
@@ -109,9 +110,6 @@ class Fragment {
 
 typedef LinkedListIterator<Fragment> FragmentIterator;
 
-// Build a fragment list out of a set of basic blocks.
-Fragment *BuildFragmentList(LocalControlFlowGraph *cfg);
-
 }  // namespace granary
 
-#endif  // GRANARY_CODE_FRAGMENT_H_
+#endif  // GRANARY_CODE_ASSEMBLE_FRAGMENT_H_

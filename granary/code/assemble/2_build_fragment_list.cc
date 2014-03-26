@@ -6,7 +6,8 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/fragment.h"
+#include "granary/code/assemble/fragment.h"
+#include "granary/code/assemble/2_build_fragment_list.h"
 
 namespace granary {
 
@@ -17,12 +18,12 @@ Fragment::Fragment(int id_)
       branch_instr(nullptr),
       next(nullptr),
       id(id_),
-      is_block_head(false),
+      is_decoded_block_head(false),
       is_future_block_head(false),
       is_exit(false),
       writes_to_stack_pointer(false),
       reads_from_stack_pointer(false),
-      stack_id(0),
+      partition_id(0),
       block_meta(nullptr),
       first(nullptr),
       last(nullptr) {}
@@ -53,7 +54,7 @@ class FragmentBuilder {
       auto label = new LabelInstruction;
       frag = MakeFragment();
       frag->block_meta = block->MetaData();
-      frag->is_block_head = true;
+      frag->is_decoded_block_head = true;
       frag->first = frag->last = label;
       label->SetMetaData<Fragment *>(frag);
       first_instr->SetMetaData<Fragment *>(frag);
@@ -287,31 +288,6 @@ class FragmentBuilder {
   Fragment *first;
   Fragment **next_frag;
 };
-
-// Build a fragment for a
-//static Fragment *BuildFragment(BasicBlock *block, int *num_fragments) {
-
-  // In case of direct block, every edge to the same direct block *still* need
-  // separate fragments (which are the edge code!). Each edge goes to a new
-  // future fragment.
-
-  // In the case of a function call, we can split the fragment into two around
-  // the call into an intermediate fragment that goes to the fall-through jump,
-  // and the intermediate fragment encodes the ABI return constraints that
-  // are present immediately after the call.
-  //      --> TODO is this a good idea?
-
-  // In the case of an indirect block, the fragment can contain to code for
-  // resolving the branch, all using virtual regs.
-
-  // In case of a native basic block, we can jump to a fragment with fixed
-  // incoming homing constraints, and the block is empty, because the jump/call
-  // is all that was needed.
-
-  // In the case of a cached basic block, we import its constraints into the
-  // target block.
-//}
-
 
 // Build a fragment list out of a set of basic blocks.
 Fragment *BuildFragmentList(LocalControlFlowGraph *cfg) {

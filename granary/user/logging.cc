@@ -16,6 +16,7 @@ static int OUTPUT_FD[] = {
     2,  // LogWarning
     2,  // LogError
     2,  // LogFatalError
+    2,  // LogDebug
     -1
 };
 
