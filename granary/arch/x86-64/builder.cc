@@ -60,6 +60,10 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
       instr->ops[i].is_sticky = true;
     }
   }
+
+  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == iclass)) {
+    instr->ops[1].is_effective_address = true;
+  }
 }
 
 // Add this register as an operand to the instruction `instr`.
@@ -91,17 +95,26 @@ void ImmediateBuilder::Build(Instruction *instr) {
 
 // Add this memory as an operand to the instruction `instr`.
 void MemoryBuilder::Build(Instruction *instr) {
-  auto &op(instr->ops[instr->num_ops++]);
-  if (is_ptr) {
-    op.type = XED_ENCODER_OPERAND_TYPE_PTR;
-    op.addr.as_ptr = ptr;
-  } else {
-    op.type = XED_ENCODER_OPERAND_TYPE_MEM;
-    op.reg = reg;
+  auto &instr_op(instr->ops[instr->num_ops++]);
+  instr_op.width = -1;  // Unknown.
+  instr_op.is_compound = false;
+  instr_op.is_effective_address = false;
+  switch (kind) {
+    case BUILD_POINTER:
+      instr_op.type = XED_ENCODER_OPERAND_TYPE_PTR;
+      instr_op.addr.as_ptr = ptr;
+      break;
+    case BUILD_REGISTER:
+      instr_op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+      instr_op.reg = reg;
+      break;
+    case BUILD_OPERAND:
+      auto is_effective_address = instr_op.is_effective_address;
+      instr_op = op;
+      instr_op.is_effective_address = is_effective_address;
+      break;
   }
-  op.is_compound = false;
-  op.rw = action;
-  op.width = -1;  // Unknown.
+  instr_op.rw = action;
 }
 
 // Add this branch target as an operand to the instruction `instr`.

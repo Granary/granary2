@@ -20,8 +20,8 @@ Fragment::Fragment(int id_)
       is_block_head(false),
       is_future_block_head(false),
       is_exit(false),
-      writes_stack_pointer(false),
-      reads_stack_pointer(false),
+      writes_to_stack_pointer(false),
+      reads_from_stack_pointer(false),
       stack_id(0),
       block_meta(nullptr),
       first(nullptr),
@@ -243,40 +243,6 @@ class FragmentBuilder {
     ExtendFragment(frag, block, next);
   }
 
-  // Returns true if an instruction reads from the stack pointer.
-  bool ReadsFromStackPointer(Instruction *instr) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      RegisterOperand reg1;
-      RegisterOperand reg2;
-      RegisterOperand reg3;
-
-      // TODO(pag): This isn't sufficient for something like `PUSHA` on
-      //            x86.
-      ninstr->MatchOperands(ReadFrom(reg1), ReadFrom(reg2), ReadFrom(reg3));
-      return reg1.Register().IsStackPointer() ||
-             reg2.Register().IsStackPointer() ||
-             reg3.Register().IsStackPointer();
-    }
-    return false;
-  }
-
-  // Returns true if an instruction writes to the stack pointer.
-  bool WritesToStackPointer(Instruction *instr) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      RegisterOperand reg1;
-      RegisterOperand reg2;
-      RegisterOperand reg3;
-
-      // TODO(pag): This isn't sufficient for something like `POPA` on
-      //            x86.
-      ninstr->MatchOperands(WriteTo(reg1), WriteTo(reg2), WriteTo(reg3));
-      return reg1.Register().IsStackPointer() ||
-             reg2.Register().IsStackPointer() ||
-             reg3.Register().IsStackPointer();
-    }
-    return false;
-  }
-
   // Extend a fragment with the instructions from a particular basic block.
   // This might end up generating many more fragments.
   void ExtendFragment(Fragment *frag, DecodedBasicBlock *block,
@@ -302,14 +268,15 @@ class FragmentBuilder {
         frag->Append(std::move(instr->UnsafeUnlink()));
 
         // Break this fragment if it changes the stack pointer.
-        frag->writes_stack_pointer = WritesToStackPointer(instr);
-        if (frag->writes_stack_pointer) {
-          frag->reads_stack_pointer = ReadsFromStackPointer(instr);
+        auto ninstr = DynamicCast<NativeInstruction *>(instr);
+        if (ninstr && ninstr->instruction.WritesToStackPointer()) {
+          frag->writes_to_stack_pointer = true;
+          frag->reads_from_stack_pointer = \
+              ninstr->instruction.ReadsFromStackPointer();
           return SplitFragmentAtStackChange(frag, block, next);
-
-        } else {
-          instr = next;
         }
+
+        instr = next;
       }
     }
   }

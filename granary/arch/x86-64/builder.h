@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
-#define GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
+#ifndef GRANARY_ARCH_X86_64_BUILDER_H_
+#define GRANARY_ARCH_X86_64_BUILDER_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -14,13 +14,10 @@
 
 #include "granary/code/register.h"
 
-#include "granary/arch/x86-64/xed.h"
+#include "granary/arch/x86-64/instruction.h"
 
 namespace granary {
 namespace arch {
-
-// Forward declarations.
-class Instruction;
 
 // Builder for a register operand.
 class RegisterBuilder {
@@ -79,24 +76,26 @@ class MemoryBuilder {
   MemoryBuilder(const MemoryBuilder &that) = default;
   MemoryBuilder(MemoryBuilder &&that) = default;
 
-  inline MemoryBuilder(VirtualRegister reg_,
-                       xed_operand_action_enum_t action_)
+  inline MemoryBuilder(Operand op_, xed_operand_action_enum_t action_)
+      : op(op_),
+        action(action_),
+        kind(BUILD_OPERAND) {}
+
+  inline MemoryBuilder(VirtualRegister reg_, xed_operand_action_enum_t action_)
       : reg(reg_),
         action(action_),
-        is_ptr(false) {}
+        kind(BUILD_REGISTER) {}
 
-  inline MemoryBuilder(xed_reg_enum_t reg_,
-                       xed_operand_action_enum_t action_)
+  inline MemoryBuilder(xed_reg_enum_t reg_, xed_operand_action_enum_t action_)
       : action(action_),
-        is_ptr(false)  {
+        kind(BUILD_REGISTER)  {
     reg.DecodeFromNative(reg_);
   }
 
-  inline MemoryBuilder(const void *ptr_,
-                       xed_operand_action_enum_t action_)
+  inline MemoryBuilder(const void *ptr_, xed_operand_action_enum_t action_)
       : ptr(ptr_),
         action(action_),
-        is_ptr(true)  {}
+        kind(BUILD_POINTER)  {}
 
   // Add this memory as an operand to the instruction `instr`.
   void Build(Instruction *instr);
@@ -105,9 +104,14 @@ class MemoryBuilder {
   union {
     VirtualRegister reg;
     const void *ptr;
+    Operand op;
   };
   xed_operand_action_enum_t action;
-  bool is_ptr;
+  enum {
+    BUILD_POINTER,
+    BUILD_REGISTER,
+    BUILD_OPERAND
+  } kind;
 };
 
 // Builder for a branch target.
@@ -148,7 +152,15 @@ template <typename A0, typename A1>
 inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC, 2);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
-  ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);
+  ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_PTR).Build(instr);
+}
+
+// Custom LEA instruction builder for source immediate operands.
+template <typename A0>
+inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC, 2);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
+  MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
 
 }  // namespace arch
@@ -157,6 +169,4 @@ inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
 // Bring in the auto-generated instruction builder API.
 #include "generated/xed2-intel64/instruction_builder.cc"
 
-
-
-#endif  // GRANARY_DRIVER_XED2_INTEL64_BUILDER_H_
+#endif  // GRANARY_ARCH_X86_64_BUILDER_H_

@@ -1,8 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 
-#ifndef GRANARY_DRIVER_OPERAND_H_
-#define GRANARY_DRIVER_OPERAND_H_
+#ifndef GRANARY_ARCH_OPERAND_H_
+#define GRANARY_ARCH_OPERAND_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -35,4 +35,4 @@ class OperandInterface {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_OPERAND_H_
+#endif  // GRANARY_ARCH_OPERAND_H_

@@ -300,7 +300,7 @@ class FragmentColorer {
   // Initialize the fragment coloring.
   void InitColoring(Fragment *frags) {
     for (auto frag : FragmentIterator(frags)) {
-      if (frag->reads_stack_pointer) {  // Reads & writes the stack pointer.
+      if (frag->reads_from_stack_pointer) {  // Reads & writes the stack pointer.
         MarkAsValid(frag);
       } else if (frag->block_meta && frag->is_exit) {
         ColorFragmentByMetaData(frag, frags);
@@ -332,7 +332,7 @@ class FragmentColorer {
       changed = false;
       for (auto frag : FragmentIterator(frags)) {
         if (!frag->stack_id &&
-            !frag->writes_stack_pointer &&
+            !frag->writes_to_stack_pointer &&
             frag->fall_through_target &&
             frag->fall_through_target->stack_id) {
           changed = PropagateColor(frag->fall_through_target, frag) || changed;
@@ -349,7 +349,7 @@ class FragmentColorer {
     for (auto changed = true; changed; ) {
       changed = false;
       for (auto frag : FragmentIterator(frags)) {
-        if (!frag->stack_id || frag->writes_stack_pointer) {
+        if (!frag->stack_id || frag->writes_to_stack_pointer) {
           continue;
         }
         changed = PropagateColor(frag, frag->branch_target) || changed;

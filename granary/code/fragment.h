@@ -63,8 +63,8 @@ class Fragment {
   // the we consider the stack to be valid in this fragment if the stack pointer
   // is also read during the operation. Otherwise, it's treated as a strict
   // stack switch, where the stack might not be valid.
-  bool writes_stack_pointer:1;
-  bool reads_stack_pointer:1;
+  bool writes_to_stack_pointer:1;
+  bool reads_from_stack_pointer:1;
 
   // Identifier of a "stack region". This is a very coarse grained concept,
   // where we color fragments according to:

@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_INSTRUCTION_H_
-#define GRANARY_DRIVER_INSTRUCTION_H_
+#ifndef GRANARY_ARCH_INSTRUCTION_H_
+#define GRANARY_ARCH_INSTRUCTION_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -58,6 +58,12 @@ class InstructionInterface {
 
   bool IsNoOp(void) const;
 
+  // Returns true if an instruction reads from the stack pointer.
+  bool ReadsFromStackPointer(void) const;
+
+  // Returns true if an instruction writes to the stack pointer.
+  bool WritesToStackPointer(void) const;
+
   const char *OpCodeName(void) const;
 
   // Apply a function to every operand.
@@ -71,4 +77,4 @@ class InstructionInterface {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_INSTRUCTION_H_
+#endif  // GRANARY_ARCH_INSTRUCTION_H_

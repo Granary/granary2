@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
-#define GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
+#ifndef GRANARY_ARCH_X86_64_INSTRUCTION_H_
+#define GRANARY_ARCH_X86_64_INSTRUCTION_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -106,6 +106,15 @@ class Instruction : public InstructionInterface {
     return XED_CATEGORY_NOP == category;
   }
 
+  // Returns true if an instruction reads from the stack pointer.
+  bool ReadsFromStackPointer(void) const;
+
+  // Returns true if an instruction writes to the stack pointer.
+  bool WritesToStackPointer(void) const;
+
+  // Analyze this instruction's use of the stack pointer.
+  void AnalyzeStackUsage(void) const;
+
   // Get the opcode name.
   const char *OpCodeName(void) const;
 
@@ -139,6 +148,11 @@ class Instruction : public InstructionInterface {
   bool has_prefix_br_hint_taken:1;
   bool has_prefix_br_hint_not_taken:1;
 
+  // Does/did this read or write to the stack pointer?
+  mutable bool reads_from_stack_pointer:1;
+  mutable bool writes_to_stack_pointer:1;
+  mutable bool analyzed_stack_usage:1;
+
   // Is this an atomic operation?
   bool is_atomic:1;
 
@@ -158,10 +172,9 @@ class Instruction : public InstructionInterface {
   // TODO(pag): Could optimize space by only storing explicit operands, and then
   //            using `iclass` to look-up implicit/suppressed operands.
   Operand ops[MAX_NUM_OPS];
-
 } __attribute__((packed));
 
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_XED2_INTEL64_INSTRUCTION_H_
+#endif  // GRANARY_ARCH_X86_64_INSTRUCTION_H_

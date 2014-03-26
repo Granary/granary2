@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_RELATIVIZE_H_
-#define GRANARY_DRIVER_RELATIVIZE_H_
+#ifndef GRANARY_ARCH_RELATIVIZE_H_
+#define GRANARY_ARCH_RELATIVIZE_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -37,4 +37,4 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_RELATIVIZE_H_
+#endif  // GRANARY_ARCH_RELATIVIZE_H_

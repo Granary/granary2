@@ -14,6 +14,11 @@ DEFINE_FUNC(granary_test_mangle)
     mov %rsp, (%rsp);
     mov %rsp, -0x8(%rsp);
 
+    push (%rax);
+    push (%rsp);
+    push -0x8(%rsp);
+    push -0x16(%rsp);
+
     lea -0x8(%rsp), %rax;
     mov %rax, 0x8(%rbp);
 

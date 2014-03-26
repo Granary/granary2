@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_DECODE_H_
-#define GRANARY_DRIVER_DECODE_H_
+#ifndef GRANARY_ARCH_DECODE_H_
+#define GRANARY_ARCH_DECODE_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -46,4 +46,4 @@ class InstructionDecoder {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_DECODE_H_
+#endif  // GRANARY_ARCH_DECODE_H_

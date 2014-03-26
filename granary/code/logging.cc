@@ -86,9 +86,8 @@ static void LogFragmentInstructions(LogLevel level, Fragment *frag) {
   // A thick black border on a fragment also means that the stack is valid.
   auto pen = 0 < frag->stack_id ? " penwidth=2" : "";
 
-  Log(level, "f%p [fillcolor=%s%s label=<%d<BR/> <BR/>[%d]|{",
-      reinterpret_cast<void *>(frag),
-      stack_color, pen, frag->id, frag->stack_id);
+  Log(level, "f%p [fillcolor=%s%s label=<%d|{",
+      reinterpret_cast<void *>(frag), stack_color, pen, frag->id);
 
   if (frag->block_meta && (frag->is_block_head || frag->is_future_block_head)) {
     auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);

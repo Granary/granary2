@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_
-#define GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_
+#ifndef GRANARY_ARCH_X86_64_OPERAND_H_
+#define GRANARY_ARCH_X86_64_OPERAND_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -33,7 +33,10 @@ class Operand : public OperandInterface {
         rw(XED_OPERAND_ACTION_INVALID),
         is_sticky(false),
         is_explicit(false),
-        is_compound(false) {}
+        is_compound(false),
+        is_effective_address(false) {
+    imm.as_uint = 0;
+  }
 
   Operand(const Operand &op);
 
@@ -127,7 +130,11 @@ class Operand : public OperandInterface {
   bool is_explicit:1;
 
   // This is a compound memory operand (base/displacement).
-  bool is_compound;
+  bool is_compound:1;
+
+  // Does this memory operand access memory? An example of a case where a memory
+  // operand does not access memory is `LEA`.
+  bool is_effective_address:1;
 
 } __attribute__((packed));
 
@@ -137,4 +144,4 @@ static_assert(sizeof(Operand) <= 16,
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_DRIVER_XED2_INTEL64_OPERAND_H_
+#endif  // GRANARY_ARCH_X86_64_OPERAND_H_

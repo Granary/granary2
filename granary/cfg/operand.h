@@ -182,6 +182,11 @@ class MemoryOperand : public Operand {
   // Note: This has a driver-specific implementation.
   bool IsCompound(void) const;
 
+  // Is this an effective address (instead of being an actual memory access).
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsEffectiveAddress(void) const;
+
   virtual ~MemoryOperand(void) = default;
 
   // Try to match this memory operand as a pointer value.

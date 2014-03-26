@@ -76,6 +76,13 @@ bool MemoryOperand::IsCompound(void) const {
   return XED_ENCODER_OPERAND_TYPE_MEM == op->type && op->is_compound;
 }
 
+// Is this an effective address (instead of being an actual memory access).
+//
+// Note: This has a driver-specific implementation.
+bool MemoryOperand::IsEffectiveAddress(void) const {
+  return op->is_effective_address;  // Applies to PTR and MEM types.
+}
+
 // Try to match this memory operand as a pointer value.
 bool MemoryOperand::MatchPointer(const void *&ptr) const {
   if (XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
@@ -105,7 +112,7 @@ static void MatchNextRegister(xed_reg_enum_t reg,
     *next += 1;
   }
 }
-}
+}  // namespace
 
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.

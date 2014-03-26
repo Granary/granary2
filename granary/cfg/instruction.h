@@ -25,6 +25,7 @@ class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class InstructionRelativizer;
 GRANARY_INTERNAL_DEFINITION class RegisterUsageTracker;
+GRANARY_INTERNAL_DEFINITION class FragmentBuilder;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -287,6 +288,7 @@ class NativeInstruction : public Instruction {
   friend class ControlFlowInstruction;
   friend class InstructionRelativizer;
   friend class RegisterUsageTracker;
+  friend class FragmentBuilder;
 
   // Invoke a function on every operand.
   void ForEachOperandImpl(const std::function<void(Operand *)> &func);

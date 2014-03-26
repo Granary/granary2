@@ -29,6 +29,44 @@ bool Instruction::HasIndirectTarget(void) const {
   }
 }
 
+// Returns true if an instruction reads from the stack pointer.
+bool Instruction::ReadsFromStackPointer(void) const {
+  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) {
+    AnalyzeStackUsage();
+  }
+  return reads_from_stack_pointer;
+}
+
+// Returns true if an instruction writes to the stack pointer.
+bool Instruction::WritesToStackPointer(void) const {
+  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) {
+    AnalyzeStackUsage();
+  }
+  return writes_to_stack_pointer;
+}
+
+// Analyze this instruction's use of the stack pointer.
+void Instruction::AnalyzeStackUsage(void) const {
+  analyzed_stack_usage = true;
+  for (auto op : ops) {
+    if (XED_ENCODER_OPERAND_TYPE_REG == op.type) {
+      if (op.reg.IsStackPointer()) {
+        if (op.IsRead()) {
+          reads_from_stack_pointer = true;
+        }
+        if (op.IsWrite()) {
+          writes_to_stack_pointer = true;
+        }
+      }
+    } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type && op.is_compound &&
+               XED_REG_RSP == op.mem.reg_base) {
+      reads_from_stack_pointer = true;
+    } else if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
+      return;
+    }
+  }
+}
+
 // Get the opcode name.
 const char *Instruction::OpCodeName(void) const {
   return xed_iclass_enum_t2str(iclass);
