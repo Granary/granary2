@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include <iostream>
+#include <cassert>
 
 #include "dependencies/xed2-intel64/granary/instruction_info.h"
 
@@ -48,72 +49,12 @@ static void GenerateImplicitRegisterBuilder(xed_reg_enum_t reg,
                 << ").Build(instr);\n";
 }
 
-// Convert a non-terminal operand into a register operand. This will sometimes
-// cheat by converting non-terminal operands into a close-enough representation
-// that benefits other parts of Granary (e.g. the virtual register system). Not
-// all non-terminal operands have a decoding that Granary cares about.
-static void ConvertNonTerminalOperand(const xed_operand_t *op) {
-  switch (xed_operand_nonterminal_name(op)) {
-    case XED_NONTERMINAL_AR10:
-      GenerateImplicitRegisterBuilder(XED_REG_R10, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR11:
-      GenerateImplicitRegisterBuilder(XED_REG_R11, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR12:
-      GenerateImplicitRegisterBuilder(XED_REG_R12, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR13:
-      GenerateImplicitRegisterBuilder(XED_REG_R13, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR14:
-      GenerateImplicitRegisterBuilder(XED_REG_R14, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR15:
-      GenerateImplicitRegisterBuilder(XED_REG_R15, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR8:
-      GenerateImplicitRegisterBuilder(XED_REG_R8, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_AR9:
-      GenerateImplicitRegisterBuilder(XED_REG_R9, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARAX:
-      GenerateImplicitRegisterBuilder(XED_REG_RAX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARBP:
-      GenerateImplicitRegisterBuilder(XED_REG_RBP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARBX:
-      GenerateImplicitRegisterBuilder(XED_REG_RBX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARCX:
-      GenerateImplicitRegisterBuilder(XED_REG_RCX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARDI:
-      GenerateImplicitRegisterBuilder(XED_REG_RDI, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARDX:
-      GenerateImplicitRegisterBuilder(XED_REG_RDX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARSI:
-      GenerateImplicitRegisterBuilder(XED_REG_RSI, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ARSP:
-      GenerateImplicitRegisterBuilder(XED_REG_RSP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_OEAX:
-      GenerateImplicitRegisterBuilder(XED_REG_EAX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ORAX:
-      GenerateImplicitRegisterBuilder(XED_REG_RAX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ORBP:
-      GenerateImplicitRegisterBuilder(XED_REG_RBP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ORDX:
-      GenerateImplicitRegisterBuilder(XED_REG_RDX, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_ORSP:
-      GenerateImplicitRegisterBuilder(XED_REG_RSP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_RIP:
-      GenerateImplicitRegisterBuilder(XED_REG_RIP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_SRBP:
-      GenerateImplicitRegisterBuilder(XED_REG_RBP, xed_operand_rw(op)); break;
-    case XED_NONTERMINAL_SRSP:
-      GenerateImplicitRegisterBuilder(XED_REG_RSP, xed_operand_rw(op)); break;
-    default: break;
-  }
-}
-
 static void GenerateImplicitOperandBuilder(InstructionInfo *info,
                                            const xed_inst_t *instr,
                                            const xed_operand_t *op) {
   auto op_name = xed_operand_name(op);
   auto op_type = xed_operand_type(op);
-  if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {
-    ConvertNonTerminalOperand(op);
-  } else if (xed_operand_is_register(op_name)) {
+  if (xed_operand_is_register(op_name)) {
       GenerateImplicitRegisterBuilder(xed_operand_reg(op), xed_operand_rw(op));
 
   } else if (XED_OPERAND_IMM0SIGNED == op_name) {
@@ -124,6 +65,8 @@ static void GenerateImplicitOperandBuilder(InstructionInfo *info,
     std::cout << INDENT << "ImmediateBuilder(" << xed_operand_imm(op)
               << ", XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);\n";
 
+  } else {
+    assert(false);
   }
 }
 
@@ -164,12 +107,15 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
                       << xed_category_enum_t2str(xed_inst_category(instr))
                       << ", " << num_explicit_ops << ");\n";
 
+  auto explicit_op = 0U;
   for (auto i = 0U; i < num_ops; ++i) {
     auto op = xed_inst_operand(instr, i);
-    if (i < num_explicit_ops) {
-      GenerateExplicitOperandBuilder(info, instr, op, i);
-    } else {
+    if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
+      GenerateExplicitOperandBuilder(info, instr, op, explicit_op++);
+    } else if (i < max_num_explicit_ops) {
       GenerateImplicitOperandBuilder(info, instr, op);
+    } else {
+      break;
     }
   }
   std::cout << "}\n";

@@ -23,9 +23,11 @@ typedef std::set<xed_iclass_enum_t> ignored_iclass_set_t;
 // another) in an iclass-specific way.
 struct InstructionInfo {
   std::set<const xed_inst_t *> templates;
+  const xed_inst_t *xedi_with_max_ops;
   ops_bitset_t ops;
   int min_num_explicit_args;
   int max_num_explicit_args;
+  int max_num_args;
 };
 
 // Maps `xed_iclass_enum_t` to information about the instruction.
@@ -47,6 +49,7 @@ static void FillTable(ignored_iclass_set_t *ignored_iclasses_set) {
     info->templates.insert(instr);
     info->min_num_explicit_args = 999;
     info->max_num_explicit_args = -1;
+    info->max_num_args = -1;
   }
 }
 
@@ -64,9 +67,16 @@ static int ExplicitArgumentCount(const xed_inst_t *instr, ops_bitset_t *args) {
 }
 
 // Process each entry of the instruction table.
-static void CountExplicitArguments(void) {
+static void CountOperands(void) {
   for (InstructionInfo &info : instr_table) {
     for (auto instr : info.templates) {
+
+      auto num_ops = static_cast<int>(xed_inst_noperands(instr));
+      if (num_ops > info.max_num_args) {
+        info.xedi_with_max_ops = instr;
+        info.max_num_args = num_ops;
+      }
+
       auto num = ExplicitArgumentCount(instr, &(info.ops));
       info.max_num_explicit_args = std::max(info.max_num_explicit_args, num);
       info.min_num_explicit_args = std::min(info.min_num_explicit_args, num);
@@ -112,7 +122,7 @@ static void FindAmbiguousEncodings(void) {
 
 static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
   FillTable(ignored_iclasses_set);
-  CountExplicitArguments();
+  CountOperands();
   FindAmbiguousEncodings();
 }
 

@@ -22,11 +22,6 @@ namespace arch {
 // Decoder state that sets the mode to 64-bit.
 extern xed_state_t XED_STATE;
 
-// Import XED instruction information into Granary's low-level IR. This
-// initializes a number of the internal `Instruction` fields to sane defaults.
-void InitInstruction(Instruction *instr, xed_iclass_enum_t iclass,
-                     xed_category_enum_t category, int8_t num_ops);
-
 // Initialize the instruction decoder.
 InstructionDecoder::InstructionDecoder(void) {}
 
@@ -77,23 +72,6 @@ static xed_error_enum_t DecodeBytes(xed_decoded_inst_t *xedd, PC pc) {
   } else {
     return xed_decode(xedd, pc, XED_MAX_INSTRUCTION_BYTES);
   }
-}
-
-// Fill in an operand as if it's a register operand.
-static void FillAddressOperand(Operand *instr_op, xed_reg_enum_t reg) {
-  instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  instr_op->is_compound = true;
-  instr_op->mem.reg_base = reg;
-  instr_op->width = -1;
-  instr_op->is_sticky = true;
-}
-
-// Fill in an operand as if it's a register operand.
-static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg) {
-  instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int8_t>(instr_op->reg.BitWidth());
-  instr_op->is_sticky = true;
 }
 
 // Pull out a register operand from the XED instruction.
@@ -160,15 +138,20 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   auto base_reg = xed_decoded_inst_get_base_reg(xedd, index);
   auto index_reg = xed_decoded_inst_get_index_reg(xedd, index);
 
+  if (XED_REG_INVALID == index_reg && XED_REG_INVALID == segment_reg && !disp) {
+    instr_op->reg.DecodeFromNative(static_cast<int>(base_reg));
+  } else {
+    instr_op->mem.disp = static_cast<int32_t>(disp);
+    instr_op->mem.reg_base = base_reg;
+    instr_op->mem.reg_index = index_reg;
+    instr_op->mem.reg_seg = segment_reg;
+    instr_op->mem.scale = static_cast<uint8_t>(scale);
+    instr_op->is_compound = true;
+  }
+
   instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  instr_op->mem.disp = static_cast<int32_t>(disp);
-  instr_op->mem.reg_base = base_reg;
-  instr_op->mem.reg_index = index_reg;
-  instr_op->mem.reg_seg = segment_reg;
-  instr_op->mem.scale = static_cast<uint8_t>(scale);
   instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
-  instr_op->is_compound = true;
   instr_op->is_effective_address = XED_ICLASS_LEA == instr->iclass;
 }
 
@@ -213,88 +196,24 @@ static void ConvertImmediateOperand(Operand *instr_op,
       xed_decoded_inst_get_immediate_width_bits(xedd));
 }
 
-// Convert a non-terminal operand into a Granary operand. This will sometimes
-// cheat by converting non-terminal operands into a close-enough representation
-// that benefits other parts of Granary (e.g. the virtual register system). Not
-// all non-terminal operands have a decoding that Granary cares about.
-static bool ConvertNonTerminalOperand(Instruction *instr, Operand *instr_op,
-                                      const xed_operand_t *op) {
-  switch (xed_operand_nonterminal_name(op)) {
-    case XED_NONTERMINAL_AR10:
-      FillAddressOperand(instr_op, XED_REG_R10); return true;
-    case XED_NONTERMINAL_AR11:
-      FillAddressOperand(instr_op, XED_REG_R11); return true;
-    case XED_NONTERMINAL_AR12:
-      FillAddressOperand(instr_op, XED_REG_R12); return true;
-    case XED_NONTERMINAL_AR13:
-      FillAddressOperand(instr_op, XED_REG_R13); return true;
-    case XED_NONTERMINAL_AR14:
-      FillAddressOperand(instr_op, XED_REG_R14); return true;
-    case XED_NONTERMINAL_AR15:
-      FillAddressOperand(instr_op, XED_REG_R15); return true;
-    case XED_NONTERMINAL_AR8:
-      FillAddressOperand(instr_op, XED_REG_R8); return true;
-    case XED_NONTERMINAL_AR9:
-      FillAddressOperand(instr_op, XED_REG_R9); return true;
-    case XED_NONTERMINAL_ARAX:
-      FillAddressOperand(instr_op, XED_REG_RAX); return true;
-    case XED_NONTERMINAL_ARBP:
-      FillAddressOperand(instr_op, XED_REG_RBP); return true;
-    case XED_NONTERMINAL_ARBX:
-      FillAddressOperand(instr_op, XED_REG_RBX); return true;
-    case XED_NONTERMINAL_ARCX:
-      FillAddressOperand(instr_op, XED_REG_RCX); return true;
-    case XED_NONTERMINAL_ARDI:
-      FillAddressOperand(instr_op, XED_REG_RDI); return true;
-    case XED_NONTERMINAL_ARDX:
-      FillAddressOperand(instr_op, XED_REG_RDX); return true;
-    case XED_NONTERMINAL_ARSI:
-      FillAddressOperand(instr_op, XED_REG_RSI); return true;
-    case XED_NONTERMINAL_ARSP:  // Address with RSP.
-      FillAddressOperand(instr_op, XED_REG_RSP); return true;
-    case XED_NONTERMINAL_OEAX:
-      FillRegisterOperand(instr_op, XED_REG_EAX); return true;
-    case XED_NONTERMINAL_ORAX:
-      FillRegisterOperand(instr_op, XED_REG_RAX); return true;
-    case XED_NONTERMINAL_ORBP:
-      FillRegisterOperand(instr_op, XED_REG_RBP); return true;
-    case XED_NONTERMINAL_ORDX:
-      FillRegisterOperand(instr_op, XED_REG_RDX); return true;
-    case XED_NONTERMINAL_ORSP:  // Output to RSP.
-      instr->writes_to_stack_pointer = true;
-      FillRegisterOperand(instr_op, XED_REG_RSP); return true;
-    case XED_NONTERMINAL_RIP:
-      FillRegisterOperand(instr_op, XED_REG_RIP); return true;
-    case XED_NONTERMINAL_SRBP:
-      FillRegisterOperand(instr_op, XED_REG_RBP); return true;
-    case XED_NONTERMINAL_SRSP:  // Shift RSP?
-      FillRegisterOperand(instr_op, XED_REG_RSP); return true;
-    default: return false;
-  }
-}
-
-// Returns true if an implicit operand is ambiguous. An implicit operand is
-// ambiguous if there are multiple encodings for the same iclass, and the given
-// operand (indexed by `op`) is explicit for some iforms but not others.
-static bool IsAmbiguousOperand(xed_iclass_enum_t iclass, xed_iform_enum_t iform,
-                               unsigned op_num);
-
-#include "generated/xed2-intel64/ambiguous_operands.cc"
-
 // Convert a `xed_operand_t` into an `Operand`. This operates on explicit
 // operands only, and when an increments `instr->num_ops` when a new explicit
 // operand is found.
-static void ConvertDecodedOperand(Instruction *instr,
+static bool ConvertDecodedOperand(Instruction *instr,
                                   const xed_decoded_inst_t *xedd,
                                   unsigned op_num) {
   auto xedi = xed_decoded_inst_inst(xedd);
   auto op = xed_inst_operand(xedi, op_num);
   auto iform = xed_decoded_inst_get_iform_enum(xedd);
+  bool is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
+                     IsAmbiguousOperand(instr->iclass, iform, op_num);
+  if (!is_explicit) {
+    return false;
+  }
+
   auto op_name = xed_operand_name(op);
   auto op_type = xed_operand_type(op);
   auto instr_op = &(instr->ops[op_num]);
-  bool is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
-                     IsAmbiguousOperand(instr->iclass, iform, op_num);
 
   instr_op->rw = xed_operand_rw(op);
   instr_op->is_sticky = !is_explicit;
@@ -311,20 +230,14 @@ static void ConvertDecodedOperand(Instruction *instr,
   } else if (XED_OPERAND_TYPE_IMM == op_type ||
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr_op, xedd, op_name);
-  } else if (XED_OPERAND_TYPE_NT_LOOKUP_FN == op_type) {  // More complicated.
-    if (!ConvertNonTerminalOperand(instr, instr_op, op)) {
-      instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;
-      GRANARY_ASSERT(!is_explicit);  // TODO(pag): Implement this!
-    }
   } else {
     // Ignore `XED_OPERAND_AGEN`, which is only for LEA.
     instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;
     GRANARY_ASSERT(false);  // TODO(pag): Implement this!
   }
 
-  if (is_explicit) {
-    ++instr->num_explicit_ops;
-  }
+  ++instr->num_explicit_ops;
+  return true;
 }
 
 // Convert the operands of a `xed_decoded_inst_t` to `Operand` types.
@@ -332,7 +245,9 @@ static void ConvertDecodedOperands(Instruction *instr,
                                    const xed_decoded_inst_t *xedd) {
   auto num_ops = static_cast<unsigned>(instr->num_ops);
   for (auto o = 0U; o < num_ops; ++o) {
-    ConvertDecodedOperand(instr, xedd, o);
+    if (!ConvertDecodedOperand(instr, xedd, o)) {
+      break;
+    }
   }
 }
 
@@ -352,7 +267,6 @@ static void ConvertDecodedInstruction(Instruction *instr,
                                       const xed_decoded_inst_t *xedd,
                                       AppPC pc) {
   auto xedi = xed_decoded_inst_inst(xedd);
-
   memset(instr, 0, sizeof *instr);
   instr->decoded_pc = pc;
   instr->iclass = xed_decoded_inst_get_iclass(xedd);
@@ -361,11 +275,11 @@ static void ConvertDecodedInstruction(Instruction *instr,
       xed_decoded_inst_get_length(xedd));
   ConvertDecodedPrefixes(instr, xedd);
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
-  instr->analyzed_stack_usage = true;
   instr->num_ops = static_cast<uint8_t>(xed_inst_noperands(xedi));
   instr->effective_operand_width = static_cast<int8_t>(
       xed_decoded_inst_get_operand_width(xedd));
   ConvertDecodedOperands(instr, xedd);
+  instr->AnalyzeStackUsage();
 }
 }  // namespace
 

@@ -176,12 +176,14 @@ class FragmentBuilder {
     auto target_block = cfi->TargetBlock();
     auto is_direct_jump = cfi->IsUnconditionalJump() &&
                           !cfi->HasIndirectTarget();
-
     if (!is_direct_jump) {
       frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
       frag->branch_instr = cfi;
       frag->branch_target = FragmentForTargetBlock(target_block);
-
+      if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
+          cfi->IsSystemReturn()) {
+        return;
+      }
     // Pretend that direct jumps are just fall-throughs.
     } else {
       next = instr;

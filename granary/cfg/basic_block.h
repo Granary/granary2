@@ -252,6 +252,9 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   // Return an iterator for the application instructions of a basic block.
   AppInstructionIterator AppInstructions(void) const;
 
+  // Return a reverse iterator for the application instructions of the block.
+  BackwardAppInstructionIterator ReversedAppInstructions(void) const;
+
   // Add a new instruction to the beginning of the instruction list.
   void PrependInstruction(std::unique_ptr<Instruction> instr);
 

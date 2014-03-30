@@ -8,6 +8,12 @@
 namespace granary {
 namespace arch {
 
+// Table of all implicit operands.
+extern const Operand * const IMPLICIT_OPERANDS[];
+
+// Number of implicit operands for each iclass.
+extern const int NUM_IMPLICIT_OPERANDS[];
+
 Instruction::Instruction(void) {
   memset(this, 0, sizeof *this);
   iclass = XED_ICLASS_INVALID;
@@ -45,25 +51,57 @@ bool Instruction::WritesToStackPointer(void) const {
   return writes_to_stack_pointer;
 }
 
+// Returns true if an instruction reads the flags.
+//
+// Note: the RFLAGS register is always the last implicit operand.
+bool Instruction::ReadsFlags(void) const {
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
+  const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+  return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
+         op.reg.IsFlags() && op.IsRead();
+}
+
+// Returns true if an instruction writes to the flags.
+//
+// Note: the RFLAGS register is always the last operand.
+bool Instruction::WritesFlags(void) const {
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
+  const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+  return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
+         op.reg.IsFlags() && op.IsWrite();
+}
+
+namespace {
+// Analyze the stack usage of a single instruction.
+static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
+  if (XED_ENCODER_OPERAND_TYPE_REG == op.type) {
+    if (op.reg.IsStackPointer()) {
+      if (op.IsRead()) {
+        instr->reads_from_stack_pointer = true;
+      }
+      if (op.IsWrite()) {
+        instr->writes_to_stack_pointer = true;
+      }
+    }
+  } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type && op.is_compound &&
+             XED_REG_RSP == op.mem.reg_base) {
+    instr->reads_from_stack_pointer = true;
+  }
+}
+}  // namespace
+
 // Analyze this instruction's use of the stack pointer.
 void Instruction::AnalyzeStackUsage(void) const {
   analyzed_stack_usage = true;
-  for (auto op : ops) {
-    if (XED_ENCODER_OPERAND_TYPE_REG == op.type) {
-      if (op.reg.IsStackPointer()) {
-        if (op.IsRead()) {
-          reads_from_stack_pointer = true;
-        }
-        if (op.IsWrite()) {
-          writes_to_stack_pointer = true;
-        }
-      }
-    } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type && op.is_compound &&
-               XED_REG_RSP == op.mem.reg_base) {
-      reads_from_stack_pointer = true;
-    } else if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-      return;
+  auto self = const_cast<Instruction *>(this);
+  for (auto &op : ops) {
+    if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
+      break;
     }
+    AnalyzeOperandStackUsage(self, op);
+  }
+  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iclass]; ++i) {
+    AnalyzeOperandStackUsage(self, IMPLICIT_OPERANDS[iclass][i]);
   }
 }
 
@@ -121,67 +159,119 @@ void Instruction::ForEachOperand(
     }
     CallWithOperand(&op, func);
   }
+  auto implicit_ops = IMPLICIT_OPERANDS[iclass];
+  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iclass]; ++i) {
+    auto implicit_op = const_cast<Operand *>(&(implicit_ops[i]));
+    CallWithOperand(implicit_op, func);
+  }
 }
+
+namespace {
+
+// Returns true if the action of the operand in the instruction matches
+// the expected action in the operand matcher.
+static bool OperandMatchesAction(const OperandMatcher &matcher,
+                                 const Operand &op) {
+  auto is_read = op.IsRead();
+  auto is_write = op.IsWrite();
+  if (is_read && is_write) {
+    if (OperandAction::READ_ONLY == matcher.action ||
+        OperandAction::WRITE_ONLY == matcher.action) {
+      return false;
+    }
+  } else if (is_read) {
+    if (OperandAction::ANY != matcher.action &&
+        OperandAction::READ != matcher.action &&
+        OperandAction::READ_ONLY != matcher.action) {
+      return false;
+    }
+  } else if (is_write) {
+    if (OperandAction::ANY != matcher.action &&
+        OperandAction::WRITE != matcher.action &&
+        OperandAction::WRITE_ONLY != matcher.action) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns true of the operand is matched and bound to the operand in the
+// matcher.
+static bool BindOperand(OperandMatcher matcher, Operand *op) {
+  if ((op->IsRegister() && IsA<RegisterOperand *>(matcher.op)) ||
+      (op->IsMemory() && IsA<MemoryOperand *>(matcher.op)) ||
+      (op->IsImmediate() && IsA<ImmediateOperand *>(matcher.op))) {
+    matcher.op->UnsafeReplace(op);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// Returns true of the operand is matched.
+//
+// TODO(pag): Extend matching beyond register operands.
+static bool MatchOperand(OperandMatcher matcher, const Operand &op) {
+  auto reg_op = DynamicCast<RegisterOperand *>(matcher.op);
+  return (op.IsRegister() && reg_op && op.reg == reg_op->Register());
+}
+
+struct MatchState {
+  size_t num_matched;
+  bool was_matched[Instruction::MAX_NUM_OPS];
+};
+
+// Try to match an operand, and update the `MatchState` accordingly.
+bool TryMatchOperand(MatchState *state, OperandMatcher m, Operand *op, int i) {
+  if (state->was_matched[i] || !OperandMatchesAction(m, *op)) {
+    return false;
+  }
+  if (GRANARY_LIKELY(OperandConstraint::BIND == m.constraint)) {
+    if (!BindOperand(m, op)) {
+      return false;
+    }
+  } else if (!MatchOperand(m, *op)) {
+    return false;
+  }
+
+  state->was_matched[i] = true;
+  ++state->num_matched;
+  return true;
+}
+
+}  // namespace
 
 // Operand matcher for multiple arguments. Returns the number of matched
 // arguments, starting from the first argument.
 size_t Instruction::CountMatchedOperands(
     std::initializer_list<OperandMatcher> &&matchers) {
-
-  size_t num_matched = 0;
-  bool was_matched[sizeof(ops)] = {false};
-
+  MatchState state = {0, {false}};
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
+  const auto implicit_ops = IMPLICIT_OPERANDS[iclass];
   for (auto m : matchers) {
+    int op_num = 0;
     auto matched = false;
-
-    for (size_t i = 0; i < sizeof(ops); ++i) {
-      auto &op(ops[i]);
+    for (auto &op : ops) {
       if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-        return num_matched;
-      } else if (was_matched[i]) {
-        continue;
+        break;
       }
-
-      // Try to reject this match based on the operand's action.
-      auto is_read = op.IsRead();
-      auto is_write = op.IsWrite();
-      if (is_read && is_write) {
-        if (OperandAction::READ_ONLY == m.action ||
-            OperandAction::WRITE_ONLY == m.action) {
-          continue;
-        }
-      } else if (is_read) {
-        if (OperandAction::ANY != m.action &&
-            OperandAction::READ != m.action &&
-            OperandAction::READ_ONLY != m.action) {
-          continue;
-        }
-      } else if (is_write) {
-        if (OperandAction::ANY != m.action &&
-            OperandAction::WRITE != m.action &&
-            OperandAction::WRITE_ONLY != m.action) {
-          continue;
-        }
-      }
-
-      // Match and bind by operand type.
-      if ((op.IsRegister() && IsA<RegisterOperand *>(m.op)) ||
-          (op.IsMemory() && IsA<MemoryOperand *>(m.op)) ||
-          (op.IsImmediate() && IsA<ImmediateOperand *>(m.op))) {
-        m.op->UnsafeReplace(&op);
-        was_matched[i] = matched = true;
-        ++num_matched;
+      if ((matched = TryMatchOperand(&state, m, &op, op_num++))) {
         break;
       }
     }
-
-    // If we didn't match the `OperandMatcher` against any operand then give up
-    // and don't proceed to the next `OperandMatcher`.
-    if (!matched) {
-      return num_matched;
+    if (!matched) {  // Try to match against implicit operands.
+      for (auto i = 0; i < num_implicit_ops; ++i) {
+        auto op = const_cast<Operand *>(&(implicit_ops[i]));
+        if ((matched = TryMatchOperand(&state, m, op, op_num++))) {
+          break;
+        }
+      }
+      if (!matched) {  // Didn't match against anything; give up.
+        return state.num_matched;
+      }
     }
   }
-  return num_matched;
+  return state.num_matched;
 }
 
 }  // namespace arch

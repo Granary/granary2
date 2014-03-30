@@ -78,22 +78,29 @@ std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
   return std::unique_ptr<Instruction>(this);
 }
 
-#ifdef GRANARY_DEBUG
-// Prevent adding an instruction before the beginning instruction of a basic
-// block.
+// Make it so that inserting an instruction before the designated first
+// instruction actually puts the instruction after the first instruction. In
+// other cases this behaves as normal.
 Instruction *AnnotationInstruction::InsertBefore(
     std::unique_ptr<Instruction> that) {
-  granary_break_on_fault_if(GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation));
-  return this->Instruction::InsertBefore(std::move(that));
+  if (GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation)) {
+    return this->Instruction::InsertAfter(std::move(that));
+  } else {
+    return this->Instruction::InsertBefore(std::move(that));
+  }
 }
 
-// Prevent adding an instruction after the ending instruction of a basic block.
+// Make it so that inserting an instruction after the designated last
+// instruction actually puts the instruction before the last instruction. In
+// other cases this behaves as normal.
 Instruction *AnnotationInstruction::InsertAfter(
     std::unique_ptr<Instruction> that) {
-  granary_break_on_fault_if(GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation));
-  return this->Instruction::InsertAfter(std::move(that));
+  if (GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation)) {
+    return this->Instruction::InsertBefore(std::move(that));
+  } else {
+    return this->Instruction::InsertAfter(std::move(that));
+  }
 }
-#endif  // GRANARY_DEBUG
 
 // Returns true if this instruction is a label.
 bool AnnotationInstruction::IsLabel(void) const {
@@ -122,6 +129,14 @@ int NativeInstruction::DecodedLength(void) const {
 // nothing and has no observable side-effects.
 bool NativeInstruction::IsNoOp(void) const {
   return instruction.IsNoOp();
+}
+
+bool NativeInstruction::ReadsConditionCodes(void) const {
+  return instruction.ReadsFlags();
+}
+
+bool NativeInstruction::WritesConditionCodes(void) const {
+  return instruction.WritesFlags();
 }
 
 bool NativeInstruction::IsFunctionCall(void) const {

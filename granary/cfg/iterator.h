@@ -104,6 +104,35 @@ class AppInstructionIterator {
   NativeInstruction *instr;
 };
 
+class BackwardAppInstructionIterator {
+ public:
+  inline BackwardAppInstructionIterator(void)
+      : instr(nullptr) {}
+
+  explicit BackwardAppInstructionIterator(Instruction *instr_);
+
+  inline BackwardAppInstructionIterator begin(void) const {
+    return *this;
+  }
+
+  inline BackwardAppInstructionIterator end(void) const {
+    return BackwardAppInstructionIterator();
+  }
+
+  inline bool operator!=(const BackwardAppInstructionIterator &that) const {
+    return instr != that.instr;
+  }
+
+  inline NativeInstruction *operator*(void) const {
+    return instr;
+  }
+
+  void operator++(void);
+
+ private:
+  NativeInstruction *instr;
+};
+
 // An iterator for basic blocks that implements C++11 range-based for loops.
 class BasicBlockIterator {
  public:

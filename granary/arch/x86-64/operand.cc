@@ -84,6 +84,11 @@ bool MemoryOperand::IsEffectiveAddress(void) const {
 }
 
 // Try to match this memory operand as a pointer value.
+bool MemoryOperand::IsPointer(void) const {
+  return XED_ENCODER_OPERAND_TYPE_PTR == op->type;
+}
+
+// Try to match this memory operand as a pointer value.
 bool MemoryOperand::MatchPointer(const void *&ptr) const {
   if (XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
     ptr = op->addr.as_ptr;
@@ -227,6 +232,8 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
   }
 }
+
+#include "generated/xed2-intel64/ambiguous_operands.cc"
 
 }  // namespace arch
 }  // namespace granary

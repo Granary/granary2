@@ -178,10 +178,8 @@ class AnnotationInstruction : public Instruction {
       : annotation(annotation_),
         data(data_) {}
 
-#ifdef GRANARY_DEBUG
   virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
-#endif
 
   // Returns true if this instruction is a label.
   bool IsLabel(void) const;
@@ -238,6 +236,8 @@ class NativeInstruction : public Instruction {
   bool IsNoOp(void) const;
 
   // Driver-specific implementations.
+  bool ReadsConditionCodes(void) const;
+  bool WritesConditionCodes(void) const;
   bool IsFunctionCall(void) const;
   bool IsFunctionReturn(void) const;
   bool IsInterruptCall(void) const;

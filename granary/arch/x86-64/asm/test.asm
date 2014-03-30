@@ -7,6 +7,9 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+    movsq;
+    ret;
+/*
     mov %rsp, %rbp;
     sub $0x20, %rsp;
 
@@ -26,6 +29,8 @@ DEFINE_FUNC(granary_test_mangle)
 
 .Lloop_call_through_stack:
     mov %rsp, %rdi;
+    cld;
+    movsq;
     shr $1, %rdi;
     callq *-0x8(%rsp, %rdi, 2);
     cmp $0, %rax;
@@ -45,7 +50,7 @@ DEFINE_FUNC(granary_test_mangle)
     // the `ret`.
     mov $1, %rax;
     ret;
-
+*/
 END_FUNC(granary_test_mangle)
 
 END_FILE

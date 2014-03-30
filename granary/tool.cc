@@ -71,7 +71,12 @@ static void RegisterToolDescription(ToolDescription *desc, const char *name) {
 //       tool class can register tool-specific meta-data.
 Tool::Tool(void)
     : next(nullptr),
-      context(context) {}
+      context(context),
+      curr_scope(-1) {
+  for (auto &scope : scopes) {
+    scope = nullptr;
+  }
+}
 #pragma clang diagnostic pop
 
 // Used to instrument control-flow instructions and decide how basic blocks
@@ -94,6 +99,22 @@ void Tool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // but is never re-executed for the same (tool, BB) pair in the current
 // instrumentation session.
 void Tool::InstrumentBlock(DecodedBasicBlock *) {}
+
+// Begin inserting some inline assembly. This takes in an optional scope
+// specifier, which allows tools to use the same variables in two or more
+// different contexts/scopes of instrumentation and not have them clash. This
+// specifies the beginning of some scope. Any virtual registers defined in
+// this scope will be live until the next `EndInlineAssembly` within the same
+// block, by the same tool, with the same `scope_id`.
+//
+// Note: `scope_id`s must be non-negative integers.
+void Tool::BeginInlineAssembly(DecodedBasicBlock *block,
+                               std::initializer_list<Operand *> inputs,
+                               int scope_id) {
+  GRANARY_UNUSED(block);
+  GRANARY_UNUSED(inputs);
+  GRANARY_UNUSED(scope_id);
+}
 
 // Register some meta-data with the meta-data manager associated with this
 // tool.
@@ -180,7 +201,7 @@ void ToolManager::InitAllocator(void) {
   if (max_size) {
     auto size = GRANARY_ALIGN_TO(max_size, max_align);
     auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
-    auto remaining_size = GRANARY_ARCH_PAGE_FRAME_SIZE - offset;
+    auto remaining_size = arch::PAGE_SIZE_BYTES - offset;
     auto max_num_allocs = remaining_size / size;
     allocator.Construct(max_num_allocs, offset, size, size);
   }
@@ -192,8 +213,7 @@ void RegisterTool(ToolDescription *desc,
                   std::initializer_list<const char *> required_tools) {
   RegisterToolDescription(desc, name);
   for (auto tool_name : required_tools) {
-    auto required_desc = FindDescByName(tool_name);
-    if (required_desc) {
+    if (auto required_desc = FindDescByName(tool_name)) {
       GRANARY_ASSERT(!depends_on[required_desc->id][desc->id]);
       depends_on[desc->id][required_desc->id] = required_desc;
     }

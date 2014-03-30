@@ -166,6 +166,13 @@ AppInstructionIterator DecodedBasicBlock::AppInstructions(void) const {
   return AppInstructionIterator(first);
 }
 
+// Return a reverse iterator for the application instructions of the block.
+BackwardAppInstructionIterator
+DecodedBasicBlock::ReversedAppInstructions(void) const {
+  return BackwardAppInstructionIterator(last);
+}
+
+
 // Add a new instruction to the beginning of the instruction list.
 void DecodedBasicBlock::PrependInstruction(std::unique_ptr<Instruction> instr) {
   FirstInstruction()->InsertAfter(std::move(instr));

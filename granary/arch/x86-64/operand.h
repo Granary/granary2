@@ -141,6 +141,12 @@ class Operand : public OperandInterface {
 static_assert(sizeof(Operand) <= 16,
     "Invalid structure packing of `granary::arch::Operand`.");
 
+// Returns true if an implicit operand is ambiguous. An implicit operand is
+// ambiguous if there are multiple encodings for the same iclass, and the given
+// operand (indexed by `op`) is explicit for some iforms but not others.
+bool IsAmbiguousOperand(xed_iclass_enum_t iclass, xed_iform_enum_t iform,
+                        unsigned op_num);
+
 }  // namespace arch
 }  // namespace granary
 

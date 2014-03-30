@@ -51,16 +51,6 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   //            atomic.
   instr->is_atomic = XED_ICLASS_XCHG == iclass ||
                      XED_CATEGORY_SEMAPHORE == category;
-
-  // Make all implicit / suppressed operands sticky.
-  for (uint8_t i = 0; i < Instruction::MAX_NUM_OPS; ++i) {
-    if (i < num_explicit_ops) {
-      instr->ops[i].is_explicit = true;
-    } else {
-      instr->ops[i].is_sticky = true;
-    }
-  }
-
   if (GRANARY_UNLIKELY(XED_ICLASS_LEA == iclass)) {
     instr->ops[1].is_effective_address = true;
   }

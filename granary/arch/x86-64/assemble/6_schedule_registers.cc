@@ -72,13 +72,16 @@ class VirtualRegisterTracker {
     for (auto frag : FragmentIterator(frags)) {
       Instruction *instr_to_remove(nullptr);
       for (auto instr : BackwardInstructionIterator(frag->last)) {
-        if (instr_to_remove) {
-          frag->RemoveInstruction(instr_to_remove);
-          instr_to_remove = nullptr;
-        }
-        if (auto def = GetMetaData<VirtualRegisterInfo *>(instr)) {
-          if (!def->num_uses) {
-            instr_to_remove = instr;
+        if (IsA<NativeInstruction *>(instr)) {
+          if (instr_to_remove) {
+            frag->RemoveInstruction(instr_to_remove);
+            instr_to_remove = nullptr;
+          }
+          if (auto def = GetMetaData<VirtualRegisterInfo *>(instr)) {
+            if (!def->num_uses) {
+              def->num_defs -= 1;
+              instr_to_remove = instr;
+            }
           }
         }
       }
@@ -98,6 +101,8 @@ class VirtualRegisterTracker {
     // By default, mark native instructions as not defining any virtual
     // registers.
     ClearMetaData(ninstr);
+
+    // TODO(pag): What if the instruction modifies the flags??
 
     // Defines a virtual register.
     if (instr.num_explicit_ops && def.IsWrite() && def.IsRegister() &&

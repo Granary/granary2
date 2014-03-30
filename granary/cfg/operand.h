@@ -168,6 +168,12 @@ class MemoryOperand : public Operand {
   // Note: This has a driver-specific implementation.
   MemoryOperand(const VirtualRegister &ptr_reg, int num_bits);
 
+  // Generic initializer for a pointer to some data.
+  template <typename T>
+  inline explicit MemoryOperand(const T *ptr)
+      : MemoryOperand(reinterpret_cast<const void *>(ptr),
+                      static_cast<int>(GRANARY_MIN(64, (sizeof(T) * 8)))) {}
+
   // Initialize a new memory operand from a pointer, where the
   // referenced memory has a width of `num_bits`.
   //
@@ -188,6 +194,11 @@ class MemoryOperand : public Operand {
   bool IsEffectiveAddress(void) const;
 
   virtual ~MemoryOperand(void) = default;
+
+  // Try to match this memory operand as a pointer value.
+  //
+  // Note: This has a driver-specific implementation.
+  bool IsPointer(void) const;
 
   // Try to match this memory operand as a pointer value.
   //
@@ -271,52 +282,80 @@ enum class OperandAction {
   READ_AND_WRITE
 };
 
+enum class OperandConstraint {
+  MATCH,
+  BIND
+};
+
 // Generic operand matcher.
 class OperandMatcher {
  public:
   Operand * GRANARY_CONST op;
   const OperandAction action;
+  const OperandConstraint constraint;
 };
 
 // Returns an operand matcher against an operand that is read.
 inline static OperandMatcher ReadFrom(Operand &op) {
-  return {&op, OperandAction::READ};
+  return {&op, OperandAction::READ, OperandConstraint::BIND};
 }
 
 // Returns an operand matcher against an operand that is only read.
 inline static OperandMatcher ReadOnlyFrom(Operand &op) {
-  return {&op, OperandAction::READ_ONLY};
+  return {&op, OperandAction::READ_ONLY, OperandConstraint::BIND};
 }
 
 // Returns an operand matcher against an operand that is written.
 inline static OperandMatcher WriteTo(Operand &op) {
-  return {&op, OperandAction::WRITE};
+  return {&op, OperandAction::WRITE, OperandConstraint::BIND};
 }
 
 // Returns an operand matcher against an operand that is only written.
 inline static OperandMatcher WriteOnlyTo(Operand &op) {
-  return {&op, OperandAction::WRITE_ONLY};
+  return {&op, OperandAction::WRITE_ONLY, OperandConstraint::BIND};
 }
 
 // Returns an operand matcher against an operand that is read and written.
 inline static OperandMatcher ReadAndWriteTo(Operand &op) {
-  return {&op, OperandAction::READ_AND_WRITE};
+  return {&op, OperandAction::READ_AND_WRITE, OperandConstraint::BIND};
 }
 
 // Returns an operand matcher against an operand that is read and written.
 inline static OperandMatcher ReadOrWriteTo(Operand &op) {
-  return {&op, OperandAction::ANY};
+  return {&op, OperandAction::ANY, OperandConstraint::BIND};
 }
 
-// Returns the effective address for a memory operand. The returned operand
-// will either be a native or virtual register.
-//
-// Note: This has an driver-specific implementation.
-//
-// TODO(pag): How to make this work if the Operand needs to point to the actual
-//            thing? I think I should distinguish between an operand ref and an
-//            operand.
-//RegisterOperand GetEffectiveAddress(MemoryOperand op);
+// TODO(pag): Only doing exact matching on register operands.
+
+// Returns an operand matcher against an operand that is read.
+inline static OperandMatcher ExactReadFrom(RegisterOperand &op) {
+  return {&op, OperandAction::READ, OperandConstraint::MATCH};
+}
+
+// Returns an operand matcher against an operand that is only read.
+inline static OperandMatcher ExactReadOnlyFrom(RegisterOperand &op) {
+  return {&op, OperandAction::READ_ONLY, OperandConstraint::MATCH};
+}
+
+// Returns an operand matcher against an operand that is written.
+inline static OperandMatcher ExactWriteTo(RegisterOperand &op) {
+  return {&op, OperandAction::WRITE, OperandConstraint::MATCH};
+}
+
+// Returns an operand matcher against an operand that is only written.
+inline static OperandMatcher ExactWriteOnlyTo(RegisterOperand &op) {
+  return {&op, OperandAction::WRITE_ONLY, OperandConstraint::MATCH};
+}
+
+// Returns an operand matcher against an operand that is read and written.
+inline static OperandMatcher ExactReadAndWriteTo(RegisterOperand &op) {
+  return {&op, OperandAction::READ_AND_WRITE, OperandConstraint::MATCH};
+}
+
+// Returns an operand matcher against an operand that is read and written.
+inline static OperandMatcher ExactReadOrWriteTo(RegisterOperand &op) {
+  return {&op, OperandAction::ANY, OperandConstraint::MATCH};
+}
 
 }  // namespace granary
 

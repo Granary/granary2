@@ -26,6 +26,7 @@ namespace arch {
 class Instruction : public InstructionInterface {
  public:
   enum {
+    MAX_NUM_EXPLICIT_OPS = XED_ENCODER_OPERANDS_MAX,
     MAX_NUM_OPS = 11
   };
 
@@ -112,6 +113,12 @@ class Instruction : public InstructionInterface {
   // Returns true if an instruction writes to the stack pointer.
   bool WritesToStackPointer(void) const;
 
+  // Returns true if an instruction reads the flags.
+  bool ReadsFlags(void) const;
+
+  // Returns true if an instruction writes to the flags.
+  bool WritesFlags(void) const;
+
   // Analyze this instruction's use of the stack pointer.
   void AnalyzeStackUsage(void) const;
 
@@ -168,10 +175,7 @@ class Instruction : public InstructionInterface {
   // All operands that Granary can make sense of. This includes implicit and
   // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
-  //
-  // TODO(pag): Could optimize space by only storing explicit operands, and then
-  //            using `iclass` to look-up implicit/suppressed operands.
-  Operand ops[MAX_NUM_OPS];
+  Operand ops[MAX_NUM_EXPLICIT_OPS];
 } __attribute__((packed));
 
 }  // namespace arch

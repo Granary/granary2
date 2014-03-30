@@ -110,6 +110,11 @@ union VirtualRegister {
   // Note: This has an architecture-specific implementation.
   bool IsInstructionPointer(void) const;
 
+  // Is this the flags register?
+  //
+  // Note: This has an architecture-specific implementation.
+  bool IsFlags(void) const;
+
   // Returns this register's internal number.
   inline int Number(void) const {
     return static_cast<int>(reg_num);
@@ -117,6 +122,20 @@ union VirtualRegister {
 
   // Widen this virtual register to a specific bit width.
   void Widen(int dest_byte_width);
+
+  // Compare one virtual register with another.
+  //
+  // Note: This does not consider bit width.
+  inline bool operator==(const VirtualRegister that) const {
+    return reg_num == that.reg_num && kind == that.kind;
+  }
+
+  // Compare one virtual register with another.
+  //
+  // Note: This does not consider bit width.
+  inline bool operator!=(const VirtualRegister that) const {
+    return reg_num != that.reg_num || kind != that.kind;
+  }
 
  private:
   struct {

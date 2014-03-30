@@ -17,6 +17,7 @@ EXPORT_HEADERS = [
   "granary/cfg/instruction.h",
   "granary/cfg/factory.h",
   "granary/cfg/operand.h",
+  "granary/code/inline_assembly.h",
   "granary/ir/lir.h",
   "granary/breakpoint.h",
   "granary/client.h",
@@ -80,7 +81,13 @@ def filter_macros(file1, file2):
   for line in lines:
     line = line.strip("\r\n\t ")
     if not line.endswith("_H_"):
-      new_lines.append(line)
+      if "IF_ECLIPSE_" in line:
+        new_lines.append("#ifdef GRANARY_ECLIPSE")
+        line = line.replace("IF_ECLIPSE_", "")
+        new_lines.append(line)
+        new_lines.append("#endif")
+      else:
+        new_lines.append(line)
   return new_lines
 
 # Return a list of unique system headers to #include.

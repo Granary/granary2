@@ -118,8 +118,12 @@ bool VirtualRegister::IsStackPointer(void) const {
 
 // Is this the instruction pointer?
 bool VirtualRegister::IsInstructionPointer(void) const {
-  return XED_REG_RIP == reg_num || XED_REG_EIP == reg_num ||
-         XED_REG_IP == reg_num;
+  return XED_REG_IP_FIRST <= reg_num && XED_REG_IP_LAST >= reg_num;
+}
+
+// Is this the flags register?
+bool VirtualRegister::IsFlags(void) const {
+  return XED_REG_FLAGS_FIRST <= reg_num && XED_REG_FLAGS_LAST >= reg_num;
 }
 
 }  // namespace granary

@@ -64,6 +64,12 @@ class InstructionInterface {
   // Returns true if an instruction writes to the stack pointer.
   bool WritesToStackPointer(void) const;
 
+  // Returns true if an instruction reads the flags.
+  bool ReadsFlags(void) const;
+
+  // Returns true if an instruction writes to the flags.
+  bool WritesFlags(void) const;
+
   const char *OpCodeName(void) const;
 
   // Apply a function to every operand.

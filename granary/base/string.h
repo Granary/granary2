@@ -18,6 +18,18 @@ extern int granary_memcmp(const void * __restrict,
 }  // extern C
 #endif  // __cplusplus
 
+#ifdef memcpy
+# undef memcpy
+#endif
+
+#ifdef memset
+# undef memset
+#endif
+
+#ifdef memcmp
+# undef memcmp
+#endif
+
 #define memcpy granary_memcpy
 #define memset granary_memset
 #define memcmp granary_memcmp

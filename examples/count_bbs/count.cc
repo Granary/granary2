@@ -45,12 +45,26 @@ class BBCount : public Tool {
       return;
     }
 
-    auto meta = GetMetaData<BlockCounter>(bb);
-    GRANARY_UNUSED(meta);
+    Instruction *insert_instr = bb->FirstInstruction();
 
-    for (auto instr : bb->Instructions()) {
-      GRANARY_UNUSED(instr);
+    // Try to find a good place to insert this instruction such that the
+    // placement is before an instruction that kills the flags (but doesn't
+    // read them).
+    for (auto instr : bb->ReversedAppInstructions()) {
+      if (!IsA<ControlFlowInstruction *>(instr) &&
+          instr->WritesConditionCodes() &&
+          !instr->ReadsConditionCodes()) {
+        insert_instr = instr;
+        break;
+      }
     }
+
+    auto meta = GetMetaData<BlockCounter>(bb);
+    MemoryOperand counter_addr(&(meta->count));
+    InlineBefore(insert_instr, InlineInputs(counter_addr),
+                 "BEGIN;"
+                 "INC m64 %0;"
+                 "END;"_x86_64);
   }
 };
 

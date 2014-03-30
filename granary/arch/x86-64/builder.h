@@ -177,6 +177,8 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
 }  // namespace granary
 
 // Bring in the auto-generated instruction builder API.
-#include "generated/xed2-intel64/instruction_builder.cc"
+#ifndef GRANARY_EXCLUDE_INSTRUCTION_BUILDER
+# include "generated/xed2-intel64/instruction_builder.cc"
+#endif
 
 #endif  // GRANARY_ARCH_X86_64_BUILDER_H_
