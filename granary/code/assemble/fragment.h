@@ -87,18 +87,15 @@ class Fragment {
   Instruction *first;
   Instruction *last;
 
-  // Which physical registers are live on entry to and exit from this block.
-  RegisterUsageTracker entry_regs_live;
+  // Which physical registers are conservatively live on entry to and exit from
+  // this block.
+  LiveRegisterTracker entry_regs_live;
+  LiveRegisterTracker exit_regs_live;
 
-  // Live registers on exit, but where we're being conservative about the set
-  // of live registers (i.e. if a register is live in any successor, then treat
-  // it as live).
-  RegisterUsageTracker exit_regs_live;
-
-  // Live registers on exit, but where we're being conservative about the set
-  // of dead registers (i.e. if a register is dead in any successor, then treat
-  // it as dead).
-  RegisterUsageTracker exit_regs_dead;
+  // Which physical registers are conservatively dead on entry to and exit from
+  // this block.
+  DeadRegisterTracker entry_regs_dead;
+  DeadRegisterTracker exit_regs_dead;
 
  private:
   friend class FragmentBuilder;

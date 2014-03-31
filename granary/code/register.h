@@ -174,20 +174,14 @@ union VirtualRegister {
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
 
-// A class that tracks live, general purpose architectural registers within a
-// straight-line sequence of instructions.
-class RegisterUsageTracker
-    : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
+// Base implementation of a register tracker.
+class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
  public:
-  // Initialize the register tracker.
-  RegisterUsageTracker(void);
+  RegisterTracker(void) = default;
 
-  RegisterUsageTracker(const RegisterUsageTracker &that) {
+  RegisterTracker(const RegisterTracker &that) {
     Copy(that);
   }
-
-  // Update this register tracker by visiting the operands of an instruction.
-  void Visit(NativeInstruction *instr);
 
   // Kill all registers.
   inline void KillAll(void) {
@@ -250,23 +244,72 @@ class RegisterUsageTracker
   // Returns true if there was a change in the set of live registers. This is
   // useful when we want to be conservative about the potentially live
   // registers out of a specific block.
-  bool Union(const RegisterUsageTracker &that);
+  bool Union(const RegisterTracker &that);
 
   // Intersect some other live register set with the current live register set.
   // Returns true if there was a change in the set of live registers. This is
   // useful when we want to be conservative about the potentially dead registers
   // out of a specific block.
-  bool Intersect(const RegisterUsageTracker &that);
+  bool Intersect(const RegisterTracker &that);
 
   // Returns true if two register usage tracker sets are equivalent.
-  bool Equals(const RegisterUsageTracker &that) const;
+  bool Equals(const RegisterTracker &that) const;
 
   // Overwrites one register usage tracker with another.
-  RegisterUsageTracker &operator=(const RegisterUsageTracker &that) {
+  RegisterTracker &operator=(const RegisterTracker &that) {
     if (this != &that) {
       this->Copy(that);
     }
     return *this;
+  }
+};
+
+// A class that tracks conservatively live, general-purpose registers within a
+// straight-line sequence of instructions.
+//
+// A register is conservatively live if there exists a control-flow path to a
+// use of the register, where along that path there is no intermediate
+// definition of the register.
+//
+// Note: By default, all registers are treated as live.
+class LiveRegisterTracker: public RegisterTracker{
+ public:
+  inline LiveRegisterTracker(void) {
+    KillAll();
+  }
+
+  // Update this register tracker by visiting the operands of an instruction.
+  //
+  // Note: This treats conditional writes to a register as reviving that
+  //       register.
+  void Visit(NativeInstruction *instr);
+
+  inline void Join(const LiveRegisterTracker &that) {
+    Union(that);
+  }
+};
+
+// A class that tracks conservatively dead, general-purpose registers within a
+// straight-line sequence of instructions.
+//
+// A register is conservatively dead if there exists any control-flow path from
+// the current instruction of a definition of the instruction.
+//
+// Note: By default, all registers are treated as live.
+class DeadRegisterTracker : public RegisterTracker {
+ public:
+  inline DeadRegisterTracker(void) {
+    ReviveAll();
+  }
+
+  // Update this register tracker by visiting the operands of an instruction.
+  //
+  // Note: This treats conditional writes to a register as reviving that
+  //       register.
+  void Visit(NativeInstruction *instr);
+
+  inline void Join(const DeadRegisterTracker &that) {
+    Intersect(that);
   }
 };
 

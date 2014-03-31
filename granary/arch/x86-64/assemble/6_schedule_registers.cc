@@ -33,7 +33,7 @@ class VirtualRegisterInfo {
   // This is fairly rough constraint. This only really meaningful for introduced
   // `LEA` instructions that defined virtual registers as a combination of
   // several other non-virtual registers.
-  RegisterUsageTracker depends_on;
+  LiveRegisterTracker depends_on;
 
 } __attribute__((packed));
 
@@ -46,7 +46,7 @@ class VirtualRegisterTracker {
   // Find all defined virtual registers.
   void FindDefinitions(void) {
     for (auto frag : FragmentIterator(frags)) {
-      RegisterUsageTracker dead_regs(frag->exit_regs_dead);
+      DeadRegisterTracker dead_regs(frag->exit_regs_dead);
       for (auto instr : BackwardInstructionIterator(frag->last)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           VisitDef(ninstr, &dead_regs);
@@ -70,30 +70,24 @@ class VirtualRegisterTracker {
   void RemoveUnusedDefs(void) {
     // TODO(pag): What if the instruction modifies the flags??
     for (auto frag : FragmentIterator(frags)) {
-      Instruction *instr_to_remove(nullptr);
-      for (auto instr : BackwardInstructionIterator(frag->last)) {
+      for (Instruction *prev(nullptr), *instr(frag->last);
+           instr; instr = prev) {
+        prev = instr->Previous();
         if (IsA<NativeInstruction *>(instr)) {
-          if (instr_to_remove) {
-            frag->RemoveInstruction(instr_to_remove);
-            instr_to_remove = nullptr;
-          }
           if (auto def = GetMetaData<VirtualRegisterInfo *>(instr)) {
             if (!def->num_uses) {
               def->num_defs -= 1;
-              instr_to_remove = instr;
+              frag->RemoveInstruction(instr);
             }
           }
         }
-      }
-      if (instr_to_remove) {
-        frag->RemoveInstruction(instr_to_remove);
       }
     }
   }
 
  private:
   // Visit all instructions that define a virtual register.
-  void VisitDef(NativeInstruction *ninstr, RegisterUsageTracker *live_regs) {
+  void VisitDef(NativeInstruction *ninstr, DeadRegisterTracker *dead_regs) {
     auto &instr(ninstr->instruction);
     auto &def(instr.ops[0]);
     auto &source(instr.ops[1]);
@@ -123,11 +117,10 @@ class VirtualRegisterTracker {
       // then make sure that any architectural registers that our virtual
       // register depends on are not killed between its def and its use(s).
       if (info.has_value) {
-        RegisterUsageTracker used_regs;
-        used_regs.KillAll();
+        LiveRegisterTracker used_regs;
+        RegisterTracker dead_regs_shadow(*dead_regs);
         used_regs.Visit(ninstr);
-        RegisterUsageTracker dead_regs(*live_regs);
-        if (dead_regs.Union(used_regs)) {
+        if (dead_regs_shadow.Union(used_regs)) {
           // Annoying case:
           //    LEA [RAX] -> %0
           //    mov [%0] -> RAX
@@ -144,7 +137,7 @@ class VirtualRegisterTracker {
         }
       }
     }
-    live_regs->Visit(ninstr);
+    dead_regs->Visit(ninstr);
   }
 
   // Try to elide a use of a virtual register.
@@ -152,7 +145,7 @@ class VirtualRegisterTracker {
     for (auto &op : ninstr->instruction.ops) {
       if (op.IsRegister()) {
         if (op.reg.IsVirtual() && !op.IsWrite()) {
-          //TryRemoveVirtRegUseInRegOp(&op);
+          TryRemoveVirtRegUseInRegOp(&op);
         }
       } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
         if (!op.is_compound && op.reg.IsVirtual()) {
@@ -244,8 +237,8 @@ class VirtualRegisterTracker {
   // Try to elide a virtual register use inside of a register operand.
   void TryRemoveVirtRegUseInRegOp(arch::Operand *use) {
     auto &repl_info(regs[use->reg.Number()]);
-    if (repl_info.has_value) {
-      TryReplaceRegUseInRegOp(use, *use);
+    if (repl_info.has_value && TryReplaceRegUseInRegOp(use, *use)) {
+      return;
     }
     ++(repl_info.num_uses);
   }

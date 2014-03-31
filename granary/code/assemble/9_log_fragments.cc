@@ -62,7 +62,7 @@ static const char *FragmentBackground(const Fragment *frag) {
 }
 
 // Log some set of dead registers (e.g. dead regs on entry or exit).
-static bool LogDeadRegs(LogLevel level, const RegisterUsageTracker &regs) {
+static bool LogDeadRegs(LogLevel level, const LiveRegisterTracker &regs) {
   const char *sep = "";
   auto printed_dead = false;
   for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
@@ -123,7 +123,7 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 
 // Log the dead registers on exit of a fragment.
 static void LogDeadExitRegs(LogLevel level, const Fragment *frag) {
-  RegisterUsageTracker all_live;
+  LiveRegisterTracker all_live;
   all_live.ReviveAll();
   if (!all_live.Equals(frag->exit_regs_live)) {
     Log(level, "|");

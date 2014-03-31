@@ -15,85 +15,78 @@
 namespace granary {
 namespace {
 
+// Initialize the live entry regs as a data flow problem.
+static void InitFragments(Fragment * const frags) {
+  for (auto frag : FragmentIterator(frags)) {
+    if (frag->is_exit || frag->is_future_block_head) {
+      frag->entry_regs_live.ReviveAll();
+    }
+  }
+}
+
 // Update a register usage set with another fragment. Returns true if we
 // expect to find any local changes in our current fragment's register
 // liveness set based on the successor having a change in the last data flow
 // iteration.
-static void UpdateRegUsageFromSuccessor(Fragment *succ,
-                                        RegisterUsageTracker *regs) {
+static void JoinFromSuccessor(Fragment *succ, LiveRegisterTracker *live_regs,
+                              DeadRegisterTracker *dead_regs) {
   if (succ) {
-    regs->Union(succ->entry_regs_live);
+    live_regs->Join(succ->entry_regs_live);
+    dead_regs->Join(succ->entry_regs_dead);
   }
 }
 
 // Calculate the live registers on entry to a fragment.
-static void FindLiveEntryRegsToFrag(Fragment * const frag,
-                                    RegisterUsageTracker *regs) {
+static void VisitInstructions(Fragment * const frag,
+                                    LiveRegisterTracker *live_regs,
+                                    DeadRegisterTracker *dead_regs) {
   for (auto instr : BackwardInstructionIterator(frag->last)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      regs->Visit(ninstr);
+      live_regs->Visit(ninstr);
+      dead_regs->Visit(ninstr);
     }
   }
 }
 
-// Initialize the live entry regs as a data flow problem.
-static void InitLiveEntryRegsToFrags(Fragment * const frags) {
-  for (auto frag : FragmentIterator(frags)) {
-    if (frag->is_exit || frag->is_future_block_head) {
-      frag->entry_regs_live.ReviveAll();
-    } else {
-      frag->entry_regs_live.KillAll();
-    }
-    frag->exit_regs_live.KillAll();
-  }
-}
+// Calculate the live registers on entry to every fragment.
+bool VisitFragment(Fragment * const frag) {
+  LiveRegisterTracker live_regs;
+  DeadRegisterTracker dead_regs;
 
-// Find dead registers on exit of a fragment. This information is used in a
-// later stage, when we're looking at definitions of virtual registers based on
-// physical registers, to see if the physical registers have changed before they
-// are used.
-static void FindDeadExitRegsFromFrag(Fragment * const frags) {
-  for (auto frag : FragmentIterator(frags)) {
-    frag->exit_regs_dead.ReviveAll();
-    if (frag->fall_through_target) {
-      frag->exit_regs_dead.Intersect(
-          frag->fall_through_target->entry_regs_live);
-    }
-    if (frag->branch_target) {
-      frag->exit_regs_dead.Intersect(frag->branch_target->entry_regs_live);
+  JoinFromSuccessor(frag->fall_through_target, &live_regs, &dead_regs);
+  JoinFromSuccessor(frag->branch_target, &live_regs, &dead_regs);
+
+  if (live_regs.Equals(frag->exit_regs_live) &&
+      dead_regs.Equals(frag->exit_regs_dead)) {
+    return false;
+  } else {
+    frag->exit_regs_live = live_regs;
+    frag->exit_regs_dead = dead_regs;
+    VisitInstructions(frag, &live_regs, &dead_regs);
+    if (!live_regs.Equals(frag->entry_regs_live) ||
+        !dead_regs.Equals(frag->entry_regs_dead)) {
+      frag->entry_regs_live = live_regs;
+      frag->entry_regs_dead = dead_regs;
+      return true;
     }
   }
+  return false;
 }
 
 }  // namespace
 
 // Calculate the live registers on entry to every fragment.
 void FindLiveEntryRegsToFrags(Fragment * const frags) {
-  InitLiveEntryRegsToFrags(frags);
+  InitFragments(frags);
   for (bool data_flow_changed = true; data_flow_changed; ) {
     data_flow_changed = false;
     for (auto frag : FragmentIterator(frags)) {
       if (frag->is_exit || frag->is_future_block_head) {
         continue;
       }
-
-      RegisterUsageTracker regs;
-      regs.KillAll();
-      UpdateRegUsageFromSuccessor(frag->fall_through_target, &regs);
-      UpdateRegUsageFromSuccessor(frag->branch_target, &regs);
-      if (regs.Equals(frag->exit_regs_live)) {
-        continue;
-      }
-
-      frag->exit_regs_live = regs;
-      FindLiveEntryRegsToFrag(frag, &regs);
-      if (!regs.Equals(frag->entry_regs_live)) {
-        frag->entry_regs_live = regs;
-        data_flow_changed = true;
-      }
+      data_flow_changed = VisitFragment(frag) || data_flow_changed;
     }
   }
-  FindDeadExitRegsFromFrag(frags);
 }
 
 
