@@ -242,8 +242,8 @@ static bool ConvertDecodedOperand(Instruction *instr,
 
 // Convert the operands of a `xed_decoded_inst_t` to `Operand` types.
 static void ConvertDecodedOperands(Instruction *instr,
-                                   const xed_decoded_inst_t *xedd) {
-  auto num_ops = static_cast<unsigned>(instr->num_ops);
+                                   const xed_decoded_inst_t *xedd,
+                                   unsigned num_ops) {
   for (auto o = 0U; o < num_ops; ++o) {
     if (!ConvertDecodedOperand(instr, xedd, o)) {
       break;
@@ -275,10 +275,9 @@ static void ConvertDecodedInstruction(Instruction *instr,
       xed_decoded_inst_get_length(xedd));
   ConvertDecodedPrefixes(instr, xedd);
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
-  instr->num_ops = static_cast<uint8_t>(xed_inst_noperands(xedi));
   instr->effective_operand_width = static_cast<int8_t>(
       xed_decoded_inst_get_operand_width(xedd));
-  ConvertDecodedOperands(instr, xedd);
+  ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
   instr->AnalyzeStackUsage();
 }
 }  // namespace

@@ -151,12 +151,19 @@ enum InstructionAnnotation {
 
   // This identifies regions of code in the kernel that might fault. In Linux,
   // these regions are identified using exception tables.
+  //
+  // TODO(pag): Implement this.
   BEGIN_MIGHT_FAULT,
   END_MIGHT_FAULT,
 
   // Used to bound atomic regions of code.
+  //
+  // TODO(pag): Implement this.
   BEGIN_DELAY_INTERRUPT,
   END_DELAY_INTERRUPT,
+
+  // Represents an inline assembly instruction.
+  INLINE_ASSEMBLY,
 
   // Target of a branch instruction.
   LABEL

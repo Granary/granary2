@@ -7,6 +7,8 @@
 #include "granary/base/lock.h"
 #include "granary/base/string.h"
 
+#include "granary/cfg/instruction.h"
+
 #include "granary/breakpoint.h"
 #include "granary/context.h"
 #include "granary/tool.h"
@@ -79,6 +81,17 @@ Tool::Tool(void)
 }
 #pragma clang diagnostic pop
 
+// Closes any open inline assembly scopes.
+Tool::~Tool(void) {
+  curr_scope = 0;
+  for (auto scope : scopes) {
+    if (scope) {
+      EndInlineAssembly();
+    }
+    ++curr_scope;
+  }
+}
+
 // Used to instrument control-flow instructions and decide how basic blocks
 // should be materialized.
 //
@@ -108,12 +121,67 @@ void Tool::InstrumentBlock(DecodedBasicBlock *) {}
 // block, by the same tool, with the same `scope_id`.
 //
 // Note: `scope_id`s must be non-negative integers.
-void Tool::BeginInlineAssembly(DecodedBasicBlock *block,
-                               std::initializer_list<Operand *> inputs,
+void Tool::BeginInlineAssembly(std::initializer_list<Operand *> inputs,
                                int scope_id) {
-  GRANARY_UNUSED(block);
-  GRANARY_UNUSED(inputs);
-  GRANARY_UNUSED(scope_id);
+  ContinueInlineAssembly(scope_id);
+  EndInlineAssembly();
+  curr_scope = scope_id;
+  scopes[scope_id] = new InlineAssemblyScope(inputs);
+}
+
+// Switch to a different scope of inline assembly.
+void Tool::ContinueInlineAssembly(int scope_id) {
+  GRANARY_ASSERT(0 <= scope_id && scope_id < MAX_NUM_INLINE_ASM_SCOPES);
+  curr_scope = scope_id;
+}
+
+// End the current inline assembly scope.
+void Tool::EndInlineAssembly(void) {
+  if (-1 != curr_scope && scopes[curr_scope]) {
+    auto &scope(scopes[curr_scope]);
+    if (scope->CanDestroy()) {
+      delete scope;
+    }
+    scope = nullptr;
+    curr_scope = -1;
+  }
+}
+
+namespace {
+// Make a new inline assembly instruction.
+static Instruction *MakeInlineAssembly(InlineAssemblyScope *scope,
+                                       const char *line) {
+  auto block = new InlineAssemblyBlock(scope, line);
+  return new AnnotationInstruction(INLINE_ASSEMBLY, block);
+}
+}  // namespace
+
+// Inline some assembly code before `instr`. Returns the inlined instruction.
+Instruction *Tool::InlineBefore(Instruction *instr,
+                                std::initializer_list<const char *> lines) {
+  GRANARY_ASSERT(-1 != curr_scope);
+  auto scope = scopes[curr_scope];
+  for (auto line : lines) {
+    if (line) {
+      instr = instr->InsertBefore(
+          std::unique_ptr<Instruction>(MakeInlineAssembly(scope, line)));
+    }
+  }
+  return instr;
+}
+
+// Inline some assembly code after `instr`. Returns the inlined instruction.
+Instruction *Tool::InlineAfter(Instruction *instr,
+                               std::initializer_list<const char *> lines) {
+  GRANARY_ASSERT(-1 != curr_scope);
+  auto scope = scopes[curr_scope];
+  for (auto line : lines) {
+    if (line) {
+      instr = instr->InsertAfter(
+          std::unique_ptr<Instruction>(MakeInlineAssembly(scope, line)));
+    }
+  }
+  return instr;
 }
 
 // Register some meta-data with the meta-data manager associated with this
@@ -131,6 +199,10 @@ ToolManager::ToolManager(void)
       allocator() {
   memset(&(is_registered[0]), 0, sizeof is_registered);
   memset(&(descriptions[0]), 0, sizeof descriptions);
+}
+
+ToolManager::~ToolManager(void) {
+  allocator.Destroy();
 }
 
 // Register a tool given its description.

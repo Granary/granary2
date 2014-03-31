@@ -58,7 +58,7 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
 
 // Add this register as an operand to the instruction `instr`.
 void RegisterBuilder::Build(Instruction *instr) {
-  auto &op(instr->ops[instr->num_ops++]);
+  auto &op(instr->ops[instr->num_explicit_ops++]);
   op.type = XED_ENCODER_OPERAND_TYPE_REG;
   op.reg = reg;
   op.rw = action;
@@ -76,7 +76,7 @@ void RegisterBuilder::Build(Instruction *instr) {
 
 // Add this immediate as an operand to the instruction `instr`.
 void ImmediateBuilder::Build(Instruction *instr) {
-  auto &op(instr->ops[instr->num_ops++]);
+  auto &op(instr->ops[instr->num_explicit_ops++]);
   op.imm.as_uint = as_uint;
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
@@ -85,7 +85,7 @@ void ImmediateBuilder::Build(Instruction *instr) {
 
 // Add this memory as an operand to the instruction `instr`.
 void MemoryBuilder::Build(Instruction *instr) {
-  auto &instr_op(instr->ops[instr->num_ops++]);
+  auto &instr_op(instr->ops[instr->num_explicit_ops++]);
   instr_op.width = -1;  // Unknown.
   instr_op.is_compound = false;
   instr_op.is_effective_address = false;
@@ -109,7 +109,7 @@ void MemoryBuilder::Build(Instruction *instr) {
 
 // Add this branch target as an operand to the instruction `instr`.
 void BranchTargetBuilder::Build(Instruction *instr) {
-  auto &op(instr->ops[instr->num_ops++]);
+  auto &op(instr->ops[instr->num_explicit_ops++]);
   op.branch_target.as_pc = pc;
   op.rw = XED_OPERAND_ACTION_R;
   op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;

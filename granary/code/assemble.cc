@@ -7,6 +7,7 @@
 #include "granary/code/assemble.h"
 
 // Stages of assembly.
+#include "granary/code/assemble/0_compile_inline_assembly.h"
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_find_live_arch_registers.h"
@@ -23,17 +24,14 @@ GRANARY_DEFINE_bool(debug_log_assembled_fragments, false,
     "false.")
 
 namespace granary {
-namespace {
-
-#if 0
-
-#endif
-
-}  // namespace
 
 // Assemble the local control-flow graph.
 void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
               LocalControlFlowGraph *cfg) {
+
+  // Compile all inline assembly instructions by parsing the inline assembly
+  // instructions and doing code generation for them.
+  CompileInlineAssembly(cfg);
 
   // "Fix" instructions that might use PC-relative operands that are now too
   // far away from their original data/targets (e.g. if the code cache is really

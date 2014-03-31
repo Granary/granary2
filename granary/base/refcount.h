@@ -43,7 +43,6 @@ class UnownedCountedObject {
     return 0 >= count;
   }
 #endif  // GRANARY_INTERNAL
-
  private:
   int count;
 };

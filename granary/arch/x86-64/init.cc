@@ -23,9 +23,29 @@ const Operand *IMPLICIT_OPERANDS[XED_ICLASS_LAST] = {nullptr};
 // Number of implicit operands for each iclass.
 int NUM_IMPLICIT_OPERANDS[XED_ICLASS_LAST] = {0};
 
+// Categories of every iclass.
+xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
+
+// Table to find the instruction selections for each iclass.
+const xed_inst_t *ICLASS_SELECTIONS[XED_ICLASS_LAST] = {nullptr};
+
 namespace {
 
+// Number of pages allocates to hold the table of implicit operands.
 static int num_implicit_operand_pages = 0;
+
+// Initialize the table of iclass categories.
+static void InitIclassTables(void) {
+  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
+    auto instr = xed_inst_table_base() + sel;
+    auto iclass = xed_inst_iclass(instr);
+    if (!ICLASS_SELECTIONS[iclass]) {
+      auto category = xed_inst_category(instr);
+      ICLASS_SELECTIONS[iclass] = instr;
+      ICLASS_CATEGORIES[iclass] = category;
+    }
+  }
+}
 
 // Invoke a function one every implicit operand of each iclass.
 static void ForEachImplicitOperand(
@@ -144,7 +164,11 @@ static bool ConvertNonTerminalOperand(Operand *instr_op,
       FillRegisterOperand(instr_op, XED_REG_RBP); return true;
     case XED_NONTERMINAL_SRSP:  // Shift RSP?
       FillRegisterOperand(instr_op, XED_REG_RSP); return true;
-    default: return false;
+    case XED_NONTERMINAL_RFLAGS:
+      FillRegisterOperand(instr_op, XED_REG_RFLAGS); return true;
+    default:
+      GRANARY_ASSERT(false);
+      return false;
   }
 }
 
@@ -206,6 +230,7 @@ void Init(void) {
   xed_state_zero(&XED_STATE);
   xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
                  XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
+  InitIclassTables();
   InitOperandTables();
 }
 

@@ -121,6 +121,8 @@ union VirtualRegister {
   }
 
   // Widen this virtual register to a specific bit width.
+  //
+  // Note: This has an architecture-specific implementation.
   void Widen(int dest_byte_width);
 
   // Compare one virtual register with another.

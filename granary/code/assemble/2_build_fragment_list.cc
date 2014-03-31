@@ -125,13 +125,16 @@ class FragmentBuilder {
     auto branch = DynamicCast<BranchInstruction *>(instr);
     auto label = branch->TargetInstruction();
     auto next = instr->Next();
-    frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
-    frag->branch_target = GetOrMakeLabelFragment(block, label);
-    frag->branch_instr = branch;
+
     if (branch->IsConditionalJump()) {
+      frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
+      frag->branch_instr = branch;
       frag->fall_through_target = MakeEmptyLabelFragment(
           block, new LabelInstruction);
       ExtendFragment(frag->fall_through_target, block, next);
+      frag->branch_target = GetOrMakeLabelFragment(block, label);
+    } else {
+      frag->fall_through_target = GetOrMakeLabelFragment(block, label);
     }
   }
 
@@ -206,7 +209,6 @@ class FragmentBuilder {
         auto label = new LabelInstruction;
         frag->fall_through_target = MakeEmptyLabelFragment(block, label);
         frag = frag->fall_through_target;
-        SetMetaData(label, frag);
         ExtendFragment(frag, block, next);
       }
     }
@@ -218,7 +220,6 @@ class FragmentBuilder {
     auto label = new LabelInstruction;
     frag->fall_through_target = MakeEmptyLabelFragment(block, label);
     frag = frag->fall_through_target;
-    SetMetaData<Fragment *>(label, frag);
     ExtendFragment(frag, block, next);
   }
 

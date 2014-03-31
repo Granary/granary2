@@ -135,6 +135,10 @@ class Operand {
   // operand is being replaced with one that has the correct type.
   GRANARY_INTERNAL_DEFINITION void UnsafeReplace(arch::Operand *op_);
 
+  // Returns a pointer to the internal, arch-specific memory operand.
+  GRANARY_INTERNAL_DEFINITION
+  const arch::Operand *Extract(void) const;
+
   GRANARY_DECLARE_BASE_CLASS(Operand)
 
  GRANARY_PROTECTED:

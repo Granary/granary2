@@ -323,6 +323,8 @@ class MetaDataManager {
   // Initialize an empty meta-data manager.
   MetaDataManager(void);
 
+  ~MetaDataManager(void);
+
   // Register some meta-data with Granary. This is a convenience method around
   // the `Register` method that operates directly on a meta-data description.
   template <typename T>

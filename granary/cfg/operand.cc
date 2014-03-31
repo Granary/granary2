@@ -80,8 +80,13 @@ Operand::Operand(arch::Operand *op_)
 
 // Replace the internal operand memory.
 void Operand::UnsafeReplace(arch::Operand *op_) {
-  op.Construct<arch::Operand &>(*op_);
+  op.Construct<const arch::Operand &>(*op_);
   op_ptr = op_;
+}
+
+// Returns a pointer to the internal, arch-specific memory operand.
+const arch::Operand *Operand::Extract(void) const {
+  return op.AddressOf();
 }
 
 bool Operand::IsRead(void) const {

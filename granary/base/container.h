@@ -13,9 +13,10 @@ template <typename T>
 class Container {
  public:
   Container(void) = default;
+  ~Container(void) = default;
 
   // Destroy the contained object.
-  ~Container(void) {
+  void Destroy(void) {
     operator->()->~T();
   }
 

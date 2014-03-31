@@ -166,9 +166,6 @@ class Instruction : public InstructionInterface {
   // Number of explicit operands.
   uint8_t num_explicit_ops:4;
 
-  // Total number of operands.
-  uint8_t num_ops:4;
-
   // The effective operand width at decode time, or -1 if unknown.
   int8_t effective_operand_width;
 

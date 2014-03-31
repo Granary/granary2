@@ -32,7 +32,9 @@ GRANARY_INTERNAL_DEFINITION enum {
 class Tool {
  public:
   Tool(void);
-  virtual ~Tool(void) = default;
+
+  // Closes any open inline assembly scopes.
+  virtual ~Tool(void);
 
   // Used to instrument control-flow instructions and decide how basic blocks
   // should be materialized.
@@ -66,6 +68,8 @@ class Tool {
     RegisterMetaData(MetaDataDescription::Get<T>());
   }
 
+ protected:
+
   // Begin inserting some inline assembly. This takes in an optional scope
   // specifier, which allows tools to use the same variables in two or more
   // different contexts/scopes of instrumentation and not have them clash. This
@@ -74,8 +78,7 @@ class Tool {
   // block, by the same tool, with the same `scope_id`.
   //
   // Note: `scope_id`s must be non-negative integers.
-  void BeginInlineAssembly(DecodedBasicBlock *block,
-                           std::initializer_list<Operand *> inputs,
+  void BeginInlineAssembly(std::initializer_list<Operand *> inputs,
                            int scope_id=0);
 
   // Switch to a different scope of inline assembly.
@@ -133,9 +136,11 @@ class Tool {
   Instruction *InlineBefore(Instruction *instr,
                             std::initializer_list<const char *> lines);
 
-  // Inline some assembly code before `instr`. Returns the inlined instruction.
+  // Inline some assembly code after `instr`. Returns the inlined instruction.
   Instruction *InlineAfter(Instruction *instr,
                            std::initializer_list<const char *> lines);
+
+ GRANARY_PUBLIC:
 
   // Register some meta-data with the meta-data manager associated with this
   // tool.
@@ -149,7 +154,7 @@ class Tool {
 
  private:
   GRANARY_CONST int curr_scope;
-  GRANARY_POINTER(InlineAssembly) *scopes[MAX_NUM_INLINE_ASM_SCOPES];
+  GRANARY_POINTER(InlineAssemblyScope) *scopes[MAX_NUM_INLINE_ASM_SCOPES];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Tool);
 };
@@ -197,6 +202,7 @@ class ToolManager {
  public:
   // Initialize an empty tool manager.
   ToolManager(void);
+  ~ToolManager(void);
 
   // Register a tool with this manager using the tool's name. This will look
   // up the tool in the global list of all registered Granary tools.

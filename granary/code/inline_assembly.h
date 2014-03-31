@@ -8,6 +8,7 @@
 #ifdef GRANARY_INTERNAL
 # include "granary/base/container.h"
 # include "granary/base/new.h"
+# include "granary/base/refcount.h"
 
 # include "granary/cfg/operand.h"
 #endif
@@ -23,43 +24,91 @@ enum {
 // Forward declarations.
 class DecodedBasicBlock;
 class LabelInstruction;
+class Instruction;
 
 // A variable in the inline assembly. Variables are untyped, and assumed to
 // be used in the correct way from the inline assembly instructions themselves.
 union InlineAssemblyVariable {
+ public:
+  InlineAssemblyVariable(void) = default;
+
+  // Initialize the inline assembly variable with a particular operand.
+  explicit InlineAssemblyVariable(Operand *op);
+
   Container<RegisterOperand> reg;
   Container<MemoryOperand> mem;
   Container<ImmediateOperand> imm;
 
   // This variable is actually a label. Labels can be referenced before they
-  // are defined, and so we need to track whether or not the label instruction
-  // has been attached
-  struct {
-    LabelInstruction *instr;
-    bool is_attached;
-  } label;
+  // are placed in the instruction stream, i.e. before they are defined.
+  LabelInstruction *label;
 };
+
+static_assert(0 == offsetof(InlineAssemblyVariable, reg),
+    "Invalid structure packing of `union InlineAssemblyVariable`.");
+
+static_assert(0 == offsetof(InlineAssemblyVariable, mem),
+    "Invalid structure packing of `union InlineAssemblyVariable`.");
+
+static_assert(0 == offsetof(InlineAssemblyVariable, imm),
+    "Invalid structure packing of `union InlineAssemblyVariable`.");
+
 
 // Represents a scope of inline assembly. Within this scope, several virtual
 // registers are live.
-class InlineAssemblyScope {
+class InlineAssemblyScope : public UnownedCountedObject {
  public:
+  // Initialize the input variables to the scope.
+  explicit InlineAssemblyScope(std::initializer_list<Operand *> inputs);
+  virtual ~InlineAssemblyScope(void);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
+
+  InlineAssemblyScope(void) = delete;
+
   // Variables used/referenced/created within the scope.
   InlineAssemblyVariable vars[MAX_NUM_INLINE_VARS];
   BitSet<MAX_NUM_INLINE_VARS> var_is_initialized;
 
-  // Is this scope still open? While a scope is open, inline assembly blocks
-  // can continue to reference it.
-  bool is_open;
-
-  // The basic block in which our inline assembly instructions belong.
-  DecodedBasicBlock *block;
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssemblyScope);
 };
 
 // Represents a block of inline assembly instructions.
 class InlineAssemblyBlock {
  public:
+  // Initialize this block of inline assembly.
+  //
+  // Note: This will acquire a reference count on the scope referenced by this
+  //       block.
+  InlineAssemblyBlock(InlineAssemblyScope *scope_, const char *assembly_);
 
+  // Destroy this block of inline assembly.
+  //
+  // Note: This will delete the associated scope iff, after releasing a
+  //       reference to the scope, the scope has no more references pointing
+  //       to it.
+  ~InlineAssemblyBlock(void);
+
+  // Compile this inline assembly into some instructions within the block
+  // `block`. This places the inlined instructions before `instr`, which is
+  // assumed to be the `AnnotationInstruction` containing the inline assembly
+  // instructions.
+  //
+  // Note: This has an architecture-specific implementation.
+  void Compile(DecodedBasicBlock *block, Instruction *instr);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
+
+ private:
+  InlineAssemblyScope * const scope;
+  const char * const assembly;
 };
 #endif  // GRANARY_INTERNAL
 

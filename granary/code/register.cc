@@ -8,17 +8,6 @@
 
 namespace granary {
 
-// Widen this virtual register to a specific bit width.
-void VirtualRegister::Widen(int dest_byte_width) {
-  switch (dest_byte_width) {
-    case 1: num_bytes = 1; return;
-    case 2: num_bytes = 2; return;
-    case 4: num_bytes = 4; return;
-    case 8: num_bytes = 5; return;
-    default: GRANARY_ASSERT(false);
-  }
-}
-
 // Initialize the register tracker.
 RegisterUsageTracker::RegisterUsageTracker(void) {
   ReviveAll();

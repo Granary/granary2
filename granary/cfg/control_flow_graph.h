@@ -40,14 +40,14 @@ class LocalControlFlowGraph final {
   // Returns an iterable that can be used inside of a range-based for loop. For
   // example:
   //
-  //    for(auto block : cfg.Blocks())
+  //    for (auto block : cfg.Blocks())
   //      ...
   BasicBlockIterator Blocks(void) const;
 
   // Returns an iterable that can be used inside of a range-based for loop. For
   // example:
   //
-  //    for(auto block : cfg.NewBlocks())
+  //    for (auto block : cfg.NewBlocks())
   //      ...
   //
   // The distinction between `Blocks` and `NewBlocks` is relevant to

@@ -110,6 +110,33 @@ int VirtualRegister::EncodeToNative(void) const {
   }
 }
 
+// Widen this virtual register to a specific bit width.
+void VirtualRegister::Widen(int dest_byte_width) {
+  switch (dest_byte_width) {
+    case 1:
+      num_bytes = 1;
+      byte_mask = LOW_BYTE;
+      preserved_byte_mask = HIGH_7_BYTES;
+      return;
+    case 2:
+      num_bytes = 2;
+      byte_mask = LOW_2_BYTES;
+      preserved_byte_mask = HIGH_6_BYTES;
+      return;
+    case 4:
+      num_bytes = 4;
+      byte_mask = LOW_4_BYTES;
+      preserved_byte_mask = 0;
+      return;
+    case 8:
+      num_bytes = 5;
+      byte_mask = ALL_8_BYTES;
+      preserved_byte_mask = 0;
+      return;
+    default: GRANARY_ASSERT(false);
+  }
+}
+
 // Is this the stack pointer?
 bool VirtualRegister::IsStackPointer(void) const {
   return XED_REG_RSP == reg_num || XED_REG_ESP == reg_num ||

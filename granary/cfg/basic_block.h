@@ -109,7 +109,7 @@ class BasicBlock : protected UnownedCountedObject {
 
   // Find the successors of this basic block. This can be used as follows:
   //
-  //    for(auto succ : block->Successors()) {
+  //    for (auto succ : block->Successors()) {
   //      succ.block
   //      succ.cti
   //    }

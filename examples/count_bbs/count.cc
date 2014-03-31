@@ -35,16 +35,12 @@ class BBCount : public Tool {
       RegisterMetaData<BlockCounter>();
     }
   }
-
   virtual ~BBCount(void) = default;
-
-  // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
       return;
     }
-
     Instruction *insert_instr = bb->FirstInstruction();
 
     // Try to find a good place to insert this instruction such that the
@@ -61,10 +57,12 @@ class BBCount : public Tool {
 
     auto meta = GetMetaData<BlockCounter>(bb);
     MemoryOperand counter_addr(&(meta->count));
-    InlineBefore(insert_instr, InlineInputs(counter_addr),
+    BeginInlineAssembly({&counter_addr});
+    InlineBefore(insert_instr,
                  "BEGIN;"
                  "INC m64 %0;"
                  "END;"_x86_64);
+    EndInlineAssembly();
   }
 };
 
