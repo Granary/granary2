@@ -208,8 +208,7 @@ class FragmentBuilder {
       } else {
         auto label = new LabelInstruction;
         frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-        frag = frag->fall_through_target;
-        ExtendFragment(frag, block, next);
+        ExtendFragment(frag->fall_through_target, block, next);
       }
     }
   }
@@ -219,8 +218,16 @@ class FragmentBuilder {
                                   Instruction *next) {
     auto label = new LabelInstruction;
     frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-    frag = frag->fall_through_target;
-    ExtendFragment(frag, block, next);
+    ExtendFragment(frag->fall_through_target, block, next);
+  }
+
+  // Split a fragment at a point where the instructions in the block change
+  // from instrumentation-added -> app, or app -> instrumentation added.
+  void SplitFragmentAtAppChange(Fragment *frag, DecodedBasicBlock *block,
+                                Instruction *next) {
+    auto label = new LabelInstruction;
+    frag->fall_through_target = MakeEmptyLabelFragment(block, label);
+    ExtendFragment(frag->fall_through_target, block, next);
   }
 
   // Extend a fragment with the instructions from a particular basic block.
@@ -228,14 +235,31 @@ class FragmentBuilder {
   void ExtendFragment(Fragment *frag, DecodedBasicBlock *block,
                       Instruction *instr) {
     const auto last_instr = block->LastInstruction();
-    for (; instr != last_instr; ) {
+    auto prev_instr_is_app = false;
+    for (auto seen_first_instr(false); instr != last_instr; ) {
+
       // Treat every label as beginning a new fragment.
       if (IsA<LabelInstruction *>(instr)) {
         return SplitFragmentAtLabel(frag, block, instr);
+      }
+
+      // Split instructions into fragments such that fragments contain either
+      // all native instructions, or all instrumentation instructions, but not
+      // both. This splitting is used in a later stage to allow us to reason
+      // about saving/restoring flags state between two native instructions
+      // that are separated by instrumentation instructions.
+      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (!seen_first_instr) {
+          seen_first_instr = true;
+          prev_instr_is_app = ninstr->IsAppInstruction();
+        } else if (ninstr->IsAppInstruction() != prev_instr_is_app) {
+          return SplitFragmentAtAppChange(frag, block, instr);
+        }
+      }
 
       // Found a local branch; add in the fall-through and/or the branch
       // target.
-      } else if (IsA<BranchInstruction *>(instr)) {
+      if (IsA<BranchInstruction *>(instr)) {
         return SplitFragmentAtBranch(frag, block, instr);
 
       // Found a non-local branch to a basic block.

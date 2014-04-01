@@ -37,7 +37,7 @@ class Watchpoints : public Tool {
       // `MOVS`, `STOS`, etc.), then we need to restore the watched bits after
       // the emulated instruction.
       RegisterOperand addr_reg(addr);
-      auto updates_address_reg = instr->MatchOperands(
+      auto updates_address_reg = addr.IsNative() && instr->MatchOperands(
           ExactReadAndWriteTo(addr_reg));
 
       BeginInlineAssembly({&addr_reg}, scope_id);

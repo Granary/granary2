@@ -113,9 +113,15 @@ static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
 static void LogInstructions(LogLevel level, const Fragment *frag) {
   for (auto instr : ForwardInstructionIterator(frag->first)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (ninstr->IsAppInstruction()) {
+        Log(level, "<FONT POINT-SIZE=\"11\" FACE=\"Courier-Bold\">");
+      }
       Log(level, "%s", ninstr->OpCodeName());
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);
+      if (ninstr->IsAppInstruction()) {
+        Log(level, "</FONT>");
+      }
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
     }
   }
@@ -160,7 +166,7 @@ static void LogFragment(LogLevel level, const Fragment *frag) {
 // Log a list of fragments as a DOT digraph.
 void Log(LogLevel level, Fragment *frags) {
   Log(level, "digraph {\n"
-             "node [fontname=Courier shape=record"
+             "node [fontname=courier shape=record"
              " nojustify=false labeljust=l style=filled];\n"
              "f0 [color=white fontcolor=white];\n");
   LogFragmentEdge(level, nullptr, frags);

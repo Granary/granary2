@@ -151,16 +151,18 @@ class InlineAssemblyParser {
   void ParseInPlaceOp(void) {
     auto var_num = ParseVar();
     GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
-    auto &untyped_op(scope->vars[var_num].mem);
+    auto &untyped_op(scope->vars[var_num].mem);  // Operand containers overlap.
     memcpy(op, untyped_op->Extract(), sizeof *op);
   }
 
+  // TODO(pag): Only supports base form right now, i.e. `[%0]` and not the full
+  //            `segment:[disp + base + index * scale]` form.
   void ParseMemoryOp(void) {
     Accept('[');
     ConsumeWhiteSpace();
     auto var_num = ParseVar();
     GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
-    auto &reg_op(scope->vars[var_num].reg);  // Operand containers overlap.
+    auto &reg_op(scope->vars[var_num].reg);
     op->type = XED_ENCODER_OPERAND_TYPE_MEM;
     op->reg = reg_op->Register();
     ConsumeWhiteSpace();
