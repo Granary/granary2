@@ -4,24 +4,26 @@
 
 using namespace granary;
 
-// Simple tool for tracing direct and synthesized jumps (but not conditional
-// jumps) in a control-flow graph.
+// Simple tool for tracing direct control-flow instructions into traces.
 class JumpFollower : public Tool {
  public:
   virtual ~JumpFollower(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
-      if (IsA<IndirectBasicBlock *>(block) || IsA<ReturnBasicBlock *>(block)) {
+      if (!IsA<DecodedBasicBlock *>(block)) {
         continue;
       }
-
       for (auto succ : block->Successors()) {
         factory->RequestBlock(succ.block);  // TODO(pag): Remove me!
         continue;  // TODO(pag): Remove me!
 
         if (succ.cti->IsConditionalJump()) {
           // Expand the target of a conditional jump only if it's a back-edge.
+          // The default branch prediction behavior on x86, absent any prior
+          // knowledge, is to predict a conditional jump if it's a back-edge.
+          // We expect that compilers will attempt to layout code such that
+          // this is the expected path to follow.
           if (succ.block->StartAppPC() < block->StartAppPC()) {
             factory->RequestBlock(succ.block);
             break;

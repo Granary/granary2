@@ -9,7 +9,9 @@ using namespace granary;
 // TODO(pag): Eventually handle user space syscalls to avoid EFAULTs.
 // TODO(pag): Eventually handle user space signals.
 // TODO(pag): Eventually handle kernel space bit waitqueues.
-// TODO(pag): Evenetually handle kernel space interrupts.
+// TODO(pag): Eventually handle kernel space interrupts.
+// TODO(pag): Eventually handle user space addresses being de-referenced in
+//            kernel space.
 
 // Implements the instrumentation needed to do address watchpoints. Address
 // watchpoints work by tainting memory addresses, such that
