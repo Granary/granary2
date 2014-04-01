@@ -14,6 +14,40 @@
 namespace granary {
 
 // Wraps up state that is used to build fragments.
+//
+// The high-level goal of this stage of assembly is to take input basic blocks
+// from a local-control-flow graph and turn them into "true" basic blocks (with
+// some added restrictions one when these true blocks end) and form a control-
+// flow graph.
+//
+// At decode time, the local control-flow graph is formed of "true" basic
+// blocks. However, instrumentation tools might inject abitrary control-flow
+// into basic blocks (e.g. via inline assembly). By the time we get around to
+// wanting to convert instrumented blocks into machine code, we hit a wall
+// where we can't assume that control flows linearly through the instructions
+// of a `DecodedBasicBlock`, and this really complicates virtual register
+// allocation (which is a pre-requisite to encoding).
+//
+// Therefore, it's necessary to "re-split up" `DecodedBasicBlocks` into actual
+// basic blocks. However, we go further than the typical definition of a basic
+// block, hence the name `Fragment`.
+//
+// A `Fragment` is a maximal sequence of instructions ending in an instruction
+// that:
+//      1)  Branches somewhere else (a control-flow instructions).
+//      2)  Alters the stack pointer. This extra condition is used during
+//          stage 4, to partition / color fragments. The key idea here is that
+//          in kernel space, we can use the stack for allocating virtual
+//          registers if the stack is "safe" (i.e. behaves like a C-style
+//          call stack). An example of an "unsafe" stack is a user space stack.
+//      3)  Is or is not an application / native instruction. That is, fragments
+//          contain either all application or all instrumentation instructions.
+//          This makes flags usage analysis, saving, and restoring easier
+//          because then we can reason about the problem at the granularity of
+//          fragments, and employ data flow frameworks to tackle the problem.
+//      4)  Is a label instruction. Label instructions are assumed to be
+//          targeted by local branch instructions, and so we eagerly split
+//          fragments at label instructions based on this assumption.
 class FragmentBuilder {
  public:
   inline FragmentBuilder(void)
@@ -99,9 +133,9 @@ class FragmentBuilder {
   }
 
   // Split a fragment into two at a label instruction `instr`. If the label
-  // is already associated with a `Fragment` instance then set that fragment as
-  // the fall-through of our current fragment. If new `Fragment` instance is
-  // associated with the label, then create one, add the association, and
+  // is already associated with a `Fragment` instance then set that fragment
+  // as the fall-through of our current fragment. If new `Fragment` instance
+  // is associated with the label, then create one, add the association, and
   // add the instructions following the label into the new fragment.
   void SplitFragmentAtLabel(Fragment *frag, DecodedBasicBlock *block,
                             Instruction *instr) {
@@ -141,10 +175,8 @@ class FragmentBuilder {
   // Return the fragment for a block that is targeted by a control-flow
   // instruction.
   Fragment *FragmentForTargetBlock(BasicBlock *block) {
-    // Function/interrupt/system return. We can never be sure in any of
-    // these cases if execution returns to the code cache, and even then,
-    // meta-data doesn't flow to the targets of returns because it's never
-    // clear to what context execution returns.
+    // Function/interrupt/system return. In these cases, we can't be sure (at
+    // instrumentationin time) that execution returns to the code cache.
     //
     // OR:
     //
@@ -235,8 +267,8 @@ class FragmentBuilder {
   void ExtendFragment(Fragment *frag, DecodedBasicBlock *block,
                       Instruction *instr) {
     const auto last_instr = block->LastInstruction();
-    auto prev_instr_is_app = false;
-    for (auto seen_first_instr(false); instr != last_instr; ) {
+    auto prev_native_instr_is_app = false;
+    for (auto seen_first_native_instr(false); instr != last_instr; ) {
 
       // Treat every label as beginning a new fragment.
       if (IsA<LabelInstruction *>(instr)) {
@@ -249,10 +281,10 @@ class FragmentBuilder {
       // about saving/restoring flags state between two native instructions
       // that are separated by instrumentation instructions.
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        if (!seen_first_instr) {
-          seen_first_instr = true;
-          prev_instr_is_app = ninstr->IsAppInstruction();
-        } else if (ninstr->IsAppInstruction() != prev_instr_is_app) {
+        if (!seen_first_native_instr) {
+          seen_first_native_instr = true;
+          prev_native_instr_is_app = ninstr->IsAppInstruction();
+        } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app) {
           return SplitFragmentAtAppChange(frag, block, instr);
         }
       }
