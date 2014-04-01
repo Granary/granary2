@@ -138,7 +138,9 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   auto base_reg = xed_decoded_inst_get_base_reg(xedd, index);
   auto index_reg = xed_decoded_inst_get_index_reg(xedd, index);
 
-  if (XED_REG_INVALID == index_reg && XED_REG_INVALID == segment_reg && !disp) {
+  if (XED_REG_INVALID == segment_reg &&
+      ((XED_REG_INVALID == index_reg && !disp) ||
+       (XED_REG_INVALID == base_reg && 1 == disp))) {
     instr_op->reg.DecodeFromNative(static_cast<int>(base_reg));
   } else {
     instr_op->mem.disp = static_cast<int32_t>(disp);
