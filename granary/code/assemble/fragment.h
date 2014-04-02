@@ -26,12 +26,24 @@ class LocalControlFlowGraph;
 class BlockMetaData;
 class FragmentBuilder;
 
+// Defines the different categories of fragments.
+enum FragmentKind : uint8_t {
+  FRAG_KIND_INSTRUMENTATION,
+  FRAG_KIND_APPLICATION,
+  FRAG_KIND_PARTITION_ENTRY,
+  FRAG_KIND_PARTITION_EXIT,
+  FRAG_KIND_FLAG_ENTRY,
+  FRAG_KIND_FLAG_EXIT
+};
+
 // Represents a basic block in the true sense. Granary basic blocks can contain
 // local control flow, so they need to be split into fragments of instructions
 // that more closely represent the actual run-time control flow. This lower
 // level model is needed for register allocation, etc.
 class Fragment {
  public:
+  // Initialize the fragment from a basic block.
+  explicit Fragment(int id_);
 
   // Next fragment in the fragment list. This is always associated with an
   // implicit control-flow instruction between two fragments.
@@ -45,6 +57,9 @@ class Fragment {
   // All fragments are chained together into a list for simple iteration,
   // freeing, etc.
   Fragment *next;
+
+  // A back-link pointer that is used to temporarily store some other meta-data.
+  Fragment *transient_back_link;
 
   // Unique ID of this fragment.
   const int id;
@@ -65,6 +80,9 @@ class Fragment {
   // stack switch, where the stack might not be valid.
   bool writes_to_stack_pointer:1;
   bool reads_from_stack_pointer:1;
+
+  // Pseudo entry/exit fragment types.
+  FragmentKind kind;
 
   // Identifier of a "stack region". This is a very coarse grained concept,
   // where we color fragments according to:
@@ -101,9 +119,6 @@ class Fragment {
   friend class FragmentBuilder;
 
   Fragment(void) = delete;
-
-  // Initialize the fragment from a basic block.
-  explicit Fragment(int id_);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
     SHARED = true,

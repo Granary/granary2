@@ -62,7 +62,11 @@ static const char *FragmentBackground(const Fragment *frag) {
 }
 
 // Log some set of dead registers (e.g. dead regs on entry or exit).
-static bool LogDeadRegs(LogLevel level, const LiveRegisterTracker &regs) {
+static bool LogDeadRegs(LogLevel level, const Fragment *frag,
+                        const LiveRegisterTracker &regs) {
+  if (FRAG_KIND_APPLICATION != frag->kind && FRAG_KIND_INSTRUMENTATION != frag->kind) {
+    return false;
+  }
   const char *sep = "";
   auto printed_dead = false;
   for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
@@ -129,18 +133,30 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 
 // Log the dead registers on exit of a fragment.
 static void LogDeadExitRegs(LogLevel level, const Fragment *frag) {
+  if (FRAG_KIND_APPLICATION != frag->kind &&
+      FRAG_KIND_INSTRUMENTATION != frag->kind) {
+    return;
+  }
   LiveRegisterTracker all_live;
   all_live.ReviveAll();
   if (!all_live.Equals(frag->exit_regs_live)) {
     Log(level, "|");
-    LogDeadRegs(level, frag->exit_regs_live);
+    LogDeadRegs(level, frag, frag->exit_regs_live);
   }
 }
 
 // If this fragment is the head of a basic block then log the basic block's
 // entry address.
-static void LogBlockEntryAddress(LogLevel level, const Fragment *frag) {
-  if (frag->block_meta &&
+static void LogBlockHeader(LogLevel level, const Fragment *frag) {
+  if (FRAG_KIND_PARTITION_ENTRY == frag->kind) {
+    Log(level, "partition entry|");
+  } else if (FRAG_KIND_PARTITION_EXIT == frag->kind) {
+    Log(level, "partition exit|");
+  } else if (FRAG_KIND_FLAG_ENTRY == frag->kind) {
+    Log(level, "flag entry|");
+  } else if (FRAG_KIND_FLAG_EXIT == frag->kind) {
+    Log(level, "flag exit|");
+  } else if (frag->block_meta &&
       (frag->is_decoded_block_head || frag->is_future_block_head)) {
     auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);
     Log(level, "%p|", meta->start_pc);
@@ -151,8 +167,9 @@ static void LogBlockEntryAddress(LogLevel level, const Fragment *frag) {
 static void LogFragment(LogLevel level, const Fragment *frag) {
   Log(level, "f%p [fillcolor=%s label=<%d|{",
       reinterpret_cast<const void *>(frag), FragmentBackground(frag), frag->id);
-  LogBlockEntryAddress(level, frag);
-  auto printed_entry_dead_regs = LogDeadRegs(level, frag->entry_regs_live);
+  LogBlockHeader(level, frag);
+  auto printed_entry_dead_regs = LogDeadRegs(level, frag,
+                                             frag->entry_regs_live);
   if (!frag->is_exit && !frag->is_future_block_head) {
     Log(level, "%s", printed_entry_dead_regs ? "|" : "");
     LogInstructions(level, frag);
@@ -170,6 +187,9 @@ void Log(LogLevel level, Fragment *frags) {
              " nojustify=false labeljust=l style=filled];\n"
              "f0 [color=white fontcolor=white];\n");
   LogFragmentEdge(level, nullptr, frags);
+  for (auto frag : FragmentIterator(frags)) {
+    frag->transient_back_link = nullptr;
+  }
   for (auto frag : FragmentIterator(frags)) {
     LogFragmentEdges(level, frag);
     LogFragment(level, frag);

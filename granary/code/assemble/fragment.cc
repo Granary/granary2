@@ -14,12 +14,14 @@ Fragment::Fragment(int id_)
       branch_target(nullptr),
       branch_instr(nullptr),
       next(nullptr),
+      transient_back_link(nullptr),
       id(id_),
       is_decoded_block_head(false),
       is_future_block_head(false),
       is_exit(false),
       writes_to_stack_pointer(false),
       reads_from_stack_pointer(false),
+      kind(FRAG_KIND_INSTRUMENTATION),
       partition_id(0),
       block_meta(nullptr),
       first(nullptr),
@@ -31,6 +33,13 @@ void Fragment::AppendInstruction(std::unique_ptr<Instruction> instr) {
     last = last->InsertAfter(std::move(instr));
   } else {
     last = first = instr.release();
+  }
+  if (FRAG_KIND_APPLICATION != kind) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(last)) {
+      if (ninstr->IsAppInstruction()) {
+        kind = FRAG_KIND_APPLICATION;
+      }
+    }
   }
 }
 

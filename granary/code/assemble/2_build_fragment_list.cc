@@ -97,6 +97,7 @@ class FragmentBuilder {
     frag->block_meta = block->UnsafeMetaData();
     frag->is_exit = true;
     frag->is_future_block_head = true;
+    frag->kind = FRAG_KIND_APPLICATION;
     return frag;
   }
 
@@ -106,6 +107,7 @@ class FragmentBuilder {
     auto frag = MakeFragment();
     frag->block_meta = block->MetaData();
     frag->is_exit = true;
+    frag->kind = FRAG_KIND_APPLICATION;
     // TODO(pag): Import constraints.
     return frag;
   }
