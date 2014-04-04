@@ -35,11 +35,10 @@ static int ImmediateWidthBits(uint64_t imm) {
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
-                      xed_category_enum_t category, uint8_t num_explicit_ops) {
+                      xed_category_enum_t category) {
   memset(instr, 0, sizeof *instr);
   instr->iclass = iclass;
   instr->category = category;
-  instr->num_explicit_ops = num_explicit_ops;
 
   // These are only really atomic if there's a memory op.
   //

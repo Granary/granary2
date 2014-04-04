@@ -262,6 +262,12 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
     }
     return *this;
   }
+
+ protected:
+  typedef typename RemoveReference<decltype(storage[0])>::Type StorageT;
+  enum {
+    STORAGE_LEN = sizeof storage / sizeof storage[0]
+  };
 };
 
 // A class that tracks conservatively live, general-purpose registers within a

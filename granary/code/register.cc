@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/cfg/instruction.h"
 #include "granary/code/register.h"
@@ -14,10 +15,10 @@ namespace granary {
 // registers out of a specific block.
 bool RegisterTracker::Union(const RegisterTracker &that) {
   bool changed = false;
-  for (size_t i = 0; i < sizeof storage; ++i) {
-    uint8_t new_byte = storage[i] | that.storage[i];
-    changed = changed || new_byte != storage[i];
-    storage[i] = new_byte;
+  for (size_t i = 0; i < STORAGE_LEN; ++i) {
+    StorageT new_val = static_cast<StorageT>(storage[i] | that.storage[i]);
+    changed = changed || new_val != storage[i];
+    storage[i] = new_val;
   }
   return changed;
 }
@@ -28,17 +29,17 @@ bool RegisterTracker::Union(const RegisterTracker &that) {
 // out of a specific block.
 bool RegisterTracker::Intersect(const RegisterTracker &that) {
   bool changed = false;
-  for (size_t i = 0; i < sizeof storage; ++i) {
-    uint8_t new_byte = storage[i] & that.storage[i];
-    changed = changed || new_byte != storage[i];
-    storage[i] = new_byte;
+  for (size_t i = 0; i < STORAGE_LEN; ++i) {
+    StorageT new_val = static_cast<StorageT>(storage[i] & that.storage[i]);
+    changed = changed || new_val != storage[i];
+    storage[i] = new_val;
   }
   return changed;
 }
 
 // Returns true if two register usage tracker sets are equivalent.
 bool RegisterTracker::Equals(const RegisterTracker &that) const {
-  for (size_t i = 0; i < sizeof storage; ++i) {
+  for (size_t i = 0; i < STORAGE_LEN; ++i) {
     if (storage[i] != that.storage[i]) {
       return false;
     }

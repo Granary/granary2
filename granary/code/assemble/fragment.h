@@ -61,7 +61,12 @@ class Fragment {
   // A back-link pointer that is used to temporarily store some other meta-data.
   Fragment *transient_back_link;
 
-  // Unique ID of this fragment.
+  // A field that is temporarily used to store some virtual register number
+  // for use by one or more passes.
+  int transient_virt_reg_num;
+
+  // Unique ID of this fragment. This roughly corresponds to a depth-first
+  // order number of the fragment.
   const int id;
 
   // Is this block the first fragment in a decoded basic block?
@@ -115,6 +120,14 @@ class Fragment {
   DeadRegisterTracker entry_regs_dead;
   DeadRegisterTracker exit_regs_dead;
 
+  // Conservative set of flags that are live on entry to this basic block.
+  uint32_t app_live_flags;
+
+  // Flags that are killed anywhere within a fragment that contains
+  // instrumented instructions. If this is an application code fragment (kind =
+  // FRAG_KIND_APPLICATION) then `killed_flags = 0`.
+  uint32_t inst_killed_flags;
+
  private:
   friend class FragmentBuilder;
 
@@ -130,7 +143,8 @@ class Fragment {
 
   // Remove an instruction.
   std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
-};
+
+} __attribute__((packed));
 
 typedef LinkedListIterator<Fragment> FragmentIterator;
 

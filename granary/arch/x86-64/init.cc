@@ -29,6 +29,10 @@ xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
 // Table to find the instruction selections for each iclass.
 const xed_inst_t *ICLASS_SELECTIONS[XED_ICLASS_LAST] = {nullptr};
 
+// Table mapping each iclass to the set of read and written flags by *any*
+// selection of that iclass.
+FlagsSet ICLASS_FLAGS[XED_ICLASS_LAST];
+
 namespace {
 
 // Number of pages allocates to hold the table of implicit operands.
@@ -43,6 +47,22 @@ static void InitIclassTables(void) {
       auto category = xed_inst_category(instr);
       ICLASS_SELECTIONS[iclass] = instr;
       ICLASS_CATEGORIES[iclass] = category;
+    }
+  }
+}
+
+// Initialize the table of iclass flags.
+static void InitIclassFlags(void) {
+  xed_decoded_inst_t xedd;
+  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
+    auto xedi = xed_inst_table_base() + sel;
+    auto iclass = xed_inst_iclass(xedi);
+    memset(&xedd, 0, sizeof xedd);
+    xedd._inst = xedi;
+    if (auto flags = xed_decoded_inst_get_rflags_info(&xedd)) {
+      auto &iclass_flags(ICLASS_FLAGS[iclass]);
+      iclass_flags.read.flat |= flags->read.flat;
+      iclass_flags.written.flat |= flags->written.flat;
     }
   }
 }
@@ -231,6 +251,7 @@ void Init(void) {
   xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
                  XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
   InitIclassTables();
+  InitIclassFlags();
   InitOperandTables();
 }
 

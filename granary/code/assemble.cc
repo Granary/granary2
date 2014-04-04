@@ -13,7 +13,8 @@
 #include "granary/code/assemble/3_find_live_arch_registers.h"
 #include "granary/code/assemble/4_partition_fragments.h"
 #include "granary/code/assemble/5_add_entry_exit_fragments.h"
-#include "granary/code/assemble/6_schedule_registers.h"
+#include "granary/code/assemble/6_save_and_restore_flags.h"
+#include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -56,6 +57,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
   AddEntryAndExitFragments(&frags);
+
+  // Add flags saving and restoring code around injected instrumentation
+  // instructions.
+  SaveAndRestoreFlags(cfg, frags);
 
   // Schedule the virtual registers.
   ScheduleVirtualRegisters(frags);

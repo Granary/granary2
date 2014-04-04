@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/new.h"

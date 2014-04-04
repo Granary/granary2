@@ -127,7 +127,7 @@ int Operand::Width(void) const {
 // Convert this operand into a string.
 void Operand::EncodeToString(OperandString *str) const {
   if (op_ptr) {
-    op->EncodeToString(str);  // TODO(pag): Implement me.
+    op->EncodeToString(str);
   } else {
     (*str)[0] = '\0';
   }

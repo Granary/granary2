@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/arch/base.h"
 #include "granary/arch/driver.h"

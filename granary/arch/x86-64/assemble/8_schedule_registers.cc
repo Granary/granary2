@@ -10,7 +10,7 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
 
-#include "granary/code/assemble/6_schedule_registers.h"
+#include "granary/code/assemble/8_schedule_registers.h"
 
 #include "granary/code/assemble/fragment.h"
 #include "granary/code/register.h"

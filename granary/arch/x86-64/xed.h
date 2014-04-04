@@ -14,6 +14,18 @@ extern "C" {
 #define XED_DLL
 #include "dependencies/xed2-intel64/include/xed-interface.h"
 }  // extern C
+
+namespace granary {
+namespace arch {
+
+struct FlagsSet {
+  xed_flag_set_t read;
+  xed_flag_set_t written;
+};
+
+}  // namespace arch
+}  // namespace granary
+
 #pragma clang diagnostic pop
 
 #endif  // GRANARY_ARCH_X86_64_XED_H_

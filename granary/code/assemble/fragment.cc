@@ -15,6 +15,7 @@ Fragment::Fragment(int id_)
       branch_instr(nullptr),
       next(nullptr),
       transient_back_link(nullptr),
+      transient_virt_reg_num(-1),
       id(id_),
       is_decoded_block_head(false),
       is_future_block_head(false),
@@ -25,7 +26,9 @@ Fragment::Fragment(int id_)
       partition_id(0),
       block_meta(nullptr),
       first(nullptr),
-      last(nullptr) {}
+      last(nullptr),
+      app_live_flags(0),
+      inst_killed_flags(0) {}
 
 // Append an instruction into the fragment.
 void Fragment::AppendInstruction(std::unique_ptr<Instruction> instr) {

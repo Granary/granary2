@@ -105,7 +105,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
                       << xed_iclass_enum_t2str(xed_inst_iclass(instr))
                       << ", XED_CATEGORY_"
                       << xed_category_enum_t2str(xed_inst_category(instr))
-                      << ", " << num_explicit_ops << ");\n";
+                      << ");\n";
 
   auto explicit_op = 0U;
   for (auto i = 0U; i < num_ops; ++i) {
