@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/cfg/instruction.h"
 #include "granary/code/assemble/fragment.h"
@@ -37,11 +38,15 @@ void Fragment::AppendInstruction(std::unique_ptr<Instruction> instr) {
   } else {
     last = first = instr.release();
   }
-  if (FRAG_KIND_APPLICATION != kind) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(last)) {
-      if (ninstr->IsAppInstruction()) {
-        kind = FRAG_KIND_APPLICATION;
-      }
+
+  // Break this fragment if it changes the stack pointer.
+  if (auto ninstr = DynamicCast<NativeInstruction *>(last)) {
+    if (FRAG_KIND_APPLICATION != kind && ninstr->IsAppInstruction()) {
+      kind = FRAG_KIND_APPLICATION;
+    }
+    if (ninstr->instruction.WritesToStackPointer()) {
+      writes_to_stack_pointer = true;
+      reads_from_stack_pointer = ninstr->instruction.ReadsFromStackPointer();
     }
   }
 }

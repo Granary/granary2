@@ -306,12 +306,10 @@ class FragmentBuilder {
         auto next = instr->Next();
         frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
 
-        // Break this fragment if it changes the stack pointer.
-        auto ninstr = DynamicCast<NativeInstruction *>(instr);
-        if (ninstr && ninstr->instruction.WritesToStackPointer()) {
-          frag->writes_to_stack_pointer = true;
-          frag->reads_from_stack_pointer = \
-              ninstr->instruction.ReadsFromStackPointer();
+        // Break this fragment if the just-appended instruction changes the
+        // stack pointer. Changes to the stack pointer are computed in
+        // `Fragment::AppendInstruction`.
+        if (frag->writes_to_stack_pointer) {
           return SplitFragmentAtStackChange(frag, block, next);
         }
 

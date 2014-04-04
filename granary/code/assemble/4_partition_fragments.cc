@@ -55,12 +55,14 @@ class FragmentColorer {
   // Initialize the fragment coloring.
   void Initialize(void) {
     for (auto frag : FragmentIterator(frags)) {
-      if (frag->reads_from_stack_pointer) {  // Reads & writes the stack pointer.
-        MarkAsValid(frag);
-      } else if (frag->block_meta && frag->is_exit) {
-        ColorFragmentByMetaData(frag, frags);
-      }
       ColorFragmentByCFI(frag);
+      if (!frag->partition_id) {
+        if (frag->reads_from_stack_pointer) {
+          MarkAsValid(frag);  // Reads & writes the stack pointer.
+        } else if (frag->block_meta && frag->is_exit) {
+          ColorFragmentByMetaData(frag, frags);
+        }
+      }
     }
   }
 
@@ -162,7 +164,9 @@ class FragmentColorer {
   // can be used for either a successor or predecessor relationship.
   bool PropagateColor(Fragment *source, Fragment *dest) {
     if (dest && !dest->partition_id) {
-      if (source->block_meta == dest->block_meta) {
+      if (source->block_meta == dest->block_meta &&
+          !source->writes_to_stack_pointer &&
+          !dest->writes_to_stack_pointer) {
         dest->partition_id = source->partition_id;
       } else if (source->partition_id > 0) {
         MarkAsValid(dest);
