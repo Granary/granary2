@@ -14,6 +14,7 @@
 #include "granary/code/assemble/4_partition_fragments.h"
 #include "granary/code/assemble/5_add_entry_exit_fragments.h"
 #include "granary/code/assemble/6_save_and_restore_flags.h"
+#include "granary/code/assemble/7_convert_to_ssa.h"
 #include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_log_fragments.h"
 
@@ -62,8 +63,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // instructions.
   SaveAndRestoreFlags(cfg, frags);
 
+  // Build an SSA-like representation for the virtual registers.
+  ConvertToSSA(frags);
+
   // Schedule the virtual registers.
-  ScheduleVirtualRegisters(frags);
+  //ScheduleVirtualRegisters(frags);
 
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, frags);

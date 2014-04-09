@@ -13,7 +13,6 @@ namespace granary {
 Fragment::Fragment(int id_)
     : fall_through_target(nullptr),
       branch_target(nullptr),
-      branch_instr(nullptr),
       next(nullptr),
       transient_back_link(nullptr),
       transient_virt_reg_num(-1),

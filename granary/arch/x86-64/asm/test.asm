@@ -7,7 +7,8 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
-    movsq;
+    mov %rdi, (%rdi,%rdx);
+    //movsq;
     ret;
 /*
     mov %rsp, %rbp;

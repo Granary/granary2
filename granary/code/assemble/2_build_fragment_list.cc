@@ -165,7 +165,6 @@ class FragmentBuilder {
 
     if (branch->IsConditionalJump()) {
       frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
-      frag->branch_instr = branch;
       frag->fall_through_target = MakeEmptyLabelFragment(
           block, new LabelInstruction);
       ExtendFragment(frag->fall_through_target, block, next);
@@ -216,7 +215,6 @@ class FragmentBuilder {
                           !cfi->HasIndirectTarget();
     if (!is_direct_jump) {
       frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
-      frag->branch_instr = cfi;
       frag->branch_target = FragmentForTargetBlock(target_block);
       if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
           cfi->IsSystemReturn()) {
@@ -271,6 +269,7 @@ class FragmentBuilder {
                       Instruction *instr) {
     const auto last_instr = block->LastInstruction();
     auto prev_native_instr_is_app = false;
+    auto prev_instr_changes_flags = false;
     for (auto seen_first_native_instr(false); instr != last_instr; ) {
 
       // Treat every label as beginning a new fragment.
@@ -283,13 +282,19 @@ class FragmentBuilder {
       // both. This splitting is used in a later stage to allow us to reason
       // about saving/restoring flags state between two native instructions
       // that are separated by instrumentation instructions.
+      //
+      // One exception to this rule is that if the last instruction doesn't
+      // affect the flags, regardless of if it's native/instrumented, it goes
+      // into whatever the previous section of code is (app or inst).
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
         if (!seen_first_native_instr) {
           seen_first_native_instr = true;
           prev_native_instr_is_app = ninstr->IsAppInstruction();
-        } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app) {
+        } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
+                   prev_instr_changes_flags) {
           return SplitFragmentAtAppChange(frag, block, instr);
         }
+        prev_instr_changes_flags = ninstr->WritesConditionCodes();
       }
 
       // Found a local branch; add in the fall-through and/or the branch

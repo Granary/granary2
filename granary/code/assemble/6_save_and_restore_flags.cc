@@ -50,13 +50,13 @@ static void InitFragmentFlagsUse(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
     frag->inst_killed_flags = 0U;
     frag->app_live_flags = ~0U;
-    frag->transient_back_link = nullptr;
+    frag->flag_sentinel = nullptr;
     frag->transient_virt_reg_num = -1;
     if (!frag->is_exit && !frag->is_future_block_head) {
       if (FRAG_KIND_INSTRUMENTATION == frag->kind) {
         KillFragmentFlags(frag);
       } else if (FRAG_KIND_FLAG_ENTRY == frag->kind) {
-        frag->transient_back_link = frag;
+        frag->flag_sentinel = frag;
       }
     }
   }
@@ -95,15 +95,15 @@ static void FindLiveAppFlags(Fragment * const frags) {
 static bool PropagateInstKilledFlags(Fragment *frag, Fragment *succ) {
   if (succ && frag->partition_id == succ->partition_id &&
       FRAG_KIND_FLAG_ENTRY != succ->kind && FRAG_KIND_FLAG_EXIT != frag->kind) {
-    auto bl = std::max(frag->transient_back_link, succ->transient_back_link);
+    auto bl = std::max(frag->flag_sentinel, succ->flag_sentinel);
     if (frag->inst_killed_flags != succ->inst_killed_flags ||
-        frag->transient_back_link != bl ||
-        succ->transient_back_link != bl) {
+        frag->flag_sentinel != bl ||
+        succ->flag_sentinel != bl) {
       auto flags = frag->inst_killed_flags | succ->inst_killed_flags;
       frag->inst_killed_flags = flags;
       succ->inst_killed_flags = flags;
-      frag->transient_back_link = bl;
-      succ->transient_back_link = bl;
+      frag->flag_sentinel = bl;
+      succ->flag_sentinel = bl;
       return true;
     } else {
       return false;

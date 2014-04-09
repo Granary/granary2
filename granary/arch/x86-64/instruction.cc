@@ -56,9 +56,13 @@ bool Instruction::WritesToStackPointer(void) const {
 // Note: the RFLAGS register is always the last implicit operand.
 bool Instruction::ReadsFlags(void) const {
   const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
-  const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
-  return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
-         op.reg.IsFlags() && op.IsRead();
+  if (num_implicit_ops) {
+    const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+    return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
+           op.reg.IsFlags() && op.IsRead();
+  } else {
+    return false;
+  }
 }
 
 // Returns true if an instruction writes to the flags.
@@ -66,9 +70,13 @@ bool Instruction::ReadsFlags(void) const {
 // Note: the RFLAGS register is always the last operand.
 bool Instruction::WritesFlags(void) const {
   const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
-  const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
-  return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
-         op.reg.IsFlags() && op.IsWrite();
+  if (num_implicit_ops) {
+    const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+    return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
+           op.reg.IsFlags() && op.IsWrite();
+  } else {
+    return false;
+  }
 }
 
 namespace {

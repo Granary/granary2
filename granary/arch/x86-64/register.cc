@@ -110,6 +110,27 @@ int VirtualRegister::EncodeToNative(void) const {
   }
 }
 
+// Return the flags register as a virtual register.
+//
+// Note: This has an architecture-specific implementation.
+VirtualRegister VirtualRegister::Flags(void) {
+  return VirtualRegister::FromNative(static_cast<int>(XED_REG_RFLAGS));
+}
+
+// Return the instruction pointer register as a virtual register.
+//
+// Note: This has an architecture-specific implementation.
+VirtualRegister VirtualRegister::InstructionPointer(void) {
+  return VirtualRegister::FromNative(static_cast<int>(XED_REG_RIP));
+}
+
+// Return the stack pointer register as a virtual register.
+//
+// Note: This has an architecture-specific implementation.
+VirtualRegister VirtualRegister::StackPointer(void) {
+  return VirtualRegister::FromNative(static_cast<int>(XED_REG_RSP));
+}
+
 // Widen this virtual register to a specific bit width.
 void VirtualRegister::Widen(int dest_byte_width) {
   switch (dest_byte_width) {

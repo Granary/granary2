@@ -219,7 +219,7 @@ class MemoryOperand : public Operand {
   // when this is a compound memory operand, e.g. `base + index * scale`. This
   // also works when the memory operand is not compound.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   size_t CountMatchedRegisters(
       std::initializer_list<VirtualRegister *> regs) const;
 

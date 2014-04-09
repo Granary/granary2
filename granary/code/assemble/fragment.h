@@ -25,15 +25,16 @@ class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class BlockMetaData;
 class FragmentBuilder;
+class SSAVariableTable;
 
 // Defines the different categories of fragments.
 enum FragmentKind : uint8_t {
   FRAG_KIND_INSTRUMENTATION,
   FRAG_KIND_APPLICATION,
-  FRAG_KIND_PARTITION_ENTRY,
-  FRAG_KIND_PARTITION_EXIT,
   FRAG_KIND_FLAG_ENTRY,
-  FRAG_KIND_FLAG_EXIT
+  FRAG_KIND_FLAG_EXIT,
+  FRAG_KIND_PARTITION_ENTRY,
+  FRAG_KIND_PARTITION_EXIT
 };
 
 // Represents a basic block in the true sense. Granary basic blocks can contain
@@ -52,18 +53,28 @@ class Fragment {
   // Conditional branch target. This always associated with an explicit
   // control-flow instruction between two fragments.
   Fragment *branch_target;
-  NativeInstruction *branch_instr;
 
   // All fragments are chained together into a list for simple iteration,
   // freeing, etc.
   Fragment *next;
 
   // A back-link pointer that is used to temporarily store some other meta-data.
-  Fragment *transient_back_link;
+  union {
+    Fragment *transient_back_link;
+    Fragment *flag_sentinel;
+    SSAVariableTable *vars;
+  };
 
-  // A field that is temporarily used to store some virtual register number
-  // for use by one or more passes.
-  int transient_virt_reg_num;
+  union {
+    // A field that is temporarily used to store some virtual register number
+    // for use by one or more passes.
+    int transient_virt_reg_num;
+
+    // Number of predecessor fragments. This is used during SSA conversion to
+    // determine whether or not uses (lacking reaching defs) should create
+    // PHI nodes or trivial PHI nodes as placeholders.
+    int num_predecessors;
+  };
 
   // Unique ID of this fragment. This roughly corresponds to a depth-first
   // order number of the fragment.
@@ -128,13 +139,8 @@ class Fragment {
   // FRAG_KIND_APPLICATION) then `killed_flags = 0`.
   uint32_t inst_killed_flags;
 
- private:
-  friend class FragmentBuilder;
-
-  Fragment(void) = delete;
-
   GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
@@ -144,6 +150,10 @@ class Fragment {
   // Remove an instruction.
   std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
 
+ private:
+  Fragment(void) = delete;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
 } __attribute__((packed));
 
 typedef LinkedListIterator<Fragment> FragmentIterator;

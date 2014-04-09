@@ -69,6 +69,21 @@ union VirtualRegister {
   // Note: This has an architecture-specific implementation.
   int EncodeToNative(void) const;
 
+  // Return the flags register as a virtual register.
+  //
+  // Note: This has an architecture-specific implementation.
+  static VirtualRegister Flags(void);
+
+  // Return the instruction pointer register as a virtual register.
+  //
+  // Note: This has an architecture-specific implementation.
+  static VirtualRegister InstructionPointer(void);
+
+  // Return the stack pointer register as a virtual register.
+  //
+  // Note: This has an architecture-specific implementation.
+  static VirtualRegister StackPointer(void);
+
   // Return the width (in bits) of this register.
   inline int BitWidth(void) const {
     return static_cast<int>(num_bytes) * 8;

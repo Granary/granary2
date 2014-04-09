@@ -14,6 +14,15 @@
 
 namespace granary {
 
+#ifdef GRANARY_ECLIPSE
+
+// For code editing purposes only. Sometimes Eclipse has trouble with all the
+// `EnableIf` specializations, so this serves to satisfy its type checker.
+template <typename ToT, typename FromT>
+ToT UnsafeCast(FromT);
+
+#else
+
 // Non-integral, non-pointer type to something else.
 //
 // Note: `__builtin_memcpy` is used instead of `memcpy`, mostly for the
@@ -68,6 +77,8 @@ template <
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));
 }
+
+#endif  // GRANARY_ECLIPSE
 
 #ifdef GRANARY_INTERNAL
 
