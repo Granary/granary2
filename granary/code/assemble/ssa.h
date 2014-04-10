@@ -21,6 +21,7 @@ namespace granary {
 // Forward declarations.
 class SSAPhi;
 class SSAPhiOperand;
+class NativeInstruction;
 
 // Generic SSA variable.
 //
@@ -58,12 +59,17 @@ class SSAVariable {
 // This node is a definition of a register.
 class SSARegister : public SSAVariable {
  public:
-  explicit inline SSARegister(VirtualRegister reg_)
-      : SSAVariable(reg_) {}
+  explicit inline SSARegister(VirtualRegister reg_,
+                              NativeInstruction *instr_=nullptr)
+      : SSAVariable(reg_),
+        instr(instr_) {}
 
   virtual ~SSARegister(void) = default;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSAVariable, SSARegister)
+
+  // Instruction that defines this register.
+  NativeInstruction *instr;
 
  private:
   SSARegister(void) = delete;
@@ -101,7 +107,7 @@ class SSAPhi : public SSAVariable {
  public:
   virtual ~SSAPhi(void) = default;
 
-  explicit inline SSAPhi(VirtualRegister reg)
+  inline explicit SSAPhi(VirtualRegister reg)
       : SSAVariable(reg),
         ops(nullptr) {}
 
@@ -142,6 +148,27 @@ class SSATrivialPhi : public SSAVariable {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SSATrivialPhi);
 };
 
+// Similar to a trivial PHI node, but where we have to treat this definition of
+// the register as being a concrete definition. This occurs in cases like
+// read & written or conditionally written registers.
+class SSAForward : public SSAVariable {
+ public:
+  virtual ~SSAForward(void);
+
+  inline SSAForward(SSAVariable *parent_, SSAVariable *next_instr_def_)
+      : SSAVariable(parent_),
+        next_instr_def(next_instr_def_) {}
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(SSAVariable, SSAForward)
+
+  SSAVariable *next_instr_def;
+
+ private:
+  SSAForward(void) = delete;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAForward);
+};
+
 // Table of SSA variables. Meant to be used when visiting the instructions
 // of a fragment in reverse order.
 class SSAVariableTable {
@@ -153,13 +180,15 @@ class SSAVariableTable {
   // being defined is read and written, or conditionally written, and therefore
   // should share the same storage and any definitions that reach the current
   // definition.
-  SSAVariable *AddInheritingDefinition(VirtualRegister reg);
+  SSAVariable *AddInheritingDefinition(VirtualRegister reg,
+                                       SSAVariable *existing_instr_def);
 
   // Add in a concrete definition for a virtual register. If a matching
   // definition is present in the `missing_defs` table, then the definition
   // there is modified in-place to represent the new definition, removed from
   // the `missing_defs` table, and returned.
-  SSAVariable *AddSimpleDefinition(VirtualRegister reg);
+  SSAVariable *AddSimpleDefinition(VirtualRegister reg,
+                                   NativeInstruction *instr);
 
   // Declare that a register is being used. This adds a definition of the
   // variable into the `missing_defs` table.

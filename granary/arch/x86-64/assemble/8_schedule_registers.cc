@@ -18,7 +18,7 @@
 #include "granary/util.h"
 
 namespace granary {
-
+#if 0
 // Info tracker about an individual virtual register.
 class VirtualRegisterInfo {
  public:
@@ -255,5 +255,5 @@ void ScheduleVirtualRegisters(Fragment * const frags) {
   tracker.TryReplaceSimpleUses();
   tracker.RemoveUnusedDefs();
 }
-
+#endif
 }  // namespace granary

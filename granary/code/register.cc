@@ -85,6 +85,16 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
   if (GRANARY_UNLIKELY(!instr)) {
     return;
   }
+
+  // Treat conditional writes and read/writes as unconditional writes.
+  instr->ForEachOperand([=] (Operand *op) {
+    if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
+      auto reg = rloc->Register();
+      if (op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
+        WriteKill(reg);  // Read/write, write, conditional write.
+      }
+    }
+  });
   instr->ForEachOperand([=] (Operand *op) {
     // All registers participating in a memory operand are reads, because
     // they are used to compute the effective address of the memory operand.
@@ -94,14 +104,12 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
       Revive(r1);
       Revive(r2);
       Revive(r3);
+
+    // If this register operand doesn't write, then it's a read.
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       auto reg = rloc->Register();
-      if (reg.IsNative() && reg.IsGeneralPurpose()) {
-        if (!op->IsRead()) {
-          WriteKill(reg);  // Write, conditional write.
-        } else {
-          Revive(reg);
-        }
+      if (!op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
+        Revive(reg);
       }
     }
   });

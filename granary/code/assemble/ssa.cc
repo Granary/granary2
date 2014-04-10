@@ -17,13 +17,15 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
       (SSARegister, 2 * 3),
       (SSAPhi, 2 * 5),
       (SSAPhiOperand, 2 * 7),
-      (SSATrivialPhi, 2 * 11))
+      (SSATrivialPhi, 2 * 11),
+      (SSAForward, 2 * 13))
 
 GRANARY_DEFINE_BASE_CLASS(SSAVariable)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSAVariable, SSARegister)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSAVariable, SSAPhi)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSAVariable, SSAPhiOperand)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSAVariable, SSATrivialPhi)
+GRANARY_DEFINE_DERIVED_CLASS_OF(SSAVariable, SSAForward)
 
 // Represents an arbitrary SSA node. All SSA nodes are backed by the same amount
 // of memory. This is useful because then an SSAPHI node can be converted into
@@ -79,13 +81,17 @@ static VirtualRegister RegisterOf(SSAVariable *var) {
       auto phi = DynamicCast<SSAPhi *>(var);
       return phi->reg;
     }
+    case kTypeIdSSAPhiOperand: {
+      auto phi_op = DynamicCast<SSAPhiOperand *>(var);
+      return RegisterOf(phi_op->Variable());
+    }
     case kTypeIdSSATrivialPhi: {
       auto trivial_phi = DynamicCast<SSATrivialPhi *>(var);
       return RegisterOf(DefinitionOf(trivial_phi));
     }
-    case kTypeIdSSAPhiOperand: {
-      auto phi_op = DynamicCast<SSAPhiOperand *>(var);
-      return RegisterOf(phi_op->Variable());
+    case kTypeIdSSAForward: {
+      auto forward_def = DynamicCast<SSAForward *>(var);
+      return RegisterOf(forward_def->parent);
     }
     default:
       GRANARY_ASSERT(false);
@@ -112,8 +118,9 @@ void SSAPhi::AddOperand(SSAVariable *var) {
   next = new (ssa_node) SSAPhiOperand(var, next);
 }
 
-// Just to get the vtable ;-)
+// Just to get the vtables ;-)
 SSATrivialPhi::~SSATrivialPhi(void) {}
+SSAForward::~SSAForward(void) {}
 
 namespace {
 
@@ -182,26 +189,47 @@ SSAVariableTable::~SSAVariableTable(void) {
 // being defined is read and written, or conditionally written, and therefore
 // should share the same storage and any definitions that reach the current
 // definition.
-SSAVariable *SSAVariableTable::AddInheritingDefinition(VirtualRegister reg) {
-  auto node_mem = new SSANode;
-  if (auto existing_var = GetVar(reg, missing_defs)) {
-    return new (node_mem) SSATrivialPhi(existing_var);
-  } else {
-    DeclareUse(reg);
-    return AddInheritingDefinition(reg);
+SSAVariable *SSAVariableTable::AddInheritingDefinition(
+    VirtualRegister reg, SSAVariable *existing_instr_def) {
+  // New PHI node representing the value that is read and written, or
+  // coniditionally written.
+  const auto new_missing_def = new (new SSANode) SSAPhi(reg);
+
+  // Make a forward def out of either the old missing def, or some new memory
+  // if the variable was not yet used in this fragment.
+  auto missing_def_i = GetVarIndex(reg, missing_defs);
+  void *current_def_mem = missing_defs[missing_def_i];
+  if (!current_def_mem) {
+    current_def_mem = new SSANode;
   }
+  auto current_def = new (current_def_mem) SSAForward(new_missing_def,
+                                                      existing_instr_def);
+
+  // Add in the missing definition that is associated with the forward variable.
+  missing_defs[missing_def_i] = new_missing_def;
+  owns_missing_def[missing_def_i] = true;
+
+  // If there wasn't already a live definition of this reg, then add this
+  // definition as the live def.
+  auto &live_def_ref(GetVar(reg, live_defs));
+  if (!live_def_ref) {
+    live_def_ref = current_def;
+  }
+
+  return current_def;
 }
 
 // Add in a concrete definition for an architectural register. If a matching
 // definition is present in the `missing_defs` table, then the definition
 // there is modified in-place to represent the new definition, removed from
 // the `missing_defs` table, and returned.
-SSAVariable *SSAVariableTable::AddSimpleDefinition(VirtualRegister reg) {
+SSAVariable *SSAVariableTable::AddSimpleDefinition(VirtualRegister reg,
+                                                   NativeInstruction *instr) {
   void *node_mem = RemoveMissingDef(reg);
   if (!node_mem) {
     node_mem = new SSANode;
   }
-  auto def = new (node_mem) SSARegister(reg);
+  auto def = new (node_mem) SSARegister(reg, instr);
   auto i = GetVarIndex(reg, live_defs);
   if (!live_defs[i]) {
     live_defs[i] = def;

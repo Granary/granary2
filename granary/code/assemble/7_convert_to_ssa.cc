@@ -39,14 +39,19 @@ static void InitAnalysis(Fragment * const frags) {
 }
 
 // Create a new variable definition.
-static void AddDef(SSAVariableTable *vars, RegisterOperand *op,
+static void AddDef(SSAVariableTable *vars, const RegisterOperand &op,
                    NativeInstruction *instr) {
-  auto reg = op->Register();
-  if (reg.IsVirtual()) {
-    if (op->IsRead() || op->IsConditionalWrite()) {
-      SetMetaData(instr, vars->AddInheritingDefinition(reg));
+  auto reg = op.Register();
+  if (reg.IsGeneralPurpose() && op.IsExplicit()) {
+    if (op.IsRead() || op.IsConditionalWrite()) {
+
+      // Note: A given instruction can have multiple inheriting definitions.
+      //       For example, `XADD_GPRv_GPRv` on x86-64.
+      auto def = vars->AddInheritingDefinition(
+          reg, GetMetaData<SSAVariable *>(instr));
+      SetMetaData(instr, def);
     } else {
-      SetMetaData(instr, vars->AddSimpleDefinition(reg));
+      SetMetaData(instr, vars->AddSimpleDefinition(reg, instr));
     }
   }
 }
@@ -54,7 +59,7 @@ static void AddDef(SSAVariableTable *vars, RegisterOperand *op,
 // Declare that the virtual register `reg` is used within the SSA variable
 // table `vars`.
 static void DeclareUse(SSAVariableTable *vars, VirtualRegister reg) {
-  if (reg.IsVirtual()) {
+  if (reg.IsGeneralPurpose()) {
     vars->DeclareUse(reg);
   }
 }
@@ -64,13 +69,15 @@ static void DeclareUse(SSAVariableTable *vars, VirtualRegister reg) {
 static void AddUses(SSAVariableTable *vars, NativeInstruction *instr) {
   instr->ForEachOperand([=] (Operand *op) {
     if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-      if (!reg_op->IsWrite()) {
+      if (!reg_op->IsWrite() && reg_op->IsExplicit()) {
         DeclareUse(vars, reg_op->Register());
       }
     } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister addr;
-      if (mem_op->MatchRegister(addr)) {
-        DeclareUse(vars, addr);
+      VirtualRegister r1, r2, r3;
+      if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+        DeclareUse(vars, r1);
+        DeclareUse(vars, r2);
+        DeclareUse(vars, r3);
       }
     }
   });
@@ -82,10 +89,10 @@ static void AddUses(SSAVariableTable *vars, NativeInstruction *instr) {
 static void NumberLocalValues(Fragment * const frag) {
   for (auto instr : BackwardInstructionIterator(frag->last)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      RegisterOperand reg;
-      if (ninstr->MatchOperands(WriteTo(reg))) {
-        AddDef(frag->vars, &reg, ninstr);
-      }
+      RegisterOperand r1, r2;
+      auto count = ninstr->CountMatchedOperands(WriteTo(r1), WriteTo(r2));
+      if (1 <= count) AddDef(frag->vars, r1, ninstr);
+      if (2 <= count) AddDef(frag->vars, r2, ninstr);
       AddUses(frag->vars, ninstr);
     }
   }

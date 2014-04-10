@@ -14,9 +14,7 @@ class Fragment;
 
 // Schedule virtual registers to either physical registers or to stack/TLS
 // slots.
-//
-// Note: This has an architecture-specific implementation.
-void ScheduleVirtualRegisters(Fragment * const frags);
+void ScheduleRegisters(Fragment * const frags);
 
 }  // namespace granary
 

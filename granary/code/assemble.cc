@@ -63,11 +63,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // instructions.
   SaveAndRestoreFlags(cfg, frags);
 
-  // Build an SSA-like representation for the virtual registers.
+  // Build an SSA-like representation for the virtual register definitions.
   ConvertToSSA(frags);
 
   // Schedule the virtual registers.
-  //ScheduleVirtualRegisters(frags);
+  ScheduleRegisters(frags);
 
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, frags);
