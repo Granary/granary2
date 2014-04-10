@@ -62,6 +62,7 @@ void RegisterBuilder::Build(Instruction *instr) {
   op.reg = reg;
   op.rw = action;
   op.width = static_cast<int8_t>(reg.BitWidth());
+  op.is_explicit = true;
 
   // Registers AH through BH are tricky to handle due to their location, so we
   // treat them as hard requirements for virtual register scheduling.
@@ -80,6 +81,7 @@ void ImmediateBuilder::Build(Instruction *instr) {
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
   op.width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
+  op.is_explicit = true;
 }
 
 // Add this memory as an operand to the instruction `instr`.
@@ -87,7 +89,8 @@ void MemoryBuilder::Build(Instruction *instr) {
   auto &instr_op(instr->ops[instr->num_explicit_ops++]);
   instr_op.width = -1;  // Unknown.
   instr_op.is_compound = false;
-  instr_op.is_effective_address = false;
+  instr_op.is_effective_address = XED_ICLASS_LEA == instr->iclass;
+  instr_op.is_explicit = true;
   switch (kind) {
     case BUILD_POINTER:
       instr_op.type = XED_ENCODER_OPERAND_TYPE_PTR;
@@ -113,6 +116,7 @@ void BranchTargetBuilder::Build(Instruction *instr) {
   op.rw = XED_OPERAND_ACTION_R;
   op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   op.width = arch::ADDRESS_WIDTH_BITS;
+  op.is_explicit = true;
 }
 
 }  // namespace arch

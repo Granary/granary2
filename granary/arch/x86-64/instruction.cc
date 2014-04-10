@@ -5,6 +5,8 @@
 #include "granary/arch/decode.h"
 #include "granary/arch/x86-64/instruction.h"
 
+#include "granary/breakpoint.h"
+
 namespace granary {
 namespace arch {
 
@@ -115,6 +117,7 @@ void Instruction::AnalyzeStackUsage(void) const {
 
 // Get the opcode name.
 const char *Instruction::OpCodeName(void) const {
+  GRANARY_ASSERT(XED_ICLASS_INVALID < iclass && XED_ICLASS_LAST > iclass);
   return xed_iclass_enum_t2str(iclass);
 }
 

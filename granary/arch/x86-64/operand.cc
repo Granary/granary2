@@ -19,14 +19,17 @@ static arch::Operand * const TOMBSTONE = \
 // suppressed and implicit operands cannot be replaced.
 bool OperandRef::ReplaceWith(const Operand &repl_op) {
   GRANARY_ASSERT(op && TOMBSTONE != op && repl_op.op_ptr);
-  if (GRANARY_UNLIKELY(op->is_sticky)) {
+  if (GRANARY_UNLIKELY(op->is_sticky || !op->is_explicit)) {
     return false;
   } else {
     auto rw = op->rw;
     auto width = op->width;
+    auto is_ea = op->is_effective_address;
     *op = *(repl_op.op.AddressOf());
     op->rw = rw;
     op->width = width;
+    op->is_effective_address = is_ea;
+    op->is_explicit = true;
     return true;
   }
 }

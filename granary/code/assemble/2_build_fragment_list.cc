@@ -158,13 +158,12 @@ class FragmentBuilder {
   // fragment for the fall-through of the branch, and include remaining
   // instructions from the block into that fragment.
   void SplitFragmentAtBranch(Fragment *frag, DecodedBasicBlock *block,
-                             Instruction *instr) {
-    auto branch = DynamicCast<BranchInstruction *>(instr);
+                             BranchInstruction *branch) {
     auto label = branch->TargetInstruction();
-    auto next = instr->Next();
+    auto next = branch->Next();
 
     if (branch->IsConditionalJump()) {
-      frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
+      frag->AppendInstruction(std::move(branch->UnsafeUnlink()));
       frag->fall_through_target = MakeEmptyLabelFragment(
           block, new LabelInstruction);
       ExtendFragment(frag->fall_through_target, block, next);
@@ -207,14 +206,13 @@ class FragmentBuilder {
 
   // Split a fragment at a non-local control-flow instruction.
   void SplitFragmentAtCFI(Fragment *frag, DecodedBasicBlock *block,
-                          Instruction *instr) {
-    auto cfi = DynamicCast<ControlFlowInstruction *>(instr);
-    auto next = instr->Next();
+                          ControlFlowInstruction *cfi) {
+    auto next = cfi->Next();
     auto target_block = cfi->TargetBlock();
     auto is_direct_jump = cfi->IsUnconditionalJump() &&
                           !cfi->HasIndirectTarget();
     if (!is_direct_jump) {
-      frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
+      frag->AppendInstruction(std::move(cfi->UnsafeUnlink()));
       frag->branch_target = FragmentForTargetBlock(target_block);
       if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
           cfi->IsSystemReturn()) {
@@ -222,7 +220,7 @@ class FragmentBuilder {
       }
     // Pretend that direct jumps are just fall-throughs.
     } else {
-      next = instr;
+      next = cfi;
     }
 
     // If this was a call or a conditional jump then add a fall-through
@@ -299,12 +297,21 @@ class FragmentBuilder {
 
       // Found a local branch; add in the fall-through and/or the branch
       // target.
-      if (IsA<BranchInstruction *>(instr)) {
-        return SplitFragmentAtBranch(frag, block, instr);
+      if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
+        return SplitFragmentAtBranch(frag, block, branch);
 
       // Found a non-local branch to a basic block.
-      } else if (IsA<ControlFlowInstruction *>(instr)) {
-        return SplitFragmentAtCFI(frag, block, instr);
+      } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
+
+        // Need to put things like function/interrupt call/return into their own
+        // fragments, because later paritioning can't then arrange to deallocate
+        // virtual registers after a function call, or after a return.
+        if (cfi->instruction.WritesToStackPointer()) {
+          auto label = new LabelInstruction;
+          frag->fall_through_target = MakeEmptyLabelFragment(block, label);
+          frag = frag->fall_through_target;
+        }
+        return SplitFragmentAtCFI(frag, block, cfi);
 
       } else {
         // Extend block with this instruction and move to the next instruction.

@@ -115,7 +115,7 @@ bool Operand::IsModifiable(void) const {
 // Returns whether or not this operand is explicit.
 bool Operand::IsExplicit(void) const {
   GRANARY_ASSERT(op_ptr && TOMBSTONE != op_ptr);
-  return op_ptr->is_sticky;
+  return op_ptr->is_explicit;
 }
 
 // Return the width (in bits) of this operand, or -1 if its width is not

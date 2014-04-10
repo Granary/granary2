@@ -25,7 +25,7 @@ class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class BlockMetaData;
 class FragmentBuilder;
-class SSAVariableTable;
+class SSAVariableTracker;
 
 // Defines the different categories of fragments.
 enum FragmentKind : uint8_t {
@@ -62,19 +62,12 @@ class Fragment {
   union {
     Fragment *transient_back_link;
     Fragment *flag_sentinel;
-    SSAVariableTable *vars;
+    SSAVariableTracker *vars;
   };
 
-  union {
-    // A field that is temporarily used to store some virtual register number
-    // for use by one or more passes.
-    int transient_virt_reg_num;
-
-    // Number of predecessor fragments. This is used during SSA conversion to
-    // determine whether or not uses (lacking reaching defs) should create
-    // PHI nodes or trivial PHI nodes as placeholders.
-    int num_predecessors;
-  };
+  // A field that is temporarily used to store some virtual register number
+  // for use by one or more passes.
+  int transient_virt_reg_num;
 
   // Unique ID of this fragment. This roughly corresponds to a depth-first
   // order number of the fragment.

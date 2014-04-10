@@ -11,6 +11,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
+#include "granary/base/lookup_table.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
 
@@ -22,6 +23,15 @@ namespace granary {
 class SSAPhi;
 class SSAPhiOperand;
 class NativeInstruction;
+class SSAVariable;
+
+// Returns the reaching definition associated with some variable `var`. In the
+// case of trivial SSA variables, we follow as many reaching definitions as we
+// can to form the
+SSAVariable *DefinitionOf(SSAVariable *var);
+
+// Returns the virtual register associated with some `SSAVariable` instance.
+VirtualRegister RegisterOf(SSAVariable *var);
 
 // Generic SSA variable.
 //
@@ -59,8 +69,8 @@ class SSAVariable {
 // This node is a definition of a register.
 class SSARegister : public SSAVariable {
  public:
-  explicit inline SSARegister(VirtualRegister reg_,
-                              NativeInstruction *instr_=nullptr)
+  inline SSARegister(VirtualRegister reg_,
+                     NativeInstruction *instr_=nullptr)
       : SSAVariable(reg_),
         instr(instr_) {}
 
@@ -169,12 +179,44 @@ class SSAForward : public SSAVariable {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAForward);
 };
 
+enum {
+  MAX_NUM_SSA_VARS = arch::NUM_GENERAL_PURPOSE_REGISTERS * 2
+};
+
+class MissingSSAVariable {
+ public:
+  SSAVariable *var;
+  bool is_owned;
+
+  inline bool operator==(const MissingSSAVariable &that) const {
+    return var == that.var;
+  }
+};
+
+template <>
+class LookupTableOperations<VirtualRegister, SSAVariable *> {
+ public:
+  static VirtualRegister KeyForValue(SSAVariable *var);
+};
+
+template <>
+class LookupTableOperations<VirtualRegister, MissingSSAVariable> {
+ public:
+  inline static VirtualRegister KeyForValue(MissingSSAVariable var) {
+    return LookupTableOperations<VirtualRegister, SSAVariable *>::
+        KeyForValue(var.var);
+  }
+};
+
+typedef FixedSizeLookupTable<VirtualRegister, SSAVariable *, MAX_NUM_SSA_VARS>
+        SSAVariableTable;
+
 // Table of SSA variables. Meant to be used when visiting the instructions
 // of a fragment in reverse order.
-class SSAVariableTable {
+class SSAVariableTracker {
  public:
-  SSAVariableTable(void);
-  ~SSAVariableTable(void);
+  SSAVariableTracker(void);
+  ~SSAVariableTracker(void);
 
   // Add in a concrete definition for a virtual register, where the register
   // being defined is read and written, or conditionally written, and therefore
@@ -203,48 +245,39 @@ class SSAVariableTable {
   // `missing_defs` table. If the destination table has multiple predecessors
   // then a PHI node is propagated in place of the definition from the current
   // table.
-  bool PropagateMissingDefinitions(SSAVariableTable *dest,
-                                   int dest_num_predecessors);
+  bool BackPropagateMissingDefinitions(SSAVariableTracker *source);
 
   // For each PHI node in the destination table, add an operand to that PHI
   // from the current table.
-  void AddPhiOperands(SSAVariableTable *dest);
+  void AddPhiOperands(SSAVariableTracker *dest);
 
   // Simplify all PHI nodes.
   void SimplifyPhiNodes(void);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(SSAVariableTable, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(SSAVariableTracker, {
     SHARED = false,
     ALIGNMENT = 1
   })
 
+  // Copy all entry definitions in this variable tracker into an SSA variable
+  // table.
+  void CopyEntryDefinitions(SSAVariableTable *vars);
+
  private:
-  enum {
-    NUM_SLOTS = arch::NUM_GENERAL_PURPOSE_REGISTERS * 2
-  };
-
-  // Returns the index into one of the storage SSA variable hash tables where
-  // the `SSAVariable` associated with `reg` exists, or where it should
-  // go.
-  int GetVarIndex(VirtualRegister reg, SSAVariable * const  *tab);
-
-  // Returns a reference to the `SSAVariable` instance associated with `reg` in
-  // the SSA varable hash table `tab`.
-  SSAVariable *&GetVar(VirtualRegister reg, SSAVariable **tab);
-
   // Removes and returns the `SSAVariable` instance associated with a missing
   // definition of `reg`.
   SSAVariable *RemoveMissingDef(VirtualRegister reg);
 
   // Variables that aren't defined on entry to this fragment.
-  SSAVariable *missing_defs[NUM_SLOTS];
-  bool owns_missing_def[NUM_SLOTS];
+  FixedSizeLookupTable<VirtualRegister,
+                       MissingSSAVariable,
+                       MAX_NUM_SSA_VARS> entry_defs;
 
   // Variables that are defined in this fragment and can reach to the next
   // fragment.
-  SSAVariable *live_defs[NUM_SLOTS];
+  SSAVariableTable exit_defs;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAVariableTable);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAVariableTracker);
 };
 
 }  // namespace granary

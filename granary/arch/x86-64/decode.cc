@@ -218,7 +218,7 @@ static bool ConvertDecodedOperand(Instruction *instr,
   auto instr_op = &(instr->ops[op_num]);
 
   instr_op->rw = xed_operand_rw(op);
-  instr_op->is_sticky = !is_explicit;
+  instr_op->is_sticky = false;
   instr_op->is_explicit = true;
 
   if (xed_operand_is_register(op_name)) {

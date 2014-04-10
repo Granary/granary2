@@ -115,6 +115,10 @@ union VirtualRegister {
     return VR_KIND_VIRTUAL == kind;
   }
 
+  inline bool IsValid(void) const {
+    return VR_KIND_UNKNOWN != kind;
+  }
+
   // Is this the stack pointer?
   //
   // Note: This has an architecture-specific implementation.

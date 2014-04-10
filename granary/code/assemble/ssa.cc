@@ -54,12 +54,10 @@ static_assert(0 == offsetof(SSANode, trivial_phi),
 static_assert(0 == offsetof(SSANode, op),
     "Invalid structure packing of `union SSANode`.");
 
-namespace {
-
 // Returns the reaching definition associated with some variable `var`. In the
 // case of trivial SSA variables, we follow as many reaching definitions as we
 // can to form the
-static SSAVariable *DefinitionOf(SSAVariable *var) {
+SSAVariable *DefinitionOf(SSAVariable *var) {
   while (auto trivial_phi = DynamicCast<SSATrivialPhi *>(var)) {
     if (trivial_phi->parent) {
       var = trivial_phi->parent;
@@ -71,7 +69,7 @@ static SSAVariable *DefinitionOf(SSAVariable *var) {
 }
 
 // Returns the virtual register associated with some `SSAVariable` instance.
-static VirtualRegister RegisterOf(SSAVariable *var) {
+VirtualRegister RegisterOf(SSAVariable *var) {
   switch (var->TypeId()) {
     case kTypeIdSSARegister: {
       auto reg = DynamicCast<SSARegister *>(var);
@@ -98,8 +96,6 @@ static VirtualRegister RegisterOf(SSAVariable *var) {
       return VirtualRegister();
   }
 }
-
-}  // namespace
 
 // Get the variable referenced by this operand.
 SSAVariable *SSAPhiOperand::Variable(void) {
@@ -173,14 +169,22 @@ void SSAPhi::TryTrivialize(void) {
   TryRecursiveTrivialize(op);
 }
 
-SSAVariableTable::SSAVariableTable(void) {
+VirtualRegister LookupTableOperations<VirtualRegister,
+                                      SSAVariable *>::KeyForValue(
+                                          SSAVariable *var) {
+  return var ? RegisterOf(var) : VirtualRegister();
+}
+
+SSAVariableTracker::SSAVariableTracker(void)
+    : entry_defs(),
+      exit_defs() {
   memset(this, 0, sizeof *this);
 }
 
-SSAVariableTable::~SSAVariableTable(void) {
-  for (auto i = 0; i < NUM_SLOTS; ++i) {
-    if (missing_defs[i] && owns_missing_def[i]) {
-      delete UnsafeCast<SSANode *>(missing_defs[i]);
+SSAVariableTracker::~SSAVariableTracker(void) {
+  for (auto def : entry_defs) {
+    if (def.is_owned) {
+      delete UnsafeCast<SSANode *>(def.var);
     }
   }
 }
@@ -189,73 +193,72 @@ SSAVariableTable::~SSAVariableTable(void) {
 // being defined is read and written, or conditionally written, and therefore
 // should share the same storage and any definitions that reach the current
 // definition.
-SSAVariable *SSAVariableTable::AddInheritingDefinition(
+SSAVariable *SSAVariableTracker::AddInheritingDefinition(
     VirtualRegister reg, SSAVariable *existing_instr_def) {
   // New PHI node representing the value that is read and written, or
   // coniditionally written.
-  const auto new_missing_def = new (new SSANode) SSAPhi(reg);
+  const auto new_entry_def = new (new SSANode) SSAPhi(reg);
 
   // Make a forward def out of either the old missing def, or some new memory
   // if the variable was not yet used in this fragment.
-  auto missing_def_i = GetVarIndex(reg, missing_defs);
-  void *current_def_mem = missing_defs[missing_def_i];
+  auto entry_def = entry_defs.Find(reg);
+  void *current_def_mem = entry_def->var;
   if (!current_def_mem) {
     current_def_mem = new SSANode;
   }
-  auto current_def = new (current_def_mem) SSAForward(new_missing_def,
+  auto current_def = new (current_def_mem) SSAForward(new_entry_def,
                                                       existing_instr_def);
 
   // Add in the missing definition that is associated with the forward variable.
-  missing_defs[missing_def_i] = new_missing_def;
-  owns_missing_def[missing_def_i] = true;
+  entry_def->var = new_entry_def;
+  entry_def->is_owned = true;
 
   // If there wasn't already a live definition of this reg, then add this
   // definition as the live def.
-  auto &live_def_ref(GetVar(reg, live_defs));
-  if (!live_def_ref) {
-    live_def_ref = current_def;
+  auto exit_def = exit_defs.Find(reg);
+  if (!*exit_def) {
+    *exit_def = current_def;
   }
 
   return current_def;
 }
 
 // Add in a concrete definition for an architectural register. If a matching
-// definition is present in the `missing_defs` table, then the definition
+// definition is present in the `entry_defs` table, then the definition
 // there is modified in-place to represent the new definition, removed from
-// the `missing_defs` table, and returned.
-SSAVariable *SSAVariableTable::AddSimpleDefinition(VirtualRegister reg,
-                                                   NativeInstruction *instr) {
+// the `entry_defs` table, and returned.
+SSAVariable *SSAVariableTracker::AddSimpleDefinition(VirtualRegister reg,
+                                                     NativeInstruction *instr) {
   void *node_mem = RemoveMissingDef(reg);
   if (!node_mem) {
     node_mem = new SSANode;
   }
   auto def = new (node_mem) SSARegister(reg, instr);
-  auto i = GetVarIndex(reg, live_defs);
-  if (!live_defs[i]) {
-    live_defs[i] = def;
+  auto exit_def = exit_defs.Find(reg);
+  if (!*exit_def) {
+    *exit_def = def;
   }
   return def;
 }
 
 // Declare that a register is being used. This adds a definition of the
-// variable into the `missing_defs` table.
-void SSAVariableTable::DeclareUse(VirtualRegister reg) {
-  auto i = GetVarIndex(reg, missing_defs);
-  if (!missing_defs[i]) {
-    auto ssa_node = new SSANode;
-    missing_defs[i] = new (ssa_node) SSAPhi(reg);
-    owns_missing_def[i] = true;
+// variable into the `entry_defs` table.
+void SSAVariableTracker::DeclareUse(VirtualRegister reg) {
+  auto entry_def = entry_defs.Find(reg);
+  if (!entry_def->var) {
+    entry_def->var = new (new SSANode) SSAPhi(reg);
+    entry_def->is_owned = true;
   }
 }
 
 // Promote missing definitions associated with uses in a fragment into live
 // definitions that leave the fragment.
-void SSAVariableTable::PromoteMissingDefinitions(void) {
-  for (auto missing_def : missing_defs) {
-    if (missing_def) {
-      auto i = GetVarIndex(RegisterOf(missing_def), live_defs);
-      if (!live_defs[i]) {
-        live_defs[i] = missing_def;
+void SSAVariableTracker::PromoteMissingDefinitions(void) {
+  for (auto entry_def : entry_defs) {
+    if (entry_def.var) {
+      auto exit_def = exit_defs.Find(RegisterOf(entry_def.var));
+      if (!*exit_def) {
+        *exit_def = entry_def.var;
       }
     }
   }
@@ -263,100 +266,70 @@ void SSAVariableTable::PromoteMissingDefinitions(void) {
 
 // Propagate definitions from one SSA variable table into another. This only
 // propagates definitions if they are missing in the `dest` table's
-// `missing_defs` table. If the destination table has multiple predecessors
+// `entry_defs` table. If the destination table has multiple predecessors
 // then a PHI node is propagated in place of the definition from the current
 // table.
-bool SSAVariableTable::PropagateMissingDefinitions(SSAVariableTable *dest,
-                                                   int dest_num_predecessors) {
-  bool changed(false);
-  for (auto def : live_defs) {
-    if (def) {
-      auto reg = RegisterOf(def);
-      auto i = dest->GetVarIndex(reg, dest->missing_defs);
-      auto &dest_def(dest->missing_defs[i]);
-      if (!dest_def) {
-        changed = true;
-        if (1 == dest_num_predecessors) {
-          dest_def = def;
-        } else {
-          auto ssa_node = new SSANode;
-          dest_def = new (ssa_node) SSAPhi(reg);
-          dest->owns_missing_def[i] = true;
+bool SSAVariableTracker::BackPropagateMissingDefinitions(
+    SSAVariableTracker *source) {
+  auto changed = false;
+  for (auto &source_entry_def : source->entry_defs) {
+    if (source_entry_def.var) {
+      auto reg = RegisterOf(source_entry_def.var);
+      auto dest_exit_def = exit_defs.Find(reg);
+      if (!*dest_exit_def) {  // Predecessor doesn't define the var.
+        auto dest_entry_def = entry_defs.Find(reg);
+        if (!dest_entry_def->var) {  // Predecessor doesn't use the var.
+          dest_entry_def->var = new (new SSANode) SSAPhi(reg);
+          dest_entry_def->is_owned = true;
+          *dest_exit_def = dest_entry_def->var;
+          changed = true;
         }
       }
     }
-  }
-  if (changed) {
-    dest->PromoteMissingDefinitions();
   }
   return changed;
 }
 
 // For each PHI node in the destination table, add an operand to that PHI
 // from the current table.
-void SSAVariableTable::AddPhiOperands(SSAVariableTable *dest) {
-  for (auto var : dest->missing_defs) {
-    if (auto phi = DynamicCast<SSAPhi *>(var)) {
-      phi->AddOperand(GetVar(phi->reg, live_defs));
+void SSAVariableTracker::AddPhiOperands(SSAVariableTracker *dest) {
+  for (auto var : dest->entry_defs) {
+    if (auto phi = DynamicCast<SSAPhi *>(var.var)) {
+      auto def = exit_defs.Find(phi->reg);
+      phi->AddOperand(*def);
     }
   }
 }
 
 // Simplify all PHI nodes.
-void SSAVariableTable::SimplifyPhiNodes(void) {
-  for (auto var : missing_defs) {
-    if (auto phi = DynamicCast<SSAPhi *>(var)) {
+void SSAVariableTracker::SimplifyPhiNodes(void) {
+  for (auto var : entry_defs) {
+    if (auto phi = DynamicCast<SSAPhi *>(var.var)) {
       phi->TryTrivialize();
     }
   }
 }
 
-// Returns the index into one of the storage SSA variable hash tables where
-// the `SSAVariable` associated with `reg` exists, or where it should
-// go.
-int SSAVariableTable::GetVarIndex(VirtualRegister reg,
-                                  SSAVariable * const *tab) {
-  for (int i = reg.Number(), max_i = i + NUM_SLOTS; i < max_i; ++i) {
-    auto index = i % NUM_SLOTS;
-    if (!tab[index] || RegisterOf(tab[index]) == reg) {
-      return index;
+// Copy all entry definitions in this variable tracker into an SSA variable
+// table.
+void SSAVariableTracker::CopyEntryDefinitions(SSAVariableTable *vars) {
+  memset(vars, 0, sizeof *vars);
+  for (auto def : entry_defs) {
+    if (def.var) {
+      auto var_def = DefinitionOf(def.var);
+      *vars->Find(RegisterOf(var_def)) = var_def;
     }
   }
-  GRANARY_ASSERT(false);
-  return 0;
-}
-
-// Returns a reference to the `SSAVariable` instance associated with `reg` in
-// the SSA varable hash table `tab`.
-SSAVariable *&SSAVariableTable::GetVar(VirtualRegister reg,
-                                       SSAVariable **tab) {
-  return tab[GetVarIndex(reg, tab)];
 }
 
 // Removes and returns the `SSAVariable` instance associated with a missing
 // definition of `reg`.
-SSAVariable *SSAVariableTable::RemoveMissingDef(VirtualRegister reg) {
-  auto i = GetVarIndex(reg, missing_defs);
-  if (missing_defs[i]) {
-    auto def = missing_defs[i];
-    missing_defs[i] = nullptr;
-    owns_missing_def[i] = false;
-    auto prev_index = i++;
-    for (auto max_i = i + NUM_SLOTS; i < max_i; ++i) {
-      auto index = i % NUM_SLOTS;
-      if (!missing_defs[index] || RegisterOf(missing_defs[index]) != reg) {
-        break;
-      } else {
-        missing_defs[prev_index] = missing_defs[index];
-        owns_missing_def[prev_index] = owns_missing_def[index];
-        owns_missing_def[index] = false;
-        prev_index = index;
-      }
-    }
-    return def;
-  } else {
-    return nullptr;
-  }
+SSAVariable *SSAVariableTracker::RemoveMissingDef(VirtualRegister reg) {
+  auto entry_def = entry_defs.Find(reg);
+  auto var = entry_def->var;
+  entry_def->var = nullptr;
+  entry_def->is_owned = false;
+  return var;
 }
 
 }  // namespace granary

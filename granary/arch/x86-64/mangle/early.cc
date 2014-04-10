@@ -55,10 +55,9 @@ void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
     APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, XED_REG_RAX, instr->ops[0]));
     instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
     instr->ops[0].reg.DecodeFromNative(static_cast<int>(XED_REG_RAX));
-    instr->ops[0].is_sticky = true;
-  } else if (XED_ENCODER_OPERAND_TYPE_REG == instr->ops[0].type) {
-    instr->ops[0].is_sticky = true;
   }
+  instr->ops[0].is_sticky = true;
+  instr->ops[0].is_explicit = true;
 }
 
 // Mangle an explicit memory operand. This will expand memory operands into
