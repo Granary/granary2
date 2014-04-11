@@ -10,12 +10,14 @@
 #include "granary/code/assemble/0_compile_inline_assembly.h"
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
-//#include "granary/code/assemble/3_find_live_arch_registers.h"
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
+
+//#include "granary/code/assemble/3_find_live_arch_registers.h"
+
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -23,7 +25,7 @@
 
 GRANARY_DEFINE_bool(debug_log_assembled_fragments, false,
     "Log the assembled fragments before doing final linking. The default is "
-    "false.")
+    "false.");
 
 namespace granary {
 

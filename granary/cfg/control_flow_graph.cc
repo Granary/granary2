@@ -3,9 +3,13 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
+
 #include "granary/base/pc.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
+
+#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -67,7 +71,7 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   // All other basic blocks are owned by control-transfer instructions.
   if (!first_block) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    granary_break_on_fault_if(!decoded_block);
+    GRANARY_ASSERT(nullptr != decoded_block);
     block->MarkAsPermanent();
     first_block = decoded_block;
   } else {

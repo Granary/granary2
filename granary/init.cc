@@ -23,7 +23,7 @@ GRANARY_DEFINE_string(attach_to, "*",
     "is `*`, representing that Granary will attach to all (non-Granary, non-"
     "tool) modules. More specific requests can be made, for example:\n"
     "\t--attach_to=[*,-libc]\t\tAttach to everything but `libc`.\n"
-    "\t--attach_to=libc\t\tOnly attach to `libc`.")
+    "\t--attach_to=libc\t\tOnly attach to `libc`.");
 #endif  // GRANARY_STANDALONE
 
 extern "C" {

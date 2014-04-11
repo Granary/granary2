@@ -61,6 +61,7 @@ static const char *FragmentBackground(const Fragment *frag) {
   }
 }
 
+#if 0
 // Log some set of dead registers (e.g. dead regs on entry or exit).
 static bool LogDeadRegs(LogLevel level, const Fragment *frag,
                         const LiveRegisterTracker &regs) {
@@ -82,6 +83,7 @@ static bool LogDeadRegs(LogLevel level, const Fragment *frag,
   }
   return printed_dead;
 }
+#endif
 
 // Log the input-only operands.
 static void LogInputOperands(LogLevel level, NativeInstruction *instr) {
@@ -131,6 +133,7 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
   }
 }
 
+#if 0
 // Log the dead registers on exit of a fragment.
 static void LogDeadExitRegs(LogLevel level, const Fragment *frag) {
   if (FRAG_KIND_APPLICATION != frag->kind &&
@@ -144,6 +147,7 @@ static void LogDeadExitRegs(LogLevel level, const Fragment *frag) {
     LogDeadRegs(level, frag, frag->exit_regs_live);
   }
 }
+#endif
 
 // If this fragment is the head of a basic block then log the basic block's
 // entry address.
@@ -165,15 +169,17 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
+  auto id = FRAG_KIND_APPLICATION == frag->kind ||
+            FRAG_KIND_INSTRUMENTATION == frag->kind ? frag->id : -1;
   Log(level, "f%p [fillcolor=%s label=<%d|{",
-      reinterpret_cast<const void *>(frag), FragmentBackground(frag), frag->id);
+      reinterpret_cast<const void *>(frag), FragmentBackground(frag), id);
   LogBlockHeader(level, frag);
-  auto printed_entry_dead_regs = LogDeadRegs(level, frag,
-                                             frag->entry_regs_live);
+  //auto printed_entry_dead_regs = LogDeadRegs(level, frag,
+  //                                           frag->entry_regs_live);
   if (!frag->is_exit && !frag->is_future_block_head) {
-    Log(level, "%s", printed_entry_dead_regs ? "|" : "");
+    //Log(level, "%s", printed_entry_dead_regs ? "|" : "");
     LogInstructions(level, frag);
-    LogDeadExitRegs(level, frag);
+    //LogDeadExitRegs(level, frag);
     Log(level, "}");
   }
   Log(level, "}>];\n");
@@ -187,9 +193,6 @@ void Log(LogLevel level, Fragment *frags) {
              " nojustify=false labeljust=l style=filled];\n"
              "f0 [color=white fontcolor=white];\n");
   LogFragmentEdge(level, nullptr, frags);
-  for (auto frag : FragmentIterator(frags)) {
-    frag->transient_back_link = nullptr;
-  }
   for (auto frag : FragmentIterator(frags)) {
     LogFragmentEdges(level, frag);
     LogFragment(level, frag);

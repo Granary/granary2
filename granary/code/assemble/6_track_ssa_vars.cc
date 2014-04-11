@@ -15,13 +15,22 @@
 namespace granary {
 namespace {
 
+// Initialize the fragment list for tracking SSA variables. This does a few
+// important things:
+//    1.  Creates SSA variable trackers for non partition entry/exit fragments.
+//    2.  Clears the meta-data associated with native instructions. Importantly,
+//        meta-data associated with other instructions is left untouched. For
+//        example, the meta-data of a `LabelInstruction` will point to the
+//        `Fragment` associated with that label. This is used later on.
+//    3.  Nulls out the SSA variable trackers for entry/exit fragments. The
+//        effect of this is that SSA variable tracking is partition-local.
 static void InitAnalysis(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
     if (FRAG_KIND_PARTITION_ENTRY != frag->kind &&
         FRAG_KIND_PARTITION_EXIT != frag->kind) {
-      frag->vars = new SSAVariableTracker;
+      frag->ssa_vars = new SSAVariableTracker;
     } else {
-      frag->vars = nullptr;
+      frag->ssa_vars = nullptr;
     }
     for (auto instr : ForwardInstructionIterator(frag->first)) {
       if (IsA<NativeInstruction *>(instr)) {
@@ -86,23 +95,24 @@ static void AddUses(SSAVariableTracker *vars, NativeInstruction *instr) {
 // instructions of a fragment. This visits the instructions in reverse order
 // and adds definitions and then declares uses.
 static void NumberLocalValues(Fragment * const frag) {
+  auto ssa_vars = frag->ssa_vars;
   for (auto instr : BackwardInstructionIterator(frag->last)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       RegisterOperand r1, r2;
       auto count = ninstr->CountMatchedOperands(WriteTo(r1), WriteTo(r2));
-      if (1 <= count) AddDef(frag->vars, r1, ninstr);
-      if (2 <= count) AddDef(frag->vars, r2, ninstr);
-      AddUses(frag->vars, ninstr);
+      if (1 <= count) AddDef(ssa_vars, r1, ninstr);
+      if (2 <= count) AddDef(ssa_vars, r2, ninstr);
+      AddUses(ssa_vars, ninstr);
     }
   }
-  frag->vars->PromoteMissingDefinitions();
+  ssa_vars->PromoteMissingDefinitions();
 }
 
 // Perform a local value numbering for all fragments in the control-flow
 // graph.
 static void LocalValueNumbering(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
-    if (frag->vars) {
+    if (frag->ssa_vars) {
       NumberLocalValues(frag);
     }
   }
@@ -121,9 +131,9 @@ static void LocalValueNumbering(Fragment * const frags) {
 static bool BackPropagateSSAUses(Fragment *pred, Fragment *succ) {
   return succ &&
          pred->partition_id == succ->partition_id &&
-         pred->vars &&
-         succ->vars &&
-         pred->vars->BackPropagateMissingDefinitions(succ->vars);
+         pred->ssa_vars &&
+         succ->ssa_vars &&
+         pred->ssa_vars->BackPropagateMissingDefinitions(succ->ssa_vars);
 }
 
 // Convert the local value numberings into partition-global value numberings.
@@ -139,8 +149,8 @@ static void PropagateLocalValueNumbers(Fragment * const frags) {
 
 // Connect the PHI nodes between a predecessor and a successor.
 static void ConnectPhiNodes(Fragment *pred, Fragment *succ) {
-  if (succ && pred->vars && succ->vars) {
-    pred->vars->AddPhiOperands(succ->vars);
+  if (succ && pred->ssa_vars && succ->ssa_vars) {
+    pred->ssa_vars->AddPhiOperands(succ->ssa_vars);
   }
 }
 
@@ -151,8 +161,8 @@ static void ConnectPhiNodes(Fragment * const frags) {
     ConnectPhiNodes(frag, frag->branch_target);
   }
   for (auto frag : FragmentIterator(frags)) {
-    if (frag->vars) {
-      frag->vars->SimplifyPhiNodes();
+    if (frag->ssa_vars) {
+      frag->ssa_vars->SimplifyPhiNodes();
     }
   }
 }

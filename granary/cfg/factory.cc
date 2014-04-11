@@ -43,7 +43,7 @@ void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
 // chosen.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
                                 BlockRequestKind strategy) {
-  granary_break_on_fault_if(!block || !block->list.IsAttached());
+  GRANARY_ASSERT(block && block->list.IsAttached());
   has_pending_request = true;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
                                             strategy);
@@ -281,7 +281,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 
 // Materialize the initial basic block.
 void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
-  GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
+  GRANARY_ASSERT(nullptr != meta);
   auto decoded_block = new DecodedBasicBlock(cfg, meta);
   DecodeInstructionList(decoded_block);
   cfg->AddBlock(decoded_block);

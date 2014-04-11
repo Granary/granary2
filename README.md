@@ -4,6 +4,15 @@ Granary+
 Setup
 -----
 
+### Step 0: Make sure you have everything that you need.
+
+1. Get LLVM and clang:
+  ```basemake
+  sudo apt-get install llvm libc++-src clang-3.4 lldb-3.4
+  ```
+
+2. Make sure you have Python 2.7 or above, but not Python 3. 
+
 ### Step 1: Initial setup.
 
 ```basemake

@@ -6,6 +6,7 @@
 // A bit of a trick to make sure that when generating export headers, we don't
 // accidentally include any system headers in the export.
 #if defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)
+# include <algorithm>
 # include <atomic>
 # include <climits>
 # include <cstdarg>

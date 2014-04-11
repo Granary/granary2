@@ -79,7 +79,7 @@ class InlineAssemblyParser {
     return *ch == next;
   }
 
-  void Accept(char next) {
+  void Accept(char GRANARY_IF_DEBUG(next)) {
     GRANARY_ASSERT(Peek(next));
     ch++;
   }

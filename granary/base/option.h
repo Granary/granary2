@@ -24,32 +24,32 @@
 #define GRANARY_DEFINE_string(name, default_value, docstring) \
   namespace { \
   static const char *GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring) \
   } \
-  const char * const &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
-  GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring)
+  const char *&GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_string(name) \
-  extern const char * const &GRANARY_FLAG_NAME(name);
+  extern const char *&GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_bool(name, default_value, docstring) \
   namespace { \
-  static bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring) \
   } \
-  const bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
-  GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring)
+  bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_bool( name) \
-  extern const bool &GRANARY_FLAG_NAME(name);
+  extern bool &GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_positive_int(name, default_value, docstring) \
   namespace { \
   static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring) \
   } \
-  const int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name)); \
-  GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring)
+  int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_positive_int( name) \
-  extern const int &GRANARY_FLAG_NAME(name);
+  extern int &GRANARY_FLAG_NAME(name)
 
 namespace granary {
 

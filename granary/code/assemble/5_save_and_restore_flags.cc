@@ -51,12 +51,12 @@ static void InitFragmentFlagsUse(Fragment * const frags) {
     frag->inst_killed_flags = 0U;
     frag->app_live_flags = ~0U;
     frag->flag_sentinel = nullptr;
-    frag->transient_virt_reg_num = -1;
     if (!frag->is_exit && !frag->is_future_block_head) {
       if (FRAG_KIND_INSTRUMENTATION == frag->kind) {
         KillFragmentFlags(frag);
       } else if (FRAG_KIND_FLAG_ENTRY == frag->kind) {
         frag->flag_sentinel = frag;
+        frag->flag_save_reg = VirtualRegister();
       }
     }
   }

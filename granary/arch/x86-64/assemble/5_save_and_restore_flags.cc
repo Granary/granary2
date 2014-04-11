@@ -63,15 +63,11 @@ namespace {
 // zone/region of instrumentation code. We steal the meaning the of the `id`
 // field of `Fragment`.
 VirtualRegister GetFlagRegister(LocalControlFlowGraph *cfg, Fragment *frag) {
-  auto bl = frag->transient_back_link;
-  if (-1 == bl->transient_virt_reg_num) {
-    auto reg = cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES);
-    bl->transient_virt_reg_num = reg.Number();
-    return reg;
-  } else {
-    return VirtualRegister(VR_KIND_VIRTUAL, arch::GPR_WIDTH_BYTES,
-                           static_cast<uint16_t>(bl->transient_virt_reg_num));
+  auto bl = frag->cached_back_link;
+  if (!bl->flag_save_reg.IsValid()) {
+    bl->flag_save_reg = cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES);
   }
+  return bl->flag_save_reg;
 }
 
 }  // namespace

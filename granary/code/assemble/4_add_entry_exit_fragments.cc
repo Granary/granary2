@@ -53,14 +53,14 @@ static void AddExitFragment(Fragment *curr, Fragment **next_ptr,
     // Try to merge some of the exit fragments using the `transient_back_link`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
-    auto back_link = next->transient_back_link;
+    auto back_link = next->cached_back_link;
     if (back_link && curr->partition_id == back_link->partition_id) {
       *next_ptr = back_link;
     } else {
       auto exit_frag = MakeFragment(exit_kind, curr, next, curr->next);
       curr->next = exit_frag;
       *next_ptr = exit_frag;
-      next->transient_back_link = exit_frag;
+      next->cached_back_link = exit_frag;
     }
   }
 }
@@ -70,7 +70,7 @@ static void AddExitFragments(Fragment * const frags,
                              bool (*is_end)(Fragment *, Fragment *),
                              FragmentKind exit_kind) {
   for (auto frag : FragmentIterator(frags)) {
-    frag->transient_back_link = nullptr;
+    frag->cached_back_link = nullptr;
   }
   for (auto frag : FragmentIterator(frags)) {
     if (frag->kind != exit_kind) {
@@ -91,14 +91,14 @@ static void AddEntryFragment(Fragment *curr, Fragment **next_ptr,
     // Try to merge some of the entry fragments using the `transient_back_link`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
-    auto back_link = next->transient_back_link;
+    auto back_link = next->cached_back_link;
     if (back_link && next->partition_id == back_link->partition_id) {
       *next_ptr = back_link;
     } else {
       auto entry_frag = MakeFragment(entry_kind, next, next, curr->next);
       curr->next = entry_frag;
       *next_ptr = entry_frag;
-      next->transient_back_link = entry_frag;
+      next->cached_back_link = entry_frag;
     }
   }
 }
@@ -108,7 +108,7 @@ static void AddEntryFragments(Fragment * const frags,
                               bool (*is_end)(Fragment *, Fragment *),
                               FragmentKind entry_kind) {
   for (auto frag : FragmentIterator(frags)) {
-    frag->transient_back_link = nullptr;
+    frag->cached_back_link = nullptr;
   }
   for (auto frag : FragmentIterator(frags)) {
     AddEntryFragment(frag, &(frag->branch_target), is_end, entry_kind);

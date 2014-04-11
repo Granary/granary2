@@ -16,7 +16,7 @@
 
 GRANARY_DEFINE_string(clients, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--clients=print_bbs,follow_jumps`.")
+    "For example: `--clients=print_bbs,follow_jumps`.");
 
 namespace granary {
 namespace {

@@ -11,12 +11,12 @@
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--clients=print_bbs,follow_jumps`.")
+    "For example: `--clients=print_bbs,follow_jumps`.");
 
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
     "The number of pages allocated at once to store edge code. Each "
     "environment maintains its own edge code allocator. The default value is "
-    "1 pages per slab.")
+    "1 pages per slab.");
 
 namespace granary {
 

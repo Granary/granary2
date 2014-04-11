@@ -4,6 +4,10 @@
 // target.
 #ifndef GRANARY_TEST
 
+// Yes this is redundant. It's to avoid clang's `-Wheader-guard` errors!
+#define GRANARY_TEST
+#undef GRANARY_TEST
+
 #define GRANARY_INTERNAL
 
 #include <sys/types.h>
@@ -11,6 +15,7 @@
 
 #ifdef GRANARY_STANDALONE
 # include <cstdio>
+# include <cstdlib>
 # include "granary/base/string.h"
 #endif
 
@@ -20,7 +25,7 @@
 
 GRANARY_DEFINE_bool(gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
-    "is yes.")
+    "is yes.");
 
 namespace granary {
 namespace {

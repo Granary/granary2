@@ -5,20 +5,20 @@
 using namespace granary;
 
 GRANARY_DEFINE_bool(print_stderr, false,
-    "Should the printer print to stderr? The default is false: log to stdout.")
+    "Should the printer print to stderr? The default is false: log to stdout.");
 
 GRANARY_DEFINE_bool(print_bb_successors, false,
     "Should the printer print the successor blocks of this basic block? The "
-    "default is false: no successors is printed.")
+    "default is false: no successors is printed.");
 
 GRANARY_DEFINE_bool(print_bb_module, false,
     "Should the originating module name/path of a basic block be printed? The "
-    "default is false: no module information is printed.")
+    "default is false: no module information is printed.");
 
 GRANARY_DEFINE_bool(print_bb_offset, false,
     "If `print_bb_module` is `true`, then also print the offset of "
     "this basic block from within the module. The default is false: no "
-    "module offsets are printed.")
+    "module offsets are printed.");
 
 static LogLevel kStream(LogOutput);
 

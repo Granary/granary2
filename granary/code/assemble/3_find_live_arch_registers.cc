@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#if 0
 
 #include "granary/base/cast.h"
 
@@ -91,3 +92,4 @@ void FindLiveEntryRegsToFrags(Fragment * const frags) {
 
 
 }  // namespace granary
+#endif

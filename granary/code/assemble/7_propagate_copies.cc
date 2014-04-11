@@ -51,7 +51,7 @@ static void UpdateDefsFromInstr(SSAVariableTable *defs,
 // Find the definitions of the registers used by a particular instruction.
 static void FindDefsForUses(Instruction *def_instr, SSAVariableTable *defs) {
   auto frag = ContainingFragment(def_instr);
-  frag->vars->CopyEntryDefinitions(defs);
+  frag->ssa_vars->CopyEntryDefinitions(defs);
   for (auto instr : ForwardInstructionIterator(frag->first)) {
     if (instr == def_instr) {
       break;
@@ -191,7 +191,7 @@ static void CopyPropagate(SSAVariableTable *vars, Operand *op) {
 // Perform copy propagation for all operands in all instructions in a given
 // fragment.
 static void CopyPropagate(SSAVariableTable *vars, Fragment * const frag) {
-  frag->vars->CopyEntryDefinitions(vars);
+  frag->ssa_vars->CopyEntryDefinitions(vars);
   for (auto instr : ForwardInstructionIterator(frag->first)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->ForEachOperand([=] (Operand *op) {
@@ -212,7 +212,7 @@ void PropagateRegisterCopies(Fragment * const frags) {
   SSAVariableTable vars;
   // Single-step copy propagation.
   for (auto frag : FragmentIterator(frags)) {
-    if (frag->vars) {
+    if (frag->ssa_vars) {
       CopyPropagate(&vars, frag);
     }
   }

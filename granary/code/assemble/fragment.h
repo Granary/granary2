@@ -58,40 +58,42 @@ class Fragment {
   // freeing, etc.
   Fragment *next;
 
-  // A back-link pointer that is used to temporarily store some other meta-data.
   union {
-    Fragment *transient_back_link;
+    // When adding flag entry/exit and partition entry/exit fragments, we often
+    // want to avoid adding redundant fragments so we cache a back link to a
+    // recently created partition/flags entry/exit fragment, and try to re-use
+    // those fragments.
+    Fragment *cached_back_link;
+
+    // When doing flag saving and restoring, we designate a single flag entry/
+    // exit fragment as tracking the flags that must be saved restored, and
+    // ensure that all fragments within a flag region refer to this "sentinel"
+    // fragment.
     Fragment *flag_sentinel;
-    SSAVariableTracker *vars;
+
+    // Like flag saving/restoring, when doing register saving and restoring, we
+    // designate a specific
+    Fragment *partition_sentinel;
   };
 
-  // A field that is temporarily used to store some virtual register number
-  // for use by one or more passes.
-  int transient_virt_reg_num;
+  // Tracks the general purpose architectural and virtual registers as-if they
+  // were SSA variables. This is used for copy propagation and virtual register
+  // allocation.
+  SSAVariableTracker *ssa_vars;
 
-  // Unique ID of this fragment. This roughly corresponds to a depth-first
-  // order number of the fragment.
-  const int id;
+  union {
+    // Unique ID of this fragment. This roughly corresponds to a depth-first
+    // order number of the fragment.
+    //
+    // Note: Used by `FRAG_KIND_INSTRUMENTATION` and `FRAG_KIND_APPLICATION`
+    //       fragments.
+    int id;
 
-  // Is this block the first fragment in a decoded basic block?
-  bool is_decoded_block_head:1;
-
-  // Is this a future basic block?
-  bool is_future_block_head:1;
-
-  // Is this an exit block? An exit block is a future block, or a block that
-  // ends in some kind of return, or a native block.
-  bool is_exit:1;
-
-  // Does the last instruction in this fragment change the stack pointer? If so,
-  // the we consider the stack to be valid in this fragment if the stack pointer
-  // is also read during the operation. Otherwise, it's treated as a strict
-  // stack switch, where the stack might not be valid.
-  bool writes_to_stack_pointer:1;
-  bool reads_from_stack_pointer:1;
-
-  // Pseudo entry/exit fragment types.
-  FragmentKind kind;
+    // Virtual register used by the flag save/restore passes to
+    //
+    // Note: Used by `FRAG_KIND_FLAG_ENTRY` fragments.
+    VirtualRegister flag_save_reg;
+  };
 
   // Identifier of a "stack region". This is a very coarse grained concept,
   // where we color fragments according to:
@@ -107,6 +109,34 @@ class Fragment {
   // changes to the stack pointer within the basic blocks.
   int partition_id;
 
+  // Conservative set of flags that are live on entry to this basic block.
+  unsigned app_live_flags;
+
+  // Flags that are killed anywhere within a fragment that contains
+  // instrumented instructions. If this is an application code fragment (kind =
+  // FRAG_KIND_APPLICATION) then `killed_flags = 0`.
+  unsigned inst_killed_flags;
+
+  // Is this block the first fragment in a decoded basic block?
+  bool is_decoded_block_head;
+
+  // Is this a future basic block?
+  bool is_future_block_head;
+
+  // Is this an exit block? An exit block is a future block, or a block that
+  // ends in some kind of return, or a native block.
+  bool is_exit;
+
+  // Does the last instruction in this fragment change the stack pointer? If so,
+  // the we consider the stack to be valid in this fragment if the stack pointer
+  // is also read during the operation. Otherwise, it's treated as a strict
+  // stack switch, where the stack might not be valid.
+  bool writes_to_stack_pointer;
+  bool reads_from_stack_pointer;
+
+  // Pseudo entry/exit fragment types.
+  FragmentKind kind;
+
   // Source basic block info.
   BlockMetaData *block_meta;
 
@@ -114,6 +144,7 @@ class Fragment {
   Instruction *first;
   Instruction *last;
 
+#if 0
   // Which physical registers are conservatively live on entry to and exit from
   // this block.
   LiveRegisterTracker entry_regs_live;
@@ -123,14 +154,7 @@ class Fragment {
   // this block.
   DeadRegisterTracker entry_regs_dead;
   DeadRegisterTracker exit_regs_dead;
-
-  // Conservative set of flags that are live on entry to this basic block.
-  uint32_t app_live_flags;
-
-  // Flags that are killed anywhere within a fragment that contains
-  // instrumented instructions. If this is an application code fragment (kind =
-  // FRAG_KIND_APPLICATION) then `killed_flags = 0`.
-  uint32_t inst_killed_flags;
+#endif
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
     SHARED = false,

@@ -16,7 +16,7 @@ enum {
 
 // Linked list of registered options.
 Option *OPTIONS = nullptr;
-std::atomic<bool> OPTIONS_INITIALIZED = ATOMIC_VAR_INIT(false);
+bool OPTIONS_INITIALIZED = false;
 
 // Copy of the option string.
 static int OPTION_STRING_LENGTH = 0;
@@ -34,7 +34,7 @@ static int CopyStringIntoOptions(int offset, const char *string) {
 
 // Finalize the option string.
 static void TerminateOptionString(int length) {
-  granary_break_on_fault_if(length >= MAX_OPTIONS_LENGTH);
+  GRANARY_ASSERT(MAX_OPTIONS_LENGTH > length);
   OPTION_STRING[length] = '\0';
   OPTION_STRING_LENGTH = length;
 }
@@ -98,7 +98,7 @@ static void ProcessOptionString(void) {
           state = ELSEWHERE;
           *ch = '\0';
         } else if (' ' != *ch) {
-          granary_break_on_fault_if(!IsValidValueChar(*ch));
+          GRANARY_ASSERT(IsValidValueChar(*ch));
         }
         break;
 
@@ -118,7 +118,7 @@ static void ProcessOptionString(void) {
       case SEEN_DASH:
         if ('-' == *ch) {
           state = IN_OPTION;
-          granary_break_on_fault_if(num_options >= MAX_NUM_OPTIONS);
+          GRANARY_ASSERT(MAX_NUM_OPTIONS > num_options);
           OPTION_VALUES[num_options] = "";  // Default to positional.
           OPTION_NAMES[num_options++] = ch + 1;
         } else {
@@ -162,7 +162,7 @@ static void ProcessPendingOptions(void) {
 void InitOptions(const char *env) {
   TerminateOptionString(CopyStringIntoOptions(0, env));
   ProcessOptionString();
-  OPTIONS_INITIALIZED.store(true);
+  OPTIONS_INITIALIZED = true;
   ProcessPendingOptions();
 }
 
@@ -176,7 +176,7 @@ void InitOptions(int argc, const char **argv) {
   }
   TerminateOptionString(offset);
   ProcessOptionString();
-  OPTIONS_INITIALIZED.store(true);
+  OPTIONS_INITIALIZED = true;
   ProcessPendingOptions();
 }
 
@@ -186,7 +186,7 @@ namespace detail {
 void RegisterOption(Option *option) {
 
   // Client/tool options.
-  if (OPTIONS_INITIALIZED.load(std::memory_order_acquire)) {
+  if (OPTIONS_INITIALIZED) {
     option->parse(option);
 
   // Internal Granary options.
