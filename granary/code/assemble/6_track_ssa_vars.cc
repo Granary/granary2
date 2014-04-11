@@ -6,7 +6,7 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
 
-#include "granary/code/assemble/7_convert_to_ssa.h"
+#include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/fragment.h"
 #include "granary/code/assemble/ssa.h"
 
@@ -166,7 +166,7 @@ static void ConnectPhiNodes(Fragment * const frags) {
 //       PHI nodes. However, no information is explicitly maintained to track
 //       which registers a given SSA register depends on, as that information
 //       is indirectly maintained by the native instructions themselves.
-void ConvertToSSA(Fragment * const frags) {
+void TrackSSAVars(Fragment * const frags) {
   InitAnalysis(frags);
   LocalValueNumbering(frags);
   PropagateLocalValueNumbers(frags);

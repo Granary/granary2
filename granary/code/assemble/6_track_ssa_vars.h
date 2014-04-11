@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_CODE_ASSEMBLE_7_CONVERT_TO_SSA_H_
-#define GRANARY_CODE_ASSEMBLE_7_CONVERT_TO_SSA_H_
+#ifndef GRANARY_CODE_ASSEMBLE_6_TRACK_SSA_VARS_H_
+#define GRANARY_CODE_ASSEMBLE_6_TRACK_SSA_VARS_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -24,8 +24,8 @@ class Fragment;
 //       PHI nodes. However, no information is explicitly maintained to track
 //       which registers a given SSA register depends on, as that information
 //       is indirectly maintained by the native instructions themselves.
-void ConvertToSSA(Fragment * const frags);
+void TrackSSAVars(Fragment * const frags);
 
 }  // namespace granary
 
-#endif  // GRANARY_CODE_ASSEMBLE_7_CONVERT_TO_SSA_H_
+#endif  // GRANARY_CODE_ASSEMBLE_6_TRACK_SSA_VARS_H_

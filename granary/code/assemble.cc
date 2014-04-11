@@ -10,12 +10,12 @@
 #include "granary/code/assemble/0_compile_inline_assembly.h"
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
-#include "granary/code/assemble/3_find_live_arch_registers.h"
-#include "granary/code/assemble/4_partition_fragments.h"
-#include "granary/code/assemble/5_add_entry_exit_fragments.h"
-#include "granary/code/assemble/6_save_and_restore_flags.h"
-#include "granary/code/assemble/7_convert_to_ssa.h"
-#include "granary/code/assemble/8_schedule_registers.h"
+//#include "granary/code/assemble/3_find_live_arch_registers.h"
+#include "granary/code/assemble/3_partition_fragments.h"
+#include "granary/code/assemble/4_add_entry_exit_fragments.h"
+#include "granary/code/assemble/5_save_and_restore_flags.h"
+#include "granary/code/assemble/6_track_ssa_vars.h"
+#include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -49,7 +49,7 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   auto frags = BuildFragmentList(cfg);
 
   // Find the live registers on entry to the fragments.
-  FindLiveEntryRegsToFrags(frags);
+  //FindLiveEntryRegsToFrags(frags);
 
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
@@ -64,10 +64,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   SaveAndRestoreFlags(cfg, frags);
 
   // Build an SSA-like representation for the virtual register definitions.
-  ConvertToSSA(frags);
+  TrackSSAVars(frags);
 
-  // Schedule the virtual registers.
-  ScheduleRegisters(frags);
+  // Perform a single step of copy propagation. The purpose of this is to
+  // allow us to eventually get rid of
+  PropagateRegisterCopies(frags);
 
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, frags);

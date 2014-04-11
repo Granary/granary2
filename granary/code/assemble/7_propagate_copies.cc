@@ -98,17 +98,23 @@ static VirtualRegister RegisterToPropagate(SSAVariableTable *vars,
   return VirtualRegister();
 }
 
-// Perform a register-to-register copy propagation.
+// Perform a register-to-register copy or a trivial effective address to
+// register copy propagation.
 static void CopyPropagate(SSAVariableTable *vars, RegisterOperand *dest,
                           VirtualRegister reg) {
   if (auto instr = GetCopyInstruction(vars, reg)) {
     RegisterOperand source;
+    MemoryOperand source_eff_addr;
+    VirtualRegister source_reg;
     if (instr->MatchOperands(ReadOnlyFrom(source))) {
-      auto source_reg = RegisterToPropagate(
-          vars, instr, source.Register(), reg);
-      if (source_reg.IsGeneralPurpose()) {
-        dest->Ref().ReplaceWith(source);
-      }
+      source_reg = source.Register();
+    } else if (instr->MatchOperands(ReadOnlyFrom(source_eff_addr)) &&
+               source_eff_addr.IsEffectiveAddress()) {
+      source_eff_addr.MatchRegister(source_reg);
+    }
+    source_reg = RegisterToPropagate(vars, instr, source_reg, reg);
+    if (source_reg.IsValid()) {
+      dest->Ref().ReplaceWith(source);
     }
   }
 }
@@ -126,17 +132,17 @@ static void CopyPropagate(SSAVariableTable *vars, NativeInstruction *instr,
                           MemoryOperand *dest) {
   VirtualRegister r1, r2, r3;
   source.CountMatchedRegisters({&r1, &r2, &r3});
-  bool good = true;
+  bool can_replace = true;
   if (r1.IsGeneralPurpose()) {
-    good = RegisterToPropagate(vars, instr, r1, r1).IsValid();
+    can_replace = RegisterToPropagate(vars, instr, r1, r1).IsValid();
   }
-  if (good && r2.IsGeneralPurpose()) {
-    good = RegisterToPropagate(vars, instr, r2, r2).IsValid();
+  if (can_replace && r2.IsGeneralPurpose()) {
+    can_replace = RegisterToPropagate(vars, instr, r2, r2).IsValid();
   }
-  if (good && r3.IsGeneralPurpose()) {
-    good = RegisterToPropagate(vars, instr, r3, r3).IsValid();
+  if (can_replace && r3.IsGeneralPurpose()) {
+    can_replace = RegisterToPropagate(vars, instr, r3, r3).IsValid();
   }
-  if (good) {
+  if (can_replace) {
     dest->Ref().ReplaceWith(source);
   }
 }
@@ -153,7 +159,7 @@ static void CopyPropagate(SSAVariableTable *vars, MemoryOperand *dest,
     if (instr->MatchOperands(ReadOnlyFrom(source_addr))) {
       auto source_reg = RegisterToPropagate(
           vars, instr, source_addr.Register(), addr);
-      if (source_reg.IsGeneralPurpose()) {
+      if (source_reg.IsValid()) {
         MemoryOperand source(source_reg, dest->Width());
         dest->Ref().ReplaceWith(source);
       }
@@ -202,7 +208,7 @@ static void CopyPropagate(SSAVariableTable *vars, Fragment * const frag) {
 
 // Schedule virtual registers to either physical registers or to stack/TLS
 // slots.
-void ScheduleRegisters(Fragment * const frags) {
+void PropagateRegisterCopies(Fragment * const frags) {
   SSAVariableTable vars;
   // Single-step copy propagation.
   for (auto frag : FragmentIterator(frags)) {

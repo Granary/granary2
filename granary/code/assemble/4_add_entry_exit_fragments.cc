@@ -4,7 +4,7 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/5_add_entry_exit_fragments.h"
+#include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/fragment.h"
 
 #include "granary/util.h"

@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_CODE_ASSEMBLE_5_ADD_ENTRY_EXIT_FRAGMENTS_H_
-#define GRANARY_CODE_ASSEMBLE_5_ADD_ENTRY_EXIT_FRAGMENTS_H_
+#ifndef GRANARY_CODE_ASSEMBLE_4_ADD_ENTRY_EXIT_FRAGMENTS_H_
+#define GRANARY_CODE_ASSEMBLE_4_ADD_ENTRY_EXIT_FRAGMENTS_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -20,4 +20,4 @@ void AddEntryAndExitFragments(Fragment **frags_ptr);
 
 }  // namespace granary
 
-#endif  // GRANARY_CODE_ASSEMBLE_5_ADD_ENTRY_EXIT_FRAGMENTS_H_
+#endif  // GRANARY_CODE_ASSEMBLE_4_ADD_ENTRY_EXIT_FRAGMENTS_H_
