@@ -33,6 +33,10 @@ SSAVariable *DefinitionOf(SSAVariable *var);
 // Returns the virtual register associated with some `SSAVariable` instance.
 VirtualRegister RegisterOf(SSAVariable *var);
 
+// Returns the `SSAVariable` associated with a definition of `reg` if this
+// instruction defines the register `reg`.
+SSAVariable *DefinitionOf(NativeInstruction *instr, VirtualRegister reg);
+
 // Generic SSA variable.
 //
 // This implementation roughly follows "Simple and Efficient Construction of
@@ -263,6 +267,9 @@ class SSAVariableTracker {
   // Copy all entry definitions in this variable tracker into an SSA variable
   // table.
   void CopyEntryDefinitions(SSAVariableTable *vars);
+
+  // Returns the definition of some register on entry to a fragment.
+  SSAVariable *EntryDefinitionOf(VirtualRegister reg);
 
  private:
   // Removes and returns the `SSAVariable` instance associated with a missing

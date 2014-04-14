@@ -49,16 +49,18 @@ static void UpdateDefsFromInstr(SSAVariableTable *defs,
 }
 
 // Find the definitions of the registers used by a particular instruction.
-static void FindDefsForUses(Instruction *def_instr, SSAVariableTable *defs) {
-  auto frag = ContainingFragment(def_instr);
-  frag->ssa_vars->CopyEntryDefinitions(defs);
-  for (auto instr : ForwardInstructionIterator(frag->first)) {
-    if (instr == def_instr) {
-      break;
-    } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      UpdateDefsFromInstr(defs, ninstr);
+static SSAVariable *FindDefForUse(Instruction *def_instr, VirtualRegister reg) {
+  // Search for a local definition within the list of instructions
+  for (auto instr : BackwardInstructionIterator(def_instr)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (auto def = DefinitionOf(ninstr, reg)) {
+        return def;
+      }
     }
   }
+  // Search for an incoming definition from `frag`s precedeccor(s).
+  auto frag = ContainingFragment(def_instr);
+  return frag->ssa_vars->EntryDefinitionOf(reg);
 }
 
 // Returns a pointer to the "copy" instruction that defines `reg`. If `reg` is
@@ -83,16 +85,14 @@ static VirtualRegister RegisterToPropagate(SSAVariableTable *vars,
                                            VirtualRegister dest_reg) {
   if (source_reg.IsGeneralPurpose() &&
       source_reg.BitWidth() == dest_reg.BitWidth()) {
-
-    SSAVariableTable source_vars;
-    FindDefsForUses(instr, &source_vars);
-
-    // Make sure that the same definition of the register being copied
-    // reaches both the copy instruction, and the instruction to which we
-    // want to propagate the copy.
-    if (DefinitionOf(*source_vars.Find(source_reg)) ==
-        DefinitionOf(*vars->Find(source_reg))) {
-      return source_reg;
+    if (auto source_reg_def = FindDefForUse(instr, source_reg)) {
+      // Make sure that the same definition of the register being copied
+      // reaches both the copy instruction, and the instruction to which we
+      // want to propagate the copy.
+      if (DefinitionOf(source_reg_def) ==
+          DefinitionOf(*vars->Find(source_reg))) {
+        return source_reg;
+      }
     }
   }
   return VirtualRegister();

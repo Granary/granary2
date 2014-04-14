@@ -152,9 +152,24 @@ static void TryRecursiveTrivialize(SSAPhiOperand *op) {
   }
 }
 
+// Returns the last `SSAVariable` defined within the fragment `frag` that
+// defines the register `reg`.
+static SSAVariable *FindDefForUse(Fragment *frag, VirtualRegister reg) {
+  for (auto instr : BackwardInstructionIterator(frag->last)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (auto var = DefinitionOf(ninstr, reg)) {
+        return var;
+      }
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 // Returns the `SSAVariable` associated with a definition of `reg` if this
-// instruction indeed defines the register `reg`.
-static SSAVariable *DefinedVar(NativeInstruction *instr, VirtualRegister reg) {
+// instruction defines the register `reg`.
+SSAVariable *DefinitionOf(NativeInstruction *instr, VirtualRegister reg) {
   if (auto var = GetMetaData<SSAVariable *>(instr)) {
     while (auto def_forward = DynamicCast<SSAForward *>(var)) {
       if (RegisterOf(def_forward->parent) == reg) {
@@ -168,21 +183,6 @@ static SSAVariable *DefinedVar(NativeInstruction *instr, VirtualRegister reg) {
   }
   return nullptr;
 }
-
-// Returns the last `SSAVariable` defined within the fragment `frag` that
-// defines the register `reg`.
-static SSAVariable *FindDefForUse(Fragment *frag, VirtualRegister reg) {
-  for (auto instr : BackwardInstructionIterator(frag->last)) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (auto var = DefinedVar(ninstr, reg)) {
-        return var;
-      }
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
 
 // Try to convert this PHI node into a trivial PHI node. If possible, this
 // will cause the memory to go through an "unsafe" type conversion.
@@ -357,6 +357,11 @@ void SSAVariableTracker::CopyEntryDefinitions(SSAVariableTable *vars) {
       *vars->Find(RegisterOf(var_def)) = var_def;
     }
   }
+}
+
+// Returns the definition of some register on entry to a fragment.
+SSAVariable *SSAVariableTracker::EntryDefinitionOf(VirtualRegister reg) {
+  return entry_defs.Find(reg)->var;
 }
 
 // Removes and returns the `SSAVariable` instance associated with a missing
