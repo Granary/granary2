@@ -105,7 +105,7 @@ static void NumberLocalValues(Fragment * const frag) {
       AddUses(ssa_vars, ninstr);
     }
   }
-  ssa_vars->PromoteMissingDefinitions();
+  //ssa_vars->PromoteMissingDefinitions();
 }
 
 // Perform a local value numbering for all fragments in the control-flow
@@ -133,7 +133,7 @@ static bool BackPropagateSSAUses(Fragment *pred, Fragment *succ) {
          pred->partition_id == succ->partition_id &&
          pred->ssa_vars &&
          succ->ssa_vars &&
-         pred->ssa_vars->BackPropagateMissingDefinitions(succ->ssa_vars);
+         pred->ssa_vars->BackPropagateMissingDefsForUses(pred, succ->ssa_vars);
 }
 
 // Convert the local value numberings into partition-global value numberings.

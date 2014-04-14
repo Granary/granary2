@@ -87,7 +87,7 @@ $(GRANARY_MERGED_LL_OBJ) :: $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES)
 # assembly files, and any archives into a single large object file.
 $(GRANARY_MERGED_OBJ) :: $(GRANARY_MERGED_LL_OBJ) $(ARCH_ASM_OBJ_FILES)
 	@echo "Linking together intermediate object files into $(GRANARY_MERGED_OBJ)."
-	@$(GRANARY_LD) -r \
+	@$(GRANARY_LD) -g -r \
 		$(GRANARY_MERGED_LL_OBJ) \
 		$(ARCH_ASM_OBJ_FILES) \
 		$(GRANARY_OTHER_AR_FILES) \

@@ -6,9 +6,13 @@
 #include "granary/base/new.h"
 #include "granary/base/string.h"
 
+#include "granary/code/assemble/fragment.h"
 #include "granary/code/assemble/ssa.h"
 
+#include "granary/cfg/instruction.h"
+
 #include "granary/breakpoint.h"
+#include "granary/util.h"
 
 namespace granary {
 
@@ -148,6 +152,36 @@ static void TryRecursiveTrivialize(SSAPhiOperand *op) {
   }
 }
 
+// Returns the `SSAVariable` associated with a definition of `reg` if this
+// instruction indeed defines the register `reg`.
+static SSAVariable *DefinedVar(NativeInstruction *instr, VirtualRegister reg) {
+  if (auto var = GetMetaData<SSAVariable *>(instr)) {
+    while (auto def_forward = DynamicCast<SSAForward *>(var)) {
+      if (RegisterOf(def_forward->parent) == reg) {
+        return var;
+      }
+      var = def_forward->next_instr_def;
+    }
+    if (var && RegisterOf(var) == reg) {
+      return var;
+    }
+  }
+  return nullptr;
+}
+
+// Returns the last `SSAVariable` defined within the fragment `frag` that
+// defines the register `reg`.
+static SSAVariable *FindDefForUse(Fragment *frag, VirtualRegister reg) {
+  for (auto instr : BackwardInstructionIterator(frag->last)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (auto var = DefinedVar(ninstr, reg)) {
+        return var;
+      }
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 // Try to convert this PHI node into a trivial PHI node. If possible, this
@@ -212,14 +246,6 @@ SSAVariable *SSAVariableTracker::AddInheritingDefinition(
   // Add in the missing definition that is associated with the forward variable.
   entry_def->var = new_entry_def;
   entry_def->is_owned = true;
-
-  // If there wasn't already a live definition of this reg, then add this
-  // definition as the live def.
-  auto exit_def = exit_defs.Find(reg);
-  if (!*exit_def) {
-    *exit_def = current_def;
-  }
-
   return current_def;
 }
 
@@ -233,12 +259,7 @@ SSAVariable *SSAVariableTracker::AddSimpleDefinition(VirtualRegister reg,
   if (!node_mem) {
     node_mem = new SSANode;
   }
-  auto def = new (node_mem) SSARegister(reg, instr);
-  auto exit_def = exit_defs.Find(reg);
-  if (!*exit_def) {
-    *exit_def = def;
-  }
-  return def;
+  return new (node_mem) SSARegister(reg, instr);
 }
 
 // Declare that a register is being used. This adds a definition of the
@@ -264,27 +285,43 @@ void SSAVariableTracker::PromoteMissingDefinitions(void) {
   }
 }
 
-// Propagate definitions from one SSA variable table into another. This only
-// propagates definitions if they are missing in the `dest` table's
-// `entry_defs` table. If the destination table has multiple predecessors
-// then a PHI node is propagated in place of the definition from the current
-// table.
-bool SSAVariableTracker::BackPropagateMissingDefinitions(
-    SSAVariableTracker *source) {
+// Propagate definitions from one SSA variable table into another. The source
+// table is treated as being the successor of the current table, hence the
+// current is the predecessor of the source table.
+bool SSAVariableTracker::BackPropagateMissingDefsForUses(
+    Fragment *predecessor, SSAVariableTracker *source) {
   auto changed = false;
   for (auto &source_entry_def : source->entry_defs) {
-    if (source_entry_def.var) {
+    if (source_entry_def.var && source_entry_def.is_owned) {
       auto reg = RegisterOf(source_entry_def.var);
-      auto dest_exit_def = exit_defs.Find(reg);
-      if (!*dest_exit_def) {  // Predecessor doesn't define the var.
-        auto dest_entry_def = entry_defs.Find(reg);
-        if (!dest_entry_def->var) {  // Predecessor doesn't use the var.
-          dest_entry_def->var = new (new SSANode) SSAPhi(reg);
-          dest_entry_def->is_owned = true;
-          *dest_exit_def = dest_entry_def->var;
-          changed = true;
-        }
+
+      // Predecessor already defines it. A different successor has done the
+      // lookup process for us. This could mean a true definition, or just an
+      // inject definition via a missing def in another successor.
+      auto exit_def = exit_defs.Find(reg);
+      if (*exit_def) {
+        continue;
       }
+
+      changed = true;
+
+      // Predecessor already defines it.
+      if (auto def = FindDefForUse(predecessor, reg)) {
+        *exit_def = def;
+        continue;
+      }
+
+      // Predecessor uses it, but does not define it.
+      auto entry_use = entry_defs.Find(reg);
+      if (entry_use->var) {
+        *exit_def = entry_use->var;
+        continue;
+      }
+
+      // Predecessor neither defines nor uses it.
+      entry_use->var = new (new SSANode) SSAPhi(reg);
+      entry_use->is_owned = true;
+      *exit_def = entry_use->var;
     }
   }
   return changed;

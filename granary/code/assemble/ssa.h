@@ -245,7 +245,8 @@ class SSAVariableTracker {
   // `missing_defs` table. If the destination table has multiple predecessors
   // then a PHI node is propagated in place of the definition from the current
   // table.
-  bool BackPropagateMissingDefinitions(SSAVariableTracker *source);
+  bool BackPropagateMissingDefsForUses(Fragment *predecessor,
+                                       SSAVariableTracker *source);
 
   // For each PHI node in the destination table, add an operand to that PHI
   // from the current table.
