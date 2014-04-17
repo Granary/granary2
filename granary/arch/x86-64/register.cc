@@ -150,7 +150,7 @@ void VirtualRegister::Widen(int dest_byte_width) {
       preserved_byte_mask = 0;
       return;
     case 8:
-      num_bytes = 5;
+      num_bytes = 8;
       byte_mask = ALL_8_BYTES;
       preserved_byte_mask = 0;
       return;

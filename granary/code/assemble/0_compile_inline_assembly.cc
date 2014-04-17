@@ -19,7 +19,7 @@ void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
       for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
         next_instr = instr->Next();
         if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-          if (INLINE_ASSEMBLY == annot->annotation) {
+          if (IA_INLINE_ASSEMBLY == annot->annotation) {
             auto asm_block = reinterpret_cast<InlineAssemblyBlock *>(
                 const_cast<void *>(annot->data));
             asm_block->Compile(dblock, instr);

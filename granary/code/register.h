@@ -8,6 +8,8 @@
 #include "granary/base/base.h"
 #include "granary/base/bitset.h"
 
+#include "granary/breakpoint.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -28,7 +30,17 @@ enum VirtualRegisterKind : uint8_t {
   // Architectural register that can potentially be re-scheduled.
   VR_KIND_ARCH_VIRTUAL,
 
-  VR_KIND_VIRTUAL
+  // General-purpose virtual register.
+  VR_KIND_VIRTUAL,
+
+#ifdef GRANARY_INTERNAL
+  // Index into the virtual register storage location. This is used at virtual
+  // register allocation time, and allows us to manage the differences between
+  // user space and kernel space at a lower level.
+  //
+  // Note: This can and should only be used as a memory operand!!
+  VR_KIND_VIRTUAL_SLOT
+#endif
 };
 
 // Defines the different types of virtual registers.
@@ -44,7 +56,9 @@ union VirtualRegister {
         kind(kind_),
         num_bytes(num_bytes_),
         byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
-        preserved_byte_mask(0) {}
+        preserved_byte_mask(0) {
+    GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
+  }
 
   // Copy constructor.
   inline VirtualRegister(const VirtualRegister &that)
@@ -117,6 +131,12 @@ union VirtualRegister {
 
   inline bool IsValid(void) const {
     return VR_KIND_UNKNOWN != kind;
+  }
+
+  // Is this a virtual spill slot? Virtual spill slots are used to identify
+  // memory locations that are used for virtual register spilling/filling.
+  GRANARY_INTERNAL_DEFINITION inline bool IsVirtualSlot(void) const {
+    return VR_KIND_VIRTUAL_SLOT == kind;
   }
 
   // Is this the stack pointer?

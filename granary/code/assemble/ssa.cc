@@ -177,6 +177,7 @@ SSAVariable *DefinitionOf(NativeInstruction *instr, VirtualRegister reg) {
       }
       var = def_forward->next_instr_def;
     }
+    //var = DefinitionOf(var);
     if (var && RegisterOf(var) == reg) {
       return var;
     }
@@ -201,6 +202,11 @@ void SSAPhi::TryTrivialize(void) {
   auto op = ops;
   InPlaceOverwritePhiNode(this, same);
   TryRecursiveTrivialize(op);
+}
+
+// Delete the memory associated with an SSA object.
+void DestroySSAObj(void *obj) {
+  delete UnsafeCast<SSANode *>(obj);
 }
 
 VirtualRegister LookupTableOperations<VirtualRegister,
@@ -255,7 +261,7 @@ SSAVariable *SSAVariableTracker::AddInheritingDefinition(
 // the `entry_defs` table, and returned.
 SSAVariable *SSAVariableTracker::AddSimpleDefinition(VirtualRegister reg,
                                                      NativeInstruction *instr) {
-  void *node_mem = RemoveMissingDef(reg);
+  void *node_mem = RemoveEntryDef(reg);
   if (!node_mem) {
     node_mem = new SSANode;
   }
@@ -274,7 +280,7 @@ void SSAVariableTracker::DeclareUse(VirtualRegister reg) {
 
 // Promote missing definitions associated with uses in a fragment into live
 // definitions that leave the fragment.
-void SSAVariableTracker::PromoteMissingDefinitions(void) {
+void SSAVariableTracker::PromoteMissingEntryDefs(void) {
   for (auto entry_def : entry_defs) {
     if (entry_def.var) {
       auto exit_def = exit_defs.Find(RegisterOf(entry_def.var));
@@ -361,12 +367,25 @@ void SSAVariableTracker::CopyEntryDefinitions(SSAVariableTable *vars) {
 
 // Returns the definition of some register on entry to a fragment.
 SSAVariable *SSAVariableTracker::EntryDefinitionOf(VirtualRegister reg) {
-  return entry_defs.Find(reg)->var;
+  if (auto def = entry_defs.Find(reg)) {
+    return def->var;
+  }
+  return nullptr;
+}
+
+// Returns the definition of some register on exit from a fragment.
+SSAVariable *SSAVariableTracker::ExitDefinitionOf(VirtualRegister reg) {
+  if (auto def = exit_defs.Find(reg)) {
+    if (*def) {
+      return *def;
+    }
+  }
+  return nullptr;
 }
 
 // Removes and returns the `SSAVariable` instance associated with a missing
 // definition of `reg`.
-SSAVariable *SSAVariableTracker::RemoveMissingDef(VirtualRegister reg) {
+SSAVariable *SSAVariableTracker::RemoveEntryDef(VirtualRegister reg) {
   auto entry_def = entry_defs.Find(reg);
   auto var = entry_def->var;
   entry_def->var = nullptr;

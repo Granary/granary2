@@ -105,25 +105,6 @@ bool Operand::IsConditionalWrite(void) const {
   return op_ptr && op->IsConditionalWrite();
 }
 
-// Returns whether or not this operand can be replaced / modified.
-//
-// Note: This has a driver-specific implementation.
-bool Operand::IsModifiable(void) const {
-  return !op->is_sticky;
-}
-
-// Returns whether or not this operand is explicit.
-bool Operand::IsExplicit(void) const {
-  GRANARY_ASSERT(op_ptr && TOMBSTONE != op_ptr);
-  return op_ptr->is_explicit;
-}
-
-// Return the width (in bits) of this operand, or -1 if its width is not
-// known.
-int Operand::Width(void) const {
-  return op->width;
-}
-
 // Convert this operand into a string.
 void Operand::EncodeToString(OperandString *str) const {
   if (op_ptr) {

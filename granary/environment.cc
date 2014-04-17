@@ -49,6 +49,11 @@ void Environment::Setup(void) {
       [&] (const char *tool_name) {
         tool_manager.Register(tool_name);
       });
+
+  // Do a dummy allocation and free of all tools. Tools register meta-data
+  // through their constructors and so this will get all tool+option-specific
+  // meta-data registered.
+  tool_manager.FreeTools(tool_manager.AllocateTools(&context));
 }
 
 void Environment::Attach(void) {

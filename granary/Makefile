@@ -15,14 +15,14 @@ ifeq (user,$(GRANARY_WHERE))
 	GRANARY_TOOL_OBJ_TARGET = $(GRANARY_TOOL_OBJ)
 endif
 
-GRANARY_MERGED_LL_LL = $(GRANARY_BIN_DIR)/granary_merged_ll.ll
-GRANARY_MERGED_LL_OBJ = $(GRANARY_BIN_DIR)/granary_merged_ll.o
+GRANARY_MERGED_BC_BC = $(GRANARY_BIN_DIR)/granary_merged_ll.bc
+GRANARY_MERGED_BC_OBJ = $(GRANARY_BIN_DIR)/granary_merged_ll.o
 
 # Go find already compiled files that were not compiled by this Makefile.
 GRANARY_EXCLUDE_FIND = -not -path "$(GRANARY_BIN_DIR)/granary/*"
 GRANARY_OTHER_AR_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.a' $(GRANARY_EXCLUDE_FIND))
-GRANARY_OTHER_OBJ_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.ll' $(GRANARY_EXCLUDE_FIND))
-GRANARY_OTHER_OBJ_FILES := $(filter-out $(GRANARY_MERGED_LL_LL),$(GRANARY_OTHER_OBJ_FILES))
+GRANARY_OTHER_OBJ_FILES := $(shell find $(GRANARY_BIN_DIR) -type f -name '*.bc' $(GRANARY_EXCLUDE_FIND))
+GRANARY_OTHER_OBJ_FILES := $(filter-out $(GRANARY_MERGED_BC_BC),$(GRANARY_OTHER_OBJ_FILES))
 
 # TODO(pag): Will need to filter-out non Linux OS's in the future.
 GRANARY_EXCLUDE_FIND = 
@@ -32,7 +32,7 @@ GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/arch/*"
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.cc' $(GRANARY_EXCLUDE_FIND))
-GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.ll))
+GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.bc))
 
 # Find assembly files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_ASM_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.asm')
@@ -40,7 +40,7 @@ ARCH_ASM_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_ASM_SR
 
 # Find C++ files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_CC_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.cc')
-ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_FILES:.cc=.ll))
+ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_FILES:.cc=.bc))
 
 # All object files to be compiled.
 GRANARY_OBJ_FILES = $(GRANARY_CC_OBJ_FILES) $(ARCH_CC_OBJ_FILES)
@@ -58,10 +58,10 @@ $(GRANARY_BIN_DIR)/granary/%.S: $(GRANARY_SRC_DIR)/granary/%.asm
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/post_process_asm.py $@
 
 # Compile C++ files to LLVM bitcode.
-$(GRANARY_BIN_DIR)/granary/%.ll: $(GRANARY_SRC_DIR)/granary/%.cc
+$(GRANARY_BIN_DIR)/granary/%.bc: $(GRANARY_SRC_DIR)/granary/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -c $< -o $@
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 
 # Compile an assembly source file into an object file.
 $(GRANARY_BIN_DIR)/granary/%.o :: $(GRANARY_BIN_DIR)/granary/%.S
@@ -69,26 +69,26 @@ $(GRANARY_BIN_DIR)/granary/%.o :: $(GRANARY_BIN_DIR)/granary/%.S
 	$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -c $< -o $@
 
 # Compile a single LLVM bitcode file to an object file.
-$(GRANARY_BIN_DIR)/granary/%.o :: $(GRANARY_BIN_DIR)/granary/%.ll
+$(GRANARY_BIN_DIR)/granary/%.o :: $(GRANARY_BIN_DIR)/granary/%.bc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) -c $< -o $@
 
-# Link together all compiled .ll files into a single .ll file.
-$(GRANARY_MERGED_LL_OBJ) :: $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES)
-	@echo "Linking intermediate bitcode files into $(GRANARY_MERGED_LL_OBJ)."
-	@llvm-link $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES) \
-		-o $(GRANARY_MERGED_LL_LL)
+# Link together all compiled .bc files into a single .bc file.
+$(GRANARY_MERGED_BC_OBJ) :: $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES)
+	@echo "Linking intermediate bitcode files into $(GRANARY_MERGED_BC_OBJ)."
+	@/usr/bin/llvm-link-3.4 $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES) \
+		-o $(GRANARY_MERGED_BC_BC)
 	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) \
-		-c $(GRANARY_MERGED_LL_LL) \
-		-o $(GRANARY_MERGED_LL_OBJ)
+		-c $(GRANARY_MERGED_BC_BC) \
+		-o $(GRANARY_MERGED_BC_OBJ)
 
 # Link together the merged .o files, the .o files related to arch-specific
 # assembly files, and any archives into a single large object file.
-$(GRANARY_MERGED_OBJ) :: $(GRANARY_MERGED_LL_OBJ) $(ARCH_ASM_OBJ_FILES)
+$(GRANARY_MERGED_OBJ) :: $(GRANARY_MERGED_BC_OBJ) $(ARCH_ASM_OBJ_FILES)
 	@echo "Linking together intermediate object files into $(GRANARY_MERGED_OBJ)."
 	@$(GRANARY_LD) -g -r \
-		$(GRANARY_MERGED_LL_OBJ) \
+		$(GRANARY_MERGED_BC_OBJ) \
 		$(ARCH_ASM_OBJ_FILES) \
 		$(GRANARY_OTHER_AR_FILES) \
 		-o $(GRANARY_MERGED_OBJ)

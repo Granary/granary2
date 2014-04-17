@@ -25,11 +25,34 @@ inline static T *GetMetaDataStrict(InstrumentedBasicBlock *block) {
   return MetaDataCast<T *>(block->MetaData());
 }
 
-// Get an instruction's meta-data.
+#ifdef GRANARY_ECLIPSE
+
+// For code editing purposes only. Sometimes Eclipse has trouble with all the
+// `EnableIf` specializations, so this serves to satisfy its type checker.
 template <typename T>
+T GetMetaData(Instruction *instr);
+
+#else
+
+// Get an instruction's meta-data.
+template <
+  typename T,
+  typename EnableIf<TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+>
+inline static uintptr_t GetMetaData(Instruction *instr) {
+  return instr->MetaData();
+}
+
+// Get an instruction's meta-data.
+template <
+  typename T,
+  typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+>
 inline static T GetMetaData(Instruction *instr) {
   return instr->MetaData<T>();
 }
+
+#endif  // GRANARY_ECLIPSE
 
 // Get an instruction's meta-data.
 inline static void ClearMetaData(Instruction *instr) {
@@ -37,8 +60,16 @@ inline static void ClearMetaData(Instruction *instr) {
 }
 
 // Set an instruction's meta-data.
-template <typename T>
-void SetMetaData(Instruction *instr, T val) {
+inline static void SetMetaData(Instruction *instr, uintptr_t val) {
+  instr->SetMetaData(val);
+}
+
+// Set an instruction's meta-data.
+template <
+  typename T,
+  typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+>
+inline static void SetMetaData(Instruction *instr, T val) {
   instr->SetMetaData<T>(val);
 }
 

@@ -45,7 +45,8 @@ static void AddDef(SSAVariableTracker *vars, const RegisterOperand &op,
                    NativeInstruction *instr) {
   auto reg = op.Register();
   if (reg.IsGeneralPurpose()) {
-    if (op.IsRead() || op.IsConditionalWrite() || !op.IsExplicit()) {
+    if (op.IsRead() || op.IsConditionalWrite() || !op.IsExplicit() ||
+        reg.PreservesBytesOnWrite()) {
 
       // Note: A given instruction can have multiple inheriting definitions.
       //       For example, `XADD_GPRv_GPRv` on x86-64.

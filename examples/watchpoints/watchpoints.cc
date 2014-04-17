@@ -69,8 +69,7 @@ class Watchpoints : public Tool {
 
   // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    MemoryOperand mloc1;
-    MemoryOperand mloc2;
+    MemoryOperand mloc1, mloc2;
     for (auto instr : bb->AppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
                                                      ReadOrWriteTo(mloc2));

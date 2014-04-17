@@ -282,8 +282,14 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
 
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.
-  GRANARY_INTERNAL_DEFINITION Instruction * const first;
-  GRANARY_INTERNAL_DEFINITION Instruction * const last;
+  //
+  // Note: These fields are marked `GRANARY_CONST`, which is only externally
+  //       resolved to `cont`, despite being internal-only fields. This is to
+  //       document that they are effectively `const`, but that they can indeed
+  //       change (e.g. `InsertBefore` and `InsertAfter` the first/last
+  //       instructions).
+  GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST first;
+  GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST last;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBasicBlock);
 };

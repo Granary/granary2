@@ -152,7 +152,7 @@ namespace {
 static Instruction *MakeInlineAssembly(InlineAssemblyScope *scope,
                                        const char *line) {
   auto block = new InlineAssemblyBlock(scope, line);
-  return new AnnotationInstruction(INLINE_ASSEMBLY, block);
+  return new AnnotationInstruction(IA_INLINE_ASSEMBLY, block);
 }
 }  // namespace
 
@@ -161,6 +161,7 @@ Instruction *Tool::InlineBefore(Instruction *instr,
                                 std::initializer_list<const char *> lines) {
   GRANARY_ASSERT(-1 != curr_scope);
   auto scope = scopes[curr_scope];
+  GRANARY_ASSERT(nullptr != scope);
   for (auto line : lines) {
     if (line) {
       instr = instr->InsertBefore(

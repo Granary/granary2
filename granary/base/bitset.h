@@ -18,8 +18,16 @@ class FastBitSet {
     storage[0] = static_cast<StorageT>(0U);
   }
 
+  inline bool Get(int i) const {
+    return Get(static_cast<unsigned>(i));
+  }
+
   inline bool Get(unsigned i) const {
     return storage[0] & (1U << i);
+  }
+
+  inline void Set(int i, bool val) {
+    Set(static_cast<unsigned>(i), val);
   }
 
   inline void Set(unsigned i, bool val) {

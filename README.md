@@ -11,7 +11,10 @@ Setup
   sudo apt-get install llvm libc++-src clang-3.4
   ```
 
-2. Make sure you have Python 2.7 or above, but not Python 3. 
+2. Get the LLVMGold plugin.
+  Follow [these instructions](http://llvm.org/docs/GoldPlugin.html) to set up LLVMGold.
+
+3. Make sure you have Python 2.7 or above, but not Python 3. 
 
 ### Step 1: Initial setup.
 

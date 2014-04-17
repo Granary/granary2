@@ -76,7 +76,7 @@
 # define GRANARY_MUTABLE mutable
 # define GRANARY_POINTER(type) type
 # define GRANARY_UINT32(type) type
-# define GRANARY_PROTECTED protected
+# define GRANARY_PROTECTED public
 # define GRANARY_PUBLIC public
 # define GRANARY_CONST
 # define GRANARY_IF_EXTERNAL(...)
@@ -90,7 +90,7 @@
 # define GRANARY_POINTER(type) void
 # define GRANARY_UINT32(type) uint32_t
 # define GRANARY_PROTECTED private
-# define GRANARY_PUBLIC private
+# define GRANARY_PUBLIC protected
 # define GRANARY_CONST const
 # define GRANARY_IF_EXTERNAL(...)  __VA_ARGS__
 # define GRANARY_EXTERNAL_DELETE = delete

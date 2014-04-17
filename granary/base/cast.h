@@ -31,9 +31,9 @@ ToT UnsafeCast(FromT);
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<IsPointer<FromT>() || IsInteger<FromT>(),
-    void,
-    int
+  typename EnableIf<
+    !IsPointer<FromT>() && !IsInteger<FromT>() &&
+    !IsPointer<ToT>() && !IsInteger<ToT>()
   >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
@@ -76,6 +76,16 @@ template <
 >
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));
+}
+
+// Integral to integral type.
+template <
+  typename ToT,
+  typename FromT,
+  typename EnableIf<IsInteger<FromT>() && IsInteger<ToT>()>::Type=0
+>
+inline ToT UnsafeCast(const FromT v) {
+  return static_cast<ToT>(v);
 }
 
 #endif  // GRANARY_ECLIPSE

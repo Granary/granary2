@@ -1,7 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-#define GRANARY_IMPLEMENT_DYNAMIC_CAST
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
@@ -79,41 +78,55 @@ std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
 }
 
 // Make it so that inserting an instruction before the designated first
-// instruction actually puts the instruction after the first instruction. In
-// other cases this behaves as normal.
+// instruction actually changes the block's first instruction. This avoids the
+// issue of maintaining a designated first instruction, whilst also avoiding the
+// issue of multiple `InsertBefore`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertBefore(
     std::unique_ptr<Instruction> that) {
-  if (GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation)) {
-    return this->Instruction::InsertAfter(std::move(that));
-  } else {
-    return this->Instruction::InsertBefore(std::move(that));
+  if (GRANARY_UNLIKELY(IA_BEGIN_BASIC_BLOCK == annotation)) {
+    auto new_first = new AnnotationInstruction(annotation, data);
+    auto block_first_ptr = UnsafeCast<Instruction **>(data);
+    this->Instruction::UnsafeInsertBefore(new_first);
+    *block_first_ptr = new_first;
+    annotation = IA_NOOP;
+    data = nullptr;
   }
+  return this->Instruction::InsertBefore(std::move(that));
 }
 
 // Make it so that inserting an instruction after the designated last
 // instruction actually puts the instruction before the last instruction. In
 // other cases this behaves as normal.
+
+// Make it so that inserting an instruction after the designated last
+// instruction actually changes the block's last instruction. This avoids the
+// issue of maintaining a designated last instruction, whilst also avoiding the
+// issue of multiple `InsertAfter`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertAfter(
     std::unique_ptr<Instruction> that) {
-  if (GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation)) {
-    return this->Instruction::InsertBefore(std::move(that));
-  } else {
-    return this->Instruction::InsertAfter(std::move(that));
+  if (GRANARY_UNLIKELY(IA_END_BASIC_BLOCK == annotation)) {
+    auto new_last = new AnnotationInstruction(annotation, data);
+    auto block_last_ptr = UnsafeCast<Instruction **>(data);
+    this->Instruction::UnsafeInsertAfter(new_last);
+    *block_last_ptr = new_last;
+    annotation = IA_NOOP;
+    data = nullptr;
   }
+  return this->Instruction::InsertAfter(std::move(that));
 }
 
 // Returns true if this instruction is a label.
 bool AnnotationInstruction::IsLabel(void) const {
-  return LABEL == annotation;
+  return IA_LABEL == annotation;
 }
 
 // Returns true if this instruction is targeted by any branches.
 bool AnnotationInstruction::IsBranchTarget(void) const {
-  return LABEL == annotation && nullptr != data;
+  return IA_LABEL == annotation && nullptr != data;
 }
 
 LabelInstruction::LabelInstruction(void)
-    : AnnotationInstruction(LABEL) {}
+    : AnnotationInstruction(IA_LABEL) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_) {}

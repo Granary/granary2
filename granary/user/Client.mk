@@ -24,12 +24,12 @@ $(1)-all : $(addprefix $(GRANARY_CLIENT_DIR)/$(1)/,$($(1)-objs))
 	
 	# Link the bitcode files together.
 	@llvm-link $(addprefix $(GRANARY_CLIENT_DIR)/$(1)/,$($(1)-objs)) \
-		-o $(GRANARY_CLIENT_DIR)/$(1)/lib$(1).ll
+		-o $(GRANARY_CLIENT_DIR)/$(1)/lib$(1).bc
 	
 	# Convert the linked bitcode files into a single object file. Goal here is
 	# to take advantage of optimization on the now fully-linked file.
 	@$(GRANARY_CC) -Qunused-arguments $(GRANARY_CC_FLAGS) \
-		-c $(GRANARY_CLIENT_DIR)/$(1)/lib$(1).ll \
+		-c $(GRANARY_CLIENT_DIR)/$(1)/lib$(1).bc \
 		-o $(GRANARY_CLIENT_DIR)/$(1)/lib$(1).o
 	
 	# Compile the object file into a shared library.
@@ -47,15 +47,15 @@ $(foreach client,$(GRANARY_CLIENTS),$(eval $(call GENRULE,$(client))))
 #$(foreach client,$(GRANARY_CLIENTS),$(info $(call GENRULE,$(client))))
 
 # Compile C++ files to LLVM bitcode.
-$(GRANARY_CLIENT_DIR)/%.ll: $(GRANARY_CLIENT_DIR)/%.cc
+$(GRANARY_CLIENT_DIR)/%.bc: $(GRANARY_CLIENT_DIR)/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -c $< -o $@
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 	
 # Clean a specific client.
 %-clean:
 	@echo "Cleaning client $* in $(GRANARY_CLIENT_DIR)/$*"
-	@find $(GRANARY_CLIENT_DIR)/$* -type f -name \*.ll -execdir rm {} \;
+	@find $(GRANARY_CLIENT_DIR)/$* -type f -name \*.bc -execdir rm {} \;
 	@find $(GRANARY_CLIENT_DIR)/$* -type f -name \*.o -execdir rm {} \;
 
 # Build all clients specified in `GRANARY_CLIENTS`.

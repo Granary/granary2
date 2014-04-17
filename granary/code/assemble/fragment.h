@@ -71,9 +71,20 @@ class Fragment {
     // fragment.
     Fragment *flag_sentinel;
 
-    // Like flag saving/restoring, when doing register saving and restoring, we
-    // designate a specific
-    Fragment *partition_sentinel;
+    // The amount of space needed for virtual register allocation.
+    struct {
+      uint32_t num_allocated_spill_slots;
+
+      // Mask of which specific spill slots are allocated. This puts an upper-
+      // bound of 32 simultaneously live fragment-local or partition-local
+      // virtual registers.
+      //
+      // Note: Fragment-local and partition-local virtual register allocation
+      //       is done separately, so in practice there is an upper bound of
+      //       64 simultaneously live virtual registers, as the spill slot
+      //       allocated mask is zeroed between the two allocation stages.
+      uint32_t spill_slot_allocated_mask;
+    };
   };
 
   // Tracks the general purpose architectural and virtual registers as-if they
@@ -114,7 +125,7 @@ class Fragment {
 
   // Flags that are killed anywhere within a fragment that contains
   // instrumented instructions. If this is an application code fragment (kind =
-  // FRAG_KIND_APPLICATION) then `killed_flags = 0`.
+  // `FRAG_KIND_APPLICATION`) then `killed_flags = 0`.
   unsigned inst_killed_flags;
 
   // Is this block the first fragment in a decoded basic block?
@@ -166,6 +177,14 @@ class Fragment {
 
   // Remove an instruction.
   std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
+
+  // Insert an instruction before another instruction
+  Instruction *InsertBefore(Instruction *insert_loc,
+                            std::unique_ptr<Instruction> insert_instr);
+
+  // Insert an instruction before another instruction
+  Instruction *InsertAfter(Instruction *insert_loc,
+                           std::unique_ptr<Instruction> insert_instr);
 
  private:
   Fragment(void) = delete;

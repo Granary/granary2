@@ -113,8 +113,10 @@ DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
                                      BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
       cfg(cfg_),
-      first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
-      last(new AnnotationInstruction(END_BASIC_BLOCK)) {
+      first(new AnnotationInstruction(IA_BEGIN_BASIC_BLOCK,
+                                      reinterpret_cast<void *>(&first))),
+      last(new AnnotationInstruction(IA_END_BASIC_BLOCK,
+                                     reinterpret_cast<void *>(&last))) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 

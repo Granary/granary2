@@ -17,7 +17,7 @@ namespace granary {
 // Returns true if this instruction is a copy instruction.
 //
 // Note: This has an architecture-specific implementation.
-bool IsCopyInstruction(const NativeInstruction *instr);
+extern bool IsCopyInstruction(const NativeInstruction *instr);
 
 namespace {
 
@@ -160,7 +160,7 @@ static void CopyPropagate(SSAVariableTable *vars, MemoryOperand *dest,
       auto source_reg = RegisterToPropagate(
           vars, instr, source_addr.Register(), addr);
       if (source_reg.IsValid()) {
-        MemoryOperand source(source_reg, dest->Width());
+        MemoryOperand source(source_reg, dest->ByteWidth());
         dest->Ref().ReplaceWith(source);
       }
 

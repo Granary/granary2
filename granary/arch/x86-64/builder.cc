@@ -89,8 +89,6 @@ void MemoryBuilder::Build(Instruction *instr) {
   auto &instr_op(instr->ops[instr->num_explicit_ops++]);
   instr_op.width = -1;  // Unknown.
   instr_op.is_compound = false;
-  instr_op.is_effective_address = XED_ICLASS_LEA == instr->iclass;
-  instr_op.is_explicit = true;
   switch (kind) {
     case BUILD_POINTER:
       instr_op.type = XED_ENCODER_OPERAND_TYPE_PTR;
@@ -101,12 +99,12 @@ void MemoryBuilder::Build(Instruction *instr) {
       instr_op.reg = reg;
       break;
     case BUILD_OPERAND:
-      auto is_effective_address = instr_op.is_effective_address;
       instr_op = op;
-      instr_op.is_effective_address = is_effective_address;
       break;
   }
   instr_op.rw = action;
+  instr_op.is_explicit = true;
+  instr_op.is_effective_address = XED_ICLASS_LEA == instr->iclass;
 }
 
 // Add this branch target as an operand to the instruction `instr`.

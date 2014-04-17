@@ -109,6 +109,7 @@ class Operand {
   //
   // Note: This is only valid on operands matched from instructions and not on
   //       manually created operands.
+  //
   // Note: This has a driver-specific implementation.
   bool IsExplicit(void) const;
 
@@ -116,7 +117,13 @@ class Operand {
   // known.
   //
   // Note: This has a driver-specific implementation.
-  int Width(void) const;
+  int BitWidth(void) const;
+
+  // Return the width (in bytes) of this operand, or -1 if its width is not
+  // known.
+  //
+  // Note: This has a driver-specific implementation.
+  int ByteWidth(void) const;
 
   // Convert this operand into a string.
   //
@@ -167,22 +174,22 @@ class MemoryOperand : public Operand {
       : Operand() {}
 
   // Initialize a new memory operand from a virtual register, where the
-  // referenced memory has a width of `num_bits`.
+  // referenced memory has a width of `num_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  MemoryOperand(const VirtualRegister &ptr_reg, int num_bits);
+  MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes);
 
   // Generic initializer for a pointer to some data.
   template <typename T>
   inline explicit MemoryOperand(const T *ptr)
       : MemoryOperand(reinterpret_cast<const void *>(ptr),
-                      static_cast<int>(GRANARY_MIN(64, (sizeof(T) * 8)))) {}
+                      static_cast<int>(GRANARY_MIN(8, sizeof(T)))) {}
 
   // Initialize a new memory operand from a pointer, where the
-  // referenced memory has a width of `num_bits`.
+  // referenced memory has a width of `num_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  MemoryOperand(const void *ptr, int num_bits);
+  MemoryOperand(const void *ptr, int num_bytes);
 
   // Returns true if this is a compound memory operation. Compound memory
   // operations can have multiple smaller operands (e.g. registers) inside of

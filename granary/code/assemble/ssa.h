@@ -14,6 +14,7 @@
 #include "granary/base/lookup_table.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
+#include "granary/base/range.h"
 
 #include "granary/code/register.h"
 
@@ -24,6 +25,7 @@ class SSAPhi;
 class SSAPhiOperand;
 class NativeInstruction;
 class SSAVariable;
+class RegisterLocation;  // Defined in `8_schedule_registers.cc`.
 
 // Returns the reaching definition associated with some variable `var`. In the
 // case of trivial SSA variables, we follow as many reaching definitions as we
@@ -51,20 +53,26 @@ class SSAVariable {
     SSAPhiOperand *next;
   };
 
+  RegisterLocation *loc;
+
   GRANARY_DECLARE_BASE_CLASS(SSAVariable)
 
  protected:
   inline SSAVariable(void)
-      : reg() {}
+      : reg(),
+        loc(nullptr) {}
 
   explicit inline SSAVariable(VirtualRegister reg_)
-      : reg(reg_) {}
+      : reg(reg_),
+        loc(nullptr) {}
 
   explicit inline SSAVariable(SSAPhiOperand *next_)
-      : next(next_) {}
+      : next(next_),
+        loc(nullptr) {}
 
   explicit inline SSAVariable(SSAVariable *parent_)
-      : parent(parent_) {}
+      : parent(parent_),
+        loc(nullptr) {}
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAVariable);
@@ -183,19 +191,24 @@ class SSAForward : public SSAVariable {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAForward);
 };
 
+// Delete the memory associated with an SSA object.
+void DestroySSAObj(void *obj);
+
 enum {
   MAX_NUM_SSA_VARS = arch::NUM_GENERAL_PURPOSE_REGISTERS * 2
 };
 
-class MissingSSAVariable {
+class SSAEntryVariable {
  public:
   SSAVariable *var;
   bool is_owned;
 
-  inline bool operator==(const MissingSSAVariable &that) const {
+  inline bool operator==(const SSAEntryVariable &that) const {
     return var == that.var;
   }
 };
+
+typedef ArrayRangeIterator<SSAEntryVariable> SSAEntryDefsIterator;
 
 template <>
 class LookupTableOperations<VirtualRegister, SSAVariable *> {
@@ -204,9 +217,9 @@ class LookupTableOperations<VirtualRegister, SSAVariable *> {
 };
 
 template <>
-class LookupTableOperations<VirtualRegister, MissingSSAVariable> {
+class LookupTableOperations<VirtualRegister, SSAEntryVariable> {
  public:
-  inline static VirtualRegister KeyForValue(MissingSSAVariable var) {
+  inline static VirtualRegister KeyForValue(SSAEntryVariable var) {
     return LookupTableOperations<VirtualRegister, SSAVariable *>::
         KeyForValue(var.var);
   }
@@ -242,7 +255,7 @@ class SSAVariableTracker {
 
   // Promote missing definitions associated with uses in a fragment into live
   // definitions that leave the fragment.
-  void PromoteMissingDefinitions(void);
+  void PromoteMissingEntryDefs(void);
 
   // Propagate definitions from one SSA variable table into another. This only
   // propagates definitions if they are missing in the `dest` table's
@@ -271,14 +284,22 @@ class SSAVariableTracker {
   // Returns the definition of some register on entry to a fragment.
   SSAVariable *EntryDefinitionOf(VirtualRegister reg);
 
+  // Returns the definition of some register on exit from a fragment.
+  SSAVariable *ExitDefinitionOf(VirtualRegister reg);
+
+  // Returns a C++11-compatible iterator over the entry definitions.
+  inline SSAEntryDefsIterator EntryDefs(void) {
+    return SSAEntryDefsIterator(entry_defs);
+  }
+
  private:
   // Removes and returns the `SSAVariable` instance associated with a missing
   // definition of `reg`.
-  SSAVariable *RemoveMissingDef(VirtualRegister reg);
+  SSAVariable *RemoveEntryDef(VirtualRegister reg);
 
   // Variables that aren't defined on entry to this fragment.
   FixedSizeLookupTable<VirtualRegister,
-                       MissingSSAVariable,
+                       SSAEntryVariable,
                        MAX_NUM_SSA_VARS> entry_defs;
 
   // Variables that are defined in this fragment and can reach to the next

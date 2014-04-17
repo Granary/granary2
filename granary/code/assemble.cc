@@ -15,9 +15,7 @@
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
-
-//#include "granary/code/assemble/3_find_live_arch_registers.h"
-
+#include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -50,9 +48,6 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // that represent the "true" basic blocks.
   auto frags = BuildFragmentList(cfg);
 
-  // Find the live registers on entry to the fragments.
-  //FindLiveEntryRegsToFrags(frags);
-
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
   PartitionFragmentsByStackUse(frags);
@@ -71,6 +66,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Perform a single step of copy propagation. The purpose of this is to
   // allow us to eventually get rid of
   PropagateRegisterCopies(frags);
+
+  // Schedule the virtual registers into either physical registers or memory
+  // locations.
+  ScheduleRegisters(frags);
 
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, frags);

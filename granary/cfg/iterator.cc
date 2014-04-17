@@ -54,7 +54,7 @@ BackwardAppInstructionIterator::BackwardAppInstructionIterator(
     : instr(FindPreviousAppInstruction(instr_)) {}
 
 void BackwardAppInstructionIterator::operator++(void) {
-  instr = FindPreviousAppInstruction(instr->Next());
+  instr = FindPreviousAppInstruction(instr->Previous());
 }
 
 

@@ -34,6 +34,32 @@ bool OperandRef::ReplaceWith(const Operand &repl_op) {
   }
 }
 
+// Returns whether or not this operand can be replaced / modified.
+bool Operand::IsModifiable(void) const {
+  return op->is_explicit && !op->is_sticky;
+}
+
+// Returns whether or not this operand is explicit.
+//
+// Note: This is only valid on operands matched from instructions and not on
+//       manually created operands.
+bool Operand::IsExplicit(void) const {
+  GRANARY_ASSERT(op_ptr && TOMBSTONE != op_ptr);
+  return op_ptr->is_explicit;
+}
+
+// Return the width (in bits) of this operand, or -1 if its width is not
+// known.
+int Operand::BitWidth(void) const {
+  return op->width;
+}
+
+// Return the width (in bytes) of this operand, or -1 if its width is not
+// known.
+int Operand::ByteWidth(void) const {
+  return -1 != op->width ? op->width / 8 : op->width;
+}
+
 bool RegisterOperand::IsNative(void) const {
   return op->reg.IsNative();
 }
@@ -48,10 +74,11 @@ VirtualRegister RegisterOperand::Register(void) const {
 }
 
 // Initialize a new memory operand from a virtual register, where the
-// referenced memory has a width of `num_bits`.
-MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bits) {
+// referenced memory has a width of `num_bytes`.
+MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
+  GRANARY_ASSERT(-1 != num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->width = static_cast<int8_t>(num_bits);
+  op->width = static_cast<int8_t>(num_bytes * 8);
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -60,10 +87,11 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bits) {
 }
 
 // Initialize a new memory operand from a pointer, where the
-// referenced memory has a width of `num_bits`.
-MemoryOperand::MemoryOperand(const void *ptr, int num_bits) {
+// referenced memory has a width of `num_bytes`.
+MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
+  GRANARY_ASSERT(-1 != num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op->width = static_cast<int8_t>(num_bits);
+  op->width = static_cast<int8_t>(num_bytes * 8);
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -216,6 +244,8 @@ void Operand::EncodeToString(OperandString *str) const {
         str->Format("%s%s%s", prefix, xed_reg_enum_t2str(arch_reg), suffix);
       } else if (reg.IsVirtual()) {
         str->Format("%s%%%u%s", prefix, reg.Number(), suffix);
+      } else if (reg.IsVirtualSlot()) {
+        str->Format("%sSLOT:%d%s", prefix, reg.Number(), suffix);
       } else {
         str->Format("%s?reg?%s", prefix, suffix);
       }

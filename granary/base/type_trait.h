@@ -72,6 +72,18 @@ struct TypesAreEqual : public FalseType {};
 template <typename A>
 struct TypesAreEqual<A, A> : public TrueType {};
 
+static_assert(sizeof(unsigned long) == sizeof(unsigned long long),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(unsigned long) == sizeof(uintptr_t),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(long) == sizeof(long long),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(long) == sizeof(intptr_t),
+    "Unrecognized architecture.");
+
 #define GRANARY_DEFINE_TRAIT_REFERENCES(trait_name) \
   template <typename A> \
   struct trait_name<A &> : public trait_name<A> {}; \

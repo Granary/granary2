@@ -28,7 +28,7 @@ where_common:
 # synthesized by optimizing compilers (e.g. memset).
 where_user: where_common
 	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
-	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.ll \
+	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.bc \
     	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
     	
 	@echo "Loading user space $(GRANARY_CLIENT_OBJ)"

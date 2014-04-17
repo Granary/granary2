@@ -68,7 +68,7 @@ $(foreach client,$(GRANARY_CLIENTS),$(eval $(call GENRULE,$(client))))
 $(GRANARY_CLIENT_DIR)/%.ll: $(GRANARY_CLIENT_DIR)/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -c $< -o $@
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 	
 # Clean a specific client.
 %-clean:

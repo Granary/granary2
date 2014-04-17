@@ -184,7 +184,7 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
   LEA_GPRv_IMMv(&lea, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
   ninstr->UnsafeInsertBefore(new NativeInstruction(&lea));
 
-  MemoryOperand rel_mloc(addr_reg, mloc.Width());
+  MemoryOperand rel_mloc(addr_reg, mloc.ByteWidth());
   GRANARY_IF_DEBUG(auto replaced = ) mloc.Ref().ReplaceWith(rel_mloc);
   GRANARY_ASSERT(replaced);
 }

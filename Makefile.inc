@@ -1,6 +1,6 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_LD ?= ld
+GRANARY_LD ?= gold
 GRANARY_CC ?= clang
 GRANARY_CXX ?= clang++
 GRANARY_AR ?= ar

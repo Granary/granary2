@@ -66,4 +66,24 @@ std::unique_ptr<Instruction> Fragment::RemoveInstruction(
   return Instruction::Unlink(instr);
 }
 
+// Insert an instruction before another instruction
+Instruction *Fragment::InsertBefore(Instruction *insert_loc,
+                                    std::unique_ptr<Instruction> insert_instr) {
+  auto inserted = insert_loc->InsertBefore(std::move(insert_instr));
+  if (first == insert_loc) {
+    first = inserted;
+  }
+  return inserted;
+}
+
+// Insert an instruction before another instruction
+Instruction *Fragment::InsertAfter(Instruction *insert_loc,
+                                   std::unique_ptr<Instruction> insert_instr) {
+  auto inserted = insert_loc->InsertAfter(std::move(insert_instr));
+  if (last == insert_loc) {
+    last = inserted;
+  }
+  return inserted;
+}
+
 }  // namespace granary

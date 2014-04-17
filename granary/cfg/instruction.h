@@ -60,8 +60,8 @@ class Instruction {
     typename T,
     typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
   >
-  T MetaData(void) const {
-    static_assert(sizeof(T) == sizeof(uintptr_t),
+  inline T MetaData(void) const {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
         "Transient meta-data type is too big. Client tools can only store "
         "a pointer-sized object as meta-data inside of an instruction.");
     return UnsafeCast<T>(MetaData());
@@ -74,10 +74,10 @@ class Instruction {
   // `uintptr_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T,uintptr_t>::RESULT>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
   >
-  void SetMetaData(T meta) {
-    static_assert(sizeof(T) == sizeof(uintptr_t),
+  inline void SetMetaData(T meta) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
         "Transient meta-data type is too big. Client tools can only store "
         "a pointer-sized object as meta-data inside of an instruction.");
     return SetMetaData(UnsafeCast<uintptr_t>(meta));
@@ -96,12 +96,12 @@ class Instruction {
   // (unowned) pointer to the inserted instruction.
   GRANARY_INTERNAL_DEFINITION
   inline Instruction *UnsafeInsertBefore(Instruction *instr) {
-    return InsertBefore(std::unique_ptr<Instruction>(instr));
+    return this->Instruction::InsertBefore(std::unique_ptr<Instruction>(instr));
   }
 
   GRANARY_INTERNAL_DEFINITION
   inline Instruction *UnsafeInsertAfter(Instruction *instr) {
-    return InsertAfter(std::unique_ptr<Instruction>(instr));
+    return this->Instruction::InsertAfter(std::unique_ptr<Instruction>(instr));
   }
 
   // Inserts an instruction before/after the current instruction. Returns an
@@ -142,29 +142,20 @@ class Instruction {
 // Built-in annotations.
 GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {
+  // Used when we "kill" off meaningful annotations but want to leave the
+  // associated instructions around.
+  IA_NOOP,
+
   // Dummy annotations representing the beginning and end of a given basic
   // block.
-  BEGIN_BASIC_BLOCK,
-  END_BASIC_BLOCK,
-
-  // This identifies regions of code in the kernel that might fault. In Linux,
-  // these regions are identified using exception tables.
-  //
-  // TODO(pag): Implement this.
-  BEGIN_MIGHT_FAULT,
-  END_MIGHT_FAULT,
-
-  // Used to bound atomic regions of code.
-  //
-  // TODO(pag): Implement this.
-  BEGIN_DELAY_INTERRUPT,
-  END_DELAY_INTERRUPT,
+  IA_BEGIN_BASIC_BLOCK,
+  IA_END_BASIC_BLOCK,
 
   // Represents an inline assembly instruction.
-  INLINE_ASSEMBLY,
+  IA_INLINE_ASSEMBLY,
 
   // Target of a branch instruction.
-  LABEL
+  IA_LABEL
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -179,7 +170,7 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   inline AnnotationInstruction(InstructionAnnotation annotation_,
-                               const void *data_=nullptr)
+                               void *data_=nullptr)
       : annotation(annotation_),
         data(data_) {}
 
@@ -192,8 +183,8 @@ class AnnotationInstruction : public Instruction {
   // Returns true if this instruction is targeted by any branches.
   bool IsBranchTarget(void) const;
 
-  GRANARY_INTERNAL_DEFINITION const InstructionAnnotation annotation;
-  GRANARY_INTERNAL_DEFINITION const void * const data;
+  GRANARY_INTERNAL_DEFINITION GRANARY_CONST InstructionAnnotation annotation;
+  GRANARY_INTERNAL_DEFINITION GRANARY_CONST void * GRANARY_CONST data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
