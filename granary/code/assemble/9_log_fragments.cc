@@ -61,30 +61,6 @@ static const char *FragmentBackground(const Fragment *frag) {
   }
 }
 
-#if 0
-// Log some set of dead registers (e.g. dead regs on entry or exit).
-static bool LogDeadRegs(LogLevel level, const Fragment *frag,
-                        const LiveRegisterTracker &regs) {
-  if (FRAG_KIND_APPLICATION != frag->kind && FRAG_KIND_INSTRUMENTATION != frag->kind) {
-    return false;
-  }
-  const char *sep = "";
-  auto printed_dead = false;
-  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-    if (regs.IsDead(i)) {
-      VirtualRegister reg(VR_KIND_ARCH_VIRTUAL, 8, static_cast<uint16_t>(i));
-      RegisterOperand rop(reg);
-      OperandString op_str;
-      rop.EncodeToString(&op_str);
-      Log(level, "%s%s", sep, op_str.Buffer());
-      sep = ",";
-      printed_dead = true;
-    }
-  }
-  return printed_dead;
-}
-#endif
-
 // Log the input-only operands.
 static void LogInputOperands(LogLevel level, NativeInstruction *instr) {
   auto sep = " ";
@@ -133,22 +109,6 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
   }
 }
 
-#if 0
-// Log the dead registers on exit of a fragment.
-static void LogDeadExitRegs(LogLevel level, const Fragment *frag) {
-  if (FRAG_KIND_APPLICATION != frag->kind &&
-      FRAG_KIND_INSTRUMENTATION != frag->kind) {
-    return;
-  }
-  LiveRegisterTracker all_live;
-  all_live.ReviveAll();
-  if (!all_live.Equals(frag->exit_regs_live)) {
-    Log(level, "|");
-    LogDeadRegs(level, frag, frag->exit_regs_live);
-  }
-}
-#endif
-
 // If this fragment is the head of a basic block then log the basic block's
 // entry address.
 static void LogBlockHeader(LogLevel level, const Fragment *frag) {
@@ -169,17 +129,19 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
-  auto id = FRAG_KIND_APPLICATION == frag->kind ||
-            FRAG_KIND_INSTRUMENTATION == frag->kind ? frag->id : -1;
-  Log(level, "f%p [fillcolor=%s label=<%d|{",
-      reinterpret_cast<const void *>(frag), FragmentBackground(frag), id);
+  if (FRAG_KIND_APPLICATION == frag->kind ||
+      FRAG_KIND_INSTRUMENTATION == frag->kind) {
+    Log(level, "f%p [fillcolor=%s label=<%d|{",
+        reinterpret_cast<const void *>(frag), FragmentBackground(frag),
+        frag->id);
+  } else {
+    Log(level, "f%p [fillcolor=%s label=<{",
+        reinterpret_cast<const void *>(frag), FragmentBackground(frag));
+  }
+
   LogBlockHeader(level, frag);
-  //auto printed_entry_dead_regs = LogDeadRegs(level, frag,
-  //                                           frag->entry_regs_live);
   if (!frag->is_exit && !frag->is_future_block_head) {
-    //Log(level, "%s", printed_entry_dead_regs ? "|" : "");
     LogInstructions(level, frag);
-    //LogDeadExitRegs(level, frag);
     Log(level, "}");
   }
   Log(level, "}>];\n");

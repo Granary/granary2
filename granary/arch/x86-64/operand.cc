@@ -76,9 +76,8 @@ VirtualRegister RegisterOperand::Register(void) const {
 // Initialize a new memory operand from a virtual register, where the
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
-  GRANARY_ASSERT(-1 != num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->width = static_cast<int8_t>(num_bytes * 8);
+  op->width = static_cast<int8_t>(0 < num_bytes ? num_bytes * 8 : -1);
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -89,9 +88,8 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
 // Initialize a new memory operand from a pointer, where the
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
-  GRANARY_ASSERT(-1 != num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op->width = static_cast<int8_t>(num_bytes * 8);
+  op->width = static_cast<int8_t>(0 < num_bytes ? num_bytes * 8 : -1);
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;

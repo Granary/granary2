@@ -12,10 +12,10 @@ DEFINE_FUNC(granary_test_mangle)
     mov (%rsi), %rdx;
     mov %rdi, (%rdi,%rdx);
     mov (%rdi, %rsi), %rdi;
-    //xadd %rdi, %rsi;
+/*    //xadd %rdi, %rsi;
     //movsq;
     ret;
-/*
+*/
     mov %rsp, %rbp;
     sub $0x20, %rsp;
 
@@ -56,7 +56,7 @@ DEFINE_FUNC(granary_test_mangle)
     // the `ret`.
     mov $1, %rax;
     ret;
-*/
+/* */
 END_FUNC(granary_test_mangle)
 
 END_FILE
