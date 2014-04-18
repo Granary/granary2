@@ -158,7 +158,6 @@ int Log(LogLevel level, const char *format, ...) throw() {
 
       case 'u':  // Unsigned number.
       generic_int:
-        generic_int_data = 0;
         if (is_64_bit) {
           generic_int_data = va_arg(args, uint64_t);
         } else {

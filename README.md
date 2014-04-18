@@ -8,7 +8,7 @@ Setup
 
 1. Get LLVM and clang:
   ```basemake
-  sudo apt-get install llvm libc++-src clang-3.4
+  sudo apt-get install llvm libc++-src clang-3.5
   ```
 
 2. Get the LLVMGold plugin.

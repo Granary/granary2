@@ -10,6 +10,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
 extern "C" {
 #define XED_DLL
 #include "dependencies/xed2-intel64/include/xed-interface.h"

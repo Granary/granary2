@@ -2,4 +2,4 @@
 
 # Tool-name: watchpoints
 GRANARY_TOOLS += # Add additional tool dependencies here.
-watchpoints-objs += watchpoints.ll
+watchpoints-objs += watchpoints.bc

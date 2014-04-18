@@ -258,13 +258,13 @@ void RegisterTool(ToolDescription *desc,
 
 // Register a tool with Granary.
 template <typename T>
-inline void RegisterTool(const char *tool_name) {
+inline static void RegisterTool(const char *tool_name) {
   RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, {});
 }
 
 // Register a tool with Granary.
 template <typename T>
-inline void RegisterTool(const char *tool_name,
+inline static void RegisterTool(const char *tool_name,
                          std::initializer_list<const char *> required_tools) {
   RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, required_tools);
 }

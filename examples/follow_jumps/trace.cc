@@ -42,5 +42,5 @@ class JumpFollower : public Tool {
 
 // Initialize the `follow_jumps` tool.
 GRANARY_CLIENT_INIT({
-  RegisterTool<JumpFollower>("follow_jumps");
+  //RegisterTool<JumpFollower>("follow_jumps");
 })

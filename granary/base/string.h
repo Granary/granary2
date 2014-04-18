@@ -44,12 +44,12 @@ namespace granary {
 class NULTerminatedStringIterator {
  public:
   inline NULTerminatedStringIterator(void)
-      : ch(nullptr) {}
+      : ch(EOS) {}
 
   inline explicit NULTerminatedStringIterator(const char *ch_)
       : ch(ch_) {
     if (ch && !*ch) {
-      ch = nullptr;
+      ch = EOS;
     }
   }
 
@@ -63,7 +63,7 @@ class NULTerminatedStringIterator {
 
   inline void operator++(void) {
     if (!*++ch) {
-      ch = nullptr;
+      ch = EOS;
     }
   }
 
@@ -77,6 +77,8 @@ class NULTerminatedStringIterator {
 
  private:
   const char *ch;
+
+  static const char *EOS;
 };
 
 // Generic method for safely writing into a character buffer of a known size.

@@ -403,7 +403,7 @@ static void FreeVirtualSlot(RegisterScheduler *sched,
 // and leaves `out_reg` as-is.
 static bool TryFindStealableDeadRegister(RegisterScheduler *sched,
                                          VirtualRegister *out_reg) {
-  for (auto i = arch::NUM_GENERAL_PURPOSE_REGISTERS; i--; ) {
+  for (int i = arch::NUM_GENERAL_PURPOSE_REGISTERS; i--; ) {
     auto &loc(sched->LocationOfGPR(i));
     if (!loc.is_live && !loc.stolen_by && !sched->GPRIsUsedInInstr(loc.reg)) {
       *out_reg = loc.reg;
@@ -416,7 +416,7 @@ static bool TryFindStealableDeadRegister(RegisterScheduler *sched,
 // Spill a register that isn't being used by the current instruction and is
 // not already stolen. This updates `out_reg` in place.
 static VirtualRegister FindSpillableRegister(RegisterScheduler *sched) {
-  for (auto i = arch::NUM_GENERAL_PURPOSE_REGISTERS; i--; ) {
+  for (int i = arch::NUM_GENERAL_PURPOSE_REGISTERS; i--; ) {
     auto &ith_gpr_loc(sched->LocationOfGPR(i));
     if (!ith_gpr_loc.stolen_by && !sched->GPRIsUsedInInstr(i)) {
       return ith_gpr_loc.reg;

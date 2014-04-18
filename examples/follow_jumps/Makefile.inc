@@ -2,4 +2,4 @@
 
 # Tool-name: follow_jumps
 GRANARY_TOOLS += # Add additional tool dependencies here.
-follow_jumps-objs += trace.ll
+follow_jumps-objs += trace.bc

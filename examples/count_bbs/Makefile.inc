@@ -2,4 +2,4 @@
 
 # Tool-name: count_bbs
 GRANARY_TOOLS += # Add additional tool dependencies here.
-count_bbs-objs += count.ll
+count_bbs-objs += count.bc

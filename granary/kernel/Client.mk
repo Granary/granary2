@@ -1,5 +1,7 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
+echo "TODO"
+
 .PHONY: all clean
 
 include ../../Makefile.inc
