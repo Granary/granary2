@@ -27,11 +27,26 @@ namespace granary {
 class BlockMetaData;
 GRANARY_INTERNAL_DEFINITION class MetaDataManager;
 
+// All types of meta-data.
+template <typename T>
+class ToolMetaData {
+ public:
+
+  // Join some meta-data associated with an existing basic block (`existing`)
+  // with the meta-data template associated with some indirect basic block
+  // (`indirect`). The default behavior here to to inherit all information from
+  // the existing block's meta-data.
+  void Join(const T *existing, const T *indirect) {
+    GRANARY_UNUSED(indirect);
+    CopyConstruct<T>(this, existing);
+  }
+};
+
 // Serializable meta-data (i.e. immutable once committed to the code cache)
 // must implement the `Hash` and `Equals` methods, and extend this template
 // using CRTP.
 template <typename T>
-class IndexableMetaData {
+class IndexableMetaData : public ToolMetaData<T> {
  public:
   void Hash(HashFunction *hasher) const;
   bool Equals(const T *that) const;
@@ -39,7 +54,8 @@ class IndexableMetaData {
 
 // Mutable meta-data (i.e. mutable even after committed to the code cache)
 // must extend this base class.
-class MutableMetaData {};
+template <typename T>
+class MutableMetaData : public ToolMetaData<T> {};
 
 // Used to decide whether two pieces of unifiable meta-data can unify.
 enum class UnificationStatus {
@@ -54,7 +70,7 @@ enum class UnificationStatus {
 // times we want to be able to re-use old versions, but the old versions aren't
 // necessarily perfectly suited, so we need to adapt to them.
 template <typename T>
-class UnifiableMetaData {
+class UnifiableMetaData : public ToolMetaData<T> {
  public:
   UnificationStatus CanUnifyWith(const T *that) const;
 };
@@ -63,7 +79,7 @@ class UnifiableMetaData {
 // Meta-data that Granary maintains about all basic blocks that are committed to
 // the code cache. This is meta-data is private to Granary and therefore not
 // exposed (directly) to tools.
-struct CacheMetaData : public MutableMetaData {
+struct CacheMetaData : public MutableMetaData<CacheMetaData> {
 
   // Initialize Granary's internal translation cache meta-data.
   CacheMetaData(void);
@@ -97,7 +113,7 @@ struct IsIndexableMetaData {
 template <typename T>
 struct IsMutableMetaData {
   enum {
-    RESULT = !!std::is_convertible<T *, MutableMetaData *>::value
+    RESULT = !!std::is_convertible<T *, MutableMetaData<T> *>::value
   };
 };
 
@@ -123,7 +139,7 @@ struct IsMetaData {
 template <typename T>
 struct IsMetaDataPointer {
   static_assert(
-      IsPointer<T>::RESULT,
+      IsPointer<T>(),
       "`MetaDataCast` can only cast to pointer types.");
   typedef typename RemovePointer<T>::Type PointedT0;
   typedef typename RemoveConst<PointedT0>::Type PointedT;
@@ -306,6 +322,8 @@ class MetaDataManager {
  public:
   // Initialize an empty meta-data manager.
   MetaDataManager(void);
+
+  ~MetaDataManager(void);
 
   // Register some meta-data with Granary. This is a convenience method around
   // the `Register` method that operates directly on a meta-data description.

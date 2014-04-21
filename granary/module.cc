@@ -240,7 +240,7 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
 
       // Reap a range or replenish its code cache.
       if (curr->begin_addr >= curr->end_addr) {
-        delete curr_elem.Unlink();
+        curr_elem.Unlink();
       } else {
         ReplenishCodeCache(context, curr);
       }

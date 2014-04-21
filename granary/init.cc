@@ -6,8 +6,9 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
+#include "granary/arch/init.h"
+
 #include "granary/client.h"
-#include "granary/driver.h"
 #include "granary/environment.h"
 #include "granary/init.h"
 #include "granary/logging.h"
@@ -22,8 +23,12 @@ GRANARY_DEFINE_string(attach_to, "*",
     "is `*`, representing that Granary will attach to all (non-Granary, non-"
     "tool) modules. More specific requests can be made, for example:\n"
     "\t--attach_to=[*,-libc]\t\tAttach to everything but `libc`.\n"
-    "\t--attach_to=libc\t\tOnly attach to `libc`.")
+    "\t--attach_to=libc\t\tOnly attach to `libc`.");
 #endif  // GRANARY_STANDALONE
+
+extern "C" {
+void granary_test_mangle(void);
+}
 
 namespace granary {
 namespace {
@@ -39,7 +44,7 @@ void Init(const char *granary_path) {
   // Initialize the driver (e.g. DynamoRIO). This usually performs from
   // architecture-specific checks to determine which architectural features
   // are enabled.
-  driver::Init();
+  arch::Init();
 
   // Dynamically load in zero or more clients. In user space, clients are
   // specified on the command-line. In kernel-space, clients are compiled in
@@ -53,7 +58,7 @@ void Init(const char *granary_path) {
   env.Construct();
 
   // TODO(pag): Remove me.
-  auto pc = UnsafeCast<AppPC>(&Log);
+  AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
   env->Setup();
   env->AttachToAppPC(pc);

@@ -6,17 +6,16 @@
 // A bit of a trick to make sure that when generating export headers, we don't
 // accidentally include any system headers in the export.
 #if defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)
+# include <algorithm>
 # include <atomic>
-# include <cstddef>
-# include <cstdarg>
-# include <memory>
-# include <initializer_list>
-# include <type_traits>
-# ifndef __STDC_LIMIT_MACROS
-#   define __STDC_LIMIT_MACROS
-# endif
-# include <stdint.h>
 # include <climits>
+# include <cstdarg>
+# include <cstddef>
+# include <cstdint>
+# include <functional>
+# include <initializer_list>
+# include <memory>
+# include <type_traits>
 #endif
 
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
@@ -66,12 +65,18 @@
 # define GRANARY_ASSERT(...)
 #endif
 
+#ifdef GRANARY_ARCH_INTERNAL
+# define GRANARY_ARCH_PUBLIC public
+#else
+# define GRANARY_ARCH_PUBLIC private
+#endif
+
 // Marks some pointers as being internal, and convertible to void for exports.
 #ifdef GRANARY_INTERNAL
 # define GRANARY_MUTABLE mutable
 # define GRANARY_POINTER(type) type
 # define GRANARY_UINT32(type) type
-# define GRANARY_PROTECTED protected
+# define GRANARY_PROTECTED public
 # define GRANARY_PUBLIC public
 # define GRANARY_CONST
 # define GRANARY_IF_EXTERNAL(...)
@@ -85,7 +90,7 @@
 # define GRANARY_POINTER(type) void
 # define GRANARY_UINT32(type) uint32_t
 # define GRANARY_PROTECTED private
-# define GRANARY_PUBLIC private
+# define GRANARY_PUBLIC protected
 # define GRANARY_CONST const
 # define GRANARY_IF_EXTERNAL(...)  __VA_ARGS__
 # define GRANARY_EXTERNAL_DELETE = delete

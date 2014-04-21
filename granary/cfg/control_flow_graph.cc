@@ -3,9 +3,13 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
+
 #include "granary/base/pc.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
+
+#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -57,14 +61,17 @@ BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
 // added, then add those too.
 void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   if (block->list.IsAttached()) {
+    GRANARY_ASSERT(-1 != block->Id());
     return;  // Already in the CFG.
   }
+
+  block->id = num_basic_blocks++;
 
   // The control-flow graph has sole ownership over the initial basic block.
   // All other basic blocks are owned by control-transfer instructions.
   if (!first_block) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    granary_break_on_fault_if(!decoded_block);
+    GRANARY_ASSERT(nullptr != decoded_block);
     block->MarkAsPermanent();
     first_block = decoded_block;
   } else {
@@ -80,6 +87,14 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   for (auto succ : block->Successors()) {  // Add the successors.
     AddBlock(succ.block);
   }
+}
+
+// Allocate a new virtual register.
+VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(int num_bytes) {
+  GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
+  GRANARY_ASSERT((1 << 16) > num_virtual_regs);
+  return VirtualRegister(VR_KIND_VIRTUAL, static_cast<uint8_t>(num_bytes),
+                         static_cast<uint16_t>(num_virtual_regs++));
 }
 
 }  // namespace granary

@@ -15,7 +15,7 @@ define GENRULE
 $(XED_GEN_DIR)/$(1).out: $(XED_SRC_DIR)/granary/$(1).cc $(XED_SRC_DIR)/lib/libxed.a
 	@echo "Building XED tool $(XED_GEN_DIR)/$(1).out"
 	@mkdir -p $(XED_GEN_DIR)
-	@$(GRANARY_CXX) -std=c++11 -I$(GRANARY_SRC_DIR) \
+	@$(GRANARY_CXX) -std=c++11 -I$(GRANARY_SRC_DIR) -g3 \
 		$(XED_SRC_DIR)/granary/$(1).cc $(XED_SRC_DIR)/lib/libxed.a \
 		-o $(XED_GEN_DIR)/$(1).out
 

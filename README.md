@@ -4,6 +4,18 @@ Granary+
 Setup
 -----
 
+### Step 0: Make sure you have everything that you need.
+
+1. Get LLVM and clang:
+  ```basemake
+  sudo apt-get install llvm libc++-src clang-3.5
+  ```
+
+2. Get the LLVMGold plugin.
+  Follow [these instructions](http://llvm.org/docs/GoldPlugin.html) to set up LLVMGold.
+
+3. Make sure you have Python 2.7 or above, but not Python 3. 
+
 ### Step 1: Initial setup.
 
 ```basemake
@@ -16,7 +28,7 @@ Setup
 If you are compiling Granary for user space, run:
 
 ```basemake
-make clean ; make all
+make clean all
 ```
 
 To run Granary on a binary, e.g. `ls`, do:

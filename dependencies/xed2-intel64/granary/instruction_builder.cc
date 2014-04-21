@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include <iostream>
+#include <cassert>
 
 #include "dependencies/xed2-intel64/granary/instruction_info.h"
 
@@ -9,30 +10,64 @@ const char *INDENT = "  ";
 static void GenerateExplicitOperandBuilder(InstructionInfo *info,
                                            const xed_inst_t *instr,
                                            const xed_operand_t *op,
-                                           unsigned op_num,
                                            unsigned arg_num) {
-  std::cout << INDENT << "ImportOperand(instr, &(instr->ops["
-            << op_num << "]), XED_OPERAND_ACTION_"
-            << xed_operand_action_enum_t2str(xed_operand_rw(op))
-            << ", a" << arg_num;
-
   auto op_name = xed_operand_name(op);
-  if (XED_OPERAND_IMM0 == op_name) {
-    std::cout << ", XED_ENCODER_OPERAND_TYPE_IMM0";
-  } else if (XED_OPERAND_IMM0SIGNED == op_name) {
-    std::cout << ", XED_ENCODER_OPERAND_TYPE_SIMM0";
-  } else if (XED_OPERAND_IMM1 == op_name || XED_OPERAND_IMM1_BYTES == op_name) {
-    std::cout << ", XED_ENCODER_OPERAND_TYPE_IMM1";
-  }
+  auto action = xed_operand_rw(op);
+  auto action_str = xed_operand_action_enum_t2str(action);
 
-  std::cout << ");\n";
+  if (xed_operand_is_register(op_name)) {
+    std::cout << INDENT << "RegisterBuilder(a" << arg_num
+              << ", XED_OPERAND_ACTION_" << action_str
+              << ").Build(instr);\n";
+  } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_MEM1 == op_name) {
+    std::cout << INDENT << "MemoryBuilder(a" << arg_num
+              << ", XED_OPERAND_ACTION_" << action_str << ").Build(instr);\n";
+
+  } else if (XED_OPERAND_IMM0SIGNED == op_name) {
+    std::cout << INDENT << "ImmediateBuilder(a" << arg_num
+              << ", XED_ENCODER_OPERAND_TYPE_SIMM0).Build(instr);\n";
+
+  } else if (XED_OPERAND_IMM0 == op_name) {
+    std::cout << INDENT << "ImmediateBuilder(a" << arg_num
+              << ", XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);\n";
+
+  } else if (XED_OPERAND_IMM1 == op_name || XED_OPERAND_IMM1_BYTES == op_name) {
+    std::cout << INDENT << "ImmediateBuilder(a" << arg_num
+              << ", XED_ENCODER_OPERAND_TYPE_IMM1).Build(instr);\n";
+
+  } else if (XED_OPERAND_RELBR == op_name) {
+    std::cout << INDENT << "BranchTargetBuilder(a" << arg_num
+              << ").Build(instr);\n";
+  }
+}
+
+static void GenerateImplicitRegisterBuilder(xed_reg_enum_t reg,
+                                            xed_operand_action_enum_t action) {
+  std::cout << INDENT << "RegisterBuilder(XED_REG_"
+                << xed_reg_enum_t2str(reg) << ", XED_OPERAND_ACTION_"
+                << xed_operand_action_enum_t2str(action)
+                << ").Build(instr);\n";
 }
 
 static void GenerateImplicitOperandBuilder(InstructionInfo *info,
                                            const xed_inst_t *instr,
-                                           const xed_operand_t *op,
-                                           unsigned op_num) {
-  std::cout << INDENT << "// TODO!!\n";
+                                           const xed_operand_t *op) {
+  auto op_name = xed_operand_name(op);
+  auto op_type = xed_operand_type(op);
+  if (xed_operand_is_register(op_name)) {
+      GenerateImplicitRegisterBuilder(xed_operand_reg(op), xed_operand_rw(op));
+
+  } else if (XED_OPERAND_IMM0SIGNED == op_name) {
+    std::cout << INDENT << "ImmediateBuilder(" << xed_operand_imm(op)
+              << ", XED_ENCODER_OPERAND_TYPE_SIMM0).Build(instr);\n";
+
+  } else if (XED_OPERAND_IMM0 == op_name) {
+    std::cout << INDENT << "ImmediateBuilder(" << xed_operand_imm(op)
+              << ", XED_ENCODER_OPERAND_TYPE_IMM0).Build(instr);\n";
+
+  } else {
+    assert(false);
+  }
 }
 
 static void GenerateInstructionBuilder(InstructionInfo *info,
@@ -64,19 +99,23 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
   for (auto i = 0; i < num_explicit_ops; ++i) {
     std::cout << ", A" << i << " a" << i;
   }
+
   std::cout << ") {\n"
-            << INDENT << "InitInstruction(instr, XED_ICLASS_"
+            << INDENT << "BuildInstruction(instr, XED_ICLASS_"
                       << xed_iclass_enum_t2str(xed_inst_iclass(instr))
                       << ", XED_CATEGORY_"
                       << xed_category_enum_t2str(xed_inst_category(instr))
-                      << ", " << max_num_explicit_ops << ");\n";
+                      << ");\n";
 
-  for (auto i = 0U, arg_offset = 0U; i < num_ops; ++i) {
+  auto explicit_op = 0U;
+  for (auto i = 0U; i < num_ops; ++i) {
     auto op = xed_inst_operand(instr, i);
     if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
-      GenerateExplicitOperandBuilder(info, instr, op, i, arg_offset++);
-    } else if (IsAmbiguousOperand(instr, i)) {
-      GenerateImplicitOperandBuilder(info, instr, op, i);
+      GenerateExplicitOperandBuilder(info, instr, op, explicit_op++);
+    } else if (i < max_num_explicit_ops) {
+      GenerateImplicitOperandBuilder(info, instr, op);
+    } else {
+      break;
     }
   }
   std::cout << "}\n";
@@ -100,7 +139,8 @@ static std::set<xed_category_enum_t> ignore_categories = {
   XED_CATEGORY_VFMA,
   XED_CATEGORY_VTX,
   XED_CATEGORY_WIDENOP,
-  XED_CATEGORY_X87_ALU
+  XED_CATEGORY_X87_ALU,
+  XED_CATEGORY_STRINGOP  // Don't want complex base/disp mem ops.
 };
 
 static bool already_generated[XED_IFORM_LAST] = {false};
@@ -126,6 +166,9 @@ static void GenerateInstructionBuilders(void) {
       auto iform = xed_inst_iform_enum(instr);
       auto icategory = xed_inst_category(instr);
       if (XED_ICLASS_INVALID != iclass &&
+          XED_ICLASS_LEA != iclass &&  // Specially handled.
+          XED_ICLASS_CALL_FAR != iclass &&  // Not handled.
+          XED_ICLASS_JMP_FAR != iclass &&  // Not handled.
           !ignore_categories.count(icategory) &&
           !already_generated[iform] &&
           !HasIgnorableOperand(instr)) {
@@ -141,10 +184,10 @@ int main(void) {
   std::cout << "#ifndef DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "#define DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "namespace granary {\n"
-            << "namespace driver {\n"
+            << "namespace arch {\n"
             << "class Instruction;\n";
   GenerateInstructionBuilders();
-  std::cout << "}  // namespace driver\n"
+  std::cout << "}  // namespace arch\n"
             << "}  // namespace granary\n"
             << "#endif  // DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n";
 }

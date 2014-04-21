@@ -5,16 +5,18 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
+#include "granary/code/metadata.h"
+
 #include "granary/environment.h"
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--clients=print_bbs,follow_jumps`.")
+    "For example: `--clients=print_bbs,follow_jumps`.");
 
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
     "The number of pages allocated at once to store edge code. Each "
     "environment maintains its own edge code allocator. The default value is "
-    "1 pages per slab.")
+    "1 pages per slab.");
 
 namespace granary {
 
@@ -36,6 +38,7 @@ void Environment::Setup(void) {
   // Register internal metadata.
   metadata_manager.Register<ModuleMetaData>();
   metadata_manager.Register<CacheMetaData>();
+  metadata_manager.Register<StackMetaData>();
 
   // Tell this environment about all loaded modules.
   module_manager.RegisterAllBuiltIn();
@@ -43,9 +46,14 @@ void Environment::Setup(void) {
   // Tell Granary about all loaded tools.
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
       FLAG_tools,
-      [&](const char *tool_name) {
+      [&] (const char *tool_name) {
         tool_manager.Register(tool_name);
       });
+
+  // Do a dummy allocation and free of all tools. Tools register meta-data
+  // through their constructors and so this will get all tool+option-specific
+  // meta-data registered.
+  tool_manager.FreeTools(tool_manager.AllocateTools(&context));
 }
 
 void Environment::Attach(void) {

@@ -14,6 +14,15 @@
 
 namespace granary {
 
+#ifdef GRANARY_ECLIPSE
+
+// For code editing purposes only. Sometimes Eclipse has trouble with all the
+// `EnableIf` specializations, so this serves to satisfy its type checker.
+template <typename ToT, typename FromT>
+ToT UnsafeCast(FromT);
+
+#else
+
 // Non-integral, non-pointer type to something else.
 //
 // Note: `__builtin_memcpy` is used instead of `memcpy`, mostly for the
@@ -23,9 +32,8 @@ template <
   typename ToT,
   typename FromT,
   typename EnableIf<
-    IsPointer<FromT>::RESULT || IsInteger<FromT>::RESULT,
-    void,
-    int
+    !IsPointer<FromT>() && !IsInteger<FromT>() &&
+    !IsPointer<ToT>() && !IsInteger<ToT>()
   >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
@@ -42,7 +50,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<IsPointer<FromT>::RESULT && IsInteger<ToT>::RESULT>::Type=0
+  typename EnableIf<IsPointer<FromT>() && IsInteger<ToT>()>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return static_cast<ToT>(reinterpret_cast<uintptr_t>(v));
@@ -53,7 +61,7 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<IsPointer<FromT>::RESULT && IsPointer<ToT>::RESULT>::Type=0
+  typename EnableIf<IsPointer<FromT>() && IsPointer<ToT>()>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(reinterpret_cast<uintptr_t>(v));
@@ -64,17 +72,29 @@ inline ToT UnsafeCast(const FromT v) {
 template <
   typename ToT,
   typename FromT,
-  typename EnableIf<IsInteger<FromT>::RESULT && IsPointer<ToT>::RESULT>::Type=0
+  typename EnableIf<IsInteger<FromT>() && IsPointer<ToT>()>::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(static_cast<uintptr_t>(v));
 }
 
+// Integral to integral type.
+template <
+  typename ToT,
+  typename FromT,
+  typename EnableIf<IsInteger<FromT>() && IsInteger<ToT>()>::Type=0
+>
+inline ToT UnsafeCast(const FromT v) {
+  return static_cast<ToT>(v);
+}
+
+#endif  // GRANARY_ECLIPSE
+
 #ifdef GRANARY_INTERNAL
 
 // Helper macro for declaring class id enumeration constants.
 # define GRANARY_DECLARE_CLASS_ID_(class_name, value) \
-  GRANARY_CAT(kIdOf, class_name) = value
+  GRANARY_CAT(kTypeId, class_name) = value
 # define GRANARY_DECLARE_CLASS_ID(params) \
     GRANARY_DECLARE_CLASS_ID_ params
 
@@ -91,8 +111,8 @@ inline ToT UnsafeCast(const FromT v) {
   bool base_type::IsDerivedFrom(const base_type *) { \
     return true; \
   } \
-  int base_type::IdOf(void) const { \
-    return GRANARY_CAT(kIdOf, base_type); \
+  int base_type::TypeId(void) const { \
+    return GRANARY_CAT(kTypeId, base_type); \
   }
 
 // Define that a class is a derived class of a single-inheritance class
@@ -103,28 +123,28 @@ inline ToT UnsafeCast(const FromT v) {
     return true; \
   } \
   bool derived_type::IsDerivedFrom(const base_type *base) { \
-    return !(base->IdOf() % GRANARY_CAT(kIdOf, derived_type)); \
+    return !(base->TypeId() % GRANARY_CAT(kTypeId, derived_type)); \
   } \
-  int derived_type::IdOf(void) const { \
-    return GRANARY_CAT(kIdOf, derived_type); \
+  int derived_type::TypeId(void) const { \
+    return GRANARY_CAT(kTypeId, derived_type); \
   }
 
 #endif  // GRANARY_INTERNAL
 
 #define GRANARY_DECLARE_BASE_CLASS(base_type) \
   static bool IsDerivedFrom(const base_type *); \
-  virtual int IdOf(void) const;
+  virtual int TypeId(void) const;
 
 #define GRANARY_DECLARE_DERIVED_CLASS_OF(base_type, derived_type) \
   static bool IsDerivedFrom(const derived_type *); \
   static bool IsDerivedFrom(const base_type *base); \
-  virtual int IdOf(void) const;
+  virtual int TypeId(void) const;
 
 // Base type to derived type cast.
 template <
   typename PointerT,
   typename BaseT,
-  typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
 >
 inline PointerT DynamicCast(const BaseT *ptr) {
   if (!ptr) {
@@ -142,7 +162,7 @@ inline PointerT DynamicCast(const BaseT *ptr) {
 template <
   typename PointerT,
   typename BaseT,
-  typename EnableIf<IsPointer<PointerT>::RESULT, int>::Type = 0
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
 >
 inline bool IsA(const BaseT *ptr) {
   typedef typename RemoveConst<

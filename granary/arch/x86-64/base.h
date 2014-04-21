@@ -12,15 +12,17 @@ namespace granary {
 namespace arch {
 
 enum {
+  PAGE_SIZE_BYTES = 4096,
+
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,
 
-  ADDRESS_SIZE_BYTES = 8,
-  ADDRESS_SIZE_BITS = 64,
+  ADDRESS_WIDTH_BYTES = 8,
+  ADDRESS_WIDTH_BITS = 64,
 
   // Size of widest general purpose registers.
-  GPR_WIDTH_BYTES = ADDRESS_SIZE_BYTES,
-  GPR_WIDTH_BITS = ADDRESS_SIZE_BITS,
+  GPR_WIDTH_BYTES = ADDRESS_WIDTH_BYTES,
+  GPR_WIDTH_BITS = ADDRESS_WIDTH_BITS,
 
   // Excludes %rsp, excludes %rip
   NUM_GENERAL_PURPOSE_REGISTERS = 14,
@@ -33,30 +35,8 @@ enum {
 // Feature support that guides architecture-oblivious optimization routines.
 enum {
 
-  // TODO(pag): - Need to formalize this a bit more. For example, for PC-rel, is
-  //              it relative to the PC of the CTI, or the next PC after the
-  //              CTI.
-  //            - Also, should these be grouped into categories, so that it's
-  //              easy to talk about the PC-rel support (8, 16, 24, 32) for a
-  //              particular kind of instruction.
-  //            - Finally, should probably have a way of tracking the current
-  //              PC-rel state of a CTI.
-
-  SUPPORTS_REL8_COND_JUMP = true,
-  SUPPORTS_REL8_DIRECT_JUMP = true,
-  SUPPORTS_REL8_DIRECT_CALL = false,
-
-  SUPPORTS_REL16_COND_JUMP = false,
-  SUPPORTS_REL16_DIRECT_JUMP = false,
-  SUPPORTS_REL16_DIRECT_CALL = false,
-
-  SUPPORTS_REL24_COND_JUMP = false,
-  SUPPORTS_REL24_DIRECT_JUMP = false,
-  SUPPORTS_REL24_DIRECT_CALL = false,
-
-  SUPPORTS_REL32_COND_JUMP = true,
-  SUPPORTS_REL32_DIRECT_JUMP = true,
-  SUPPORTS_REL32_DIRECT_CALL = false
+  // The maximum width of a relative branch.
+  REL_BRANCH_WIDTH_BITS = 32
 };
 
 }  // namespace arch

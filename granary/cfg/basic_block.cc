@@ -3,8 +3,10 @@
 #define GRANARY_INTERNAL
 
 #include "granary/cfg/basic_block.h"
-#include "granary/cfg/instruction.h"
+#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
+#include "granary/cfg/instruction.h"
+
 #include "granary/module.h"
 #include "granary/util.h"
 
@@ -12,13 +14,13 @@ namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (BasicBlock, 2),
-    (NativeBasicBlock, 2 * 3),
-    (InstrumentedBasicBlock, 2 * 5),
-    (CachedBasicBlock, 2 * 5 * 7),
-    (DecodedBasicBlock, 2 * 5 * 11),
-    (DirectBasicBlock, 2 * 5 * 13),
-    (IndirectBasicBlock, 2 * 5 * 17),
-    (ReturnBasicBlock, 2 * 19))
+      (NativeBasicBlock, 2 * 3),
+      (InstrumentedBasicBlock, 2 * 5),
+        (CachedBasicBlock, 2 * 5 * 7),
+        (DecodedBasicBlock, 2 * 5 * 11),
+        (DirectBasicBlock, 2 * 5 * 13),
+        (IndirectBasicBlock, 2 * 5 * 17),
+        (ReturnBasicBlock, 2 * 5 * 19))
 
 GRANARY_DEFINE_BASE_CLASS(BasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
@@ -60,7 +62,8 @@ void SuccessorBlockIterator::operator++(void) {
 
 BasicBlock::BasicBlock(void)
     : UnownedCountedObject(),
-      list() {}
+      list(),
+      id(-1) {}
 
 detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
@@ -71,8 +74,19 @@ int BasicBlock::NumLocalPredecessors(void) const {
   return this->NumReferences();
 }
 
+// Retunrs a unique ID for this basic block within the LCFG. This can be
+// useful for client tools to implement data flow passes.
+int BasicBlock::Id(void) const {
+  return id;
+}
+
 // Get this basic block's meta-data.
 BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
+  return meta;
+}
+
+// Get this basic block's meta-data.
+BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
   return meta;
 }
 
@@ -80,7 +94,8 @@ BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
 InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
     : meta(meta_),
       cached_meta_hash(0),
-      native_pc(MetaDataCast<ModuleMetaData *>(meta)->start_pc) {}
+      native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
+                     : nullptr) {}
 
 // Returns the starting PC of this basic block.
 AppPC InstrumentedBasicBlock::StartAppPC(void) const {
@@ -94,11 +109,14 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 
 
 // Initialize a decoded basic block.
-DecodedBasicBlock::DecodedBasicBlock(BlockMetaData *meta_)
+DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
+                                     BlockMetaData *meta_)
     : InstrumentedBasicBlock(meta_),
-      next(nullptr),
-      first(new AnnotationInstruction(BEGIN_BASIC_BLOCK)),
-      last(new AnnotationInstruction(END_BASIC_BLOCK)) {
+      cfg(cfg_),
+      first(new AnnotationInstruction(IA_BEGIN_BASIC_BLOCK,
+                                      reinterpret_cast<void *>(&first))),
+      last(new AnnotationInstruction(IA_END_BASIC_BLOCK,
+                                     reinterpret_cast<void *>(&last))) {
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
@@ -112,10 +130,16 @@ InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
   }
 }
 
-// Return an iterator of the successors of a basic block.
+// Return an iterator of the successor blocks of this basic block.
 detail::SuccessorBlockIterator DecodedBasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator(
       internal::FindNextSuccessorInstruction(first));
+}
+
+// Allocates a new temporary virtual register for use by instructions within
+// this basic block.
+VirtualRegister DecodedBasicBlock::AllocateVirtualRegister(int num_bytes) {
+  return cfg->AllocateVirtualRegister(num_bytes);
 }
 
 // Return the first instruction in the basic block.
@@ -142,6 +166,33 @@ DecodedBasicBlock::ReversedInstructions(void) const {
 // Return an iterator for the application instructions of a basic block.
 AppInstructionIterator DecodedBasicBlock::AppInstructions(void) const {
   return AppInstructionIterator(first);
+}
+
+// Return a reverse iterator for the application instructions of the block.
+BackwardAppInstructionIterator
+DecodedBasicBlock::ReversedAppInstructions(void) const {
+  return BackwardAppInstructionIterator(last);
+}
+
+
+// Add a new instruction to the beginning of the instruction list.
+void DecodedBasicBlock::PrependInstruction(std::unique_ptr<Instruction> instr) {
+  FirstInstruction()->InsertAfter(std::move(instr));
+}
+
+// Add a new instruction to the end of the instruction list.
+void DecodedBasicBlock::AppendInstruction(std::unique_ptr<Instruction> instr) {
+  LastInstruction()->InsertBefore(std::move(instr));
+}
+
+// Add a new instruction to the beginning of the instruction list.
+void DecodedBasicBlock::UnsafePrependInstruction(Instruction *instr) {
+  PrependInstruction(std::move(std::unique_ptr<Instruction>(instr)));
+}
+
+// Add a new instruction to the end of the instruction list.
+void DecodedBasicBlock::UnsafeAppendInstruction(Instruction *instr) {
+  AppendInstruction(std::move(std::unique_ptr<Instruction>(instr)));
 }
 
 // Free all of the instructions in the basic block. This is invoked by
@@ -175,8 +226,15 @@ CachePC IndirectBasicBlock::StartCachePC(void) const {
 }
 
 // Initialize a return basic block.
-ReturnBasicBlock::ReturnBasicBlock(void)
-    : BasicBlock() {}
+ReturnBasicBlock::ReturnBasicBlock(BlockMetaData *meta_)
+    : InstrumentedBasicBlock(nullptr),
+      lazy_meta(meta_) {}
+
+// Return this basic block's meta-data. Accessing a return basic block's meta-
+// data will "create" it for the block.
+BlockMetaData *ReturnBasicBlock::MetaData(void) {
+  return meta = lazy_meta;
+}
 
 // Returns the starting PC of this basic block.
 AppPC ReturnBasicBlock::StartAppPC(void) const {

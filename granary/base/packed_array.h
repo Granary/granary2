@@ -14,6 +14,8 @@ namespace granary {
 template <typename T, unsigned long kSizeBits, unsigned long kNumElems>
 class PackedArray {
  public:
+  typedef PackedArray<T, kSizeBits, kNumElems> SelfType;
+
   PackedArray(void) {
     memset(&(storage[0]), 0, sizeof storage);
   }
@@ -36,7 +38,12 @@ class PackedArray {
     storage[index] = old_val | static_cast<uint8_t>(byte_val << shift);
   }
 
- private:
+  // Copy all values from one packed array into this packed array.
+  void Copy(const SelfType &that) {
+    memcpy(&(storage[0]), &(that.storage[0]), sizeof storage);
+  }
+
+ protected:
   enum {
     SIZE = GRANARY_ALIGN_TO(kSizeBits, 2),
     NUM_ELEMS = GRANARY_ALIGN_TO(kNumElems, 8),

@@ -6,6 +6,9 @@
 
 namespace granary {
 
+// End-of-string signal for NUL-terminated strings.
+const char *NULTerminatedStringIterator::EOS = "";
+
 // Returns the length of a C string, i.e. the number of non-'\0' characters up
 // to but excluding the first '\0' character.
 unsigned long StringLength(const char *ch) {
@@ -37,13 +40,11 @@ unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
 bool StringsMatch(const char *str1, const char *str2) {
   if (str1 == str2) {
     return true;
-  }
-  if ((str1 && !str2) || (!str1 && str2)) {
-    return false;
-  }
-  for (; *str1 == *str2; ++str1, ++str2) {
-    if (!*str1) {
-      return true;
+  } else if (str1 && str2) {
+    for (; *str1 == *str2; ++str1, ++str2) {
+      if (!*str1) {
+        return true;
+      }
     }
   }
   return false;
@@ -135,13 +136,9 @@ static unsigned long DeFormatGenericInt(const char *buffer, void *data,
 
 }  // namespace
 
-// Similar to `snprintf`. Returns the number of formatted characters.
-__attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char * __restrict buffer, unsigned long len,
-                     const char * __restrict format, ...) {
-  va_list args;
-  va_start(args, format);
-
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+unsigned long VarFormat(char * __restrict buffer, unsigned long len,
+                        const char * __restrict format, va_list args) {
   if (!buffer || !format || !len) {
     return 0;
   }
@@ -156,71 +153,77 @@ unsigned long Format(char * __restrict buffer, unsigned long len,
   } state(STATE_CONTINUE);
 
   for (auto format_ch : NULTerminatedStringIterator(format)) {
-    switch (state) {
-      case STATE_CONTINUE:
-        if ('%' == format_ch) {
-          state = STATE_SEEN_FORMAT_SPEC;
-          is_long = false;
-          base = 10;
+    if (STATE_CONTINUE == state) {
+      if ('%' == format_ch) {
+        state = STATE_SEEN_FORMAT_SPEC;
+        is_long = false;
+        base = 10;
+      } else {
+        buff.Write(format_ch);
+      }
+    } else {
+      if ('%' == format_ch) {
+        buff.Write(format_ch);
+      } else if ('c' == format_ch) {
+        buff.Write(static_cast<char>(va_arg(args, int)));
+      } else if ('s' == format_ch) {
+        buff.Write(va_arg(args, const char *));
+      } else if ('l' == format_ch) {  // Long un/signed integer.
+        is_long = true;
+        continue;  // Don't change the state.
+      } else if ('d' == format_ch) {
+        long generic_int(0);
+        if (is_long) {
+          generic_int = va_arg(args, long);
         } else {
-          buff.Write(format_ch);
+          generic_int = static_cast<long>(va_arg(args, int));
         }
-        break;
-
-      case STATE_SEEN_FORMAT_SPEC:
-        if ('%' == format_ch) {
-          buff.Write(format_ch);
-        } else if ('c' == format_ch) {
-          buff.Write(static_cast<char>(va_arg(args, int)));
-        } else if ('s' == format_ch) {
-          state = STATE_CONTINUE;
-          buff.Write(va_arg(args, const char *));
-        } else if ('l' == format_ch) {  // Long un/signed integer.
+        if (0 > generic_int) {
+          buff.Write('-');
+          generic_int = -generic_int;
+        }
+        FormatGenericInt(buff, static_cast<unsigned long>(generic_int), 10);
+      } else if ('u' == format_ch || 'x' == format_ch || 'p' == format_ch) {
+        if ('x' == format_ch) {
+          base = 16;
+        } else if ('p' == format_ch) {
+          base = 16;
           is_long = true;
-          break;  // Don't change the state.
-        } else if ('d' == format_ch) {
-          long generic_int(0);
-          if (is_long) {
-            generic_int = va_arg(args, long);
-          } else {
-            generic_int = static_cast<long>(va_arg(args, int));
-          }
-          if (0 > generic_int) {
-            buff.Write('-');
-            generic_int = -generic_int;
-          }
-          FormatGenericInt(buff, static_cast<unsigned long>(generic_int), 10);
-        } else if ('u' == format_ch || 'x' == format_ch || 'p' == format_ch) {
-          if ('x' == format_ch) {
-            base = 16;
-          } else if ('p' == format_ch) {
-            base = 16;
-            is_long = true;
-          }
-          unsigned long generic_uint(0);
-          if (is_long) {
-            generic_uint = va_arg(args, unsigned long);
-          } else {
-            generic_uint = static_cast<unsigned long>(va_arg(args, unsigned));
-          }
-          if ('p' == format_ch) {
-            if (!generic_uint) {
-              buff.Write("(nil)");
-              break;
-            } else {
-              buff.Write("0x");
-            }
-          }
-          FormatGenericInt(buff, generic_uint, base);
-        } else {
-          buff.Write(format_ch); // Unexpected char after `%`, elide the `%`.
         }
-        state = STATE_CONTINUE;
-        break;
+        unsigned long generic_uint(0);
+        if (is_long) {
+          generic_uint = va_arg(args, unsigned long);
+        } else {
+          generic_uint = static_cast<unsigned long>(va_arg(args, unsigned));
+        }
+        if ('p' == format_ch) {
+          if (!generic_uint) {
+            buff.Write("(nil)");
+            continue;  // Don't change the state.
+          } else {
+            buff.Write("0x");
+          }
+        }
+        FormatGenericInt(buff, generic_uint, base);
+      } else {
+        buff.Write(format_ch); // Unexpected char after `%`, elide the `%`.
+      }
+      state = STATE_CONTINUE;
     }
   }
   buff.Finalize();
   return buff.NumCharsWritten();
+}
+
+// Similar to `snprintf`. Returns the number of formatted characters.
+__attribute__ ((format(printf, 3, 4)))
+unsigned long Format(char * __restrict buffer, unsigned long len,
+                     const char * __restrict format, ...) {
+  va_list args;
+  va_start(args, format);
+  auto ret = VarFormat(buffer, len, format, args);
+  va_end(args);
+  return ret;
 }
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.

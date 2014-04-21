@@ -2,4 +2,4 @@
 
 # Tool-name: print_bbs
 GRANARY_TOOLS += # Add additional tool dependencies here.
-print_bbs-objs += print.ll
+print_bbs-objs += print.bc

@@ -7,9 +7,9 @@
 static const char *INDENT = "  ";
 
 static void GenerateOperandCheckerPrologue(void) {
-  std::cout << "static bool IsAmbiguousOperand(xed_iclass_enum_t iclass,\n"
-            << "                               xed_iform_enum_t iform,\n"
-            << "                               unsigned op_num) {\n"
+  std::cout << "bool IsAmbiguousOperand(xed_iclass_enum_t iclass,\n"
+            << "                        xed_iform_enum_t iform,\n"
+            << "                        unsigned op_num) {\n"
             << INDENT << "if (false) {\n";
 }
 
@@ -62,7 +62,6 @@ static void GenerateDisambiguator(InstructionInfo &info) {
     if (HasAmbiguousOperands(instr)) {
       GenerateIformCheck(instr, has_ambiguous_iclass);
       has_ambiguous_iclass = true;
-
       bool has_ambiguous_arg = false;
       for (auto arg_num = 0U; arg_num < 8; ++arg_num) {
         if (IsAmbiguousOperand(instr, arg_num)) {

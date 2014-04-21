@@ -9,9 +9,10 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
 
+#include "granary/arch/driver.h"
+
 #include "granary/ir/lir.h"
 
-#include "granary/driver.h"
 #include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"
@@ -42,7 +43,7 @@ void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
 // chosen.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
                                 BlockRequestKind strategy) {
-  granary_break_on_fault_if(!block || !block->list.IsAttached());
+  GRANARY_ASSERT(block && block->list.IsAttached());
   has_pending_request = true;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
                                             strategy);
@@ -50,82 +51,93 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 
 namespace {
 
+// Hash some basic block meta-data.
+static uint32_t HashMetaData(HashFunction *hasher,
+                             InstrumentedBasicBlock *block) {
+  hasher->Reset();
+  if (auto meta = block->UnsafeMetaData()) {
+    meta->Hash(hasher);
+  }
+  hasher->Finalize();
+  return hasher->Extract32();
+}
+}  // namespace
+
 // Convert a decoded instruction into the internal Granary instruction IR.
-static Instruction *MakeInstruction(ContextInterface *context,
-                                    driver::Instruction *instr) {
+Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
   if (instr->HasIndirectTarget()) {
-    if (instr->IsFunctionReturn() ||
-        instr->IsInterruptReturn() ||
-        instr->IsSystemReturn()) {
-      return new ControlFlowInstruction(instr, new ReturnBasicBlock);
+    if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
+      return new ControlFlowInstruction(
+          instr,
+          new IndirectBasicBlock(context->AllocateEmptyBlockMetaData()));
+
+    // Return, with default empty meta-data.
+    } else if (instr->IsFunctionReturn()) {
+      return new ControlFlowInstruction(
+          instr, new ReturnBasicBlock(context->AllocateEmptyBlockMetaData()));
+
+    // System call/return, interrupt call/return.
     } else {
-      auto meta = context->AllocateEmptyBlockMetaData();
-      return new ControlFlowInstruction(instr, new IndirectBasicBlock(meta));
+      return new ControlFlowInstruction(instr, new NativeBasicBlock(nullptr));
     }
+
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    auto meta = context->AllocateBlockMetaData(instr->BranchTarget());
+    auto meta = context->AllocateBlockMetaData(instr->BranchTargetPC());
     return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));
   } else {
     return new NativeInstruction(instr);
   }
 }
 
-// Hash some basic block meta-data.
-static uint32_t HashMetaData(HashFunction *hasher,
-                             InstrumentedBasicBlock *block) {
-  hasher->Reset();
-  block->MetaData()->Hash(hasher);
-  hasher->Finalize();
-  return hasher->Extract32();
-}
-}  // namespace
 
 // Add the fall-through instruction for a block.
 void BlockFactory::AddFallThroughInstruction(
-    driver::InstructionDecoder *decoder, Instruction *last_instr, AppPC pc) {
+    arch::InstructionDecoder *decoder, DecodedBasicBlock *block,
+    Instruction *last_instr, AppPC pc) {
 
   auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump())) {
+  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump() ||
+              cti->IsSystemCall() || cti->IsInterruptCall())) {
     // Unconditionally decode the next instruction. If it's a jump then we'll
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR
     // instruction for the fall-through.
-    driver::Instruction dinstr;
-    if (!decoder->Decode(&dinstr, pc)) {
-      last_instr->InsertAfter(lir::Jump(new NativeBasicBlock(pc)));
+    arch::Instruction dinstr;
+    if (!decoder->Decode(block, &dinstr, pc)) {
+      block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
-      last_instr->InsertAfter(std::unique_ptr<Instruction>(
-          MakeInstruction(context, &dinstr)));
+      block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
-      last_instr->InsertAfter(lir::Jump(this, pc));
+      block->AppendInstruction(lir::Jump(this, pc));
     }
   }
 }
 
 // Decode an instruction list starting at `pc` and link the decoded
 // instructions into the instruction list beginning with `instr`.
-void BlockFactory::DecodeInstructionList(Instruction *instr, AppPC pc) {
-  driver::InstructionDecoder decoder;
-  for (; !IsA<ControlFlowInstruction *>(instr); ) {
+void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
+  auto pc = block->StartAppPC();
+  arch::InstructionDecoder decoder;
+  Instruction *instr(nullptr);
+  do {
     auto decoded_pc = pc;
-    driver::Instruction dinstr;
-    if (!decoder.DecodeNext(&dinstr, &pc)) {
-      instr->InsertAfter(lir::Jump(new NativeBasicBlock(decoded_pc)));
+    arch::Instruction dinstr;
+    if (!decoder.DecodeNext(block, &dinstr, &pc)) {
+      block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
-    instr = instr->InsertAfter(std::unique_ptr<Instruction>(
-        MakeInstruction(context, &dinstr)));
+    instr = MakeInstruction(&dinstr);
+    block->UnsafeAppendInstruction(instr);
     context->AnnotateInstruction(instr);
-  }
-  AddFallThroughInstruction(&decoder, instr, pc);
+  } while (!IsA<ControlFlowInstruction *>(instr));
+  AddFallThroughInstruction(&decoder, block, instr, pc);
 }
 
 // Hash the meta data of all basic blocks. This resets the `materialized_block`
 // of any `DirectBasicBlock` from prior materialization runs.
 void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
   for (auto block : cfg->Blocks()) {
-    auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
-    if (meta_block) {
+    if (auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
       meta_block->cached_meta_hash = HashMetaData(hasher, meta_block);
       auto direct_block = DynamicCast<DirectBasicBlock *>(block);
       if (!direct_block) {
@@ -237,10 +249,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
         // Fall-through.
 
       case REQUEST_NOW: {
-        auto decoded_block = new DecodedBasicBlock(block->meta);
+        auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
         block->meta = nullptr;  // Steal.
-        DecodeInstructionList(decoded_block->FirstInstruction(),
-                              block->StartAppPC());
+        DecodeInstructionList(decoded_block);
         cfg->AddBlock(decoded_block);
         block->materialized_block = decoded_block;
         return true;
@@ -270,10 +281,9 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
 
 // Materialize the initial basic block.
 void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
-  GRANARY_IF_DEBUG( granary_break_on_fault_if(!meta); )
-  auto decoded_block = new DecodedBasicBlock(meta);
-  DecodeInstructionList(decoded_block->FirstInstruction(),
-                        decoded_block->StartAppPC());
+  GRANARY_ASSERT(nullptr != meta);
+  auto decoded_block = new DecodedBasicBlock(cfg, meta);
+  DecodeInstructionList(decoded_block);
   cfg->AddBlock(decoded_block);
 }
 

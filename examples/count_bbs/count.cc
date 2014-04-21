@@ -7,12 +7,12 @@ using namespace granary;
 GRANARY_DEFINE_bool(count_execs, false,
     "Count the number of times each block is executed. This option is only "
     "meaningful for static instrumentation. By default, `count_bbs` does not "
-    "count the number of executions of each basic block.")
+    "count the number of executions of each basic block.");
 
 namespace {
 
 // Runtime block execution counter.
-class BlockCounter : public MutableMetaData {
+class BlockCounter : public MutableMetaData<BlockCounter> {
  public:
   BlockCounter(void)
       : count(0) {}
@@ -37,20 +37,33 @@ class BBCount : public Tool {
   }
 
   virtual ~BBCount(void) = default;
-
-  // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
       return;
     }
+    Instruction *insert_instr = bb->FirstInstruction();
 
-    auto meta = GetMetaData<BlockCounter>(bb);
-    GRANARY_UNUSED(meta);
-
-    for (auto instr : bb->Instructions()) {
-      GRANARY_UNUSED(instr);
+    // Try to find a good place to insert this instruction such that the
+    // placement is before an instruction that kills the flags (but doesn't
+    // read them).
+    for (auto instr : bb->ReversedAppInstructions()) {
+      if (!IsA<ControlFlowInstruction *>(instr) &&
+          instr->WritesConditionCodes() &&
+          !instr->ReadsConditionCodes()) {
+        insert_instr = instr;
+        break;
+      }
     }
+
+    // Now that we have an insertion spot (either first instruction, or before
+    // and instruction that kills the flags), go and insert the increment to
+    // the block-specific execution counter.
+    auto meta = GetMetaData<BlockCounter>(bb);
+    MemoryOperand counter_addr(&(meta->count));
+    BeginInlineAssembly({&counter_addr});
+    InlineBefore(insert_instr, "INC m64 %0;"_x86_64);
+    EndInlineAssembly();
   }
 };
 

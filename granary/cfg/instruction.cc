@@ -1,24 +1,24 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-#define GRANARY_IMPLEMENT_DYNAMIC_CAST
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/breakpoint.h"
 
-
 namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (Instruction, 2),
-    (AnnotationInstruction, 2 * 3),
-    (NativeInstruction, 2 * 5),
-    (BranchInstruction, 2 * 5 * 7),
-    (ControlFlowInstruction, 2 * 5 * 11))
+      (AnnotationInstruction, 2 * 3),
+        (LabelInstruction, 2 * 3 * 5),
+      (NativeInstruction, 2 * 7),
+        (BranchInstruction, 2 * 7 * 11),
+        (ControlFlowInstruction, 2 * 7 * 13))
 
 GRANARY_DEFINE_BASE_CLASS(Instruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
@@ -31,20 +31,14 @@ Instruction *Instruction::Previous(void) {
   return list.GetPrevious(this);
 }
 
-// By default, non-native instructions are treated as having zero length.
-int Instruction::Length(void) const {
-  return 0;
+// Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
+uintptr_t Instruction::MetaData(void) const {
+  return transient_meta;
 }
 
-// Pretend to encode this instruction at address `cache_pc`.
-CachePC Instruction::StageEncode(CachePC cache_pc_) {
-  cache_pc = cache_pc_;
-  return cache_pc + this->Length();
-}
-
-// Encode this instruction at `cache_pc`.
-bool Instruction::Encode(driver::InstructionDecoder *) {
-  return true;
+// Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
+void Instruction::SetMetaData(uintptr_t meta) {
+  transient_meta = meta;
 }
 
 Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
@@ -61,8 +55,7 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
 
 // Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  granary_break_on_fault_if(
-      GRANARY_UNLIKELY(IsA<AnnotationInstruction *>(instr)));
+  GRANARY_ASSERT(!IsA<AnnotationInstruction *>(instr));
   instr->list.Unlink();
 
   // If we're unlinking a branch then make sure that the target itself does
@@ -75,47 +68,88 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   return std::unique_ptr<Instruction>(instr);
 }
 
-#ifdef GRANARY_DEBUG
-// Prevent adding an instruction before the beginning instruction of a basic
-// block.
+// Unlink an instruction in an unsafe way. The normal unlink process exists
+// for ensuring some amount of safety, whereas this is meant to be used only
+// in internal cases where Granary is safely doing an "unsafe" thing (e.g.
+// when it's stealing instructions for `Fragment`s.
+std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
+  list.Unlink();
+  return std::unique_ptr<Instruction>(this);
+}
+
+// Make it so that inserting an instruction before the designated first
+// instruction actually changes the block's first instruction. This avoids the
+// issue of maintaining a designated first instruction, whilst also avoiding the
+// issue of multiple `InsertBefore`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertBefore(
     std::unique_ptr<Instruction> that) {
-  granary_break_on_fault_if(GRANARY_UNLIKELY(BEGIN_BASIC_BLOCK == annotation));
+  if (GRANARY_UNLIKELY(IA_BEGIN_BASIC_BLOCK == annotation)) {
+    auto new_first = new AnnotationInstruction(annotation, data);
+    auto block_first_ptr = UnsafeCast<Instruction **>(data);
+    this->Instruction::UnsafeInsertBefore(new_first);
+    *block_first_ptr = new_first;
+    annotation = IA_NOOP;
+    data = nullptr;
+  }
   return this->Instruction::InsertBefore(std::move(that));
 }
 
-// Prevent adding an instruction after the ending instruction of a basic block.
+// Make it so that inserting an instruction after the designated last
+// instruction actually puts the instruction before the last instruction. In
+// other cases this behaves as normal.
+
+// Make it so that inserting an instruction after the designated last
+// instruction actually changes the block's last instruction. This avoids the
+// issue of maintaining a designated last instruction, whilst also avoiding the
+// issue of multiple `InsertAfter`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertAfter(
     std::unique_ptr<Instruction> that) {
-  granary_break_on_fault_if(GRANARY_UNLIKELY(END_BASIC_BLOCK == annotation));
+  if (GRANARY_UNLIKELY(IA_END_BASIC_BLOCK == annotation)) {
+    auto new_last = new AnnotationInstruction(annotation, data);
+    auto block_last_ptr = UnsafeCast<Instruction **>(data);
+    this->Instruction::UnsafeInsertAfter(new_last);
+    *block_last_ptr = new_last;
+    annotation = IA_NOOP;
+    data = nullptr;
+  }
   return this->Instruction::InsertAfter(std::move(that));
 }
-#endif  // GRANARY_DEBUG
 
 // Returns true if this instruction is a label.
 bool AnnotationInstruction::IsLabel(void) const {
-  return LABEL == annotation;
+  return IA_LABEL == annotation;
 }
 
 // Returns true if this instruction is targeted by any branches.
 bool AnnotationInstruction::IsBranchTarget(void) const {
-  return LABEL == annotation && nullptr != data;
+  return IA_LABEL == annotation && nullptr != data;
 }
 
-NativeInstruction::NativeInstruction(const driver::Instruction *instruction_)
+LabelInstruction::LabelInstruction(void)
+    : AnnotationInstruction(IA_LABEL) {}
+
+NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_) {}
 
 NativeInstruction::~NativeInstruction(void) {}
 
 // Get the length of the instruction.
-int NativeInstruction::Length(void) const {
-  return instruction.Length();
+int NativeInstruction::DecodedLength(void) const {
+  return instruction.DecodedLength();
 }
 
 // Returns true if this instruction is essentially a no-op, i.e. it does
 // nothing and has no observable side-effects.
 bool NativeInstruction::IsNoOp(void) const {
   return instruction.IsNoOp();
+}
+
+bool NativeInstruction::ReadsConditionCodes(void) const {
+  return instruction.ReadsFlags();
+}
+
+bool NativeInstruction::WritesConditionCodes(void) const {
+  return instruction.WritesFlags();
 }
 
 bool NativeInstruction::IsFunctionCall(void) const {
@@ -159,22 +193,39 @@ bool NativeInstruction::HasIndirectTarget(void) const {
 }
 
 bool NativeInstruction::IsAppInstruction(void) const {
-  return nullptr != instruction.GetAppPC();
+  return nullptr != instruction.DecodedPC();
 }
 
-// Encode this instruction at `cache_pc`.
-bool NativeInstruction::Encode(driver::InstructionDecoder *encoder) {
-  return encoder->Encode(&instruction, cache_pc);
+void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
+  instruction.SetDecodedPC(decoded_pc);
+}
+
+// Get the opcode name.
+const char *NativeInstruction::OpCodeName(void) const {
+  return instruction.OpCodeName();
+}
+
+// Invoke a function on every operand.
+void NativeInstruction::ForEachOperandImpl(
+    const std::function<void(Operand *)> &func) {
+  instruction.ForEachOperand(func);
+}
+
+// Try to match and bind one or more operands from this instruction. Returns
+// the number of operands matched, starting from the first operand.
+size_t NativeInstruction::CountMatchedOperandsImpl(
+    std::initializer_list<OperandMatcher> &&matchers) {
+  return instruction.CountMatchedOperands(std::move(matchers));
 }
 
 // Return the targeted instruction of this branch.
-const AnnotationInstruction *BranchInstruction::TargetInstruction(void) const {
+LabelInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;
 }
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    const driver::Instruction *instruction_, BasicBlock *target_)
+    const arch::Instruction *instruction_, BasicBlock *target_)
       : NativeInstruction(instruction_),
         target(target_) {
   target->Acquire();
@@ -200,30 +251,15 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
   return target;
 }
 
-// Encode this instruction at `cache_pc`.
-bool ControlFlowInstruction::Encode(driver::InstructionDecoder *encoder) {
-  if (IsA<InstrumentedBasicBlock *>(target) &&
-      !IsA<IndirectBasicBlock *>(target)) {
-    instruction.SetBranchTarget(target->StartCachePC());
-  } else if (IsA<NativeBasicBlock *>(target)) {
-    instruction.SetBranchTarget(target->StartAppPC());
-  }
-  return encoder->Encode(&instruction, cache_pc);
-}
-
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
+  GRANARY_ASSERT(new_target->list.IsAttached());
+  GRANARY_ASSERT(-1 != new_target->Id());
   auto old_target = target;
   new_target->Acquire();
   target = new_target;
   old_target->Release();
-}
-
-// Encode this instruction at `cache_pc`.
-bool BranchInstruction::Encode(driver::InstructionDecoder *encoder) {
-  instruction.SetBranchTarget(target->StartCachePC());
-  return encoder->Encode(&instruction, cache_pc);
 }
 
 }  // namespace granary

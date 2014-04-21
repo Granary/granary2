@@ -18,6 +18,18 @@ extern int granary_memcmp(const void * __restrict,
 }  // extern C
 #endif  // __cplusplus
 
+#ifdef memcpy
+# undef memcpy
+#endif
+
+#ifdef memset
+# undef memset
+#endif
+
+#ifdef memcmp
+# undef memcmp
+#endif
+
 #define memcpy granary_memcpy
 #define memset granary_memset
 #define memcmp granary_memcmp
@@ -32,12 +44,12 @@ namespace granary {
 class NULTerminatedStringIterator {
  public:
   inline NULTerminatedStringIterator(void)
-      : ch(nullptr) {}
+      : ch(EOS) {}
 
   inline explicit NULTerminatedStringIterator(const char *ch_)
       : ch(ch_) {
     if (ch && !*ch) {
-      ch = nullptr;
+      ch = EOS;
     }
   }
 
@@ -51,7 +63,7 @@ class NULTerminatedStringIterator {
 
   inline void operator++(void) {
     if (!*++ch) {
-      ch = nullptr;
+      ch = EOS;
     }
   }
 
@@ -65,6 +77,8 @@ class NULTerminatedStringIterator {
 
  private:
   const char *ch;
+
+  static const char *EOS;
 };
 
 // Generic method for safely writing into a character buffer of a known size.
@@ -158,6 +172,10 @@ unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);
 
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+unsigned long VarFormat(char * __restrict buffer, unsigned long len,
+                        const char * __restrict format, va_list args);
+
 // Similar to `snprintf`. Returns the number of formatted characters.
 __attribute__ ((format(printf, 3, 4)))
 unsigned long Format(char * __restrict buffer, unsigned long len,
@@ -167,6 +185,76 @@ unsigned long Format(char * __restrict buffer, unsigned long len,
 __attribute__ ((format(scanf, 2, 3)))
 int DeFormat(const char * __restrict buffer,
              const char * __restrict format, ...);
+
+// Represents a fixed-length C-string. This is appropriate for returning a
+// temporary string of a maximum length from a function.
+//
+// kLen represents the maximum length of the C-string, absent the NUL-
+// terminator.
+template <unsigned long kLen>
+class FixedLengthString {
+ public:
+  static_assert(kLen > 0,
+      "The length of a fixed-length string must be at least `1`.");
+
+  FixedLengthString(void)
+      : len(0) {
+    str[0] = '\0';
+  }
+
+  inline char &operator[](unsigned long i) {
+    if (i < kLen) {
+      len = i;
+      return str[i];
+    } else {
+      i = kLen;
+      return str[kLen];
+    }
+  }
+
+  operator const char *(void) {
+    str[kLen] = '\0';
+    return &(str[0]);
+  }
+
+  inline unsigned long MaxLength(void) const {
+    return kLen;
+  }
+
+  inline char *Buffer(void) {
+    return &(str[0]);
+  }
+
+  inline unsigned long RemainingLength(void) const {
+    return kLen - len;
+  }
+
+  inline char *RemainingBuffer(void) {
+    return &(str[len]);
+  }
+
+  // Similar to `snprintf`.
+  __attribute__ ((format(printf, 2, 3)))
+  void Format(const char * __restrict format, ...) {
+    va_list args;
+    va_start(args, format);
+    len = VarFormat(Buffer(), MaxLength(), format, args);
+    va_end(args);
+  }
+
+  // Similar to `snprintf`. This appends to the end of the string
+  __attribute__ ((format(printf, 2, 3)))
+  void UpdateFormat(const char * __restrict format, ...) {
+    va_list args;
+    va_start(args, format);
+    len += VarFormat(RemainingBuffer(), RemainingLength(), format, args);
+    va_end(args);
+  }
+
+ private:
+  char str[kLen + 1];
+  unsigned long len;
+};
 
 // Apply a functor to each comma-separated value. This will remove leading
 // and trailing spaces.

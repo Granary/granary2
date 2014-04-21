@@ -3,8 +3,20 @@
 #ifndef GRANARY_BASE_TYPE_TRAIT_H_
 #define GRANARY_BASE_TYPE_TRAIT_H_
 
-
 namespace granary {
+
+class TrueType : public std::true_type {
+ public:
+  enum {
+    RESULT = true
+  };
+};
+class FalseType : public std::false_type {
+ public:
+  enum {
+    RESULT = false
+  };
+};
 
 template <typename T>
 struct RemoveReference {
@@ -32,145 +44,93 @@ struct RemovePointer<T *> {
 };
 
 template <typename T>
-struct IsArray {
-  enum {
-    RESULT = false
-  };
-};
+struct IsArray : public FalseType {};
 
 template <typename T, unsigned long kLen>
-struct IsArray<T[kLen]> {
-  enum {
-    RESULT = true
-  };
-};
+struct IsArray<T[kLen]> : public TrueType {};
 
 template <typename T>
-struct IsArray<T[]> {
-  enum {
-    RESULT = true
-  };
-};
+struct IsArray<T[]> : public TrueType {};
 
-template <const bool Condition, typename TrueType=int, typename FalseType=void>
+template <const bool Condition, typename IfTrueType=int,
+                                typename IfFalseType=void>
 struct EnableIf;
 
-template <typename TrueType, typename FalseType>
-struct EnableIf<true, TrueType, FalseType> {
-  typedef TrueType Type;
+template <typename IfTrueType, typename IfFalseType>
+struct EnableIf<true, IfTrueType, IfFalseType> {
+  typedef IfTrueType Type;
 };
 
-template <typename TrueType, typename FalseType>
-struct EnableIf<false, TrueType, FalseType> {
-  typedef FalseType Type;
+template <typename IfTrueType, typename IfFalseType>
+struct EnableIf<false, IfTrueType, IfFalseType> {
+  typedef IfFalseType Type;
 };
 
 template <typename A, typename B>
-struct TypesAreEqual {
-  enum {
-    RESULT = false
-  };
-};
+struct TypesAreEqual : public FalseType {};
 
 template <typename A>
-struct TypesAreEqual<A, A> {
-  enum {
-    RESULT = true
-  };
-};
+struct TypesAreEqual<A, A> : public TrueType {};
+
+static_assert(sizeof(unsigned long) == sizeof(unsigned long long),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(unsigned long) == sizeof(uintptr_t),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(long) == sizeof(long long),
+    "Unrecognized architecture.");
+
+static_assert(sizeof(long) == sizeof(intptr_t),
+    "Unrecognized architecture.");
 
 #define GRANARY_DEFINE_TRAIT_REFERENCES(trait_name) \
   template <typename A> \
-  struct trait_name<A &> { \
-    enum { \
-      RESULT = trait_name<A>::RESULT \
-    }; \
-  }; \
+  struct trait_name<A &> : public trait_name<A> {}; \
   template <typename A> \
-  struct trait_name<A &&> { \
-    enum { \
-      RESULT = trait_name<A>::RESULT \
-    }; \
-  }
+  struct trait_name<A &&> : public trait_name<A> {}
 
 template <typename A>
-struct IsPointer {
-  enum {
-    RESULT = false
-  };
-};
+struct IsPointer : public FalseType {};
+
+template <typename Ret, typename... Args>
+struct IsPointer<Ret (*)(Args...)> : public TrueType {};
+
+template <typename A>
+struct IsPointer<A *> : public TrueType {};
 
 GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
 
-template <typename Ret, typename... Args>
-struct IsPointer<Ret (*)(Args...)> {
-  enum {
-    RESULT = true
-  };
-};
+template <typename A>
+struct IsInteger : public FalseType {};
 
 template <typename A>
-struct IsPointer<A *> {
-  enum {
-    RESULT = true
-  };
-};
+struct IsSignedInteger : public FalseType {};
 
 template <typename A>
-struct IsInteger {
-  enum {
-    RESULT = false
-  };
-};
+struct IsUnsignedInteger : public FalseType {};
+
+#define GRANARY_DEFINE_IS_INTEGRAL(type, signed_base_type, unsigned_base_type) \
+  template <> \
+  struct IsInteger<type> : public TrueType {}; \
+  template <> \
+  struct IsSignedInteger<type> : public signed_base_type {}; \
+  template <> \
+  struct IsUnsignedInteger<type> : public unsigned_base_type {}
+
+GRANARY_DEFINE_IS_INTEGRAL(unsigned char, FalseType, TrueType);
+GRANARY_DEFINE_IS_INTEGRAL(signed char, TrueType, FalseType);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned short, FalseType, TrueType);
+GRANARY_DEFINE_IS_INTEGRAL(signed short, TrueType, FalseType);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned int, FalseType, TrueType);
+GRANARY_DEFINE_IS_INTEGRAL(signed int, TrueType, FalseType);
+GRANARY_DEFINE_IS_INTEGRAL(unsigned long, FalseType, TrueType);
+GRANARY_DEFINE_IS_INTEGRAL(signed long, TrueType, FalseType);
+#undef GRANARY_DEFINE_IS_INTEGRAL
 
 GRANARY_DEFINE_TRAIT_REFERENCES(IsInteger);
-
-template <typename A>
-struct IsSignedInteger {
-  enum {
-    RESULT = false
-  };
-};
-
-template <typename A>
-struct IsUnsignedInteger {
-  enum {
-    RESULT = false
-  };
-};
-
 GRANARY_DEFINE_TRAIT_REFERENCES(IsSignedInteger);
 GRANARY_DEFINE_TRAIT_REFERENCES(IsUnsignedInteger);
-
-#define GRANARY_DEFINE_IS_INTEGRAL(type, is_signed) \
-  template <> \
-  struct IsInteger<type> { \
-    enum { \
-      RESULT = true \
-    }; \
-  }; \
-  template <> \
-  struct IsSignedInteger<type> { \
-    enum { \
-      RESULT = is_signed \
-    }; \
-  }; \
-  template <> \
-  struct IsUnsignedInteger<type> { \
-    enum { \
-      RESULT = !is_signed \
-    }; \
-  }
-
-GRANARY_DEFINE_IS_INTEGRAL(unsigned char, false);
-GRANARY_DEFINE_IS_INTEGRAL(signed char, true);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned short, false);
-GRANARY_DEFINE_IS_INTEGRAL(signed short, true);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned int, false);
-GRANARY_DEFINE_IS_INTEGRAL(signed int, true);
-GRANARY_DEFINE_IS_INTEGRAL(unsigned long, false);
-GRANARY_DEFINE_IS_INTEGRAL(signed long, true);
-#undef GRANARY_DEFINE_IS_INTEGRAL
 
 template <typename T>
 struct RemoveConst {

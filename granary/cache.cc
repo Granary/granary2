@@ -11,7 +11,7 @@
 GRANARY_DEFINE_positive_int(code_cache_slab_size, 8,
     "The number of pages allocated at once to store cache code. Each "
     "module maintains its own cache code allocator. The default value is "
-    "8 pages per slab.")
+    "8 pages per slab.");
 
 namespace granary {
 

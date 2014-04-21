@@ -31,7 +31,7 @@ class UnownedCountedObject {
 
   inline void Release(void) {
     count -= 2;
-    GRANARY_IF_DEBUG( granary_break_on_fault_if(0 > count); )
+    GRANARY_ASSERT(0 <= count);
   }
 
   // Returns the number of objects referring to this object.
@@ -43,7 +43,6 @@ class UnownedCountedObject {
     return 0 >= count;
   }
 #endif  // GRANARY_INTERNAL
-
  private:
   int count;
 };

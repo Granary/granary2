@@ -136,6 +136,10 @@ MetaDataManager::MetaDataManager(void)
   memset(&(offsets[0]), 0, sizeof(offsets));
 }
 
+MetaDataManager::~MetaDataManager(void) {
+  allocator.Destroy();
+}
+
 // Register some meta-data with the meta-data manager. This is a no-op if the
 // meta-data has already been registered.
 void MetaDataManager::Register(MetaDataDescription *desc) {

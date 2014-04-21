@@ -1,6 +1,6 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_LD ?= ld
+GRANARY_LD ?= gold
 GRANARY_CC ?= clang
 GRANARY_CXX ?= clang++
 GRANARY_AR ?= ar
@@ -11,7 +11,7 @@ GRANARY_OS ?= linux
 GRANARY_TARGET ?= debug# release, debug, test
 GRANARY_WHERE ?= user# user, kernel
 GRANARY_DRIVER ?= xed2-intel64
-GRANARY_STANDALONE ?= 0
+GRANARY_STANDALONE ?= 0# 0, 1
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
 GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
@@ -34,9 +34,6 @@ GRANARY_CLIENT_DIR ?= $(GRANARY_SRC_DIR)/examples
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
 GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_WHERE)
-
-GRANARY_DRIVER_SRC_DIR ?= $(GRANARY_SRC_DIR)/granary/driver/$(GRANARY_DRIVER)
-GRANARY_DRIVER_BIN_DIR ?= $(GRANARY_BIN_DIR)/granary/driver/$(GRANARY_DRIVER)
 
 GRANARY_WHERE_SRC_DIR = $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
 GRANARY_WHERE_BIN_DIR = $(GRANARY_BIN_DIR)/granary/$(GRANARY_WHERE)
@@ -72,6 +69,7 @@ GRANARY_ASM_FLAGS =
 GRANARY_COMMON_FLAGS =
 GRANARY_COMMON_ARCH_FLAGS =
 GRANARY_COMMON_WARN_FLAGS =
+GRANARY_DEBUG_FLAGS =
 
 ifdef GRANARY_CLIENT_NAME
 	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
@@ -86,7 +84,7 @@ GRANARY_COMMON_FLAGS += -DGRANARY_WHERE_$(GRANARY_WHERE)
 
 # Use GNU C99 and standard C++11.
 GRANARY_CC_FLAGS += -std=gnu99
-GRANARY_COMMON_CXX_FLAGS = -std=c++11
+GRANARY_COMMON_CXX_FLAGS = -std=c++11 -stdlib=libc++
 
 # Enable valgrind checking of code.
 ifeq (1,$(GRANARY_WITH_VALGRIND))
@@ -110,11 +108,13 @@ endif
 # Enable/disable features based on whether or not this is a debug or release
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
-    GRANARY_COMMON_FLAGS += -O3 -g0
-    GRANARY_LD_FLAGS += -O3 -g0
+	GRANARY_DEBUG_FLAGS += -g0
+    GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+    GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
-	GRANARY_COMMON_FLAGS += -O0 -g3 -DGRANARY_DEBUG
-    GRANARY_LD_FLAGS += -O0 -g3
+	GRANARY_DEBUG_FLAGS += -g3
+	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS) -DGRANARY_DEBUG
+	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
 endif
 
 # Make sure certain architectural features are disabled.
@@ -175,6 +175,7 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
+GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZSt25__throw_bad_function_callv=granary_break_on_unreachable_code"
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code" # delete
 GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code" # new
 

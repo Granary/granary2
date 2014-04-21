@@ -7,8 +7,8 @@
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
-#include "granary/breakpoint.h"
 
+#include "granary/breakpoint.h"
 #include "granary/client.h"
 #include "granary/module.h"
 
@@ -24,7 +24,7 @@ class Lexer {
         file_offset(0),
         token_offset(0),
         try_fill_buffer(true) {
-    granary_break_on_fault_if(-1 == fd);
+    GRANARY_ASSERT(-1 != fd);
     FillBuffer();
   }
 

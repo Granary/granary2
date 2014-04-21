@@ -18,7 +18,7 @@ class BlockMetaData;
 class HashFunction;
 
 #ifdef GRANARY_INTERNAL
-namespace driver {
+namespace arch {
 class InstructionDecoder;
 }
 #endif  // GRANARY_INTERNAL
@@ -100,15 +100,31 @@ class BlockFactory {
  private:
   BlockFactory(void) = delete;
 
+#if 0
+  // Convert an indirect call into a direct call that jumps to an intermediate
+  // block that does an indirect jump. This exists so that the lookup process
+  // for the indirect target is done after the stack size change, and so that
+  // it can also be instrumented.
+  GRANARY_INTERNAL_DEFINITION
+  Instruction *MakeIndirectCall(Instruction *prev_instr,
+                                Instruction *last_instr,
+                                arch::Instruction *instr);
+#endif
+
+  // Convert a decoded instruction into the internal Granary instruction IR.
+  GRANARY_INTERNAL_DEFINITION
+  Instruction *MakeInstruction(arch::Instruction *instr);
+
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION
-  void AddFallThroughInstruction(driver::InstructionDecoder *decoder,
+  void AddFallThroughInstruction(arch::InstructionDecoder *decoder,
+                                 DecodedBasicBlock *block,
                                  Instruction *last_instr, AppPC pc);
 
   // Decode an instruction list starting at `pc` and link the decoded
   // instructions into the instruction list beginning with `instr`.
   GRANARY_INTERNAL_DEFINITION
-  void DecodeInstructionList(Instruction *instr, AppPC pc);
+  void DecodeInstructionList(DecodedBasicBlock *block);
 
   // Hash the meta data of all basic blocks.
   GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);

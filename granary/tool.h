@@ -8,6 +8,8 @@
 #include "granary/base/new.h"
 #include "granary/base/operator.h"
 
+#include "granary/code/inline_assembly.h"
+
 #include "granary/metadata.h"
 
 namespace granary {
@@ -17,8 +19,11 @@ class BlockFactory;
 class LocalControlFlowGraph;
 class DecodedBasicBlock;
 class Tool;
+class Operand;
 
 GRANARY_INTERNAL_DEFINITION class ContextInterface;
+GRANARY_INTERNAL_DEFINITION class InlineAssembly;
+
 GRANARY_INTERNAL_DEFINITION enum {
   MAX_NUM_MANAGED_TOOLS = 32
 };
@@ -27,7 +32,9 @@ GRANARY_INTERNAL_DEFINITION enum {
 class Tool {
  public:
   Tool(void);
-  virtual ~Tool(void) = default;
+
+  // Closes any open inline assembly scopes.
+  virtual ~Tool(void);
 
   // Used to instrument control-flow instructions and decide how basic blocks
   // should be materialized.
@@ -51,12 +58,69 @@ class Tool {
   // instrumentation session.
   virtual void InstrumentBlock(DecodedBasicBlock *block);
 
+ GRANARY_PUBLIC:
+
   // Register some meta-data with Granary that will be used with this tool.
   // This is a convenience method around the `RegisterMetaData` method that
   // operates directly on a meta-data description.
   template <typename T>
   inline void RegisterMetaData(void) {
     RegisterMetaData(MetaDataDescription::Get<T>());
+  }
+
+ protected:
+
+  // Begin inserting some inline assembly. This takes in an optional scope
+  // specifier, which allows tools to use the same variables in two or more
+  // different contexts/scopes of instrumentation and not have them clash. This
+  // specifies the beginning of some scope. Any virtual registers defined in
+  // this scope will be live until the next `EndInlineAssembly` within the same
+  // block, by the same tool, with the same `scope_id`.
+  //
+  // Note: `scope_id`s must be non-negative integers.
+  void BeginInlineAssembly(std::initializer_list<Operand *> inputs,
+                           int scope_id=0);
+
+  // Switch to a different scope of inline assembly.
+  void ContinueInlineAssembly(int scope_id);
+
+  // End the current inline assembly scope.
+  void EndInlineAssembly(void);
+
+  // Inline some assembly code before `instr`, but only if `cond` is true.
+  // Returns the inlined instruction, or `instr` if `cond` is false.
+  template <typename... Strings>
+  inline Instruction *InlineBeforeIf(Instruction *instr, bool cond,
+                                     Strings... lines) {
+    if (cond) {
+      return InlineBefore(instr, {lines...});
+    } else {
+      return instr;
+    }
+  }
+
+  // Inline some assembly code before `instr`. Returns the inlined instruction.
+  template <typename... Strings>
+  inline Instruction *InlineBefore(Instruction *instr, Strings... lines) {
+    return InlineBefore(instr, {lines...});
+  }
+
+  // Inline some assembly code after `instr`, but only if `cond` is true.
+  // Returns the inlined instruction, or `instr` if `cond` is false.
+  template <typename... Strings>
+  inline Instruction *InlineAfterIf(Instruction *instr, bool cond,
+                                    Strings... lines) {
+    if (cond) {
+      return InlineAfter(instr, {lines...});
+    } else {
+      return instr;
+    }
+  }
+
+  // Inline some assembly code after `instr`. Returns the inlined instruction.
+  template <typename... Strings>
+  Instruction *InlineAfter(Instruction *instr, Strings... lines) {
+    return InlineAfter(instr, {lines...});
   }
 
   // TODO(pag): Need to expose static methods on a tool to flush a
@@ -68,7 +132,16 @@ class Tool {
   //                --> Perhaps a takeover event on a module, and a release
   //                    event on a module.
 
+  // Inline some assembly code before `instr`. Returns the inlined instruction.
+  Instruction *InlineBefore(Instruction *instr,
+                            std::initializer_list<const char *> lines);
+
+  // Inline some assembly code after `instr`. Returns the inlined instruction.
+  Instruction *InlineAfter(Instruction *instr,
+                           std::initializer_list<const char *> lines);
+
  GRANARY_PUBLIC:
+
   // Register some meta-data with the meta-data manager associated with this
   // tool.
   void RegisterMetaData(const MetaDataDescription *desc);
@@ -78,6 +151,10 @@ class Tool {
 
   // Context into which this tool has been instantiated.
   GRANARY_POINTER(ContextInterface) *context;
+
+ private:
+  GRANARY_CONST int curr_scope;
+  GRANARY_POINTER(InlineAssemblyScope) *scopes[MAX_NUM_INLINE_ASM_SCOPES];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Tool);
 };
@@ -125,6 +202,7 @@ class ToolManager {
  public:
   // Initialize an empty tool manager.
   ToolManager(void);
+  ~ToolManager(void);
 
   // Register a tool with this manager using the tool's name. This will look
   // up the tool in the global list of all registered Granary tools.
@@ -180,13 +258,13 @@ void RegisterTool(ToolDescription *desc,
 
 // Register a tool with Granary.
 template <typename T>
-inline void RegisterTool(const char *tool_name) {
+inline static void RegisterTool(const char *tool_name) {
   RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, {});
 }
 
 // Register a tool with Granary.
 template <typename T>
-inline void RegisterTool(const char *tool_name,
+inline static void RegisterTool(const char *tool_name,
                          std::initializer_list<const char *> required_tools) {
   RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, required_tools);
 }
