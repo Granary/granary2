@@ -56,14 +56,13 @@ class BBCount : public Tool {
       }
     }
 
+    // Now that we have an insertion spot (either first instruction, or before
+    // and instruction that kills the flags), go and insert the increment to
+    // the block-specific execution counter.
     auto meta = GetMetaData<BlockCounter>(bb);
     MemoryOperand counter_addr(&(meta->count));
     BeginInlineAssembly({&counter_addr});
     InlineBefore(insert_instr, "INC m64 %0;"_x86_64);
-    InlineBefore(insert_instr,
-                 "MOV r64 %1, m64 %0;"
-                 "MOV r64 %2, r64 %1;"
-                 "ADD r64 %2, r64 %1;"_x86_64);
     EndInlineAssembly();
   }
 };
