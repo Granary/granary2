@@ -513,6 +513,24 @@ static void ScheduleFragLocalReg(RegisterScheduler *sched,
   }
 }
 
+// Try to eliminate a redundant copy instruction.
+static bool TryRemoveCopyInstruction(RegisterScheduler *sched,
+                                     NativeInstruction *instr) {
+  RegisterOperand dest_reg_op;
+  if (IsCopyInstruction(instr) &&
+      instr->MatchOperands(WriteOnlyTo(dest_reg_op))) {
+    auto reg = dest_reg_op.Register();
+    auto var = GetMetaData<SSARegister *>(instr);
+    auto def = DefinitionOf(var);
+    if (reg.IsVirtual() && !DefinitionEscapesFragment(sched->frag, var, reg) &&
+        def->reg == reg) {
+      instr->UnsafeUnlink();
+      return true;
+    }
+  }
+  return false;
+}
+
 // Ensure that any native GPRs used by a particular operand are homed.
 static void HomeNativeGPRs(RegisterScheduler *sched, NativeInstruction *instr,
                            Operand *op) {
@@ -574,20 +592,23 @@ static void ScheduleFragLocalRegs(RegisterScheduler *sched) {
         FindUsedNativeGPRs(sched, op);
       });
 
-      ninstr->ForEachOperand([=] (Operand *op) {
-        ScheduleFragLocalReg(sched, ninstr, op);
-      });
+      if (!TryRemoveCopyInstruction(sched, ninstr)) {
+        ninstr->ForEachOperand([=] (Operand *op) {
+          ScheduleFragLocalReg(sched, ninstr, op);
+        });
 
-      // For each defined virtual instruction, free up the spill slot associated
-      // with this virtual register if the virtual register is fragment-local
-      // and if the virtual register is definitely defind by this instruction.
-      ForEachDefinition(ninstr, [=] (SSAVariable *def) {
-        auto def_reg = RegisterOf(def);
-        if (def_reg.IsVirtual() && IsA<SSARegister *>(def) &&
-            !DefinitionEscapesFragment(sched->frag, def, def_reg)) {
-          FreeVirtualSlot(sched, prev_instr, LocationOf(def));
-        }
-      });
+        // For each defined virtual instruction, free up the spill slot
+        // associated with this virtual register if the virtual register is
+        // fragment-local and if the virtual register is definitely defind by
+        // this instruction.
+        ForEachDefinition(ninstr, [=] (SSAVariable *def) {
+          auto def_reg = RegisterOf(def);
+          if (def_reg.IsVirtual() && IsA<SSARegister *>(def) &&
+              !DefinitionEscapesFragment(sched->frag, def, def_reg)) {
+            FreeVirtualSlot(sched, prev_instr, LocationOf(def));
+          }
+        });
+      }
     }
     instr = prev_instr;
   }
