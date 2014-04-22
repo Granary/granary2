@@ -67,8 +67,8 @@ static uint32_t HashMetaData(BlockMetaData *meta) {
 
 }  // namespace
 
-// Take over a program's execution by replacing a return address with an
-// instrumented return address.
+// Instrument one or more basic blocks (contained in the local control-
+// flow graph, or materialized during `InstrumentControlFlow`).
 void Instrument(ContextInterface *context,
                 LocalControlFlowGraph *cfg,
                 BlockMetaData *meta) {
