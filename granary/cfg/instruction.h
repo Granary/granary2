@@ -130,7 +130,11 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION CachePC cache_pc;
 
   // Transient, tool-specific meta-data stored in this instruction. The lifetime
-  // of this meta-data is the
+  // of this meta-data is the length of a tool's instrumentation function (i.e. 
+  // `InstrumentControlFlow`, `InstrumentBlocks`, or `InstrumentBlock`). This
+  // meta-data is the backing storage for tools to temporarily attach small
+  // amounts of data (e.g. pointers to data structures, bit sets of live regs)
+  // to instructions for a short period of time. 
   GRANARY_INTERNAL_DEFINITION uintptr_t transient_meta;
 
  private:
