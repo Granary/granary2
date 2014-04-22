@@ -111,7 +111,7 @@ union VirtualRegister {
   // Returns true if this register preserves any of the bytes of the backing
   // GPR on a write, or if all bytes of the register are overwritten.
   inline bool PreservesBytesOnWrite(void) const {
-    return VR_KIND_ARCH_VIRTUAL == kind && 0 != preserved_byte_mask;
+    return 0 != preserved_byte_mask;
   }
 
   // Is this an architectural register?

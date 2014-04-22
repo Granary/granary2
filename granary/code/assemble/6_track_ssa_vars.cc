@@ -45,9 +45,9 @@ static bool InstructionReadsReg(NativeInstruction *instr,
                                 const VirtualRegister reg) {
   auto ret = false;
   instr->ForEachOperand([&] (Operand *op) {
-    if (!ret && op->IsRead()) {
+    if (!ret) {
       if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-        ret = reg_op->Register() == reg;
+        ret = op->IsRead() && reg_op->Register() == reg;
       } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
         VirtualRegister r1, r2, r3;
         if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
@@ -62,6 +62,7 @@ static bool InstructionReadsReg(NativeInstruction *instr,
 // Create a new variable definition.
 static void AddDef(SSAVariableTracker *vars, const RegisterOperand &op,
                    NativeInstruction *instr) {
+  GRANARY_ASSERT(op.IsWrite());
   auto reg = op.Register();
   if (reg.IsGeneralPurpose()) {
     if (op.IsRead() || op.IsConditionalWrite() || !op.IsExplicit() ||
