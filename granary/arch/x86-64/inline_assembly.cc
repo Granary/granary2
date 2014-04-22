@@ -5,6 +5,7 @@
 #include "granary/base/string.h"
 
 #include "granary/cfg/basic_block.h"
+#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
@@ -29,12 +30,14 @@ namespace {
 // Granary's inline assembly instructions.
 class InlineAssemblyParser {
  public:
-  InlineAssemblyParser(InlineAssemblyScope *scope_,
+  InlineAssemblyParser(LocalControlFlowGraph *cfg_,
+                       InlineAssemblyScope *scope_,
                        DecodedBasicBlock *block_,
                        Instruction *instr_,
                        const char *ch_)
       : op(nullptr),
         num_immediates(0),
+        cfg(cfg_),
         scope(scope_),
         block(block_),
         instr(instr_),
@@ -290,6 +293,15 @@ class InlineAssemblyParser {
     if (data.IsJump()) {
       GRANARY_ASSERT(nullptr != branch_target);
       new_instr.reset(new BranchInstruction(&data, branch_target));
+    } else if (data.IsFunctionCall()) {
+      auto bb = new NativeBasicBlock(
+          data.HasIndirectTarget() ? nullptr : data.BranchTargetPC());
+      cfg->AddBlock(bb);
+      new_instr.reset(new ControlFlowInstruction(&data, bb));
+    } else if (data.IsFunctionReturn()) {
+      auto bb = new ReturnBasicBlock(nullptr /* no meta-data */);
+      cfg->AddBlock(bb);
+      new_instr.reset(new ControlFlowInstruction(&data, bb));
     } else {
       new_instr.reset(new NativeInstruction(&data));
     }
@@ -304,6 +316,9 @@ class InlineAssemblyParser {
 
   // The number of immediates already seen.
   int num_immediates;
+
+  // The control-flow graph; used to materialize basic blocks.
+  LocalControlFlowGraph *cfg;
 
   // Scope from which local/input variables can be looked up.
   InlineAssemblyScope * const scope;
@@ -328,9 +343,10 @@ class InlineAssemblyParser {
 // `block`. This places the inlined instructions before `instr`, which is
 // assumed to be the `AnnotationInstruction` containing the inline assembly
 // instructions.
-void InlineAssemblyBlock::Compile(DecodedBasicBlock *block,
+void InlineAssemblyBlock::Compile(LocalControlFlowGraph *cfg,
+                                  DecodedBasicBlock *block,
                                   Instruction *instr) {
-  InlineAssemblyParser parser(scope, block, instr, assembly);
+  InlineAssemblyParser parser(cfg, scope, block, instr, assembly);
   parser.ParseInstructions();
 }
 

@@ -210,6 +210,8 @@ class SSAEntryVariable {
 
 typedef ArrayRangeIterator<SSAEntryVariable> SSAEntryDefsIterator;
 
+typedef ArrayRangeIterator<SSAVariable *> SSAExitDefsIterator;
+
 template <>
 class LookupTableOperations<VirtualRegister, SSAVariable *> {
  public:
@@ -290,6 +292,11 @@ class SSAVariableTracker {
   // Returns a C++11-compatible iterator over the entry definitions.
   inline SSAEntryDefsIterator EntryDefs(void) {
     return SSAEntryDefsIterator(entry_defs);
+  }
+
+  // Returns a C++11-compatible iterator over the entry definitions.
+  inline SSAExitDefsIterator ExitDefs(void) {
+    return SSAExitDefsIterator(exit_defs);
   }
 
  private:

@@ -14,6 +14,8 @@ Fragment::Fragment(int id_)
     : fall_through_target(nullptr),
       branch_target(nullptr),
       next(nullptr),
+      prev(nullptr),
+      partition_sentinel(nullptr),
       cached_back_link(nullptr),
       ssa_vars(nullptr),
       id(id_),

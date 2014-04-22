@@ -156,6 +156,62 @@ class LinkedListIterator {
   T *curr;
 };
 
+// Generic iterator for simple linked lists with public `prev` fields.
+template <typename T>
+class ReverseLinkedListIterator {
+ public:
+  typedef ReverseLinkedListIterator<T> Iterator;
+
+  ReverseLinkedListIterator(void)
+      : curr(nullptr) {}
+
+  ReverseLinkedListIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  ReverseLinkedListIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  explicit ReverseLinkedListIterator(T *last)
+      : curr(last) {}
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(nullptr);
+  }
+
+  inline void operator++(void) {
+    curr = curr->prev;
+  }
+
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
+
+  inline T *operator*(void) const {
+    return curr;
+  }
+
+  // Returns the first valid element from an iterator.
+  static T *First(LinkedListIterator<T> elems) {
+    T *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline T *First(T *elems_ptr) {
+    return Last(LinkedListIterator<T>(elems_ptr));
+  }
+
+ private:
+  T *curr;
+};
+
 // Forward declaration.
 template <typename T> class LinkedListZipper;
 

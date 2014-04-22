@@ -37,6 +37,10 @@ enum FragmentKind : uint8_t {
   FRAG_KIND_PARTITION_EXIT
 };
 
+enum {
+  MAX_NUM_LIVE_VIRTUAL_REGS = 56
+};
+
 // Represents a basic block in the true sense. Granary basic blocks can contain
 // local control flow, so they need to be split into fragments of instructions
 // that more closely represent the actual run-time control flow. This lower
@@ -45,6 +49,25 @@ class Fragment {
  public:
   // Initialize the fragment from a basic block.
   explicit Fragment(int id_);
+
+  // Append an instruction into the fragment.
+  void AppendInstruction(std::unique_ptr<Instruction> instr);
+
+  // Remove an instruction.
+  std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
+
+  // Insert an instruction before another instruction
+  Instruction *InsertBefore(Instruction *insert_loc,
+                            std::unique_ptr<Instruction> insert_instr);
+
+  // Insert an instruction before another instruction
+  Instruction *InsertAfter(Instruction *insert_loc,
+                           std::unique_ptr<Instruction> insert_instr);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
 
   // Next fragment in the fragment list. This is always associated with an
   // implicit control-flow instruction between two fragments.
@@ -57,6 +80,14 @@ class Fragment {
   // All fragments are chained together into a list for simple iteration,
   // freeing, etc.
   Fragment *next;
+
+  // Previous pointers. Chained together during register scheduling.
+  Fragment *prev;
+
+  // Allows for all fragments within a partition to point at some single
+  // "sentinel" fragment that can be used to coordinate information that is
+  // "global" to the partition.
+  Fragment *partition_sentinel;
 
   union {
     // When adding flag entry/exit and partition entry/exit fragments, we often
@@ -73,7 +104,13 @@ class Fragment {
 
     // The amount of space needed for virtual register allocation.
     struct {
-      uint32_t num_allocated_spill_slots;
+      bool is_closed:1;
+
+      // Number of spill slots. When doing fragment-local scheduling, we use
+      // fragment-specific spill slots; however, when doing partition-local
+      // scheduling, we use the `num_spill_slots` from a fragment's
+      // `partition_sentinel`.
+      uint8_t num_spill_slots:7;
 
       // Mask of which specific spill slots are allocated. This puts an upper-
       // bound of 32 simultaneously live fragment-local or partition-local
@@ -83,8 +120,9 @@ class Fragment {
       //       is done separately, so in practice there is an upper bound of
       //       64 simultaneously live virtual registers, as the spill slot
       //       allocated mask is zeroed between the two allocation stages.
-      uint32_t spill_slot_allocated_mask;
-    };
+      uint64_t spill_slot_allocated_mask:MAX_NUM_LIVE_VIRTUAL_REGS;
+
+    } __attribute__((packed));
   };
 
   // Tracks the general purpose architectural and virtual registers as-if they
@@ -104,6 +142,10 @@ class Fragment {
     //
     // Note: Used by `FRAG_KIND_FLAG_ENTRY` fragments.
     VirtualRegister flag_save_reg;
+
+    // The current "round" of partition-global register allocation. This is
+    // only tracked within a partition sentinel fragment.
+    int reg_alloc_round;
   };
 
   // Identifier of a "stack region". This is a very coarse grained concept,
@@ -167,25 +209,6 @@ class Fragment {
   DeadRegisterTracker exit_regs_dead;
 #endif
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-
-  // Append an instruction into the fragment.
-  void AppendInstruction(std::unique_ptr<Instruction> instr);
-
-  // Remove an instruction.
-  std::unique_ptr<Instruction> RemoveInstruction(Instruction *instr);
-
-  // Insert an instruction before another instruction
-  Instruction *InsertBefore(Instruction *insert_loc,
-                            std::unique_ptr<Instruction> insert_instr);
-
-  // Insert an instruction before another instruction
-  Instruction *InsertAfter(Instruction *insert_loc,
-                           std::unique_ptr<Instruction> insert_instr);
-
  private:
   Fragment(void) = delete;
 
@@ -193,6 +216,7 @@ class Fragment {
 } __attribute__((packed));
 
 typedef LinkedListIterator<Fragment> FragmentIterator;
+typedef ReverseLinkedListIterator<Fragment> ReverseFragmentIterator;
 
 }  // namespace granary
 

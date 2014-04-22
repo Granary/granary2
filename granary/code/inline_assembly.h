@@ -22,6 +22,7 @@ enum {
 
 #ifdef GRANARY_INTERNAL
 // Forward declarations.
+class LocalControlFlowGraph;
 class DecodedBasicBlock;
 class LabelInstruction;
 class Instruction;
@@ -99,7 +100,8 @@ class InlineAssemblyBlock {
   // instructions.
   //
   // Note: This has an architecture-specific implementation.
-  void Compile(DecodedBasicBlock *block, Instruction *instr);
+  void Compile(LocalControlFlowGraph *cfg, DecodedBasicBlock *block,
+               Instruction *instr);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
     SHARED = true,

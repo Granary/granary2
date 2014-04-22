@@ -183,12 +183,41 @@ inline RegisterLocation *LocationOf(SSAVariable *var) {
 static RegisterLocation *AssignRegisterLocation(SSAVariable *var,
                                                 RegisterLocation *next) {
   auto def = DefinitionOf(var);
+  auto forward_var = DynamicCast<SSAForward *>(var);
+  auto forward_def = forward_var ? DefinitionOf(forward_var->parent)
+                                 : nullptr;
+
+  // First, guarantee that if this is a forward def, that the thing being
+  // forward defined has a location.
+  if (forward_def) {
+    if (!forward_def->loc) {
+      forward_def->loc = new RegisterLocation(next);
+    }
+  }
+
+  // Next, make sure out var has a location, even if it is a forward def.
   if (!def->loc) {
     next = new RegisterLocation(next);
     def->loc = next;
   }
+
+  // Finally, if `var` is a `SSAForward`, then by construction the forward
+  // defined variable now also has location, which is unioned with our
+  // variable's location.
+  if (forward_def) {
+    def->loc->UnionWith(forward_def->loc);
+  }
+
+  // If `var` is a `TrivialPhi` then it might not be def. Also, `var` might
+  // already have a location assigned to it because it was forward defined
+  // (really backward when you think of it, because it's forward when going
+  // through the instructions in reverse order).
   if (var != def) {
-    var->loc = def->loc;
+    if (var->loc) {
+      var->loc->UnionWith(def->loc);
+    } else {
+      var->loc = def->loc;
+    }
   }
   return next;
 }
@@ -270,7 +299,7 @@ static SSAVariable *FindLocalInstrDefinitionOf(Instruction *instr_using_reg,
   SSAVariable *def(nullptr);
   for (auto instr : BackwardInstructionIterator(instr_using_reg)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if ((def = DefinitionOf(ninstr, reg))) {
+      if ((def = DefinitionOf(ninstr, reg)) && IsA<SSARegister *>(def)) {
         return def;
       }
     }
@@ -314,14 +343,11 @@ static VirtualRegister VirtualSpillOf(RegisterLocation *loc) {
 // register.
 static VirtualRegister AllocateVirtualSlot(Fragment *frag,
                                            RegisterLocation *loc) {
-  // Note: `spill_slot_allocated_mask` is `uint32_t`, hence the maximum of 32
-  //       simultaneously live fragment-local registers.
-  for (uint32_t i(0); i < 32; ++i) {
+  for (uint8_t i(0); i < MAX_NUM_LIVE_VIRTUAL_REGS; ++i) {
     const auto mask = 1U << i;
     if (!(frag->spill_slot_allocated_mask & mask)) {
       frag->spill_slot_allocated_mask |= mask;
-      frag->num_allocated_spill_slots = std::max(
-          i, frag->num_allocated_spill_slots);
+      frag->num_spill_slots = std::max(i, frag->num_spill_slots);
       loc->spill_slot = static_cast<int>(i);
       loc->reg = VirtualSpillOf(loc);
       return loc->reg;
@@ -630,12 +656,186 @@ static void FillRemainingStolenGPRs(RegisterScheduler *sched) {
 // containing fragments.
 static void ScheduleLocalRegs(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
-    frag->num_allocated_spill_slots = 0;
+    frag->is_closed = false;
+    frag->num_spill_slots = 0;
     frag->spill_slot_allocated_mask = 0;
     if (frag->ssa_vars) {
       RegisterScheduler sched(frag);
       ScheduleFragLocalRegs(&sched);
       FillRemainingStolenGPRs(&sched);
+    }
+  }
+}
+
+// Merge all frag-local spill info into each fragment's partition sentinel. This
+// has the effect of summarizing the worst-case fragment-local spill info from
+// the fragments within a partition.
+//
+// Also links together the fragments via the `prev` pointer, and returns the
+// last fragment in the fragment list.
+static Fragment *CombineLocalSpillInfo(Fragment * const frags) {
+  Fragment *last_frag(nullptr);
+
+  // Propagate info from fragments to the sentinel.
+  for (auto frag : FragmentIterator(frags)) {
+    frag->prev = last_frag;
+    last_frag = frag;
+    if (frag->ssa_vars && frag->partition_sentinel) {
+      auto part_frag = frag->partition_sentinel;
+      auto num_spill_slots = frag->num_spill_slots;
+      part_frag->num_spill_slots = std::max(part_frag->num_spill_slots,
+                                            num_spill_slots);
+      part_frag->spill_slot_allocated_mask |= ~((~0x0U) << num_spill_slots);
+    } else {
+      frag->reg_alloc_round = 0;
+    }
+  }
+
+  // Propagate info from the sentinel back to the fragments.
+  for (auto frag : FragmentIterator(frags)) {
+    if (frag->ssa_vars && frag->partition_sentinel) {
+      auto part_frag = frag->partition_sentinel;
+      frag->num_spill_slots = part_frag->num_spill_slots;
+      frag->spill_slot_allocated_mask = part_frag->spill_slot_allocated_mask;
+    }
+  }
+  return last_frag;
+}
+
+// Applies a function to every entry and exit definition within a fragment.
+template <typename FuncT>
+static void ForEachLocation(Fragment * const frag, FuncT func) {
+  for (auto entry_def : frag->ssa_vars->EntryDefs()) {
+    if (entry_def.var) {
+      func(LocationOf(DefinitionOf(entry_def.var)));
+    }
+  }
+  for (auto exit_def : frag->ssa_vars->ExitDefs()) {
+    if (exit_def) {
+      func(LocationOf(DefinitionOf(exit_def)));
+    }
+  }
+}
+
+// Returns true if a fragment contains some unscheduled registers.
+static bool FragmentHasUnscheduledRegs(Fragment * const frag) {
+  auto has_unscheduled_regs = false;
+  ForEachLocation(frag, [&] (RegisterLocation *loc) {
+    has_unscheduled_regs = has_unscheduled_regs || loc->reg.IsVirtual();
+  });
+  return has_unscheduled_regs;
+}
+
+// Allocates slots to all virtual registers within a given fragment.
+static void AllocateUnscheduledRegs(Fragment * const frag,
+                                    Fragment * const part_frag) {
+  ForEachLocation(frag, [=] (RegisterLocation *loc) {
+    if (loc->reg.IsVirtual()) {
+      loc->reg = AllocateVirtualSlot(frag, loc);
+      auto slot = static_cast<unsigned>(loc->reg.Number());
+      part_frag->spill_slot_allocated_mask |= 1UL << slot;
+    }
+  });
+}
+
+// Returns true if the location `loc` of the register `reg` represents a
+// definition in `frag`, which is the fragment whose registers were most
+// recently allocated within the partition associated with `part_frag`. This
+// Is a basic way of asking: do there exist shared definitions between two
+// fragments.
+static bool RegDefInAllocFrag(RegisterLocation *loc, VirtualRegister reg,
+                              Fragment *frag) {
+  if (auto entry_var = frag->ssa_vars->EntryDefinitionOf(reg)) {
+    if (LocationOf(DefinitionOf(entry_var)) == loc) {
+      return true;
+    }
+  }
+  if (auto exit_var = frag->ssa_vars->ExitDefinitionOf(reg)) {
+    return LocationOf(DefinitionOf(exit_var)) == loc;
+  }
+  return false;
+}
+
+// Propagates a register allocation from a chosen fragment (the allocation info
+// was cached in `alloc_frag`) to `frag`, but only if `frag` uses one of the
+// registers being allocated. The idea here is that we want to cheat and be
+// conservative and include the transitive closure of
+static void PropagateAllocatedRegs(Fragment * const frag,
+                                   Fragment * const part_frag) {
+  auto alloc_frag = part_frag->partition_sentinel;
+  ForEachLocation(frag, [=] (RegisterLocation *loc) {
+    auto reg = loc->reg;
+    if (reg.IsVirtualSlot()) {
+      auto slot = static_cast<unsigned>(reg.Number());
+      auto mask = 1UL << slot;
+      GRANARY_ASSERT(0 != (alloc_frag->spill_slot_allocated_mask & mask));
+      GRANARY_ASSERT(0 != (part_frag->spill_slot_allocated_mask & mask));
+
+      // Propagate the allocation.
+      if (!(frag->spill_slot_allocated_mask & mask) ||
+          RegDefInAllocFrag(loc, reg, alloc_frag)) {
+        frag->spill_slot_allocated_mask |= part_frag->spill_slot_allocated_mask;
+      }
+    }
+  });
+}
+
+// Allocate virtual registers that are used across several fragments within a
+// partition. To simplify the problem, we consider any virtual register live on
+// entry/exit from a fragment to interfere. This means that the granularity of
+// live ranges is fragments and not individual instructions.
+static void AllocateNonLocalRegs(Fragment * const last_frag) {
+
+  auto round = 1;
+
+  // Visit the fragments in reverse order (this is basically a post-order
+  // traversal) and schedule the registers.
+  for (auto changed = true; changed; ++round) {
+    changed = false;
+
+    for (auto frag : ReverseFragmentIterator(last_frag)) {
+      if (frag->ssa_vars && frag->partition_sentinel && !frag->is_closed) {
+        auto part_frag = frag->partition_sentinel;
+
+        // We need to choose a fragment from this partition, and schedule all
+        // registers from that fragment.
+        if (part_frag->reg_alloc_round < round) {
+          if (FragmentHasUnscheduledRegs(frag)) {
+            changed = true;
+
+            // Within this partition, we've now "chosen" the set of registers
+            // to allocate (by choosing a fragment). We will allocate all
+            // registers from
+            part_frag->partition_sentinel = frag;
+            part_frag->reg_alloc_round = round;
+            part_frag->spill_slot_allocated_mask = 0;
+
+            AllocateUnscheduledRegs(frag, part_frag);
+          }
+          frag->is_closed = true;
+
+        // We've now chosen a fragment, scheduled its registers, now we need
+        // to mark those register slots scheduled everywhere else where *any*
+        // of those scheduled registers appears.
+        } else {
+          PropagateAllocatedRegs(frag, part_frag);
+        }
+      }
+    }
+  }
+}
+
+// Schedule all virtual registers that are used in one or more fragments. By
+// this point they should all be allocated. One challenge for scheduling is that
+// a virtual register might be placed in two different physical registers
+// across in two or more successors of a fragment, and needs to be in the same
+// spot in the fragment itself.
+static void ScheduleNonLocalRegs(Fragment * const last_frag) {
+  for (auto slot = 0; -1 != slot; ) {
+    slot = -1;
+    for (auto frag : ReverseFragmentIterator(last_frag)) {
+      // Choose only a single slot to schedule.
+      GRANARY_UNUSED(frag);  // TODO(pag): Implement me!
     }
   }
 }
@@ -683,6 +883,9 @@ static void CleanUpSSAVars(Fragment * const frags) {
 void ScheduleRegisters(Fragment * const frags) {
   auto loc = AssignRegisterLocations(frags);
   ScheduleLocalRegs(frags);
+  auto last_frag = CombineLocalSpillInfo(frags);
+  AllocateNonLocalRegs(last_frag);
+  ScheduleNonLocalRegs(last_frag);
   CleanUpRegisterLocations(loc);
   CleanUpSSAVars(frags);
 }

@@ -40,13 +40,32 @@ static void InitAnalysis(Fragment * const frags) {
   }
 }
 
+// Returns true if an instruction reads from a particular register.
+static bool InstructionReadsReg(NativeInstruction *instr,
+                                const VirtualRegister reg) {
+  auto ret = false;
+  instr->ForEachOperand([&] (Operand *op) {
+    if (!ret && op->IsRead()) {
+      if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+        ret = reg_op->Register() == reg;
+      } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+        VirtualRegister r1, r2, r3;
+        if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+          ret = reg == r1 || reg == r2 || reg == r3;
+        }
+      }
+    }
+  });
+  return ret;
+}
+
 // Create a new variable definition.
 static void AddDef(SSAVariableTracker *vars, const RegisterOperand &op,
                    NativeInstruction *instr) {
   auto reg = op.Register();
   if (reg.IsGeneralPurpose()) {
     if (op.IsRead() || op.IsConditionalWrite() || !op.IsExplicit() ||
-        reg.PreservesBytesOnWrite()) {
+        reg.PreservesBytesOnWrite() || InstructionReadsReg(instr, reg)) {
 
       // Note: A given instruction can have multiple inheriting definitions.
       //       For example, `XADD_GPRv_GPRv` on x86-64.

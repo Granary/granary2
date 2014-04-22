@@ -67,10 +67,12 @@ void LiveRegisterTracker::Visit(NativeInstruction *instr) {
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       auto reg = rloc->Register();
       if (reg.IsNative() && reg.IsGeneralPurpose()) {
-        if (op->IsRead() || op->IsConditionalWrite()) {
-          Revive(reg);  // Read, read/write, and conditional write.
+        // Read, read/write, conditional write, or partial write.
+        if (op->IsRead() || op->IsConditionalWrite() ||
+            reg.PreservesBytesOnWrite()) {
+          Revive(reg);
         } else if (op->IsWrite()) {  // Write-only.
-          WriteKill(reg);
+          Kill(reg);
         }
       }
     }
@@ -86,12 +88,14 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
     return;
   }
 
-  // Treat conditional writes and read/writes as unconditional writes.
+  // Treat conditional writes, read/writes, and partial writes as unconditional
+  // writes. The idea is that what we really want to track is whether any part
+  // of the register has potentially been modified.
   instr->ForEachOperand([=] (Operand *op) {
     if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       auto reg = rloc->Register();
       if (op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
-        WriteKill(reg);  // Read/write, write, conditional write.
+        Kill(reg);  // Read/write, write, conditional write.
       }
     }
   });

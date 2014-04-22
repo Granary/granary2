@@ -26,6 +26,10 @@ static Fragment *MakeFragment(FragmentKind kind, Fragment *inherit,
   frag->fall_through_target = fall_through;
   frag->next = next;
   SetMetaData(label, frag);
+
+  if (FRAG_KIND_PARTITION_ENTRY == kind || FRAG_KIND_PARTITION_EXIT == kind) {
+    frag->partition_sentinel = frag;
+  }
   return frag;
 }
 
@@ -146,6 +150,31 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   return curr->partition_id != next->partition_id;
 }
 
+// Associate every fragment within a partition with the same partition
+// sentinel.
+static void IdentifyPartitionSentinels(Fragment * const frags) {
+  for (auto changed = true; changed; ) {
+    changed = false;
+    for (auto frag : FragmentIterator(frags)) {
+      if (FRAG_KIND_PARTITION_EXIT != frag->kind) {
+        auto part = frag->partition_sentinel;
+        auto old_part = part;
+        if (frag->fall_through_target) {
+          part = std::max(part, frag->fall_through_target->partition_sentinel);
+          changed = changed || part != old_part;
+          if (frag->branch_target) {
+            part = std::max(part, frag->branch_target->partition_sentinel);
+            changed = changed || part != old_part;
+            frag->branch_target->partition_sentinel = part;
+          }
+          frag->fall_through_target->partition_sentinel = part;
+        }
+        frag->partition_sentinel = part;
+      }
+    }
+  }
+}
+
 }  // namespace
 
 // Adds designated entry and exit fragments around fragment partitions and
@@ -159,6 +188,7 @@ void AddEntryAndExitFragments(Fragment **frags_ptr) {
   AddEntryFragments(frags, IsFlagEntry, FRAG_KIND_FLAG_ENTRY);
   AddEntryFragments(frags, IsPartitionEntry, FRAG_KIND_PARTITION_ENTRY);
   AddExitFragments(frags, IsPartitionExit, FRAG_KIND_PARTITION_EXIT);
+  IdentifyPartitionSentinels(frags);
 }
 
 }  // namespace granary

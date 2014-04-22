@@ -267,7 +267,6 @@ class FragmentBuilder {
                       Instruction *instr) {
     const auto last_instr = block->LastInstruction();
     auto prev_native_instr_is_app = false;
-    auto prev_instr_changes_flags = false;
     for (auto seen_first_native_instr(false); instr != last_instr; ) {
 
       // Treat every label as beginning a new fragment.
@@ -281,7 +280,7 @@ class FragmentBuilder {
       // about saving/restoring flags state between two native instructions
       // that are separated by instrumentation instructions.
       //
-      // One exception to this rule is that if the last instruction doesn't
+      // One exception to this rule is that if the current instruction doesn't
       // affect the flags, regardless of if it's native/instrumented, it goes
       // into whatever the previous section of code is (app or inst).
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -289,10 +288,10 @@ class FragmentBuilder {
           seen_first_native_instr = true;
           prev_native_instr_is_app = ninstr->IsAppInstruction();
         } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
-                   prev_instr_changes_flags) {
+                   (ninstr->ReadsConditionCodes() ||
+                    ninstr->WritesConditionCodes())) {
           return SplitFragmentAtAppChange(frag, block, instr);
         }
-        prev_instr_changes_flags = ninstr->WritesConditionCodes();
       }
 
       // Found a local branch; add in the fall-through and/or the branch
@@ -304,8 +303,9 @@ class FragmentBuilder {
       } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
 
         // Need to put things like function/interrupt call/return into their own
-        // fragments, because later paritioning can't then arrange to deallocate
-        // virtual registers after a function call, or after a return.
+        // fragments, because later partitioning can't then arrange to
+        // deallocate virtual registers after a function call, or after a
+        // return.
         if (cfi->instruction.WritesToStackPointer()) {
           auto label = new LabelInstruction;
           frag->fall_through_target = MakeEmptyLabelFragment(block, label);

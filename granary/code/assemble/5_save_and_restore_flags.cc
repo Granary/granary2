@@ -45,7 +45,8 @@ void InjectRestoreFlags(LocalControlFlowGraph *cfg, Fragment *frag);
 
 namespace {
 
-// Scan each decoded basic block to determine the set of
+// Scan each decoded basic block to determine the set of live app flags and
+// killed instrumentation flags.
 static void InitFragmentFlagsUse(Fragment * const frags) {
   for (auto frag : FragmentIterator(frags)) {
     frag->inst_killed_flags = 0U;
