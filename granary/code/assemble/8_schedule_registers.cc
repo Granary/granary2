@@ -107,6 +107,7 @@ namespace {
 
 // Returns the Nth architectural virtual register.
 static VirtualRegister NthArchGPR(int n) {
+  GRANARY_ASSERT(0 <= n && arch::NUM_GENERAL_PURPOSE_REGISTERS > n);
   return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
@@ -337,7 +338,7 @@ static SSAVariable *LocalDefinitionOf(Fragment *frag,
 
 // Returns the Nth spill slot as a virtual register.
 static VirtualRegister NthSpillSlot(int spill_slot) {
-  GRANARY_ASSERT(-1 != spill_slot);
+  GRANARY_ASSERT(0 <= spill_slot && MAX_NUM_LIVE_VIRTUAL_REGS > spill_slot);
   return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
                            static_cast<uint16_t>(spill_slot));
 }
@@ -739,7 +740,7 @@ static void ForEachLocation(Fragment * const frag, FuncT func) {
 static bool FragmentHasUnscheduledRegs(Fragment * const frag) {
   auto has_unscheduled_regs = false;
   ForEachLocation(frag, [&] (RegisterLocation *loc) {
-    has_unscheduled_regs = has_unscheduled_regs || loc->reg.IsVirtual();
+    has_unscheduled_regs = has_unscheduled_regs || !loc->reg.IsValid();
   });
   return has_unscheduled_regs;
 }
@@ -749,9 +750,9 @@ static void AllocateUnscheduledRegs(RegisterScheduler * const sched,
                                     Fragment * const frag,
                                     Fragment * const part_frag) {
   ForEachLocation(frag, [=] (RegisterLocation *loc) {
-    if (loc->reg.IsVirtual()) {
+    if (!loc->reg.IsValid()) {
       loc->reg = AllocateVirtualSlot(frag, loc);
-      auto slot = static_cast<unsigned>(loc->reg.Number());
+      auto slot = static_cast<unsigned>(loc->spill_slot);
 
       part_frag->spill_slot_allocated_mask |= 1UL << slot;
       ++(part_frag->num_spill_slots);
@@ -792,7 +793,7 @@ static void PropagateAllocatedRegs(Fragment * const frag,
   ForEachLocation(frag, [=] (RegisterLocation *loc) {
     auto reg = loc->reg;
     if (reg.IsVirtualSlot()) {
-      auto slot = static_cast<unsigned>(reg.Number());
+      auto slot = static_cast<unsigned>(loc->spill_slot);
       auto mask = 1UL << slot;
       GRANARY_ASSERT(0 != (alloc_frag->spill_slot_allocated_mask & mask));
       GRANARY_ASSERT(0 != (part_frag->spill_slot_allocated_mask & mask));
@@ -856,8 +857,8 @@ static SSAVariable *FindEntryDefForSlot(Fragment * const frag, int slot) {
   for (auto entry_def : frag->ssa_vars->EntryDefs()) {
     if (entry_def.var) {
       auto loc = LocationOf(entry_def.var);
-      if (loc->reg.Number() == slot) {
-        GRANARY_ASSERT(loc->reg.IsVirtual());
+      if (loc->spill_slot == slot) {
+        GRANARY_ASSERT(loc->reg.IsVirtualSlot());
         return entry_def.var;
       }
     }
@@ -871,8 +872,8 @@ static SSAVariable *FindExitDefForSlot(Fragment * const frag, int slot) {
   for (auto exit_def : frag->ssa_vars->ExitDefs()) {
     if (exit_def) {
       auto loc = LocationOf(exit_def);
-      if (loc->reg.Number() == slot) {
-        GRANARY_ASSERT(loc->reg.IsVirtual());
+      if (loc->spill_slot == slot) {
+        GRANARY_ASSERT(loc->reg.IsVirtualSlot());
         return exit_def;
       }
     }
@@ -880,47 +881,140 @@ static SSAVariable *FindExitDefForSlot(Fragment * const frag, int slot) {
   return nullptr;
 }
 
-// Schedule all virtual registers associated with the same allocated spill slot.
-static void ScheduleSlot(RegisterScheduler * const sched,
-                         Fragment * const frag,
-                         const VirtualRegister preferred_steal_gpr,
-                         int slot) {
-  auto entry_def = FindEntryDefForSlot(frag, slot);
-  auto exit_def = FindExitDefForSlot(frag, slot);
+struct SlotScheduler {
+  // The SSA variable associated with this location on entry to the fragment.
+  SSAVariable *entry_def;
 
-  uint64_t gpr_busy_mask = (1UL << preferred_steal_gpr.Number());
-  auto slot_loc = NthSpillSlot(slot);
-  auto slot_reg = VirtualRegister();
-  auto slot_loc_is_live = true;
-  if (exit_def && !(frag->spill_slot_allocated_mask & gpr_busy_mask)) {
-    slot_loc = preferred_steal_gpr;
-    slot_loc_is_live = nullptr != frag->ssa_vars->ExitDefinitionOf(slot_loc);
-    slot_reg = RegisterOf(exit_def);
+  // The SSA variable associated with this location on exit from this fragment.
+  SSAVariable *exit_def;
+
+  // The slot's current location. This is either a spill slot, or a general-
+  // purpose register. In practice it should be stored in the
+  // `preferred_steal_gpr`, but sometimes there are conflicts.
+  VirtualRegister slot_loc;
+
+  // The virtual register associated with this slot. This will either be
+  // `RegisterOf(exit_def)` or `RegisterOf(entry_def)`.
+  VirtualRegister slot_reg;
+
+  // The GPR that we prefer to steal for use by this slot.
+  VirtualRegister preferred_steal_gpr;
+
+  // The specific slot being scheduled.
+  int slot;
+};
+
+enum {
+  NUM_GPRS = arch::NUM_GENERAL_PURPOSE_REGISTERS,
+  MAX_LIVE_GPRS = MAX_NUM_LIVE_VIRTUAL_REGS
+};
+
+// Steal a register for a spill slot.
+static VirtualRegister StealRegisterForSlot(const BitSet<NUM_GPRS> used_gprs) {
+  for (int i = NUM_GPRS; i--;) {
+    if (!used_gprs.Get(i)) {
+      return NthArchGPR(i);
+    }
   }
+  GRANARY_ASSERT(false);
+  return VirtualRegister();
+}
 
-  for (auto instr : BackwardInstructionIterator(frag->last)) {
+// Schedule a slot from the bottom-up. This assumes that
+static void BottomUpScheduleSlot(SlotScheduler * const sched,
+                                 Fragment * const frag,
+                                 Instruction *last) {
+  const auto spill_slot = NthSpillSlot(sched->slot);
+  const auto preferred_gpr_num = sched->preferred_steal_gpr.Number();
+
+  for (auto instr : BackwardInstructionIterator(last)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
 
-      // Need to look for a definition that might "kill" the slot location
-      // temporarily, which might mean that the slot switches over for use
-      // by another virtual register.
-      bool slot_filled_by_instr = false;
-      if (slot_reg.IsValid()) {
-        ForEachDefinition(ninstr, [&] (SSAVariable *def) {
-          if (!slot_filled_by_instr) {
-            slot_filled_by_instr = RegisterOf(def) == slot_reg;
+      // Simplifying assumption enforced by prior steps:
+      //  - No two distinct virtual registers within this block share the same
+      //    slot, even if they don't truly interfere. This is because the
+      //    granularity of interference is a single fragment, not a single
+      //    instruction.
+
+      // Look for conflicts with the current slot location.
+      bool slot_reg_is_used = false;
+      bool slot_loc_is_used = false;
+      BitSet<NUM_GPRS> used_gprs;
+
+      // Updates some register tracking state.
+      auto track_use = [&] (VirtualRegister reg) {
+        slot_reg_is_used = slot_reg_is_used || reg == sched->slot_reg;
+        slot_loc_is_used = slot_loc_is_used || reg == sched->slot_loc;
+        if (reg.IsNative() && reg.IsGeneralPurpose()) {
+          used_gprs.Set(reg.Number(), true);
+        }
+      };
+
+      // Visit all operands to figure out what regs are used and not used.
+      ninstr->ForEachOperand([&] (Operand *op) {
+        if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+          track_use(reg_op->Register());
+        } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+          VirtualRegister r1, r2, r3;
+          if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+            track_use(r1);
+            track_use(r2);
+            track_use(r3);
           }
-        });
+        }
+      });
+
+      // If the slot location is used, then we need to restore the GPR that is
+      // currently stored in the slot. What this really means is that we need
+      // to save the GPR to the slot after the instruction that uses it, because
+      // after that point we assume that the GPR will be used.
+      //
+      // TODO(pag): Could be smarter about only saving the GPR to the slot if
+      //            the GPR is live after the current instruction.
+      if (slot_loc_is_used) {
+        GRANARY_ASSERT(sched->slot_loc.IsNative());
+        frag->InsertAfter(instr, SaveGPRToSlot(sched->slot_loc, spill_slot));
+        sched->slot_loc = spill_slot;
       }
 
-      ninstr->ForEachOperand([=] (Operand *op) {
-        GRANARY_UNUSED(op);
-      });
+      // The instruction uses the VR associated with the slot, and it's not
+      // located in a GPR, so we need to steal a GPR. What this really means
+      // is that after this instruction, we need to restore the GPR's value from
+      // the slot, because we assume it is live after the instruction.
+      if (slot_reg_is_used && !sched->slot_loc.IsNative()) {
+        GRANARY_ASSERT(spill_slot == sched->slot_loc);
+        if (!used_gprs.Get(preferred_gpr_num)) {
+          sched->slot_loc = sched->preferred_steal_gpr;
+        } else {
+          sched->slot_loc = StealRegisterForSlot(used_gprs);
+        }
+        frag->InsertAfter(instr,
+                          RestoreGPRFromSlot(sched->slot_loc, spill_slot));
+      }
     }
-    GRANARY_UNUSED(instr);
-    GRANARY_UNUSED(slot_reg);
-    GRANARY_UNUSED(sched);
-    GRANARY_UNUSED(entry_def);
+  }
+}
+
+// Schedule all virtual registers associated with the same allocated spill slot.
+static void ScheduleSlot(Fragment * const frag,
+                         const VirtualRegister preferred_steal_gpr,
+                         int slot) {
+  const uint64_t gpr_busy_mask = (1UL << preferred_steal_gpr.Number());
+
+  SlotScheduler sched;
+  sched.entry_def = FindEntryDefForSlot(frag, slot);
+  sched.exit_def = FindExitDefForSlot(frag, slot);
+  sched.slot_loc = NthSpillSlot(slot);
+  sched.slot_reg = sched.exit_def ? RegisterOf(sched.exit_def)
+                                  : RegisterOf(sched.entry_def);
+  if (sched.exit_def && !(frag->spill_slot_allocated_mask & gpr_busy_mask)) {
+    sched.slot_loc = preferred_steal_gpr;
+  }
+  sched.preferred_steal_gpr = preferred_steal_gpr;
+  sched.slot = slot;
+
+  if (sched.exit_def) {
+    BottomUpScheduleSlot(&sched, frag, frag->last);
   }
 
   // Mark the preferred GPR as busy in this block. This is so that the same
@@ -936,16 +1030,11 @@ static void ScheduleSlot(RegisterScheduler * const sched,
 // spot in the fragment itself.
 static void ScheduleNonLocalRegs(RegisterScheduler * const sched,
                                  Fragment * const last_frag) {
-  enum {
-    NUM_GPRS = arch::NUM_GENERAL_PURPOSE_REGISTERS,
-    MAX_LIVE_GPRS = MAX_NUM_LIVE_VIRTUAL_REGS
-  };
-
   // Clear out all spill slot masks of non-partition fragments. We will use
   // these to determine which arch GPRs are busy (i.e. already holding a
   // virtual register) on *entry* to a block.
   for (auto frag : ReverseFragmentIterator(last_frag)) {
-    if (frag->first) {
+    if (frag->ssa_vars) {
       frag->spill_slot_allocated_mask = 0;
     }
   }
@@ -958,22 +1047,22 @@ static void ScheduleNonLocalRegs(RegisterScheduler * const sched,
 
     // The preferred arch GPR that we want to steal.
     const auto preferred_gpr = NthArchGPR(
-        (NUM_GPRS * MAX_LIVE_GPRS - gpr_start) % NUM_GPRS);
+        NUM_GPRS - ((NUM_GPRS * MAX_LIVE_GPRS + gpr_start) % NUM_GPRS) - 1);
 
     // Go through every fragment and try to schedule the virtual register whose
     // `RegisterLocation::reg.Number()` is `slot`.
     for (auto frag : ReverseFragmentIterator(last_frag)) {
-      if (!frag->first) {
-        continue;  // No instructions.
+      if (!frag->ssa_vars) {
+        continue;  // No useful instructions.
       }
 
       sched->frag = frag;
       auto frag_uses_slot = false;
       ForEachLocation(frag, [&] (RegisterLocation *loc) {
-        frag_uses_slot = frag_uses_slot || loc->reg.Number() == slot;
+        frag_uses_slot = frag_uses_slot || loc->spill_slot == slot;
       });
       if (frag_uses_slot) {
-        ScheduleSlot(sched, frag, preferred_gpr, slot);
+        ScheduleSlot(frag, preferred_gpr, slot);
       }
     }
     ++gpr_start;

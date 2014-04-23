@@ -51,7 +51,7 @@ below) then you could try the following:
 ```
 
 If you want to compile Granary in standalone mode (where it will not take over
-some binary's execution via `LD_PRELOAD`, do:
+some binary's execution via `LD_PRELOAD`), then do:
 
 ```basemake
 make clean ; make all GRANARY_STANDALONE=1
