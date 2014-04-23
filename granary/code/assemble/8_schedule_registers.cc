@@ -149,7 +149,9 @@ struct RegisterScheduler {
   explicit RegisterScheduler(Fragment *frag_)
       : frag(frag_),
         gprs_used_in_instr(),
-        gpr_storage_locs() {}
+        gpr_storage_locs(),
+        global_slots(),
+        max_num_used_local_slots(0) {}
 
   inline GPRLocation &LocationOfGPR(int i) {
     return gpr_storage_locs.location[i];
@@ -172,6 +174,9 @@ struct RegisterScheduler {
   Fragment *frag;
   RegUseTracker gprs_used_in_instr;
   GPRLocations gpr_storage_locs;
+
+  BitSet<MAX_NUM_LIVE_VIRTUAL_REGS> global_slots;
+  uint8_t max_num_used_local_slots;
 };
 
 // Returns the current storage location for an SSAVariable.
@@ -330,13 +335,18 @@ static SSAVariable *LocalDefinitionOf(Fragment *frag,
   return nullptr;
 }
 
+// Returns the Nth spill slot as a virtual register.
+static VirtualRegister NthSpillSlot(int spill_slot) {
+  GRANARY_ASSERT(-1 != spill_slot);
+  return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
+                           static_cast<uint16_t>(spill_slot));
+}
+
 // Returns the virtual spill slot register associated with a storage location
 // for a register, regardless of if the backing storage of the location is
 // a spill slot or a native GPR.
 static VirtualRegister VirtualSpillOf(RegisterLocation *loc) {
-  GRANARY_ASSERT(-1 != loc->spill_slot);
-  return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
-                         static_cast<uint16_t>(loc->spill_slot));
+  return NthSpillSlot(loc->spill_slot);
 }
 
 // Allocate a spill slot from this fragment for a fragment-local virtual
@@ -673,7 +683,8 @@ static void ScheduleLocalRegs(Fragment * const frags) {
 //
 // Also links together the fragments via the `prev` pointer, and returns the
 // last fragment in the fragment list.
-static Fragment *CombineLocalSpillInfo(Fragment * const frags) {
+static Fragment *CombineLocalSpillInfo(RegisterScheduler * const sched,
+                                       Fragment * const frags) {
   Fragment *last_frag(nullptr);
 
   // Propagate info from fragments to the sentinel.
@@ -697,6 +708,13 @@ static Fragment *CombineLocalSpillInfo(Fragment * const frags) {
       auto part_frag = frag->partition_sentinel;
       frag->num_spill_slots = part_frag->num_spill_slots;
       frag->spill_slot_allocated_mask = part_frag->spill_slot_allocated_mask;
+
+      // Propagate the maximum number of local spill slots allocated anywhere.
+      // We track this so that later, when allocating partition-global regs,
+      // we can try to avoid stealing the same registers as the local
+      // allocation strategy steals.
+      sched->max_num_used_local_slots = std::max(
+          sched->max_num_used_local_slots, part_frag->num_spill_slots);
     }
   }
   return last_frag;
@@ -727,13 +745,21 @@ static bool FragmentHasUnscheduledRegs(Fragment * const frag) {
 }
 
 // Allocates slots to all virtual registers within a given fragment.
-static void AllocateUnscheduledRegs(Fragment * const frag,
+static void AllocateUnscheduledRegs(RegisterScheduler * const sched,
+                                    Fragment * const frag,
                                     Fragment * const part_frag) {
   ForEachLocation(frag, [=] (RegisterLocation *loc) {
     if (loc->reg.IsVirtual()) {
       loc->reg = AllocateVirtualSlot(frag, loc);
       auto slot = static_cast<unsigned>(loc->reg.Number());
+
       part_frag->spill_slot_allocated_mask |= 1UL << slot;
+      ++(part_frag->num_spill_slots);
+
+      // Mark the slot as having been allocated *somewhere*. Our scheduling
+      // algorithm is pretty simple: assign registers to only one global slot
+      // at a time.
+      sched->global_slots.Set(slot, true);
     }
   });
 }
@@ -784,33 +810,32 @@ static void PropagateAllocatedRegs(Fragment * const frag,
 // partition. To simplify the problem, we consider any virtual register live on
 // entry/exit from a fragment to interfere. This means that the granularity of
 // live ranges is fragments and not individual instructions.
-static void AllocateNonLocalRegs(Fragment * const last_frag) {
-
-  auto round = 1;
+static void AllocateNonLocalRegs(RegisterScheduler *sched,
+                                 Fragment * const last_frag) {
+  auto reg_alloc_round = 1;
 
   // Visit the fragments in reverse order (this is basically a post-order
   // traversal) and schedule the registers.
-  for (auto changed = true; changed; ++round) {
+  for (auto changed = true; changed; ++reg_alloc_round) {
     changed = false;
-
     for (auto frag : ReverseFragmentIterator(last_frag)) {
       if (frag->ssa_vars && frag->partition_sentinel && !frag->is_closed) {
         auto part_frag = frag->partition_sentinel;
 
         // We need to choose a fragment from this partition, and schedule all
         // registers from that fragment.
-        if (part_frag->reg_alloc_round < round) {
+        if (part_frag->reg_alloc_round < reg_alloc_round) {
           if (FragmentHasUnscheduledRegs(frag)) {
             changed = true;
 
             // Within this partition, we've now "chosen" the set of registers
             // to allocate (by choosing a fragment). We will allocate all
-            // registers from
+            // registers from the partition spill slot mask.
             part_frag->partition_sentinel = frag;
-            part_frag->reg_alloc_round = round;
+            part_frag->reg_alloc_round = reg_alloc_round;
             part_frag->spill_slot_allocated_mask = 0;
 
-            AllocateUnscheduledRegs(frag, part_frag);
+            AllocateUnscheduledRegs(sched, frag, part_frag);
           }
           frag->is_closed = true;
 
@@ -825,18 +850,133 @@ static void AllocateNonLocalRegs(Fragment * const last_frag) {
   }
 }
 
+// Returns the definition of the variable (on entry to a fragment) that will
+// be spilled/filled from a particular spill slot.
+static SSAVariable *FindEntryDefForSlot(Fragment * const frag, int slot) {
+  for (auto entry_def : frag->ssa_vars->EntryDefs()) {
+    if (entry_def.var) {
+      auto loc = LocationOf(entry_def.var);
+      if (loc->reg.Number() == slot) {
+        GRANARY_ASSERT(loc->reg.IsVirtual());
+        return entry_def.var;
+      }
+    }
+  }
+  return nullptr;
+}
+
+// Returns the definition of the variable (on exit from a fragment) that will
+// be spilled/filled from a particular spill slot.
+static SSAVariable *FindExitDefForSlot(Fragment * const frag, int slot) {
+  for (auto exit_def : frag->ssa_vars->ExitDefs()) {
+    if (exit_def) {
+      auto loc = LocationOf(exit_def);
+      if (loc->reg.Number() == slot) {
+        GRANARY_ASSERT(loc->reg.IsVirtual());
+        return exit_def;
+      }
+    }
+  }
+  return nullptr;
+}
+
+// Schedule all virtual registers associated with the same allocated spill slot.
+static void ScheduleSlot(RegisterScheduler * const sched,
+                         Fragment * const frag,
+                         const VirtualRegister preferred_steal_gpr,
+                         int slot) {
+  auto entry_def = FindEntryDefForSlot(frag, slot);
+  auto exit_def = FindExitDefForSlot(frag, slot);
+
+  uint64_t gpr_busy_mask = (1UL << preferred_steal_gpr.Number());
+  auto slot_loc = NthSpillSlot(slot);
+  auto slot_reg = VirtualRegister();
+  auto slot_loc_is_live = true;
+  if (exit_def && !(frag->spill_slot_allocated_mask & gpr_busy_mask)) {
+    slot_loc = preferred_steal_gpr;
+    slot_loc_is_live = nullptr != frag->ssa_vars->ExitDefinitionOf(slot_loc);
+    slot_reg = RegisterOf(exit_def);
+  }
+
+  for (auto instr : BackwardInstructionIterator(frag->last)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+
+      // Need to look for a definition that might "kill" the slot location
+      // temporarily, which might mean that the slot switches over for use
+      // by another virtual register.
+      bool slot_filled_by_instr = false;
+      if (slot_reg.IsValid()) {
+        ForEachDefinition(ninstr, [&] (SSAVariable *def) {
+          if (!slot_filled_by_instr) {
+            slot_filled_by_instr = RegisterOf(def) == slot_reg;
+          }
+        });
+      }
+
+      ninstr->ForEachOperand([=] (Operand *op) {
+        GRANARY_UNUSED(op);
+      });
+    }
+    GRANARY_UNUSED(instr);
+    GRANARY_UNUSED(slot_reg);
+    GRANARY_UNUSED(sched);
+    GRANARY_UNUSED(entry_def);
+  }
+
+  // Mark the preferred GPR as busy in this block. This is so that the same
+  // arch GPR can't simultaneously be "busy" (i.e. contain) the value of two
+  // different virtual registers.
+  frag->spill_slot_allocated_mask |= gpr_busy_mask;
+}
+
 // Schedule all virtual registers that are used in one or more fragments. By
 // this point they should all be allocated. One challenge for scheduling is that
 // a virtual register might be placed in two different physical registers
 // across in two or more successors of a fragment, and needs to be in the same
 // spot in the fragment itself.
-static void ScheduleNonLocalRegs(Fragment * const last_frag) {
-  for (auto slot = 0; -1 != slot; ) {
-    slot = -1;
-    for (auto frag : ReverseFragmentIterator(last_frag)) {
-      // Choose only a single slot to schedule.
-      GRANARY_UNUSED(frag);  // TODO(pag): Implement me!
+static void ScheduleNonLocalRegs(RegisterScheduler * const sched,
+                                 Fragment * const last_frag) {
+  enum {
+    NUM_GPRS = arch::NUM_GENERAL_PURPOSE_REGISTERS,
+    MAX_LIVE_GPRS = MAX_NUM_LIVE_VIRTUAL_REGS
+  };
+
+  // Clear out all spill slot masks of non-partition fragments. We will use
+  // these to determine which arch GPRs are busy (i.e. already holding a
+  // virtual register) on *entry* to a block.
+  for (auto frag : ReverseFragmentIterator(last_frag)) {
+    if (frag->first) {
+      frag->spill_slot_allocated_mask = 0;
     }
+  }
+
+  int gpr_start = sched->max_num_used_local_slots;
+  for (auto slot = 0; slot < MAX_LIVE_GPRS; ++slot) {
+    if (!sched->global_slots.Get(slot)) {
+      continue;
+    }
+
+    // The preferred arch GPR that we want to steal.
+    const auto preferred_gpr = NthArchGPR(
+        (NUM_GPRS * MAX_LIVE_GPRS - gpr_start) % NUM_GPRS);
+
+    // Go through every fragment and try to schedule the virtual register whose
+    // `RegisterLocation::reg.Number()` is `slot`.
+    for (auto frag : ReverseFragmentIterator(last_frag)) {
+      if (!frag->first) {
+        continue;  // No instructions.
+      }
+
+      sched->frag = frag;
+      auto frag_uses_slot = false;
+      ForEachLocation(frag, [&] (RegisterLocation *loc) {
+        frag_uses_slot = frag_uses_slot || loc->reg.Number() == slot;
+      });
+      if (frag_uses_slot) {
+        ScheduleSlot(sched, frag, preferred_gpr, slot);
+      }
+    }
+    ++gpr_start;
   }
 }
 
@@ -883,9 +1023,10 @@ static void CleanUpSSAVars(Fragment * const frags) {
 void ScheduleRegisters(Fragment * const frags) {
   auto loc = AssignRegisterLocations(frags);
   ScheduleLocalRegs(frags);
-  auto last_frag = CombineLocalSpillInfo(frags);
-  AllocateNonLocalRegs(last_frag);
-  ScheduleNonLocalRegs(last_frag);
+  RegisterScheduler sched(nullptr);
+  auto last_frag = CombineLocalSpillInfo(&sched, frags);
+  AllocateNonLocalRegs(&sched, last_frag);
+  ScheduleNonLocalRegs(&sched, last_frag);
   CleanUpRegisterLocations(loc);
   CleanUpSSAVars(frags);
 }

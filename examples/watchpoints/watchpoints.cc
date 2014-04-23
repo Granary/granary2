@@ -50,9 +50,7 @@ class Watchpoints : public Tool {
                    "BT r64 %0, i8 48;"
                    GRANARY_IF_USER_ELSE("JB", "JNB") " l %1;"
                    "SHL r64 %0, i8 16;"
-                   "SAR r64 %0, i8 16;"
-                   "SETNO r8 %0;"
-                   "RET_NEAR;"_x86_64);
+                   "SAR r64 %0, i8 16;"_x86_64);
       // TODO(pag): Insert annotation for watchpoints here so that other tools
       //            can depend on `watchpoints` and then inject their code
       //            before/after the watchpoints-specific annotation.

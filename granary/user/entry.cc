@@ -12,10 +12,10 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
 
 #ifdef GRANARY_STANDALONE
 # include <cstdio>
-# include <cstdlib>
 # include "granary/base/string.h"
 #endif
 
