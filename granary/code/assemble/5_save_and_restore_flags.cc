@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #define GRANARY_INTERNAL
 
 #include "granary/cfg/instruction.h"
@@ -159,3 +159,4 @@ void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, Fragment * const frags) {
 }
 
 }  // namespace granary
+#endif

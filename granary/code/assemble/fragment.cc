@@ -9,6 +9,40 @@
 
 namespace granary {
 
+GRANARY_DECLARE_CLASS_HEIRARCHY(
+    (Fragment, 2),
+      (CodeFragment, 2 * 3),
+      (PartitionEntryFragment, 2 * 5),
+      (PartitionExitFragment, 2 * 7),
+      (FlagEntryFragment, 2 * 11),
+      (FlagExitFragment, 2 * 13),
+      (ExitFragment, 2 * 17))
+
+GRANARY_DEFINE_BASE_CLASS(Fragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, CodeFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
+
+Fragment::Fragment(void)
+    : list(),
+      instrs(),
+      flag_use(),
+      partition(),
+      flag_zone(),
+      successors{nullptr, nullptr} { }
+
+CodeFragment::~CodeFragment(void) {}
+PartitionEntryFragment::~PartitionEntryFragment(void) {}
+PartitionExitFragment::~PartitionExitFragment(void) {}
+FlagEntryFragment::~FlagEntryFragment(void) {}
+FlagExitFragment::~FlagExitFragment(void) {}
+ExitFragment::~ExitFragment(void) {}
+
+#if 0
+
 // Initialize the fragment from a basic block.
 Fragment::Fragment(int id_)
     : fall_through_target(nullptr),
@@ -87,5 +121,6 @@ Instruction *Fragment::InsertAfter(Instruction *insert_loc,
   }
   return inserted;
 }
+#endif
 
 }  // namespace granary

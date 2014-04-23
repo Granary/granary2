@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
@@ -27,3 +27,4 @@ bool IsCopyInstruction(const NativeInstruction *instr) {
 }
 
 }  // namespace granary
+#endif

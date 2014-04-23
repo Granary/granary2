@@ -143,6 +143,15 @@ class Instruction {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Instruction);
 };
 
+// Represents a basic list of instructions. These are internal typedefs,
+// mostly used later during the code assembly process.
+GRANARY_INTERNAL_DEFINITION
+typedef ListOfListHead<Instruction> InstructionList;
+GRANARY_INTERNAL_DEFINITION
+typedef ListHeadIterator<Instruction> InstructionListIterator;
+GRANARY_INTERNAL_DEFINITION
+typedef ReverseListHeadIterator<Instruction> ReverseInstructionListIterator;
+
 // Built-in annotations.
 GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {

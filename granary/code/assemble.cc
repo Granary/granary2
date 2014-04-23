@@ -5,17 +5,20 @@
 #include "granary/base/option.h"
 
 #include "granary/code/assemble.h"
+#include "granary/code/assemble/fragment.h"
 
 // Stages of assembly.
 #include "granary/code/assemble/0_compile_inline_assembly.h"
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
+/*
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
+*/
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -40,14 +43,17 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // far away from the original native code in memory).
   RelativizeLCFG(code_cache, cfg);
 
+  FragmentList frags;
+
   // Split the LCFG into fragments. The relativization step might introduce its
   // own control flow, as well as instrumentation tools. This means that
   // `DecodedBasicBlock`s no longer represent "true" basic blocks because they
   // can contain internal control-flow. This makes further analysis more
   // complicated, so to simplify things we re-split up the blocks into fragments
   // that represent the "true" basic blocks.
-  auto frags = BuildFragmentList(cfg);
+  BuildFragmentList(cfg, &frags);
 
+  /*
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
   PartitionFragmentsByStackUse(frags);
@@ -70,10 +76,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Schedule the virtual registers into either physical registers or memory
   // locations.
   ScheduleRegisters(frags);
-
+   */
   if (FLAG_debug_log_assembled_fragments) {
-    Log(LogDebug, frags);
+    Log(LogDebug, &frags);
   }
+
 
   GRANARY_UNUSED(env);
 }

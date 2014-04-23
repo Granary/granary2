@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #define GRANARY_INTERNAL
 
 #include "granary/base/container.h"
@@ -394,4 +394,4 @@ SSAVariable *SSAVariableTracker::RemoveEntryDef(VirtualRegister reg) {
 }
 
 }  // namespace granary
-
+#endif

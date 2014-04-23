@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
@@ -211,3 +211,4 @@ void PartitionFragmentsByStackUse(Fragment * const frags) {
 
 
 }  // namespace granary
+#endif

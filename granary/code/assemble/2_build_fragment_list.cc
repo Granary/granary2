@@ -14,8 +14,6 @@
 
 namespace granary {
 
-// Wraps up state that is used to build fragments.
-//
 // The high-level goal of this stage of assembly is to take input basic blocks
 // from a local-control-flow graph and turn them into "true" basic blocks (with
 // some added restrictions one when these true blocks end) and form a control-
@@ -49,296 +47,291 @@ namespace granary {
 //      4)  Is a label instruction. Label instructions are assumed to be
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
-class FragmentBuilder {
- public:
-  inline FragmentBuilder(void)
-      : next_id(0),
-        native_fragment(nullptr),
-        first(nullptr),
-        next_frag(&first) {}
 
-  // Get the list of fragments associated with a basic block.
-  Fragment *FragmentForBlock(DecodedBasicBlock *block) {
-    auto first_instr = block->FirstInstruction();
-    Fragment *frag = GetMetaData<Fragment *>(first_instr);
-    if (!frag) {
+namespace {
+
+// Make a new code fragment.
+static CodeFragment *MakeFragment(FragmentList *frags) {
+  auto frag = new CodeFragment;
+  frags->Append(frag);
+  return frag;
+}
+
+// Make a fragment for a native basic block.
+static ExitFragment *MakeNativeFragment(FragmentList *frags) {
+  auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
+  frags->Append(frag);
+  return frag;
+}
+
+// Make a block head fragment for some kind of future basic block.
+static ExitFragment *MakeFutureBlockFragment(FragmentList *frags,
+                                             InstrumentedBasicBlock *block) {
+  auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK);
+  frags->Append(frag);
+  frag->block_metadata = block->UnsafeMetaData();
+  return frag;
+}
+
+// Make a block head fragment for a cached basic block. This means importing
+// its register schedule as hard constraints.
+static ExitFragment *MakeCachedFragment(FragmentList *frags,
+                                        CachedBasicBlock *block) {
+  auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
+  frags->Append(frag);
+  frag->block_metadata = block->UnsafeMetaData();
+  return frag;
+}
+
+// Create a new fragment starting at a label.
+static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
+                                            DecodedBasicBlock *block,
+                                            LabelInstruction *label) {
+  auto frag = MakeFragment(frags);
+  frag->block_metadata = block->MetaData();
+  frag->instrs.Append(label->UnsafeUnlink().release());
+  SetMetaData(label, frag);
+  return frag;
+}
+
+// Extend a fragment with the instructions from a particular basic block.
+// This might end up generating many more fragments.
+static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
+                           DecodedBasicBlock *block, Instruction *instr);
+
+// Get or make the fragment starting at a label.
+static CodeFragment *GetOrMakeLabelFragment(FragmentList *frags,
+                                            DecodedBasicBlock *block,
+                                            LabelInstruction *label) {
+  CodeFragment *frag = GetMetaData<CodeFragment *>(label);
+  if (!frag) {
+    auto next = label->Next();
+    frag = MakeEmptyLabelFragment(frags, block, label);
+    ExtendFragment(frags, frag, block, next);
+  }
+  return frag;
+}
+
+// Split a fragment into two at a label instruction `instr`. If the label
+// is already associated with a `Fragment` instance then set that fragment
+// as the fall-through of our current fragment. If new `Fragment` instance
+// is associated with the label, then create one, add the association, and
+// add the instructions following the label into the new fragment.
+static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
+                                 DecodedBasicBlock *block, Instruction *instr) {
+  auto label_fragment = GetMetaData<CodeFragment *>(instr);
+  if (label_fragment) {  // Already processed this fragment.
+    frag->successors[0] = label_fragment;
+  } else {
+    auto label = DynamicCast<LabelInstruction *>(instr);
+    auto next = instr->Next();
+    auto succ = MakeEmptyLabelFragment(frags, block, label);
+    frag->successors[0] = succ;
+    ExtendFragment(frags, succ, block, next);
+  }
+}
+
+// Split a fragment into two at a local branch instruction. First get or
+// create the fragment associated with the branch target. Then create a
+// fragment for the fall-through of the branch, and include remaining
+// instructions from the block into that fragment.
+static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
+                                  DecodedBasicBlock *block,
+                                  BranchInstruction *branch) {
+  auto label = branch->TargetInstruction();
+  auto next = branch->Next();
+  if (branch->IsConditionalJump()) {
+    frag->instrs.Append(branch->UnsafeUnlink().release());
+    auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
+    frag->successors[0] = succ;
+    ExtendFragment(frags, succ, block, next);
+    frag->successors[1] = GetOrMakeLabelFragment(frags, block, label);
+  } else {
+    frag->successors[0] = GetOrMakeLabelFragment(frags, block, label);
+  }
+}
+
+// Get the list of fragments associated with a basic block.
+static CodeFragment *FragmentForBlock(FragmentList *frags,
+                                      DecodedBasicBlock *block);
+
+// Return the fragment for a block that is targeted by a control-flow
+// instruction.
+static Fragment *FragmentForTargetBlock(FragmentList *frags,
+                                        BasicBlock *block) {
+  // Function/interrupt/system return. In these cases, we can't be sure (at
+  // instrumentationin time) that execution returns to the code cache.
+  //
+  // OR:
+  //
+  // Direct call/jump to native; interrupt call, system call. All regs
+  // must be homed on exit of this block lets things really screw up.
+  if (IsA<NativeBasicBlock *>(block)) {
+    return MakeNativeFragment(frags);
+
+  // Indirect call/jump, or direct call/jump/conditional jump
+  // to a future block.
+  } else if (IsA<ReturnBasicBlock *>(block) ||
+             IsA<IndirectBasicBlock *>(block) ||
+             IsA<DirectBasicBlock *>(block)) {
+    return MakeFutureBlockFragment(
+        frags, DynamicCast<InstrumentedBasicBlock *>(block));
+
+  // Direct call/jump/conditional jump to a decoded block.
+  } else if (IsA<DecodedBasicBlock *>(block)) {
+    return FragmentForBlock(frags, DynamicCast<DecodedBasicBlock *>(block));
+
+  // Direct call/jump/conditional jump to a cached block.
+  } else {
+    return MakeCachedFragment(frags, DynamicCast<CachedBasicBlock *>(block));
+  }
+}
+
+// Split a fragment at a non-local control-flow instruction.
+static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
+                               DecodedBasicBlock *block,
+                               ControlFlowInstruction *cfi) {
+  auto next = cfi->Next();
+  auto target_block = cfi->TargetBlock();
+  auto is_direct_jump = cfi->IsUnconditionalJump() &&
+                        !cfi->HasIndirectTarget();
+  if (!is_direct_jump) {
+    frag->instrs.Append(cfi->UnsafeUnlink().release());
+    frag->successors[1] = FragmentForTargetBlock(frags, target_block);
+    if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
+        cfi->IsSystemReturn()) {
+      return;
+    }
+  // Pretend that direct jumps are just fall-throughs.
+  } else {
+    next = cfi;
+  }
+
+  // If this was a call or a conditional jump then add a fall-through
+  // fragment.
+  if (cfi->IsFunctionCall() || cfi->IsInterruptCall() ||
+      cfi->IsSystemCall() || cfi->IsConditionalJump() ||
+      is_direct_jump) {
+
+    // Try to be smarter about the fall-through to avoid making "useless"
+    // intermediate fragments containing only a single unconditional
+    // jump.
+    auto next_cfi = DynamicCast<ControlFlowInstruction *>(next);
+    if (next_cfi && next_cfi->IsUnconditionalJump()) {
+      target_block = next_cfi->TargetBlock();
+      frag->successors[0] = FragmentForTargetBlock(frags, target_block);
+    } else {
       auto label = new LabelInstruction;
-      frag = MakeFragment();
-      frag->block_meta = block->MetaData();
-      frag->is_decoded_block_head = true;
-      frag->first = frag->last = label;
-      SetMetaData(label, frag);
-      SetMetaData(first_instr, frag);
-      ExtendFragment(frag, block, first_instr->Next());
-    }
-    return frag;
-  }
-
- private:
-  Fragment *MakeFragment(void) {
-    auto frag = new Fragment(next_id++);
-    *next_frag = frag;
-    next_frag = &(frag->next);
-    return frag;
-  }
-
-  // Make a fragment for a native basic block.
-  Fragment *MakeNativeFragment(void) {
-    if (!native_fragment) {
-      native_fragment = MakeFragment();
-      native_fragment->is_exit = true;
-      // TODO(pag): Add hard constraints!
-    }
-    return native_fragment;
-  }
-
-  // Make a block head fragment for some kind of future basic block.
-  Fragment *MakeFutureBlockFragment(InstrumentedBasicBlock *block) {
-    auto frag = MakeFragment();
-    frag->block_meta = block->UnsafeMetaData();
-    frag->is_exit = true;
-    frag->is_future_block_head = true;
-    frag->kind = FRAG_KIND_APPLICATION;
-    return frag;
-  }
-
-  // Make a block head fragment for a cached basic block. This means importing
-  // its register schedule as hard constraints.
-  Fragment *MakeCachedFragment(CachedBasicBlock *block) {
-    auto frag = MakeFragment();
-    frag->block_meta = block->MetaData();
-    frag->is_exit = true;
-    frag->kind = FRAG_KIND_APPLICATION;
-    // TODO(pag): Import constraints.
-    return frag;
-  }
-
-  // Create a new fragment starting at a label.
-  Fragment *MakeEmptyLabelFragment(DecodedBasicBlock *block,
-                                   LabelInstruction *label) {
-    auto frag = MakeFragment();
-    frag->block_meta = block->MetaData();
-    frag->AppendInstruction(label->UnsafeUnlink());
-    SetMetaData(label, frag);
-    return frag;
-  }
-
-  // Get or make the fragment starting at a label.
-  Fragment *GetOrMakeLabelFragment(DecodedBasicBlock *block,
-                                   LabelInstruction *label) {
-    Fragment *frag = GetMetaData<Fragment *>(label);
-    if (!frag) {
-      auto next = label->Next();
-      frag = MakeEmptyLabelFragment(block, label);
-      ExtendFragment(frag, block, next);
-    }
-    return frag;
-  }
-
-  // Split a fragment into two at a label instruction `instr`. If the label
-  // is already associated with a `Fragment` instance then set that fragment
-  // as the fall-through of our current fragment. If new `Fragment` instance
-  // is associated with the label, then create one, add the association, and
-  // add the instructions following the label into the new fragment.
-  void SplitFragmentAtLabel(Fragment *frag, DecodedBasicBlock *block,
-                            Instruction *instr) {
-    Fragment *label_fragment = GetMetaData<Fragment *>(instr);
-    if (label_fragment) {  // Already processed this fragment.
-      frag->fall_through_target = label_fragment;
-    } else {
-      auto label = DynamicCast<LabelInstruction *>(instr);
-      auto next = instr->Next();
-      frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-      ExtendFragment(frag->fall_through_target, block, next);
+      auto succ = MakeEmptyLabelFragment(frags, block, label);
+      frag->successors[0] = succ;
+      ExtendFragment(frags, succ, block, next);
     }
   }
+}
 
-  // Split a fragment into two at a local branch instruction. First get or
-  // create the fragment associated with the branch target. Then create a
-  // fragment for the fall-through of the branch, and include remaining
-  // instructions from the block into that fragment.
-  void SplitFragmentAtBranch(Fragment *frag, DecodedBasicBlock *block,
-                             BranchInstruction *branch) {
-    auto label = branch->TargetInstruction();
-    auto next = branch->Next();
+// Split a fragment at a point where the instructions in the block change
+// from instrumentation-added -> app, or app -> instrumentation added.
+static void SplitFragmentAtAppChange(FragmentList *frags, CodeFragment *frag,
+                                     DecodedBasicBlock *block,
+                                     Instruction *next) {
+  auto label = new LabelInstruction;
+  auto succ = MakeEmptyLabelFragment(frags, block, label);
+  frag->successors[0] = succ;
+  ExtendFragment(frags, succ, block, next);
+}
 
-    if (branch->IsConditionalJump()) {
-      frag->AppendInstruction(std::move(branch->UnsafeUnlink()));
-      frag->fall_through_target = MakeEmptyLabelFragment(
-          block, new LabelInstruction);
-      ExtendFragment(frag->fall_through_target, block, next);
-      frag->branch_target = GetOrMakeLabelFragment(block, label);
-    } else {
-      frag->fall_through_target = GetOrMakeLabelFragment(block, label);
+// Extend a fragment with the instructions from a particular basic block.
+// This might end up generating many more fragments.
+static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
+                           DecodedBasicBlock *block, Instruction *instr) {
+
+  const auto last_instr = block->LastInstruction();
+  auto prev_native_instr_is_app = false;
+  for (auto seen_first_native_instr(false); instr != last_instr; ) {
+
+    // Treat every label as beginning a new fragment.
+    if (IsA<LabelInstruction *>(instr)) {
+      return SplitFragmentAtLabel(frags, frag, block, instr);
     }
-  }
 
-  // Return the fragment for a block that is targeted by a control-flow
-  // instruction.
-  Fragment *FragmentForTargetBlock(BasicBlock *block) {
-    // Function/interrupt/system return. In these cases, we can't be sure (at
-    // instrumentationin time) that execution returns to the code cache.
+    // Split instructions into fragments such that fragments contain either
+    // all native instructions, or all instrumentation instructions, but not
+    // both. This splitting is used in a later stage to allow us to reason
+    // about saving/restoring flags state between two native instructions
+    // that are separated by instrumentation instructions.
     //
-    // OR:
-    //
-    // Direct call/jump to native; interrupt call, system call. All regs
-    // must be homed on exit of this block lets things really screw up.
-    if (IsA<NativeBasicBlock *>(block)) {
-      return MakeNativeFragment();
-
-    // Indirect call/jump, or direct call/jump/conditional jump
-    // to a future block.
-    } else if (IsA<ReturnBasicBlock *>(block) ||
-               IsA<IndirectBasicBlock *>(block) ||
-               IsA<DirectBasicBlock *>(block)) {
-      return MakeFutureBlockFragment(
-            DynamicCast<InstrumentedBasicBlock *>(block));
-
-    // Direct call/jump/conditional jump to a decoded block.
-    } else if (IsA<DecodedBasicBlock *>(block)) {
-      return FragmentForBlock(DynamicCast<DecodedBasicBlock *>(block));
-
-    // Direct call/jump/conditional jump to a cached block.
-    } else {
-      return MakeCachedFragment(DynamicCast<CachedBasicBlock *>(block));
-    }
-  }
-
-  // Split a fragment at a non-local control-flow instruction.
-  void SplitFragmentAtCFI(Fragment *frag, DecodedBasicBlock *block,
-                          ControlFlowInstruction *cfi) {
-    auto next = cfi->Next();
-    auto target_block = cfi->TargetBlock();
-    auto is_direct_jump = cfi->IsUnconditionalJump() &&
-                          !cfi->HasIndirectTarget();
-    if (!is_direct_jump) {
-      frag->AppendInstruction(std::move(cfi->UnsafeUnlink()));
-      frag->branch_target = FragmentForTargetBlock(target_block);
-      if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
-          cfi->IsSystemReturn()) {
-        return;
+    // One exception to this rule is that if the current instruction doesn't
+    // affect the flags, regardless of if it's native/instrumented, it goes
+    // into whatever the previous section of code is (app or inst).
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!seen_first_native_instr) {
+        seen_first_native_instr = true;
+        prev_native_instr_is_app = ninstr->IsAppInstruction();
+      } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
+                 (ninstr->ReadsConditionCodes() ||
+                  ninstr->WritesConditionCodes())) {
+        return SplitFragmentAtAppChange(frags, frag, block, instr);
       }
-    // Pretend that direct jumps are just fall-throughs.
-    } else {
-      next = cfi;
     }
 
-    // If this was a call or a conditional jump then add a fall-through
-    // fragment.
-    if (cfi->IsFunctionCall() || cfi->IsInterruptCall() ||
-        cfi->IsSystemCall() || cfi->IsConditionalJump() ||
-        is_direct_jump) {
+    // Found a local branch; add in the fall-through and/or the branch
+    // target.
+    if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
+      return SplitFragmentAtBranch(frags, frag, block, branch);
 
-      // Try to be smarter about the fall-through to avoid making "useless"
-      // intermediate fragments containing only a single unconditional
-      // jump.
-      auto next_cfi = DynamicCast<ControlFlowInstruction *>(next);
-      if (next_cfi && next_cfi->IsUnconditionalJump()) {
-        target_block = next_cfi->TargetBlock();
-        frag->fall_through_target = FragmentForTargetBlock(target_block);
-      } else {
+    // Found a non-local branch to a basic block.
+    } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
+
+      // Need to put things like function/interrupt call/return into their own
+      // fragments, because later partitioning can't then arrange to
+      // deallocate virtual registers after a function call, or after a
+      // return.
+      if (cfi->instruction.WritesToStackPointer()) {
         auto label = new LabelInstruction;
-        frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-        ExtendFragment(frag->fall_through_target, block, next);
+        auto succ = MakeEmptyLabelFragment(frags, block, label);
+        frag->successors[0] = succ;
+        frag = succ;
       }
+      return SplitFragmentAtCFI(frags, frag, block, cfi);
+
+    } else {
+      // Extend block with this instruction and move to the next instruction.
+      auto next = instr->Next();
+      frag->instrs.Append(instr->UnsafeUnlink().release());
+      instr = next;
     }
   }
+}
 
-  // Split a fragment at a stack pointer-changing instruction.
-  void SplitFragmentAtStackChange(Fragment *frag, DecodedBasicBlock *block,
-                                  Instruction *next) {
+// Get the list of fragments associated with a basic block.
+static CodeFragment *FragmentForBlock(FragmentList *frags,
+                                      DecodedBasicBlock *block) {
+  auto first_instr = block->FirstInstruction();
+  CodeFragment *frag = GetMetaData<CodeFragment *>(first_instr);
+  if (!frag) {
     auto label = new LabelInstruction;
-    frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-    ExtendFragment(frag->fall_through_target, block, next);
+    frag = new CodeFragment;
+    frag->is_app_code = false;
+    frag->block_metadata = block->MetaData();
+    frag->is_block_head = true;
+    frag->instrs.Append(label);
+
+    SetMetaData(label, frag);
+    SetMetaData(first_instr, frag);
+
+    frags->Append(frag);
+
+    // Start from the second instruction because the first instruction is a
+    // annotation for beginning the basic block.
+    ExtendFragment(frags, frag, block, first_instr->Next());
   }
+  return frag;
+}
 
-  // Split a fragment at a point where the instructions in the block change
-  // from instrumentation-added -> app, or app -> instrumentation added.
-  void SplitFragmentAtAppChange(Fragment *frag, DecodedBasicBlock *block,
-                                Instruction *next) {
-    auto label = new LabelInstruction;
-    frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-    ExtendFragment(frag->fall_through_target, block, next);
-  }
-
-  // Extend a fragment with the instructions from a particular basic block.
-  // This might end up generating many more fragments.
-  void ExtendFragment(Fragment *frag, DecodedBasicBlock *block,
-                      Instruction *instr) {
-    const auto last_instr = block->LastInstruction();
-    auto prev_native_instr_is_app = false;
-    for (auto seen_first_native_instr(false); instr != last_instr; ) {
-
-      // Treat every label as beginning a new fragment.
-      if (IsA<LabelInstruction *>(instr)) {
-        return SplitFragmentAtLabel(frag, block, instr);
-      }
-
-      // Split instructions into fragments such that fragments contain either
-      // all native instructions, or all instrumentation instructions, but not
-      // both. This splitting is used in a later stage to allow us to reason
-      // about saving/restoring flags state between two native instructions
-      // that are separated by instrumentation instructions.
-      //
-      // One exception to this rule is that if the current instruction doesn't
-      // affect the flags, regardless of if it's native/instrumented, it goes
-      // into whatever the previous section of code is (app or inst).
-      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        if (!seen_first_native_instr) {
-          seen_first_native_instr = true;
-          prev_native_instr_is_app = ninstr->IsAppInstruction();
-        } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
-                   (ninstr->ReadsConditionCodes() ||
-                    ninstr->WritesConditionCodes())) {
-          return SplitFragmentAtAppChange(frag, block, instr);
-        }
-      }
-
-      // Found a local branch; add in the fall-through and/or the branch
-      // target.
-      if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-        return SplitFragmentAtBranch(frag, block, branch);
-
-      // Found a non-local branch to a basic block.
-      } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-
-        // Need to put things like function/interrupt call/return into their own
-        // fragments, because later partitioning can't then arrange to
-        // deallocate virtual registers after a function call, or after a
-        // return.
-        if (cfi->instruction.WritesToStackPointer()) {
-          auto label = new LabelInstruction;
-          frag->fall_through_target = MakeEmptyLabelFragment(block, label);
-          frag = frag->fall_through_target;
-        }
-        return SplitFragmentAtCFI(frag, block, cfi);
-
-      } else {
-        // Extend block with this instruction and move to the next instruction.
-        auto next = instr->Next();
-        frag->AppendInstruction(std::move(instr->UnsafeUnlink()));
-
-        // Break this fragment if the just-appended instruction changes the
-        // stack pointer. Changes to the stack pointer are computed in
-        // `Fragment::AppendInstruction`.
-        if (frag->writes_to_stack_pointer) {
-          return SplitFragmentAtStackChange(frag, block, next);
-        }
-
-        instr = next;
-      }
-    }
-  }
-
-  int next_id;
-
-  Fragment *native_fragment;
-  Fragment *first;
-  Fragment **next_frag;
-};
+}  // namespace
 
 // Build a fragment list out of a set of basic blocks.
-Fragment *BuildFragmentList(LocalControlFlowGraph *cfg) {
+void BuildFragmentList(LocalControlFlowGraph *cfg, FragmentList *frags) {
   for (auto block : cfg->Blocks()) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
@@ -347,8 +340,7 @@ Fragment *BuildFragmentList(LocalControlFlowGraph *cfg) {
       }
     }
   }
-  FragmentBuilder builder;
-  return builder.FragmentForBlock(cfg->EntryBlock());
+  FragmentForBlock(frags, cfg->EntryBlock());
 }
 
 }  // namespace granary

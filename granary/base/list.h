@@ -4,6 +4,7 @@
 #define GRANARY_BASE_LIST_H_
 
 #include "granary/base/base.h"
+#include "granary/base/type_trait.h"
 
 #ifdef GRANARY_DEBUG
 # include "granary/breakpoint.h"
@@ -100,6 +101,183 @@ class ListHead {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ListHead);
 };
 
+
+// Interface for managing doubly-linked lists. Assumes that type there exists a
+// pulbic `T::list` with type `ListHead`.
+template <typename T>
+class ListOfListHead {
+ public:
+  inline ListOfListHead(void)
+      : first(nullptr),
+        last(nullptr) {}
+
+  inline T *First(void) const {
+    return first;
+  }
+
+  inline T *Last(void) const {
+    return last;
+  }
+
+  void Prepend(T *elm) {
+    if (first) elm->list.template SetNext<T>(elm, first);
+    first = elm;
+    if (!last) last = elm;
+  }
+
+  void Append(T *elm) {
+    if (last) last->list.template SetNext<T>(last, elm);
+    last = elm;
+    if (!first) first = elm;
+  }
+
+  void InsertBefore(T *new_elm, T *before_elm) {
+    if (before_elm == first) {
+      Prepend(new_elm);
+    } else {
+      before_elm->template SetPrevious<T>(before_elm, new_elm);
+    }
+  }
+
+  void InsertAfter(T *new_elm, T *after_elm) {
+    if (after_elm == last) {
+      Append(new_elm);
+    } else {
+      after_elm->template SetNext<T>(after_elm, new_elm);
+    }
+  }
+
+ private:
+  T *first;
+  T *last;
+};
+
+// Generic iterator for simple linked lists where `T::list` is a public member
+// of type `ListHead`.
+template <typename T>
+class ListHeadIterator {
+ public:
+  typedef ListHeadIterator<T> Iterator;
+
+  ListHeadIterator(void)
+      : curr(nullptr) {}
+
+  ListHeadIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  ListHeadIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  explicit ListHeadIterator(T *first)
+      : curr(first) {}
+
+  explicit ListHeadIterator(const ListOfListHead<T> &list)
+      : curr(list.First()) {}
+
+  explicit ListHeadIterator(const ListOfListHead<T> *list)
+      : curr(list->First()) {}
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(static_cast<T *>(nullptr));
+  }
+
+  inline void operator++(void) {
+    curr = curr->list.template GetNext<T>(curr);
+  }
+
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
+
+  inline T *operator*(void) const {
+    return curr;
+  }
+
+  // Returns the last valid element from an iterator.
+  static T *Last(Iterator elems) {
+    T *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline T *Last(T *elems_ptr) {
+    return Last(Iterator(elems_ptr));
+  }
+
+ private:
+  T *curr;
+};
+
+// Generic iterator for simple linked lists where `T::list` is a public member
+// of type `ListHead`.
+template <typename T>
+class ReverseListHeadIterator {
+ public:
+  typedef ReverseListHeadIterator<T> Iterator;
+
+  ReverseListHeadIterator(void)
+      : curr(nullptr) {}
+
+  ReverseListHeadIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  ReverseListHeadIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  explicit ReverseListHeadIterator(T *last)
+      : curr(last) {}
+
+  explicit ReverseListHeadIterator(const ListOfListHead<T> &list)
+      : curr(list.Last()) {}
+
+  explicit ReverseListHeadIterator(const ListOfListHead<T> *list)
+      : curr(list->Last()) {}
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(static_cast<T *>(nullptr));
+  }
+
+  inline void operator++(void) {
+    curr = curr->list.template GetPrevious<T>(curr);
+  }
+
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
+
+  inline T *operator*(void) const {
+    return curr;
+  }
+
+  // Returns the last valid element from an iterator.
+  static T *First(Iterator elems) {
+    T *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline T *First(T *elems_ptr) {
+    return First(Iterator(elems_ptr));
+  }
+
+ private:
+  T *curr;
+};
+
 // Generic iterator for simple linked lists with public `next` fields.
 template <typename T>
 class LinkedListIterator {
@@ -123,7 +301,7 @@ class LinkedListIterator {
   }
 
   inline Iterator end(void) const {
-    return Iterator(nullptr);
+    return Iterator(static_cast<T *>(nullptr));
   }
 
   inline void operator++(void) {
@@ -139,7 +317,7 @@ class LinkedListIterator {
   }
 
   // Returns the last valid element from an iterator.
-  static T *Last(LinkedListIterator<T> elems) {
+  static T *Last(Iterator elems) {
     T *last(nullptr);
     for (auto elem : elems) {
       last = elem;
@@ -149,7 +327,7 @@ class LinkedListIterator {
 
   // Returns the last valid element from an iterator.
   static inline T *Last(T *elems_ptr) {
-    return Last(LinkedListIterator<T>(elems_ptr));
+    return Last(Iterator(elems_ptr));
   }
 
  private:
@@ -179,7 +357,7 @@ class ReverseLinkedListIterator {
   }
 
   inline Iterator end(void) const {
-    return Iterator(nullptr);
+    return Iterator(static_cast<T *>(nullptr));
   }
 
   inline void operator++(void) {
@@ -195,7 +373,7 @@ class ReverseLinkedListIterator {
   }
 
   // Returns the first valid element from an iterator.
-  static T *First(LinkedListIterator<T> elems) {
+  static T *First(Iterator elems) {
     T *last(nullptr);
     for (auto elem : elems) {
       last = elem;
@@ -205,7 +383,7 @@ class ReverseLinkedListIterator {
 
   // Returns the last valid element from an iterator.
   static inline T *First(T *elems_ptr) {
-    return Last(LinkedListIterator<T>(elems_ptr));
+    return Last(Iterator(elems_ptr));
   }
 
  private:
@@ -319,7 +497,7 @@ class LinkedListZipper {
   }
 
   inline Iterator end(void) const {
-    return Iterator(nullptr);
+    return Iterator(static_cast<T **>(nullptr));
   }
 
  private:

@@ -11,10 +11,9 @@ namespace granary {
 
 // Forward declarations.
 class LocalControlFlowGraph;
-class Fragment;
 
 // Build a fragment list out of a set of basic blocks.
-Fragment *BuildFragmentList(LocalControlFlowGraph *cfg);
+void BuildFragmentList(LocalControlFlowGraph *cfg, FragmentList *frags);
 
 }  // namespace granary
 

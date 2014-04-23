@@ -10,11 +10,10 @@
 namespace granary {
 
 // Forward declarations.
-class Fragment;
 enum LogLevel : int;
 
 // Log a list of fragments as a DOT digraph.
-void Log(LogLevel level, Fragment *frags);
+void Log(LogLevel level, FragmentList *frags);
 
 }  // namespace granary
 

@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
@@ -205,3 +205,4 @@ void TrackSSAVars(Fragment * const frags) {
 }
 
 }  // namespace granary
+#endif

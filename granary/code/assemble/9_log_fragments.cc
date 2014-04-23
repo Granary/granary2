@@ -24,11 +24,10 @@ static void LogFragmentEdge(LogLevel level, const Fragment *pred,
 
 // Log the outgoing edges of a fragment.
 static void LogFragmentEdges(LogLevel level, Fragment *frag) {
-  if (frag->fall_through_target) {
-    LogFragmentEdge(level, frag, frag->fall_through_target);
-  }
-  if (frag->branch_target) {
-    LogFragmentEdge(level, frag, frag->branch_target);
+  for (auto succ : frag->successors) {
+    if (succ) {
+      LogFragmentEdge(level, frag, succ);
+    }
   }
 }
 
@@ -53,12 +52,17 @@ static const char *FragmentBackground(const Fragment *frag) {
   enum {
     NUM_COLORS = sizeof partition_color / sizeof partition_color[0]
   };
+  /*
   if (0 < frag->partition_id) {
     auto stack_id = static_cast<size_t>(frag->partition_id);
     return partition_color[stack_id % NUM_COLORS];
   } else {
     return "white";
-  }
+  }*/
+  // TODO(pag): Re-do this!
+  GRANARY_UNUSED(frag);
+  GRANARY_UNUSED(partition_color);
+  return "white";
 }
 
 // Log the input-only operands.
@@ -93,7 +97,7 @@ static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
 
 // Log the instructions of a fragment.
 static void LogInstructions(LogLevel level, const Fragment *frag) {
-  for (auto instr : ForwardInstructionIterator(frag->first)) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       if (ninstr->IsAppInstruction()) {
         Log(level, "<FONT POINT-SIZE=\"11\" FACE=\"Courier-Bold\">");
@@ -112,35 +116,30 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 // If this fragment is the head of a basic block then log the basic block's
 // entry address.
 static void LogBlockHeader(LogLevel level, const Fragment *frag) {
-  if (FRAG_KIND_PARTITION_ENTRY == frag->kind) {
+  if (IsA<PartitionEntryFragment *>(frag)) {
     Log(level, "partition entry|");
-  } else if (FRAG_KIND_PARTITION_EXIT == frag->kind) {
+  } else if (IsA<PartitionExitFragment *>(frag)) {
     Log(level, "partition exit|");
-  } else if (FRAG_KIND_FLAG_ENTRY == frag->kind) {
+  } else if (IsA<FlagEntryFragment *>(frag)) {
     Log(level, "flag entry|");
-  } else if (FRAG_KIND_FLAG_EXIT == frag->kind) {
+  } else if (IsA<FlagExitFragment *>(frag)) {
     Log(level, "flag exit|");
-  } else if (frag->block_meta &&
-      (frag->is_decoded_block_head || frag->is_future_block_head)) {
-    auto meta = MetaDataCast<ModuleMetaData *>(frag->block_meta);
-    Log(level, "%p|", meta->start_pc);
+  } else if (IsA<ExitFragment *>(frag)) {
+    Log(level, "exit");
+  } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
+    if (code->block_metadata && code->is_block_head) {
+      auto meta = MetaDataCast<ModuleMetaData *>(code->block_metadata);
+      Log(level, "%p|", meta->start_pc);
+    }
   }
 }
 
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
-  if (FRAG_KIND_APPLICATION == frag->kind ||
-      FRAG_KIND_INSTRUMENTATION == frag->kind) {
-    Log(level, "f%p [fillcolor=%s label=<%d|{",
-        reinterpret_cast<const void *>(frag), FragmentBackground(frag),
-        frag->id);
-  } else {
-    Log(level, "f%p [fillcolor=%s label=<{",
-        reinterpret_cast<const void *>(frag), FragmentBackground(frag));
-  }
-
+  Log(level, "f%p [fillcolor=%s label=<{", reinterpret_cast<const void *>(frag),
+      FragmentBackground(frag));
   LogBlockHeader(level, frag);
-  if (!frag->is_exit && !frag->is_future_block_head) {
+  if (!IsA<ExitFragment *>(frag)) {
     LogInstructions(level, frag);
     Log(level, "}");
   }
@@ -149,12 +148,12 @@ static void LogFragment(LogLevel level, const Fragment *frag) {
 }  // namespace
 
 // Log a list of fragments as a DOT digraph.
-void Log(LogLevel level, Fragment *frags) {
+void Log(LogLevel level, FragmentList *frags) {
   Log(level, "digraph {\n"
              "node [fontname=courier shape=record"
              " nojustify=false labeljust=l style=filled];\n"
              "f0 [color=white fontcolor=white];\n");
-  LogFragmentEdge(level, nullptr, frags);
+  LogFragmentEdge(level, nullptr, frags->First());
   for (auto frag : FragmentIterator(frags)) {
     LogFragmentEdges(level, frag);
     LogFragment(level, frag);

@@ -10,23 +10,220 @@
 #include "granary/arch/base.h"
 
 #include "granary/base/bitset.h"
+#include "granary/base/cast.h"
+#include "granary/base/disjoint_set.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
+
+#include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
 
 namespace granary {
 
 // Forward declarations.
-class Instruction;
-class LabelInstruction;
-class NativeInstruction;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class BlockMetaData;
 class FragmentBuilder;
 class SSAVariableTracker;
 
+class SpillInfo {
+ public:
+  enum {
+    MAX_NUM_SPILL_SLOTS = 32
+  };
+
+  int num_spill_slots;
+
+  // Tracks which spill slots are allocated.
+  BitSet<MAX_NUM_SPILL_SLOTS> used_spill_slots;
+
+  int AllocateSpillSlot(void);
+};
+
+// Tracks flag usage within a code fragment.
+class FlagUsageInfo {
+ public:
+  inline FlagUsageInfo(void)
+      : flag_save_reg(),
+        entry_live_flags(0),
+        all_killed_flags(0) {}
+
+  // Register uses to save and restore the application flags.
+  VirtualRegister flag_save_reg;
+
+  // Conservative set of flags that are live on entry to this basic block.
+  uint32_t entry_live_flags;
+
+  // Flags that are killed anywhere within this fragment.
+  uint32_t all_killed_flags;
+};
+
+// Represents a fragment of instructions. Fragments are like basic blocks.
+// Fragments are slightly more restricted than basic blocks, and track other
+// useful properties as well.
+class Fragment {
+ public:
+  Fragment(void);
+
+  virtual ~Fragment(void) = default;
+
+  GRANARY_DECLARE_BASE_CLASS(Fragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+  // Connects together fragments into a `FragmentList`.
+  ListHead list;
+
+  // List of instructions in the fragment.
+  InstructionList instrs;
+
+  // Tracks flag use within this fragment.
+  FlagUsageInfo flag_use;
+
+  // The partition to which this fragment belongs.
+  DisjointSet<SpillInfo *> partition;
+
+  // The "flag zone" to which this fragment belongs.
+  DisjointSet<FlagUsageInfo *> flag_zone;
+
+  // Targets in/out of this fragment.
+  enum {
+    SUCC_FALL_THROUGH = 0,
+    SUCC_BRANCH = 1
+  };
+  Fragment *successors[2];
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
+};
+
+typedef ListOfListHead<Fragment> FragmentList;
+typedef ListHeadIterator<Fragment> FragmentIterator;
+typedef ReverseListHeadIterator<Fragment> ReverseFragmentIterator;
+
+class CodeFragment : public Fragment {
+ public:
+  inline CodeFragment(void)
+      : Fragment(),
+        is_app_code(false),
+        is_block_head(false),
+        block_metadata(nullptr) {}
+
+  virtual ~CodeFragment(void);
+
+  // Is this a fragment of application instructions? If this is false, then all
+  // instructions are either injected from instrumentation, or they could be
+  // some application instructions that don't read or write the flags.
+  bool is_app_code;
+
+  // Does this fragment represent the beginning of a basic block?
+  bool is_block_head;
+
+  // The meta-data associated with the basic block that this code fragment
+  // originates from.
+  BlockMetaData *block_metadata;
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeFragment);
+};
+
+class PartitionEntryFragment : public Fragment {
+ public:
+  virtual ~PartitionEntryFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionEntryFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(PartitionEntryFragment);
+};
+
+class PartitionExitFragment : public Fragment {
+ public:
+  virtual ~PartitionExitFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionExitFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(PartitionExitFragment);
+};
+
+class FlagEntryFragment : public Fragment {
+ public:
+  virtual ~FlagEntryFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(FlagEntryFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(FlagEntryFragment);
+};
+
+class FlagExitFragment : public Fragment {
+ public:
+  virtual ~FlagExitFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(FlagExitFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(FlagExitFragment);
+};
+
+enum ExitFragmentKind {
+  FRAG_EXIT_NATIVE,
+  FRAG_EXIT_FUTURE_BLOCK,
+  FRAG_EXIT_EXISTING_BLOCK
+};
+
+class ExitFragment : public Fragment {
+ public:
+  explicit ExitFragment(ExitFragmentKind kind_)
+      : Fragment(),
+        kind(kind_) {}
+
+  virtual ~ExitFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, ExitFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(ExitFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+  ExitFragmentKind kind;
+
+  union {
+    BlockMetaData *block_metadata;
+  };
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ExitFragment);
+};
+
+#if 0
 // Defines the different categories of fragments.
 enum FragmentKind : uint8_t {
   FRAG_KIND_INSTRUMENTATION,
@@ -217,7 +414,7 @@ class Fragment {
 
 typedef LinkedListIterator<Fragment> FragmentIterator;
 typedef ReverseLinkedListIterator<Fragment> ReverseFragmentIterator;
-
+#endif
 }  // namespace granary
 
 #endif  // GRANARY_CODE_ASSEMBLE_FRAGMENT_H_
