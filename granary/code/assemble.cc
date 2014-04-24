@@ -11,8 +11,8 @@
 #include "granary/code/assemble/0_compile_inline_assembly.h"
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
-/*
 #include "granary/code/assemble/3_partition_fragments.h"
+/*
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"

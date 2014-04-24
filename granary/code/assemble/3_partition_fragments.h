@@ -9,12 +9,9 @@
 
 namespace granary {
 
-// Forward declaration.
-class Fragment;
-
 // Partition the fragments into groups, where each group is labeled/colored by
 // their `stack_id` field.
-void PartitionFragmentsByStackUse(Fragment * const frags);
+void PartitionFragmentsByStackUse(FragmentList *frags);
 
 }  // namespace granary
 

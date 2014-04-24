@@ -18,6 +18,21 @@
 
 namespace granary {
 
+// Relativize a direct control-flow instruction.
+//
+// Note: This has an architecture-specific implementation.
+void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
+                         PC target_pc, bool target_is_far_away);
+
+// Relativize a instruction with a memory operand, where the operand loads some
+// value from `mem_addr`
+//
+// Note: This has an architecture-specific implementation.
+void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
+                     const MemoryOperand &op, const void *mem_addr);
+
+namespace {
+
 template <unsigned num_bits>
 struct RelAddress;
 
@@ -63,7 +78,7 @@ class InstructionRelativizer {
                        const MemoryOperand &mloc) {
     const void *mptr(nullptr);
     if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
-      arch::RelativizeMemOp(block, instr, mloc, mptr);
+      granary::RelativizeMemOp(block, instr, mloc, mptr);
     }
   }
 
@@ -91,8 +106,8 @@ class InstructionRelativizer {
       // instructions need to be relativized regardless of whether or not the
       // target PC is far away. For example, on x86, the `LOOP rel8`
       // instructions must always be relativized.
-      arch::RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
-                                  AddressNeedsRelativizing(target_pc));
+      RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
+                          AddressNeedsRelativizing(target_pc));
 
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {
@@ -114,12 +129,19 @@ class InstructionRelativizer {
     } else {
       RelativizeMemOp(block, instr);
     }
+
+    auto &ainstr(instr->instruction);
+    if (ainstr.WritesToStackPointer()) {
+
+    }
   }
 
   // Relativizes instructions that use PC-relative operands that are too far
   // away from our estimate of where this block will be encoded.
   void RelativizeBlock(DecodedBasicBlock *block) {
-    for (auto instr : block->Instructions()) {
+    Instruction *next_instr(nullptr);
+    for (auto instr = block->FirstInstruction(); instr; instr = next_instr) {
+      next_instr = instr->Next();
       if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
         RelativizeInstruction(block, native_instr);
       }
@@ -135,6 +157,8 @@ class InstructionRelativizer {
 
   PC cache_pc;
 };
+
+}  // namespace
 
 // Relativize the native instructions within a LCFG.
 void RelativizeLCFG(CodeCacheInterface *code_cache,

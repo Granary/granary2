@@ -108,133 +108,29 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
   instr->writes_to_stack_pointer = does_write;
 }
 
-// Mangle a `PUSH_MEMv` instruction, where the memory operand being pushed falls
-// into the user space redzone. This is a very unusual case.
-//
-// An example of where this type of instruction is used is in the Linux kernel
-// `repeat_nmi` function. It can happen with recursive NMIs (e.g. a breakpoint
-// in an NMI handler). What the kernel seems to do is have 3 copies of the NMI
-// ISF: the current one (base of NMI stack, pushed on by hardware), a saved
-// version of the first NMI, and a saved version of the repeated NMI. The kernel
-// then tests a special location on the stack that tells it whether or not it's
-// executing in a nested NMI. The kernel overwrites one of its copies with
-// another copy (located just below [on the stack] the copy being overwritten).
-//
-// See `arch/x86/kernel/entry_64.S` in the Linux kernel source code.
-//
-// TODO(pag): This mangling wouldn't actually work for `repeat_nmi` because its
-//            `PUSH`es could overwrite some important data.
-static void ManglePushFromRedZone(DecodedBasicBlock *block, Instruction *instr,
-                                  Operand op) {
-  auto decoded_pc = instr->decoded_pc;
-  if (-8 == op.mem.disp) {
-    LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-8, XED_REG_RSP));
-  } else {
-    Instruction ni;
-    op.mem.disp += 8;  // Width of a 64-bit address.
-    APP(PUSH_GPRv_50(&ni, XED_REG_RAX));
-    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, XED_REG_RAX, op));
-    XCHG_MEMv_GPRv(instr, BaseDispMemOp(0, XED_REG_RSP), XED_REG_RAX);
-  }
-  instr->decoded_pc = decoded_pc;
-}
-
-// Mangle a `PUSH_MEMv`, where an value from somewhere on the stack is
-// being duplicated.
-//
-// An example of where this type of instruction is used is in the Linux kernel
-// `first_nmi` function. It duplicates one of the NMI ISFs that is higher up
-// on the stack.
-//
-// See `arch/x86/kernel/entry_64.S` in the Linux kernel source code.
-static void MangleDuplicateFromStack(DecodedBasicBlock *block,
-                                     Instruction *instr, Operand op) {
-  Instruction ni;
-  auto decoded_pc = instr->decoded_pc;
-  APP(PUSH_GPRv_50(&ni, XED_REG_RAX));
-  APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, XED_REG_RAX,
-                           BaseDispMemOp(op.mem.disp + 8, XED_REG_RSP)));
-  XCHG_MEMv_GPRv(instr, BaseDispMemOp(0, XED_REG_RSP), XED_REG_RAX);
-  instr->decoded_pc = decoded_pc;
-}
-
-// Generic mangling of a `PUSH_MEMv` that doesn't try to manage any of the
-// corner cases.
-//
-// An example of where this type of instruction is used is in the Linux kernel
-// `restore_registers` function. It is used to push the flags onto the stack
-// before doing a `POPFQ`.
-static void ManglePushMemOpGeneric(DecodedBasicBlock *block, Instruction *instr,
-                                   Operand op) {
-  Instruction ni;
-  APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(-8, XED_REG_RSP)));
-  APP(PUSH_GPRv_50(&ni, XED_REG_RAX));
-  APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, XED_REG_RAX, op));
-  APP(MOV_MEMv_GPRv(&ni, BaseDispMemOp(8, XED_REG_RSP), XED_REG_RAX));
-  POP_GPRv_51(instr, XED_REG_RAX);
-  AnalyzedStackUsage(instr, true, true);
-}
-
 // Mangle a `PUSH_MEMv` instruction.
 static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
-  if (XED_ENCODER_OPERAND_TYPE_MEM != op.type || !op.is_compound) {
-    return;
+  if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+    Instruction ni;
+    auto vr = block->AllocateVirtualRegister();
+    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
+    APP(MOV_MEMv_GPRv(&ni, BaseDispMemOp(0, XED_REG_RSP), vr));
+    LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-8, XED_REG_RSP));
+    AnalyzedStackUsage(instr, true, true);
   }
-  // We're going to try to handle things like `PUSH (%rsp)` and `PUSH -8(%rsp)`,
-  // but in practice this is undecidable because someone could first store
-  // the stack pointer into a register, e.g. `%rax`, and then do `PUSH (%rax)`.
-  //
-  // Note: RSP cannot be the index register.
-  if (XED_REG_RSP == op.mem.reg_base) {
-    // Corner case: pushing memory from the redzone onto the stack.
-    if (-8 >= op.mem.disp && XED_REG_INVALID == op.mem.reg_index) {
-      ManglePushFromRedZone(block, instr, op);
-
-    // Duplicating a value on the stack.
-    } else if (0 <= op.mem.disp && XED_REG_INVALID == op.mem.reg_index) {
-      MangleDuplicateFromStack(block, instr, op);
-
-    // Undecidable, e.g. `PUSH -0x8(%rsp, %rbp, 1)`. We'll make the simplifying
-    // assumption that it's reading from somewhere already allocated on the
-    // stack, and not from somewhere in the user space redzone.
-    } else {
-      op.mem.disp += 8;
-      ManglePushMemOpGeneric(block, instr, op);
-    }
-  } else {
-    ManglePushMemOpGeneric(block, instr, op);
-  }
-}
-
-// Generic mangling of a `POP_MEMv` that doesn't try to manage any of the
-// corner cases.
-//
-// This is used only in a few places in the Linux kernel, usually where the
-// flags are pushed onto the stack (`PUSHFQ`), and then popped off into a
-// memory location for storing.
-static void ManglePopMemOpGeneric(DecodedBasicBlock *block, Instruction *instr,
-                                  Operand op) {
-  Instruction ni;
-  APP(PUSH_GPRv_50(&ni, XED_REG_RAX));
-  APP(MOV_GPRv_MEMv(&ni, XED_REG_RAX, BaseDispMemOp(8, XED_REG_RSP)));
-  APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, XED_REG_RAX));
-  POP_GPRv_51(instr, XED_REG_RAX);
-  AnalyzedStackUsage(instr, true, true);
 }
 
 // Mangle a `POP_MEMv` instruction.
 static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
-  if (XED_ENCODER_OPERAND_TYPE_MEM != op.type || !op.is_compound) {
-    return;
-  }
-  // We're going to try to handle things like `POP (%rsp)` and `POP -8(%rsp)`.
-  // This can be used for stack-to-stack memory moves.
-  if (XED_REG_RSP == op.mem.reg_base) {
-    GRANARY_ASSERT(false);  // TODO(pag): Not implemented.
-  } else {
-    ManglePopMemOpGeneric(block, instr, op);
+  if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+    Instruction ni;
+    auto vr = block->AllocateVirtualRegister();
+    APP(MOV_GPRv_MEMv(&ni, vr, BaseDispMemOp(0, XED_REG_RSP)));
+    APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
+    LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(8, XED_REG_RSP));
+    AnalyzedStackUsage(instr, true, true);
   }
 }
 
@@ -250,6 +146,54 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
   MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
   instr->decoded_pc = decoded_pc;
   instr->ops[1].width = 8;
+}
+
+// Mangle an `ENTER` instruction.
+static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  auto frame_size = instr->ops[0].imm.as_uint & 0xFFFFUL;
+  auto num_args = instr->ops[1].imm.as_uint & 0x1FUL;
+  auto temp_rbp = block->AllocateVirtualRegister();
+  auto decoded_pc = instr->decoded_pc;
+  APP_NATIVE(MOV_GPRv_GPRv_89(&ni, temp_rbp, XED_REG_RSP));
+  APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP));
+
+  // In the case of something like watchpoints, where `RBP` is being tracked,
+  // and where the application is doing something funky with `RBP` (e.g. it's
+  // somehow watched), then we want to see these memory writes.
+  for (auto i = 0UL; i < num_args; ++i) {
+    auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
+    APP_NATIVE_MANGLED(PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP)));
+  }
+
+  if (frame_size) {
+    APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                      BaseDispMemOp(-static_cast<int32_t>(frame_size),
+                                    XED_REG_RSP)));
+
+    // Enter finishes with a memory write that is "unused". This is to detect
+    // stack segment issues and page faults. We don't even bother with this
+    // because emulating the exception behavior of `ENTER` is pointless because
+    // it could fault in so many other ways. We'll just hope that the fault
+    // occurs on the next thing to touch the stack, and doesn't happen in any
+    // of the reads through `RBP` or stack pushes above ;-)
+  }
+  MOV_GPRv_GPRv_89(instr, XED_REG_RBP, temp_rbp);
+  instr->decoded_pc = decoded_pc;
+  AnalyzedStackUsage(instr, false, false);
+}
+
+// Mangle a `LEAVE` instruction. By making the `MOV RSP, RBP` explicit, we help
+// the stack analysis in `granary/assemble/2_partition_fragments.cc` easier,
+// and by making the `POP RBP` explicit, we make the next fragment get marked
+// as having a valid stack.
+static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  auto decoded_pc = instr->decoded_pc;
+  APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
+  POP_GPRv_51(instr, XED_REG_RBP);
+  instr->decoded_pc = decoded_pc;
+  AnalyzedStackUsage(instr, true, true);
 }
 
 }  // namespace
@@ -273,6 +217,10 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr) {
       return ManglePopMemOp(block, instr);
     case XED_ICLASS_XLAT:
       return MangleXLAT(block, instr);
+    case XED_ICLASS_ENTER:
+      return MangleEnter(block, instr);
+    case XED_ICLASS_LEAVE:
+      return MangleLeave(block, instr);
     default:
       return MangleExplicitMemOp(block, instr);
   }

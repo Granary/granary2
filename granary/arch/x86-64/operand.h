@@ -78,6 +78,14 @@ class Operand : public OperandInterface {
     return is_explicit;
   }
 
+  inline int ByteWidth(void) const {
+    return -1 == width ? -1 : width / 8;
+  }
+
+  inline int BitWidth(void) const {
+    return width;
+  }
+
   void EncodeToString(OperandString *str) const;
 
   union {

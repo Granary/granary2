@@ -45,6 +45,27 @@ inline ToT UnsafeCast(const FromT v) {
   return dest;
 }
 
+// Non-integral, non-pointer type to some kind of pointer or integer type.
+//
+// Note: `__builtin_memcpy` is used instead of `memcpy`, mostly for the
+//     sake of kernel code where it sometimes seems that the optimisation
+//     of inlining a normal `memcpy` is not done.
+template <
+  typename ToT,
+  typename FromT,
+  typename EnableIf<
+    !IsPointer<FromT>() && !IsInteger<FromT>() &&
+    (IsPointer<ToT>() || IsInteger<ToT>())
+  >::Type=0
+>
+inline ToT UnsafeCast(const FromT v) {
+  static_assert(sizeof(FromT) == sizeof(ToT),
+    "Dangerous unsafe cast between two types of different sizes.");
+
+  ToT dest;
+  __builtin_memcpy(&dest, &v, sizeof(ToT));
+  return dest;
+}
 
 // Pointer to integral type.
 template <

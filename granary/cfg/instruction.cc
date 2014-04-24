@@ -62,7 +62,7 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   // not continue to reference the branch.
   auto branch = DynamicCast<BranchInstruction *>(instr);
   if (branch) {
-    const_cast<const void *&>(branch->TargetInstruction()->data) = nullptr;
+    *(branch->TargetInstruction()->GetDataPtr<void *>()) = nullptr;
   }
 
   return std::unique_ptr<Instruction>(instr);
@@ -89,7 +89,7 @@ Instruction *AnnotationInstruction::InsertBefore(
     this->Instruction::UnsafeInsertBefore(new_first);
     *block_first_ptr = new_first;
     annotation = IA_NOOP;
-    data = nullptr;
+    data = 0;
   }
   return this->Instruction::InsertBefore(std::move(that));
 }
@@ -110,7 +110,7 @@ Instruction *AnnotationInstruction::InsertAfter(
     this->Instruction::UnsafeInsertAfter(new_last);
     *block_last_ptr = new_last;
     annotation = IA_NOOP;
-    data = nullptr;
+    data = 0;
   }
   return this->Instruction::InsertAfter(std::move(that));
 }
@@ -122,7 +122,7 @@ bool AnnotationInstruction::IsLabel(void) const {
 
 // Returns true if this instruction is targeted by any branches.
 bool AnnotationInstruction::IsBranchTarget(void) const {
-  return IA_LABEL == annotation && nullptr != data;
+  return IA_LABEL == annotation && 0 != data;
 }
 
 LabelInstruction::LabelInstruction(void)

@@ -23,7 +23,6 @@ class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
-GRANARY_INTERNAL_DEFINITION class InstructionRelativizer;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -168,7 +167,10 @@ enum InstructionAnnotation {
   IA_INLINE_ASSEMBLY,
 
   // Target of a branch instruction.
-  IA_LABEL
+  IA_LABEL,
+
+  // Shift the stack pointer by a constant.
+  IA_SHIFT_STACK_POINTER
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -182,10 +184,16 @@ class AnnotationInstruction : public Instruction {
   virtual ~AnnotationInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline AnnotationInstruction(InstructionAnnotation annotation_,
-                               void *data_=nullptr)
+  inline explicit AnnotationInstruction(InstructionAnnotation annotation_)
       : annotation(annotation_),
-        data(data_) {}
+        data(0) {}
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline AnnotationInstruction(InstructionAnnotation annotation_,
+                               T data_)
+      : annotation(annotation_),
+        data(UnsafeCast<uintptr_t>(data_)) {}
 
   virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
@@ -197,13 +205,25 @@ class AnnotationInstruction : public Instruction {
   bool IsBranchTarget(void) const;
 
   GRANARY_INTERNAL_DEFINITION GRANARY_CONST InstructionAnnotation annotation;
-  GRANARY_INTERNAL_DEFINITION GRANARY_CONST void * GRANARY_CONST data;
+  GRANARY_INTERNAL_DEFINITION GRANARY_CONST uintptr_t GRANARY_CONST data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline T GetData(void) const {
+    return UnsafeCast<T>(data);
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline T *GetDataPtr(void) const {
+    return UnsafeCast<T *>(&data);
+  }
 
  private:
   AnnotationInstruction(void) = delete;
@@ -295,7 +315,6 @@ class NativeInstruction : public Instruction {
 
  private:
   friend class ControlFlowInstruction;
-  friend class InstructionRelativizer;
 
   // Invoke a function on every operand.
   void ForEachOperandImpl(const std::function<void(Operand *)> &func);

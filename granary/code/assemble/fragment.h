@@ -28,6 +28,14 @@ class BlockMetaData;
 class FragmentBuilder;
 class SSAVariableTracker;
 
+// Information about the partition to which a fragment belongs.
+union PartitionInfo {
+  inline PartitionInfo(void)
+      : id(0) {}
+
+  int id;
+};
+
 class SpillInfo {
  public:
   enum {
@@ -85,7 +93,7 @@ class Fragment {
   FlagUsageInfo flag_use;
 
   // The partition to which this fragment belongs.
-  DisjointSet<SpillInfo *> partition;
+  DisjointSet<PartitionInfo> partition;
 
   // The "flag zone" to which this fragment belongs.
   DisjointSet<FlagUsageInfo *> flag_zone;
@@ -111,7 +119,7 @@ class CodeFragment : public Fragment {
       : Fragment(),
         is_app_code(false),
         is_block_head(false),
-        block_metadata(nullptr) {}
+        block_meta(nullptr) {}
 
   virtual ~CodeFragment(void);
 
@@ -125,7 +133,7 @@ class CodeFragment : public Fragment {
 
   // The meta-data associated with the basic block that this code fragment
   // originates from.
-  BlockMetaData *block_metadata;
+  BlockMetaData *block_meta;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {

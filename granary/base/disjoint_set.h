@@ -6,38 +6,17 @@
 #include "granary/base/base.h"
 
 namespace granary {
-namespace detail {
-
-// Represents the value contained within a disjoint set.
-template <typename T>
-class DisjointSetValue {
- public:
-  inline DisjointSetValue(void)
-      : value() {}
-
-  T &Value(void) {
-    return value;
-  }
-
- private:
-  T value;
-};
-
-template <>
-class DisjointSetValue<void> {};
-
-}  // namespace detail
 
 // An embedded disjoint set data structure that implements the union-find
 // algorithm.
 template <typename T>
-class DisjointSet : public detail::DisjointSetValue<T> {
+class DisjointSet {
  public:
   typedef DisjointSet<T> SelfT;
 
   inline DisjointSet(void)
-      : detail::DisjointSetValue<T>(),
-        parent(this) {}
+      : parent(this),
+        value() {}
 
   // Union together two containers.
   template <typename U>
@@ -71,6 +50,11 @@ class DisjointSet : public detail::DisjointSetValue<T> {
     }
   }
 
+  // Union together two potentially disjoint sets into one larger set.
+  void Union(SelfT &that) {
+    Union(&that);
+  }
+
   // Find the "root" of this set.
   SelfT *Find(void) {
     if (parent != this) {
@@ -89,8 +73,17 @@ class DisjointSet : public detail::DisjointSetValue<T> {
     return Find() != that.Find();
   }
 
+  inline T &Value(void) {
+    return Find()->value;
+  }
+
+  inline T *operator->(void) {
+    return &(Find()->value);
+  }
+
  private:
   SelfT *parent;
+  T value;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DisjointSet);
 };

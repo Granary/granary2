@@ -48,6 +48,15 @@ namespace granary {
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
 
+// Returns true if the instruction modifies the stack pointer by a constant
+// value, otherwise returns false.
+//
+// Note: This function assumes that the stack pointer is an operand of the
+//       input instruction, and that it is a destination operand.
+//
+// Note: This function has an architecture-specific implementation.
+bool IsConstantStackPointerChange(const arch::Instruction &instr);
+
 namespace {
 
 // Make a new code fragment.
@@ -88,10 +97,17 @@ static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
                                             DecodedBasicBlock *block,
                                             LabelInstruction *label) {
   auto frag = MakeFragment(frags);
-  frag->block_metadata = block->MetaData();
+  frag->block_meta = block->MetaData();
   frag->instrs.Append(label->UnsafeUnlink().release());
   SetMetaData(label, frag);
   return frag;
+}
+
+// Append an instruction to a fragment. This also analyzes the stack usage of
+// the instruction.
+static void Append(CodeFragment *frag, Instruction *instr) {
+  instr->UnsafeUnlink().release();
+  frag->instrs.Append(instr);
 }
 
 // Extend a fragment with the instructions from a particular basic block.
@@ -141,7 +157,7 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
   auto label = branch->TargetInstruction();
   auto next = branch->Next();
   if (branch->IsConditionalJump()) {
-    frag->instrs.Append(branch->UnsafeUnlink().release());
+    Append(frag, branch);
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
     frag->successors[0] = succ;
     ExtendFragment(frags, succ, block, next);
@@ -196,7 +212,7 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
   auto is_direct_jump = cfi->IsUnconditionalJump() &&
                         !cfi->HasIndirectTarget();
   if (!is_direct_jump) {
-    frag->instrs.Append(cfi->UnsafeUnlink().release());
+    Append(frag, cfi);
     frag->successors[1] = FragmentForTargetBlock(frags, target_block);
     if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
         cfi->IsSystemReturn()) {
@@ -227,6 +243,18 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
       ExtendFragment(frags, succ, block, next);
     }
   }
+}
+
+// Split a fragment at a stack pointer-changing instruction.
+static void SplitFragmentAtStackChange(FragmentList *frags, CodeFragment *frag,
+                                       DecodedBasicBlock *block,
+                                       Instruction *instr) {
+  auto label = new LabelInstruction;
+  auto succ = MakeEmptyLabelFragment(frags, block, label);
+  auto next = instr->Next();
+  frag->successors[0] = succ;
+  Append(succ, instr);
+  ExtendFragment(frags, succ, block, next);
 }
 
 // Split a fragment at a point where the instructions in the block change
@@ -295,9 +323,21 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
       return SplitFragmentAtCFI(frags, frag, block, cfi);
 
     } else {
+      // Break this fragment if the about-to-be appended instruction changes the
+      // stack pointer without also reading it. This is our guide to an "unsafe"
+      // stack pointer change.
+      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        auto &ainstr(ninstr->instruction);
+        if (frag->instrs.First() != frag->instrs.Last() &&
+            ainstr.WritesToStackPointer() &&
+            !IsConstantStackPointerChange(ainstr)) {
+          return SplitFragmentAtStackChange(frags, frag, block, instr);
+        }
+      }
+
       // Extend block with this instruction and move to the next instruction.
       auto next = instr->Next();
-      frag->instrs.Append(instr->UnsafeUnlink().release());
+      Append(frag, instr);
       instr = next;
     }
   }
@@ -312,7 +352,7 @@ static CodeFragment *FragmentForBlock(FragmentList *frags,
     auto label = new LabelInstruction;
     frag = new CodeFragment;
     frag->is_app_code = false;
-    frag->block_metadata = block->MetaData();
+    frag->block_meta = block->MetaData();
     frag->is_block_head = true;
     frag->instrs.Append(label);
 

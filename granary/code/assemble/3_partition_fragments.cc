@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-#if 0
+
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
@@ -16,6 +16,8 @@
 #include "granary/util.h"
 
 namespace granary {
+
+#if 0
 
 // Implements the necessary forward and backward data-flow passes to partition/
 // color fragments such that two fragments are colored the same if and only if:
@@ -39,7 +41,7 @@ class FragmentColorer {
   // We check against the first fragment because we don't want to penalize
   // the first fragment into a different color if back propagation can give
   // it a color on its own.
-  bool ColorFragmentByMetaData(Fragment *frag, Fragment *first_frag) {
+  bool ColorFragmentByMetaData(CodeFragment *frag, Fragment *first_frag) {
     auto stack_meta = MetaDataCast<StackMetaData *>(frag->block_meta);
     if (frag != first_frag && stack_meta->has_stack_hint) {
       if (stack_meta->behaves_like_callstack) {
@@ -54,14 +56,18 @@ class FragmentColorer {
 
   // Initialize the fragment coloring.
   void Initialize(void) {
-    for (auto frag : FragmentIterator(frags)) {
-      ColorFragmentByCFI(frag);
-      if (!frag->partition_id) {
-        if (frag->reads_from_stack_pointer) {
-          MarkAsValid(frag);  // Reads & writes the stack pointer.
-        } else if (frag->block_meta && frag->is_exit) {
-          ColorFragmentByMetaData(frag, frags);
+    for (auto frag_ : FragmentIterator(frags)) {
+      if (auto frag = DynamicCast<CodeFragment *>(frag_)) {
+        ColorFragmentByCFI(frag);
+        if (!frag->partition->id) {
+          if (frag->reads_from_stack_pointer) {
+            MarkAsValid(frag);  // Reads & writes the stack pointer.
+          } else if (frag->block_meta && frag->is_exit) {
+            ColorFragmentByMetaData(frag, frags);
+          }
         }
+      } else if (auto frag = DynamicCast<ExitFragment *>(frag_)) {
+
       }
     }
   }
@@ -69,7 +75,7 @@ class FragmentColorer {
   // Finalize the fragment coloring.
   void Finalize(void) {
     for (auto frag : FragmentIterator(frags)) {
-      if (!frag->partition_id) {
+      if (!frag->partition->id) {
         MarkAsInvalid(frag);
       }
     }
@@ -80,12 +86,15 @@ class FragmentColorer {
     auto global_changed = false;
     for (auto changed = true; changed; ) {
       changed = false;
-      for (auto frag : FragmentIterator(frags)) {
-        if (!frag->partition_id &&
-            !frag->writes_to_stack_pointer &&
-            frag->fall_through_target &&
-            frag->fall_through_target->partition_id) {
-          changed = PropagateColor(frag->fall_through_target, frag) || changed;
+      for (auto frag_ : FragmentIterator(frags)) {
+        if (auto frag = DynamicCast<CodeFragment *>(frag_)) {
+          for (auto succ : frag->successors) {
+            if (succ && !frag->partition->id &&
+                !frag->writes_to_stack_pointer &&
+                succ->partition->id) {
+              changed = PropagateColor(succ, frag) || changed;
+            }
+          }
         }
       }
       global_changed = global_changed || changed;
@@ -98,12 +107,13 @@ class FragmentColorer {
     auto global_changed = false;
     for (auto changed = true; changed; ) {
       changed = false;
-      for (auto frag : FragmentIterator(frags)) {
-        if (!frag->partition_id || frag->writes_to_stack_pointer) {
+      for (auto frag_ : FragmentIterator(frags)) {
+        auto frag = DynamicCast<CodeFragment *>(frag_);
+        if (!frag->partition->id || frag->writes_to_stack_pointer) {
           continue;
         }
-        changed = PropagateColor(frag, frag->branch_target) || changed;
-        changed = PropagateColor(frag, frag->fall_through_target) || changed;
+        changed = PropagateColor(frag, frag->successors[0]) || changed;
+        changed = PropagateColor(frag, frag->successors[1]) || changed;
       }
       global_changed = global_changed || changed;
     }
@@ -115,9 +125,9 @@ class FragmentColorer {
   // a C-style call stack.
   void MarkAsValid(Fragment *frag) {
     if (frag) {
-      GRANARY_ASSERT(0 <= frag->partition_id);
-      if (!frag->partition_id) {
-        frag->partition_id = next_valid_id++;
+      GRANARY_ASSERT(0 <= frag->partition->id);
+      if (!frag->partition->id) {
+        frag->partition->id = next_valid_id++;
       }
     }
   }
@@ -126,9 +136,9 @@ class FragmentColorer {
   // behave like a callstack.
   void MarkAsInvalid(Fragment *frag) {
     if (frag) {
-      GRANARY_ASSERT(0 >= frag->partition_id);
-      if (!frag->partition_id) {
-        frag->partition_id = next_invalid_id--;
+      GRANARY_ASSERT(0 >= frag->partition->id);
+      if (!frag->partition->id) {
+        frag->partition->id = next_invalid_id--;
       }
     }
   }
@@ -154,21 +164,24 @@ class FragmentColorer {
       // lead to returns.
       } else if (instr->IsFunctionCall() || instr->IsFunctionReturn()) {
         MarkAsValid(frag);
-        MarkAsValid(frag->branch_target);
-        MarkAsValid(frag->fall_through_target);
+        MarkAsValid(frag->successors[1]);
+        MarkAsValid(frag->successors[0]);
       }
     }
   }
 
   // Propagate the coloring from a source fragment to a dest fragment. This
   // can be used for either a successor or predecessor relationship.
-  bool PropagateColor(Fragment *source, Fragment *dest) {
-    if (dest && !dest->partition_id) {
+  bool PropagateColor(Fragment *source_, Fragment *dest_) {
+    auto source = UnsafeCast<CodeFragment *>(source_);
+    auto dest = UnsafeCast<CodeFragment *>(dest_);
+    if (dest && !dest->partition->id) {
       if (source->block_meta == dest->block_meta &&
           !source->writes_to_stack_pointer &&
           !dest->writes_to_stack_pointer) {
-        dest->partition_id = source->partition_id;
-      } else if (source->partition_id > 0) {
+        dest->partition->id = source->partition->id;
+        dest->partition.Union(source->partition);
+      } else if (source->partition->id > 0) {
         MarkAsValid(dest);
       } else {
         MarkAsInvalid(dest);
@@ -190,11 +203,16 @@ class FragmentColorer {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FragmentColorer);
 };
 
-// Partition the fragments into groups, where each group is labeled/colored by
-// their `stack_id` field.
-void PartitionFragmentsByStackUse(Fragment * const frags) {
+// Partition the fragments into groups, where two fragments belong to the same
+// group (partition) iff they are connected by control flow, if they belong to
+// the same basic block, and if the stack pointer does not change between them.
+void PartitionFragmentsByStackUse(FragmentList *frags) {
   FragmentColorer colorer(frags);
   colorer.Initialize();
+
+  auto first_frag = DynamicCast<CodeFragment *>(frags->First());
+  colorer.ColorFragmentByMetaData(first_frag, nullptr);
+  /*
   for (auto changed = true; changed; ) {
     changed = colorer.BackPropagate();
     changed = colorer.ForwardPropagate() || changed;
@@ -203,12 +221,18 @@ void PartitionFragmentsByStackUse(Fragment * const frags) {
     // of the entry fragment and propagate it forward (assuming that we have
     // not already deduced the safety of its stack).
     if (!changed && !frags->partition_id) {
-      changed = colorer.ColorFragmentByMetaData(frags, nullptr);
+      changed = colorer.ColorFragmentByMetaData(frags->First(), nullptr);
     }
-  }
+  }*/
   colorer.Finalize();
 }
+#endif
 
+// Partition the fragments into groups, where two fragments belong to the same
+// group (partition) iff they are connected by control flow, if they belong to
+// the same basic block, and if the stack pointer does not change between them.
+void PartitionFragmentsByStackUse(FragmentList *frags) {
+  GRANARY_UNUSED(frags);
+}
 
 }  // namespace granary
-#endif

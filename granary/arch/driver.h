@@ -11,7 +11,6 @@
 #include "granary/arch/init.h"
 #include "granary/arch/decode.h"
 #include "granary/arch/encode.h"
-#include "granary/arch/relativize.h"
 
 // Include "documentation" driver interfaces (for example:
 // `arch::InstructionInterface`and `arch::OperandInterface`). These serve
