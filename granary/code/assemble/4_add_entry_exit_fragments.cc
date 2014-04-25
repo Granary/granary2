@@ -414,12 +414,24 @@ void AddEntryAndExitFragments(FragmentList *frags) {
   AnalyzeFlagsUse(frags);
   ConvertToAppFrags(frags);
   AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
+
+  auto code_first = DynamicCast<CodeFragment *>(frags->First());
+  GRANARY_ASSERT(nullptr != code_first);
+
+  // Guarantee that there is a flag entry fragment for the first fragment.
+  if (!code_first->attr.is_app_code) {
+    frags->Prepend(MakeFragment<FlagEntryFragment>(code_first, code_first));
+  }
+
   AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
 
   AddEntryFragments(frags, IsPartitionEntry,
                     MakeFragment<PartitionEntryFragment>);
-  frags->Prepend(MakeFragment<PartitionEntryFragment>(frags->First(),
-                                                      frags->First()));
+
+  // Guarantee that there is a partition entry fragment.
+  auto first_frag = frags->First();
+  frags->Prepend(MakeFragment<PartitionEntryFragment>(first_frag, first_frag));
+
   AddExitFragments(frags, IsPartitionExit,
                    MakeFragment<PartitionExitFragment>);
   LabelPartitions(frags);
