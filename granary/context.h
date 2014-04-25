@@ -31,10 +31,6 @@ class ContextInterface {
 
   virtual ~ContextInterface(void) = default;
 
-  // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list. This returns the first
-  virtual void AnnotateInstruction(Instruction *instr) = 0;
-
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
 
@@ -88,10 +84,6 @@ class Context : public ContextInterface {
         metadata_manager(metadata_manager_),
         tool_manager(tool_manager_),
         edge_code_cache(edge_code_cache_) {}
-
-  // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list. This returns the first
-  virtual void AnnotateInstruction(Instruction *instr) override;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;

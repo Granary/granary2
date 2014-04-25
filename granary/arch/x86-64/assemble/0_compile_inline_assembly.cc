@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/string.h"
 
@@ -16,7 +17,9 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+
 namespace arch {
+
 // Categories of every iclass.
 extern xed_category_enum_t ICLASS_CATEGORIES[];
 
@@ -24,6 +27,7 @@ extern xed_category_enum_t ICLASS_CATEGORIES[];
 extern const int NUM_IMPLICIT_OPERANDS[];
 
 }  // namespace arch
+
 namespace {
 
 // Not very pretty, but implements a simple top-down parser for parsing
@@ -290,6 +294,14 @@ class InlineAssemblyParser {
   void FinalizeInstruction(void) {
     std::unique_ptr<Instruction> new_instr;
     FixupOperands();
+
+    // Don't allow instructions the read or modify the stack pointer as this
+    // will break invariants set up by early mangling about stack pointer
+    // definedness.
+    data.AnalyzeStackUsage();
+    GRANARY_ASSERT(!data.ReadsFromStackPointer() &&
+                   !data.WritesToStackPointer());
+
     if (data.IsJump()) {
       GRANARY_ASSERT(nullptr != branch_target);
       new_instr.reset(new BranchInstruction(&data, branch_target));
@@ -343,10 +355,12 @@ class InlineAssemblyParser {
 // `block`. This places the inlined instructions before `instr`, which is
 // assumed to be the `AnnotationInstruction` containing the inline assembly
 // instructions.
-void InlineAssemblyBlock::Compile(LocalControlFlowGraph *cfg,
-                                  DecodedBasicBlock *block,
-                                  Instruction *instr) {
-  InlineAssemblyParser parser(cfg, scope, block, instr, assembly);
+void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
+                                DecodedBasicBlock *block,
+                                Instruction *instr,
+                                InlineAssemblyBlock *asm_block) {
+  InlineAssemblyParser parser(cfg, asm_block->scope, block,
+                              instr, asm_block->assembly);
   parser.ParseInstructions();
 }
 

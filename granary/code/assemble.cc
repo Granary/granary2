@@ -53,11 +53,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // that represent the "true" basic blocks.
   BuildFragmentList(cfg, &frags);
 
-  /*
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
-  PartitionFragmentsByStackUse(frags);
-
+  PartitionFragments(&frags);
+  /*
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
   AddEntryAndExitFragments(&frags);

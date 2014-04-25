@@ -169,8 +169,10 @@ enum InstructionAnnotation {
   // Target of a branch instruction.
   IA_LABEL,
 
-  // Shift the stack pointer by a constant.
-  IA_SHIFT_STACK_POINTER
+  // Marks the stack as changing to a valid or undefined stack pointer value.
+  IA_UNDEFINED_STACK,
+  IA_UNKNOWN_STACK,
+  IA_VALID_STACK
 };
 
 // An annotation instruction is an environment-specific and implementation-

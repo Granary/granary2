@@ -48,15 +48,6 @@ namespace granary {
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
 
-// Returns true if the instruction modifies the stack pointer by a constant
-// value, otherwise returns false.
-//
-// Note: This function assumes that the stack pointer is an operand of the
-//       input instruction, and that it is a destination operand.
-//
-// Note: This function has an architecture-specific implementation.
-bool IsConstantStackPointerChange(const arch::Instruction &instr);
-
 namespace {
 
 // Make a new code fragment.
@@ -78,7 +69,7 @@ static ExitFragment *MakeFutureBlockFragment(FragmentList *frags,
                                              InstrumentedBasicBlock *block) {
   auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK);
   frags->Append(frag);
-  frag->block_metadata = block->UnsafeMetaData();
+  frag->block_meta = block->UnsafeMetaData();
   return frag;
 }
 
@@ -88,7 +79,7 @@ static ExitFragment *MakeCachedFragment(FragmentList *frags,
                                         CachedBasicBlock *block) {
   auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
   frags->Append(frag);
-  frag->block_metadata = block->UnsafeMetaData();
+  frag->block_meta = block->UnsafeMetaData();
   return frag;
 }
 
@@ -216,11 +207,12 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
     frag->successors[1] = FragmentForTargetBlock(frags, target_block);
     if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
         cfi->IsSystemReturn()) {
+      frag->successors[0] = frag->successors[1];
+      frag->successors[1] = nullptr;
       return;
     }
-  // Pretend that direct jumps are just fall-throughs.
   } else {
-    next = cfi;
+    next = cfi;  // Pretend that direct jumps are just fall-throughs.
   }
 
   // If this was a call or a conditional jump then add a fall-through
@@ -245,23 +237,24 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
   }
 }
 
-// Split a fragment at a stack pointer-changing instruction.
+// Split a fragment at a place where the validness of the stack pointer changes
+// from defined to undefined, or undefined to defined.
 static void SplitFragmentAtStackChange(FragmentList *frags, CodeFragment *frag,
                                        DecodedBasicBlock *block,
-                                       Instruction *instr) {
+                                       Instruction *instr,
+                                       bool stack_is_valid) {
   auto label = new LabelInstruction;
   auto succ = MakeEmptyLabelFragment(frags, block, label);
-  auto next = instr->Next();
   frag->successors[0] = succ;
-  Append(succ, instr);
-  ExtendFragment(frags, succ, block, next);
+  succ->stack.is_checked = true;
+  succ->stack.is_valid = stack_is_valid;
+  ExtendFragment(frags, succ, block, instr);
 }
 
 // Split a fragment at a point where the instructions in the block change
 // from instrumentation-added -> app, or app -> instrumentation added.
-static void SplitFragmentAtAppChange(FragmentList *frags, CodeFragment *frag,
-                                     DecodedBasicBlock *block,
-                                     Instruction *next) {
+static void SplitFragment(FragmentList *frags, CodeFragment *frag,
+                          DecodedBasicBlock *block, Instruction *next) {
   auto label = new LabelInstruction;
   auto succ = MakeEmptyLabelFragment(frags, block, label);
   frag->successors[0] = succ;
@@ -298,7 +291,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
       } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
                  (ninstr->ReadsConditionCodes() ||
                   ninstr->WritesConditionCodes())) {
-        return SplitFragmentAtAppChange(frags, frag, block, instr);
+        return SplitFragment(frags, frag, block, instr);
       }
     }
 
@@ -317,25 +310,59 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
       if (cfi->instruction.WritesToStackPointer()) {
         auto label = new LabelInstruction;
         auto succ = MakeEmptyLabelFragment(frags, block, label);
+        succ->stack.is_checked = true;
+        succ->stack.is_valid = true;
+        succ->stack.has_stack_changing_cfi = true;
         frag->successors[0] = succ;
         frag = succ;
       }
       return SplitFragmentAtCFI(frags, frag, block, cfi);
 
-    } else {
-      // Break this fragment if the about-to-be appended instruction changes the
-      // stack pointer without also reading it. This is our guide to an "unsafe"
-      // stack pointer change.
-      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        auto &ainstr(ninstr->instruction);
-        if (frag->instrs.First() != frag->instrs.Last() &&
-            ainstr.WritesToStackPointer() &&
-            !IsConstantStackPointerChange(ainstr)) {
-          return SplitFragmentAtStackChange(frags, frag, block, instr);
+    // Ignore annotation instructions, but use them to guide the fragment
+    // splitting w.r.t stack definedness. The stack definedness annotations
+    // come from early mangling of instructions. It's important that they
+    // come from there as they will be inserted before any virtual registers
+    // created for use by a particular stack pointer changing instruction.
+    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      auto next = instr->Next();
+      if (IA_VALID_STACK == annot->annotation) {
+        if (frag->stack.is_checked && !frag->stack.is_valid) {
+          return SplitFragmentAtStackChange(frags, frag, block, next, true);
+        } else {
+          frag->stack.is_checked = true;
+          frag->stack.is_valid = true;
+        }
+      } else if (IA_UNDEFINED_STACK == annot->annotation) {
+        if (frag->stack.is_checked && frag->stack.is_valid) {
+          return SplitFragmentAtStackChange(frags, frag, block, next, false);
+        } else {
+          frag->stack.is_checked = true;
+          frag->stack.is_valid = false;
+        }
+
+      // This annotation is somewhat more suble than the above two. The idea
+      // is that when we do the stack analysis and fragment partitioning in
+      // `3_partition_fragments.cc`, we want to be aggressive about stack
+      // validity. So, for example, if we see something like:
+      //          MOV RSP, [X]
+      //          MOV Y, [Z]
+      //          POP [Y]
+      // Then we'll split that into two fragments:
+      //          MOV RSP, [X]
+      //          ------------
+      //          MOV Y, [Z]
+      //          POP [Y]
+      // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
+      // by the stack undefinedness of the `MOV RSP, [X]`.
+      } else if (IA_UNKNOWN_STACK == annot->annotation) {
+        if (frag->stack.is_checked && !frag->stack.is_valid) {
+          return SplitFragment(frags, frag, block, next);
         }
       }
+      instr = next;
 
-      // Extend block with this instruction and move to the next instruction.
+    // Extend block with this instruction and move to the next instruction.
+    } else {
       auto next = instr->Next();
       Append(frag, instr);
       instr = next;

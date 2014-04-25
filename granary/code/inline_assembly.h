@@ -94,21 +94,11 @@ class InlineAssemblyBlock {
   //       to it.
   ~InlineAssemblyBlock(void);
 
-  // Compile this inline assembly into some instructions within the block
-  // `block`. This places the inlined instructions before `instr`, which is
-  // assumed to be the `AnnotationInstruction` containing the inline assembly
-  // instructions.
-  //
-  // Note: This has an architecture-specific implementation.
-  void Compile(LocalControlFlowGraph *cfg, DecodedBasicBlock *block,
-               Instruction *instr);
-
   GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
- private:
   InlineAssemblyScope * const scope;
   const char * const assembly;
 };

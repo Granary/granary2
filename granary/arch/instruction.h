@@ -64,6 +64,10 @@ class InstructionInterface {
   // Returns true if an instruction writes to the stack pointer.
   bool WritesToStackPointer(void) const;
 
+  // Returns true if the instruction modifies the stack pointer by a constant
+  // value, otherwise returns false.
+  bool ShiftsStackPointer(void) const;
+
   // Returns true if an instruction reads the flags.
   bool ReadsFlags(void) const;
 

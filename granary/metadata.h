@@ -313,7 +313,9 @@ class BlockMetaData {
 template <typename T, typename EnableIf<IsMetaDataPointer<T>::RESULT>::Type=0>
 inline T MetaDataCast(BlockMetaData *meta) {
   typedef typename RemovePointer<T>::Type M;
-  return reinterpret_cast<T>(meta->Cast(MetaDataDescription::Get<M>()));
+  return GRANARY_LIKELY(nullptr != meta)
+      ? reinterpret_cast<T>(meta->Cast(MetaDataDescription::Get<M>()))
+      : nullptr;
 }
 
 #ifdef GRANARY_INTERNAL

@@ -6,8 +6,4 @@
 
 namespace granary {
 
-// Annotates the instruction, or adds an annotated instruction into the
-// instruction list.
-void Context::AnnotateInstruction(Instruction *) {}
-
 }  // namespace granary

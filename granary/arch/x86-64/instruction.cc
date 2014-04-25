@@ -53,6 +53,35 @@ bool Instruction::WritesToStackPointer(void) const {
   return writes_to_stack_pointer;
 }
 
+// Returns true if the instruction modifies the stack pointer by a constant
+// value, otherwise returns false.
+bool Instruction::ShiftsStackPointer(void) const {
+  switch (iclass) {
+    case XED_ICLASS_PUSH:
+    case XED_ICLASS_POP:
+    case XED_ICLASS_CALL_NEAR:
+    case XED_ICLASS_CALL_FAR:
+    case XED_ICLASS_RET_NEAR:
+    case XED_ICLASS_RET_FAR:
+    case XED_ICLASS_ENTER:
+      return true;
+
+    case XED_ICLASS_ADD:
+    case XED_ICLASS_SUB:
+      return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
+             ops[1].IsImmediate();
+
+    case XED_ICLASS_LEA:
+      return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
+             ops[1].IsMemory() && ops[1].is_compound &&
+             XED_REG_RSP == ops[1].mem.reg_base &&
+             XED_REG_INVALID == ops[1].mem.reg_index;
+
+    default:
+      return false;
+  }
+}
+
 // Returns true if an instruction reads the flags.
 //
 // Note: the RFLAGS register is always the last implicit operand.

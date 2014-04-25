@@ -68,6 +68,33 @@ class FlagUsageInfo {
   uint32_t all_killed_flags;
 };
 
+// Tracks stack usage info.
+class StackUsageInfo {
+ public:
+  StackUsageInfo(void)
+      : is_valid(false),
+        is_checked(false),
+        has_stack_changing_cfi(false),
+        overall_change(0) {}
+
+  // Tells us whether or not the stack pointer in this block appears to
+  // reference a valid thread (user or kernel space) stack.
+  bool is_valid;
+
+  // Tells us whether or not we have decided on the value of `is_valid`.
+  bool is_checked;
+
+  // Does this fragment contain a control-flow instruction that modifies the
+  // stack pointer?
+  bool has_stack_changing_cfi;
+
+  // Summarizes the overall change made to the stack pointer across this
+  // fragment.
+  //
+  // TODO(pag): Track this!!
+  int overall_change;
+};
+
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
@@ -119,7 +146,8 @@ class CodeFragment : public Fragment {
       : Fragment(),
         is_app_code(false),
         is_block_head(false),
-        block_meta(nullptr) {}
+        block_meta(nullptr),
+        stack() {}
 
   virtual ~CodeFragment(void);
 
@@ -134,6 +162,9 @@ class CodeFragment : public Fragment {
   // The meta-data associated with the basic block that this code fragment
   // originates from.
   BlockMetaData *block_meta;
+
+  // Tracks the stack usage in this code fragment.
+  StackUsageInfo stack;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {
@@ -224,7 +255,7 @@ class ExitFragment : public Fragment {
   ExitFragmentKind kind;
 
   union {
-    BlockMetaData *block_metadata;
+    BlockMetaData *block_meta;
   };
 
  private:

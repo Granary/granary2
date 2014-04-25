@@ -56,7 +56,7 @@ class DisjointSet {
   }
 
   // Find the "root" of this set.
-  SelfT *Find(void) {
+  SelfT *Find(void) const {
     if (parent != this) {
       parent = parent->Find();
     }
@@ -77,13 +77,21 @@ class DisjointSet {
     return Find()->value;
   }
 
+  inline const T &Value(void) const {
+    return Find()->value;
+  }
+
   inline T *operator->(void) {
-    return &(Find()->value);
+    return &Value();
+  }
+
+  inline const T *operator->(void) const {
+    return &Value();
   }
 
  private:
-  SelfT *parent;
-  T value;
+  mutable SelfT *parent;
+  mutable T value;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DisjointSet);
 };

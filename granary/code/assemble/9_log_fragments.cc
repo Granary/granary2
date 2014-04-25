@@ -52,17 +52,16 @@ static const char *FragmentBackground(const Fragment *frag) {
   enum {
     NUM_COLORS = sizeof partition_color / sizeof partition_color[0]
   };
-  /*
-  if (0 < frag->partition_id) {
-    auto stack_id = static_cast<size_t>(frag->partition_id);
-    return partition_color[stack_id % NUM_COLORS];
-  } else {
+  if (IsA<ExitFragment *>(frag)) {
     return "white";
-  }*/
-  // TODO(pag): Re-do this!
-  GRANARY_UNUSED(frag);
-  GRANARY_UNUSED(partition_color);
-  return "white";
+  }
+  if (auto code = DynamicCast<CodeFragment *>(frag)) {
+    if (!code->stack.is_valid) {
+      return "grey";
+    }
+  }
+  auto stack_id = static_cast<size_t>(frag->partition->id);
+  return stack_id ? partition_color[stack_id % NUM_COLORS] : "white";
 }
 
 // Log the input-only operands.
@@ -152,7 +151,7 @@ void Log(LogLevel level, FragmentList *frags) {
   Log(level, "digraph {\n"
              "node [fontname=courier shape=record"
              " nojustify=false labeljust=l style=filled];\n"
-             "f0 [color=white fontcolor=white];\n");
+             "f0 [label=enter];\n");
   LogFragmentEdge(level, nullptr, frags->First());
   for (auto frag : FragmentIterator(frags)) {
     LogFragmentEdges(level, frag);

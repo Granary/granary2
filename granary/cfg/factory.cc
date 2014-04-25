@@ -113,6 +113,23 @@ void BlockFactory::AddFallThroughInstruction(
   }
 }
 
+// Annotate the instruction list based on the just-added instruction. This adds
+// in the `IA_UNKNOWN_STACK` annotation when the decoded instruction resulted in
+// the addition of an `IA_UNDEFINED_STACK` annotation. These two annotations
+// are used during code assembly to split up blocks into fragments.
+static void AnnotateInstruction(DecodedBasicBlock *block,
+                                Instruction *begin) {
+  for (auto instr : InstructionListIterator(begin)) {
+    if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (IA_UNDEFINED_STACK == annot->annotation) {
+        block->UnsafeAppendInstruction(
+            new AnnotationInstruction(IA_UNKNOWN_STACK));
+        break;
+      }
+    }
+  }
+}
+
 // Decode an instruction list starting at `pc` and link the decoded
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
@@ -127,8 +144,9 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
       return;
     }
     instr = MakeInstruction(&dinstr);
+    auto prev_instr = block->LastInstruction()->Previous();
     block->UnsafeAppendInstruction(instr);
-    context->AnnotateInstruction(instr);
+    AnnotateInstruction(block, prev_instr->Next());
   } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(&decoder, block, instr, pc);
 }

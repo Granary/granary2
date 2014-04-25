@@ -9,9 +9,10 @@
 
 namespace granary {
 
-// Partition the fragments into groups, where each group is labeled/colored by
-// their `stack_id` field.
-void PartitionFragmentsByStackUse(FragmentList *frags);
+// Partition the fragments into groups, where two fragments belong to the same
+// group (partition) iff they are connected by control flow, if they belong to
+// the same basic block, and if the stack pointer does not change between them.
+void PartitionFragments(FragmentList *frags);
 
 }  // namespace granary
 

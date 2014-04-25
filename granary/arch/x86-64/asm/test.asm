@@ -7,9 +7,10 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+    enter $10, $2;
     xlat;
-    ret;
-/*
+//    ret;
+
     mov %rax, %rdi;
     mov %rdi, %rsi;
     mov (%rsi), %rdx;
@@ -17,7 +18,7 @@ DEFINE_FUNC(granary_test_mangle)
     mov (%rdi, %rsi), %rdi;
    //xadd %rdi, %rsi;
     //movsq;
-    ret;
+//    ret;
 
     mov %rsp, %rbp;
     sub $0x20, %rsp;
@@ -33,7 +34,7 @@ DEFINE_FUNC(granary_test_mangle)
 
     lea -0x8(%rsp), %rax;
     mov %rax, 0x8(%rbp);
-    xlat;
+    //xlat;
     mov $0, %rax;
 
 .Lloop_call_through_stack:
@@ -58,8 +59,9 @@ DEFINE_FUNC(granary_test_mangle)
     // In this block the stack pointer should be seen as valid because of
     // the `ret`.
     mov $1, %rax;
+    leave;
     ret;
-*/
+
 END_FUNC(granary_test_mangle)
 
 END_FILE

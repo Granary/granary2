@@ -40,7 +40,7 @@ namespace arch {
   do { \
     __VA_ARGS__; \
     ni.decoded_pc = instr->decoded_pc; \
-    MangleDecodedInstruction(block, &ni); \
+    MangleDecodedInstruction(block, &ni, true); \
     block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
@@ -191,6 +191,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
+  block->UnsafeAppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
   AnalyzedStackUsage(instr, true, true);
@@ -200,29 +201,56 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
 
 // Perform "early" mangling of some instructions. This is primary to make the
 // task of virtual register allocation tractable.
-void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr) {
+void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
+                              bool rec) {
   // Do the stack usage "early" so that it is reflected in instructions
   // whose memory operands and split into intermediate `LEA` instructions.
-  instr->AnalyzeStackUsage();
+
+  // Inject `AnnotationInstruction`s at opportune moments to make the job of
+  // `granary/code/assemble/2_build_fragment_list.cc` easier by making sure
+  // that if an instruction, e.g. `MOV RSP, [RAX]` modifies the stack pointer,
+  // and that if it's converted to something like:
+  //                LEA %0, [RAX];
+  //                MOV RSP, [%0];
+  // That both instructions (and therefore all related virtual registers)
+  // appear in the same fragment partition during assembly.
+  if (!rec && instr->WritesToStackPointer()) {
+    if (instr->ShiftsStackPointer()) {
+      if (XED_ICLASS_ADD != instr->iclass && XED_ICLASS_SUB != instr->iclass) {
+        block->UnsafeAppendInstruction(
+            new AnnotationInstruction(IA_VALID_STACK));
+      }
+    } else {
+      block->UnsafeAppendInstruction(
+          new AnnotationInstruction(IA_UNDEFINED_STACK));
+    }
+  }
 
   switch (instr->iclass) {
     case XED_ICLASS_CALL_NEAR:
     case XED_ICLASS_JMP:
-      return MangleIndirectCFI(block, instr);
+      MangleIndirectCFI(block, instr);
+      break;
     case XED_ICLASS_LEA:
-      return;
+      break;
     case XED_ICLASS_PUSH:
-      return ManglePushMemOp(block, instr);
+      ManglePushMemOp(block, instr);
+      break;
     case XED_ICLASS_POP:
-      return ManglePopMemOp(block, instr);
+      ManglePopMemOp(block, instr);
+      break;
     case XED_ICLASS_XLAT:
-      return MangleXLAT(block, instr);
+      MangleXLAT(block, instr);
+      break;
     case XED_ICLASS_ENTER:
-      return MangleEnter(block, instr);
+      MangleEnter(block, instr);
+      break;
     case XED_ICLASS_LEAVE:
-      return MangleLeave(block, instr);
+      MangleLeave(block, instr);
+      break;
     default:
-      return MangleExplicitMemOp(block, instr);
+      MangleExplicitMemOp(block, instr);
+      break;
   }
 }
 
