@@ -45,20 +45,27 @@ static const char *partition_color[] = {
   "darkorchid2"
 };
 
+enum {
+  NUM_COLORS = sizeof partition_color / sizeof partition_color[0]
+};
+
+static const char *FragmentBorder(const Fragment *frag) {
+  if (auto code = DynamicCast<CodeFragment *>(frag)) {
+    if (!code->stack.is_checked) {
+      return "red";
+    } else if (!code->stack.is_valid) {
+      return "white";
+    }
+  }
+  return "black";
+}
+
 // Color the fragment according to the partition to which it belongs. This is
 // meant to be a visual cue, not a perfect association with the fragment's
 // partition id.
 static const char *FragmentBackground(const Fragment *frag) {
-  enum {
-    NUM_COLORS = sizeof partition_color / sizeof partition_color[0]
-  };
   if (IsA<ExitFragment *>(frag)) {
     return "white";
-  }
-  if (auto code = DynamicCast<CodeFragment *>(frag)) {
-    if (!code->stack.is_valid) {
-      return "grey";
-    }
   }
   auto stack_id = static_cast<size_t>(frag->partition->id);
   return stack_id ? partition_color[stack_id % NUM_COLORS] : "white";
@@ -135,8 +142,9 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
-  Log(level, "f%p [fillcolor=%s label=<{", reinterpret_cast<const void *>(frag),
-      FragmentBackground(frag));
+  Log(level, "f%p [fillcolor=%s color=%s label=<{",
+      reinterpret_cast<const void *>(frag),
+      FragmentBackground(frag), FragmentBorder(frag));
   LogBlockHeader(level, frag);
   if (!IsA<ExitFragment *>(frag)) {
     LogInstructions(level, frag);

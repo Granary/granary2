@@ -21,7 +21,8 @@ extern const FlagsSet ICLASS_FLAGS[];
 void VisitInstructionFlags(const arch::Instruction &instr,
                            FlagUsageInfo *flags) {
   auto &instr_flags(arch::ICLASS_FLAGS[instr.iclass]);
-  flags->all_killed_flags |= instr_flags.written.flat;
+  flags->all_written_flags |= instr_flags.written.flat;
+  flags->all_read_flags |= instr_flags.read.flat;
   flags->entry_live_flags &= ~instr_flags.written.flat;
   flags->entry_live_flags |= instr_flags.read.flat;
 }

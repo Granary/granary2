@@ -118,13 +118,17 @@ class FlagUsageInfo {
  public:
   inline FlagUsageInfo(void)
       : entry_live_flags(0),
-        all_killed_flags(0) {}
+        all_read_flags(0),
+        all_written_flags(0) {}
 
   // Conservative set of flags that are live on entry to this basic block.
   uint32_t entry_live_flags;
 
   // Flags that are killed anywhere within this fragment.
-  uint32_t all_killed_flags;
+  uint32_t all_read_flags;
+
+  // Flags that are killed anywhere within this fragment.
+  uint32_t all_written_flags;
 };
 
 // Tracks stack usage info.
@@ -152,6 +156,8 @@ class StackUsageInfo {
   //
   // TODO(pag): Track this!!
   int overall_change;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(StackUsageInfo);
 };
 
 // Attributes about a block of code.

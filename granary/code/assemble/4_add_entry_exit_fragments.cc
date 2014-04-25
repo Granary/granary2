@@ -13,161 +13,6 @@
 
 namespace granary {
 
-#if 0
-namespace {
-
-// Make an entry/exit fragment of a specific kind and partially chain it into
-// the control-flow and the fragments list.
-static Fragment *MakeFragment(FragmentKind kind, Fragment *inherit,
-                              Fragment *fall_through, Fragment *next) {
-  auto frag = new Fragment(-1);
-  auto label = new LabelInstruction;
-  frag->AppendInstruction(std::unique_ptr<Instruction>(label));
-  frag->kind = kind;
-  frag->partition_id = inherit->partition_id;
-  frag->block_meta = inherit->block_meta;
-  frag->is_decoded_block_head = inherit->is_decoded_block_head;
-  frag->fall_through_target = fall_through;
-  frag->next = next;
-  SetMetaData(label, frag);
-
-  if (FRAG_KIND_PARTITION_ENTRY == kind || FRAG_KIND_PARTITION_EXIT == kind) {
-    frag->partition_sentinel = frag;
-  }
-  return frag;
-}
-
-// Initialize the problem by adding the partition and flag entry fragments
-// for the first basic block.
-static void InitEntryFragments(Fragment **frags_ptr) {
-  auto first = *frags_ptr;
-  auto first_part = MakeFragment(FRAG_KIND_PARTITION_ENTRY,
-                                 first, first, first);
-  *frags_ptr = first_part;
-
-  if (FRAG_KIND_INSTRUMENTATION == first->kind) {
-    auto first_flag = MakeFragment(FRAG_KIND_FLAG_ENTRY, first, first, first);
-    first_part->next = first_part->fall_through_target = first_flag;
-  }
-}
-
-// Conditionally add an exit fragment, and try to be slightly smart about not
-// making redundant fragments (e.g. redundant entry/exit fragments).
-static void AddExitFragment(Fragment *curr, Fragment **next_ptr,
-                            bool (*is_end)(Fragment *, Fragment *),
-                            FragmentKind exit_kind) {
-  auto next = *next_ptr;
-  if (next && is_end(curr, next)) {
-    // Try to merge some of the exit fragments using the `transient_back_link`
-    // pointer in fragment. This will allow us to generate slightly tighter
-    // code.
-    auto back_link = next->cached_back_link;
-    if (back_link && curr->partition_id == back_link->partition_id) {
-      *next_ptr = back_link;
-    } else {
-      auto exit_frag = MakeFragment(exit_kind, curr, next, curr->next);
-      curr->next = exit_frag;
-      *next_ptr = exit_frag;
-      next->cached_back_link = exit_frag;
-    }
-  }
-}
-
-// Add in all of the end fragments of a particular kind.
-static void AddExitFragments(Fragment * const frags,
-                             bool (*is_end)(Fragment *, Fragment *),
-                             FragmentKind exit_kind) {
-  for (auto frag : FragmentIterator(frags)) {
-    frag->cached_back_link = nullptr;
-  }
-  for (auto frag : FragmentIterator(frags)) {
-    if (frag->kind != exit_kind) {
-      AddExitFragment(frag, &(frag->branch_target), is_end, exit_kind);
-      AddExitFragment(frag, &(frag->fall_through_target), is_end, exit_kind);
-    }
-  }
-}
-
-
-// Conditionally add an entry fragment, and try to be slightly smart about not
-// making redundant fragments (e.g. redundant entry/exit fragments).
-static void AddEntryFragment(Fragment *curr, Fragment **next_ptr,
-                             bool (*is_end)(Fragment *, Fragment *),
-                             FragmentKind entry_kind) {
-  auto next = *next_ptr;
-  if (next && is_end(curr, next)) {
-    // Try to merge some of the entry fragments using the `transient_back_link`
-    // pointer in fragment. This will allow us to generate slightly tighter
-    // code.
-    auto back_link = next->cached_back_link;
-    if (back_link && next->partition_id == back_link->partition_id) {
-      *next_ptr = back_link;
-    } else {
-      auto entry_frag = MakeFragment(entry_kind, next, next, curr->next);
-      curr->next = entry_frag;
-      *next_ptr = entry_frag;
-      next->cached_back_link = entry_frag;
-    }
-  }
-}
-
-// Add in all of the entry fragments of a particular kind.
-static void AddEntryFragments(Fragment * const frags,
-                              bool (*is_end)(Fragment *, Fragment *),
-                              FragmentKind entry_kind) {
-  for (auto frag : FragmentIterator(frags)) {
-    frag->cached_back_link = nullptr;
-  }
-  for (auto frag : FragmentIterator(frags)) {
-    AddEntryFragment(frag, &(frag->branch_target), is_end, entry_kind);
-    AddEntryFragment(frag, &(frag->fall_through_target), is_end, entry_kind);
-  }
-}
-
-
-
-// Associate every fragment within a partition with the same partition
-// sentinel.
-static void IdentifyPartitionSentinels(Fragment * const frags) {
-  for (auto changed = true; changed; ) {
-    changed = false;
-    for (auto frag : FragmentIterator(frags)) {
-      if (FRAG_KIND_PARTITION_EXIT != frag->kind) {
-        auto part = frag->partition_sentinel;
-        auto old_part = part;
-        if (frag->fall_through_target) {
-          part = std::max(part, frag->fall_through_target->partition_sentinel);
-          changed = changed || part != old_part;
-          if (frag->branch_target) {
-            part = std::max(part, frag->branch_target->partition_sentinel);
-            changed = changed || part != old_part;
-            frag->branch_target->partition_sentinel = part;
-          }
-          frag->fall_through_target->partition_sentinel = part;
-        }
-        frag->partition_sentinel = part;
-      }
-    }
-  }
-}
-
-}  // namespace
-
-// Adds designated entry and exit fragments around fragment partitions and
-// around groups of instrumentation code fragments. First we add entry/exits
-// around instrumentation code fragments for saving/restoring flags, then we
-// add entry/exits around the partitions for saving/restoring registers.
-void AddEntryAndExitFragments(Fragment **frags_ptr) {
-  InitEntryFragments(frags_ptr);
-  auto frags = *frags_ptr;
-  AddExitFragments(frags, IsFlagExit, FRAG_KIND_FLAG_EXIT);
-  AddEntryFragments(frags, IsFlagEntry, FRAG_KIND_FLAG_ENTRY);
-  AddEntryFragments(frags, IsPartitionEntry, FRAG_KIND_PARTITION_ENTRY);
-  AddExitFragments(frags, IsPartitionExit, FRAG_KIND_PARTITION_EXIT);
-  IdentifyPartitionSentinels(frags);
-}
-#endif
-
 // Visits an instructions within the fragment and revives/kills architecture-
 // specific flags stored in the `FlagUsageInfo` object.
 //
@@ -183,7 +28,7 @@ static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
   for (auto succ : frag->successors) {
     if (IsA<ExitFragment *>(frag)) {
       exit_live_flags = ~0U;
-    } else if (auto succ_code = DynamicCast<CodeFragment *>(succ)){
+    } else if (auto succ_code = DynamicCast<CodeFragment *>(succ)) {
       exit_live_flags |= succ_code->flags.entry_live_flags;
     }
   }
@@ -194,7 +39,7 @@ static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
 // use was changed then this returns true.
 static bool AnalyzeFlagUse(CodeFragment *frag) {
   FlagUsageInfo flags;
-  flags.all_killed_flags = 0U;
+  flags.all_written_flags = 0U;
   flags.entry_live_flags = LiveFlagsOnExit(frag);
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -222,7 +67,7 @@ static void AnalyzeFlagsUse(FragmentList *frags) {
 // the flag use.
 static bool ConvertToAppFrag(CodeFragment *frag) {
   auto live_flags_exit = LiveFlagsOnExit(frag);
-  if (!(frag->flags.all_killed_flags & live_flags_exit)) {
+  if (!(frag->flags.all_written_flags & live_flags_exit)) {
     frag->attr.is_app_code = true;
     return true;
   }
@@ -411,8 +256,14 @@ static void LabelPartitions(FragmentList *frags) {
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
 void AddEntryAndExitFragments(FragmentList *frags) {
+
+  // Do some flags analysis to figure out if we can convert instrumentation
+  // fragments to application fragments. The benefit of conversion is that we
+  // will ideally have fewer flag save/restore zones, and so later will have
+  // to inject fewer flag saving/restoring instructions.
   AnalyzeFlagsUse(frags);
   ConvertToAppFrags(frags);
+
   AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
 
   auto code_first = DynamicCast<CodeFragment *>(frags->First());

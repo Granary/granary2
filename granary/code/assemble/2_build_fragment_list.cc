@@ -386,9 +386,10 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
       // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
       // by the stack undefinedness of the `MOV RSP, [X]`.
       } else if (IA_UNKNOWN_STACK == annot->annotation) {
-        if (frag->stack.is_checked && !frag->stack.is_valid) {
-          return SplitFragment(frags, frag, block, next);
-        }
+        GRANARY_ASSERT(!frag->stack.is_checked || !frag->stack.is_valid);
+        frag->stack.is_checked = true;
+        frag->stack.is_valid = false;
+        return SplitFragment(frags, frag, block, next);
       }
       instr = next;
 

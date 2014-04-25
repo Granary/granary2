@@ -119,14 +119,18 @@ void BlockFactory::AddFallThroughInstruction(
 // are used during code assembly to split up blocks into fragments.
 static void AnnotateInstruction(DecodedBasicBlock *block,
                                 Instruction *begin) {
+  bool in_undefined_state = false;
   for (auto instr : InstructionListIterator(begin)) {
     if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       if (IA_UNDEFINED_STACK == annot->annotation) {
-        block->UnsafeAppendInstruction(
-            new AnnotationInstruction(IA_UNKNOWN_STACK));
-        break;
+        in_undefined_state = true;
+      } else if (IA_VALID_STACK == annot->annotation) {
+        in_undefined_state = false;
       }
     }
+  }
+  if (in_undefined_state) {
+    block->UnsafeAppendInstruction(new AnnotationInstruction(IA_UNKNOWN_STACK));
   }
 }
 
@@ -139,14 +143,14 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   do {
     auto decoded_pc = pc;
     arch::Instruction dinstr;
+    auto before_instr = block->LastInstruction()->Previous();
     if (!decoder.DecodeNext(block, &dinstr, &pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
     instr = MakeInstruction(&dinstr);
-    auto prev_instr = block->LastInstruction()->Previous();
     block->UnsafeAppendInstruction(instr);
-    AnnotateInstruction(block, prev_instr->Next());
+    AnnotateInstruction(block, before_instr);
   } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(&decoder, block, instr, pc);
 }

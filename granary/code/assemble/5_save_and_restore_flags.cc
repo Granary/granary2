@@ -1,9 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-#if 0
+
 #define GRANARY_INTERNAL
 
 #include "granary/cfg/instruction.h"
-#include "granary/cfg/iterator.h"
 
 #include "granary/code/assemble/fragment.h"
 
@@ -19,6 +18,8 @@
 //            partition.
 
 namespace granary {
+
+#if 0
 
 // Visits all native instructions within the fragment and kills any flags that
 // those instructions kill. This does not revive any flags.
@@ -157,6 +158,14 @@ void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, Fragment * const frags) {
   FindEntryExitKilledFlags(frags);
   InjectFlagSavesAndRestores(cfg, frags);
 }
+#endif
+
+// Insert flags saving code into `FRAG_TYPE_FLAG_ENTRY` fragments, and flag
+// restoring code into `FRAG_TYPE_FLAG_EXIT` code. We only insert code to save
+// and restore flags if it is necessary.
+void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, FragmentList *frags) {
+  GRANARY_UNUSED(cfg);
+  GRANARY_UNUSED(frags);
+}
 
 }  // namespace granary
-#endif
