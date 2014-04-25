@@ -43,7 +43,6 @@ class ListHead {
     if (!next) {
       return nullptr;
     }
-
     return reinterpret_cast<T *>(GetObject(object, next));
   }
 
@@ -54,7 +53,6 @@ class ListHead {
     if (!that_object) {
       return;
     }
-
     ListHead *that_list(GetList(this_object, that_object));
     Chain(that_list->GetLast(), next);
     Chain(this, that_list->GetFirst());
@@ -67,7 +65,6 @@ class ListHead {
     if (!prev) {
       return nullptr;
     }
-
     return reinterpret_cast<T *>(GetObject(object, prev));
   }
 
@@ -78,7 +75,6 @@ class ListHead {
     if (!that_object) {
       return;
     }
-
     ListHead *that_list(GetList(this_object, that_object));
     Chain(prev, that_list->GetFirst());
     Chain(that_list->GetLast(), this);
@@ -120,7 +116,7 @@ class ListOfListHead {
   }
 
   void Prepend(T *elm) {
-    if (first) elm->list.template SetNext<T>(elm, first);
+    if (first) first->list.template SetPrevious<T>(first, elm);
     first = elm;
     if (!last) last = elm;
   }
@@ -131,19 +127,19 @@ class ListOfListHead {
     if (!first) first = elm;
   }
 
-  void InsertBefore(T *new_elm, T *before_elm) {
+  void InsertBefore(T *before_elm, T *new_elm) {
     if (before_elm == first) {
       Prepend(new_elm);
     } else {
-      before_elm->template SetPrevious<T>(before_elm, new_elm);
+      before_elm->list.template SetPrevious<T>(before_elm, new_elm);
     }
   }
 
-  void InsertAfter(T *new_elm, T *after_elm) {
+  void InsertAfter(T *after_elm, T *new_elm) {
     if (after_elm == last) {
       Append(new_elm);
     } else {
-      after_elm->template SetNext<T>(after_elm, new_elm);
+      after_elm->list.template SetNext<T>(after_elm, new_elm);
     }
   }
 

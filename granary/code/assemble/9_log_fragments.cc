@@ -126,8 +126,8 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   } else if (IsA<ExitFragment *>(frag)) {
     Log(level, "exit");
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
-    if (code->block_meta && code->is_block_head) {
-      auto meta = MetaDataCast<ModuleMetaData *>(code->block_meta);
+    if (code->attr.block_meta && code->attr.is_block_head) {
+      auto meta = MetaDataCast<ModuleMetaData *>(code->attr.block_meta);
       Log(level, "%p|", meta->start_pc);
     }
   }

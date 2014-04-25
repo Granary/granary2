@@ -88,16 +88,24 @@ static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
                                             DecodedBasicBlock *block,
                                             LabelInstruction *label) {
   auto frag = MakeFragment(frags);
-  frag->block_meta = block->MetaData();
+  frag->attr.block_meta = block->UnsafeMetaData();
   frag->instrs.Append(label->UnsafeUnlink().release());
   SetMetaData(label, frag);
   return frag;
 }
 
-// Append an instruction to a fragment. This also analyzes the stack usage of
-// the instruction.
+// Append an instruction to a fragment. This also does minor flag usage analysis
+// of the instruction to figure out if the fragment should be treated as an
+// application fragment or an instrumentation code fragment.
 static void Append(CodeFragment *frag, Instruction *instr) {
   instr->UnsafeUnlink().release();
+  if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+    frag->attr.has_native_instrs = true;
+    if (ninstr->IsAppInstruction() &&
+        (ninstr->ReadsConditionCodes() || ninstr->WritesConditionCodes())) {
+      frag->attr.is_app_code = true;
+    }
+  }
   frag->instrs.Append(instr);
 }
 
@@ -131,10 +139,23 @@ static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
     frag->successors[0] = label_fragment;
   } else {
     auto label = DynamicCast<LabelInstruction *>(instr);
+    auto block_meta = block->UnsafeMetaData();
     auto next = instr->Next();
-    auto succ = MakeEmptyLabelFragment(frags, block, label);
-    frag->successors[0] = succ;
-    ExtendFragment(frags, succ, block, next);
+
+    // Create a new successor fragment.
+    if (frag->attr.has_native_instrs ||
+        (frag->attr.is_block_head && frag->attr.block_meta != block_meta)) {
+      auto succ = MakeEmptyLabelFragment(frags, block, label);
+      frag->successors[0] = succ;
+      frag = succ;
+
+    // Extend the current fragment in-place.
+    } else {
+      frag->attr.block_meta = block_meta;
+      SetMetaData<CodeFragment *>(instr, frag);
+      Append(frag, label);
+    }
+    ExtendFragment(frags, frag, block, next);
   }
 }
 
@@ -153,8 +174,14 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
     frag->successors[0] = succ;
     ExtendFragment(frags, succ, block, next);
     frag->successors[1] = GetOrMakeLabelFragment(frags, block, label);
-  } else {
+  } else if (frag->attr.has_native_instrs ||
+             GetMetaData<CodeFragment *>(label)) {
     frag->successors[0] = GetOrMakeLabelFragment(frags, block, label);
+  } else {  // Try to merge into the current fragment.
+    SetMetaData<CodeFragment *>(label, frag);
+    frag->attr.block_meta = block->UnsafeMetaData();
+    Append(frag, label);
+    ExtendFragment(frags, frag, block, next);
   }
 }
 
@@ -194,6 +221,20 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
   }
 }
 
+// Go find the next instruction that is a control-flow instruction. If we find
+// any non-control-flow native instructions between here and the next
+// instruction then return `nullptr`.
+static ControlFlowInstruction *NextUninterruptedCFI(Instruction *next) {
+  for (auto instr : InstructionListIterator(next)) {
+    if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
+      return cfi;
+    } else if (IsA<NativeInstruction *>(instr)) {
+      break;
+    }
+  }
+  return nullptr;
+}
+
 // Split a fragment at a non-local control-flow instruction.
 static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
                                DecodedBasicBlock *block,
@@ -215,25 +256,19 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
     next = cfi;  // Pretend that direct jumps are just fall-throughs.
   }
 
-  // If this was a call or a conditional jump then add a fall-through
-  // fragment.
-  if (cfi->IsFunctionCall() || cfi->IsInterruptCall() ||
-      cfi->IsSystemCall() || cfi->IsConditionalJump() ||
-      is_direct_jump) {
-
-    // Try to be smarter about the fall-through to avoid making "useless"
-    // intermediate fragments containing only a single unconditional
-    // jump.
-    auto next_cfi = DynamicCast<ControlFlowInstruction *>(next);
-    if (next_cfi && next_cfi->IsUnconditionalJump()) {
-      target_block = next_cfi->TargetBlock();
-      frag->successors[0] = FragmentForTargetBlock(frags, target_block);
-    } else {
-      auto label = new LabelInstruction;
-      auto succ = MakeEmptyLabelFragment(frags, block, label);
-      frag->successors[0] = succ;
-      ExtendFragment(frags, succ, block, next);
-    }
+  // Try to be smarter about the fall-through to avoid making "useless"
+  // intermediate fragments containing only a single unconditional
+  // jump.
+  auto next_cfi = NextUninterruptedCFI(next);
+  if (next_cfi && next_cfi->IsUnconditionalJump()) {
+    target_block = next_cfi->TargetBlock();
+    frag->successors[0] = FragmentForTargetBlock(frags, target_block);
+  } else {
+    auto label = new LabelInstruction;
+    auto succ = MakeEmptyLabelFragment(frags, block, label);
+    frag->successors[0] = succ;
+    succ->attr.block_meta = frag->attr.block_meta;
+    ExtendFragment(frags, succ, block, next);
   }
 }
 
@@ -267,8 +302,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
                            DecodedBasicBlock *block, Instruction *instr) {
 
   const auto last_instr = block->LastInstruction();
-  auto prev_native_instr_is_app = false;
-  for (auto seen_first_native_instr(false); instr != last_instr; ) {
+  for (; instr != last_instr; ) {
 
     // Treat every label as beginning a new fragment.
     if (IsA<LabelInstruction *>(instr)) {
@@ -284,14 +318,11 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     // One exception to this rule is that if the current instruction doesn't
     // affect the flags, regardless of if it's native/instrumented, it goes
     // into whatever the previous section of code is (app or inst).
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (!seen_first_native_instr) {
-        seen_first_native_instr = true;
-        prev_native_instr_is_app = ninstr->IsAppInstruction();
-      } else if (ninstr->IsAppInstruction() != prev_native_instr_is_app &&
-                 (ninstr->ReadsConditionCodes() ||
-                  ninstr->WritesConditionCodes())) {
-        return SplitFragment(frags, frag, block, instr);
+    if (frag->attr.is_app_code) {
+      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
+          return SplitFragment(frags, frag, block, instr);
+        }
       }
     }
 
@@ -378,14 +409,11 @@ static CodeFragment *FragmentForBlock(FragmentList *frags,
   if (!frag) {
     auto label = new LabelInstruction;
     frag = new CodeFragment;
-    frag->is_app_code = false;
-    frag->block_meta = block->MetaData();
-    frag->is_block_head = true;
+    frag->attr.block_meta = block->UnsafeMetaData();
+    frag->attr.is_block_head = true;
     frag->instrs.Append(label);
-
     SetMetaData(label, frag);
     SetMetaData(first_instr, frag);
-
     frags->Append(frag);
 
     // Start from the second instruction because the first instruction is a

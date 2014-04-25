@@ -43,19 +43,7 @@ void KillFragmentFlags(Fragment * const frag) {
   }
 }
 
-// Visits a native instructions within the fragment and revives/kills
-// flags.
-//
-// Note: This has an architecture-specific implementation.
-uint32_t VisitInstructionFlags(const NativeInstruction *instr,
-                               uint32_t in_flags) {
-  if (instr) {
-    auto &flags(arch::ICLASS_FLAGS[instr->instruction.iclass]);
-    return (in_flags & ~flags.written.flat) | flags.read.flat;
-  } else {
-    return in_flags;
-  }
-}
+
 
 namespace {
 

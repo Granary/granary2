@@ -24,6 +24,7 @@ DEFINE_FUNC(granary_test_mangle)
     sub $0x20, %rsp;
 
     mov %rsp, -0x8(%rbp);
+    adcq $1, (%rsp);
     mov %rsp, (%rsp);
     mov %rsp, -0x8(%rsp);
 

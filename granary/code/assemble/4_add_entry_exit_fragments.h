@@ -9,14 +9,11 @@
 
 namespace granary {
 
-// Forward declaration.
-class Fragment;
-
 // Adds designated entry and exit fragments around fragment partitions and
 // around groups of instrumentation code fragments. First we add entry/exits
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
-void AddEntryAndExitFragments(Fragment **frags_ptr);
+void AddEntryAndExitFragments(FragmentList *frags);
 
 }  // namespace granary
 

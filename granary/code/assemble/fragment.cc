@@ -29,9 +29,9 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 Fragment::Fragment(void)
     : list(),
       instrs(),
-      flag_use(),
       partition(),
       flag_zone(),
+      temp(),
       successors{nullptr, nullptr} { }
 
 CodeFragment::~CodeFragment(void) {}

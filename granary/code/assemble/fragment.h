@@ -27,6 +27,12 @@ class LocalControlFlowGraph;
 class BlockMetaData;
 class FragmentBuilder;
 class SSAVariableTracker;
+class FlagZone;
+class Fragment;
+class PartitionEntryFragment;
+class PartitionExitFragment;
+class FlagEntryFragment;
+class FlagExitFragment;
 
 // Information about the partition to which a fragment belongs.
 union PartitionInfo {
@@ -50,16 +56,69 @@ class SpillInfo {
   int AllocateSpillSlot(void);
 };
 
+// Temporary data stored in a code fragment that's used by different stages
+// of the assembly.
+union TempData {
+ public:
+  inline TempData(void)
+      : _(0) {}
+
+  uint64_t _;
+
+  Fragment *entry_exit_frag;
+};
+
+// Represents a fragment of instructions. Fragments are like basic blocks.
+// Fragments are slightly more restricted than basic blocks, and track other
+// useful properties as well.
+class Fragment {
+ public:
+  Fragment(void);
+
+  virtual ~Fragment(void) = default;
+
+  GRANARY_DECLARE_BASE_CLASS(Fragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+  // Connects together fragments into a `FragmentList`.
+  ListHead list;
+
+  // List of instructions in the fragment.
+  InstructionList instrs;
+
+  // The partition to which this fragment belongs.
+  DisjointSet<PartitionInfo> partition;
+
+  // The "flag zone" to which this fragment belongs.
+  DisjointSet<FlagZone *> flag_zone;
+
+  // Temporary, pass-specific data.
+  TempData temp;
+
+  // Targets in/out of this fragment.
+  enum {
+    SUCC_FALL_THROUGH = 0,
+    SUCC_BRANCH = 1
+  };
+  Fragment *successors[2];
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
+};
+
+typedef ListOfListHead<Fragment> FragmentList;
+typedef ListHeadIterator<Fragment> FragmentIterator;
+typedef ReverseListHeadIterator<Fragment> ReverseFragmentIterator;
+
 // Tracks flag usage within a code fragment.
 class FlagUsageInfo {
  public:
   inline FlagUsageInfo(void)
-      : flag_save_reg(),
-        entry_live_flags(0),
+      : entry_live_flags(0),
         all_killed_flags(0) {}
-
-  // Register uses to save and restore the application flags.
-  VirtualRegister flag_save_reg;
 
   // Conservative set of flags that are live on entry to this basic block.
   uint32_t entry_live_flags;
@@ -95,61 +154,19 @@ class StackUsageInfo {
   int overall_change;
 };
 
-// Represents a fragment of instructions. Fragments are like basic blocks.
-// Fragments are slightly more restricted than basic blocks, and track other
-// useful properties as well.
-class Fragment {
+// Attributes about a block of code.
+class CodeAttributes {
  public:
-  Fragment(void);
-
-  virtual ~Fragment(void) = default;
-
-  GRANARY_DECLARE_BASE_CLASS(Fragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-
-  // Connects together fragments into a `FragmentList`.
-  ListHead list;
-
-  // List of instructions in the fragment.
-  InstructionList instrs;
-
-  // Tracks flag use within this fragment.
-  FlagUsageInfo flag_use;
-
-  // The partition to which this fragment belongs.
-  DisjointSet<PartitionInfo> partition;
-
-  // The "flag zone" to which this fragment belongs.
-  DisjointSet<FlagUsageInfo *> flag_zone;
-
-  // Targets in/out of this fragment.
-  enum {
-    SUCC_FALL_THROUGH = 0,
-    SUCC_BRANCH = 1
-  };
-  Fragment *successors[2];
-
- private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
-};
-
-typedef ListOfListHead<Fragment> FragmentList;
-typedef ListHeadIterator<Fragment> FragmentIterator;
-typedef ReverseListHeadIterator<Fragment> ReverseFragmentIterator;
-
-class CodeFragment : public Fragment {
- public:
-  inline CodeFragment(void)
-      : Fragment(),
+  inline CodeAttributes(void)
+      : has_native_instrs(false),
         is_app_code(false),
         is_block_head(false),
-        block_meta(nullptr),
-        stack() {}
+        block_meta(nullptr) {}
 
-  virtual ~CodeFragment(void);
+  // Does this fragment have any native instructions in it, or is it just full
+  // or annotations, labels, and other things? We use this to try to avoid
+  // adding redundant fragments (e.g. if you had multiple labels in a row).
+  bool has_native_instrs;
 
   // Is this a fragment of application instructions? If this is false, then all
   // instructions are either injected from instrumentation, or they could be
@@ -162,6 +179,23 @@ class CodeFragment : public Fragment {
   // The meta-data associated with the basic block that this code fragment
   // originates from.
   BlockMetaData *block_meta;
+};
+
+class CodeFragment : public Fragment {
+ public:
+  inline CodeFragment(void)
+      : Fragment(),
+        attr(),
+        flags(),
+        stack() {}
+
+  virtual ~CodeFragment(void);
+
+  // Attributes relates to the code in this fragment.
+  CodeAttributes attr;
+
+  // Tracks flag use within this fragment.
+  FlagUsageInfo flags;
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
@@ -178,6 +212,7 @@ class CodeFragment : public Fragment {
 
 class PartitionEntryFragment : public Fragment {
  public:
+  PartitionEntryFragment(void) = default;
   virtual ~PartitionEntryFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
@@ -192,6 +227,7 @@ class PartitionEntryFragment : public Fragment {
 
 class PartitionExitFragment : public Fragment {
  public:
+  PartitionExitFragment(void) = default;
   virtual ~PartitionExitFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
@@ -206,6 +242,7 @@ class PartitionExitFragment : public Fragment {
 
 class FlagEntryFragment : public Fragment {
  public:
+  FlagEntryFragment(void) = default;
   virtual ~FlagEntryFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
@@ -220,6 +257,7 @@ class FlagEntryFragment : public Fragment {
 
 class FlagExitFragment : public Fragment {
  public:
+  FlagExitFragment(void) = default;
   virtual ~FlagExitFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)

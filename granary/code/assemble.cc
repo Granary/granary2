@@ -12,8 +12,8 @@
 #include "granary/code/assemble/1_relativize.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_partition_fragments.h"
-/*
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
+/*
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
@@ -56,11 +56,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.
   PartitionFragments(&frags);
-  /*
+
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
   AddEntryAndExitFragments(&frags);
-
+  /*
   // Add flags saving and restoring code around injected instrumentation
   // instructions.
   SaveAndRestoreFlags(cfg, frags);
