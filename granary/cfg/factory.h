@@ -136,6 +136,12 @@ class BlockFactory {
   // CTIs going to now-materialized `DirectBasicBlock`s.
   GRANARY_INTERNAL_DEFINITION void RelinkCFIs(void);
 
+  // Runs some simple analysis (for the purposes of internal meta-data) of the
+  // just-materialized basic blocks. This is often necessary because the results
+  // of these analyses might become incomplete at later stages due to
+  // interference by instrumentation tools.
+  GRANARY_INTERNAL_DEFINITION void AnalyzeNewBlocks(void);
+
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION
   BasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);

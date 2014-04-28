@@ -101,6 +101,9 @@ static void Append(CodeFragment *frag, Instruction *instr) {
   instr->UnsafeUnlink().release();
   if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
     frag->attr.has_native_instrs = true;
+    if (ninstr->WritesConditionCodes()) {
+      frag->attr.modifies_flags = true;
+    }
     if (ninstr->IsAppInstruction() &&
         (ninstr->ReadsConditionCodes() || ninstr->WritesConditionCodes())) {
       frag->attr.is_app_code = true;
@@ -168,16 +171,29 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
                                   BranchInstruction *branch) {
   auto label = branch->TargetInstruction();
   auto next = branch->Next();
+
+  // Conditional jump, therefore we have to create two successor fragments.
   if (branch->IsConditionalJump()) {
     Append(frag, branch);
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
-    frag->successors[0] = succ;
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     ExtendFragment(frags, succ, block, next);
-    frag->successors[1] = GetOrMakeLabelFragment(frags, block, label);
+    frag->successors[FRAG_SUCC_BRANCH] = GetOrMakeLabelFragment(
+        frags, block, label);
+    frag->branch_instr = branch;
+
+  // Unconditional jump, and the current instruction is either a block head or
+  // has instructions in it, so we can't convert this fragment into the target
+  // fragment.
   } else if (frag->attr.has_native_instrs ||
              GetMetaData<CodeFragment *>(label)) {
-    frag->successors[0] = GetOrMakeLabelFragment(frags, block, label);
-  } else {  // Try to merge into the current fragment.
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = GetOrMakeLabelFragment(
+        frags, block, label);
+
+  // This fragment has no "useful" instructions in it, it's not a block head,
+  // and we've got an unconditional jump. Convert the current fragment into the
+  // target fragment.
+  } else {
     SetMetaData<CodeFragment *>(label, frag);
     frag->attr.block_meta = block->UnsafeMetaData();
     Append(frag, label);
@@ -245,12 +261,15 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
                         !cfi->HasIndirectTarget();
   if (!is_direct_jump) {
     Append(frag, cfi);
-    frag->successors[1] = FragmentForTargetBlock(frags, target_block);
+    frag->successors[FRAG_SUCC_BRANCH] = FragmentForTargetBlock(frags,
+                                                                target_block);
     if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
         cfi->IsSystemReturn()) {
-      frag->successors[0] = frag->successors[1];
-      frag->successors[1] = nullptr;
+      std::swap(frag->successors[FRAG_SUCC_FALL_THROUGH],
+                frag->successors[FRAG_SUCC_BRANCH]);
       return;
+    } else {
+      frag->branch_instr = cfi;
     }
   } else {
     next = cfi;  // Pretend that direct jumps are just fall-throughs.
@@ -318,11 +337,13 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     // One exception to this rule is that if the current instruction doesn't
     // affect the flags, regardless of if it's native/instrumented, it goes
     // into whatever the previous section of code is (app or inst).
-    if (frag->attr.is_app_code) {
-      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (frag->attr.is_app_code) {
         if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
           return SplitFragment(frags, frag, block, instr);
         }
+      } else if (ninstr->IsAppInstruction() && frag->attr.modifies_flags) {
+        return SplitFragment(frags, frag, block, instr);
       }
     }
 

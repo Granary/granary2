@@ -38,6 +38,7 @@ void Environment::Setup(void) {
   // Register internal metadata.
   metadata_manager.Register<ModuleMetaData>();
   metadata_manager.Register<CacheMetaData>();
+  metadata_manager.Register<RegisterMetaData>();
   metadata_manager.Register<StackMetaData>();
 
   // Tell this environment about all loaded modules.

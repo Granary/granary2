@@ -80,7 +80,7 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
       return slab;
     }
   }
-  granary_break_on_unreachable_code();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 

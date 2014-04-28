@@ -68,6 +68,18 @@ union TempData {
   Fragment *entry_exit_frag;
 };
 
+// Tracks registers used within fragments.
+class RegisterUsageInfo {
+ public:
+  LiveRegisterTracker live_on_entry;
+};
+
+// Targets in/out of this fragment.
+enum {
+  FRAG_SUCC_FALL_THROUGH = 0,
+  FRAG_SUCC_BRANCH = 1
+};
+
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
@@ -98,12 +110,12 @@ class Fragment {
   // Temporary, pass-specific data.
   TempData temp;
 
-  // Targets in/out of this fragment.
-  enum {
-    SUCC_FALL_THROUGH = 0,
-    SUCC_BRANCH = 1
-  };
+  // Tracks register usage across fragments.
+  RegisterUsageInfo regs;
+
+  // Tracks the successor fragments.
   Fragment *successors[2];
+  NativeInstruction *branch_instr;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
@@ -118,17 +130,52 @@ class FlagUsageInfo {
  public:
   inline FlagUsageInfo(void)
       : entry_live_flags(0),
+        exit_live_flags(0),
         all_read_flags(0),
         all_written_flags(0) {}
 
-  // Conservative set of flags that are live on entry to this basic block.
+  // Conservative set of flags that are live on entry to and exit from this
+  // fragment.
   uint32_t entry_live_flags;
+  uint32_t exit_live_flags;
 
   // Flags that are killed anywhere within this fragment.
   uint32_t all_read_flags;
 
   // Flags that are killed anywhere within this fragment.
   uint32_t all_written_flags;
+};
+
+// Maintains information about flags usage within a "zone" (a group of non-
+// application fragments that are directly connected by control flow). Flag
+// zones are delimited by `FlagEntry` and `FlagExit` fragments.
+class FlagZone {
+ public:
+  FlagZone(VirtualRegister flag_save_reg_, VirtualRegister flag_killed_reg_);
+
+  // All flags killed by any instruction within this flag zone.
+  uint32_t killed_flags;
+
+  // Live flags on exit from this flags zone.
+  uint32_t live_flags;
+
+  // Register used for holding the flags state.
+  VirtualRegister flag_save_reg;
+
+  // General-purpose register used in the process of storing the flags. Might
+  // be invalid. Might also be a architectural GPR.
+  VirtualRegister flag_killed_reg;
+
+  // Live registers on exit from this flags zone.
+  LiveRegisterTracker live_regs;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(FlagZone, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  FlagZone(void) = delete;
 };
 
 // Tracks stack usage info.
@@ -165,6 +212,7 @@ class CodeAttributes {
  public:
   inline CodeAttributes(void)
       : has_native_instrs(false),
+        modifies_flags(false),
         is_app_code(false),
         is_block_head(false),
         block_meta(nullptr) {}
@@ -173,6 +221,9 @@ class CodeAttributes {
   // or annotations, labels, and other things? We use this to try to avoid
   // adding redundant fragments (e.g. if you had multiple labels in a row).
   bool has_native_instrs;
+
+  // Does this fragment have any instructions that write to the flags?
+  bool modifies_flags;
 
   // Is this a fragment of application instructions? If this is false, then all
   // instructions are either injected from instrumentation, or they could be

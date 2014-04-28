@@ -38,17 +38,21 @@ static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
 // Analyzes and updates the flag use for a fragment. If the fragment's flag
 // use was changed then this returns true.
 static bool AnalyzeFlagUse(CodeFragment *frag) {
+  auto exit_live_flags = LiveFlagsOnExit(frag);
   FlagUsageInfo flags;
   flags.all_written_flags = 0U;
-  flags.entry_live_flags = LiveFlagsOnExit(frag);
+  flags.exit_live_flags = exit_live_flags;
+  flags.entry_live_flags = exit_live_flags;
+
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       VisitInstructionFlags(ninstr->instruction, &flags);
     }
   }
-  const auto old_live_flags = frag->flags.entry_live_flags;
+
+  const auto changed = flags.entry_live_flags != frag->flags.entry_live_flags;
   frag->flags = flags;
-  return old_live_flags != flags.entry_live_flags;
+  return changed;
 }
 
 // Analyzes and updates the flags usage for all fragments.

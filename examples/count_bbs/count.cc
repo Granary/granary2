@@ -52,7 +52,6 @@ class BBCount : public Tool {
           instr->WritesConditionCodes() &&
           !instr->ReadsConditionCodes()) {
         insert_instr = instr;
-        break;
       }
     }
 

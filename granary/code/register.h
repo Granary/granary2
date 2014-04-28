@@ -316,8 +316,8 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
 // use of the register, where along that path there is no intermediate
 // definition of the register.
 //
-// Note: By default, all registers are treated as live.
-class LiveRegisterTracker: public RegisterTracker{
+// Note: By default, all registers are treated as dead.
+class LiveRegisterTracker: public RegisterTracker {
  public:
   inline LiveRegisterTracker(void) {
     KillAll();
@@ -327,6 +327,12 @@ class LiveRegisterTracker: public RegisterTracker{
   //
   // Note: This treats conditional writes to a register as reviving that
   //       register.
+  //
+  // Note: This *only* inspects register usage in the instruction, and does
+  //       *not* consider any implied register usage (e.g. treat all regs as
+  //       live before a jump). Implied register usage is treated as a policy
+  //       decision that must be made by the user of a register tracker, and
+  //       not by the tracker itself.
   void Visit(NativeInstruction *instr);
 
   inline void Join(const LiveRegisterTracker &that) {
@@ -351,6 +357,12 @@ class DeadRegisterTracker : public RegisterTracker {
   //
   // Note: This treats conditional writes to a register as reviving that
   //       register.
+  //
+  // Note: This *only* inspects register usage in the instruction, and does
+  //       *not* consider any implied register usage (e.g. treat all regs as
+  //       dead before a jump). Implied register usage is treated as a policy
+  //       decision that must be made by the user of a register tracker, and
+  //       not by the tracker itself.
   void Visit(NativeInstruction *instr);
 
   inline void Join(const DeadRegisterTracker &that) {

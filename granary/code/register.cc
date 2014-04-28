@@ -87,7 +87,6 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
   if (GRANARY_UNLIKELY(!instr)) {
     return;
   }
-
   // Treat conditional writes, read/writes, and partial writes as unconditional
   // writes. The idea is that what we really want to track is whether any part
   // of the register has potentially been modified.

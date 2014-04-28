@@ -4,12 +4,15 @@
 
 #include "dependencies/xxhash/hash.h"
 
+#include "granary/arch/driver.h"
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/factory.h"
 
-#include "granary/arch/driver.h"
+#include "granary/code/metadata.h"
+#include "granary/code/register.h"
 
 #include "granary/ir/lir.h"
 
@@ -210,6 +213,22 @@ void BlockFactory::RelinkCFIs(void) {
   }
 }
 
+// Runs some simple analysis (for the purposes of internal meta-data) of the
+// just-materialized basic blocks. This is often necessary because the results
+// of these analyses might become incomplete at later stages due to
+// interference by instrumentation tools.
+void BlockFactory::AnalyzeNewBlocks(void) {
+  for (auto changed = true; changed; ) {
+    changed = false;
+    for (auto block : cfg->NewBlocks()) {
+      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+        auto meta = GetMetaData<RegisterMetaData>(decoded_block);
+        changed = meta->AnalyzeBlock(decoded_block) || changed;
+      }
+    }
+  }
+}
+
 // Search an LCFG for a block whose meta-data matches the meta-data of
 // `exclude`. The returned block, if any, is guaranteed not to be `exclude`,
 // as well as not being another `DirectBasicBlock` instance.
@@ -298,6 +317,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
   has_pending_request = false;
   if (MaterializeDirectBlocks() || cfg->first_new_block) {
     RelinkCFIs();
+    AnalyzeNewBlocks();
   }
 }
 

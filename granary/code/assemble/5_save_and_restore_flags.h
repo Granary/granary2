@@ -11,12 +11,11 @@ namespace granary {
 
 // Forward declarations.
 class LocalControlFlowGraph;
-class Fragment;
 
 // Insert flags saving code into `FRAG_TYPE_FLAG_ENTRY` fragments, and flag
 // restoring code into `FRAG_TYPE_FLAG_EXIT` code. We only insert code to save
 // and restore flags if it is necessary.
-void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, Fragment * const frags);
+void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, FragmentList *frags);
 
 }  // namespace granary
 

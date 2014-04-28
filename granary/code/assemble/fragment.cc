@@ -32,7 +32,8 @@ Fragment::Fragment(void)
       partition(),
       flag_zone(),
       temp(),
-      successors{nullptr, nullptr} { }
+      successors{nullptr, nullptr},
+      branch_instr(nullptr) { }
 
 CodeFragment::~CodeFragment(void) {}
 PartitionEntryFragment::~PartitionEntryFragment(void) {}
@@ -40,6 +41,14 @@ PartitionExitFragment::~PartitionExitFragment(void) {}
 FlagEntryFragment::~FlagEntryFragment(void) {}
 FlagExitFragment::~FlagExitFragment(void) {}
 ExitFragment::~ExitFragment(void) {}
+
+FlagZone::FlagZone(VirtualRegister flag_save_reg_,
+                   VirtualRegister flag_killed_reg_)
+    : killed_flags(0),
+      live_flags(0),
+      flag_save_reg(flag_save_reg_),
+      flag_killed_reg(flag_killed_reg_),
+      live_regs() {}
 
 #if 0
 

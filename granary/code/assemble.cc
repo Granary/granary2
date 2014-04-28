@@ -13,8 +13,8 @@
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
-/*
 #include "granary/code/assemble/5_save_and_restore_flags.h"
+/*
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
@@ -60,11 +60,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
   AddEntryAndExitFragments(&frags);
-  /*
+
   // Add flags saving and restoring code around injected instrumentation
   // instructions.
-  SaveAndRestoreFlags(cfg, frags);
-
+  SaveAndRestoreFlags(cfg, &frags);
+  /*
   // Build an SSA-like representation for the virtual register definitions.
   TrackSSAVars(frags);
 
