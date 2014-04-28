@@ -26,6 +26,11 @@ extern xed_category_enum_t ICLASS_CATEGORIES[];
 // Number of implicit operands for each iclass.
 extern const int NUM_IMPLICIT_OPERANDS[];
 
+// Table mapping each iclass to the set of read and written flags by *any*
+// selection of that iclass.
+extern FlagsSet ICLASS_FLAGS[];
+
+
 }  // namespace arch
 
 namespace {
@@ -301,6 +306,13 @@ class InlineAssemblyParser {
     data.AnalyzeStackUsage();
     GRANARY_ASSERT(!data.ReadsFromStackPointer() &&
                    !data.WritesToStackPointer());
+
+    // Ensure that instrumentation instructions do not alter the direction
+    // flag! This is because we have no reliable way of saving and restoring
+    // the direction flag (lest we use `PUSHF` and `POPF`) when the stack
+    // pointer is not known to be valid.
+    GRANARY_IF_DEBUG( auto flags = arch::ICLASS_FLAGS[data.iclass]; )
+    GRANARY_ASSERT(!flags.written.s.df);
 
     if (data.IsJump()) {
       GRANARY_ASSERT(nullptr != branch_target);
