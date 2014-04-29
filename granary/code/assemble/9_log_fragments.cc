@@ -105,15 +105,12 @@ static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
 static void LogInstructions(LogLevel level, const Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (ninstr->IsAppInstruction()) {
-        Log(level, "<FONT POINT-SIZE=\"11\" FACE=\"Courier-Bold\">");
+      if (!ninstr->IsAppInstruction()) {
+        Log(level, "&nbsp;  ");
       }
       Log(level, "%s", ninstr->OpCodeName());
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);
-      if (ninstr->IsAppInstruction()) {
-        Log(level, "</FONT>");
-      }
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
     }
   }
