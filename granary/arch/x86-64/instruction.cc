@@ -147,7 +147,8 @@ void Instruction::AnalyzeStackUsage(void) const {
 // Get the opcode name.
 const char *Instruction::OpCodeName(void) const {
   GRANARY_ASSERT(XED_ICLASS_INVALID < iclass && XED_ICLASS_LAST > iclass);
-  return xed_iclass_enum_t2str(iclass);
+  GRANARY_ASSERT(XED_IFORM_INVALID < iform && XED_IFORM_LAST > iform);
+  return xed_iform_enum_t2str(iform);
 }
 
 namespace {

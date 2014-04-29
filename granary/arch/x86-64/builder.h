@@ -137,12 +137,13 @@ class BranchTargetBuilder {
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
-                      xed_category_enum_t category);
+                      xed_iform_enum_t iform, xed_category_enum_t category);
 
 // Custom LEA instruction builder for source register operands.
 template <typename A0, typename A1>
 inline static void LEA_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC);
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
+                   XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
@@ -151,7 +152,8 @@ inline static void LEA_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1) {
 // doing `dest = src1 + src2`.
 template <typename A0, typename A1, typename A2>
 inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC);
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
+                   XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
   RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
@@ -160,7 +162,8 @@ inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
 // Custom LEA instruction builder for source immediate operands.
 template <typename A0, typename A1>
 inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC);
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
+                   XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_PTR).Build(instr);
 }
@@ -168,7 +171,8 @@ inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
 // Custom LEA instruction builder for source immediate operands.
 template <typename A0>
 inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_CATEGORY_MISC);
+  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
+                   XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }

@@ -215,6 +215,7 @@ class CodeAttributes {
         modifies_flags(false),
         is_app_code(false),
         is_block_head(false),
+        num_inst_preds(0),
         block_meta(nullptr) {}
 
   // Does this fragment have any native instructions in it, or is it just full
@@ -232,6 +233,12 @@ class CodeAttributes {
 
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head;
+
+  // The number of non-application (instrumentation) predecessors.
+  //
+  // Note: We don't care if this value overflows or goes out of sync, as it is
+  //       used as a heuristic in step `4_add_entry_exit_fragments`.
+  uint8_t num_inst_preds;
 
   // The meta-data associated with the basic block that this code fragment
   // originates from.

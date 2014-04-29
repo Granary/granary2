@@ -38,7 +38,9 @@ void InjectSaveFlags(FlagEntryFragment *frag) {
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
-    GRANARY_ASSERT(!flags.s.df);
+    GRANARY_IF_DEBUG( xed_flag_set_t killed_flags; )
+    GRANARY_IF_DEBUG( killed_flags.flat = zone->killed_flags; )
+    GRANARY_ASSERT(!killed_flags.s.df);
     if (zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
       APP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
     }
@@ -56,7 +58,6 @@ void InjectRestoreFlags(FlagExitFragment *frag) {
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
-    GRANARY_ASSERT(!flags.s.df);
     if (flags.s.of) {
       APP(ADD_GPR8_IMMb_80r0(&ni, XED_REG_AL, 0x7F));
     }

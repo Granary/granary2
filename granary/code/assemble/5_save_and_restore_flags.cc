@@ -124,12 +124,14 @@ static void VerifyFragment(Fragment *frag) {
   if (IsA<PartitionEntryFragment *>(frag)) {
     if (code_succ) {
       GRANARY_ASSERT(code_succ->attr.is_app_code);
+    } else {
+      GRANARY_ASSERT(IsA<FlagEntryFragment *>(succ));
     }
   } else if (IsA<FlagEntryFragment *>(frag)) {
     GRANARY_ASSERT(!IsA<FlagExitFragment *>(succ));
 
   } else if (IsA<FlagExitFragment *>(frag)) {
-    if (!IsA<PartitionExitFragment *>(frag)) {
+    if (!IsA<PartitionExitFragment *>(succ) && !IsA<ExitFragment *>(succ)) {
       GRANARY_ASSERT(code_succ);
       GRANARY_ASSERT(code_succ->attr.is_app_code);
     }
@@ -181,10 +183,12 @@ static void UpdateFlagZones(FragmentList *frags) {
     auto &flag_zone(frag->flag_zone.Value());
     if (flag_zone) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        flag_zone->killed_flags |= code->flags.all_written_flags;
-        for (auto succ : frag->successors) {
-          if (IsA<FlagExitFragment *>(succ)) {
-            flag_zone->live_flags |= code->flags.exit_live_flags;
+        if (!code->attr.is_app_code) {
+          flag_zone->killed_flags |= code->flags.all_written_flags;
+          for (auto succ : frag->successors) {
+            if (IsA<FlagExitFragment *>(succ)) {
+              flag_zone->live_flags |= code->flags.exit_live_flags;
+            }
           }
         }
       } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {

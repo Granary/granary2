@@ -29,9 +29,10 @@ xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
 // Table to find the instruction selections for each iclass.
 const xed_inst_t *ICLASS_SELECTIONS[XED_ICLASS_LAST] = {nullptr};
 
-// Table mapping each iclass to the set of read and written flags by *any*
-// selection of that iclass.
+// Table mapping each iclass/iform to the set of read and written flags by *any*
+// selection of that iclass/iform.
 FlagsSet ICLASS_FLAGS[XED_ICLASS_LAST];
+FlagsSet IFORM_FLAGS[XED_IFORM_LAST];
 
 namespace {
 
@@ -63,6 +64,51 @@ static void InitIclassFlags(void) {
       auto &iclass_flags(ICLASS_FLAGS[iclass]);
       iclass_flags.read.flat |= flags->read.flat;
       iclass_flags.written.flat |= flags->written.flat;
+
+      // Turns conditionally written flags into read flags.
+      if (flags->may_write) {
+        iclass_flags.read.flat |= flags->written.flat;
+      }
+    }
+  }
+}
+
+// Initialize the table of iform flags.
+static void InitIformFlags(void) {
+  xed_decoded_inst_t xedd;
+  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
+    auto xedi = xed_inst_table_base() + sel;
+    auto iform = xed_inst_iform_enum(xedi);
+    auto &iform_flags(IFORM_FLAGS[iform]);
+    memset(&xedd, 0, sizeof xedd);
+    xedd._inst = xedi;
+    if (auto flags = xed_decoded_inst_get_rflags_info(&xedd)) {
+      iform_flags.read.flat |= flags->read.flat;
+      iform_flags.written.flat |= flags->written.flat;
+
+      // Turns conditionally written flags into read flags.
+      if (flags->may_write) {
+        iform_flags.read.flat |= flags->written.flat;
+      }
+
+    // The little hack above doesn't tend to work for instructions that use the
+    // `_flag_complex` field of `xed_inst_t`, is it can lead to doing an actual
+    // lookup of the decoded operands (of which none are provided!). We fall
+    // back on hoping that we've managed to get some simple flags via the iclass
+    // in a prior step.
+    } else if (auto num_ops = xed_inst_noperands(xedi)) {
+      auto last_op = xed_inst_operand(xedi, num_ops - 1);
+      auto last_op_type = xed_operand_type(last_op);
+      auto nt_name = xed_operand_nonterminal_name(last_op);
+      if (XED_OPERAND_TYPE_NT_LOOKUP_FN == last_op_type &&
+          XED_NONTERMINAL_RFLAGS == nt_name) {
+        iform_flags = ICLASS_FLAGS[xed_inst_iclass(xedi)];
+        /*auto rw = xed_operand_rw(last_op);
+        if (XED_OPERAND_ACTION_CW == rw || XED_OPERAND_ACTION_RCW == rw) {
+          iform_flags.read.flat |= iform_flags.written.flat;
+        }*/
+      }
+
     }
   }
 }
@@ -252,6 +298,7 @@ void Init(void) {
                  XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
   InitIclassTables();
   InitIclassFlags();
+  InitIformFlags();
   InitOperandTables();
 }
 

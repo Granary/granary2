@@ -28,7 +28,7 @@ extern const int NUM_IMPLICIT_OPERANDS[];
 
 // Table mapping each iclass to the set of read and written flags by *any*
 // selection of that iclass.
-extern FlagsSet ICLASS_FLAGS[];
+extern FlagsSet IFORM_FLAGS[];
 
 
 }  // namespace arch
@@ -290,6 +290,10 @@ class InlineAssemblyParser {
         auto xedi_op = xed_inst_operand(xedi, i++);
         instr_op.rw = xed_operand_rw(xedi_op);
         instr_op.is_explicit = true;
+        if (instr_op.IsRegister() && instr_op.reg.IsNative() &&
+            !instr_op.reg.IsGeneralPurpose()) {
+          instr_op.is_sticky = true;
+        }
       }
     }
   }
@@ -311,7 +315,7 @@ class InlineAssemblyParser {
     // flag! This is because we have no reliable way of saving and restoring
     // the direction flag (lest we use `PUSHF` and `POPF`) when the stack
     // pointer is not known to be valid.
-    GRANARY_IF_DEBUG( auto flags = arch::ICLASS_FLAGS[data.iclass]; )
+    GRANARY_IF_DEBUG( auto flags = arch::IFORM_FLAGS[data.iform]; )
     GRANARY_ASSERT(!flags.written.s.df);
 
     if (data.IsJump()) {

@@ -12,7 +12,7 @@ namespace arch {
 
 // Table mapping each iclass to the set of read and written flags by *any*
 // selection of that iclass.
-extern const FlagsSet ICLASS_FLAGS[];
+extern const FlagsSet IFORM_FLAGS[];
 
 }  // namespace arch
 
@@ -20,7 +20,7 @@ extern const FlagsSet ICLASS_FLAGS[];
 // specific flags stored in the `FlagUsageInfo` object.
 void VisitInstructionFlags(const arch::Instruction &instr,
                            FlagUsageInfo *flags) {
-  auto &instr_flags(arch::ICLASS_FLAGS[instr.iclass]);
+  auto &instr_flags(arch::IFORM_FLAGS[instr.iform]);
   flags->all_written_flags |= instr_flags.written.flat;
   flags->all_read_flags |= instr_flags.read.flat;
   flags->entry_live_flags &= ~instr_flags.written.flat;

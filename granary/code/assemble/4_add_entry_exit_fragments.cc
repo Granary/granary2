@@ -22,11 +22,26 @@ void VisitInstructionFlags(const arch::Instruction &instr,
 
 namespace {
 
+// Counts the number of instrumented predecessors.
+static void CountInstrumentedPredecessors(FragmentList *frags) {
+  for (auto frag : FragmentIterator(frags)) {
+    if (auto code = DynamicCast<CodeFragment *>(frag)) {
+      if (!code->attr.is_app_code) {
+        for (auto succ : code->successors) {
+          if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
+            code_succ->attr.num_inst_preds++;
+          }
+        }
+      }
+    }
+  }
+}
+
 // Returns the live flags on exit from a fragment.
 static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
   auto exit_live_flags = 0U;
   for (auto succ : frag->successors) {
-    if (IsA<ExitFragment *>(frag)) {
+    if (IsA<ExitFragment *>(succ)) {
       exit_live_flags = ~0U;
     } else if (auto succ_code = DynamicCast<CodeFragment *>(succ)) {
       exit_live_flags |= succ_code->flags.entry_live_flags;
@@ -67,15 +82,33 @@ static void AnalyzeFlagsUse(FragmentList *frags) {
   }
 }
 
+// Heuristic for telling us if we should try to convert an instrumented fragment
+// into an application fragment.
+static bool SuccessorMakesFragConvertible(CodeFragment *frag) {
+  for (auto succ : frag->successors) {
+    if (succ) {
+      if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
+        if (!code_succ->attr.is_app_code) return false;
+        if (1 < code_succ->attr.num_inst_preds) return false;  // Heuristic.
+      } else if (!IsA<ExitFragment *>(succ)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Try to convert an instrumentation fragment into a code fragment based on
 // the flag use.
 static bool ConvertToAppFrag(CodeFragment *frag) {
   auto live_flags_exit = LiveFlagsOnExit(frag);
   if (!(frag->flags.all_written_flags & live_flags_exit)) {
-    frag->attr.is_app_code = true;
-    return true;
+    frag->attr.is_app_code = SuccessorMakesFragConvertible(frag);
+    if (!frag->attr.is_app_code && frag->stack.has_stack_changing_cfi) {
+      frag->attr.is_app_code = true;
+    }
   }
-  return false;
+  return frag->attr.is_app_code;
 }
 
 // Converts instrumentation fragments into application fragments where the
@@ -108,13 +141,12 @@ static void ResetTempData(FragmentList *frags) {
 // transition between partitions, or where we transition from application code
 // to instrumentation code.
 static bool IsFlagEntry(Fragment *curr, Fragment *next) {
-  if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
-    if (auto next_code = DynamicCast<CodeFragment *>(next)) {
-      return !next_code->attr.is_app_code &&
-             !curr_code->stack.has_stack_changing_cfi &&
-             (curr->partition != next->partition ||
-              curr_code->attr.is_app_code);
-    }
+  auto code_next = DynamicCast<CodeFragment *>(next);
+  if (IsA<PartitionEntryFragment *>(curr)) {
+    return code_next && !code_next->attr.is_app_code;
+  } else if (auto code_curr = DynamicCast<CodeFragment *>(curr)) {
+    return code_curr->attr.is_app_code && code_next &&
+           !code_next->attr.is_app_code;
   }
   return false;
 }
@@ -127,15 +159,14 @@ static bool IsFlagEntry(Fragment *curr, Fragment *next) {
 // application code fragment (or a flag entry, which will appear as non-equal
 // partitions).
 static bool IsFlagExit(Fragment *curr, Fragment *next) {
-  if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
-    if (curr_code->stack.has_stack_changing_cfi) return false;
-    if (curr_code->attr.is_app_code) return false;
-    if (curr->partition != next->partition) return true;
-    if (auto next_code = DynamicCast<CodeFragment *>(next)) {
-      return next_code->attr.is_app_code;
-    }
-    GRANARY_ASSERT(!IsA<FlagEntryFragment *>(next));
-    GRANARY_ASSERT(!IsA<FlagExitFragment *>(next));
+  if (auto code_curr = DynamicCast<CodeFragment *>(curr)) {
+    if (code_curr->attr.is_app_code) return false;
+    if (IsA<PartitionEntryFragment *>(next)) return false;
+    if (IsA<PartitionExitFragment *>(next)) return true;
+    if (IsA<ExitFragment *>(next)) return true;
+    auto code_next = DynamicCast<CodeFragment *>(next);
+    GRANARY_ASSERT(nullptr != code_next);
+    return code_next->attr.is_app_code;
   }
   return false;
 }
@@ -143,20 +174,32 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 // Returns true if the transition between `curr` and `next` represents a
 // partition entry point.
 static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
-  auto next_code = DynamicCast<CodeFragment *>(next);
-  return curr->partition != next->partition &&
-         !IsA<ExitFragment *>(next) &&
-         (!next_code || !next_code->stack.has_stack_changing_cfi);
+  if (auto code_curr = DynamicCast<CodeFragment *>(curr)) {
+    if (auto code_next = DynamicCast<CodeFragment *>(next)) {
+      if (code_curr->attr.block_meta != code_next->attr.block_meta) return true;
+      if (code_next->stack.has_stack_changing_cfi) return false;
+      return code_curr->stack.is_valid != code_next->stack.is_valid;
+    }
+  }
+  return false;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
 // partition exit point.
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
-  auto curr_code = DynamicCast<CodeFragment *>(curr);
-  return curr->partition != next->partition &&
-         !IsA<PartitionExitFragment *>(curr) &&
-         !IsA<PartitionExitFragment *>(next) &&
-         (!curr_code || !curr_code->stack.has_stack_changing_cfi);
+  auto code_curr = DynamicCast<CodeFragment *>(curr);
+  if (code_curr && code_curr->stack.has_stack_changing_cfi) {
+    return false;
+  }
+  if (IsA<PartitionEntryFragment *>(next)) {
+    return !IsA<PartitionExitFragment *>(curr);
+  } else if (IsA<PartitionEntryFragment *>(curr) ||
+             IsA<PartitionExitFragment *>(curr)) {
+    return false;
+  } else if (auto code_next = DynamicCast<CodeFragment *>(next)) {
+    return code_next->stack.has_stack_changing_cfi;
+  }
+  return false;
 }
 
 // Conditionally add an exit fragment, and try to be slightly smart about not
@@ -260,25 +303,7 @@ static void LabelPartitions(FragmentList *frags) {
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
 void AddEntryAndExitFragments(FragmentList *frags) {
-
-  // Do some flags analysis to figure out if we can convert instrumentation
-  // fragments to application fragments. The benefit of conversion is that we
-  // will ideally have fewer flag save/restore zones, and so later will have
-  // to inject fewer flag saving/restoring instructions.
   AnalyzeFlagsUse(frags);
-  ConvertToAppFrags(frags);
-
-  AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
-
-  auto code_first = DynamicCast<CodeFragment *>(frags->First());
-  GRANARY_ASSERT(nullptr != code_first);
-
-  // Guarantee that there is a flag entry fragment for the first fragment.
-  if (!code_first->attr.is_app_code) {
-    frags->Prepend(MakeFragment<FlagEntryFragment>(code_first, code_first));
-  }
-
-  AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
 
   AddEntryFragments(frags, IsPartitionEntry,
                     MakeFragment<PartitionEntryFragment>);
@@ -289,6 +314,18 @@ void AddEntryAndExitFragments(FragmentList *frags) {
 
   AddExitFragments(frags, IsPartitionExit,
                    MakeFragment<PartitionExitFragment>);
+
+  // Do some flags analysis to figure out if we can convert instrumentation
+  // fragments to application fragments. The benefit of conversion is that we
+  // will ideally have fewer flag save/restore zones, and so later will have
+  // to inject fewer flag saving/restoring instructions.
+  CountInstrumentedPredecessors(frags);
+  ConvertToAppFrags(frags);
+
+  AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
+
+  AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
+
   LabelPartitions(frags);
 }
 

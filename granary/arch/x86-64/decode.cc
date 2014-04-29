@@ -206,9 +206,8 @@ static bool ConvertDecodedOperand(Instruction *instr,
                                   unsigned op_num) {
   auto xedi = xed_decoded_inst_inst(xedd);
   auto op = xed_inst_operand(xedi, op_num);
-  auto iform = xed_decoded_inst_get_iform_enum(xedd);
   bool is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
-                     IsAmbiguousOperand(instr->iclass, iform, op_num);
+                     IsAmbiguousOperand(instr->iclass, instr->iform, op_num);
   if (!is_explicit) {
     return false;
   }
@@ -272,6 +271,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
   memset(instr, 0, sizeof *instr);
   instr->decoded_pc = pc;
   instr->iclass = xed_decoded_inst_get_iclass(xedd);
+  instr->iform = xed_decoded_inst_get_iform_enum(xedd);
   instr->category = xed_decoded_inst_get_category(xedd);
   instr->decoded_length = static_cast<uint8_t>(
       xed_decoded_inst_get_length(xedd));
