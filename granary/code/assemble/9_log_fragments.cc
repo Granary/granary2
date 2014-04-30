@@ -158,7 +158,7 @@ void Log(LogLevel level, FragmentList *frags) {
              " nojustify=false labeljust=l style=filled];\n"
              "f0 [label=enter];\n");
   LogFragmentEdge(level, nullptr, frags->First());
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     LogFragmentEdges(level, frag);
     LogFragment(level, frag);
   }

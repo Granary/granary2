@@ -111,6 +111,9 @@ def strip_combined_files(new_lines):
       if line.lstrip("\t ").startswith("friend "):
         continue
 
+      # Make sure that certain uses of friend classes/functions are exported.
+      line = line.replace("GRANARY_EXPORTED_friend", "friend")
+
       if "GRANARY_INTERNAL_DEFINITION" in line:
         in_internal_definition = True
         brace_count = 0

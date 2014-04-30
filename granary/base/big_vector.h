@@ -4,6 +4,7 @@
 #define GRANARY_BASE_BIG_VECTOR_H_
 
 #include "granary/base/base.h"
+#include "granary/base/type_trait.h"
 
 namespace granary {
 namespace detail {
@@ -61,15 +62,15 @@ class BigVector : protected detail::BigVectorImpl {
       : detail::BigVectorImpl(alignof(T), sizeof(T)) {}
 
   // Access the element at index `index`.
-  inline T &operator[](size_t index) {
-    return *reinterpret_cast<T *>(FindObjectPointer(index));
-  }
-
-  // Access the element at index `index`.
-  inline T &operator[](int index) {
+  template <typename I, typename EnableIf<IsInteger<I>::RESULT>::Type=0>
+  inline T &operator[](I index) {
     return *reinterpret_cast<T *>(
         FindObjectPointer(static_cast<size_t>(index)));
   }
+
+  // TODO(oag): Add `Size` method.
+  // TODO(pag): Add `Append` method.
+  // TODO(pag): Make iterable.
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(BigVector, (T));

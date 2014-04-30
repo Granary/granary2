@@ -24,7 +24,7 @@ namespace {
 
 // Counts the number of instrumented predecessors.
 static void CountInstrumentedPredecessors(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto code = DynamicCast<CodeFragment *>(frag)) {
       if (!code->attr.is_app_code) {
         for (auto succ : code->successors) {
@@ -74,7 +74,7 @@ static bool AnalyzeFlagUse(CodeFragment *frag) {
 static void AnalyzeFlagsUse(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
-    for (auto frag : ReverseFragmentIterator(frags)) {
+    for (auto frag : ReverseFragmentListIterator(frags)) {
       if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
         changed = AnalyzeFlagUse(code_frag) || changed;
       }
@@ -116,7 +116,7 @@ static bool ConvertToAppFrag(CodeFragment *frag) {
 static void ConvertToAppFrags(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
-    for (auto frag : ReverseFragmentIterator(frags)) {
+    for (auto frag : ReverseFragmentListIterator(frags)) {
       if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
         if (!code_frag->attr.is_app_code) {
           changed = ConvertToAppFrag(code_frag) || changed;
@@ -129,7 +129,7 @@ static void ConvertToAppFrags(FragmentList *frags) {
 // Reset the pass-specific "back link" pointer that is used to re-use entry and
 // exit fragments.
 static void ResetTempData(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     frag->temp.entry_exit_frag = nullptr;
   }
 }
@@ -230,7 +230,7 @@ static void AddExitFragments(FragmentList * const frags,
                              bool (*is_end)(Fragment *, Fragment *),
                              Fragment *(*make_frag)(Fragment *, Fragment *)) {
   ResetTempData(frags);
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
       if (succ) {
         AddExitFragment(frags, frag, &succ, is_end, make_frag);
@@ -276,7 +276,7 @@ static void AddEntryFragments(FragmentList * const frags,
                               bool (*is_end)(Fragment *, Fragment *),
                               Fragment *(*make_frag)(Fragment *, Fragment *)) {
   ResetTempData(frags);
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
       if (succ) {
         AddEntryFragment(frags, frag, &succ, is_end, make_frag);
@@ -288,7 +288,7 @@ static void AddEntryFragments(FragmentList * const frags,
 // Label the N fragment partitions with IDs 1 through N.
 static void LabelPartitions(FragmentList *frags) {
   auto next_id = 1;
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     auto &partition(frag->partition.Value());
     if (!partition.id) {
       partition.id = next_id++;

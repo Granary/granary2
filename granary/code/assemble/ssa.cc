@@ -1,4 +1,76 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
+
+#define GRANARY_INTERNAL
+
+#include "granary/base/new.h"
+
+#include "granary/code/assemble/ssa.h"
+
+#define GRANARY_DEFINE_SSA_ALLOCATOR(cls) \
+  void *cls::operator new(std::size_t) { \
+    return new SSANodeMemory; \
+  } \
+  void *cls::operator new(std::size_t, void *mem) { \
+    return mem; \
+  } \
+  void cls::operator delete(void *address) { \
+    delete reinterpret_cast<SSANodeMemory *>(address); \
+  }
+
+namespace granary {
+
+GRANARY_DECLARE_CLASS_HEIRARCHY(
+    (SSANode, 2),
+      (SSAControlPhiNode, 2 * 3),
+      (SSAAliasNode, 2 * 5),
+      (SSADataPhiNode, 2 * 7),
+      (SSARegisterNode, 2 * 11))
+
+GRANARY_DEFINE_BASE_CLASS(SSANode)
+GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSAControlPhiNode)
+GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSAAliasNode)
+GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
+GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
+
+SSANode::~SSANode(void) {}
+SSAControlPhiNode::~SSAControlPhiNode(void) {}
+SSAAliasNode::~SSAAliasNode(void) {}
+SSADataPhiNode::~SSADataPhiNode(void) {}
+SSARegisterNode::~SSARegisterNode(void) {}
+
+// Enough memory to hold an arbitrary `SSANode`.
+union SSANodeMemory {
+ public:
+  alignas(SSAControlPhiNode) char _1[sizeof(SSAControlPhiNode)];
+  alignas(SSAAliasNode) char _2[sizeof(SSAAliasNode)];
+  alignas(SSADataPhiNode) char _3[sizeof(SSADataPhiNode)];
+  alignas(SSARegisterNode) char _4[sizeof(SSARegisterNode)];
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(SSANodeMemory, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+};
+
+GRANARY_DEFINE_SSA_ALLOCATOR(SSAControlPhiNode)
+GRANARY_DEFINE_SSA_ALLOCATOR(SSAAliasNode)
+GRANARY_DEFINE_SSA_ALLOCATOR(SSADataPhiNode)
+GRANARY_DEFINE_SSA_ALLOCATOR(SSARegisterNode)
+
+#undef GRANARY_DEFINE_SSA_ALLOCATOR
+
+SSAOperand::SSAOperand(void)
+    : operand(nullptr),
+      nodes(),
+      action(SSAOperandAction::INVALID),
+      is_reg(false) {}
+
+SSAInstruction::SSAInstruction(void)
+    : defs(),
+      uses() {}
+
+}  // namespace granary
+
 #if 0
 #define GRANARY_INTERNAL
 

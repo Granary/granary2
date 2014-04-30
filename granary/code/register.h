@@ -218,7 +218,7 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
  public:
   RegisterTracker(void) = default;
 
-  RegisterTracker(const RegisterTracker &that) {
+  inline RegisterTracker(const RegisterTracker &that) {
     Copy(that);
   }
 
@@ -234,48 +234,36 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
 
   // Kill a specific register.
   inline void Kill(int num) {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
     Set(static_cast<unsigned>(num), false);
   }
 
   // Kill a specific register.
-  inline void Kill(VirtualRegister reg) {
-    if (reg.IsNative() && reg.IsGeneralPurpose()) {
-      Kill(reg.Number());
-    }
-  }
+  void Kill(VirtualRegister reg);
 
   // Kill a specific register, where we treat this register is being part of
   // a write. This takes into account the fact that two or more registers might
   // alias the same data.
-  inline void WriteKill(VirtualRegister reg) {
-    if (reg.IsNative() && reg.IsGeneralPurpose()) {
-      if (reg.PreservesBytesOnWrite()) {
-        Revive(reg.Number());
-      } else {
-        Kill(reg.Number());
-      }
-    }
-  }
+  void WriteKill(VirtualRegister reg);
 
   // Returns true if a register is dead.
   inline bool IsDead(int num) const {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
     return !Get(static_cast<unsigned>(num));
   }
 
   // Revive a specific register.
   inline void Revive(int num) {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
     Set(static_cast<unsigned>(num), true);
   }
 
   // Kill a specific register.
-  inline void Revive(VirtualRegister reg) {
-    if (reg.IsNative() && reg.IsGeneralPurpose()) {
-      Revive(reg.Number());
-    }
-  }
+  void Revive(VirtualRegister reg);
 
   // Returns true if a register is live.
   inline bool IsLive(int num) const {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
     return Get(static_cast<unsigned>(num));
   }
 
@@ -295,12 +283,7 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   bool Equals(const RegisterTracker &that) const;
 
   // Overwrites one register usage tracker with another.
-  RegisterTracker &operator=(const RegisterTracker &that) {
-    if (this != &that) {
-      this->Copy(that);
-    }
-    return *this;
-  }
+  RegisterTracker &operator=(const RegisterTracker &that);
 
  protected:
   typedef typename RemoveReference<decltype(storage[0])>::Type StorageT;
@@ -308,6 +291,49 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
     STORAGE_LEN = sizeof storage / sizeof storage[0]
   };
 };
+
+namespace detail {
+
+template <bool kIsLive>
+class RegisterTrackerIterator {
+ public:
+  typedef RegisterTrackerIterator<kIsLive> Iterator;
+
+  RegisterTrackerIterator(void)
+      : tracker(nullptr),
+        num(arch::NUM_GENERAL_PURPOSE_REGISTERS) {}
+
+  explicit RegisterTrackerIterator(const RegisterTracker *tracker_)
+      : tracker(tracker_),
+        num(0) {
+    Advance();
+  }
+
+  bool operator!=(const Iterator &that) const {
+    return num != that.num;
+  }
+
+  VirtualRegister operator*(void) const {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
+    return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES, num);
+  }
+
+  inline void operator++(void) {
+    ++num;
+    Advance();
+  }
+
+ private:
+  void Advance(void) {
+    for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
+           kIsLive != tracker->IsLive(num); ++num) {}
+  }
+
+  const RegisterTracker * const tracker;
+  int num;
+};
+
+}  // namespace detail
 
 // A class that tracks conservatively live, general-purpose registers within a
 // straight-line sequence of instructions.
@@ -317,10 +343,20 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
 // definition of the register.
 //
 // Note: By default, all registers are treated as dead.
-class LiveRegisterTracker: public RegisterTracker {
+class LiveRegisterTracker : public RegisterTracker {
  public:
   inline LiveRegisterTracker(void) {
     KillAll();
+  }
+
+  typedef detail::RegisterTrackerIterator<true> Iterator;
+
+  inline Iterator begin(void) const {
+    return Iterator(this);
+  }
+
+  inline Iterator end(void) const {
+    return Iterator();
   }
 
   // Update this register tracker by visiting the operands of an instruction.
@@ -351,6 +387,16 @@ class DeadRegisterTracker : public RegisterTracker {
  public:
   inline DeadRegisterTracker(void) {
     ReviveAll();
+  }
+
+  typedef detail::RegisterTrackerIterator<false> Iterator;
+
+  inline Iterator begin(void) const {
+    return Iterator(this);
+  }
+
+  inline Iterator end(void) const {
+    return Iterator();
   }
 
   // Update this register tracker by visiting the operands of an instruction.

@@ -48,7 +48,7 @@ namespace {
 // Initialize the set of live in all exit fragments. All other fragments start
 // off with null sets of lvie regs on exit.
 static void InitLiveRegsOnExit(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
       switch (exit_frag->kind) {
         case FRAG_EXIT_NATIVE:
@@ -84,6 +84,7 @@ static bool AnalyzeFragRegs(Fragment *frag) {
       }
     }
   }
+  frag->regs.live_on_exit = regs;
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     regs.Visit(DynamicCast<NativeInstruction *>(instr));
   }
@@ -96,7 +97,7 @@ static bool AnalyzeFragRegs(Fragment *frag) {
 static void AnalyzeFragRegs(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
-    for (auto frag : ReverseFragmentIterator(frags)) {
+    for (auto frag : ReverseFragmentListIterator(frags)) {
       if (!IsA<ExitFragment *>(frag)) {
         changed = AnalyzeFragRegs(frag) || changed;
       }
@@ -141,7 +142,7 @@ static void VerifyFragment(Fragment *frag) {
 
 // Identify the "flag zones" by making sure every fragment
 static void IdentifyFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     GRANARY_IF_DEBUG( VerifyFragment(frag); )
     if (IsA<CodeFragment *>(frag) || IsA<FlagEntryFragment *>(frag)) {
       for (auto succ : frag->successors) {
@@ -156,7 +157,7 @@ static void IdentifyFlagZones(FragmentList *frags) {
 // Allocate flag zone structures for each distinct flag zone.
 static void AllocateFlagZones(FragmentList *frags,
                               LocalControlFlowGraph *cfg) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (IsA<FlagEntryFragment *>(frag)) {
       auto &flag_zone(frag->flag_zone.Value());
       if (!flag_zone) {
@@ -167,7 +168,7 @@ static void AllocateFlagZones(FragmentList *frags,
   }
 #ifdef GRANARY_DEBUG
   // Quick and easy verification of the flag zones.
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (IsA<FlagExitFragment *>(frag)) {
       GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
     }
@@ -179,7 +180,7 @@ static void AllocateFlagZones(FragmentList *frags,
 // fragments that belong to this flag zone, as well as the flags used *after*
 // the flag zone.
 static void UpdateFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     auto &flag_zone(frag->flag_zone.Value());
     if (flag_zone) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
@@ -201,7 +202,7 @@ static void UpdateFlagZones(FragmentList *frags) {
 // Injects architecture-specific code that saves and restores the flags within
 // flag entry and exit fragments.
 static void SaveAndRestoreFlags(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto flag_entry = DynamicCast<FlagEntryFragment *>(frag)) {
       InjectSaveFlags(flag_entry);
     } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {
@@ -212,7 +213,7 @@ static void SaveAndRestoreFlags(FragmentList *frags) {
 
 // Frees all flag zone data structures.
 static void FreeFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     auto &flag_zone(frag->flag_zone.Value());
     if (flag_zone) {
       delete flag_zone;

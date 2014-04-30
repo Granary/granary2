@@ -14,6 +14,7 @@
 #include "granary/base/disjoint_set.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
+#include "granary/base/tiny_map.h"
 
 #include "granary/cfg/instruction.h"
 
@@ -33,6 +34,7 @@ class PartitionEntryFragment;
 class PartitionExitFragment;
 class FlagEntryFragment;
 class FlagExitFragment;
+class SSANode;
 
 // Information about the partition to which a fragment belongs.
 union PartitionInfo {
@@ -72,6 +74,7 @@ union TempData {
 class RegisterUsageInfo {
  public:
   LiveRegisterTracker live_on_entry;
+  LiveRegisterTracker live_on_exit;
 };
 
 // Targets in/out of this fragment.
@@ -122,8 +125,8 @@ class Fragment {
 };
 
 typedef ListOfListHead<Fragment> FragmentList;
-typedef ListHeadIterator<Fragment> FragmentIterator;
-typedef ReverseListHeadIterator<Fragment> ReverseFragmentIterator;
+typedef ListHeadIterator<Fragment> FragmentListIterator;
+typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
 
 // Tracks flag usage within a code fragment.
 class FlagUsageInfo {
@@ -245,10 +248,26 @@ class CodeAttributes {
   BlockMetaData *block_meta;
 };
 
-class CodeFragment : public Fragment {
+typedef TinyMap<VirtualRegister, SSANode *,
+                arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> SSANodeMap;
+
+// A fragment with associated SSA vars.
+class SSAFragment : public Fragment {
+ public:
+  virtual ~SSAFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, SSAFragment)
+
+  struct {
+    SSANodeMap entry_nodes;
+    SSANodeMap exit_nodes;
+  } ssa;
+};
+
+class CodeFragment : public SSAFragment {
  public:
   inline CodeFragment(void)
-      : Fragment(),
+      : SSAFragment(),
         attr(),
         flags(),
         stack() {}
@@ -304,7 +323,7 @@ class PartitionExitFragment : public Fragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(PartitionExitFragment);
 };
 
-class FlagEntryFragment : public Fragment {
+class FlagEntryFragment : public SSAFragment {
  public:
   FlagEntryFragment(void) = default;
   virtual ~FlagEntryFragment(void);
@@ -319,7 +338,7 @@ class FlagEntryFragment : public Fragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FlagEntryFragment);
 };
 
-class FlagExitFragment : public Fragment {
+class FlagExitFragment : public SSAFragment {
  public:
   FlagExitFragment(void) = default;
   virtual ~FlagExitFragment(void);
@@ -553,8 +572,8 @@ class Fragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
 } __attribute__((packed));
 
-typedef LinkedListIterator<Fragment> FragmentIterator;
-typedef ReverseLinkedListIterator<Fragment> ReverseFragmentIterator;
+typedef LinkedListIterator<Fragment> FragmentListIterator;
+typedef ReverseLinkedListIterator<Fragment> ReverseFragmentListIterator;
 #endif
 }  // namespace granary
 

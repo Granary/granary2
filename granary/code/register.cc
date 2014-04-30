@@ -9,6 +9,33 @@
 
 namespace granary {
 
+// Kill a specific register.
+void RegisterTracker::Kill(VirtualRegister reg) {
+  if (reg.IsNative() && reg.IsGeneralPurpose()) {
+    Kill(reg.Number());
+  }
+}
+
+// Kill a specific register, where we treat this register is being part of
+// a write. This takes into account the fact that two or more registers might
+// alias the same data.
+void RegisterTracker::WriteKill(VirtualRegister reg) {
+  if (reg.IsNative() && reg.IsGeneralPurpose()) {
+    if (reg.PreservesBytesOnWrite()) {
+      Revive(reg.Number());
+    } else {
+      Kill(reg.Number());
+    }
+  }
+}
+
+// Kill a specific register.
+void RegisterTracker::Revive(VirtualRegister reg) {
+  if (reg.IsNative() && reg.IsGeneralPurpose()) {
+    Revive(reg.Number());
+  }
+}
+
 // Union some other live register set with the current live register set.
 // Returns true if there was a change in the set of live registers. This is
 // useful when we want to be conservative about the potentially live
@@ -45,6 +72,14 @@ bool RegisterTracker::Equals(const RegisterTracker &that) const {
     }
   }
   return true;
+}
+
+// Overwrites one register usage tracker with another.
+RegisterTracker &RegisterTracker::operator=(const RegisterTracker &that) {
+  if (this != &that) {
+    this->Copy(that);
+  }
+  return *this;
 }
 
 // Update this register tracker by visiting the operands of an instruction.

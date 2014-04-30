@@ -84,9 +84,16 @@ void Operand::UnsafeReplace(arch::Operand *op_) {
   op_ptr = op_;
 }
 
-// Returns a pointer to the internal, arch-specific memory operand.
+// Returns a pointer to the internal, arch-specific memory operand that is
+// *internal* to this `Operand`.
 const arch::Operand *Operand::Extract(void) const {
   return op.AddressOf();
+}
+
+// Returns a pointer to the internal, arch-specific memory operand that is
+// *referenced* by this `Operand`.
+const arch::Operand *Operand::UnsafeExtract(void) const {
+  return op_ptr;
 }
 
 bool Operand::IsRead(void) const {

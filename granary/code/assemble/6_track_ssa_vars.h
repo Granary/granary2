@@ -14,17 +14,8 @@
 
 namespace granary {
 
-// Forward declaration.
-class Fragment;
-
 // Build a graph for the SSA definitions associated with the fragments.
-//
-// Note: This does not cover uses in the traditional sense. That is, we only
-//       explicitly maintain SSA form for definitions, and uses that reach
-//       PHI nodes. However, no information is explicitly maintained to track
-//       which registers a given SSA register depends on, as that information
-//       is indirectly maintained by the native instructions themselves.
-void TrackSSAVars(Fragment * const frags);
+void TrackSSAVars(FragmentList * const frags);
 
 }  // namespace granary
 

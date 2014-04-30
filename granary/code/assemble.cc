@@ -14,8 +14,8 @@
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
-/*
 #include "granary/code/assemble/6_track_ssa_vars.h"
+/*
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
 */
@@ -64,9 +64,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // Add flags saving and restoring code around injected instrumentation
   // instructions.
   SaveAndRestoreFlags(cfg, &frags);
+
+  TrackSSAVars(&frags);
   /*
   // Build an SSA-like representation for the virtual register definitions.
-  TrackSSAVars(frags);
+
 
   // Perform a single step of copy propagation. The purpose of this is to
   // allow us to eventually get rid of

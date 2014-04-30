@@ -82,14 +82,14 @@ static bool PropagateValidity(CodeFragment * const frag) {
 static void AnalyzeStackUsage(FragmentList * const frags) {
   for (auto changed = true; changed; ) {
     changed = false;
-    for (auto frag : FragmentIterator(frags)) {
+    for (auto frag : FragmentListIterator(frags)) {
       if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
         changed = PropagateValidity(cfrag) || changed;
       }
     }
   }
   // Mark all remaining unchecked fragments as being on invalid stacks.
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->stack.is_checked) {
         cfrag->stack.is_checked = true;
@@ -105,7 +105,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
 //      3) Neither fragment contains a control-flow instruction that changes
 //         the stack pointer.
 static void GroupFragments(FragmentList *frags) {
-  for (auto frag : FragmentIterator(frags)) {
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       GRANARY_ASSERT(nullptr != cfrag->successors[0]);
       for (auto succ : cfrag->successors) {

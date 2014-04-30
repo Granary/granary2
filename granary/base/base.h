@@ -98,8 +98,10 @@
 
 #ifdef GRANARY_EXTERNAL
 # define GRANARY_EXTERNAL_SHARED extern
+# define GRANARY_EXTERNAL_FRIEND GRANARY_EXPORTED_friend
 #else
 # define GRANARY_EXTERNAL_SHARED
+# define GRANARY_EXTERNAL_FRIEND friend
 #endif
 
 // Name of the granary binary.
