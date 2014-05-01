@@ -15,8 +15,8 @@
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
-/*
 #include "granary/code/assemble/7_propagate_copies.h"
+/*
 #include "granary/code/assemble/8_schedule_registers.h"
 */
 #include "granary/code/assemble/9_log_fragments.h"

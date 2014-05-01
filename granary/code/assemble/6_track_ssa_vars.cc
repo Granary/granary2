@@ -439,12 +439,20 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
       }
     }
   }
+  // No "leaky" definitions to compensate for.
   if (!comp->ssa.entry_nodes.Size()) {
     delete comp;
     return;
   }
 
-  // Make it look reasonable.
+  // Make `comp` appear to be yet another `CodeFragment` to all future
+  // assembly passes.
+  if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
+    comp->attr.block_meta = code_pred->attr.block_meta;
+    comp->stack.is_checked = true;
+    comp->stack.is_valid = code_pred->stack.is_valid;
+  }
+
   comp->attr.is_compensation_code = true;
   comp->partition.Union(reinterpret_cast<Fragment *>(comp),
                         reinterpret_cast<Fragment *>(pred));
@@ -487,7 +495,6 @@ static void AddCompensatingFragments(FragmentList *frags) {
         continue;
       }
     }
-    // "Exit" compensation code.
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       for (auto &succ : ssa_frag->successors) {
         if (succ) {

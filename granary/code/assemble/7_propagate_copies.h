@@ -9,12 +9,11 @@
 
 namespace granary {
 
-// Forward declaration.
-class Fragment;
-
-// Schedule virtual registers to either physical registers or to stack/TLS
-// slots.
-void PropagateRegisterCopies(Fragment * const frags);
+// Perform the following kinds of copy-propagation.
+//    1) register-to-register
+//    2) register-to-(memory operand)
+//    3) (effective address)-to-(memory operand)
+void PropagateRegisterCopies(FragmentList *frags);
 
 }  // namespace granary
 

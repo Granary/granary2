@@ -104,8 +104,17 @@ static void Append(CodeFragment *frag, Instruction *instr) {
     if (ninstr->WritesConditionCodes()) {
       frag->attr.modifies_flags = true;
     }
-    if (ninstr->IsAppInstruction() &&
-        (ninstr->ReadsConditionCodes() || ninstr->WritesConditionCodes())) {
+
+    // If the app instruction reads/writes the flags, then to maintain the
+    // flag save/restore invariant, we must make this into an app fragment.
+    // Also, if the app instruction writes to the stack pointer, then we want
+    // to try to prevent such an instruction from being placed inside of a
+    // flag save/restore zone.
+    if (!frag->attr.is_app_code &&
+        ninstr->IsAppInstruction() &&
+        (ninstr->ReadsConditionCodes() ||
+         ninstr->WritesConditionCodes() ||
+         ninstr->instruction.WritesToStackPointer())) {
       frag->attr.is_app_code = true;
     }
   }

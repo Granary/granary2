@@ -1,14 +1,31 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-#if 0
+
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
+
+#include "granary/code/assemble/fragment.h"
+#include "granary/code/assemble/ssa.h"
+
+namespace granary {
+
+// Perform the following kinds of copy-propagation.
+//    1) register-to-register
+//    2) register-to-(memory operand)
+//    3) (effective address)-to-(memory operand)
+void PropagateRegisterCopies(FragmentList *frags) {
+  GRANARY_UNUSED(frags);
+}
+
+}  // namespace granary
+
+#if 0
+
 
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
 #include "granary/cfg/operand.h"
 
-#include "granary/code/assemble/fragment.h"
-#include "granary/code/assemble/ssa.h"
+
 
 #include "granary/util.h"
 
