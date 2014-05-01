@@ -74,7 +74,10 @@ class SSAControlPhiNode : public SSANode {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSAControlPhiNode)
 
-  TinyVector<SSANode *, 2> incoming_nodes;
+  // Add an operand to the PHI node.
+  void AddOperand(SSANode *node);
+
+  TinyVector<SSANode *, 2> operands;
 };
 
 // Represents a node that is directly inherited from some other location. The
@@ -94,7 +97,7 @@ class SSAAliasNode : public SSANode {
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSAAliasNode)
 
   // The aliased value of this node.
-  SSANode * const incoming_node;
+  SSANode * const aliased_node;
 
  private:
   SSAAliasNode(void) = delete;
@@ -115,8 +118,9 @@ class SSADataPhiNode : public SSANode {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
 
-  // The inherited value of this node.
-  SSANode * const incoming_node;
+  // The node on which this data-PHI node is (internally / opaquely) control-
+  // dependent.
+  SSANode * const dependent_node;
 
  private:
   SSADataPhiNode(void) = delete;

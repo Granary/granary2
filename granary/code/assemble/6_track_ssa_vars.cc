@@ -271,7 +271,9 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
   }
 }
 
-// Add the missing definitions as annotation instructions.
+// Add the missing definitions as annotation instructions. This is so that all
+// nodes are owned by *some* fragment, which simplifies later memory
+// reclamation.
 static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
   for (auto node : frag->ssa.entry_nodes.Values()) {
     GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
@@ -351,6 +353,8 @@ static bool BackPropagateEntryDefs(SSAFragment *frag, SSAFragment *succ) {
   return changed;
 }
 
+// Back propagates entry definitions of a successor fragment into the exit and
+// entry definitions of a predecessor fragment.
 static void BackPropagateEntryDefs(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
@@ -362,7 +366,29 @@ static void BackPropagateEntryDefs(FragmentList *frags) {
           }
         }
       }
+    }
+  }
+}
 
+// Connects all control-PHI nodes between predecessors and successors.
+static void ConnectControlPhiNodes(SSAFragment *pred, SSAFragment *succ) {
+  for (auto succ_entry_node : succ->ssa.entry_nodes.Values()) {
+    if (auto succ_phi = DynamicCast<SSAControlPhiNode *>(succ_entry_node)) {
+      auto pred_exit_node = pred->ssa.exit_nodes[succ_phi->reg];
+      succ_phi->AddOperand(pred_exit_node);
+    }
+  }
+}
+
+// Connects all control-PHI nodes between predecessors and successors.
+static void ConnectControlPhiNodes(FragmentList *frags) {
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+      for (auto succ : frag->successors) {
+        if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
+          ConnectControlPhiNodes(ssa_frag, ssa_succ);
+        }
+      }
     }
   }
 }
@@ -375,6 +401,7 @@ void TrackSSAVars(FragmentList * const frags) {
   InitEntryNodesFromLiveExitRegs(frags);
   LocalValueNumbering(frags);
   BackPropagateEntryDefs(frags);
+  ConnectControlPhiNodes(frags);
 }
 
 }  // namespace granary

@@ -176,7 +176,11 @@ enum InstructionAnnotation {
 
   // Represents the definition of some `SSANode`, used in later assembly stages
   // so that all nodes are owned by some `Fragment`.
-  IA_SSA_NODE_DEF
+  IA_SSA_NODE_DEF,
+
+  // A pre-definition of an `SSANode` occurs when there are "dangling"
+  // SSA control-phi definitions.
+  IA_SSA_PRE_DEF,
 };
 
 // An annotation instruction is an environment-specific and implementation-

@@ -41,15 +41,28 @@ SSANode::~SSANode(void) {}
 
 SSAControlPhiNode::SSAControlPhiNode(SSAFragment *frag_, VirtualRegister reg_)
     : SSANode(frag_, reg_),
-      incoming_nodes() {}
+      operands() {}
+
+// Add an operand to the PHI node.
+void SSAControlPhiNode::AddOperand(SSANode *node) {
+  if (node) {
+    for (auto op_node : operands) {
+      if (op_node == node) {
+        return;
+      }
+    }
+    storage.Union(reinterpret_cast<SSANode *>(this), node);
+    operands.Append(node);
+  }
+}
 
 SSAAliasNode::SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
-      incoming_node(incoming_node_) {}
+      aliased_node(incoming_node_) {}
 
 SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
-      incoming_node(incoming_node_) {}
+      dependent_node(incoming_node_) {}
 
 SSARegisterNode::SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
                                  VirtualRegister reg_)
