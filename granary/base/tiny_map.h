@@ -66,6 +66,10 @@ class TinyMap {
       return *it;
     }
 
+    inline const MapPair operator*(void) const {
+      return *it;
+    }
+
     void operator++(void) {
       ++it;
       Advance();
@@ -128,7 +132,7 @@ class TinyMap {
       ++it;
     }
 
-    inline V operator*(void) {
+    inline K operator*(void) const {
       return (*it).key;
     }
 
@@ -208,6 +212,10 @@ class TinyMap {
         return;
       }
     }
+  }
+
+  unsigned long Size(void) const {
+    return size;
   }
 
  private:

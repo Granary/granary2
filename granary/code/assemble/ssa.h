@@ -77,6 +77,11 @@ class SSAControlPhiNode : public SSANode {
   // Add an operand to the PHI node.
   void AddOperand(SSANode *node);
 
+  // Try to convert this PHI node into an alias or a register node. If this
+  // succeeds at trivializing the PHI node then `true` is returned, otherwise
+  // `false` is returned.
+  bool UnsafeTryTrivialize(void);
+
   TinyVector<SSANode *, 2> operands;
 };
 
@@ -136,7 +141,7 @@ class SSADataPhiNode : public SSANode {
 class SSARegisterNode : public SSANode {
  public:
   virtual ~SSARegisterNode(void) = default;
-  SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
+  SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
                   VirtualRegister reg_);
 
   // Allocate and free.
@@ -148,7 +153,7 @@ class SSARegisterNode : public SSANode {
 
   // Instruction that defines this register. We use this in combination with
   // `frag` when doing copy-propagation.
-  NativeInstruction *instr;
+  Instruction *instr;
 
   // Register defined by this node.
   const VirtualRegister reg;
@@ -232,6 +237,9 @@ class SSAInstruction {
 // in the instruction `instr`, or `nullptr` if the register is not defined by
 // the instruction.
 SSANode *DefinedNodeForReg(Instruction *instr, VirtualRegister reg);
+
+// Returns the un-aliased node associated with the current node.
+SSANode *UnaliasedNode(SSANode *node);
 
 #if 0
 

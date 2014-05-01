@@ -7,6 +7,7 @@
 
 #include "granary/cfg/instruction.h"
 
+#include "granary/code/assemble/fragment.h"
 #include "granary/code/assemble/ssa.h"
 
 #include "granary/util.h"
@@ -56,6 +57,88 @@ void SSAControlPhiNode::AddOperand(SSANode *node) {
   }
 }
 
+namespace {
+
+// Finds the annotation instruction that "defines" the PHI node.
+static Instruction *FindDefiningInstruction(SSAControlPhiNode *phi) {
+  for (auto instr : InstructionListIterator(phi->frag->instrs)) {
+    if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (IA_SSA_NODE_DEF == ainstr->annotation) {
+        if (ainstr->GetData<SSANode *>() == phi) return instr;
+        continue;
+      }
+    }
+
+    // If we reach here then it's either not an annotation instruction, or not
+    // the right kind of annotation. `6_track_ssa_vars` ensures that all of
+    // the annotations are prepended to the fragments, so don't do useless
+    // searching.
+    break;
+  }
+  GRANARY_ASSERT(false);
+  return nullptr;
+}
+
+// Try to recursively trivialize the operands of a trivial PHI node.
+//
+// Note: The `phi_operand` will never be an `SSAAliasNode` node.
+static void TryRecursiveTrivialize(SSANode *phi_operand) {
+  if (auto phi = DynamicCast<SSAControlPhiNode *>(phi_operand)) {
+    phi->UnsafeTryTrivialize();
+  }
+}
+
+// Overwrite a generalized PHI node with a different type of SSA variable.
+static void UnsafeTrivializePhiNode(SSAControlPhiNode *phi,
+                                    SSANode *phi_operand) {
+  // Save the storage set, so that we can make sure everything continues to
+  // link up after our conversion.
+  auto storage = phi->storage;
+
+  // Make sure that memory associated with the operands is cleaned up.
+  phi->~SSAControlPhiNode();
+
+  // Happens if the initial write to a variable is a read and write
+  // (e.g. xor a, a), conditionally written, or partially written as its
+  // initial write. In this case we synthesize the operand as-if it's an
+  // `SSARegisterNode`.
+  if (!phi_operand) {
+    auto reg = new (phi) SSARegisterNode(phi->frag,
+                                         FindDefiningInstruction(phi),
+                                         phi->reg);
+    reg->storage = storage;
+
+  // Happens if we have a def that reaches to a cycle of uses, where within the
+  // cycle there is no intermediate def.
+  } else {
+    auto alias = new (phi) SSAAliasNode(phi->frag, phi_operand);
+    alias->storage = storage;
+    TryRecursiveTrivialize(phi_operand);
+  }
+}
+
+}  // namespace
+
+// Try to convert this PHI node into an alias or a register node. If this
+// succeeds at trivializing the PHI node then `true` is returned, otherwise
+// `false` is returned.
+bool SSAControlPhiNode::UnsafeTryTrivialize(void) {
+  SSANode *only_operand(nullptr);
+  for (auto op_node : operands) {
+    auto unaliased_operand = UnaliasedNode(op_node);
+    if (unaliased_operand == only_operand || unaliased_operand == this) {
+      continue;  // Unique value or self-reference.
+    } else if (only_operand) {
+      return false;  // Merges at least two operands.
+    } else {
+      only_operand = unaliased_operand;
+    }
+  }
+  // Perform unsafe conversion to a register or alias node.
+  UnsafeTrivializePhiNode(this, only_operand);
+  return true;
+}
+
 SSAAliasNode::SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
       aliased_node(incoming_node_) {}
@@ -64,7 +147,7 @@ SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
       dependent_node(incoming_node_) {}
 
-SSARegisterNode::SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
+SSARegisterNode::SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
                                  VirtualRegister reg_)
     : SSANode(frag_, reg_),
       instr(instr_) {}
@@ -153,6 +236,15 @@ SSANode *DefinedNodeForReg(Instruction *instr, VirtualRegister reg) {
     return DefinedNodeForReg(ainstr, reg);
   } else {
     return nullptr;
+  }
+}
+
+// Returns the un-aliased node associated with the current node.
+SSANode *UnaliasedNode(SSANode *node) {
+  if (auto alias = DynamicCast<SSAAliasNode *>(node)) {
+    return UnaliasedNode(alias->aliased_node);
+  } else {
+    return node;
   }
 }
 
@@ -283,33 +375,7 @@ SSAForward::~SSAForward(void) {}
 
 namespace {
 
-// Overwrite a generalized PHI node with a different type of SSA variable.
-static void InPlaceOverwritePhiNode(SSAPhi *node, SSAVariable *val) {
-  // Happens if the initial write to a variable is a read and write
-  // (e.g. xor a, a), conditionally written, or partially written as its
-  // initial write. In this case we synthesize the operand as-if it's an
-  // `SSARegister`.
-  if (!val) {
-    new (node) SSARegister(node->reg);
 
-  // Happens if we have a def that reaches to a cycle of uses, where within the
-  // cycle there is no intermediate def.
-  } else {
-    new (node) SSATrivialPhi(DefinitionOf(val));
-  }
-}
-
-// Try to recursively trivialize the operands of a trivial PHI node.
-static void TryRecursiveTrivialize(SSAPhiOperand *op) {
-  SSAPhiOperand *next_op(nullptr);
-  for (; op; op = next_op) {
-    next_op = op->next;
-    if (auto phi = DynamicCast<SSAPhi *>(op->Variable())) {
-      phi->TryTrivialize();
-    }
-    delete UnsafeCast<SSANode *>(op);
-  }
-}
 
 // Returns the last `SSAVariable` defined within the fragment `frag` that
 // defines the register `reg`.
@@ -359,7 +425,7 @@ void SSAPhi::TryTrivialize(void) {
     }
   }
   auto op = ops;
-  InPlaceOverwritePhiNode(this, same);
+  UnsafeTrivializePhiNode(this, same);
   TryRecursiveTrivialize(op);
 }
 

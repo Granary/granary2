@@ -218,6 +218,7 @@ class CodeAttributes {
         modifies_flags(false),
         is_app_code(false),
         is_block_head(false),
+        is_compensation_code(false),
         num_inst_preds(0),
         block_meta(nullptr) {}
 
@@ -237,6 +238,13 @@ class CodeAttributes {
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head;
 
+  // Is this a "compensating" fragment. This is used during register allocation
+  // when we have a case like: P -> S1, P -> S2, and the register R is live from
+  // P -> S1 but dead from P -> S2. In this case, we add a compensating
+  // fragment P -> C -> S2, wherein we treat R as list on entry to C and
+  // explicit "kill" it in C with an annotation instruction.
+  bool is_compensation_code;
+
   // The number of non-application (instrumentation) predecessors.
   //
   // Note: We don't care if this value overflows or goes out of sync, as it is
@@ -246,7 +254,8 @@ class CodeAttributes {
   // The meta-data associated with the basic block that this code fragment
   // originates from.
   BlockMetaData *block_meta;
-};
+
+} __attribute__((packed));
 
 typedef TinyMap<VirtualRegister, SSANode *,
                 arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> SSANodeMap;
@@ -264,6 +273,7 @@ class SSAFragment : public Fragment {
   } ssa;
 };
 
+// A fragment of native or instrumentation instructions.
 class CodeFragment : public SSAFragment {
  public:
   inline CodeFragment(void)
@@ -293,6 +303,7 @@ class CodeFragment : public SSAFragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeFragment);
 };
 
+// A fragment where space for virtual registers can be allocated.
 class PartitionEntryFragment : public Fragment {
  public:
   PartitionEntryFragment(void) = default;
@@ -308,6 +319,7 @@ class PartitionEntryFragment : public Fragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(PartitionEntryFragment);
 };
 
+// A fragment where space for virtual registers can be deallocated.
 class PartitionExitFragment : public Fragment {
  public:
   PartitionExitFragment(void) = default;
@@ -323,6 +335,7 @@ class PartitionExitFragment : public Fragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(PartitionExitFragment);
 };
 
+// A fragment where the native flags state might need to be save.
 class FlagEntryFragment : public SSAFragment {
  public:
   FlagEntryFragment(void) = default;
@@ -338,6 +351,7 @@ class FlagEntryFragment : public SSAFragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FlagEntryFragment);
 };
 
+// A fragment where the native flags state might need to be restored.
 class FlagExitFragment : public SSAFragment {
  public:
   FlagExitFragment(void) = default;
@@ -359,6 +373,10 @@ enum ExitFragmentKind {
   FRAG_EXIT_EXISTING_BLOCK
 };
 
+// A fragment representing either a native basic block, a future basic block
+// (either directly or indirectly targeted), or a cached basic block. Exit
+// fragments have no successors, and can be treated as exit nodes of the
+// fragment control-flow graph.
 class ExitFragment : public Fragment {
  public:
   explicit ExitFragment(ExitFragmentKind kind_)

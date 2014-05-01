@@ -393,6 +393,120 @@ static void ConnectControlPhiNodes(FragmentList *frags) {
   }
 }
 
+// Attempt to trivialize as many `SSAControlPhiNode`s as possible into either
+// `SSAAliasNode`s or into `SSARegisterNode`s.
+static void SimplifyControlPhiNodes(FragmentList *frags) {
+  for (auto changed = true; changed; ) {
+    changed = false;
+    for (auto frag : ReverseFragmentListIterator(frags)) {
+      if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+        for (auto entry_node : ssa_frag->ssa.entry_nodes.Values()) {
+          auto phi_entry_node = DynamicCast<SSAControlPhiNode *>(entry_node);
+          if (phi_entry_node) {
+            changed = phi_entry_node->UnsafeTryTrivialize() || changed;
+          }
+        }
+      }
+    }
+  }
+}
+
+static void AddCompensationRegKills(CodeFragment *frag) {
+  for (auto node : frag->ssa.entry_nodes.Values()) {
+    frag->instrs.Append(new AnnotationInstruction(IA_SSA_NODE_UNDEF, node));
+  }
+}
+
+// If a *virtual* register R is live on exit in `pred` but not live on entry
+// in `succ` then add a compensating fragment between `pred` and `succ` that
+// contains R as as live on entry, and explicitly kills those variables using
+// special annotation instructions.
+//
+// Note: `succ` is passed by reference so that we can update the correct
+//       successor entry in `pred` more easily.
+static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
+                                    Fragment *&succ) {
+  auto comp = new CodeFragment;
+  for (auto &exit_node : pred->ssa.exit_nodes) {
+    if (exit_node.key.IsVirtual()) {
+      comp->ssa.entry_nodes[exit_node.key] = exit_node.value;
+    }
+  }
+  if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
+    for (auto entry_reg : ssa_succ->ssa.entry_nodes.Keys()) {
+      if (entry_reg.IsVirtual()) {
+        comp->ssa.entry_nodes.Remove(entry_reg);
+      }
+    }
+  }
+  if (!comp->ssa.entry_nodes.Size()) {
+    delete comp;
+    return;
+  }
+
+  // Make it look reasonable.
+  comp->attr.is_compensation_code = true;
+  comp->partition.Union(reinterpret_cast<Fragment *>(comp),
+                        reinterpret_cast<Fragment *>(pred));
+  comp->regs.live_on_entry = pred->regs.live_on_exit;
+  comp->regs.live_on_exit = pred->regs.live_on_exit;
+
+  // Chain it into the control-flow.
+  comp->successors[0] = succ;
+  succ = comp;
+
+  frags->InsertAfter(pred, comp);  // Chain it into the fragment list.
+
+  AddCompensationRegKills(comp);
+}
+
+#ifdef GRANARY_DEBUG
+// Asserts that there are nodes (of any type) on entry to frag that are
+// associated with virtual registers. This can happen in the case where some
+// instrumentation reads from a virtual register before writing to it. We
+// handle some architecture-specific special cases like `XOR A, A` on x86
+// when buildig up the `SSAInstruction`s and by using the
+// `SSAOperandAction::CLEARED` action.
+static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
+  for (auto reg : frag->ssa.entry_nodes.Keys()) {
+    GRANARY_ASSERT(!reg.IsVirtual());
+  }
+}
+#endif
+
+// Goes and adds "compensating" fragments. The idea here is that if we have
+// an edge between a predecessor fragment P and its successor S, and some
+// register R is live on exit from P, but is not live on entry to S, then
+// really it is killed in the transition from P to S. We need to explicitly
+// represent this "death" (for later allocation purposes) by introducing
+// a dummy compensating fragment.
+static void AddCompensatingFragments(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
+      if (code_frag->attr.is_compensation_code) {
+        continue;
+      }
+    }
+    // "Exit" compensation code.
+    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+      for (auto &succ : ssa_frag->successors) {
+        if (succ) {
+          AddCompensatingFragment(frags, ssa_frag, succ);
+        }
+      }
+
+    } else if (IsA<PartitionEntryFragment *>(frag)) {
+#ifdef GRANARY_DEBUG
+      for (auto succ : frag->successors) {
+        if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
+          CheckForUndefinedVirtualRegs(ssa_succ);
+        }
+      }
+#endif
+    }
+  }
+}
+
 }  // namespace
 
 // Build a graph for the SSA definitions associated with the fragments.
@@ -402,6 +516,8 @@ void TrackSSAVars(FragmentList * const frags) {
   LocalValueNumbering(frags);
   BackPropagateEntryDefs(frags);
   ConnectControlPhiNodes(frags);
+  SimplifyControlPhiNodes(frags);
+  AddCompensatingFragments(frags);
 }
 
 }  // namespace granary

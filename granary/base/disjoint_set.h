@@ -92,8 +92,6 @@ class DisjointSet {
  private:
   mutable SelfT *parent;
   mutable T value;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(DisjointSet);
 };
 
 }  // namespace granary

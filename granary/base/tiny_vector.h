@@ -57,6 +57,10 @@ class TinyVector {
       return vec->elems[i];
     }
 
+    inline U operator*(void) const {
+      return vec->elems[i];
+    }
+
    private:
     template <typename, unsigned long> friend class TinyVector;
 

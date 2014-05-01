@@ -178,9 +178,9 @@ enum InstructionAnnotation {
   // so that all nodes are owned by some `Fragment`.
   IA_SSA_NODE_DEF,
 
-  // A pre-definition of an `SSANode` occurs when there are "dangling"
-  // SSA control-phi definitions.
-  IA_SSA_PRE_DEF,
+  // An "undefinition" of a node that appears in a compensating fragment.
+  // See `granary/code/assemble/6_track_ssa_vars.cc`.
+  IA_SSA_NODE_UNDEF
 };
 
 // An annotation instruction is an environment-specific and implementation-
