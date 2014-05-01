@@ -37,16 +37,146 @@ class TinyMap {
         size(0) {}
 
  private:
-   TinyVector<MapPair, kMinMapSize> elems;
+  TinyVector<MapPair, kMinMapSize> elems;
+
+  typedef decltype(elems.begin()) VecIterator;
+  typedef decltype(const_cast<const decltype(elems) *>(&elems)->begin())
+      ConstVecIterator;
+
+  // Iterator over the entries of the `TinyMap`.
+  template <typename VecIteratorType>
+  class IteratorImpl {
+   public:
+    inline IteratorImpl(void)
+        : it() {}
+
+    inline IteratorImpl(const IteratorImpl<VecIteratorType> &that)
+          : it(that.it) {}
+
+    inline explicit IteratorImpl(VecIteratorType it_)
+          : it(it_) {
+      Advance();
+    }
+
+    inline bool operator!=(const IteratorImpl<VecIteratorType> &that) const {
+      return it != that.it;
+    }
+
+    inline MapPair &operator*(void) {
+      return *it;
+    }
+
+    void operator++(void) {
+      ++it;
+      Advance();
+    }
+
+   private:
+    void Advance(void) {
+      while (it != VecIteratorType()) {
+        auto &curr(*it);
+        if (K() == curr.key) {
+          ++it;  // Skip over empty keys.
+        } else {
+          break;
+        }
+      }
+    }
+
+    VecIteratorType it;
+  };
 
  public:
 
-  inline auto begin(void) -> decltype(this->elems.begin()) {
-    return elems.begin();
+  typedef IteratorImpl<VecIterator> Iterator;
+  typedef IteratorImpl<ConstVecIterator> ConstIterator;
+
+  inline Iterator begin(void) {
+    return Iterator(elems.begin());
   }
 
-  inline auto end(void) -> decltype(this->elems.end()) {
-    return elems.end();
+  inline Iterator end(void) {
+    return Iterator(elems.end());
+  }
+
+  inline ConstIterator begin(void) const {
+    return ConstIterator(elems.begin());
+  }
+
+  inline ConstIterator end(void) const {
+    return ConstIterator(elems.end());
+  }
+
+  // Iterator class for the keys of a `TinyMap`.
+  class KeyIterator {
+   public:
+    inline KeyIterator(void)
+        : it() {}
+
+    inline explicit KeyIterator(const ConstIterator &it_)
+        : it(it_) {}
+
+    inline KeyIterator begin(void) {
+      return *this;
+    }
+
+    inline KeyIterator end(void) {
+      return KeyIterator();
+    }
+
+    inline void operator++(void) {
+      ++it;
+    }
+
+    inline V operator*(void) {
+      return (*it).key;
+    }
+
+    inline bool operator!=(const KeyIterator &that) const {
+      return it != that.it;
+    }
+   private:
+    ConstIterator it;
+  };
+
+  // Iterator class for the values of a `TinyMap`.
+  class ValueIterator {
+   public:
+    inline ValueIterator(void)
+        : it() {}
+
+    inline explicit ValueIterator(const Iterator &it_)
+        : it(it_) {}
+
+    inline ValueIterator begin(void) {
+      return *this;
+    }
+
+    inline ValueIterator end(void) {
+      return ValueIterator();
+    }
+
+    inline void operator++(void) {
+      ++it;
+    }
+
+    inline V operator*(void) {
+      return (*it).value;
+    }
+
+    inline bool operator!=(const ValueIterator &that) const {
+      return it != that.it;
+    }
+   private:
+    Iterator it;
+  };
+
+  KeyIterator Keys(void) const {
+    return KeyIterator(begin());
+  }
+
+  ValueIterator Values(void) {
+    return ValueIterator(begin());
   }
 
   V &operator[](K key) {

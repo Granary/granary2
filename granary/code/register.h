@@ -305,7 +305,7 @@ class RegisterTrackerIterator {
 
   explicit RegisterTrackerIterator(const RegisterTracker *tracker_)
       : tracker(tracker_),
-        num(0) {
+        num(0U) {
     Advance();
   }
 
@@ -326,11 +326,11 @@ class RegisterTrackerIterator {
  private:
   void Advance(void) {
     for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
-           kIsLive != tracker->IsLive(num); ++num) {}
+           kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
   }
 
   const RegisterTracker * const tracker;
-  int num;
+  uint16_t num;
 };
 
 }  // namespace detail

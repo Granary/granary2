@@ -35,9 +35,10 @@ class SSASpillStorage {
 // Generic SSA Node.
 class SSANode {
  public:
-  inline explicit SSANode(SSAFragment *frag_)
+  inline SSANode(SSAFragment *frag_, VirtualRegister reg_)
       : storage(),
-        frag(frag_) {}
+        frag(frag_),
+        reg(reg_) {}
 
   virtual ~SSANode(void);
 
@@ -45,6 +46,9 @@ class SSANode {
 
   // SSAFragment in which this register is defined.
   SSAFragment * const frag;
+
+  // The register associated with this node.
+  const VirtualRegister reg;
 
   GRANARY_DECLARE_BASE_CLASS(SSANode)
 
@@ -60,11 +64,8 @@ class SSANode {
 // is the node itself, then the node is converted into an `SSATrivialPhiNode`.
 class SSAControlPhiNode : public SSANode {
  public:
-  inline explicit SSAControlPhiNode(SSAFragment *frag_)
-      : SSANode(frag_),
-        incoming_nodes() {}
-
-  virtual ~SSAControlPhiNode(void);
+  virtual ~SSAControlPhiNode(void) = default;
+  SSAControlPhiNode(SSAFragment *frag_, VirtualRegister reg_);
 
   // Allocate and free.
   static void *operator new(std::size_t);
@@ -82,11 +83,8 @@ class SSAControlPhiNode : public SSANode {
 // for its incoming value, and that any use of
 class SSAAliasNode : public SSANode {
  public:
-  inline SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
-      : SSANode(frag_),
-        incoming_node(incoming_node_) {}
-
-  virtual ~SSAAliasNode(void);
+  virtual ~SSAAliasNode(void) = default;
+  SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_);
 
   // Allocate and free.
   static void *operator new(std::size_t);
@@ -95,6 +93,7 @@ class SSAAliasNode : public SSANode {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSAAliasNode)
 
+  // The aliased value of this node.
   SSANode * const incoming_node;
 
  private:
@@ -106,13 +105,8 @@ class SSAAliasNode : public SSANode {
 // opaque to us. For example, a read/write or conditional write
 class SSADataPhiNode : public SSANode {
  public:
-  inline SSADataPhiNode(SSAFragment *frag_, NativeInstruction *instr_,
-                        SSANode *incoming_node_)
-      : SSANode(frag_),
-        instr(instr_),
-        incoming_node(incoming_node_) {}
-
-  virtual ~SSADataPhiNode(void);
+  virtual ~SSADataPhiNode(void) = default;
+  SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_);
 
   // Allocate and free.
   static void *operator new(std::size_t);
@@ -120,9 +114,6 @@ class SSADataPhiNode : public SSANode {
   static void operator delete(void *address);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
-
-  // Instruction at which this register is defined.
-  NativeInstruction * const instr;
 
   // The inherited value of this node.
   SSANode * const incoming_node;
@@ -140,13 +131,9 @@ class SSADataPhiNode : public SSANode {
 // `SSAControlPhiNode`.
 class SSARegisterNode : public SSANode {
  public:
-  inline SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
-                         VirtualRegister reg_)
-      : SSANode(frag_),
-        instr(instr_),
-        reg(reg_) {}
-
-  virtual ~SSARegisterNode(void);
+  virtual ~SSARegisterNode(void) = default;
+  SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
+                  VirtualRegister reg_);
 
   // Allocate and free.
   static void *operator new(std::size_t);
@@ -155,10 +142,11 @@ class SSARegisterNode : public SSANode {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
 
-  // Instruction at which this register is defined.
-  NativeInstruction * const instr;
+  // Instruction that defines this register. We use this in combination with
+  // `frag` when doing copy-propagation.
+  NativeInstruction *instr;
 
-  // Register defined by `instr`.
+  // Register defined by this node.
   const VirtualRegister reg;
 
  private:
@@ -235,6 +223,11 @@ class SSAInstruction {
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SSAInstruction);
 };
+
+// Returns a pointer to the `SSANode` that is used to define the register `reg`
+// in the instruction `instr`, or `nullptr` if the register is not defined by
+// the instruction.
+SSANode *DefinedNodeForReg(Instruction *instr, VirtualRegister reg);
 
 #if 0
 

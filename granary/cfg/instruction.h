@@ -172,7 +172,11 @@ enum InstructionAnnotation {
   // Marks the stack as changing to a valid or undefined stack pointer value.
   IA_UNDEFINED_STACK,
   IA_UNKNOWN_STACK,
-  IA_VALID_STACK
+  IA_VALID_STACK,
+
+  // Represents the definition of some `SSANode`, used in later assembly stages
+  // so that all nodes are owned by some `Fragment`.
+  IA_SSA_NODE_DEF
 };
 
 // An annotation instruction is an environment-specific and implementation-

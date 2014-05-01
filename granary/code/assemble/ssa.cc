@@ -1,10 +1,15 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/new.h"
 
+#include "granary/cfg/instruction.h"
+
 #include "granary/code/assemble/ssa.h"
+
+#include "granary/util.h"
 
 #define GRANARY_DEFINE_SSA_ALLOCATOR(cls) \
   void *cls::operator new(std::size_t) { \
@@ -33,10 +38,23 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
 
 SSANode::~SSANode(void) {}
-SSAControlPhiNode::~SSAControlPhiNode(void) {}
-SSAAliasNode::~SSAAliasNode(void) {}
-SSADataPhiNode::~SSADataPhiNode(void) {}
-SSARegisterNode::~SSARegisterNode(void) {}
+
+SSAControlPhiNode::SSAControlPhiNode(SSAFragment *frag_, VirtualRegister reg_)
+    : SSANode(frag_, reg_),
+      incoming_nodes() {}
+
+SSAAliasNode::SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
+    : SSANode(frag_, incoming_node_->reg),
+      incoming_node(incoming_node_) {}
+
+SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
+    : SSANode(frag_, incoming_node_->reg),
+      incoming_node(incoming_node_) {}
+
+SSARegisterNode::SSARegisterNode(SSAFragment *frag_, NativeInstruction *instr_,
+                                 VirtualRegister reg_)
+    : SSANode(frag_, reg_),
+      instr(instr_) {}
 
 // Enough memory to hold an arbitrary `SSANode`.
 union SSANodeMemory {
@@ -68,6 +86,62 @@ SSAOperand::SSAOperand(void)
 SSAInstruction::SSAInstruction(void)
     : defs(),
       uses() {}
+
+namespace {
+
+// Returns a pointer to the `SSANode` that is used to define the register `reg`
+// in the instruction `instr`, or `nullptr` if the register is not defined by
+// the instruction.
+static SSANode *DefinedNodeForReg(NativeInstruction *instr,
+                                  VirtualRegister reg) {
+  if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
+    for (auto &op : ssa_instr->defs) {
+      if (SSAOperandAction::WRITE == op.action) {
+        auto node = op.nodes[0];
+        if (node->reg == reg) return node;
+      } else {  // `SSAOperandAction::CLEARED`.
+        break;
+      }
+    }
+    for (auto &op : ssa_instr->uses) {
+      if (SSAOperandAction::READ_WRITE == op.action) {
+        auto node = op.nodes[0];
+        if (node->reg == reg) return node;
+      } else {  // `SSAOperandAction::READ`.
+        break;
+      }
+    }
+  }
+  return nullptr;
+}
+
+// Returns a pointer to the `SSANode` that is defined by a special annotation
+// within a fragment's instruction list.
+static SSANode *DefinedNodeForReg(AnnotationInstruction *instr,
+                                  VirtualRegister reg) {
+  if (IA_SSA_NODE_DEF == instr->annotation) {
+    auto node = instr->GetData<SSANode *>();
+    if (node->reg == reg) {
+      return node;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+// Returns a pointer to the `SSANode` that is used to define the register `reg`
+// in the instruction `instr`, or `nullptr` if the register is not defined by
+// the instruction.
+SSANode *DefinedNodeForReg(Instruction *instr, VirtualRegister reg) {
+  if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+    return DefinedNodeForReg(ninstr, reg);
+  } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+    return DefinedNodeForReg(ainstr, reg);
+  } else {
+    return nullptr;
+  }
+}
 
 }  // namespace granary
 

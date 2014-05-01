@@ -40,7 +40,7 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
 
   // Ignore all non general-purpose registers, as they cannot be scheduled with
   // virtual registers.
-  } else if (reg_op && reg_op->Register().IsGeneralPurpose()) {
+  } else if (reg_op && !reg_op->Register().IsGeneralPurpose()) {
     return;
 
   // Return pointer memory operands (i.e. absolute memory addresses), as they
@@ -148,6 +148,31 @@ static void CreateSSAInstructions(FragmentList *frags) {
   }
 }
 
+// For every `SSAFragment` that targets a non `SSAFragment` successor, add the
+// live GPRs on exit from the `SSAFragment` as initial `SSAControlPhiNode`s to
+// the fragment's `ssa.entry_nodes` map.
+static void InitEntryNodesFromLiveExitRegs(FragmentList *frags) {
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+      auto is_exit = false;
+      for (auto succ : frag->successors) {
+        if (succ && !IsA<SSAFragment *>(succ)) {
+          is_exit = true;
+          break;
+        }
+      }
+      if (is_exit) {
+        for (auto reg : ssa_frag->regs.live_on_exit) {
+          auto &node(ssa_frag->ssa.entry_nodes[reg]);
+          if (!node) {
+            node = new SSAControlPhiNode(ssa_frag, reg);
+          }
+        }
+      }
+    }
+  }
+}
+
 // Perform local value numbering for definitions.
 static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
                     SSAInstruction *ssa_instr) {
@@ -191,10 +216,7 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
 }
 
 // Perform local value numbering for uses.
-static void LVNUses(SSAFragment *frag, NativeInstruction *instr,
-                    SSAInstruction *ssa_instr) {
-
-
+static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
   for (auto &op : ssa_instr->uses) {
     if (SSAOperandAction::READ_WRITE == op.action) {  // Read-only, must be reg.
       GRANARY_ASSERT(op.is_reg);
@@ -203,7 +225,7 @@ static void LVNUses(SSAFragment *frag, NativeInstruction *instr,
 
       // We're doing a read/write, so while we are making a new definition, it
       // will need to depend on some as-of-yet to be determined definition.
-      auto new_node = new SSAControlPhiNode(frag);
+      auto new_node = new SSAControlPhiNode(frag, reg);
 
       // Some previous instruction (in the current fragment) uses this register,
       // and so created a placeholder version of the register to be filled in
@@ -211,13 +233,13 @@ static void LVNUses(SSAFragment *frag, NativeInstruction *instr,
       // control-PHI with a data-PHI.
       if (node) {
         GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-        op.nodes.Append(new (node) SSADataPhiNode(frag, instr, new_node));
+        op.nodes.Append(new (node) SSADataPhiNode(frag, new_node));
 
       // No instructions (in the current fragment) that follow `instr` use the
       // register `reg`, but later when we do GVN, we might need to propagate
       // this definition to a successor.
       } else {
-        op.nodes.Append(new SSADataPhiNode(frag, instr, new_node));
+        op.nodes.Append(new SSADataPhiNode(frag, new_node));
       }
 
       GRANARY_ASSERT(1U == op.nodes.Size());
@@ -240,12 +262,20 @@ static void LVNUses(SSAFragment *frag, NativeInstruction *instr,
         if (reg.IsGeneralPurpose()) {
           auto &node(frag->ssa.entry_nodes[reg]);
           if (!node) {
-            node = new SSAControlPhiNode(frag);
+            node = new SSAControlPhiNode(frag, reg);
           }
           op.nodes.Append(node);
         }
       }
     }
+  }
+}
+
+// Add the missing definitions as annotation instructions.
+static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
+  for (auto node : frag->ssa.entry_nodes.Values()) {
+    GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
+    frag->instrs.Prepend(new AnnotationInstruction(IA_SSA_NODE_DEF, node));
   }
 }
 
@@ -258,10 +288,81 @@ static void LocalValueNumbering(FragmentList *frags) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
             LVNDefs(ssa_frag, ninstr, ssa_instr);
-            LVNUses(ssa_frag, ninstr, ssa_instr);
+            LVNUses(ssa_frag, ssa_instr);
           }
         }
       }
+      AddMissingDefsAsAnnotations(ssa_frag);
+    }
+  }
+}
+
+// Returns the last `SSANode` defined within the fragment `frag` that
+// defines the register `reg`.
+static SSANode *FindDefForUse(SSAFragment *frag, VirtualRegister reg) {
+  for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
+    if (auto node = DefinedNodeForReg(instr, reg)) {
+      return node;
+    }
+  }
+  return nullptr;
+}
+
+// Back-propagate the entry nodes of `succ` into the exit nodes of `frag`, then
+// update the entry nodes of `succ` if necessary.
+static bool BackPropagateEntryDefs(SSAFragment *frag, SSAFragment *succ) {
+  auto changed = false;
+  for (auto succ_node : succ->ssa.entry_nodes.Values()) {
+    auto reg = succ_node->reg;
+    GRANARY_ASSERT(reg.IsGeneralPurpose());
+
+    // Already inherited, either in a previous step, or by a different
+    // successor of `frag` that we've already visited.
+    auto &exit_node(frag->ssa.exit_nodes[reg]);
+    if (exit_node) {
+      exit_node->storage.Union(exit_node, succ_node);
+      continue;
+    }
+
+    // Defined in `frag`, or used in `frag` but not defined.
+    if (auto node = FindDefForUse(frag, reg)) {
+      node->storage.Union(node, succ_node);
+      exit_node = node;
+      continue;
+    }
+
+    // `FindDefForUse` didn't find it, so it means that `reg` was neither
+    // defined nor used in `frag`. We should similarly not find it in
+    // `entry_nodes`, because then that would imply a bug where something that
+    // should be both in the exit and entry nodes is present in the entry but
+    // not the exit nodes (which would have been caught by a check above).
+    auto &entry_node(frag->ssa.entry_nodes[reg]);
+    GRANARY_ASSERT(nullptr == entry_node);
+
+    // `frag` (predecessor of `succ`) doesn't define or use `reg`, so inherit
+    // the node directly and pass it up through the `entry_nodes` as well.
+    entry_node = succ_node;
+    exit_node = succ_node;
+
+    // Make a note that `entry_nodes` has changed, which could further change
+    // other fragments.
+    changed = true;
+  }
+  return changed;
+}
+
+static void BackPropagateEntryDefs(FragmentList *frags) {
+  for (auto changed = true; changed; ) {
+    changed = false;
+    for (auto frag : ReverseFragmentListIterator(frags)) {
+      if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+        for (auto succ : frag->successors) {
+          if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
+            changed = BackPropagateEntryDefs(ssa_frag, ssa_succ) || changed;
+          }
+        }
+      }
+
     }
   }
 }
@@ -271,7 +372,9 @@ static void LocalValueNumbering(FragmentList *frags) {
 // Build a graph for the SSA definitions associated with the fragments.
 void TrackSSAVars(FragmentList * const frags) {
   CreateSSAInstructions(frags);
+  InitEntryNodesFromLiveExitRegs(frags);
   LocalValueNumbering(frags);
+  BackPropagateEntryDefs(frags);
 }
 
 }  // namespace granary
