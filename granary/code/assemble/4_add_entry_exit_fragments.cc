@@ -17,8 +17,8 @@ namespace granary {
 // specific flags stored in the `FlagUsageInfo` object.
 //
 // Note: This has an architecture-specific implementation.
-void VisitInstructionFlags(const arch::Instruction &instr,
-                           FlagUsageInfo *flags);
+extern void VisitInstructionFlags(const arch::Instruction &instr,
+                                  FlagUsageInfo *flags);
 
 namespace {
 

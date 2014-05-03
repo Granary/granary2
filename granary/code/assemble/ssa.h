@@ -238,6 +238,9 @@ class SSAInstruction {
 // the instruction.
 SSANode *DefinedNodeForReg(Instruction *instr, VirtualRegister reg);
 
+// Returns a pointer to the `SSANode` that is defined at this instruction.
+SSANode *DefinedNode(Instruction *instr);
+
 // Returns the un-aliased node associated with the current node.
 SSANode *UnaliasedNode(SSANode *node);
 

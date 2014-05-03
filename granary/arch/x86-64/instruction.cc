@@ -75,7 +75,8 @@ bool Instruction::ShiftsStackPointer(void) const {
       return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
              ops[1].IsMemory() && ops[1].is_compound &&
              XED_REG_RSP == ops[1].mem.reg_base &&
-             XED_REG_INVALID == ops[1].mem.reg_index;
+             XED_REG_INVALID == ops[1].mem.reg_index &&
+             0 != ops[1].mem.disp;
 
     default:
       return false;

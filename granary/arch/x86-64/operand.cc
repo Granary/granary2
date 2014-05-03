@@ -22,14 +22,15 @@ bool OperandRef::ReplaceWith(const Operand &repl_op) {
   if (GRANARY_UNLIKELY(op->is_sticky || !op->is_explicit)) {
     return false;
   } else {
-    auto rw = op->rw;
-    auto width = op->width;
-    auto is_ea = op->is_effective_address;
+    const auto rw = op->rw;
+    const auto width = op->width;
+    const auto is_ea = op->is_effective_address;
     *op = *(repl_op.op.AddressOf());
+    if (-1 != width) op->width = width;
     op->rw = rw;
-    op->width = width;
     op->is_effective_address = is_ea;
     op->is_explicit = true;
+    op->is_sticky = false;
     return true;
   }
 }

@@ -9,9 +9,13 @@
 
 namespace granary {
 
-// Implements a resizable array for a very small number of elements. TinyVectors
-// guarantee that at least `kMinSize` can be placed in the vector before any
-// dynamic allocation occurs.
+// Implements a dynamically sized array for a very small number of elements.
+// `TinyVector`s guarantee that at least `kMinSize` can be placed in the vector
+// before any dynamic memory allocation occurs.
+//
+// Note: This vector guarantees that elements in the vector will not be moved.
+//       Therefore, a pointer to an element in the vector will remain the
+//       same across vector resize operations.
 template <typename T, uintptr_t kMinSize>
 class TinyVector {
  public:
@@ -38,12 +42,12 @@ class TinyVector {
           i = 0;
         }
 
-      // Last element in a full vector.
+      // `i >= kMinSize`; Last element in a full vector.
       } else if (kMinSize == vec->num_elems) {
         vec = nullptr;
         i = 0;
 
-      // Looks like `vec` has a `next` pointer, follow it.
+      // `i >= kMinSize`; Looks like `vec` has a `next` pointer, follow it.
       } else {
         vec = vec->next;
         if (!vec->num_elems) {  // The `next` vector has nothing in it.
@@ -79,10 +83,42 @@ class TinyVector {
     }
   }
 
+  TinyVector(const TinyVector<T, kMinSize> &that)
+      : num_elems(0) {
+    if (std::is_trivial<T>()) {
+      memset(elems, 0, sizeof elems);
+    }
+    for (auto &elem : that) {
+      Append(elem);
+    }
+  }
+
   ~TinyVector(void) {
     if (num_elems > kMinSize) {
       delete next;
-      next = nullptr;
+    }
+    num_elems = 0;
+  }
+
+  SelfType &operator=(const SelfType &that) {
+    if (this != &that) {
+      if (num_elems) {
+        this->~TinyVector();
+      }
+      if (that.num_elems) {
+        new (this) SelfType(that);
+      } else {
+        new (this) SelfType;
+      }
+    }
+    return *this;
+  }
+
+  // Clear out the entire vector.
+  void Clear(void) {
+    if (num_elems) {
+      this->~TinyVector();
+      new (this) SelfType;
     }
   }
 
@@ -113,7 +149,7 @@ class TinyVector {
   }
 
   // Append a value to the end of this tiny vector.
-  T &Append(T val) {
+  T &Append(const T &val) {
     if (kMinSize > num_elems) {
       elems[num_elems++] = val;
       return elems[num_elems - 1];
@@ -146,9 +182,11 @@ class TinyVector {
 
  private:
   // Returns the element at a specific index.
+  //
+  // Note: This function doesn't do overflow checking!
   T &ElementAt(uintptr_t index) {
     auto curr = this;
-    while (index > kMinSize) {
+    while (index >= kMinSize) {
       curr = curr->next;
       index -= kMinSize;
     }
@@ -156,9 +194,11 @@ class TinyVector {
   }
 
   // Returns the element at a specific index.
+  //
+  // Note: This function doesn't do overflow checking!
   const T &ElementAt(uintptr_t index) const {
     auto curr = this;
-    while (index > kMinSize) {
+    while (index >= kMinSize) {
       curr = curr->next;
       index -= kMinSize;
     }
@@ -170,7 +210,7 @@ class TinyVector {
   union {
     uintptr_t num_elems;
     SelfType *next;
-  };
+  } __attribute__((packed));
 };
 
 }  // namespace granary

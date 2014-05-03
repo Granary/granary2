@@ -48,9 +48,9 @@ class BigVectorImpl {
 // Represents a scalable array that is expected to have many entries, and so
 // will be backed by a lot of memory.
 //
-// A key detail of this vector is that growing the vector does not change the
-// backing addresses of elements, so taking a pointer of an element is a
-// valid operation.
+// Note: This vector guarantees that elements in the vector will not be moved.
+//       Therefore, a pointer to an element in the vector will remain the
+//       same across vector resize operations.
 //
 // Note: This is only for plain-old-data types or data types with trivial
 //       constructors and data-structures. The assumption is that zero-

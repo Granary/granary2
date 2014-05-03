@@ -224,7 +224,7 @@ static bool ConvertDecodedOperand(Instruction *instr,
     ConvertRegisterOperand(instr, instr_op, xedd, op_name);
   } else if (XED_OPERAND_RELBR == op_name) {
     ConvertRelativeBranch(instr, instr_op, xedd);
-  } else if (XED_OPERAND_MEM0 == op_name) {
+  } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_AGEN == op_name) {
     ConvertBaseDisp(instr, instr_op, xedd, 0);
   } else if (XED_OPERAND_MEM1 == op_name) {
     ConvertBaseDisp(instr, instr_op, xedd, 1);

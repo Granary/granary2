@@ -183,6 +183,15 @@ class TinyMap {
     return ValueIterator(begin());
   }
 
+  bool Exists(K key) const {
+    for (auto &entry : elems) {
+      if (entry.key == key) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   V &operator[](K key) {
     GRANARY_ASSERT(K() != key);
     MapPair *last_empty_entry(nullptr);

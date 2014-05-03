@@ -16,10 +16,10 @@ namespace granary {
 // instructions.
 //
 // Note: This has an architecture-specific implementation.
-void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
-                                DecodedBasicBlock *block,
-                                Instruction *instr,
-                                InlineAssemblyBlock *asm_block);
+extern void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
+                                       DecodedBasicBlock *block,
+                                       Instruction *instr,
+                                       InlineAssemblyBlock *asm_block);
 
 // Compile all inline assembly instructions by parsing the inline assembly
 // instructions and doing code generation for them.

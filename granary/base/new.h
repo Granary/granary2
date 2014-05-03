@@ -22,6 +22,9 @@ namespace granary {
   friend class OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
+  inline static void *operator new(std::size_t, void *address) { \
+    return address; \
+  } \
   static void *operator new(std::size_t) { \
     void *address(OperatorNewAllocator<class_name>::Allocate()); \
     VALGRIND_MALLOCLIKE_BLOCK(address, sizeof(class_name), 0, 0); \

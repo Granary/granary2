@@ -17,64 +17,17 @@ namespace granary {
 // clearing the value of `A` and not reading it for the sake of reading it.
 //
 // Note: This function has an architecture-specific implementation.
-void ConvertOperandActions(const NativeInstruction *instr,
-                           SSAOperandPack &operands);
+extern void ConvertOperandActions(const NativeInstruction *instr,
+                                  SSAOperandPack &operands);
 
 // Get the virtual register associated with an arch operand.
 //
 // Note: This assumes that the arch operand is indeed a register operand!
 //
 // Note: This function has an architecture-specific implementation.
-VirtualRegister GetRegister(const SSAOperand &op);
+extern VirtualRegister GetRegister(const SSAOperand &op);
 
 namespace {
-
-// Add an `SSAOperand` to an operand pack.
-static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
-  auto mem_op = DynamicCast<MemoryOperand *>(op);
-  auto reg_op = DynamicCast<RegisterOperand *>(op);
-
-  // Ignore immediate operands as they are unrelated to virtual registers.
-  if (!mem_op && !reg_op) {
-    return;
-
-  // Ignore all non general-purpose registers, as they cannot be scheduled with
-  // virtual registers.
-  } else if (reg_op && !reg_op->Register().IsGeneralPurpose()) {
-    return;
-
-  // Return pointer memory operands (i.e. absolute memory addresses), as they
-  // contain no general-purpose registers.
-  } else if (mem_op && mem_op->IsPointer()) {
-    return;
-  }
-
-  SSAOperand ssa_op;
-  ssa_op.operand = const_cast<arch::Operand *>(op->UnsafeExtract());
-  ssa_op.is_reg = nullptr != reg_op;
-
-  // Figure out the action that should be associated with all dependencies
-  // of this operand. Later we'll also do minor post-processing of all
-  // operands that will potentially convert some `WRITE`s into `READ_WRITE`s
-  // where the same register appears as both a read and write operand.
-  // Importantly, we could have the same register is a write reg, and a read
-  // mem, and in that case we wouldn't perform any such conversions.
-  if (mem_op) {
-    ssa_op.action = SSAOperandAction::READ;
-  } else if (op->IsConditionalWrite() || op->IsReadWrite()) {
-    ssa_op.action = SSAOperandAction::READ_WRITE;
-  } else if (op->IsWrite()) {
-    if (reg_op && reg_op->Register().PreservesBytesOnWrite()) {
-      ssa_op.action = SSAOperandAction::READ_WRITE;
-    } else {
-      ssa_op.action = SSAOperandAction::WRITE;
-    }
-  } else {
-    ssa_op.action = SSAOperandAction::READ;
-  }
-
-  operands.Append(ssa_op);
-}
 
 // Returns true of we find a read register operand in the `operands` pack that
 // uses the same register as `op`.
@@ -91,28 +44,32 @@ static bool FindReadFromReg(const SSAOperand &op,
   return false;
 }
 
+}  // namespace
+
 // Convert writes to register operates into read/writes if there is another
 // read from the same register (that isn't a memory operand) in the current
 // operand pack.
 //
 // The things we want to handle here are instruction's like `MOV A, A`.
-static void ConvertOperandActions(SSAOperandPack &operands) {
+//
+// Note: This function is also used by `7_propagate_copies`.
+bool ConvertOperandActions(SSAOperandPack &operands) {
+  auto changed = false;
   for (auto &op : operands) {
     if (op.is_reg && SSAOperandAction::WRITE == op.action &&
         FindReadFromReg(op, operands)) {
       op.action = SSAOperandAction::READ_WRITE;
+      changed = true;
     }
   }
+  return changed;
 }
 
-// Create an `SSAInstruction` for the operands associated with some
-// `NativeInstruction`. We add the operands to the instruction in a specific
-// order for later convenience.
-static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
-  if (!operands.Size()) {
-    return nullptr;
-  }
-  auto instr = new SSAInstruction;
+// Decompose an `SSAOperandPack` containing all kinds of operands into the
+// canonical format required by `SSAInstruction`.
+//
+// Note: This function is alos used by `7_propagate_copies`.
+void AddInstructionOperands(SSAInstruction *instr, SSAOperandPack &operands) {
   for (auto &op : operands) {
     if (SSAOperandAction::WRITE == op.action) instr->defs.Append(op);
   }
@@ -125,6 +82,78 @@ static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
   for (auto &op : operands) {
     if (SSAOperandAction::READ == op.action) instr->uses.Append(op);
   }
+}
+
+namespace {
+
+// Add an `SSAOperand` to an operand pack.
+static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
+  auto mem_op = DynamicCast<MemoryOperand *>(op);
+  auto reg_op = DynamicCast<RegisterOperand *>(op);
+
+  // Ignore immediate operands as they are unrelated to virtual registers.
+  if (!mem_op && !reg_op) {
+    return;
+
+  // Ignore all non general-purpose registers, as they cannot be scheduled with
+  // virtual registers.
+  } else if (reg_op) {
+    if (!reg_op->Register().IsGeneralPurpose()) return;
+
+  // Only use memory operands that contain general-purpose registers.
+  } else if (mem_op) {
+    if (mem_op->IsPointer()) return;
+
+    VirtualRegister r1, r2, r3;
+    auto num_gprs = 0;
+    if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+      if (r1.IsGeneralPurpose()) ++num_gprs;
+      if (r2.IsGeneralPurpose()) ++num_gprs;
+      if (r3.IsGeneralPurpose()) ++num_gprs;
+    }
+    if (!num_gprs) return;  // E.g. referencing memory directly on the stack.
+  }
+
+  SSAOperand ssa_op;
+
+  GRANARY_ASSERT(op->Ref().IsValid());
+  ssa_op.operand = const_cast<arch::Operand *>(op->UnsafeExtract());
+  GRANARY_ASSERT(nullptr != ssa_op.operand);
+
+  ssa_op.is_reg = nullptr != reg_op;
+
+  // Figure out the action that should be associated with all dependencies
+  // of this operand. Later we'll also do minor post-processing of all
+  // operands that will potentially convert some `WRITE`s into `READ_WRITE`s
+  // where the same register appears as both a read and write operand.
+  // Importantly, we could have the same register is a write reg, and a read
+  // mem, and in that case we wouldn't perform any such conversions.
+  if (mem_op) {
+    ssa_op.action = SSAOperandAction::READ;
+  } else if (op->IsConditionalWrite() || op->IsReadWrite()) {
+    ssa_op.action = SSAOperandAction::READ_WRITE;
+  } else if (op->IsWrite()) {
+    if (reg_op->Register().PreservesBytesOnWrite()) {
+      ssa_op.action = SSAOperandAction::READ_WRITE;
+    } else {
+      ssa_op.action = SSAOperandAction::WRITE;
+    }
+  } else {
+    ssa_op.action = SSAOperandAction::READ;
+  }
+
+  operands.Append(ssa_op);
+}
+
+// Create an `SSAInstruction` for the operands associated with some
+// `NativeInstruction`. We add the operands to the instruction in a specific
+// order for later convenience.
+static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
+  if (!operands.Size()) {
+    return nullptr;
+  }
+  auto instr = new SSAInstruction;
+  AddInstructionOperands(instr, operands);
   return instr;
 }
 

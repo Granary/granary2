@@ -21,7 +21,7 @@ static void UpdateIfClearedByXor(const arch::Operand *arch_ops,
   if (!arch_ops[1].IsRegister()) return;
   if (arch_ops[0].reg != arch_ops[1].reg) {
     ssa_ops[0].action = SSAOperandAction::READ_WRITE;
-    ssa_ops[1].action = SSAOperandAction::READ_WRITE;
+    ssa_ops[1].action = SSAOperandAction::READ;
   } else {
     ssa_ops[0].action = SSAOperandAction::WRITE;
     ssa_ops[1].action = SSAOperandAction::CLEARED;
@@ -39,7 +39,7 @@ static void UpdateIfClearedBySub(const arch::Operand *arch_ops,
   }
 }
 
-// Look for the pattern `SUB A, A`.
+// Look for the pattern `AND A, 0`.
 static void UpdateIfClearedByAnd(const arch::Operand *arch_ops,
                                  SSAOperandPack &ssa_ops) {
   if (!arch_ops[0].IsRegister()) return;
@@ -75,8 +75,6 @@ void ConvertOperandActions(const NativeInstruction *instr,
 // Get the virtual register associated with an arch operand.
 //
 // Note: This assumes that the arch operand is indeed a register operand!
-//
-// Note: This function has an architecture-specific implementation.
 VirtualRegister GetRegister(const SSAOperand &op) {
   GRANARY_ASSERT(op.operand->IsRegister());
   return op.operand->reg;

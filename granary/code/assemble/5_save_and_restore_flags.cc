@@ -31,17 +31,17 @@ namespace granary {
 //       returned register is valid.
 //
 // Note: This has an architecture-specific implementation.
-VirtualRegister FlagKillReg(void);
+extern VirtualRegister FlagKillReg(void);
 
 // Inserts instructions that saves the flags within the fragment `frag`.
 //
 // Note: This has an architecture-specific implementation.
-void InjectSaveFlags(FlagEntryFragment *frag);
+extern void InjectSaveFlags(FlagEntryFragment *frag);
 
 // Inserts instructions that restore the flags within the fragment `frag`.
 //
 // Note: This has an architecture-specific implementation.
-void InjectRestoreFlags(FlagExitFragment *frag);
+extern void InjectRestoreFlags(FlagExitFragment *frag);
 
 namespace {
 

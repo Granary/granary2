@@ -21,15 +21,16 @@ namespace granary {
 // Relativize a direct control-flow instruction.
 //
 // Note: This has an architecture-specific implementation.
-void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
-                         PC target_pc, bool target_is_far_away);
+extern void RelativizeDirectCFI(ControlFlowInstruction *cfi,
+                                arch::Instruction *instr, PC target_pc,
+                                bool target_is_far_away);
 
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
 //
 // Note: This has an architecture-specific implementation.
-void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
-                     const MemoryOperand &op, const void *mem_addr);
+extern void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
+                            const MemoryOperand &op, const void *mem_addr);
 
 namespace {
 

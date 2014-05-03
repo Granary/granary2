@@ -65,15 +65,16 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // instructions.
   SaveAndRestoreFlags(cfg, &frags);
 
+  // Build an SSA-like representation for all definitions and uses of general-
+  // purpose registers.
   TrackSSAVars(&frags);
-  /*
-  // Build an SSA-like representation for the virtual register definitions.
-
 
   // Perform a single step of copy propagation. The purpose of this is to
-  // allow us to eventually get rid of
-  PropagateRegisterCopies(frags);
+  // allow us to get rid of redundant defs/uses of registers that are created
+  // by earlier steps.
+  PropagateRegisterCopies(&frags);
 
+  /*
   // Schedule the virtual registers into either physical registers or memory
   // locations.
   ScheduleRegisters(frags);

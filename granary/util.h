@@ -30,7 +30,7 @@ inline static T *GetMetaDataStrict(InstrumentedBasicBlock *block) {
 // For code editing purposes only. Sometimes Eclipse has trouble with all the
 // `EnableIf` specializations, so this serves to satisfy its type checker.
 template <typename T>
-T GetMetaData(Instruction *instr);
+T GetMetaData(const Instruction *instr);
 
 #else
 
@@ -39,7 +39,7 @@ template <
   typename T,
   typename EnableIf<TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
 >
-inline static uintptr_t GetMetaData(Instruction *instr) {
+inline static uintptr_t GetMetaData(const Instruction *instr) {
   return instr->MetaData();
 }
 
@@ -48,7 +48,7 @@ template <
   typename T,
   typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
 >
-inline static T GetMetaData(Instruction *instr) {
+inline static T GetMetaData(const Instruction *instr) {
   return instr->MetaData<T>();
 }
 
