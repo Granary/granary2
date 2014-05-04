@@ -56,19 +56,22 @@ void AddInstructionOperands(SSAInstruction *instr, SSAOperandPack &operands);
 namespace {
 
 // Represents a potentially copy-able operand.
-struct CopyOperand {
-  inline CopyOperand(void)
-      : node(nullptr),
-        operand(nullptr) {}
+struct RegisterValue {
+  inline RegisterValue(void)
+      : reg_node(nullptr),
+        reg_value(nullptr) {}
 
-  CopyOperand &operator=(const CopyOperand &) = default;
+  RegisterValue &operator=(const RegisterValue &) = default;
 
-  SSANode *node;
-  SSAOperand *operand;
+  // The `SSANode` associated with the value of this operand.
+  SSANode *reg_node;
+
+  // A pointer to an operand in an `SSAInstruction` where `node` is used.
+  SSAOperand *reg_value;
 };
 
 // The set of reaching definitions that
-typedef TinyMap<VirtualRegister, CopyOperand,
+typedef TinyMap<VirtualRegister, RegisterValue,
                 arch::NUM_GENERAL_PURPOSE_REGISTERS> ReachingDefinintions;
 
 // Updates the definition set with a node. Here we handle the case where the
@@ -76,15 +79,13 @@ typedef TinyMap<VirtualRegister, CopyOperand,
 static void UpdateAnnotationDefs(ReachingDefinintions &defs, SSANode *node) {
   node = UnaliasedNode(node);
 
-  auto &copy_op(defs[node->reg]);
-  copy_op.node = node;
-  copy_op.operand = nullptr;
+  auto &reg_value(defs[node->reg]);
+  reg_value.reg_node = node;
+  reg_value.reg_value = nullptr;
 
   if (auto reg_node = DynamicCast<SSARegisterNode *>(node)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(reg_node->instr)) {
-      if (auto copied_op = GetCopiedOperand(ninstr)) {
-        copy_op.operand = copied_op;
-      }
+      reg_value.reg_value = GetCopiedOperand(ninstr);
     }
   }
 }
@@ -94,18 +95,18 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
                                   SSAInstruction *instr) {
   for (const auto &op : instr->defs) {
     if (SSAOperandAction::WRITE == op.action) {
-      auto &copy_op(defs[GetRegister(op)]);
-      copy_op.node = op.nodes[0];
-      copy_op.operand = nullptr;
+      auto &reg_value(defs[GetRegister(op)]);
+      reg_value.reg_node = op.nodes[0];
+      reg_value.reg_value = nullptr;
     } else {
       break;
     }
   }
   for (const auto &op : instr->defs) {
     if (SSAOperandAction::READ_WRITE == op.action) {
-      auto &copy_op(defs[GetRegister(op)]);
-      copy_op.node = op.nodes[0];
-      copy_op.operand = nullptr;
+      auto &reg_value(defs[GetRegister(op)]);
+      reg_value.reg_node = op.nodes[0];
+      reg_value.reg_value = nullptr;
     } else {
       break;
     }
@@ -121,86 +122,145 @@ static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
       UpdateAnnotationDefs(defs, ainstr->GetData<SSANode *>());
     }
   } else if (auto ninstr = DynamicCast<const NativeInstruction *>(instr)) {
-    auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr);
-    if (!ssa_instr) {
-      return;
-    }
-    if (auto copied_op = GetCopiedOperand(ninstr)) {
-      /*
-      VirtualRegister copied_reg;
-      if (copied_op->is_reg) {  // Register.
-        copied_reg = GetRegister(*copied_op);
-      } else {  // Effective address, encoded as a memory operand.
-        MemoryOperand effective_address(copied_op->operand);
-        effective_address.MatchRegister(copied_reg);
+    if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
+      if (auto copied_value = GetCopiedOperand(ninstr)) {
+        auto &reg_operand(ssa_instr->defs[0]);
+        auto defined_reg = GetRegister(reg_operand);
+        auto &reg_value(defs[defined_reg]);
+        reg_value.reg_node = reg_operand.nodes[0];
+        reg_value.reg_value = copied_value;
+      } else {
+        UpdateInstructionDefs(defs, ssa_instr);
       }
-      if (copied_reg.IsValid()) {
-
-        return;
-      }*/
-
-      auto &copy_op(defs[ssa_instr->defs[0].nodes[0]->reg]);
-      copy_op.node = copied_op->nodes[0];
-      copy_op.operand = copied_op;
-
-    } else {
-      UpdateInstructionDefs(defs, ssa_instr);
     }
   }
 }
 
-// Perform a register-to-register copy or a trivial effective address to
-// register copy propagation.
-static bool CopyPropagate(ReachingDefinintions &defs, RegisterOperand &dest) {
-  auto dest_reg = dest.Register();
-  auto &dest_op(defs[dest_reg]);
-  if (dest_op.operand) {
-    VirtualRegister source_reg;
-    SSANode *source_node(nullptr);
-    if (dest_op.operand->is_reg) {
-      RegisterOperand source(dest_op.operand->operand);
-      source_reg = source.Register();
-      source_node = dest_op.node;
-    } else {
-      MemoryOperand source(dest_op.operand->operand);
-      if (source.IsEffectiveAddress()) {
-        if (source.MatchRegister(source_reg)) {
-          auto reaching_source_reg_node = UnaliasedNode(defs[source_reg].node);
-          auto orig_source_reg_node = UnaliasedNode(dest_op.operand->nodes[0]);
-          if (reaching_source_reg_node == orig_source_reg_node) {
-            source_node = reaching_source_reg_node;
-          }
-        }
-      }
-    }
-    if (source_node && source_reg.IsValid() &&
-        CanPropagate(source_reg, dest_reg)) {
-
-      RegisterOperand copied_reg_op(source_reg);
-      dest.Ref().ReplaceWith(copied_reg_op);
-
-      dest_op.operand->is_reg = true;
-      dest_op.operand->nodes.Clear();
-      dest_op.operand->nodes.Append(source_node);
-
-      return true;
-    }
+// Perform register to register and effective address to register copy
+// propagation.
+static bool CopyPropagateReg(ReachingDefinintions &defs,
+                             SSAOperand &dest_operand) {
+  RegisterOperand dest_reg_op(dest_operand.operand);
+  if (!dest_reg_op.IsExplicit()) {
+    return false;
   }
-  return false;
+
+  auto reg_to_replace = GetRegister(dest_operand);
+  auto replacement_operand = defs[reg_to_replace];
+  auto source_operand = replacement_operand.reg_value;
+  if (!source_operand) {
+    return false;  // Replacement operand wasn't created by a copy instruction.
+  }
+  VirtualRegister replacement_reg;
+  if (source_operand->is_reg) {  // Register to register.
+    replacement_reg = GetRegister(*source_operand);
+
+  } else {  // Effective address to register.
+    MemoryOperand effective_address(source_operand->operand);
+    if (!effective_address.IsEffectiveAddress()) return false;
+    if (!effective_address.MatchRegister(replacement_reg)) return false;
+  }
+  if (!CanPropagate(replacement_reg, reg_to_replace)) {
+    return false;
+  }
+  auto replacement_reg_node_at_copy = source_operand->nodes[0];
+  auto replacement_reg_node_at_instr = defs[replacement_reg].reg_node;
+  if (UnaliasedNode(replacement_reg_node_at_copy) !=
+      UnaliasedNode(replacement_reg_node_at_instr)) {
+    return false;
+  }
+
+  RegisterOperand copied_reg_op(replacement_reg);
+  dest_reg_op.Ref().ReplaceWith(copied_reg_op);
+
+  // Update the nodes in the `SSAInstruction` in-place.
+  dest_operand.nodes = source_operand->nodes;
+  return true;
 }
 
-// Returns `true` if copy-propagation into this instruction changed any arch_operand.
+// Perform register-to-base address and effective address to memory operand
+// copy propagation.
+static bool CopyPropagateMem(ReachingDefinintions &defs,
+                             SSAOperand &dest_operand) {
+  MemoryOperand dest_mem_op(dest_operand.operand);
+  if (!dest_mem_op.IsExplicit()) {
+    return false;
+  }
+
+  // Make sure this is a memory operand that dereferences a single register,
+  // and not some compound value that uses a register.
+  VirtualRegister reg_to_replace;
+  if (!dest_mem_op.MatchRegister(reg_to_replace) ||
+      !reg_to_replace.IsGeneralPurpose() ||
+      arch::ADDRESS_WIDTH_BITS != reg_to_replace.BitWidth()) {
+    return false;
+  }
+
+  // Replacement operand wasn't created by a copy instruction.
+  auto replacement_operand = defs[reg_to_replace].reg_value;
+  if (!replacement_operand) {
+    return false;
+  }
+  VirtualRegister mem_regs[3];
+
+  // Register to base address of a memory operand.
+  if (replacement_operand->is_reg) {
+    mem_regs[0] = GetRegister(*replacement_operand);
+    if (arch::ADDRESS_WIDTH_BITS != mem_regs[0].BitWidth()) {
+      return false;
+    }
+  } else {  // Effective address to memory operand.
+    MemoryOperand effective_address(replacement_operand->operand);
+    if (!effective_address.IsEffectiveAddress()) return false;
+    if (!effective_address.CountMatchedRegisters({&(mem_regs[0]),
+                                                  &(mem_regs[1]),
+                                                  &(mem_regs[2])})) {
+      return false;
+    }
+  }
+  auto i = 0;
+  for (auto mem_reg : mem_regs) {
+    if (!mem_reg.IsGeneralPurpose()) {
+      continue;
+    }
+    auto mem_reg_node_at_copy = replacement_operand->nodes[i++];
+    auto mem_reg_node_at_instr = defs[mem_reg].reg_node;
+    GRANARY_ASSERT(nullptr != mem_reg_node_at_copy);
+    GRANARY_ASSERT(mem_reg == mem_reg_node_at_copy->reg);
+    GRANARY_ASSERT(mem_reg == mem_reg_node_at_instr->reg);
+    if (UnaliasedNode(mem_reg_node_at_copy) !=
+        UnaliasedNode(mem_reg_node_at_instr)) {
+      return false;
+    }
+  }
+  if (replacement_operand->is_reg) {
+    MemoryOperand replacement_mem_op(mem_regs[0], arch::GPR_WIDTH_BYTES);
+    dest_mem_op.Ref().ReplaceWith(replacement_mem_op);
+  } else {
+    MemoryOperand replacement_mem_op(replacement_operand->operand);
+    dest_mem_op.Ref().ReplaceWith(replacement_mem_op);
+  }
+
+  // Update the nodes in the `SSAInstruction` in-place.
+  dest_operand.nodes = replacement_operand->nodes;
+  return true;
+}
+
+// Returns `true` if copy-propagation into this instruction changed any
+// `arch::Operand`.
 static bool UpdateUses(ReachingDefinintions &defs, SSAInstruction *instr) {
   auto changed = false;
   for (auto &used_op : instr->uses) {
     if (SSAOperandAction::READ != used_op.action) {
       continue;
     }
+    // Register effective address -> register, and register -> register.
     if (used_op.is_reg) {
-      RegisterOperand reg_op(used_op.operand);
-      changed = (reg_op.IsExplicit() && CopyPropagate(defs, reg_op)) || changed;
+      changed = CopyPropagateReg(defs, used_op) || changed;
+
+    // Register -> memory base address, and effective address -> memory operand.
     } else {
-      //MemoryOperand mem_op(used_op.operand);
+      changed = CopyPropagateMem(defs, used_op) || changed;
     }
   }
   return changed;
@@ -225,9 +285,10 @@ static void FixInstruction(NativeInstruction *ninstr,
 }  // namespace
 
 // Perform the following kinds of copy-propagation.
-//    1) register-to-register
-//    2) register-to-(memory operand)
-//    3) (effective address)-to-(memory arch_operand)
+//    1) Register -> register.
+//    2) Trivial effective address -> register.
+//    3) Register -> base address of memory operand.
+//    4) Effective address -> memory arch_operand.
 void PropagateRegisterCopies(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
@@ -250,181 +311,3 @@ void PropagateRegisterCopies(FragmentList *frags) {
 }
 
 }  // namespace granary
-
-#if 0
-
-
-#include "granary/cfg/instruction.h"
-#include "granary/cfg/iterator.h"
-#include "granary/cfg/operand.h"
-
-
-
-#include "granary/util.h"
-
-namespace granary {
-
-
-
-namespace {
-
-// Get the fragment containing a particular instruction.
-static Fragment *ContainingFragment(Instruction *def_instr) {
-  for (auto instr : BackwardInstructionIterator(def_instr)) {
-    if (IsA<LabelInstruction *>(instr)) {
-      if (auto frag = GetMetaData<Fragment *>(instr)) {
-        return frag;
-      }
-    }
-  }
-  return nullptr;
-}
-
-// Update the definitions in `defs` with any variables defined in a native
-// instruction.
-static void UpdateDefsFromInstr(SSAVariableTable *defs,
-                                NativeInstruction *instr) {
-  if (auto def_var = GetMetaData<SSAVariable *>(instr)) {
-    while (auto def_forward = DynamicCast<SSAForward *>(def_var)) {
-      *(defs->Find(def_forward->reg)) = def_forward;
-      def_var = def_forward->next_instr_def;
-    }
-    if (def_var) {
-      *(defs->Find(RegisterOf(def_var))) = DefinitionOf(def_var);
-    }
-  }
-}
-
-// Find the definitions of the registers used by a particular instruction.
-static SSAVariable *FindDefForUse(Instruction *def_instr, VirtualRegister reg) {
-  // Search for a local definition within the list of instructions
-  for (auto instr : BackwardInstructionIterator(def_instr)) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (auto def = DefinitionOf(ninstr, reg)) {
-        return def;
-      }
-    }
-  }
-  // Search for an incoming definition from `frag`s precedeccor(s).
-  auto frag = ContainingFragment(def_instr);
-  return frag->ssa_vars->EntryDefinitionOf(reg);
-}
-
-// Returns a pointer to the "copy" instruction that defines `reg`. If `reg` is
-// defined by a non-`SSARegister` (e.g. a PHI node), or not defined by a copy
-// instruction, then return `nullptr`.
-static NativeInstruction *GetCopyInstruction(SSAVariableTable *vars,
-                                             VirtualRegister reg) {
-  auto reg_var = DynamicCast<SSARegister *>(*vars->Find(reg));
-  if (reg_var) {
-    if (auto def_instr = reg_var->instr) {
-      return IsCopyInstruction(def_instr) ? def_instr : nullptr;
-    }
-  }
-  return nullptr;
-}
-
-
-
-
-// Perform an effective address to memory operand copy propagation.
-//
-// When checking an effective address, we need to verify that all general-
-// purpose registers participating in the computation of the effective address
-// are still defined, and have the same definitions, at the point at which we
-// want to propagate them to.
-//
-// Note: We ignore non-general-purpose registers, e.g. x86 segment registers.
-static void CopyPropagate(SSAVariableTable *vars, NativeInstruction *instr,
-                          const MemoryOperand &source,
-                          MemoryOperand *dest) {
-  VirtualRegister r1, r2, r3;
-  source.CountMatchedRegisters({&r1, &r2, &r3});
-  bool can_replace = true;
-  if (r1.IsGeneralPurpose()) {
-    can_replace = RegisterToPropagate(vars, instr, r1, r1).IsValid();
-  }
-  if (can_replace && r2.IsGeneralPurpose()) {
-    can_replace = RegisterToPropagate(vars, instr, r2, r2).IsValid();
-  }
-  if (can_replace && r3.IsGeneralPurpose()) {
-    can_replace = RegisterToPropagate(vars, instr, r3, r3).IsValid();
-  }
-  if (can_replace) {
-    dest->Ref().ReplaceWith(source);
-  }
-}
-
-// Perform a address register-to-memory op or effective address-to-memory op
-// copy propagation.
-static void CopyPropagate(SSAVariableTable *vars, MemoryOperand *dest,
-                          VirtualRegister addr) {
-  if (auto instr = GetCopyInstruction(vars, addr)) {
-    RegisterOperand source_addr;
-    MemoryOperand source_eff_addr;
-
-    // Address register -> dereference propagation.
-    if (instr->MatchOperands(ReadOnlyFrom(source_addr))) {
-      auto source_reg = RegisterToPropagate(
-          vars, instr, source_addr.Register(), addr);
-      if (source_reg.IsValid()) {
-        MemoryOperand source(source_reg, dest->ByteWidth());
-        dest->Ref().ReplaceWith(source);
-      }
-
-    // Effective address -> memory operation.
-    } else if (instr->MatchOperands(ReadOnlyFrom(source_eff_addr)) &&
-        source_eff_addr.IsEffectiveAddress()) {
-      CopyPropagate(vars, instr, source_eff_addr, dest);
-    }
-  }
-}
-
-// Try to perform a copy propagation for one of the registers being used in a
-// particular instruction.
-static void CopyPropagate(SSAVariableTable *vars, Operand *op) {
-  if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-    auto reg = reg_op->Register();
-    if (reg.IsGeneralPurpose() && !reg_op->IsWrite()) {
-      CopyPropagate(vars, reg_op, reg);
-    }
-  } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-    VirtualRegister addr;
-    if (mem_op->MatchRegister(addr)) {
-      CopyPropagate(vars, mem_op, addr);
-    }
-  }
-}
-
-// Perform copy propagation for all operands in all instructions in a given
-// fragment.
-static void CopyPropagate(SSAVariableTable *vars, Fragment * const frag) {
-  frag->ssa_vars->CopyEntryDefinitions(vars);
-  for (auto instr : ForwardInstructionIterator(frag->first)) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      ninstr->ForEachOperand([=] (Operand *op) {
-        if (op->IsExplicit()) {
-          CopyPropagate(vars, op);
-        }
-      });
-      UpdateDefsFromInstr(vars, ninstr);
-    }
-  }
-}
-
-}  // namespace
-
-// Schedule virtual registers to either physical registers or to stack/TLS
-// slots.
-void PropagateRegisterCopies(Fragment * const frags) {
-  SSAVariableTable vars;
-  // Single-step copy propagation.
-  for (auto frag : FragmentIterator(frags)) {
-    if (frag->ssa_vars) {
-      CopyPropagate(&vars, frag);
-    }
-  }
-}
-
-}  // namespace granary
-#endif

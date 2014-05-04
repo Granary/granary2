@@ -38,6 +38,13 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSAAliasNode)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
 
+SSANode::SSANode(SSAFragment *frag_, VirtualRegister reg_)
+    : storage(),
+      frag(frag_),
+      reg(reg_) {
+  GRANARY_ASSERT(reg.IsGeneralPurpose());
+}
+
 SSANode::~SSANode(void) {}
 
 SSAControlPhiNode::SSAControlPhiNode(SSAFragment *frag_, VirtualRegister reg_)

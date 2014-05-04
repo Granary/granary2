@@ -10,9 +10,10 @@
 namespace granary {
 
 // Perform the following kinds of copy-propagation.
-//    1) register-to-register
-//    2) register-to-(memory operand)
-//    3) (effective address)-to-(memory operand)
+//    1) Register -> register.
+//    2) Trivial effective address -> register.
+//    3) Register -> base address of memory operand.
+//    4) Effective address -> memory arch_operand.
 void PropagateRegisterCopies(FragmentList *frags);
 
 }  // namespace granary

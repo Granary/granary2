@@ -32,14 +32,18 @@ namespace {
 // Returns true of we find a read register operand in the `operands` pack that
 // uses the same register as `op`.
 //
-// Note: This assumes that `op` refers to a register operand.
+// Note: This assumes that `op` refers to a register operand whose action is
+//       a `WRITE`.
 static bool FindReadFromReg(const SSAOperand &op,
                             const SSAOperandPack &operands) {
   const auto op_reg = GetRegister(op);
   for (auto &related_op : operands) {
-    if (&op == &related_op || !related_op.is_reg) continue;
-    if (SSAOperandAction::WRITE == related_op.action) continue;
-    if (GetRegister(related_op) == op_reg) return true;
+    if (SSAOperandAction::WRITE == related_op.action ||
+        SSAOperandAction::CLEARED == related_op.action ||
+        !related_op.is_reg) {
+      continue;
+    }
+    if (op_reg == GetRegister(related_op)) return true;
   }
   return false;
 }
@@ -56,8 +60,7 @@ static bool FindReadFromReg(const SSAOperand &op,
 bool ConvertOperandActions(SSAOperandPack &operands) {
   auto changed = false;
   for (auto &op : operands) {
-    if (op.is_reg && SSAOperandAction::WRITE == op.action &&
-        FindReadFromReg(op, operands)) {
+    if (SSAOperandAction::WRITE == op.action && FindReadFromReg(op, operands)) {
       op.action = SSAOperandAction::READ_WRITE;
       changed = true;
     }
