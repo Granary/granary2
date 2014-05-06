@@ -16,15 +16,14 @@ namespace granary {
 
 // Returns a valid `SSAOperand` pointer to the operand being copied if this
 // instruction is a copy instruction, otherwise returns `nullptr`.
-//
-// Note: This has an architecture-specific implementation.
 SSAOperand *GetCopiedOperand(const NativeInstruction *instr) {
-  const auto &instruction(instr->instruction);
-  const auto iclass = instruction.iclass;
   auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
   if (1UL != ssa_instr->defs.Size()) {
     return nullptr;
   }
+
+  const auto &instruction(instr->instruction);
+  const auto iclass = instruction.iclass;
 
   // We don't allow copy propagation of the stack pointer, and we require that
   // catch issues like `MOV r16, r16` not being copy-propagatable because the

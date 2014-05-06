@@ -62,31 +62,33 @@ void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
 
 // Mangle an explicit memory operand. This will expand memory operands into
 // `LEA` instructions.
-void MangleExplicitMemOp(DecodedBasicBlock *block, Instruction *instr) {
+void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   Instruction ni;
-  for (auto &op : instr->ops) {
-    if (!op.is_explicit || XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-      break;
-    } else if (XED_ENCODER_OPERAND_TYPE_MEM != op.type || !op.is_compound) {
-      continue;
-    }
 
-    // All built-in memory operands, other than `XLAT`, a simple dereferences
-    // of a single base register. We will convert most into non-compound
-    // operands to make them easier to manipulate from the instrumentation
-    // side of things.
-    if (op.is_sticky) {
-      if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index &&
-          XED_REG_RSP != op.mem.reg_base) {
-        op.is_compound = false;
-        op.reg.DecodeFromNative(static_cast<int>(op.mem.reg_base));
-      }
-    } else {
-      auto mem_reg = block->AllocateVirtualRegister();
-      APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
+  // Special consideration is given to non-compound stack operands, e.g.
+  // `MOV ..., [RSP]`. Because we might be changing the stack pointer, we
+  // bring those operands out into their own instructions early on so that we
+  // can potentially alter what the offset to them is later on (in the event
+  // that virtual regs are spilled to the stack).
+  if (!op.is_compound && !op.reg.IsStackPointer()) {
+    return;
+  }
+
+  // All built-in memory operands, other than `XLAT`, a simple dereferences
+  // of a single base register. We will convert most into non-compound
+  // operands to make them easier to manipulate from the instrumentation
+  // side of things.
+  if (op.is_sticky) {
+    if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index &&
+        XED_REG_RSP != op.mem.reg_base) {
       op.is_compound = false;
-      op.reg = mem_reg;
+      op.reg.DecodeFromNative(static_cast<int>(op.mem.reg_base));
     }
+  } else {
+    auto mem_reg = block->AllocateVirtualRegister();
+    APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
+    op.is_compound = false;
+    op.reg = mem_reg;
   }
 }
 
@@ -98,6 +100,38 @@ static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg) {
   op.mem.disp = disp;
   op.mem.reg_base = base_reg;
   return op;
+}
+
+// Add in an extra instruction for a read from the stack pointer. The purpose
+// of this is that if an instruction reads from the stack pointer, then we'll
+// potentially need to emulate what the intended stack pointer read is later
+// on when virtual register spilling might have changed the actual stack
+// pointer.
+static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
+                                            Operand &op) {
+  if (!op.IsWrite()) {
+    Instruction ni;
+    auto sp = block->AllocateVirtualRegister();
+    APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP)));
+    sp.Widen(op.reg.ByteWidth());
+    op.reg = sp;  // Replace the operand.
+  }
+}
+
+// Mangle an explicit memory operand. This will expand memory operands into
+// `LEA` instructions.
+void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  for (auto &op : instr->ops) {
+    if (op.is_explicit) {
+      if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+        MangleExplicitMemOp(block, op);
+
+      } else if (op.IsRegister() && op.reg.IsStackPointer()) {
+        MangleExplicitStackPointerRegOp(block, op);
+      }
+    }
+  }
 }
 
 // Mark an instruction as potentially reading and writing to the stack.
@@ -249,7 +283,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       MangleLeave(block, instr);
       break;
     default:
-      MangleExplicitMemOp(block, instr);
+      MangleExplicitOps(block, instr);
       break;
   }
 }

@@ -81,13 +81,15 @@ static void UpdateAnnotationDefs(ReachingDefinintions &defs, SSANode *node) {
 
   auto &reg_value(defs[node->reg]);
   reg_value.reg_node = node;
-  reg_value.reg_value = nullptr;
 
-  if (auto reg_node = DynamicCast<SSARegisterNode *>(node)) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(reg_node->instr)) {
-      reg_value.reg_value = GetCopiedOperand(ninstr);
-    }
-  }
+  // Always treat these as null. The idea here is that even though in some
+  // cases we can do cross-fragment propagation, we won't because then we'd
+  // need to actually maintain the bookkeeping in order to say that the copied
+  // value is propagated to the necessary fragments. That would be complicated,
+  // so we don't maintain that bookkeeping, and disallow cross-fragment
+  // propagation to avoid breaking invariants assumed by the register scheduler
+  // about the entry/exit defs representing all shared regs.
+  reg_value.reg_value = nullptr;
 }
 
 // Remove all non-copied definitions from a set of reaching definitions.
@@ -102,7 +104,7 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
       break;
     }
   }
-  for (const auto &op : instr->defs) {
+  for (const auto &op : instr->uses) {
     if (SSAOperandAction::READ_WRITE == op.action) {
       auto &reg_value(defs[GetRegister(op)]);
       reg_value.reg_node = op.nodes[0];

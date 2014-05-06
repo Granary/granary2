@@ -28,6 +28,26 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 
+// Allocate a spill slot from this spill info.
+int SpillInfo::AllocateSpillSlot(void) {
+  for (auto i = 0; i < num_slots; ++i) {
+    if (!used_slots.Get(i)) {
+      used_slots.Set(i, true);
+      return i;
+    }
+  }
+  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots));
+  used_slots.Set(num_slots, true);
+  return num_slots++;
+}
+
+// Free a spill slot from active use.
+void SpillInfo::FreeSpillSlot(int slot) {
+  GRANARY_ASSERT(num_slots > slot);
+  GRANARY_ASSERT(used_slots.Get(slot));
+  used_slots.Set(slot, false);
+}
+
 Fragment::Fragment(void)
     : list(),
       instrs(),
@@ -51,6 +71,8 @@ FlagZone::FlagZone(VirtualRegister flag_save_reg_,
       live_flags(0),
       flag_save_reg(flag_save_reg_),
       flag_killed_reg(flag_killed_reg_),
-      live_regs() {}
+      live_regs(),
+      num_frags_in_zone(0),
+      only_frag(nullptr) {}
 
 }  // namespace granary

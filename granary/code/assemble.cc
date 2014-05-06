@@ -16,9 +16,7 @@
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
-/*
 #include "granary/code/assemble/8_schedule_registers.h"
-*/
 #include "granary/code/assemble/9_log_fragments.h"
 
 #include "granary/logging.h"
@@ -74,11 +72,10 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // by earlier steps.
   PropagateRegisterCopies(&frags);
 
-  /*
   // Schedule the virtual registers into either physical registers or memory
   // locations.
-  ScheduleRegisters(frags);
-   */
+  ScheduleRegisters(&frags);
+
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, &frags);
   }

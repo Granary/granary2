@@ -20,6 +20,14 @@
     frag->instrs.Append(ninstr); \
   } while (0)
 
+// Prepend a non-native, created instruction to the fragment.
+#define PREP(...) \
+  do { \
+    __VA_ARGS__; \
+    auto ninstr = new NativeInstruction(&ni); \
+    frag->instrs.Prepend(ninstr); \
+  } while (0)
+
 namespace granary {
 
 // Returns the architectural register that is potentially killed by the
@@ -32,29 +40,36 @@ VirtualRegister FlagKillReg(void) {
 }
 
 // Inserts instructions that saves the flags within the fragment `frag`.
-void InjectSaveFlags(FlagEntryFragment *frag) {
+void InjectSaveFlags(Fragment *frag) {
   arch::Instruction ni;
   auto zone = frag->flag_zone.Value();
+  if (1 == zone->num_frags_in_zone) {
+    frag = zone->only_frag;
+  }
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
     GRANARY_IF_DEBUG( xed_flag_set_t killed_flags; )
     GRANARY_IF_DEBUG( killed_flags.flat = zone->killed_flags; )
     GRANARY_ASSERT(!killed_flags.s.df);
-    if (zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
-      APP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
-    }
-    APP(LAHF(&ni));
     if (flags.s.of) {
-      APP(SETO_GPR8(&ni, XED_REG_AL));
+      PREP(SETO_GPR8(&ni, XED_REG_AL));
+    }
+    PREP(LAHF(&ni));
+    if (zone->flag_killed_reg.IsNative() &&
+        zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
+      PREP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
     }
   }
 }
 
 // Inserts instructions that restore the flags within the fragment `frag`.
-void InjectRestoreFlags(FlagExitFragment *frag) {
+void InjectRestoreFlags(Fragment *frag) {
   arch::Instruction ni;
   auto zone = frag->flag_zone.Value();
+  if (1 == zone->num_frags_in_zone) {
+    frag = zone->only_frag;
+  }
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
@@ -62,7 +77,8 @@ void InjectRestoreFlags(FlagExitFragment *frag) {
       APP(ADD_GPR8_IMMb_80r0(&ni, XED_REG_AL, 0x7F));
     }
     APP(SAHF(&ni));
-    if (zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
+    if (zone->flag_killed_reg.IsNative() &&
+        zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
       APP(MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg));
     }
   }

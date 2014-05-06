@@ -190,6 +190,19 @@ SSAInstruction::SSAInstruction(void)
     : defs(),
       uses() {}
 
+SSAInstruction::~SSAInstruction(void) {
+  for (auto &def : defs) {
+    delete def.nodes[0];
+  }
+  for (auto &use : uses) {
+    if (SSAOperandAction::READ_WRITE == use.action) {
+      if (IsA<SSADataPhiNode *>(use.nodes[0])) {
+        delete use.nodes[0];
+      }
+    }
+  }
+}
+
 namespace {
 
 // Returns a pointer to the `SSANode` that is used to define the register `reg`

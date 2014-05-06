@@ -143,6 +143,18 @@ class ListOfListHead {
     }
   }
 
+  void Remove(T *elm) {
+    auto elm_next = elm->list.template GetNext<T>(elm);
+    auto elm_prev = elm->list.template GetPrevious<T>(elm);
+    elm->list.Unlink();
+    if (last == elm) {
+      last = elm_prev;
+    }
+    if (first == elm) {
+      first = elm_next;
+    }
+  }
+
  private:
   T *first;
   T *last;

@@ -36,12 +36,12 @@ extern VirtualRegister FlagKillReg(void);
 // Inserts instructions that saves the flags within the fragment `frag`.
 //
 // Note: This has an architecture-specific implementation.
-extern void InjectSaveFlags(FlagEntryFragment *frag);
+extern void InjectSaveFlags(Fragment *frag);
 
 // Inserts instructions that restore the flags within the fragment `frag`.
 //
 // Note: This has an architecture-specific implementation.
-extern void InjectRestoreFlags(FlagExitFragment *frag);
+extern void InjectRestoreFlags(Fragment *frag);
 
 namespace {
 
@@ -162,18 +162,26 @@ static void AllocateFlagZones(FragmentList *frags,
       auto &flag_zone(frag->flag_zone.Value());
       if (!flag_zone) {
         flag_zone = new FlagZone(
-            cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES), FlagKillReg());
+            cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES),
+            FlagKillReg());
       }
     }
   }
-#ifdef GRANARY_DEBUG
-  // Quick and easy verification of the flag zones.
+
   for (auto frag : FragmentListIterator(frags)) {
+#ifdef GRANARY_DEBUG
+    // Quick and easy verification of the flag zones.
     if (IsA<FlagExitFragment *>(frag)) {
       GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
     }
-  }
 #endif  // GRANARY_DEBUG
+    if (IsA<CodeFragment *>(frag)) {
+      if (auto zone = frag->flag_zone.Value()) {
+        zone->num_frags_in_zone += 1;
+        zone->only_frag = frag;
+      }
+    }
+  }
 }
 
 // Update the flag zones with the flags and registers used in the various

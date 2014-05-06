@@ -7,10 +7,10 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
-    /*mov (%rsi, %rdi), %rsp;
+    mov (%rsi, %rdi), %rsp;
     mov 4(%rsi, %rdi, 2), %rdi;
     mov (%rdi, %rsi), %rdi;
-    mov (%rdi, %rsi), %rsi;*/
+    mov (%rdi, %rsi), %rsi;/*
     lea 8(%rdi, %rsi), %rdx;
     mov (%rdx), %rsi;
 
@@ -77,7 +77,7 @@ DEFINE_FUNC(granary_test_mangle)
     // the `ret`.
     mov $1, %rax;
     leave;
-
+*/
     ret;
 
 END_FUNC(granary_test_mangle)

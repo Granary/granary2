@@ -28,8 +28,21 @@ class Operand;
 // Location at which a SSA Node is stored.
 class SSASpillStorage {
  public:
+  inline SSASpillStorage(void)
+      : is_local(false),
+        checked_is_local(false),
+        slot(-1),
+        reg() {}
+
+  bool is_local;
+  bool checked_is_local;
   int slot;
   VirtualRegister reg;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(SSASpillStorage, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
 };
 
 // Generic SSA Node.
@@ -214,6 +227,7 @@ typedef TinyVector<SSAOperand, 2> SSAOperandPack;
 class SSAInstruction {
  public:
   SSAInstruction(void);
+  ~SSAInstruction(void);
 
   // Ordered as: `WRITE` > `CLEARED`.
   SSAOperandPack defs;

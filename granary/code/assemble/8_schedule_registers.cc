@@ -1,15 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-#if 0
+
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/base/base.h"
-#include "granary/base/bitset.h"
-#include "granary/base/list.h"
-#include "granary/base/new.h"
-
 #include "granary/cfg/instruction.h"
-#include "granary/cfg/iterator.h"
 
 #include "granary/code/assemble/fragment.h"
 #include "granary/code/assemble/ssa.h"
@@ -18,6 +12,480 @@
 
 namespace granary {
 
+// Returns a valid `SSAOperand` pointer to the operand being copied if this
+// instruction is a copy instruction, otherwise returns `nullptr`.
+//
+// Note: This has an architecture-specific implementation.
+extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr);
+
+// Create an instruction to copy a GPR to a spill slot.
+//
+// Note: This has an architecture-specific implementation.
+extern std::unique_ptr<Instruction> SaveGPRToSlot(VirtualRegister gpr,
+                                                  VirtualRegister slot);
+
+// Create an instruction to copy the value of a spill slot to a GPR.
+//
+// Note: This has an architecture-specific implementation.
+extern std::unique_ptr<Instruction> RestoreGPRFromSlot(VirtualRegister gpr,
+                                                       VirtualRegister slot);
+
+// Returns the GPR that is copied by this instruction into a virtual
+// register. If this instruction is not a simple copy operation of this form,
+// then an invalid virtual register is returned.
+//
+// Note: This has an architecture-specific implementation.
+extern VirtualRegister GPRCopiedToVR(const NativeInstruction *instr);
+
+// Returns the GPR that is copied by this instruction from a virtual
+// register. If this instruction is not a simple copy operation of this form,
+// then an invalid virtual register is returned.
+//
+// Note: This has an architecture-specific implementation.
+extern VirtualRegister GPRCopiedFromVR(const NativeInstruction *instr);
+namespace {
+
+// Applies a function to each `SSAOperand` that defines a register within the
+// `SSAInstruction` associated with `instr`.
+static void ForEachDefinitionOperandImpl(NativeInstruction *instr,
+                                  std::function<void(SSAOperand *)> &func) {
+  if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
+    for (auto &def : ssa_instr->defs) {
+      if (SSAOperandAction::WRITE != def.action) break;
+      func(&def);
+    }
+    for (auto &def : ssa_instr->uses) {
+      if (SSAOperandAction::READ_WRITE != def.action) break;
+      func(&def);
+    }
+  }
+}
+
+// Applies a function to each `SSAOperand` that defines a register within the
+// `SSAInstruction` associated with `instr`.
+template <typename T>
+static void ForEachDefinitionOperand(NativeInstruction *instr, T func_) {
+  std::function<void(SSAOperand *)> func(std::cref(func_));
+  ForEachDefinitionOperandImpl(instr, func);
+}
+
+// Applies a function to each defined `SSANode` within a given instruction.
+static void ForEachDefinitionImpl(Instruction *instr,
+                                  std::function<void(SSANode *)> &func) {
+  if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+    if (IA_SSA_NODE_DEF == ainstr->annotation) {
+      if (auto def_node = ainstr->GetData<SSANode *>()) {
+        func(def_node);
+      }
+    }
+  } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+    ForEachDefinitionOperand(ninstr, [&] (SSAOperand *op) {
+      func(op->nodes[0]);
+    });
+  }
+}
+
+// Applies a function to each defined `SSANode` within a given instruction.
+template <typename T>
+static void ForEachDefinition(Instruction *instr, T func_) {
+  std::function<void(SSANode *)> func(std::cref(func_));
+  ForEachDefinitionImpl(instr, func);
+}
+
+// Allocate `SSASpillStorage` objects for every register web.
+static void AllocateSpillStorage(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    for (auto instr : InstructionListIterator(frag->instrs)) {
+      ForEachDefinition(instr, [=] (SSANode *node) {
+        auto &storage(node->storage.Value());
+        if (!storage) {
+          storage = new SSASpillStorage;
+        }
+      });
+    }
+  }
+}
+
+// Allocate `SSASpillStorage` objects for every register web.
+static void FreeSpillStorage(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    for (auto instr : InstructionListIterator(frag->instrs)) {
+      ForEachDefinition(instr, [=] (SSANode *node) {
+        auto &storage(node->storage.Value());
+        if (storage) {
+          delete storage;
+          storage = nullptr;
+        }
+      });
+    }
+  }
+}
+
+// Free up all SSA-related data structures stored in the fragment instructions.
+static void FreeSSAData(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    for (auto instr : InstructionListIterator(frag->instrs)) {
+      if (IsA<NativeInstruction *>(instr)) {
+        if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
+          delete ssa_instr;
+          ClearMetaData(instr);
+        }
+      } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+        if (IA_SSA_NODE_DEF == ainstr->annotation) {
+          delete ainstr->GetData<SSANode *>();
+        }
+      }
+    }
+  }
+}
+
+// Returns the `SSASpillStorage` object associated with an `SSANode`.
+static SSASpillStorage *StorageOf(SSANode *node) {
+  return node->storage.Value();
+}
+
+// Try to eliminate a redundant copy instruction.
+static bool TryRemoveCopyInstruction(SSAFragment *frag,
+                                     NativeInstruction *instr) {
+  if (!GetCopiedOperand(instr)) return false;
+
+  auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
+  auto dest_node = ssa_instr->defs[0].nodes[0];
+  auto dest_loc = StorageOf(dest_node);
+
+  // There has been a use of this node.
+  if (dest_loc->checked_is_local) return false;
+
+  // For transparency, we'll only remove copies that we've likely introduced.
+  auto dest_reg = dest_node->reg;
+  if (dest_reg.IsNative()) return false;
+
+  // The node isn't used in this fragment, but is used in some future fragment.
+  if (frag->ssa.exit_nodes.Exists(dest_reg) &&
+      dest_loc == StorageOf(frag->ssa.exit_nodes[dest_reg])) {
+    return false;
+  }
+
+  instr->UnsafeUnlink();
+  delete dest_loc;
+  delete ssa_instr;
+  return true;
+}
+
+// Return the Nth architectural GPR.
+static VirtualRegister NthArchGPR(int n) {
+  return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES,
+                         static_cast<uint16_t>(n));
+}
+
+// Return the Nth spill slot.
+static VirtualRegister NthSpillSlot(int n) {
+  return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
+                         static_cast<uint16_t>(n));
+}
+
+// Returns a pointer to an `SSANode`s `SSASpillStorage` if the node is local to
+// the current fragment. If the node is local, then a spill slot is allocated
+// for the node.
+static SSASpillStorage *LocalStorageForNode(SSAFragment *frag, SSANode *node) {
+  auto storage = StorageOf(node);
+  if (storage->is_local) {
+    return storage;
+  } else if (storage->checked_is_local) {
+    return nullptr;
+  } else {
+    storage->checked_is_local = true;
+    auto reg = node->reg;
+    if (frag->ssa.exit_nodes.Exists(reg) &&
+        storage == StorageOf(frag->ssa.exit_nodes[reg])) {
+      return nullptr;
+    }
+    if (frag->ssa.entry_nodes.Exists(reg) &&
+        storage == StorageOf(frag->ssa.entry_nodes[reg])) {
+      return nullptr;
+    }
+    storage->is_local = true;
+    storage->slot = frag->spill.AllocateSpillSlot();
+    return storage;
+  }
+}
+
+class LocalScheduler {
+ public:
+  explicit LocalScheduler(SSAFragment *frag_)
+      : frag(frag_),
+        used_regs(),
+        live_regs(frag->regs.live_on_exit),
+        next_gpr(NUM_GPRS - 1) {
+    for (auto &vr : vr_occupying_gpr) vr = nullptr;
+    for (auto &slot : slot_containing_gpr) slot = -1;
+  }
+
+  void HomeUsedGPRs(NativeInstruction *instr) {
+    for (auto used_gpr : used_regs) {
+      const auto n = used_gpr.Number();
+
+      auto &vr(vr_occupying_gpr[n]);
+      if (!vr) continue;  // No VR stole this GPR.
+
+      // Mark the storage for this node as not being backed.
+      vr->reg = VirtualRegister();
+      vr = nullptr;
+
+      auto &slot(slot_containing_gpr[n]);
+      if (-1 == slot) continue;  // The GPR was dead when it was stolen.
+
+      instr->InsertAfter(std::move(SaveGPRToSlot(used_gpr,
+                                                 NthSpillSlot(slot))));
+      slot = -1;
+    }
+  }
+
+  // Updates `gpr_num` to be some general-purpose register that will be used to
+  // hold the value of some virtual register. Returns `true` if the GPR was dead
+  // and has been stolen, and `false` if the GPR needs to be spilled/filled.
+  bool TryStealGPR(int &gpr_num) {
+    for (auto num_checked = 0; num_checked < NUM_GPRS; ++num_checked) {
+      if (-1 == next_gpr) next_gpr = NUM_GPRS - 1;  // Wrap this around.
+      auto n = next_gpr--;
+      if (used_regs.IsLive(n)) continue;  // Used in the instruction.
+      if (vr_occupying_gpr[n]) continue;  // Used by another VR.
+      gpr_num = std::max(gpr_num, n);
+      if (!live_regs.IsLive(n)) {
+        gpr_num = n;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Tries to steal a register for use by `vr`. If one can be stolen, then `vr`
+  // gets to use the stolen register. Otherwise, a GPR is filled from a spill
+  // slot, `vr` gets to use that GPR for prior instructions. Either way, we
+  // assign some native GPR to `vr`.
+  void StealOrFillSpilledGPR(NativeInstruction *instr, SSASpillStorage *vr) {
+    auto gpr_num = -1;
+    auto is_stolen = TryStealGPR(gpr_num);
+    GRANARY_ASSERT(-1 != gpr_num);
+    GRANARY_ASSERT(-1 == slot_containing_gpr[gpr_num]);
+    GRANARY_ASSERT(-1 != vr->slot);
+    vr_occupying_gpr[gpr_num] = vr;
+    vr->reg = NthArchGPR(gpr_num);
+    if (!is_stolen) {
+      slot_containing_gpr[gpr_num] = vr->slot;
+      instr->InsertAfter(std::move(RestoreGPRFromSlot(
+          vr->reg, NthSpillSlot(vr->slot))));
+    }
+  }
+
+  // Mark the GPR associated with `vr->reg` as homed.
+  void MarkGPRAsHomed(SSASpillStorage *vr) {
+    auto gpr_num = vr->reg.Number();
+    vr_occupying_gpr[gpr_num] = nullptr;
+    slot_containing_gpr[gpr_num] = -1;
+    //vr->reg = VirtualRegister();
+  }
+
+  enum {
+    NUM_GPRS = arch::NUM_GENERAL_PURPOSE_REGISTERS
+  };
+
+  SSAFragment *frag;
+
+  UsedRegisterTracker used_regs;
+  LiveRegisterTracker live_regs;
+
+  SSASpillStorage *vr_occupying_gpr[NUM_GPRS];
+  int slot_containing_gpr[NUM_GPRS];
+
+  int next_gpr;
+
+ private:
+  LocalScheduler(void) = delete;
+};
+
+// Replace a use of a virtual register
+static void ReplaceOperand(SSAOperand &op) {
+  GRANARY_ASSERT(1 == op.nodes.Size());
+  auto node = op.nodes[0];
+  auto storage = StorageOf(node);
+  auto replacement_reg = storage->reg;
+  GRANARY_ASSERT(node->reg.IsVirtual());
+  GRANARY_ASSERT(replacement_reg.IsNative());
+  Operand existing_op(op.operand);
+  if (op.is_reg) {
+    replacement_reg.Widen(op.operand->ByteWidth());
+    RegisterOperand repl_op(replacement_reg);
+    GRANARY_IF_DEBUG( auto replaced = ) existing_op.Ref().ReplaceWith(repl_op);
+    GRANARY_ASSERT(replaced);
+  } else {
+    replacement_reg.Widen(arch::ADDRESS_WIDTH_BYTES);
+    MemoryOperand repl_op(replacement_reg, op.operand->ByteWidth());
+    GRANARY_IF_DEBUG( auto replaced = ) existing_op.Ref().ReplaceWith(repl_op);
+    GRANARY_ASSERT(replaced);
+  }
+}
+
+// Handle the special case where we're copying a GPR to a VR. This is
+// targeted at cases where a flag zone contains only a single code
+// fragment, and where the flags save/restore code is inlined into that
+// fragment instead of being part of a flag entry/exit fragment.
+static bool SpecialCaseCopyGPRToVR(LocalScheduler *sched,
+                                   NativeInstruction *instr,
+                                   SSAInstruction *ssa_instr,
+                                   SSASpillStorage *vr) {
+  auto gpr_copied_to_vr = GPRCopiedToVR(instr);
+  if (!gpr_copied_to_vr.IsValid()) return false;
+
+  auto new_copy_instr = instr->InsertBefore(std::move(SaveGPRToSlot(
+      gpr_copied_to_vr, NthSpillSlot(vr->slot))));
+
+  SetMetaData(new_copy_instr, ssa_instr);
+  ClearMetaData(instr);
+  sched->frag->instrs.Remove(instr);
+  delete instr;
+  return true;
+}
+
+// Perform fragment-local register scheduling.
+static void ScheduleFragLocalRegDefs(LocalScheduler *sched,
+                                     NativeInstruction *instr,
+                                     SSAInstruction *ssa_instr) {
+  for (auto &def : ssa_instr->defs) {
+    auto replace = false;
+    if (SSAOperandAction::CLEARED == def.action) continue;
+    for (auto node : def.nodes) {
+      if (!node->reg.IsVirtual()) continue;
+      auto vr = LocalStorageForNode(sched->frag, node);
+      if (!vr) continue;
+      if (!vr->reg.IsValid()) {  // Need to allocate a register for `vr`.
+        if (SpecialCaseCopyGPRToVR(sched, instr, ssa_instr, vr)) {
+          return;
+        }
+        sched->StealOrFillSpilledGPR(instr, vr);
+      }
+      replace = true;  // Need to update the operand.
+      instr->InsertBefore(std::move(SaveGPRToSlot(
+          vr->reg, NthSpillSlot(vr->slot))));
+      sched->MarkGPRAsHomed(vr);
+    }
+    if (replace) ReplaceOperand(def);
+  }
+
+}
+
+// Handle the special case where we're copying a VR to a GPR. This is
+// targeted at cases where a flag zone contains only a single code
+// fragment, and where the flags save/restore code is inlined into that
+// fragment instead of being part of a flag entry/exit fragment.
+static bool SpecialCaseCopyVRToGPR(LocalScheduler *sched,
+                                   NativeInstruction *instr,
+                                   SSAInstruction *ssa_instr,
+                                   SSANode *node,
+                                   SSASpillStorage *vr) {
+  // There are no intermediate uses of this register between this use and its
+  // definition.
+  auto reg_node = DynamicCast<SSARegisterNode *>(node);
+  if (!reg_node) return false;
+
+  // The register is defined by a native instruction in this fragment.
+  auto reg_def_instr = DynamicCast<NativeInstruction *>(reg_node->instr);
+  if (!reg_def_instr) return false;
+
+  // The native instruction that defines this register does so as a copy of
+  // a GPR into the VR.
+  if (!GPRCopiedToVR(reg_def_instr).IsValid()) return false;
+
+  // This use of the VR is simple a restoration of whatever was saved by the
+  // instruction that defines this VR.
+  auto gpr_copied_to_vr = GPRCopiedFromVR(instr);
+  if (!gpr_copied_to_vr.IsValid()) return false;
+
+  auto new_copy_instr = instr->InsertBefore(std::move(RestoreGPRFromSlot(
+      gpr_copied_to_vr, NthSpillSlot(vr->slot))));
+  SetMetaData(new_copy_instr, ssa_instr);
+  ClearMetaData(instr);
+  sched->frag->instrs.Remove(instr);
+  delete instr;
+  return true;
+}
+
+// Perform fragment-local register scheduling.
+static void ScheduleFragLocalRegUses(LocalScheduler *sched,
+                                     NativeInstruction *instr,
+                                     SSAInstruction *ssa_instr) {
+  for (auto &use : ssa_instr->uses) {
+    auto replace = false;
+    for (auto node : use.nodes) {
+      if (!node->reg.IsVirtual()) continue;
+      auto vr = LocalStorageForNode(sched->frag, node);
+      if (!vr) continue;
+      if (!vr->reg.IsValid()) {  // Need to allocate a register for `vr`.
+        if (SpecialCaseCopyVRToGPR(sched, instr, ssa_instr, node, vr)) {
+          return;
+        }
+        sched->StealOrFillSpilledGPR(instr, vr);
+      }
+      replace = true;
+    }
+    if (replace) ReplaceOperand(use);
+  }
+}
+
+static void ScheduleFragLocalRegs(SSAFragment *frag) {
+  LocalScheduler sched(frag);
+  Instruction *prev_instr(nullptr);
+  for (auto instr = frag->instrs.Last(); instr; instr = prev_instr) {
+    prev_instr = instr->Previous();
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (TryRemoveCopyInstruction(frag, ninstr))  {
+        continue;  // Removed a redundant copy operation, `ninstr` now invalid.
+      }
+
+      sched.used_regs.KillAll();
+      sched.used_regs.Visit(ninstr);
+      sched.HomeUsedGPRs(ninstr);
+
+      // Visit before scheduling because scheduling might actually kill some
+      // registers. It doesn't matter that we don't observe the exact registers
+      // scheduled in because those will be accounted for by the
+      // `LocalScheduler`.
+      LiveRegisterTracker next_live(sched.live_regs);
+      next_live.Visit(ninstr);
+
+      if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
+        ScheduleFragLocalRegDefs(&sched, ninstr, ssa_instr);
+        ScheduleFragLocalRegUses(&sched, ninstr, ssa_instr);
+      }
+
+      sched.live_regs = next_live;
+    }
+  }
+}
+
+static void ScheduleFragLocalRegs(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+      ScheduleFragLocalRegs(ssa_frag);
+    }
+  }
+}
+
+}  // namespace
+
+// Schedule virtual registers.
+void ScheduleRegisters(FragmentList *frags) {
+  AllocateSpillStorage(frags);
+  ScheduleFragLocalRegs(frags);
+  FreeSpillStorage(frags);
+  FreeSSAData(frags);
+}
+
+}  // namespace granary
+
+#if 0
+
+namespace granary {
 // Returns true if this instruction is a copy instruction.
 //
 // Note: This has an architecture-specific implementation.
@@ -31,17 +499,7 @@ extern bool IsCopyInstruction(const NativeInstruction *instr);
 bool TryReplaceOperand(const NativeInstruction *ninstr,
                        const Operand *op, Operand *repl_op);
 
-// Create an instruction to copy a GPR to a spill slot.
-//
-// Note: This has an architecture-specific implementation.
-std::unique_ptr<Instruction> SaveGPRToSlot(VirtualRegister gpr,
-                                           VirtualRegister slot);
 
-// Create an instruction to copy the value of a spill slot to a GPR.
-//
-// Note: This has an architecture-specific implementation.
-std::unique_ptr<Instruction> RestoreGPRFromSlot(VirtualRegister gpr,
-                                                VirtualRegister slot);
 
 // Represents a storage location for a virtual register. Uses the union-find
 // algorithm to settle on a canonical storage location for all virtual registers
@@ -278,24 +736,7 @@ static RegisterLocation *AssignPhiRegisterLocations(Fragment * const frag,
   return next;
 }
 
-// Assign storage locations to all variables.
-static RegisterLocation *AssignRegisterLocations(Fragment * const frags) {
-  RegisterLocation *next(nullptr);
-  // Assign a storage location to every "bare" definition.
-  for (auto frag : FragmentIterator(frags)) {
-    for (auto instr : ForwardInstructionIterator(frag->first)) {
-      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        next = AssignInstrDefRegisterLocations(ninstr, next);
-      }
-    }
-  }
-  for (auto frag : FragmentIterator(frags)) {
-    if (frag->ssa_vars) {
-      next = AssignPhiRegisterLocations(frag, next);
-    }
-  }
-  return next;
-}
+
 
 // Find the local definition of a particular register by scanning the
 // instruction list of a fragment in reverse order, starting at

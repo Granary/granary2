@@ -82,6 +82,25 @@ RegisterTracker &RegisterTracker::operator=(const RegisterTracker &that) {
   return *this;
 }
 
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterTracker::Visit(NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) {
+    return;
+  }
+  instr->ForEachOperand([=] (Operand *op) {
+    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
+      VirtualRegister r1, r2, r3;
+      mloc->CountMatchedRegisters({&r1, &r2, &r3});
+      Revive(r1);
+      Revive(r2);
+      Revive(r3);
+    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
+      Revive(rloc->Register());
+    }
+  });
+}
+
 // Update this register tracker by visiting the operands of an instruction.
 //
 // Note: This treats conditional writes to a register as reviving that

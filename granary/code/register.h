@@ -338,6 +338,37 @@ class RegisterTrackerIterator {
 // A class that tracks conservatively live, general-purpose registers within a
 // straight-line sequence of instructions.
 //
+// A register is used if the register appears anywhere in an instruction.
+//
+// Note: By default, all registers are treated as dead.
+class UsedRegisterTracker : public RegisterTracker {
+ public:
+  inline UsedRegisterTracker(void) {
+    KillAll();
+  }
+
+  typedef detail::RegisterTrackerIterator<true> Iterator;
+
+  inline Iterator begin(void) const {
+    return Iterator(this);
+  }
+
+  inline Iterator end(void) const {
+    return Iterator();
+  }
+
+  // Update this register tracker by marking all registers that appear in an
+  // instruction as used.
+  void Visit(NativeInstruction *instr);
+
+  inline void Join(const UsedRegisterTracker &that) {
+    Union(that);
+  }
+};
+
+// A class that tracks conservatively live, general-purpose registers within a
+// straight-line sequence of instructions.
+//
 // A register is conservatively live if there exists a control-flow path to a
 // use of the register, where along that path there is no intermediate
 // definition of the register.
