@@ -81,6 +81,10 @@ class Tool {
   void BeginInlineAssembly(std::initializer_list<Operand *> inputs,
                            int scope_id=0);
 
+  inline void BeginInlineAssembly(int scope_id=0) {
+    BeginInlineAssembly(std::initializer_list<Operand *>{}, scope_id);
+  }
+
   // Switch to a different scope of inline assembly.
   void ContinueInlineAssembly(int scope_id);
 

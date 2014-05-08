@@ -67,7 +67,7 @@ static const char *FragmentBackground(const Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
     return "white";
   }
-  auto stack_id = static_cast<size_t>(frag->partition->id);
+  auto stack_id = static_cast<size_t>(frag->partition.Value()->id);
   return stack_id ? partition_color[stack_id % NUM_COLORS] : "white";
 }
 

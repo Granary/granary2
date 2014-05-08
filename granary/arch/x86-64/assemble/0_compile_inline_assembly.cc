@@ -23,13 +23,9 @@ namespace arch {
 // Categories of every iclass.
 extern xed_category_enum_t ICLASS_CATEGORIES[];
 
-// Number of implicit operands for each iclass.
-extern const int NUM_IMPLICIT_OPERANDS[];
-
 // Table mapping each iclass to the set of read and written flags by *any*
 // selection of that iclass.
 extern FlagsSet IFORM_FLAGS[];
-
 
 }  // namespace arch
 
@@ -106,7 +102,8 @@ class InlineAssemblyParser {
 
   void ParseWord(char *buff) {
     for (; *ch; ) {
-      if (PeekWhitespace() || Peek(';') || Peek(',') || Peek(':')) {
+      if (PeekWhitespace() || Peek(';') || Peek(',') ||
+          Peek(':') || Peek('[') || Peek(']')) {
         break;
       }
       *buff++ = *ch++;
@@ -157,6 +154,7 @@ class InlineAssemblyParser {
     ParseWord(buff);
     auto reg = str2xed_reg_enum_t(buff);
     GRANARY_ASSERT(XED_REG_INVALID != reg);
+    op->type = XED_ENCODER_OPERAND_TYPE_REG;
     op->reg.DecodeFromNative(static_cast<int>(reg));
   }
 
@@ -172,11 +170,15 @@ class InlineAssemblyParser {
   void ParseMemoryOp(void) {
     Accept('[');
     ConsumeWhiteSpace();
-    auto var_num = ParseVar();
-    GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
-    auto &reg_op(scope->vars[var_num].reg);
+    if (Peek('%')) {
+      auto var_num = ParseVar();
+      GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
+      auto &reg_op(scope->vars[var_num].reg);
+      op->reg = reg_op->Register();
+    } else {
+      ParseArchReg();
+    }
     op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-    op->reg = reg_op->Register();
     ConsumeWhiteSpace();
     Accept(']');
   }

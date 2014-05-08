@@ -30,19 +30,12 @@ class FragmentBuilder;
 class SSAVariableTracker;
 class FlagZone;
 class Fragment;
+class SSAFragment;
 class PartitionEntryFragment;
 class PartitionExitFragment;
 class FlagEntryFragment;
 class FlagExitFragment;
 class SSANode;
-
-// Information about the partition to which a fragment belongs.
-union PartitionInfo {
-  inline PartitionInfo(void)
-      : id(0) {}
-
-  int id;
-};
 
 class SpillInfo {
  public:
@@ -52,18 +45,73 @@ class SpillInfo {
 
   inline SpillInfo(void)
       : num_slots(0),
-        used_slots() {}
+        used_slots(),
+        gprs_holding_vrs() {
+    gprs_holding_vrs.KillAll();
+  }
 
+  // Maximum number of slots allocated from this `SpillInfo` object.
   int num_slots;
 
   // Tracks which spill slots are allocated.
   BitSet<MAX_NUM_SPILL_SLOTS> used_slots;
 
-  // Allocate a spill slot from this spill info.
-  int AllocateSpillSlot(void);
+  // If a GPR is live in `entry_gprs_holding_vrs`, then on entry to the current
+  // fragment, the GPR contains the value of a VR.
+  RegisterTracker gprs_holding_vrs;
+
+  // Allocate a spill slot from this spill info. Takes an optional offset that
+  // can be used to slide the allocated slot by some amount. The offset
+  // parameter is used to offset partition-local slot allocations by the number
+  // of fragment local slot allocations.
+  int AllocateSpillSlot(int offset=0);
 
   // Free a spill slot from active use.
-  void FreeSpillSlot(int slot);
+  void FreeSpillSlot(int slot, int offset=0);
+};
+
+// Information about the partition to which a fragment belongs.
+class PartitionInfo {
+ public:
+  explicit PartitionInfo(int id_);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionInfo, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+  // Clear out the number of usage count of registers in this partition.
+  void ClearGPRUseCounters(void);
+
+  // Count the number of uses of the arch GPRs in this fragment.
+  void CountGPRUses(Fragment *frag);
+
+  // Returns the most preferred arch GPR for use by partition-local register
+  // scheduling.
+  int PreferredGPRNum(void);
+
+  const int id;
+
+  // The current "round" of partition-local scheduling.
+  int scheduler_round;
+
+  // Maximum number of spill slots used by fragments somewhere in this
+  // partition.
+  int num_local_slots;
+
+  // Counts the number of uses of each GPR within the partition.
+  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+
+  // What is the number/index of the preferred GPR for the current VR being
+  // allocated. This is -1 if we haven't yet determined the next preferred GPR
+  // number.
+  int preferred_gpr_num;
+
+  // Partition-local spill info.
+  SpillInfo spill;
+
+ private:
+  PartitionInfo(void) = delete;
 };
 
 // Temporary data stored in a code fragment that's used by different stages
@@ -81,8 +129,17 @@ union TempData {
 // Tracks registers used within fragments.
 class RegisterUsageInfo {
  public:
+  RegisterUsageInfo(void);
+
   LiveRegisterTracker live_on_entry;
   LiveRegisterTracker live_on_exit;
+  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+
+  // Clear out the number of usage count of registers in this fragment.
+  void ClearGPRUseCounters(void);
+
+  // Count the number of uses of the arch GPRs in this fragment.
+  void CountGPRUses(Fragment *frag);
 };
 
 // Targets in/out of this fragment.
@@ -113,7 +170,7 @@ class Fragment {
   InstructionList instrs;
 
   // The partition to which this fragment belongs.
-  DisjointSet<PartitionInfo> partition;
+  DisjointSet<PartitionInfo *> partition;
 
   // The "flag zone" to which this fragment belongs.
   DisjointSet<FlagZone *> flag_zone;

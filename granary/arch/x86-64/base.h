@@ -24,8 +24,8 @@ enum {
   GPR_WIDTH_BYTES = ADDRESS_WIDTH_BYTES,
   GPR_WIDTH_BITS = ADDRESS_WIDTH_BITS,
 
-  // Excludes %rsp, excludes %rip
-  NUM_GENERAL_PURPOSE_REGISTERS = 14,
+  // Excludes %rsp, excludes %rip.
+  NUM_GENERAL_PURPOSE_REGISTERS = 15,
 
   // Byte value with which to poison executable memory. This should normally
   // correspond to something that .

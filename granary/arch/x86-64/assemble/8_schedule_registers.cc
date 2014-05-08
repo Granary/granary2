@@ -48,27 +48,51 @@ bool TryReplaceOperand(NativeInstruction *ninstr, Operand *op,
 #endif
 
 // Create an instruction to copy a GPR to a spill slot.
-std::unique_ptr<Instruction> SaveGPRToSlot(VirtualRegister gpr,
-                                           VirtualRegister slot) {
+Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());
   GRANARY_ASSERT(slot.IsVirtualSlot());
   arch::Instruction ninstr;
   gpr.Widen(arch::GPR_WIDTH_BYTES);
   slot.Widen(arch::ADDRESS_WIDTH_BYTES);
   arch::MOV_MEMv_GPRv(&ninstr, slot, gpr);
-  return std::unique_ptr<Instruction>(new NativeInstruction(&ninstr));
+  return new NativeInstruction(&ninstr);
 }
 
 // Create an instruction to copy the value of a spill slot to a GPR.
-std::unique_ptr<Instruction> RestoreGPRFromSlot(VirtualRegister gpr,
-                                                VirtualRegister slot) {
+Instruction *RestoreGPRFromSlot(VirtualRegister gpr, VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());
   GRANARY_ASSERT(slot.IsVirtualSlot());
   arch::Instruction ninstr;
   gpr.Widen(arch::GPR_WIDTH_BYTES);
   slot.Widen(arch::ADDRESS_WIDTH_BYTES);
   arch::MOV_GPRv_MEMv(&ninstr, gpr, slot);
-  return std::unique_ptr<Instruction>(new NativeInstruction(&ninstr));
+  return new NativeInstruction(&ninstr);
+}
+
+// Swaps the value of one GPR with another.
+//
+// Note: This has an architecture-specific implementation.
+Instruction *SwapGPRWithGPR(VirtualRegister gpr1, VirtualRegister gpr2) {
+  GRANARY_ASSERT(gpr1.IsNative());
+  GRANARY_ASSERT(gpr2.IsNative());
+  arch::Instruction ninstr;
+  gpr1.Widen(arch::GPR_WIDTH_BYTES);
+  gpr2.Widen(arch::GPR_WIDTH_BYTES);
+  arch::XCHG_GPRv_GPRv(&ninstr, gpr1, gpr2);
+  return new NativeInstruction(&ninstr);
+}
+
+// Swaps the value of one GPR with a slot.
+//
+// Note: This has an architecture-specific implementation.
+Instruction *SwapGPRWithSlot(VirtualRegister gpr, VirtualRegister slot) {
+  GRANARY_ASSERT(gpr.IsNative());
+  GRANARY_ASSERT(slot.IsVirtualSlot());
+  arch::Instruction ninstr;
+  gpr.Widen(arch::GPR_WIDTH_BYTES);
+  slot.Widen(arch::ADDRESS_WIDTH_BYTES);
+  arch::XCHG_MEMv_GPRv(&ninstr, slot, gpr);
+  return new NativeInstruction(&ninstr);
 }
 
 // Returns the GPR that is copied by this instruction into a virtual

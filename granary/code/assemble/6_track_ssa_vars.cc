@@ -215,6 +215,7 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
     auto &node(frag->ssa.entry_nodes[reg]);
     if (SSAOperandAction::WRITE == op.action) {
 
+
       // Some later (in this fragment) instruction reads from this register,
       // and so it created an `SSAControlPhiNode` for that use so that it could
       // signal that a concrete definition of that use was missing. We now have
@@ -222,7 +223,9 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
       // node.
       if (node) {
         GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
+        auto storage = node->storage;
         node = new (node) SSARegisterNode(frag, instr, reg);
+        node->storage = storage;
 
       // No use (in the current fragment) depends on this register, but when
       // we later to global value numbering, we might need to forward-propagate
@@ -230,6 +233,7 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
       } else {
         node = new SSARegisterNode(frag, instr, reg);
       }
+
     } else {  // `SSAOperandAction::CLEAR`.
       GRANARY_ASSERT(IsA<SSARegisterNode *>(node));
     }

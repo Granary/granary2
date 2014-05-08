@@ -252,6 +252,11 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
     return !Get(static_cast<unsigned>(num));
   }
 
+  // Returns true if a register is live.
+  inline bool IsDead(VirtualRegister reg) const {
+    return IsDead(reg.Number());
+  }
+
   // Revive a specific register.
   inline void Revive(int num) {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
@@ -265,6 +270,11 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   inline bool IsLive(int num) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
     return Get(static_cast<unsigned>(num));
+  }
+
+  // Returns true if a register is live.
+  inline bool IsLive(VirtualRegister reg) const {
+    return IsLive(reg.Number());
   }
 
   // Union some other live register set with the current live register set.

@@ -94,6 +94,15 @@ static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
   return frag;
 }
 
+// Returns true if this instruction would convert the current fragmnet into
+// application code.
+static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
+  if (!instr->IsAppInstruction()) return false;
+  return instr->instruction.WritesToStackPointer() ||
+         instr->ReadsConditionCodes() ||
+         instr->WritesConditionCodes();
+}
+
 // Append an instruction to a fragment. This also does minor flag usage analysis
 // of the instruction to figure out if the fragment should be treated as an
 // application fragment or an instrumentation code fragment.
@@ -110,11 +119,7 @@ static void Append(CodeFragment *frag, Instruction *instr) {
     // Also, if the app instruction writes to the stack pointer, then we want
     // to try to prevent such an instruction from being placed inside of a
     // flag save/restore zone.
-    if (!frag->attr.is_app_code &&
-        ninstr->IsAppInstruction() &&
-        (ninstr->ReadsConditionCodes() ||
-         ninstr->WritesConditionCodes() ||
-         ninstr->instruction.WritesToStackPointer())) {
+    if (!frag->attr.is_app_code && InstrMakesFragmentIntoAppCode(ninstr)) {
       frag->attr.is_app_code = true;
     }
   }
@@ -351,7 +356,8 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
         if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
           return SplitFragment(frags, frag, block, instr);
         }
-      } else if (ninstr->IsAppInstruction() && frag->attr.modifies_flags) {
+      } else if (frag->attr.modifies_flags &&  // Must have at least 1 instr.
+                 InstrMakesFragmentIntoAppCode(ninstr)) {
         return SplitFragment(frags, frag, block, instr);
       }
     }

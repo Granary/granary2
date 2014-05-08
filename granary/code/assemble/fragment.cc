@@ -28,24 +28,102 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 
-// Allocate a spill slot from this spill info.
-int SpillInfo::AllocateSpillSlot(void) {
+// Allocate a spill slot from this spill info. Takes an optional offset that
+// can be used to slide the allocated slot by some amount. The offset
+// parameter is used to offset partition-local slot allocations by the number
+// of fragment local slot allocations.
+int SpillInfo::AllocateSpillSlot(int offset) {
   for (auto i = 0; i < num_slots; ++i) {
     if (!used_slots.Get(i)) {
       used_slots.Set(i, true);
-      return i;
+      return i + offset;
     }
   }
-  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots));
+  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots + offset));
   used_slots.Set(num_slots, true);
-  return num_slots++;
+  return offset + num_slots++;
 }
 
 // Free a spill slot from active use.
-void SpillInfo::FreeSpillSlot(int slot) {
-  GRANARY_ASSERT(num_slots > slot);
-  GRANARY_ASSERT(used_slots.Get(slot));
-  used_slots.Set(slot, false);
+void SpillInfo::FreeSpillSlot(int slot, int offset) {
+  GRANARY_ASSERT((slot - offset) >= 0);
+  GRANARY_ASSERT(num_slots > (slot - offset));
+  GRANARY_ASSERT(used_slots.Get(slot - offset));
+  used_slots.Set(slot - offset, false);
+}
+
+PartitionInfo::PartitionInfo(int id_)
+    : id(id_),
+      scheduler_round(0),
+      num_local_slots(0),
+      num_uses_of_gpr{0},
+      preferred_gpr_num(-1),
+      spill() {}
+
+// Clear out the number of usage count of registers in this partition.
+void PartitionInfo::ClearGPRUseCounters(void) {
+  memset(&(num_uses_of_gpr[0]), 0, sizeof num_uses_of_gpr);
+  preferred_gpr_num = -1;
+}
+
+// Count the number of uses of the arch GPRs in this fragment.
+void PartitionInfo::CountGPRUses(Fragment *frag) {
+  frag->regs.CountGPRUses(frag);
+  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    num_uses_of_gpr[i] += frag->regs.num_uses_of_gpr[i];
+  }
+}
+
+// Returns the most preferred arch GPR for use by partition-local register
+// scheduling.
+int PartitionInfo::PreferredGPRNum(void) {
+  if (-1 == preferred_gpr_num) {
+    auto min = INT_MAX;
+    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+      if (num_uses_of_gpr[i] < min) {
+        preferred_gpr_num = i;
+        min = num_uses_of_gpr[i];
+      }
+    }
+  }
+  return preferred_gpr_num;
+}
+
+RegisterUsageInfo::RegisterUsageInfo(void)
+    : live_on_entry(),
+      live_on_exit(),
+      num_uses_of_gpr{0} {}
+
+// Clear out the number of usage count of registers in this fragment.
+void RegisterUsageInfo::ClearGPRUseCounters(void) {
+  memset(&(num_uses_of_gpr[0]), 0, sizeof num_uses_of_gpr);
+}
+
+// Count the number of uses of the arch GPRs in this fragment.
+void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
+  frag->regs.ClearGPRUseCounters();
+  auto gpr_counter = [=] (VirtualRegister reg) {
+    if (reg.IsNative() && reg.IsGeneralPurpose()) {
+      num_uses_of_gpr[reg.Number()] += 1;
+    }
+  };
+  auto operand_counter = [&] (Operand *op) {
+    if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+      gpr_counter(reg_op->Register());
+    } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+      VirtualRegister r1, r2, r3;
+      if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+        gpr_counter(r1);
+        gpr_counter(r2);
+        gpr_counter(r3);
+      }
+    }
+  };
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      ninstr->ForEachOperand(operand_counter);
+    }
+  }
 }
 
 Fragment::Fragment(void)

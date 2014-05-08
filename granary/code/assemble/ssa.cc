@@ -152,7 +152,9 @@ SSAAliasNode::SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
 
 SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
-      dependent_node(incoming_node_) {}
+      dependent_node(incoming_node_) {
+  storage.Union(dependent_node->storage);
+}
 
 SSARegisterNode::SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
                                  VirtualRegister reg_)
@@ -192,7 +194,9 @@ SSAInstruction::SSAInstruction(void)
 
 SSAInstruction::~SSAInstruction(void) {
   for (auto &def : defs) {
-    delete def.nodes[0];
+    if (SSAOperandAction::WRITE == def.action) {
+      delete def.nodes[0];
+    }
   }
   for (auto &use : uses) {
     if (SSAOperandAction::READ_WRITE == use.action) {

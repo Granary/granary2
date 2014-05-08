@@ -287,11 +287,11 @@ static void AddEntryFragments(FragmentList * const frags,
 
 // Label the N fragment partitions with IDs 1 through N.
 static void LabelPartitions(FragmentList *frags) {
-  auto next_id = 1;
+  auto next_id = 0;
   for (auto frag : FragmentListIterator(frags)) {
     auto &partition(frag->partition.Value());
-    if (!partition.id) {
-      partition.id = next_id++;
+    if (!partition) {
+      partition = new PartitionInfo(++next_id);
     }
   }
 }

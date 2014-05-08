@@ -27,6 +27,7 @@ InlineAssemblyScope::InlineAssemblyScope(
     std::initializer_list<Operand *> inputs)
     : vars() {
   memset(&vars, 0, sizeof vars);
+  var_is_initialized.SetAll(false);
   for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {
     new (&(vars[i])) InlineAssemblyVariable(inputs.begin()[i]);
     var_is_initialized.Set(i, true);
