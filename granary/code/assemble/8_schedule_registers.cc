@@ -614,29 +614,6 @@ static void ForEachSharedVR(SSAFragment *frag, T func) {
   }
 }
 
-#if 0
-// Allocate virtual registers that are used across several fragments within a
-// partition. To simplify the problem, we consider any virtual register live on
-// entry/exit from a fragment to interfere. This means that the granularity of
-// live ranges is fragments and not individual instructions.
-static int AllocatePartitionLocalRegs(FragmentList *frags) {
-  auto max_slot = -1;
-  for (auto frag : FragmentListIterator(frags)) {
-    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-      auto partition = ssa_frag->partition.Value();
-      ForEachSharedVR(ssa_frag, [&] (SSANode *, SSASpillStorage *vr) {
-        if (-1 == vr->slot) {
-          vr->slot = partition->spill.AllocateSpillSlot(
-              partition->num_local_slots);
-          max_slot = std::max(max_slot, vr->slot);
-        }
-      });
-    }
-  }
-  return max_slot;
-}
-#endif
-
 class SlotScheduler {
  public:
   SlotScheduler(SSAFragment *frag_, SSASpillStorage *vr, int preferred_gpr_num_)

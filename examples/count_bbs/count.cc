@@ -38,15 +38,6 @@ class BBCount : public Tool {
 
   virtual ~BBCount(void) = default;
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    BeginInlineAssembly();
-    InlineBefore(bb->FirstInstruction(),
-                 "XOR r64 %0, r64 %0;"
-                 "ADD r64 %0, i32 1;"
-                 "TEST r64 R13, r64 R14;"
-                 "TEST r64 R15, r64 R14;"
-                 "ADD r64 %0, i32 1;"_x86_64);
-    EndInlineAssembly();
-
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
       return;
