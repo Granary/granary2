@@ -23,11 +23,9 @@
 namespace granary {
 
 // Forward declarations.
-class DecodedBasicBlock;
-class LocalControlFlowGraph;
 class BlockMetaData;
-class FragmentBuilder;
-class SSAVariableTracker;
+
+class SSASpillStorage;
 class FlagZone;
 class Fragment;
 class SSAFragment;
@@ -66,8 +64,11 @@ class SpillInfo {
   // of fragment local slot allocations.
   int AllocateSpillSlot(int offset=0);
 
+  // Mark a spill slot as being used.
+  void MarkSlotAsUsed(int slot);
+
   // Free a spill slot from active use.
-  void FreeSpillSlot(int slot, int offset=0);
+  void FreeSpillSlot(int slot);
 };
 
 // Information about the partition to which a fragment belongs.
@@ -106,6 +107,9 @@ class PartitionInfo {
   // allocated. This is -1 if we haven't yet determined the next preferred GPR
   // number.
   int preferred_gpr_num;
+
+  // The VR being allocated and scheduled.
+  SSASpillStorage *vr_being_scheduled;
 
   // Partition-local spill info.
   SpillInfo spill;
@@ -333,6 +337,9 @@ typedef TinyMap<VirtualRegister, SSANode *,
 // A fragment with associated SSA vars.
 class SSAFragment : public Fragment {
  public:
+  SSAFragment(void)
+      : all_regs_scheduled(false) {}
+
   virtual ~SSAFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, SSAFragment)
@@ -341,6 +348,8 @@ class SSAFragment : public Fragment {
     SSANodeMap entry_nodes;
     SSANodeMap exit_nodes;
   } ssa;
+
+  bool all_regs_scheduled;
 
   SpillInfo spill;
 };

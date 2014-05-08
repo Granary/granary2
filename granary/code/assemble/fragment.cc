@@ -33,23 +33,31 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 // parameter is used to offset partition-local slot allocations by the number
 // of fragment local slot allocations.
 int SpillInfo::AllocateSpillSlot(int offset) {
-  for (auto i = 0; i < num_slots; ++i) {
+  for (auto i = offset; i < num_slots; ++i) {
     if (!used_slots.Get(i)) {
       used_slots.Set(i, true);
-      return i + offset;
+      return i;
     }
   }
-  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots + offset));
+  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots));
   used_slots.Set(num_slots, true);
-  return offset + num_slots++;
+  return num_slots++;
+}
+
+// Mark a spill slot as being used.
+void SpillInfo::MarkSlotAsUsed(int slot) {
+  GRANARY_ASSERT(slot >= 0);
+  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + slot));
+  used_slots.Set(slot, true);
+  num_slots = std::max(num_slots, slot + 1);
 }
 
 // Free a spill slot from active use.
-void SpillInfo::FreeSpillSlot(int slot, int offset) {
-  GRANARY_ASSERT((slot - offset) >= 0);
-  GRANARY_ASSERT(num_slots > (slot - offset));
-  GRANARY_ASSERT(used_slots.Get(slot - offset));
-  used_slots.Set(slot - offset, false);
+void SpillInfo::FreeSpillSlot(int slot) {
+  GRANARY_ASSERT(slot >= 0);
+  GRANARY_ASSERT(num_slots > slot);
+  GRANARY_ASSERT(used_slots.Get(slot));
+  used_slots.Set(slot, false);
 }
 
 PartitionInfo::PartitionInfo(int id_)
@@ -58,6 +66,7 @@ PartitionInfo::PartitionInfo(int id_)
       num_local_slots(0),
       num_uses_of_gpr{0},
       preferred_gpr_num(-1),
+      vr_being_scheduled(nullptr),
       spill() {}
 
 // Clear out the number of usage count of registers in this partition.

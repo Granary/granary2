@@ -614,6 +614,7 @@ static void ForEachSharedVR(SSAFragment *frag, T func) {
   }
 }
 
+#if 0
 // Allocate virtual registers that are used across several fragments within a
 // partition. To simplify the problem, we consider any virtual register live on
 // entry/exit from a fragment to interfere. This means that the granularity of
@@ -634,20 +635,17 @@ static int AllocatePartitionLocalRegs(FragmentList *frags) {
   }
   return max_slot;
 }
+#endif
 
 class SlotScheduler {
  public:
-  SlotScheduler(SSAFragment *frag_, SSASpillStorage *vr, int slot_,
-                int preferred_gpr_num_)
+  SlotScheduler(SSAFragment *frag_, SSASpillStorage *vr, int preferred_gpr_num_)
       : frag(frag_),
         entry_node(nullptr),
         exit_node(nullptr),
         slot_reg(),
         preferred_gpr_num(preferred_gpr_num_),
-        preferred_steal_gpr(NthArchGPR(preferred_gpr_num)),
-        slot(slot_) {
-
-    GRANARY_ASSERT(SpillInfo::MAX_NUM_SPILL_SLOTS > slot);
+        preferred_steal_gpr(NthArchGPR(preferred_gpr_num)) {
     GRANARY_ASSERT(0 <= preferred_gpr_num && NUM_GPRS > preferred_gpr_num);
 
     // Find the entry node.
@@ -685,9 +683,6 @@ class SlotScheduler {
   // The GPR that we prefer to steal for use by this slot.
   int preferred_gpr_num;
   VirtualRegister preferred_steal_gpr;
-
-  // The specific slot being scheduled.
-  const int slot;
 
  private:
   SlotScheduler(void) = delete;
@@ -736,12 +731,17 @@ static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
 // Schedule a slot from the bottom-up.
 static void SchedulePartitionLocalReg(const SlotScheduler &sched,
                                       SSAFragment *frag, SSASpillStorage *vr) {
-  const auto spill_slot = NthSpillSlot(sched.slot);
+  const auto spill_slot = NthSpillSlot(vr->slot);
   const auto preferred_gpr_num = sched.preferred_gpr_num;
 
   LocalScheduler local_sched(frag, sched.preferred_gpr_num);
   const auto preferred_gpr_is_busy = frag->spill.gprs_holding_vrs.IsLive(
       preferred_gpr_num);
+
+  // Mark the preferred GPR as busy in this fragment. This is so that the
+  // same GPR can't simultaneously be "busy" (i.e. contain) the value of
+  // two different virtual registers on exit/entry from a fragment.
+  frag->spill.gprs_holding_vrs.Revive(preferred_gpr_num);
 
   // If the VR is live on exit from this frag, then we assume that any
   // the VR is assumed to be located in the preferred GPR on entry to any
@@ -749,12 +749,12 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
   // already been marked as busy.
   if (sched.exit_node && !preferred_gpr_is_busy) {
     vr->reg = sched.preferred_steal_gpr;
-    local_sched.slot_containing_gpr[preferred_gpr_num] = sched.slot;
+    local_sched.slot_containing_gpr[preferred_gpr_num] = vr->slot;
     local_sched.vr_occupying_gpr[preferred_gpr_num] = vr;
 
   // Not live on exit, or it is live, and so its also busy.
   } else {
-    vr->reg = NthSpillSlot(sched.slot);
+    vr->reg = spill_slot;
   }
 
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
@@ -821,15 +821,14 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
 
 // Returns the `SSASpillStorage` associated with either of an entry/exit VR
 // used in `frag`, or `nullptr`.
-static SSASpillStorage *StorageForSlot(SSAFragment *frag, int slot) {
-  SSASpillStorage *storage(nullptr);
-  ForEachSharedVR(frag, [&] (SSANode *, SSASpillStorage *vr) {
-    if (slot == vr->slot) {
-      GRANARY_ASSERT(!storage || (storage == vr));
-      storage = vr;
+static bool FragUsesVR(SSAFragment *frag, SSASpillStorage *vr) {
+  auto is_used = false;
+  ForEachSharedVR(frag, [&] (SSANode *, SSASpillStorage *node_vr) {
+    if (vr == node_vr) {
+      is_used = true;
     }
   });
-  return storage;
+  return is_used;
 }
 
 // Update the partition info with the count of the number of uses of every GPR
@@ -845,41 +844,68 @@ static void CountNumRegUses(FragmentList *frags) {
   }
 }
 
+static SSASpillStorage *GetUnscheduledVR(SSAFragment *frag) {
+  SSASpillStorage *vr(nullptr);
+  ForEachSharedVR(frag, [&] (SSANode *, SSASpillStorage *node_vr) {
+    if (-1 == node_vr->slot && !vr) {
+      vr = node_vr;
+    }
+  });
+
+  if (!vr) {  // No remaining unscheduled VRs.
+    frag->all_regs_scheduled = true;
+  }
+
+  return vr;
+}
+
 // Schedule all virtual registers that are used in one or more fragments. By
 // this point they should all be allocated. One challenge for scheduling is that
 // a virtual register might be placed in two different physical registers
 // across in two or more successors of a fragment, and needs to be in the same
 // spot in the fragment itself.
 static void SchedulePartitionLocalRegs(FragmentList *frags) {
-  auto max_slot = AllocatePartitionLocalRegs(frags);
-  for (auto slot = 0; slot <= max_slot; ++slot) {
+  for (auto allocated = true; allocated; ) {
+    allocated = false;
 
     // Continually update the register counts, as scheduling will change
     // the counts, and thus change our preferences.
     CountNumRegUses(frags);
 
-    // Go through every fragment and try to schedule the virtual register whose
-    // `RegisterLocation::reg.Number()` is `slot`.
     for (auto frag : ReverseFragmentListIterator(frags)) {
-
-      // Doesn't use VRs.
       auto ssa_frag = DynamicCast<SSAFragment *>(frag);
-      if (!ssa_frag) continue;
+      if (!ssa_frag) continue;  // Doesn't use VRs.
+      if (ssa_frag->all_regs_scheduled) continue;
 
-      // Not a partition-local slot.
       auto partition = ssa_frag->partition.Value();
-      if (slot < partition->num_local_slots) continue;
+      auto &vr(partition->vr_being_scheduled);
+      auto found_vr = false;
 
-      if (auto vr = StorageForSlot(ssa_frag, slot)) {
+      if (!vr) {
+        if (!(vr = GetUnscheduledVR(ssa_frag))) continue;
+        allocated = true;
+        found_vr = true;
+        vr->slot = ssa_frag->spill.AllocateSpillSlot(
+            partition->num_local_slots);
+      }
+
+      if (found_vr || FragUsesVR(ssa_frag, vr)) {
+
+        // Mark this slot as used in every fragment where it appears.
+        ssa_frag->spill.MarkSlotAsUsed(vr->slot);
+
         auto preferred_gpr_num = partition->PreferredGPRNum();
-
-        SlotScheduler sched(ssa_frag, vr, slot, preferred_gpr_num);
+        SlotScheduler sched(ssa_frag, vr, preferred_gpr_num);
         SchedulePartitionLocalReg(sched, ssa_frag, vr);
+      }
+    }
 
-        // Mark the preferred GPR as busy in this fragment. This is so that the
-        // same GPR can't simultaneously be "busy" (i.e. contain) the value of
-        // two different virtual registers on exit/entry from a fragment.
-        ssa_frag->spill.gprs_holding_vrs.Revive(preferred_gpr_num);
+    // If we allocated any VRs, then make sure we reset the field representing
+    // the current VR being allocated in each partition.
+    if (allocated) {
+      for (auto frag : ReverseFragmentListIterator(frags)) {
+        auto partition = frag->partition.Value();
+        partition->vr_being_scheduled = nullptr;
       }
     }
   }
