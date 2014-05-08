@@ -130,6 +130,8 @@ static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
         auto defined_reg = GetRegister(reg_operand);
         auto &reg_value(defs[defined_reg]);
         reg_value.reg_node = reg_operand.nodes[0];
+
+        GRANARY_ASSERT(SSAOperandAction::INVALID != copied_value->action);
         reg_value.reg_value = copied_value;
       } else {
         UpdateInstructionDefs(defs, ssa_instr);

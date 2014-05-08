@@ -277,7 +277,6 @@ class LocalScheduler {
 
       vr = nullptr;
       slot = -1;
-
     }
   }
 
@@ -674,6 +673,20 @@ static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
     for (auto node : def.nodes) {
       if (!node->reg.IsVirtual()) continue;
       if (StorageOf(node) != vr) continue;
+
+      // Special case flag entry fragments, whose flag save register is live on
+      // exit.
+      //
+      // TODO(pag): This is ugly.
+      if (IsA<FlagEntryFragment *>(sched->frag) &&
+          SpecialCaseCopyGPRToVR(sched, instr, ssa_instr, vr)) {
+        auto vr_reg_num = vr->reg.Number();
+        GRANARY_ASSERT(vr_reg_num == sched->preferred_gpr_num);
+        sched->vr_occupying_gpr[vr_reg_num] = nullptr;
+        sched->slot_containing_gpr[vr_reg_num] = -1;
+        return;
+      }
+
       if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
         sched->StealOrFillSpilledGPR(instr, vr);
       }
@@ -685,7 +698,6 @@ static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
       ReplaceOperand(def);
     }
   }
-
 }
 
 // Perform fragment-local register scheduling.
@@ -697,6 +709,17 @@ static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
     for (auto node : use.nodes) {
       if (!node->reg.IsVirtual()) continue;
       if (StorageOf(node) != vr) continue;
+
+      // Special case flag exit fragments, whose flag save register is live on
+      // entry.
+      //
+      // TODO(pag): This is ugly.
+      if (IsA<FlagExitFragment *>(sched->frag) &&
+          SpecialCaseCopyVRToGPR(sched, instr, ssa_instr, node, vr)) {
+        vr->reg = NthArchGPR(sched->preferred_gpr_num);
+        return;
+      }
+
       if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
         sched->StealOrFillSpilledGPR(instr, vr);
       }
@@ -734,7 +757,10 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
     vr->reg = spill_slot;
   }
 
-  for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
+  Instruction *prev_instr(nullptr);
+  for (auto instr = frag->instrs.Last(); instr; instr = prev_instr) {
+    prev_instr = instr->Previous();
+
     auto ninstr = DynamicCast<NativeInstruction *>(instr);
     if (!ninstr) {
       // Handle compensation instructions.

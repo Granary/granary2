@@ -116,16 +116,17 @@ namespace {
 static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
   if (XED_ENCODER_OPERAND_TYPE_REG == op.type) {
     if (op.reg.IsStackPointer()) {
-      if (op.IsRead()) {
+      if (op.IsRead()) instr->reads_from_stack_pointer = true;
+      if (op.IsWrite()) instr->writes_to_stack_pointer = true;
+    }
+  } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+    if (op.is_compound) {
+      if (XED_REG_RSP == op.mem.reg_base)  {
         instr->reads_from_stack_pointer = true;
       }
-      if (op.IsWrite()) {
-        instr->writes_to_stack_pointer = true;
-      }
+    } else {
+      if (op.reg.IsStackPointer()) instr->reads_from_stack_pointer = true;
     }
-  } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type && op.is_compound &&
-             XED_REG_RSP == op.mem.reg_base) {
-    instr->reads_from_stack_pointer = true;
   }
 }
 }  // namespace

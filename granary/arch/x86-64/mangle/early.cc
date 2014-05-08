@@ -189,7 +189,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto num_args = instr->ops[1].imm.as_uint & 0x1FUL;
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
-  APP_NATIVE(MOV_GPRv_GPRv_89(&ni, temp_rbp, XED_REG_RSP));
+  APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP)));
   APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP));
 
   // In the case of something like watchpoints, where `RBP` is being tracked,

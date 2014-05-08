@@ -100,6 +100,8 @@ int VirtualRegister::EncodeToNative(void) const {
     widest_reg = static_cast<xed_reg_enum_t>(static_cast<int>(widest_reg) + 1);
   }
 
+  GRANARY_ASSERT(XED_REG_RSP != widest_reg);
+
   switch (byte_mask) {
     case LOW_2_BYTES: return widest_reg - (XED_REG_RAX - XED_REG_AX);
     case LOW_4_BYTES: return widest_reg - (XED_REG_RAX - XED_REG_EAX);
@@ -160,8 +162,12 @@ void VirtualRegister::Widen(int dest_byte_width) {
 
 // Is this the stack pointer?
 bool VirtualRegister::IsStackPointer(void) const {
-  return XED_REG_RSP == reg_num || XED_REG_ESP == reg_num ||
-         XED_REG_SP == reg_num || XED_REG_SPL == reg_num;
+  if (VR_KIND_ARCH_FIXED == kind) {
+    return XED_REG_RSP == reg_num || XED_REG_ESP == reg_num ||
+           XED_REG_SP == reg_num || XED_REG_SPL == reg_num;
+  } else {
+    return false;
+  }
 }
 
 // Is this the instruction pointer?

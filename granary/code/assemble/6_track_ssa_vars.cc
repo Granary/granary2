@@ -490,8 +490,14 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   }
 
   comp->attr.is_compensation_code = true;
+
+  // Union this compensating fragment into the partition, and make sure to keep
+  // the partition info around.
+  auto pred_partition_info = pred->partition.Value();
   comp->partition.Union(reinterpret_cast<Fragment *>(comp),
                         reinterpret_cast<Fragment *>(pred));
+  comp->partition.Value() = pred_partition_info;
+
   comp->regs.live_on_entry = pred->regs.live_on_exit;
   comp->regs.live_on_exit = pred->regs.live_on_exit;
 
