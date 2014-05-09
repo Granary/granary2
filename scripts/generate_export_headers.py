@@ -12,6 +12,7 @@ EXPORT_HEADERS = [
   "granary/base/lock.h",
   "granary/base/string.h",
   "granary/base/option.h",
+  "granary/code/register.h",
   "granary/cfg/control_flow_graph.h",
   "granary/cfg/basic_block.h",
   "granary/cfg/instruction.h",

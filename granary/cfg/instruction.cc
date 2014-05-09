@@ -218,6 +218,15 @@ size_t NativeInstruction::CountMatchedOperandsImpl(
   return instruction.CountMatchedOperands(std::move(matchers));
 }
 
+BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
+                                     LabelInstruction *target_)
+    : NativeInstruction(instruction_),
+      target(target_) {
+
+  // Mark this label as being targeted by some instruction.
+  *target->GetDataPtr<uint64_t>() += 1;
+}
+
 // Return the targeted instruction of this branch.
 LabelInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;

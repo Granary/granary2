@@ -94,6 +94,7 @@ int PartitionInfo::PreferredGPRNum(void) {
         min = num_uses_of_gpr[i];
       }
     }
+    GRANARY_ASSERT(-1 != preferred_gpr_num);
   }
   return preferred_gpr_num;
 }
@@ -134,6 +135,16 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
     }
   }
 }
+
+
+CodeAttributes::CodeAttributes(void)
+    : has_native_instrs(false),
+      modifies_flags(false),
+      is_app_code(false),
+      is_block_head(false),
+      is_compensation_code(false),
+      num_inst_preds(0),
+      block_meta(nullptr) {}
 
 Fragment::Fragment(void)
     : list(),

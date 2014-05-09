@@ -346,10 +346,8 @@ class BranchInstruction final : public NativeInstruction {
   virtual ~BranchInstruction(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline BranchInstruction(const arch::Instruction *instruction_,
-                           LabelInstruction *target_)
-      : NativeInstruction(instruction_),
-        target(target_) {}
+  BranchInstruction(const arch::Instruction *instruction_,
+                    LabelInstruction *target_);
 
   // Return the targeted instruction of this branch.
   LabelInstruction *TargetInstruction(void) const;

@@ -154,13 +154,13 @@ static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
   auto label_fragment = GetMetaData<CodeFragment *>(instr);
   if (label_fragment) {  // Already processed this fragment.
     frag->successors[0] = label_fragment;
-  } else {
-    auto label = DynamicCast<LabelInstruction *>(instr);
+  } else if (auto label = DynamicCast<LabelInstruction *>(instr)) {
     auto block_meta = block->UnsafeMetaData();
-    auto next = instr->Next();
+    auto next = label->Next();
 
     // Create a new successor fragment.
     if (frag->attr.has_native_instrs ||
+        label->data ||  // If non-zero then it's likely targeted by a branch.
         (frag->attr.is_block_head && frag->attr.block_meta != block_meta)) {
       auto succ = MakeEmptyLabelFragment(frags, block, label);
       frag->successors[0] = succ;
@@ -168,11 +168,16 @@ static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
 
     // Extend the current fragment in-place.
     } else {
+      GRANARY_ASSERT(!frag->attr.block_meta ||
+                     (frag->attr.block_meta == block_meta));
       frag->attr.block_meta = block_meta;
-      SetMetaData<CodeFragment *>(instr, frag);
-      Append(frag, label);
+      SetMetaData(label, frag);
+      frag->instrs.Append(label->UnsafeUnlink().release());
     }
     ExtendFragment(frags, frag, block, next);
+
+  } else {
+    GRANARY_ASSERT(false);
   }
 }
 
@@ -375,13 +380,17 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
       // deallocate virtual registers after a function call, or after a
       // return.
       if (cfi->instruction.WritesToStackPointer()) {
-        auto label = new LabelInstruction;
-        auto succ = MakeEmptyLabelFragment(frags, block, label);
-        succ->stack.is_checked = true;
-        succ->stack.is_valid = true;
-        succ->stack.has_stack_changing_cfi = true;
-        frag->successors[0] = succ;
-        frag = succ;
+        if (frag->attr.has_native_instrs ||
+            (frag->stack.is_checked && !frag->stack.is_valid)) {
+          auto label = new LabelInstruction;
+          auto succ = MakeEmptyLabelFragment(frags, block, label);
+          frag->successors[0] = succ;
+          frag = succ;
+        }
+
+        frag->stack.is_checked = true;
+        frag->stack.is_valid = true;
+        frag->stack.has_stack_changing_cfi = true;
       }
       return SplitFragmentAtCFI(frags, frag, block, cfi);
 

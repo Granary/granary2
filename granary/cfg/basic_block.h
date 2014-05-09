@@ -228,7 +228,6 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
 
   // Allocates a new temporary virtual register for use by instructions within
   // this basic block.
-  GRANARY_INTERNAL_DEFINITION
   VirtualRegister AllocateVirtualRegister(int num_bytes=arch::GPR_WIDTH_BYTES);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)

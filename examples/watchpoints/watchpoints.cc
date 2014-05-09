@@ -26,59 +26,92 @@ class Watchpoints : public Tool {
  public:
   virtual ~Watchpoints(void) = default;
 
-  void InstrumentMemOp(NativeInstruction *instr, const MemoryOperand &mloc,
-                       int scope_id) {
-    VirtualRegister addr;
-    if (mloc.MatchRegister(addr) && !addr.IsStackPointer() &&
-        !mloc.IsEffectiveAddress()) {
+  void InstrumentMemOp(DecodedBasicBlock *bb, NativeInstruction *instr,
+                       const LiveRegisterTracker &live_regs,
+                       const MemoryOperand &mloc, int scope_id) {
+    // Doesn't read from or write to memory.
+    if (mloc.IsEffectiveAddress()) return;
 
-      // If the address register is read AND overwritten by the memory
-      // instruction, which is the case for x86 string instructions (e.g.
-      // `MOVS`, `STOS`, etc.), then we need to restore the watched bits after
-      // the emulated instruction.
-      RegisterOperand addr_reg(addr);
-      auto updates_address_reg = addr.IsNative() && instr->MatchOperands(
-          ExactReadAndWriteTo(addr_reg));
+    // Reads or writes from an absolute address, not through a register.
+    VirtualRegister watched_addr;
+    if (!mloc.MatchRegister(watched_addr)) return;
 
-      BeginInlineAssembly({&addr_reg}, scope_id);
-      InlineBeforeIf(instr, updates_address_reg,
-                     "MOV r64 %2, r64 %0;"_x86_64);  // Backup the value.
+    // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
+    if (!watched_addr.IsGeneralPurpose()) return;
+
+    VirtualRegister unwatched_addr(bb->AllocateVirtualRegister());
+    RegisterOperand unwatched_addr_reg(unwatched_addr);
+    RegisterOperand watched_addr_reg(watched_addr);
+
+    // It was already replaced by something else; modify the virtual register
+    // in-place under the assumption that the original(s) are already saved.
+    if (watched_addr.IsVirtual()) {
+      BeginInlineAssembly({nullptr, &watched_addr_reg}, scope_id);
+
+    // It's an explicit memory location, so we will change the memory operand
+    // in place to use `%1`.
+    } else if (mloc.IsModifiable()) {
+      BeginInlineAssembly({&watched_addr_reg, &unwatched_addr_reg}, scope_id);
       InlineBefore(instr,
-                   // Store bit 48 into the carry flag, and then jump to label
-                   // `%1` if the CF indicates that the address in `%0` (i.e.
-                   // addr_reg) isn't watched.
-                   "BT r64 %0, i8 48;"
-                   GRANARY_IF_USER_ELSE("JB", "JNB") " l %1;"
-                   "SHL r64 %0, i8 16;"
-                   "SAR r64 %0, i8 16;"_x86_64);
-      // TODO(pag): Insert annotation for watchpoints here so that other tools
-      //            can depend on `watchpoints` and then inject their code
-      //            before/after the watchpoints-specific annotation.
-      // TODO(pag): Need to be able to communicate properties of the memory
-      //            location to other tools (e.g. size, read/write, etc.).
+                   "MOV r64 %1, r64 %0;"_x86_64);  // Copy the watched addr.
+
+    // It's an implicit memory location, so we need to change the register
+    // being used by the instruction in place, while keeping a copy around
+    // for later.
+    } else {
+      GRANARY_ASSERT(watched_addr.IsNative());
+      BeginInlineAssembly({&unwatched_addr_reg, &watched_addr_reg}, scope_id);
       InlineBefore(instr,
-                   "LABEL %1:"_x86_64);
-      InlineAfterIf(instr, updates_address_reg,
-                    "BSWAP r64 %0;"
-                    "BSWAP r64 %2;"
-                    "MOV r16 %0, r16 %2;"
-                    "BSWAP r64 %0;"_x86_64);
-      EndInlineAssembly();
+                   "MOV r64 %0, r64 %1;"_x86_64);  // Copy the watched addr.
     }
+    InlineBefore(instr,
+                 "BT r64 %1, i8 48;"  // Test the discriminating bit (bit 48).
+                 GRANARY_IF_USER_ELSE("JB", "JNB") " l %2;"
+                 "  SHL r64 %1, i8 16;"
+                 "  SAR r64 %1, i8 16;"
+                 "  "  // %1 now contains unwatched address.
+                 "LABEL %2:"_x86_64);
+
+    // Nothing to do in this case, just mirror the structure above.
+    if (watched_addr.IsVirtual()) {
+
+    // Replace the original memory operand.
+    } else if (mloc.IsModifiable()) {
+      MemoryOperand unwatched_addr_mloc(unwatched_addr, mloc.ByteWidth());
+      mloc.Ref().ReplaceWith(unwatched_addr_mloc);
+
+    // Restore the original only if it's an implicit register (and so we
+    // modified the register in place instead of modifying a copy), and if
+    // the register itself is not killed by the instruction, and not dead
+    // after the instruction.
+    } else if (!instr->MatchOperands(ExactWriteOnlyTo(watched_addr_reg)) &&
+               !live_regs.IsDead(watched_addr)) {
+      InlineAfter(instr,
+                  "BSWAP r64 %0;"
+                  "BSWAP r64 %1;"
+                  "MOV r16 %1, r16 %0;"
+                  "BSWAP r64 %1;"_x86_64);
+    }
+
+    EndInlineAssembly();
   }
 
   // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     MemoryOperand mloc1, mloc2;
-    for (auto instr : bb->AppInstructions()) {
+    LiveRegisterTracker live_regs;
+    live_regs.ReviveAll();
+
+    for (auto instr : bb->ReversedAppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
                                                      ReadOrWriteTo(mloc2));
       if (2 == num_matched) {
-        InstrumentMemOp(instr, mloc1, 0);
-        InstrumentMemOp(instr, mloc2, 1);
+        InstrumentMemOp(bb, instr, live_regs, mloc1, 0);
+        InstrumentMemOp(bb, instr, live_regs, mloc2, 1);
       } else if (1 == num_matched) {
-        InstrumentMemOp(instr, mloc1, 0);
+        InstrumentMemOp(bb, instr, live_regs, mloc1, 0);
       }
+      live_regs.Visit(instr);
     }
   }
 };

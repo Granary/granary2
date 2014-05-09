@@ -290,14 +290,7 @@ class StackUsageInfo {
 // Attributes about a block of code.
 class CodeAttributes {
  public:
-  inline CodeAttributes(void)
-      : has_native_instrs(false),
-        modifies_flags(false),
-        is_app_code(false),
-        is_block_head(false),
-        is_compensation_code(false),
-        num_inst_preds(0),
-        block_meta(nullptr) {}
+  CodeAttributes(void);
 
   // Does this fragment have any native instructions in it, or is it just full
   // or annotations, labels, and other things? We use this to try to avoid
