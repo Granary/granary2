@@ -50,8 +50,7 @@ class BBCount : public Tool {
                  "  ADD r32 %2, i32 1;"
                  "  JMP l %4;"
                  "LABEL %3:"
-                 //"  MOV r64 RAX, r64 %1;"
-                 "  TEST r64 %1, r64 RAX;"_x86_64);
+                 "  TEST r64 %1, r64 %1;"_x86_64);
     EndInlineAssembly();
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
