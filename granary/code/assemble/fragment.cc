@@ -88,7 +88,7 @@ void PartitionInfo::CountGPRUses(Fragment *frag) {
 int PartitionInfo::PreferredGPRNum(void) {
   if (-1 == preferred_gpr_num) {
     auto min = INT_MAX;
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    for (auto i = arch::NUM_GENERAL_PURPOSE_REGISTERS - 1; i >= 0; --i) {
       if (num_uses_of_gpr[i] < min) {
         preferred_gpr_num = i;
         min = num_uses_of_gpr[i];
@@ -158,6 +158,7 @@ FlagZone::FlagZone(VirtualRegister flag_save_reg_,
       live_flags(0),
       flag_save_reg(flag_save_reg_),
       flag_killed_reg(flag_killed_reg_),
+      used_regs(),
       live_regs(),
       num_frags_in_zone(0),
       only_frag(nullptr) {}

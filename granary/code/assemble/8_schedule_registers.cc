@@ -367,11 +367,10 @@ class LocalScheduler {
     GRANARY_ASSERT(!used_regs.IsLive(preferred_gpr_num));
     vr_occupying_gpr[preferred_gpr_num] = vr;
     vr->reg = NthArchGPR(preferred_gpr_num);
-    if (live_regs.IsLive(preferred_gpr_num)) {
-      slot_containing_gpr[preferred_gpr_num] = vr->slot;
-      frag->instrs.InsertAfter(
-          instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
-    }
+    slot_containing_gpr[preferred_gpr_num] = vr->slot;
+    frag->instrs.InsertAfter(
+        instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
+    next_live_regs.Revive(preferred_gpr_num);
   }
 
   // Tries to steal a register for use by `vr`. If one can be stolen, then `vr`
@@ -664,6 +663,27 @@ class SlotScheduler {
   SlotScheduler(void) = delete;
 };
 
+// Special case flag entry fragments, whose flag save register is live on
+// exit.
+//
+// TODO(pag): This is ugly, and potentially overly architecture-specific.
+static bool SpecialCaseFlagEntry(LocalScheduler *sched,
+                                 NativeInstruction *instr,
+                                 SSAInstruction *ssa_instr,
+                                 SSASpillStorage *vr) {
+  if (!IsA<FlagEntryFragment *>(sched->frag)) return false;
+  auto flag_zone = sched->frag->flag_zone.Value();
+  if (!flag_zone->flag_killed_reg.IsNative()) return false;
+  if (flag_zone->used_regs.IsLive(flag_zone->flag_killed_reg)) return false;
+  if (!SpecialCaseCopyGPRToVR(sched, instr, ssa_instr, vr)) return false;
+
+  auto vr_reg_num = vr->reg.Number();
+  GRANARY_ASSERT(vr_reg_num == sched->preferred_gpr_num);
+  sched->vr_occupying_gpr[vr_reg_num] = nullptr;
+  sched->slot_containing_gpr[vr_reg_num] = -1;
+  return true;
+}
+
 // Perform fragment-local register scheduling.
 static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
                                          NativeInstruction *instr,
@@ -673,20 +693,7 @@ static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
     for (auto node : def.nodes) {
       if (!node->reg.IsVirtual()) continue;
       if (StorageOf(node) != vr) continue;
-
-      // Special case flag entry fragments, whose flag save register is live on
-      // exit.
-      //
-      // TODO(pag): This is ugly.
-      if (IsA<FlagEntryFragment *>(sched->frag) &&
-          SpecialCaseCopyGPRToVR(sched, instr, ssa_instr, vr)) {
-        auto vr_reg_num = vr->reg.Number();
-        GRANARY_ASSERT(vr_reg_num == sched->preferred_gpr_num);
-        sched->vr_occupying_gpr[vr_reg_num] = nullptr;
-        sched->slot_containing_gpr[vr_reg_num] = -1;
-        return;
-      }
-
+      if (SpecialCaseFlagEntry(sched, instr, ssa_instr, vr)) return;
       if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
         sched->StealOrFillSpilledGPR(instr, vr);
       }
@@ -700,6 +707,25 @@ static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
   }
 }
 
+// Special case flag exit fragments, whose flag save register is live on
+// exit.
+//
+// TODO(pag): This is ugly, and potentially overly architecture-specific.
+static bool SpecialCaseFlagExit(LocalScheduler *sched,
+                                NativeInstruction *instr,
+                                SSAInstruction *ssa_instr,
+                                SSANode *node,
+                                SSASpillStorage *vr) {
+  if (!IsA<FlagExitFragment *>(sched->frag)) return false;
+  auto flag_zone = sched->frag->flag_zone.Value();
+  if (!flag_zone->flag_killed_reg.IsNative()) return false;
+  if (flag_zone->used_regs.IsLive(flag_zone->flag_killed_reg)) return false;
+  if (!SpecialCaseCopyVRToGPR(sched, instr, ssa_instr, node, vr)) return false;
+
+  vr->reg = NthArchGPR(sched->preferred_gpr_num);
+  return true;
+}
+
 // Perform fragment-local register scheduling.
 static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
                                          NativeInstruction *instr,
@@ -709,16 +735,7 @@ static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
     for (auto node : use.nodes) {
       if (!node->reg.IsVirtual()) continue;
       if (StorageOf(node) != vr) continue;
-
-      // Special case flag exit fragments, whose flag save register is live on
-      // entry.
-      //
-      // TODO(pag): This is ugly.
-      if (IsA<FlagExitFragment *>(sched->frag) &&
-          SpecialCaseCopyVRToGPR(sched, instr, ssa_instr, node, vr)) {
-        vr->reg = NthArchGPR(sched->preferred_gpr_num);
-        return;
-      }
+      if (SpecialCaseFlagExit(sched, instr, ssa_instr, node, vr)) return;
 
       if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
         sched->StealOrFillSpilledGPR(instr, vr);
@@ -768,7 +785,6 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
         if (IA_SSA_NODE_UNDEF == ainstr->annotation) {
           auto node_vr = StorageOf(ainstr->GetData<SSANode *>());
           if (node_vr == vr) {
-            local_sched.next_live_regs.Revive(sched.preferred_steal_gpr);
             local_sched.RestorePreferredGPR(ainstr, vr);
           }
         }
@@ -888,6 +904,7 @@ static void SchedulePartitionLocalRegs(FragmentList *frags) {
         if (!(vr = GetUnscheduledVR(ssa_frag))) continue;
         allocated = true;
         found_vr = true;
+        GRANARY_ASSERT(-1 == vr->slot);
         vr->slot = ssa_frag->spill.AllocateSpillSlot(
             partition->num_local_slots);
       }
@@ -914,6 +931,17 @@ static void SchedulePartitionLocalRegs(FragmentList *frags) {
   }
 }
 
+// Frees all flag zone data structures.
+static void FreeFlagZones(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    auto &flag_zone(frag->flag_zone.Value());
+    if (flag_zone) {
+      delete flag_zone;
+      flag_zone = nullptr;
+    }
+  }
+}
+
 }  // namespace
 
 // Schedule virtual registers.
@@ -923,6 +951,7 @@ void ScheduleRegisters(FragmentList *frags) {
   SchedulePartitionLocalRegs(frags);
   FreeSpillStorage(frags);
   FreeSSAData(frags);
+  FreeFlagZones(frags);
 }
 
 }  // namespace granary

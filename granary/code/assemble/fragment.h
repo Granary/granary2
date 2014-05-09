@@ -238,6 +238,9 @@ class FlagZone {
   // be invalid. Might also be a architectural GPR.
   VirtualRegister flag_killed_reg;
 
+  // Registers used anywhere within this flag zone.
+  UsedRegisterTracker used_regs;
+
   // Live registers on exit from this flags zone.
   LiveRegisterTracker live_regs;
 

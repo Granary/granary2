@@ -155,10 +155,10 @@ static void IdentifyFlagZones(FragmentList *frags) {
 }
 
 // Allocate flag zone structures for each distinct flag zone.
-static void AllocateFlagZones(FragmentList *frags,
+static void AllocateFlagZones(FragmentList * const frags,
                               LocalControlFlowGraph *cfg) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (IsA<FlagEntryFragment *>(frag)) {
+    if (IsA<FlagEntryFragment *>(frag) || IsA<FlagExitFragment *>(frag)) {
       auto &flag_zone(frag->flag_zone.Value());
       if (!flag_zone) {
         flag_zone = new FlagZone(
@@ -171,7 +171,7 @@ static void AllocateFlagZones(FragmentList *frags,
   for (auto frag : FragmentListIterator(frags)) {
 #ifdef GRANARY_DEBUG
     // Quick and easy verification of the flag zones.
-    if (IsA<FlagExitFragment *>(frag)) {
+    if (IsA<FlagEntryFragment *>(frag) || IsA<FlagExitFragment *>(frag)) {
       GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
     }
 #endif  // GRANARY_DEBUG
@@ -184,6 +184,13 @@ static void AllocateFlagZones(FragmentList *frags,
   }
 }
 
+// Tracks which registers are used anywhere in the flag zone.
+static void UpdateUsedRegsInFlagZone(FlagZone *zone, CodeFragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    zone->used_regs.Visit(DynamicCast<NativeInstruction *>(instr));
+  }
+}
+
 // Update the flag zones with the flags and registers used in the various
 // fragments that belong to this flag zone, as well as the flags used *after*
 // the flag zone.
@@ -193,6 +200,7 @@ static void UpdateFlagZones(FragmentList *frags) {
     if (flag_zone) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
         if (!code->attr.is_app_code) {
+          UpdateUsedRegsInFlagZone(flag_zone, code);
           flag_zone->killed_flags |= code->flags.all_written_flags;
           for (auto succ : frag->successors) {
             if (IsA<FlagExitFragment *>(succ)) {
@@ -219,17 +227,6 @@ static void SaveAndRestoreFlags(FragmentList *frags) {
   }
 }
 
-// Frees all flag zone data structures.
-static void FreeFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    auto &flag_zone(frag->flag_zone.Value());
-    if (flag_zone) {
-      delete flag_zone;
-      flag_zone = nullptr;
-    }
-  }
-}
-
 }  // namespace
 
 // Insert flags saving code into `FRAG_TYPE_FLAG_ENTRY` fragments, and flag
@@ -242,7 +239,6 @@ void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, FragmentList *frags) {
   AllocateFlagZones(frags, cfg);
   UpdateFlagZones(frags);
   SaveAndRestoreFlags(frags);
-  FreeFlagZones(frags);
 }
 
 }  // namespace granary

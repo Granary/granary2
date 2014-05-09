@@ -52,13 +52,35 @@ void InjectSaveFlags(Fragment *frag) {
     GRANARY_IF_DEBUG( xed_flag_set_t killed_flags; )
     GRANARY_IF_DEBUG( killed_flags.flat = zone->killed_flags; )
     GRANARY_ASSERT(!killed_flags.s.df);
-    if (flags.s.of) {
+    GRANARY_ASSERT(zone->flag_save_reg != zone->flag_killed_reg);
+
+    auto save_flag_killed_reg = zone->flag_killed_reg.IsNative() &&
+        zone->live_regs.IsLive(zone->flag_killed_reg.Number());
+
+    auto killed_reg_used = zone->used_regs.IsLive(zone->flag_killed_reg);
+
+    // Restore the native version of `flag_killed_reg` from `flag_save_reg`.
+    if (save_flag_killed_reg && killed_reg_used) {
+      PREP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+    }
+
+    if (flags.s.of) {  // Save the overflow flag.
       PREP(SETO_GPR8(&ni, XED_REG_AL));
     }
-    PREP(LAHF(&ni));
-    if (zone->flag_killed_reg.IsNative() &&
-        zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
-      PREP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+
+    PREP(LAHF(&ni));  // Save the arithmetic flags.
+
+    // Save the native version of `flag_killed_reg` into `flag_save_reg`.
+    if (save_flag_killed_reg) {
+      if (killed_reg_used) {
+        // A bit of a hack: Try the XCHG into thinking that `flag_save_reg` is
+        // a write-only operand instead of read/write.
+        XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg);
+        ni.ops[0].rw = XED_OPERAND_ACTION_W;
+        PREP();
+      } else {
+        PREP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+      }
     }
   }
 }
@@ -73,13 +95,25 @@ void InjectRestoreFlags(Fragment *frag) {
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
+    auto save_flag_killed_reg = zone->flag_killed_reg.IsNative() &&
+        zone->live_regs.IsLive(zone->flag_killed_reg.Number());
+    auto killed_reg_used = zone->used_regs.IsLive(zone->flag_killed_reg);
+
+    if (save_flag_killed_reg && killed_reg_used) {
+      APP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+    }
+
     if (flags.s.of) {
       APP(ADD_GPR8_IMMb_80r0(&ni, XED_REG_AL, 0x7F));
     }
+
     APP(SAHF(&ni));
-    if (zone->flag_killed_reg.IsNative() &&
-        zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
-      APP(MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg));
+    if (save_flag_killed_reg) {
+      if (killed_reg_used) {
+        APP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+      } else {
+        APP(MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg));
+      }
     }
   }
 }

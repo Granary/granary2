@@ -498,8 +498,17 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
                         reinterpret_cast<Fragment *>(pred));
   comp->partition.Value() = pred_partition_info;
 
+  // Union this compensating fragment into the flag zone.
+  auto pred_flag_zone = pred->flag_zone.Value();
+  comp->flag_zone.Union(reinterpret_cast<Fragment *>(comp),
+                        reinterpret_cast<Fragment *>(pred));
+  comp->flag_zone.Value() = pred_flag_zone;
+
+  // TODO(pag): I suspect this isn't working right for some reason because
+  //            in some examples, compensation code doesn't get injected when
+  //            it should if we base it on a liveness test.
   comp->regs.live_on_entry = pred->regs.live_on_exit;
-  comp->regs.live_on_exit = pred->regs.live_on_exit;
+  comp->regs.live_on_exit = succ->regs.live_on_entry;
 
   // Chain it into the control-flow.
   comp->successors[0] = succ;
