@@ -38,20 +38,6 @@ class BBCount : public Tool {
 
   virtual ~BBCount(void) = default;
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    BeginInlineAssembly();
-    InlineBefore(bb->FirstInstruction(),
-                 "  MOV r32 %0, i32 10;"
-                 "  MOV r64 %1, i32 1;"
-                 "  MOV r32 %2, i32 1;"
-                 "LABEL %4:"
-                 "  CMP r32 %2, r32 %0;"
-                 "  JNLE l %3;"
-                 "  IMUL r64 %1, r64 %2;"
-                 "  ADD r32 %2, i32 1;"
-                 "  JMP l %4;"
-                 "LABEL %3:"
-                 "  TEST r64 %1, r64 %1;"_x86_64);
-    EndInlineAssembly();
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
       return;

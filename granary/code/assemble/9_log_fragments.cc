@@ -124,9 +124,9 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   } else if (IsA<PartitionExitFragment *>(frag)) {
     Log(level, "deallocate space|");
   } else if (IsA<FlagEntryFragment *>(frag)) {
-    Log(level, "flag save|");
+    Log(level, "save flags|");
   } else if (IsA<FlagExitFragment *>(frag)) {
-    Log(level, "flag restor|");
+    Log(level, "restore flags|");
   } else if (IsA<ExitFragment *>(frag)) {
     Log(level, "exit");
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
