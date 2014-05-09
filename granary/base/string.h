@@ -3,6 +3,10 @@
 #ifndef GRANARY_BASE_STRING_H_
 #define GRANARY_BASE_STRING_H_
 
+// Don't take over `memset` et al. when we're running test cases, as that will
+// interfere with the C++ standard library.
+#ifndef GRANARY_TEST
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
@@ -33,6 +37,8 @@ extern int granary_memcmp(const void * __restrict,
 #define memcpy granary_memcpy
 #define memset granary_memset
 #define memcmp granary_memcmp
+
+#endif  // GRANARY_TEST
 
 #ifdef __cplusplus
 #include "granary/base/base.h"

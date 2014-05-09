@@ -16,37 +16,6 @@
 
 namespace granary {
 
-#if 0
-// Speculates on whether or not a particular instruction selection exists for
-// some set of explicit operands. Returns true if we thing the selection does
-// exist.
-//
-// This instruction is a bit sketchy. Copies the original arch instruction
-// associated with `ninstr`, then figures out where in the instruction `op` is,
-// then points `repl_op` at the associated operand (based on the computed
-// offset) in the copied instruction, then does the replacement, then searches
-// for an instruction selection for the instruction.
-bool TryReplaceOperand(NativeInstruction *ninstr, Operand *op,
-                       Operand *repl_op) {
-  GRANARY_ASSERT(op->Ref().IsValid());
-
-  auto orig_instr = &(ninstr->instruction);
-  auto orig_instr_op = op->op_ptr;
-  auto instr = *orig_instr;
-  auto offset = reinterpret_cast<uintptr_t>(orig_instr_op) -
-                reinterpret_cast<uintptr_t>(orig_instr);
-  auto old_repl_op_op_ptr = repl_op->op_ptr;
-  repl_op->op_ptr = UnsafeCast<arch::Operand *>(
-      UnsafeCast<char *>(&instr) + offset);
-
-  repl_op->Ref().ReplaceWith(*repl_op);
-  auto can_replace = SelectInstruction(&instr);
-  repl_op->op_ptr = old_repl_op_op_ptr;
-
-  return can_replace;
-}
-#endif
-
 // Create an instruction to copy a GPR to a spill slot.
 Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());

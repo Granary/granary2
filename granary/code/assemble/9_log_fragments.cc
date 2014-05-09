@@ -120,13 +120,13 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 // entry address.
 static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   if (IsA<PartitionEntryFragment *>(frag)) {
-    Log(level, "partition entry|");
+    Log(level, "allocate space|");
   } else if (IsA<PartitionExitFragment *>(frag)) {
-    Log(level, "partition exit|");
+    Log(level, "deallocate space|");
   } else if (IsA<FlagEntryFragment *>(frag)) {
-    Log(level, "flag entry|");
+    Log(level, "flag save|");
   } else if (IsA<FlagExitFragment *>(frag)) {
-    Log(level, "flag exit|");
+    Log(level, "flag restor|");
   } else if (IsA<ExitFragment *>(frag)) {
     Log(level, "exit");
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {

@@ -4,7 +4,7 @@
 
 #include "granary/base/cast.h"
 #include "granary/cfg/control_flow_graph.h"
-#include "granary/code/instrument.h"
+#include "granary/instrument.h"
 #include "granary/metadata.h"
 #include "granary/module.h"
 

@@ -10,7 +10,7 @@
 
 #include "granary/module.h"
 
-#include "test/code/cache.h"
+#include "test/cache.h"
 #include "test/context.h"
 
 using namespace granary;
