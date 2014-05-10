@@ -38,6 +38,7 @@ class Watchpoints : public Tool {
 
     // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
     if (!watched_addr.IsGeneralPurpose()) return;
+    if (watched_addr.IsVirtualStackPointer()) return;
 
     VirtualRegister unwatched_addr(bb->AllocateVirtualRegister());
     RegisterOperand unwatched_addr_reg(unwatched_addr);
@@ -46,30 +47,30 @@ class Watchpoints : public Tool {
     // It was already replaced by something else; modify the virtual register
     // in-place under the assumption that the original(s) are already saved.
     if (watched_addr.IsVirtual()) {
-      BeginInlineAssembly({nullptr, &watched_addr_reg}, scope_id);
+      BeginInlineAssembly({&watched_addr_reg}, scope_id);
 
     // It's an explicit memory location, so we will change the memory operand
-    // in place to use `%1`.
+    // in place to use `%0`.
     } else if (mloc.IsModifiable()) {
-      BeginInlineAssembly({&watched_addr_reg, &unwatched_addr_reg}, scope_id);
+      BeginInlineAssembly({&unwatched_addr_reg, &watched_addr_reg}, scope_id);
       InlineBefore(instr,
-                   "MOV r64 %1, r64 %0;"_x86_64);  // Copy the watched addr.
+                   "MOV r64 %0, r64 %1;"_x86_64);  // Copy the watched addr.
 
     // It's an implicit memory location, so we need to change the register
     // being used by the instruction in place, while keeping a copy around
     // for later.
     } else {
       GRANARY_ASSERT(watched_addr.IsNative());
-      BeginInlineAssembly({&unwatched_addr_reg, &watched_addr_reg}, scope_id);
+      BeginInlineAssembly({&watched_addr_reg, &unwatched_addr_reg}, scope_id);
       InlineBefore(instr,
-                   "MOV r64 %0, r64 %1;"_x86_64);  // Copy the watched addr.
+                   "MOV r64 %1, r64 %0;"_x86_64);  // Copy the watched addr.
     }
     InlineBefore(instr,
-                 "BT r64 %1, i8 48;"  // Test the discriminating bit (bit 48).
+                 "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
                  GRANARY_IF_USER_ELSE("JB", "JNB") " l %2;"
-                 "  SHL r64 %1, i8 16;"
-                 "  SAR r64 %1, i8 16;"
-                 "  "  // %1 now contains unwatched address.
+                 "  SHL r64 %0, i8 16;"
+                 "  SAR r64 %0, i8 16;"
+                 "  "  // %0 now contains unwatched address.
                  "LABEL %2:"_x86_64);
 
     // Nothing to do in this case, just mirror the structure above.
@@ -87,10 +88,10 @@ class Watchpoints : public Tool {
     } else if (!instr->MatchOperands(ExactWriteOnlyTo(watched_addr_reg)) &&
                !live_regs.IsDead(watched_addr)) {
       InlineAfter(instr,
-                  "BSWAP r64 %0;"
                   "BSWAP r64 %1;"
-                  "MOV r16 %1, r16 %0;"
-                  "BSWAP r64 %1;"_x86_64);
+                  "BSWAP r64 %0;"
+                  "MOV r16 %0, r16 %1;"
+                  "BSWAP r64 %0;"_x86_64);
     }
 
     EndInlineAssembly();

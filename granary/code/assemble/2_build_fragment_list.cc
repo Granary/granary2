@@ -402,14 +402,16 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       auto next = instr->Next();
       if (IA_VALID_STACK == annot->annotation) {
-        if (frag->stack.is_checked && !frag->stack.is_valid) {
+        if ((frag->stack.is_checked && !frag->stack.is_valid) ||
+            frag->attr.has_native_instrs) {
           return SplitFragmentAtStackChange(frags, frag, block, next, true);
         } else {
           frag->stack.is_checked = true;
           frag->stack.is_valid = true;
         }
       } else if (IA_UNDEFINED_STACK == annot->annotation) {
-        if (frag->stack.is_checked && frag->stack.is_valid) {
+        if ((frag->stack.is_checked && frag->stack.is_valid) ||
+            frag->attr.has_native_instrs) {
           return SplitFragmentAtStackChange(frags, frag, block, next, false);
         } else {
           frag->stack.is_checked = true;

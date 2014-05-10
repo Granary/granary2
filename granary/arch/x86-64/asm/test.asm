@@ -8,9 +8,11 @@ START_FILE
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
     //xlat;
-    //push %rax;
+    //push %rsp;
+    push (%rsp);
+    pop %rsp;
     //mov (%rax), %rax;
-    mov (%rdi,%rsi), %rsp;
+    //mov (%rdi,%rsi), %rsp;
     //mov (%rax), %rax;
     //movsq;
 

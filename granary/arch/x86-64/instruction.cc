@@ -57,8 +57,13 @@ bool Instruction::WritesToStackPointer(void) const {
 // value, otherwise returns false.
 bool Instruction::ShiftsStackPointer(void) const {
   switch (iclass) {
-    case XED_ICLASS_PUSH:
     case XED_ICLASS_POP:
+      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) {
+        return false;
+      } else {
+        return true;
+      }
+    case XED_ICLASS_PUSH:
     case XED_ICLASS_CALL_NEAR:
     case XED_ICLASS_CALL_FAR:
     case XED_ICLASS_RET_NEAR:

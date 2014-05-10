@@ -33,6 +33,10 @@ enum VirtualRegisterKind : uint8_t {
   // General-purpose virtual register.
   VR_KIND_VIRTUAL,
 
+  // Virtual register that represents the stack pointer, of some offset of the
+  // stack pointer.
+  VR_KIND_VIRTUAL_STACK,
+
 #ifdef GRANARY_INTERNAL
   // Index into the virtual register storage location. This is used at virtual
   // register allocation time, and allows us to manage the differences between
@@ -121,12 +125,13 @@ union VirtualRegister {
 
   // Is this a general purpose register?
   inline bool IsGeneralPurpose(void) const {
-    return VR_KIND_ARCH_VIRTUAL == kind || VR_KIND_VIRTUAL == kind;
+    return VR_KIND_ARCH_VIRTUAL == kind || VR_KIND_VIRTUAL == kind ||
+           VR_KIND_VIRTUAL_STACK == kind;
   }
 
   // Is this a virtual register?
   inline bool IsVirtual(void) const {
-    return VR_KIND_VIRTUAL == kind;
+    return VR_KIND_VIRTUAL == kind || VR_KIND_VIRTUAL_STACK == kind;
   }
 
   inline bool IsValid(void) const {
@@ -143,6 +148,11 @@ union VirtualRegister {
   //
   // Note: This has an architecture-specific implementation.
   bool IsStackPointer(void) const;
+
+  // Is this a "virtual" stack pointer?
+  inline bool IsVirtualStackPointer(void) const {
+    return VR_KIND_VIRTUAL_STACK == kind;
+  }
 
   // Is this the instruction pointer?
   //
@@ -176,6 +186,12 @@ union VirtualRegister {
   // Note: This does not consider bit width.
   inline bool operator!=(const VirtualRegister that) const {
     return reg_num != that.reg_num || kind != that.kind;
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  inline void ConvertToVirtualStackPointer(void) {
+    GRANARY_ASSERT(VR_KIND_VIRTUAL == kind);
+    kind = VR_KIND_VIRTUAL_STACK;
   }
 
  private:

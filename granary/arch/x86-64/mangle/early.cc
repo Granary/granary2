@@ -79,13 +79,20 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   // operands to make them easier to manipulate from the instrumentation
   // side of things.
   if (op.is_sticky) {
-    if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index &&
-        XED_REG_RSP != op.mem.reg_base) {
+    if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index) {
+      GRANARY_ASSERT(XED_REG_RSP != op.mem.reg_base);
       op.is_compound = false;
       op.reg.DecodeFromNative(static_cast<int>(op.mem.reg_base));
     }
   } else {
     auto mem_reg = block->AllocateVirtualRegister();
+    if (op.is_compound) {
+      if (XED_REG_RSP == op.mem.reg_base) {
+        mem_reg.ConvertToVirtualStackPointer();
+      }
+    } else {
+      if (op.reg.IsStackPointer()) mem_reg.ConvertToVirtualStackPointer();
+    }
     APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
     op.is_compound = false;
     op.reg = mem_reg;
@@ -96,9 +103,14 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
 static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op.is_compound = true;
-  op.mem.disp = disp;
-  op.mem.reg_base = base_reg;
+  if (disp) {
+    op.is_compound = true;
+    op.mem.disp = disp;
+    op.mem.reg_base = base_reg;
+  } else {
+    op.is_compound = false;
+    op.reg.DecodeFromNative(base_reg);
+  }
   return op;
 }
 
@@ -112,6 +124,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
   if (!op.IsWrite()) {
     Instruction ni;
     auto sp = block->AllocateVirtualRegister();
+    sp.ConvertToVirtualStackPointer();
     APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP)));
     sp.Widen(op.reg.ByteWidth());
     op.reg = sp;  // Replace the operand.
@@ -158,13 +171,31 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
 // Mangle a `POP_MEMv` instruction.
 static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
+  Instruction ni;
+  auto vr = block->AllocateVirtualRegister();
+  APP(MOV_GPRv_MEMv(&ni, vr, BaseDispMemOp(0, XED_REG_RSP)));
+  APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(8, XED_REG_RSP));
+  AnalyzedStackUsage(instr, true, true);
+}
+
+// Mangle a `POP_GPRv` instruction, where the popped GPR is the stack pointer.
+static void ManglePopStackPointer(DecodedBasicBlock *block,
+                                  Instruction *instr) {
+  auto decoded_pc = instr->decoded_pc;
+  MOV_GPRv_MEMv(instr, instr->ops[0].reg, BaseDispMemOp(0, XED_REG_RSP));
+  instr->decoded_pc = decoded_pc;
+  AnalyzedStackUsage(instr, true, true);
+  MangleDecodedInstruction(block, instr, true);
+}
+
+// Mangle a `POP_*` instruction.
+static void ManglePop(DecodedBasicBlock *block, Instruction *instr) {
+  auto op = instr->ops[0];
   if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
-    Instruction ni;
-    auto vr = block->AllocateVirtualRegister();
-    APP(MOV_GPRv_MEMv(&ni, vr, BaseDispMemOp(0, XED_REG_RSP)));
-    APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
-    LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(8, XED_REG_RSP));
-    AnalyzedStackUsage(instr, true, true);
+    ManglePopMemOp(block, instr);
+  } else if (op.IsRegister() && op.reg.IsStackPointer()) {
+    ManglePopStackPointer(block, instr);
   }
 }
 
@@ -189,6 +220,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto num_args = instr->ops[1].imm.as_uint & 0x1FUL;
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
+  temp_rbp.ConvertToVirtualStackPointer();
   APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP)));
   APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP));
 
@@ -271,7 +303,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       ManglePushMemOp(block, instr);
       break;
     case XED_ICLASS_POP:
-      ManglePopMemOp(block, instr);
+      ManglePop(block, instr);
       break;
     case XED_ICLASS_XLAT:
       MangleXLAT(block, instr);

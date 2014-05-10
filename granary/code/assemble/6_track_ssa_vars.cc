@@ -475,10 +475,9 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
       }
     }
   }
-  // No "leaky" definitions to compensate for.
   if (!comp->ssa.entry_nodes.Size()) {
     delete comp;
-    return;
+    return;  // No "leaky" definitions to compensate for.
   }
 
   // Make `comp` appear to be yet another `CodeFragment` to all future
@@ -504,9 +503,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
                         reinterpret_cast<Fragment *>(pred));
   comp->flag_zone.Value() = pred_flag_zone;
 
-  // TODO(pag): I suspect this isn't working right for some reason because
-  //            in some examples, compensation code doesn't get injected when
-  //            it should if we base it on a liveness test.
+  // Make sure we've got accurate regs info based on our predecessor/successor.
   comp->regs.live_on_entry = pred->regs.live_on_exit;
   comp->regs.live_on_exit = succ->regs.live_on_entry;
 
