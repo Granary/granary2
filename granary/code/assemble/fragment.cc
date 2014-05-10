@@ -151,6 +151,7 @@ Fragment::Fragment(void)
       instrs(),
       partition(),
       flag_zone(),
+      flags(),
       temp(),
       successors{nullptr, nullptr},
       branch_instr(nullptr) { }

@@ -27,5 +27,17 @@ void VisitInstructionFlags(const arch::Instruction &instr,
   flags->entry_live_flags |= instr_flags.read.flat;
 }
 
+// Returns a bitmap representing all arithmetic flags being live.
+uint32_t AllArithmeticFlags(void) {
+  xed_flag_set_t flags;
+  flags.s.of = 1;
+  flags.s.sf = 1;
+  flags.s.zf = 1;
+  flags.s.af = 1;
+  flags.s.pf = 1;
+  flags.s.cf = 1;
+  return flags.flat;
+}
+
 }  // namespace granary
 

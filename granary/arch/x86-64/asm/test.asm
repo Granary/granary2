@@ -16,16 +16,15 @@ DEFINE_FUNC(granary_test_mangle)
     //mov (%rax), %rax;
     //movsq;
 
-    ret;
-/*
-    addq (%r15, %r14), %r13;
+    adcq (%r15, %r14), %r13;
     addq (%r13, %r12), %r11;
     addq (%r11, %r10), %r9;
     addq (%r9, %r8), %rdi;
     addq (%rdi, %rsi), %rbp;
     addq (%rbp, %rbx), %rdx;
     addq (%rdx, %rcx), %rax;
-*/  /*
+ret;
+  /*
     push %rax;
     push %rbx;
     pop %rax;

@@ -146,6 +146,27 @@ class RegisterUsageInfo {
   void CountGPRUses(Fragment *frag);
 };
 
+// Tracks flag usage within a code fragment.
+class FlagUsageInfo {
+ public:
+  inline FlagUsageInfo(void)
+      : entry_live_flags(0),
+        exit_live_flags(0),
+        all_read_flags(0),
+        all_written_flags(0) {}
+
+  // Conservative set of flags that are live on entry to and exit from this
+  // fragment.
+  uint32_t entry_live_flags;
+  uint32_t exit_live_flags;
+
+  // Flags that are killed anywhere within this fragment.
+  uint32_t all_read_flags;
+
+  // Flags that are killed anywhere within this fragment.
+  uint32_t all_written_flags;
+};
+
 // Targets in/out of this fragment.
 enum {
   FRAG_SUCC_FALL_THROUGH = 0,
@@ -179,6 +200,9 @@ class Fragment {
   // The "flag zone" to which this fragment belongs.
   DisjointSet<FlagZone *> flag_zone;
 
+  // Tracks flag use within this fragment.
+  FlagUsageInfo flags;
+
   // Temporary, pass-specific data.
   TempData temp;
 
@@ -196,27 +220,6 @@ class Fragment {
 typedef ListOfListHead<Fragment> FragmentList;
 typedef ListHeadIterator<Fragment> FragmentListIterator;
 typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
-
-// Tracks flag usage within a code fragment.
-class FlagUsageInfo {
- public:
-  inline FlagUsageInfo(void)
-      : entry_live_flags(0),
-        exit_live_flags(0),
-        all_read_flags(0),
-        all_written_flags(0) {}
-
-  // Conservative set of flags that are live on entry to and exit from this
-  // fragment.
-  uint32_t entry_live_flags;
-  uint32_t exit_live_flags;
-
-  // Flags that are killed anywhere within this fragment.
-  uint32_t all_read_flags;
-
-  // Flags that are killed anywhere within this fragment.
-  uint32_t all_written_flags;
-};
 
 // Maintains information about flags usage within a "zone" (a group of non-
 // application fragments that are directly connected by control flow). Flag
@@ -356,16 +359,12 @@ class CodeFragment : public SSAFragment {
   inline CodeFragment(void)
       : SSAFragment(),
         attr(),
-        flags(),
         stack() {}
 
   virtual ~CodeFragment(void);
 
   // Attributes relates to the code in this fragment.
   CodeAttributes attr;
-
-  // Tracks flag use within this fragment.
-  FlagUsageInfo flags;
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;

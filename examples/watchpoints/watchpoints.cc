@@ -65,6 +65,7 @@ class Watchpoints : public Tool {
       InlineBefore(instr,
                    "MOV r64 %1, r64 %0;"_x86_64);  // Copy the watched addr.
     }
+
     InlineBefore(instr,
                  "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
                  GRANARY_IF_USER_ELSE("JB", "JNB") " l %2;"

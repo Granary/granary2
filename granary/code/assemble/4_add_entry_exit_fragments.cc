@@ -20,6 +20,11 @@ namespace granary {
 extern void VisitInstructionFlags(const arch::Instruction &instr,
                                   FlagUsageInfo *flags);
 
+// Returns a bitmap representing all arithmetic flags being live.
+//
+// Note: This has an architecture-specific implementation.
+extern uint32_t AllArithmeticFlags(void);
+
 namespace {
 
 // Counts the number of instrumented predecessors.
@@ -42,7 +47,7 @@ static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
   auto exit_live_flags = 0U;
   for (auto succ : frag->successors) {
     if (IsA<ExitFragment *>(succ)) {
-      exit_live_flags = ~0U;
+      exit_live_flags = AllArithmeticFlags();
     } else if (auto succ_code = DynamicCast<CodeFragment *>(succ)) {
       exit_live_flags |= succ_code->flags.entry_live_flags;
     }
@@ -65,9 +70,13 @@ static bool AnalyzeFlagUse(CodeFragment *frag) {
     }
   }
 
-  const auto changed = flags.entry_live_flags != frag->flags.entry_live_flags;
-  frag->flags = flags;
-  return changed;
+  if (flags.entry_live_flags != frag->flags.entry_live_flags ||
+      flags.exit_live_flags != frag->flags.exit_live_flags) {
+    frag->flags = flags;
+    return true;
+  } else {
+    return false;
+  }
 }
 
 // Analyzes and updates the flags usage for all fragments.
@@ -221,6 +230,10 @@ static void AddExitFragment(FragmentList *frags,
       frags->InsertAfter(curr, exit_frag);
       *succ_ptr = exit_frag;
       back_link = exit_frag;
+
+      // Propagate flags usage info.
+      exit_frag->flags.exit_live_flags = succ->flags.entry_live_flags;
+      exit_frag->flags.entry_live_flags = exit_frag->flags.exit_live_flags;
     }
   }
 }
@@ -258,6 +271,10 @@ static void AddEntryFragment(FragmentList *frags,
       frags->InsertAfter(curr, entry_frag);
       *succ_ptr = entry_frag;
       back_link = entry_frag;
+
+      // Propagate flags usage info.
+      entry_frag->flags.exit_live_flags = succ->flags.entry_live_flags;
+      entry_frag->flags.entry_live_flags = entry_frag->flags.exit_live_flags;
     }
   }
 }

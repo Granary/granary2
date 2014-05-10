@@ -202,14 +202,10 @@ static void UpdateFlagZones(FragmentList *frags) {
         if (!code->attr.is_app_code) {
           UpdateUsedRegsInFlagZone(flag_zone, code);
           flag_zone->killed_flags |= code->flags.all_written_flags;
-          for (auto succ : frag->successors) {
-            if (IsA<FlagExitFragment *>(succ)) {
-              flag_zone->live_flags |= code->flags.exit_live_flags;
-            }
-          }
         }
       } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {
         flag_zone->live_regs.Union(flag_exit->regs.live_on_entry);
+        flag_zone->live_flags |= flag_exit->flags.exit_live_flags;
       }
     }
   }
