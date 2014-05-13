@@ -39,6 +39,7 @@ int SpillInfo::AllocateSpillSlot(int offset) {
       return i;
     }
   }
+  num_slots = std::max(num_slots, offset);
   GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots));
   used_slots.Set(num_slots, true);
   return num_slots++;

@@ -223,7 +223,6 @@ static SSASpillStorage *LocalStorageForNode(SSAFragment *frag, SSANode *node) {
     auto partition = frag->partition.Value();
     partition->num_local_slots = std::max(partition->num_local_slots,
                                           storage->slot + 1);
-
     return storage;
   }
 }
@@ -868,7 +867,11 @@ static void SchedulePartitionLocalRegs(FragmentList *frags) {
 
       if (found_vr || FragUsesVR(ssa_frag, vr)) {
 
-        // Mark this slot as used in every fragment where it appears.
+        // Mark this slot as used in every fragment where it appears as either
+        // live on entry or live on exit. Because of the way that live on entry/
+        // exit was built (via data flow), we should get a natural cover of the
+        // transitive closure of all potentially simultaneously live reg (at
+        // the fragment granularity).
         ssa_frag->spill.MarkSlotAsUsed(vr->slot);
 
         auto preferred_gpr_num = partition->PreferredGPRNum();
