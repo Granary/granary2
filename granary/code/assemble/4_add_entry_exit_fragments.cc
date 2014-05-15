@@ -43,7 +43,10 @@ static void CountInstrumentedPredecessors(FragmentList *frags) {
 }
 
 // Returns the live flags on exit from a fragment.
-static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
+static uint32_t LiveFlagsOnExit(Fragment *frag) {
+  if (IsA<ExitFragment *>(frag)) {
+    return AllArithmeticFlags();
+  }
   auto exit_live_flags = 0U;
   for (auto succ : frag->successors) {
     if (IsA<ExitFragment *>(succ)) {
@@ -57,7 +60,7 @@ static uint32_t LiveFlagsOnExit(CodeFragment *frag) {
 
 // Analyzes and updates the flag use for a fragment. If the fragment's flag
 // use was changed then this returns true.
-static bool AnalyzeFlagUse(CodeFragment *frag) {
+static bool AnalyzeFlagUse(Fragment *frag) {
   auto exit_live_flags = LiveFlagsOnExit(frag);
   FlagUsageInfo flags;
   flags.all_written_flags = 0U;
@@ -69,7 +72,6 @@ static bool AnalyzeFlagUse(CodeFragment *frag) {
       VisitInstructionFlags(ninstr->instruction, &flags);
     }
   }
-
   if (flags.entry_live_flags != frag->flags.entry_live_flags ||
       flags.exit_live_flags != frag->flags.exit_live_flags) {
     frag->flags = flags;
@@ -84,9 +86,7 @@ static void AnalyzeFlagsUse(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
     for (auto frag : ReverseFragmentListIterator(frags)) {
-      if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-        changed = AnalyzeFlagUse(code_frag) || changed;
-      }
+      changed = AnalyzeFlagUse(frag) || changed;
     }
   }
 }
@@ -113,9 +113,6 @@ static bool ConvertToAppFrag(CodeFragment *frag) {
   auto live_flags_exit = LiveFlagsOnExit(frag);
   if (!(frag->flags.all_written_flags & live_flags_exit)) {
     frag->attr.is_app_code = SuccessorMakesFragConvertible(frag);
-    if (!frag->attr.is_app_code && frag->stack.has_stack_changing_cfi) {
-      frag->attr.is_app_code = true;
-    }
   }
   return frag->attr.is_app_code;
 }
@@ -183,30 +180,36 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 // Returns true if the transition between `curr` and `next` represents a
 // partition entry point.
 static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
-  if (auto code_curr = DynamicCast<CodeFragment *>(curr)) {
-    if (auto code_next = DynamicCast<CodeFragment *>(next)) {
-      if (code_curr->attr.block_meta != code_next->attr.block_meta) return true;
-      if (code_next->stack.has_stack_changing_cfi) return false;
-      return code_curr->stack.is_valid != code_next->stack.is_valid;
-    }
+  if (curr->partition == next->partition) return false;
+  if (IsA<PartitionEntryFragment *>(curr)) return false;
+  if (IsA<PartitionEntryFragment *>(next)) return false;
+  if (IsA<ExitFragment *>(next)) return false;
+  if (auto next_code = DynamicCast<CodeFragment *>(next)) {
+    if (!next_code->attr.can_add_to_partition) return false;
   }
-  return false;
+  return true;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
 // partition exit point.
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
-  auto code_curr = DynamicCast<CodeFragment *>(curr);
-  if (code_curr && code_curr->stack.has_stack_changing_cfi) {
-    return false;
+  if (curr->partition == next->partition) return false;
+  if (IsA<PartitionExitFragment *>(curr)) return false;
+  if (IsA<PartitionExitFragment *>(next)) return false;
+  if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
+    if (!curr_code->attr.can_add_to_partition) return false;
   }
+  if (IsA<ExitFragment *>(next)) return true;
   if (IsA<PartitionEntryFragment *>(next)) {
-    return !IsA<PartitionExitFragment *>(curr);
-  } else if (IsA<PartitionEntryFragment *>(curr) ||
-             IsA<PartitionExitFragment *>(curr)) {
-    return false;
-  } else if (auto code_next = DynamicCast<CodeFragment *>(next)) {
-    return code_next->stack.has_stack_changing_cfi;
+    if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
+      if (curr_code->attr.branches_to_edge_code) {
+        return false;  // This is a fall-through.
+      }
+    }
+    return true;
+  }
+  if (auto next_code = DynamicCast<CodeFragment *>(next)) {
+    if (!next_code->attr.can_add_to_partition) return true;
   }
   return false;
 }

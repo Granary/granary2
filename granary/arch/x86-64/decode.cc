@@ -11,8 +11,8 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/arch/decode.h"
+#include "granary/arch/x86-64/early_mangle.h"
 #include "granary/arch/x86-64/instruction.h"
-#include "granary/arch/x86-64/mangle/early.h"
 
 #include "granary/breakpoint.h"
 
@@ -28,16 +28,24 @@ InstructionDecoder::InstructionDecoder(void) {}
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
 // successfully decoded.
-bool InstructionDecoder::DecodeNext(DecodedBasicBlock *block,
-                                    Instruction *instr, AppPC *pc) {
-  *pc = DecodeInternal(block, instr, *pc);
+bool InstructionDecoder::DecodeNext(Instruction *instr, AppPC *pc) {
+  *pc = DecodeInternal(instr, *pc);
   return nullptr != *pc;
 }
 
 // Decode an x86 instruction into an instruction IR.
-bool InstructionDecoder::Decode(DecodedBasicBlock *block,
-                                Instruction *instr, AppPC pc) {
-  return nullptr != DecodeInternal(block, instr, pc);
+bool InstructionDecoder::Decode(Instruction *instr, AppPC pc) {
+  return nullptr != DecodeInternal(instr, pc);
+}
+
+// Mangle a decoded instruction. Separated from the `Decode` step because
+// mangling might involve adding many new instructions to deal with some
+// instruction set peculiarities, and sometimes we only want to speculatively
+// decode and instruction and not add these extra instructions to a block.
+void InstructionDecoder::Mangle(DecodedBasicBlock *block,
+                                Instruction *instr) {
+  GRANARY_ASSERT(XED_ICLASS_INVALID != instr->iclass);
+  MangleDecodedInstruction(block, instr, false);
 }
 
 namespace {
@@ -287,15 +295,12 @@ static void ConvertDecodedInstruction(Instruction *instr,
 
 // Decode an x86-64 instruction into a Granary `Instruction`, by first going
 // through XED's `xed_decoded_inst_t` IR.
-AppPC InstructionDecoder::DecodeInternal(DecodedBasicBlock *block,
-                                         Instruction *instr, AppPC pc) {
+AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
   if (pc) {
     xed_decoded_inst_t xedd;
     if (XED_ERROR_NONE == DecodeBytes(&xedd, pc)) {
       ConvertDecodedInstruction(instr, &xedd, pc);
-      auto next_pc = pc + instr->decoded_length;
-      MangleDecodedInstruction(block, instr);
-      return next_pc;
+      return pc + instr->decoded_length;
     }
   }
   return nullptr;

@@ -64,15 +64,6 @@ static ExitFragment *MakeNativeFragment(FragmentList *frags) {
   return frag;
 }
 
-// Make a block head fragment for some kind of future basic block.
-static ExitFragment *MakeFutureBlockFragment(FragmentList *frags,
-                                             InstrumentedBasicBlock *block) {
-  auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK);
-  frags->Append(frag);
-  frag->block_meta = block->UnsafeMetaData();
-  return frag;
-}
-
 // Make a block head fragment for a cached basic block. This means importing
 // its register schedule as hard constraints.
 static ExitFragment *MakeCachedFragment(FragmentList *frags,
@@ -98,6 +89,26 @@ static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
 // application code.
 static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
   if (!instr->IsAppInstruction()) return false;
+
+  // Minor optimization: we want to arrange for potential flag save/restores to
+  // span from a fragment all the way into edge code, instead of potentially
+  // have some before the indirect CTI and some after.
+  if (instr->IsFunctionCall() || instr->IsUnconditionalJump()) {
+    if (instr->HasIndirectTarget()) {
+      return false;
+    }
+
+  // Only do the optimization for specialized function returns; unspecialized
+  // returns use an identity translation and therefore do not use edge code.
+  } else if (instr->IsFunctionReturn()) {
+    auto target_block = DynamicCast<ControlFlowInstruction *>(instr)
+        ->TargetBlock();
+    auto ret_block = DynamicCast<ReturnBasicBlock *>(target_block);
+    if (ret_block->UnsafeMetaData()) {
+      return false;
+    }
+  }
+
   return instr->instruction.WritesToStackPointer() ||
          instr->ReadsConditionCodes() ||
          instr->WritesConditionCodes();
@@ -224,12 +235,48 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
 static CodeFragment *FragmentForBlock(FragmentList *frags,
                                       DecodedBasicBlock *block);
 
+
+// Make an edge fragment and an exit fragment for some future block.
+static CodeFragment *MakeEdgeFragment(FragmentList *frags,
+                                      CodeFragment *pred_frag,
+                                      InstrumentedBasicBlock *block,
+                                      BlockMetaData *block_meta) {
+  auto edge_frag = new CodeFragment;
+  edge_frag->stack.is_valid = pred_frag->stack.is_valid;
+  edge_frag->stack.is_checked = pred_frag->stack.is_checked;
+  edge_frag->attr.is_edge_code = true;
+  edge_frag->attr.block_meta = block_meta;
+
+  auto exit_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK);
+  exit_frag->block_meta = block_meta;
+
+  // If this is the target of an indirect CFI (call, jmp, ret) then make sure
+  // that the edge code shares the same partition as the predecessor so that
+  // virtual registers can be spread across both.
+  if (!IsA<DirectBasicBlock *>(block)) {
+    edge_frag->partition.Union(edge_frag, pred_frag);
+  }
+
+  edge_frag->successors[0] = exit_frag;
+  frags->Append(edge_frag);
+  frags->Append(exit_frag);
+
+  return edge_frag;
+}
+
+static ExitFragment *MakeExitFragment(FragmentList *frags) {
+  auto exit_frag = new ExitFragment(FRAG_EXIT_NATIVE);
+  frags->Append(exit_frag);
+  return exit_frag;
+}
+
 // Return the fragment for a block that is targeted by a control-flow
 // instruction.
 static Fragment *FragmentForTargetBlock(FragmentList *frags,
+                                        CodeFragment *pred_frag,
                                         BasicBlock *block) {
   // Function/interrupt/system return. In these cases, we can't be sure (at
-  // instrumentationin time) that execution returns to the code cache.
+  // instrumentation time) that execution returns to the code cache.
   //
   // OR:
   //
@@ -238,21 +285,34 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
   if (IsA<NativeBasicBlock *>(block)) {
     return MakeNativeFragment(frags);
 
-  // Indirect call/jump, or direct call/jump/conditional jump
-  // to a future block.
-  } else if (IsA<ReturnBasicBlock *>(block) ||
-             IsA<IndirectBasicBlock *>(block) ||
-             IsA<DirectBasicBlock *>(block)) {
-    return MakeFutureBlockFragment(
-        frags, DynamicCast<InstrumentedBasicBlock *>(block));
-
   // Direct call/jump/conditional jump to a decoded block.
   } else if (IsA<DecodedBasicBlock *>(block)) {
     return FragmentForBlock(frags, DynamicCast<DecodedBasicBlock *>(block));
 
   // Direct call/jump/conditional jump to a cached block.
-  } else {
+  } else if (IsA<CachedBasicBlock *>(block)) {
     return MakeCachedFragment(frags, DynamicCast<CachedBasicBlock *>(block));
+
+  // Direct jump / conditional jump to an unresolved block, need to add in
+  // some edge code.
+  } else if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+    return MakeEdgeFragment(frags, pred_frag, direct_block,
+                            direct_block->MetaData());
+
+  // Indirect call/jump, or direct call/jump/conditional jump
+  // to a future block.
+  } else if (IsA<ReturnBasicBlock *>(block) ||
+             IsA<IndirectBasicBlock *>(block)) {
+    auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
+    auto block_meta = inst_block->UnsafeMetaData();
+    if (block_meta) {
+      return MakeEdgeFragment(frags, pred_frag, inst_block, block_meta);
+    } else {
+      return MakeExitFragment(frags);
+    }
+  } else {
+    GRANARY_ASSERT(false);
+    return nullptr;
   }
 }
 
@@ -270,25 +330,78 @@ static ControlFlowInstruction *NextUninterruptedCFI(Instruction *next) {
   return nullptr;
 }
 
+static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
+                               DecodedBasicBlock *block,
+                               Fragment *target_frag,
+                               ControlFlowInstruction *cfi) {
+  CodeFragment *ret_frag(frag);
+  bool makes_stack_valid = cfi->IsFunctionCall() || cfi->IsFunctionReturn() ||
+                           cfi->IsInterruptReturn();
+  bool targets_edge_code = false;
+  bool can_add_to_partition = true;
+  if (auto target_cfrag = DynamicCast<CodeFragment *>(target_frag)) {
+    /*
+    if (!target_cfrag->attr.is_edge_code) {
+      ret_frag = nullptr;
+    } else {
+      targets_edge_code = true;
+    }*/
+    targets_edge_code = target_cfrag->attr.is_edge_code;
+  }
+  if (frag->attr.has_native_instrs && makes_stack_valid &&
+      frag->stack.is_checked && !frag->stack.is_valid) {
+    ret_frag = nullptr;
+  }
+  if (!targets_edge_code && cfi->instruction.WritesToStackPointer()) {
+    if (frag->attr.has_native_instrs) ret_frag = nullptr;
+    can_add_to_partition = false;
+  }
+#if 0
+  if (ret_frag && frag->attr.has_native_instrs &&
+      cfi->instruction.WritesToStackPointer()) {
+    /*if (makes_stack_valid && frag->stack.is_checked &&
+        !frag->stack.is_valid) {
+      if () ret_frag = nullptr;
+    } else if (frag->attr.has_native_instrs) {
+      ret_frag = nullptr;
+    }*/
+    ret_frag = nullptr;
+  }
+#endif
+  if (!ret_frag) {
+    auto label = new LabelInstruction;
+    auto succ = MakeEmptyLabelFragment(frags, block, label);
+    frag->successors[0] = succ;
+    ret_frag = succ;
+  }
+  if (makes_stack_valid) {
+    ret_frag->stack.is_valid = true;
+    ret_frag->stack.is_checked = true;
+  }
+  ret_frag->attr.can_add_to_partition = can_add_to_partition;
+  Append(ret_frag, cfi);
+  if (targets_edge_code) {
+    ret_frag->attr.branches_to_edge_code = true;
+  }
+  return ret_frag;
+}
+
 // Split a fragment at a non-local control-flow instruction.
 static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
                                DecodedBasicBlock *block,
                                ControlFlowInstruction *cfi) {
   auto next = cfi->Next();
   auto target_block = cfi->TargetBlock();
-  auto is_direct_jump = cfi->IsUnconditionalJump() &&
-                        !cfi->HasIndirectTarget();
-  if (!is_direct_jump) {
-    Append(frag, cfi);
-    frag->successors[FRAG_SUCC_BRANCH] = FragmentForTargetBlock(frags,
-                                                                target_block);
+  auto is_branch = !cfi->IsUnconditionalJump() || cfi->HasIndirectTarget();
+
+  if (is_branch) {
+    auto target_frag = FragmentForTargetBlock(frags, frag, target_block);
+    frag = AppendCFI(frags, frag, block, target_frag, cfi);
+    frag->successors[FRAG_SUCC_BRANCH] = target_frag;
+    frag->branch_instr = cfi;
     if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
         cfi->IsSystemReturn()) {
-      std::swap(frag->successors[FRAG_SUCC_FALL_THROUGH],
-                frag->successors[FRAG_SUCC_BRANCH]);
       return;
-    } else {
-      frag->branch_instr = cfi;
     }
   } else {
     next = cfi;  // Pretend that direct jumps are just fall-throughs.
@@ -300,7 +413,7 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
   auto next_cfi = NextUninterruptedCFI(next);
   if (next_cfi && next_cfi->IsUnconditionalJump()) {
     target_block = next_cfi->TargetBlock();
-    frag->successors[0] = FragmentForTargetBlock(frags, target_block);
+    frag->successors[0] = FragmentForTargetBlock(frags, frag, target_block);
   } else {
     auto label = new LabelInstruction;
     auto succ = MakeEmptyLabelFragment(frags, block, label);
@@ -374,24 +487,6 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
 
     // Found a non-local branch to a basic block.
     } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-
-      // Need to put things like function/interrupt call/return into their own
-      // fragments, because later partitioning can't then arrange to
-      // deallocate virtual registers after a function call, or after a
-      // return.
-      if (cfi->instruction.WritesToStackPointer()) {
-        if (frag->attr.has_native_instrs ||
-            (frag->stack.is_checked && !frag->stack.is_valid)) {
-          auto label = new LabelInstruction;
-          auto succ = MakeEmptyLabelFragment(frags, block, label);
-          frag->successors[0] = succ;
-          frag = succ;
-        }
-
-        frag->stack.is_checked = true;
-        frag->stack.is_valid = true;
-        frag->stack.has_stack_changing_cfi = true;
-      }
       return SplitFragmentAtCFI(frags, frag, block, cfi);
 
     // Ignore annotation instructions, but use them to guide the fragment
@@ -402,8 +497,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       auto next = instr->Next();
       if (IA_VALID_STACK == annot->annotation) {
-        if ((frag->stack.is_checked && !frag->stack.is_valid) ||
-            frag->attr.has_native_instrs) {
+        if (frag->stack.is_checked && !frag->stack.is_valid) {
           return SplitFragmentAtStackChange(frags, frag, block, next, true);
         } else {
           frag->stack.is_checked = true;
@@ -417,7 +511,6 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
           frag->stack.is_checked = true;
           frag->stack.is_valid = false;
         }
-
       // This annotation is somewhat more suble than the above two. The idea
       // is that when we do the stack analysis and fragment partitioning in
       // `3_partition_fragments.cc`, we want to be aggressive about stack

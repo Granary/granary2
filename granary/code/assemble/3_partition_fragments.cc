@@ -103,19 +103,17 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
 //      1) The fragments originate from the same decoded basic block.
 //      2) The stack validity between the two fragments is the same.
 //      3) Neither fragment contains a control-flow instruction that changes
-//         the stack pointer.
+//         the stack pointer. This condition is not strictly tested here, and
+//         does not apply in all cases due to allowances for edge code.
 static void GroupFragments(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      GRANARY_ASSERT(nullptr != cfrag->successors[0]);
       for (auto succ : cfrag->successors) {
         if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ)) {
-          if (succ_cfrag->attr.block_meta == cfrag->attr.block_meta &&
-              succ_cfrag->stack.is_valid == cfrag->stack.is_valid &&
-              !cfrag->stack.has_stack_changing_cfi &&
-              !succ_cfrag->stack.has_stack_changing_cfi) {
-            cfrag->partition.Union(cfrag, succ_cfrag);
-          }
+          if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;
+          if (!succ_cfrag->attr.can_add_to_partition) continue;
+          if (succ_cfrag->stack.is_valid != cfrag->stack.is_valid) continue;
+          cfrag->partition.Union(cfrag, succ_cfrag);
         }
       }
     }

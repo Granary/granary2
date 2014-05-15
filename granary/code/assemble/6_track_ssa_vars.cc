@@ -12,6 +12,20 @@
 
 namespace granary {
 
+// TODO!!!!!!!!!!!!!!!!!!!!!
+//     !!!!!!!!!!!!!!!!!!!!!
+// If the fragment has a branch_instr that has an indirect target that is a
+// virtual register, then add the virtual register to the outgoing defs of
+// the source frag, and the incoming defs of the dest frag.
+
+// TODO!!!!!!!!!!!!!!!!!!!!!
+// Potential optimization for mangling:
+//      If the base reg is [RAX] or [RAX*1] the always convert that into
+//      an LEA + use of VR, so that we hoist the use of RAX outside of the
+//      potentially instrumented instruction, and therefore avoid potential
+//      ugly flag save/restore issues!!!!
+
+
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
 // clearing the value of `A` and not reading it for the sake of reading it.
@@ -483,6 +497,10 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
+    if (code_pred->attr.branches_to_edge_code) {
+      delete comp;  // E.g. fall-through after an indirect CALL.
+      return;
+    }
     comp->attr.block_meta = code_pred->attr.block_meta;
     comp->stack.is_checked = true;
     comp->stack.is_valid = code_pred->stack.is_valid;

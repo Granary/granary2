@@ -106,9 +106,10 @@ void BlockFactory::AddFallThroughInstruction(
     // a fall-through to native, and if it's neither then just add in a LIR
     // instruction for the fall-through.
     arch::Instruction dinstr;
-    if (!decoder->Decode(block, &dinstr, pc)) {
+    if (!decoder->Decode(&dinstr, pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
     } else if (dinstr.IsUnconditionalJump()) {
+      decoder->Mangle(block, &dinstr);
       block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
       block->AppendInstruction(lir::Jump(this, pc));
@@ -147,10 +148,11 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     auto decoded_pc = pc;
     arch::Instruction dinstr;
     auto before_instr = block->LastInstruction()->Previous();
-    if (!decoder.DecodeNext(block, &dinstr, &pc)) {
+    if (!decoder.DecodeNext(&dinstr, &pc)) {
       block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
       return;
     }
+    decoder.Mangle(block, &dinstr);
     instr = MakeInstruction(&dinstr);
     block->UnsafeAppendInstruction(instr);
     AnnotateInstruction(block, before_instr);

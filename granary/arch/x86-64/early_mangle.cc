@@ -3,8 +3,8 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/x86-64/builder.h"
+#include "granary/arch/x86-64/early_mangle.h"
 #include "granary/arch/x86-64/instruction.h"
-#include "granary/arch/x86-64/mangle/early.h"
 
 #include "granary/base/base.h"
 
@@ -46,18 +46,18 @@ namespace arch {
 
 namespace {
 
-// Mangle an indirect call or jump through memory into a mov of the memory
-// location into the `RAX` register (transparency corner case), then an
-// indirect call through the register.
+// Mangle an indirect CALL or JMP through memory into a MOV of the memory
+// location into a virtual register, then an indirect call through the
+// virtual register.
 void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
   if (XED_ENCODER_OPERAND_TYPE_MEM == instr->ops[0].type) {
     Instruction ni;
-    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, XED_REG_RAX, instr->ops[0]));
+    auto target_loc = block->AllocateVirtualRegister();
+    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, target_loc, instr->ops[0]));
     instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
-    instr->ops[0].reg.DecodeFromNative(static_cast<int>(XED_REG_RAX));
+    instr->ops[0].reg = target_loc;
+    instr->ops[0].is_sticky = false;
   }
-  instr->ops[0].is_sticky = true;
-  instr->ops[0].is_explicit = true;
 }
 
 // Mangle an explicit memory operand. This will expand memory operands into
@@ -71,7 +71,13 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   // can potentially alter what the offset to them is later on (in the event
   // that virtual regs are spilled to the stack).
   if (!op.is_compound && !op.reg.IsStackPointer()) {
-    return;
+
+    // Minor optimization attempt to move de-references of RAX outside of flag
+    // zones. In the worst case, we'll likely just remove the resulting `LEA`
+    // instruction with copy propagation.
+    if (XED_REG_RAX != op.reg.EncodeToNative()) {
+      return;
+    }
   }
 
   // All built-in memory operands, other than `XLAT`, a simple dereferences

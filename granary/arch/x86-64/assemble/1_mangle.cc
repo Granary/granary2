@@ -156,7 +156,6 @@ void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
     if (target_is_far_away) {
       arch::CALL_NEAR_MEMv(instr, new NativeAddress(target_pc));
     }
-
   } else if (XED_ICLASS_JMP == iclass) {
     if (target_is_far_away) {
       arch::JMP_MEMv(instr, new NativeAddress(target_pc));
@@ -170,8 +169,9 @@ void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
   // Conditional jumps. We translate these by converting them into a negated
   // conditional jump around an indirect jump to the far-away instruction.
   } else if (instr->IsConditionalJump()) {
-    if (target_is_far_away) RelativizeConditionalBranch(cfi, instr, target_pc);
-
+    if (target_is_far_away) {
+      RelativizeConditionalBranch(cfi, instr, target_pc);
+    }
   } else {
     GRANARY_ASSERT(false);
   }

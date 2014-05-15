@@ -76,12 +76,12 @@ static bool AnalyzeFragRegs(Fragment *frag) {
   LiveRegisterTracker regs;
   if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
     regs = fall_through->regs.live_on_entry;
-    if (auto branch = frag->successors[FRAG_SUCC_BRANCH]) {
-      if (frag->branch_instr->IsConditionalJump()) {
-        regs.Union(branch->regs.live_on_entry);
-      } else {
-        regs = branch->regs.live_on_entry;
-      }
+  }
+  if (auto branch = frag->successors[FRAG_SUCC_BRANCH]) {
+    if (frag->branch_instr->IsConditionalJump()) {
+      regs.Union(branch->regs.live_on_entry);
+    } else {
+      regs = branch->regs.live_on_entry;
     }
   }
   frag->regs.live_on_exit = regs;
@@ -146,7 +146,9 @@ static void IdentifyFlagZones(FragmentList *frags) {
     GRANARY_IF_DEBUG( VerifyFragment(frag); )
     if (IsA<CodeFragment *>(frag) || IsA<FlagEntryFragment *>(frag)) {
       for (auto succ : frag->successors) {
-        if (succ && !IsA<PartitionExitFragment *>(succ)) {
+        if (succ && frag->partition == succ->partition &&
+            !IsA<PartitionExitFragment *>(succ) &&
+            !IsA<ExitFragment *>(succ)) {
           frag->flag_zone.Union(frag, succ);
         }
       }
@@ -207,6 +209,12 @@ static void UpdateFlagZones(FragmentList *frags) {
         flag_zone->live_regs.Union(flag_exit->regs.live_on_entry);
         flag_zone->live_flags |= flag_exit->flags.exit_live_flags;
       }
+    } else {
+#ifdef GRANARY_DEBUG
+      if (auto code = DynamicCast<CodeFragment *>(frag)) {
+        GRANARY_ASSERT(code->attr.is_app_code);
+      }
+#endif
     }
   }
 }

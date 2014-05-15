@@ -9,7 +9,7 @@
 
 // Stages of assembly.
 #include "granary/code/assemble/0_compile_inline_assembly.h"
-#include "granary/code/assemble/1_relativize.h"
+#include "granary/code/assemble/1_mangle.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
@@ -39,7 +39,7 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // "Fix" instructions that might use PC-relative operands that are now too
   // far away from their original data/targets (e.g. if the code cache is really
   // far away from the original native code in memory).
-  RelativizeLCFG(code_cache, cfg);
+  MangleInstructions(code_cache, cfg);
 
   FragmentList frags;
 
@@ -79,7 +79,6 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   if (FLAG_debug_log_assembled_fragments) {
     Log(LogDebug, &frags);
   }
-
 
   GRANARY_UNUSED(env);
 }

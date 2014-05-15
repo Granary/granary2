@@ -139,7 +139,10 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
 
 
 CodeAttributes::CodeAttributes(void)
-    : has_native_instrs(false),
+    : is_edge_code(false),
+      branches_to_edge_code(false),
+      can_add_to_partition(true),
+      has_native_instrs(false),
       modifies_flags(false),
       is_app_code(false),
       is_block_head(false),

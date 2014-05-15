@@ -58,10 +58,11 @@ struct RelAddress<24> {
 };
 
 // Manages simple relativization checks / tasks.
-class InstructionRelativizer {
+class BlockMangler {
  public:
-  explicit InstructionRelativizer(PC estimated_encode_loc)
-      : cache_pc(estimated_encode_loc) {}
+  BlockMangler(DecodedBasicBlock *block_, PC estimated_encode_loc)
+      : block(block_),
+        cache_pc(estimated_encode_loc) {}
 
   inline bool AddressNeedsRelativizing(const void *ptr) const {
     return AddressNeedsRelativizing(reinterpret_cast<PC>(ptr));
@@ -75,8 +76,7 @@ class InstructionRelativizer {
   }
 
   // Relativize a particular memory operation within a memory instruction.
-  void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *instr,
-                       const MemoryOperand &mloc) {
+  void RelativizeMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
     const void *mptr(nullptr);
     if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
       granary::RelativizeMemOp(block, instr, mloc, mptr);
@@ -84,37 +84,49 @@ class InstructionRelativizer {
   }
 
   // Relativize a memory instruction.
-  void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *instr) {
+  void RelativizeMemOp(NativeInstruction *instr) {
     MemoryOperand mloc1;
     MemoryOperand mloc2;
     auto count = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
                                              ReadOrWriteTo(mloc2));
     if (2 == count) {
-      RelativizeMemOp(block, instr, mloc1);
-      RelativizeMemOp(block, instr, mloc2);
+      RelativizeMemOp(instr, mloc1);
+      RelativizeMemOp(instr, mloc2);
     } else if (1 == count) {
-      RelativizeMemOp(block, instr, mloc1);
+      RelativizeMemOp(instr, mloc1);
     }
   }
 
+  // Mangle a return, where the target of the return is specialized.
+  void MangleSpecializedReturn(ControlFlowInstruction *cfi) {
+    GRANARY_UNUSED(cfi);
+  }
+
   // Relativize a control-flow instruction.
-  void RelativizeCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
+  void MangleCFI(ControlFlowInstruction *cfi) {
     auto target_block = cfi->TargetBlock();
     if (IsA<NativeBasicBlock *>(target_block)) {
-      auto target_pc = target_block->StartAppPC();
-
       // We always defer to arch-specific relativization because some
       // instructions need to be relativized regardless of whether or not the
       // target PC is far away. For example, on x86, the `LOOP rel8`
       // instructions must always be relativized.
-      RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
-                          AddressNeedsRelativizing(target_pc));
-
+      if (!cfi->HasIndirectTarget()) {
+        auto target_pc = target_block->StartAppPC();
+        RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
+                            AddressNeedsRelativizing(target_pc));
+      }
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {
       MemoryOperand mloc;
       if (cfi->MatchOperands(ReadFrom(mloc))) {
-        RelativizeMemOp(block, cfi, mloc);
+        RelativizeMemOp(cfi, mloc);
+      }
+
+    // Need to mangle the indirect direct (with meta-data) into a return to
+    // a different program counter.
+    } else if (auto return_bb = DynamicCast<ReturnBasicBlock *>(target_block)) {
+      if (return_bb->UnsafeMetaData()) {
+        MangleSpecializedReturn(cfi);
       }
     }
   }
@@ -123,12 +135,11 @@ class InstructionRelativizer {
   // far away with ones that use virtual registers or other mechanisms. This is
   // the "easy" side of things, where the virtual register system needs to do
   // the "hard" part of actually making register usage reasonable.
-  void RelativizeInstruction(DecodedBasicBlock *block,
-                             NativeInstruction *instr) {
+  void RelativizeInstruction(NativeInstruction *instr) {
     if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-      RelativizeCFI(block, cfi);
+      MangleCFI(cfi);
     } else {
-      RelativizeMemOp(block, instr);
+      RelativizeMemOp(instr);
     }
 
     auto &ainstr(instr->instruction);
@@ -139,36 +150,38 @@ class InstructionRelativizer {
 
   // Relativizes instructions that use PC-relative operands that are too far
   // away from our estimate of where this block will be encoded.
-  void RelativizeBlock(DecodedBasicBlock *block) {
+  void Mangle(void) {
     Instruction *next_instr(nullptr);
     for (auto instr = block->FirstInstruction(); instr; instr = next_instr) {
       next_instr = instr->Next();
       if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
-        RelativizeInstruction(block, native_instr);
+        RelativizeInstruction(native_instr);
       }
     }
   }
 
  private:
-  InstructionRelativizer(void) = delete;
+  BlockMangler(void) = delete;
 
   enum : ptrdiff_t {
     MAX_BRANCH_OFFSET = RelAddress<arch::REL_BRANCH_WIDTH_BITS>::MAX_OFFSET
   };
 
+  DecodedBasicBlock *block;
   PC cache_pc;
 };
 
 }  // namespace
 
 // Relativize the native instructions within a LCFG.
-void RelativizeLCFG(CodeCacheInterface *code_cache,
-                    LocalControlFlowGraph* cfg) {
+void MangleInstructions(CodeCacheInterface *code_cache,
+                        LocalControlFlowGraph* cfg) {
   auto estimated_encode_loc = code_cache->AllocateBlock(0);
-  InstructionRelativizer rel(estimated_encode_loc);
+
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      rel.RelativizeBlock(decoded_block);
+      BlockMangler mangler(decoded_block, estimated_encode_loc);
+      mangler.Mangle();
     }
   }
 }

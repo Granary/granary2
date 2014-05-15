@@ -267,7 +267,9 @@ class StackUsageInfo {
   StackUsageInfo(void)
       : is_valid(false),
         is_checked(false),
+#if 0
         has_stack_changing_cfi(false),
+#endif
         overall_change(0) {}
 
   // Tells us whether or not the stack pointer in this block appears to
@@ -277,9 +279,11 @@ class StackUsageInfo {
   // Tells us whether or not we have decided on the value of `is_valid`.
   bool is_checked;
 
+#if 0
   // Does this fragment contain a control-flow instruction that modifies the
   // stack pointer?
   bool has_stack_changing_cfi;
+#endif
 
   // Summarizes the overall change made to the stack pointer across this
   // fragment.
@@ -294,6 +298,16 @@ class StackUsageInfo {
 class CodeAttributes {
  public:
   CodeAttributes(void);
+
+  // True iff this code fragment is the entrypoint to some edge code.
+  bool is_edge_code;
+  bool branches_to_edge_code;
+
+  // Can this fragment be added into another partition? We use this to prevent
+  // fragments that only contain things like IRET, RET, etc. from being unioned
+  // into an existing partition. This would be bad because we lose control at
+  // things like IRET and unspecialized RETs.
+  bool can_add_to_partition;
 
   // Does this fragment have any native instructions in it, or is it just full
   // or annotations, labels, and other things? We use this to try to avoid

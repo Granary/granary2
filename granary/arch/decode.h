@@ -29,16 +29,22 @@ class InstructionDecoder {
   // Decode an instruction, and update the program counter by reference
   // to point to the next logical instruction. Returns `true` if the
   // instruction was successfully decoded/encoded.
-  bool DecodeNext(DecodedBasicBlock *block, Instruction *, AppPC *);
+  bool DecodeNext(Instruction *, AppPC *);
 
   // Decode an instruction. Returns `true` if the instruction was
   // successfully decoded/encoded.
-  bool Decode(DecodedBasicBlock *block, Instruction *, AppPC);
+  bool Decode(Instruction *, AppPC);
+
+  // Mangle a decoded instruction. Separated from the `Decode` step because
+  // mangling might involve adding many new instructions to deal with some
+  // instruction set peculiarities, and sometimes we only want to speculatively
+  // decode and instruction and not add these extra instructions to a block.
+  void Mangle(DecodedBasicBlock *block, Instruction *instr);
 
  private:
   // Internal APIs for decoding instructions. These APIs directly
   // interact with the driver.
-  AppPC DecodeInternal(DecodedBasicBlock *block, Instruction *, AppPC);
+  AppPC DecodeInternal(Instruction *, AppPC);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionDecoder);
 };
