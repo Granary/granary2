@@ -144,6 +144,7 @@ CodeAttributes::CodeAttributes(void)
       can_add_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
+      has_flag_split_hint(false),
       is_app_code(false),
       is_block_head(false),
       is_compensation_code(false),

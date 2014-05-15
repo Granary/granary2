@@ -317,6 +317,14 @@ class CodeAttributes {
   // Does this fragment have any instructions that write to the flags?
   bool modifies_flags;
 
+  // Is there a hint set that we should split this fragment before a non-
+  // native instruction changes the flags? This is designed as a minor
+  // optimization for x86-like architectures, where flags are accessed through
+  // a specific register (`AH` in x86 via `LAHF` and `SAHF`), and where the
+  // flag save/restore code behaves in a sub-optimal way if instrumentation code
+  // uses the register `AL/AH/AX/EAX/RAX`.
+  bool has_flag_split_hint;
+
   // Is this a fragment of application instructions? If this is false, then all
   // instructions are either injected from instrumentation, or they could be
   // some application instructions that don't read or write the flags.

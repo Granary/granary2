@@ -25,6 +25,11 @@ namespace granary {
 //      potentially instrumented instruction, and therefore avoid potential
 //      ugly flag save/restore issues!!!!
 
+//      Add a fragment break hint during Append in build fragment list that
+//      will try to break a fragment when it seems like a prefix of the fragment
+//      that doesn't play with the flags uses RAX.
+//      ---> Forcibly make the prefix fragment into app code?
+
 
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
@@ -497,7 +502,8 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
-    if (code_pred->attr.branches_to_edge_code) {
+    if (code_pred->attr.branches_to_edge_code &&
+        succ != pred->successors[FRAG_SUCC_BRANCH]) {
       delete comp;  // E.g. fall-through after an indirect CALL.
       return;
     }
@@ -548,6 +554,26 @@ static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
 }
 #endif
 
+// For indirect control-flow instructions (e.g. call/jump through a register),
+// we need to share the register with the target fragment, assuming that the
+// target fragment is some edge code.
+static void ShareIndirectCFIReg(CodeFragment *source) {
+  RegisterOperand target_reg;
+  if (source->branch_instr->MatchOperands(ReadOnlyFrom(target_reg))) {
+    auto pc_reg = target_reg.Register();
+    if (pc_reg.IsGeneralPurpose()) {
+      if (auto node = FindDefForUse(source, pc_reg)) {
+        if (!source->ssa.exit_nodes.Exists(pc_reg)) {
+          source->ssa.exit_nodes[pc_reg] = node;
+        }
+
+        // Note: We don't add it into the `dest` fragment because later code
+        //       that injects compensations will do it for us.
+      }
+    }
+  }
+}
+
 // Goes and adds "compensating" fragments. The idea here is that if we have
 // an edge between a predecessor fragment P and its successor S, and some
 // register R is live on exit from P, but is not live on entry to S, then
@@ -559,6 +585,10 @@ static void AddCompensatingFragments(FragmentList *frags) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       if (code_frag->attr.is_compensation_code) {
         continue;
+      } else if (code_frag->branch_instr &&
+                 code_frag->attr.branches_to_edge_code &&
+                 code_frag->branch_instr->HasIndirectTarget()) {
+        ShareIndirectCFIReg(code_frag);
       }
     }
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {

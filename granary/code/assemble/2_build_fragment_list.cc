@@ -48,6 +48,12 @@ namespace granary {
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
 
+// Try to add a flag split hint to a code fragment.
+//
+// Note: This function has an architecture-specific implementation.
+extern void TryAddFlagSplitHint(CodeFragment *frag,
+                                const NativeInstruction *instr);
+
 namespace {
 
 // Make a new code fragment.
@@ -117,13 +123,25 @@ static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
 // Append an instruction to a fragment. This also does minor flag usage analysis
 // of the instruction to figure out if the fragment should be treated as an
 // application fragment or an instrumentation code fragment.
-static void Append(CodeFragment *frag, Instruction *instr) {
+static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
+                            CodeFragment *frag, Instruction *instr) {
   instr->UnsafeUnlink().release();
   if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-    frag->attr.has_native_instrs = true;
     if (ninstr->WritesConditionCodes()) {
+
+      // Try to split the fragment before appending the instruction so that
+      // we can (hopefully) optimize on some flag save/restore code.
+      if (frag->attr.has_flag_split_hint && !ninstr->IsAppInstruction()) {
+        GRANARY_ASSERT(!frag->attr.modifies_flags);
+        frag->attr.is_app_code = true;
+        auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
+        frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
+        frag = succ;
+      }
       frag->attr.modifies_flags = true;
+      frag->attr.has_flag_split_hint = false;
     }
+    frag->attr.has_native_instrs = true;
 
     // If the app instruction reads/writes the flags, then to maintain the
     // flag save/restore invariant, we must make this into an app fragment.
@@ -132,9 +150,15 @@ static void Append(CodeFragment *frag, Instruction *instr) {
     // flag save/restore zone.
     if (!frag->attr.is_app_code && InstrMakesFragmentIntoAppCode(ninstr)) {
       frag->attr.is_app_code = true;
+      frag->attr.has_flag_split_hint = false;
+    }
+
+    if (!frag->attr.is_app_code && !frag->attr.has_flag_split_hint) {
+      TryAddFlagSplitHint(frag, ninstr);
     }
   }
   frag->instrs.Append(instr);
+  return frag;
 }
 
 // Extend a fragment with the instructions from a particular basic block.
@@ -204,7 +228,7 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
 
   // Conditional jump, therefore we have to create two successor fragments.
   if (branch->IsConditionalJump()) {
-    Append(frag, branch);
+    frag = Append(frags, block, frag, branch);
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     ExtendFragment(frags, succ, block, next);
@@ -226,7 +250,7 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
   } else {
     SetMetaData<CodeFragment *>(label, frag);
     frag->attr.block_meta = block->UnsafeMetaData();
-    Append(frag, label);
+    frag = Append(frags, block, frag, label);
     ExtendFragment(frags, frag, block, next);
   }
 }
@@ -340,12 +364,6 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
   bool targets_edge_code = false;
   bool can_add_to_partition = true;
   if (auto target_cfrag = DynamicCast<CodeFragment *>(target_frag)) {
-    /*
-    if (!target_cfrag->attr.is_edge_code) {
-      ret_frag = nullptr;
-    } else {
-      targets_edge_code = true;
-    }*/
     targets_edge_code = target_cfrag->attr.is_edge_code;
   }
   if (frag->attr.has_native_instrs && makes_stack_valid &&
@@ -356,18 +374,6 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
     if (frag->attr.has_native_instrs) ret_frag = nullptr;
     can_add_to_partition = false;
   }
-#if 0
-  if (ret_frag && frag->attr.has_native_instrs &&
-      cfi->instruction.WritesToStackPointer()) {
-    /*if (makes_stack_valid && frag->stack.is_checked &&
-        !frag->stack.is_valid) {
-      if () ret_frag = nullptr;
-    } else if (frag->attr.has_native_instrs) {
-      ret_frag = nullptr;
-    }*/
-    ret_frag = nullptr;
-  }
-#endif
   if (!ret_frag) {
     auto label = new LabelInstruction;
     auto succ = MakeEmptyLabelFragment(frags, block, label);
@@ -379,7 +385,7 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
     ret_frag->stack.is_checked = true;
   }
   ret_frag->attr.can_add_to_partition = can_add_to_partition;
-  Append(ret_frag, cfi);
+  ret_frag = Append(frags, block, ret_frag, cfi);
   if (targets_edge_code) {
     ret_frag->attr.branches_to_edge_code = true;
   }
@@ -536,7 +542,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     // Extend block with this instruction and move to the next instruction.
     } else {
       auto next = instr->Next();
-      Append(frag, instr);
+      frag = Append(frags, block, frag, instr);
       instr = next;
     }
   }
