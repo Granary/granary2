@@ -14,7 +14,7 @@
 namespace granary {
 namespace internal {
 
-#ifndef GRANARY_WITH_VALGRIND //allocate and deallocate object using slab-style
+#ifndef GRANARY_WITH_VALGRIND  // Use slab-style allocation.
 
 // Constants that define how we will initialize various chunks of memory.
 enum {
@@ -143,14 +143,7 @@ void *SlabAllocator::AllocateFromFreeList(void) {
   return head;
 }
 
-#else	//allocate and deallocate object usig `malloc` and `free`
-
-// Constants that define how we will initialize various chunks of memory.
-enum {
-  UNALLOCATED_MEMORY_POISON = 0xAB,
-  DEALLOCATED_MEMORY_POISON = 0xBC,
-  UNINITIALIZED_MEMORY_POISON = 0xCD,
-};
+#else	 // Use `malloc` and `free` to play nice with Valgrind.
 
 // Initialize a new slab list. Once initialized, slab lists are never changed.
 SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
@@ -181,23 +174,15 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
 
 // Allocate some memory from heap.
 void *SlabAllocator::Allocate(void) {
-  void *address;
-
-  address = malloc(aligned_size);
-  if (!address) {
-	//error-handle
-  }
-  return address;
+  return malloc(aligned_size);
 }
 
 // Free some memory from heap.
 void SlabAllocator::Free(void *address) {
-	if (NULL != address) {
-		free(address);
-	}
+  free(address);
 }
 
-#endif //GRANARY_WITH_VALGRIND
+#endif  // GRANARY_WITH_VALGRIND
 
 }  // namespace internal
 }  // namespace granary
