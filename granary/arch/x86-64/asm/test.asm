@@ -92,6 +92,8 @@ DEFINE_FUNC(granary_test_mangle)
     mov %rax, 0x8(%rbp);
     //xlat;
     mov $0, %rax;
+    callq .Lloop_call_through_stack;
+    jmp .Lafter_loop_call_through_stack;
 
 .Lloop_call_through_stack:
     mov %rsp, %rdi;
@@ -100,7 +102,11 @@ DEFINE_FUNC(granary_test_mangle)
     shr $1, %rdi;
     callq *-0x8(%rsp, %rdi, 2);
     cmp $0, %rax;
+
     jz .Lloop_call_through_stack;
+    ret;
+
+.Lafter_loop_call_through_stack:
 
     // Pop the stack frame. This introduces some interestingness: should the
     // next fragment be considered to be on an invalid frame, or a valid one?
