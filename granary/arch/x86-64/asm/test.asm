@@ -7,6 +7,26 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+  .Lfoo:
+    push   %rbp
+    mov    %rsp,%rbp
+    sub    $0x10,%rsp
+    mov    %edi,-0x4(%rbp)
+    mov    %rsi,-0x10(%rbp)
+    mov    -0x4(%rbp),%edi
+    mov    -0x10(%rbp),%rsi
+    jz .Lfoo;
+    callq  *%rax
+    callq  *%rdx
+    mov    -0x10(%rbp),%rsi
+    mov    (%rsi),%rdi
+    callq  *%rcx
+    mov    %rax,%rdi
+    callq  *%rdi
+    mov    $0x0,%eax
+    add    $0x10,%rsp
+    pop    %rbp
+    retq
 /*
     push %rax;
     jnz granary_test_mangle;
@@ -40,7 +60,7 @@ DEFINE_FUNC(granary_test_mangle)
     addq (%rdx, %rcx), %rax;
     ret;
 */
-
+/*
     push %rax;
     push %rbx;
     pop %rax;
@@ -123,7 +143,7 @@ DEFINE_FUNC(granary_test_mangle)
     mov $1, %rax;
     leave;
     ret;
-
+*/
 END_FUNC(granary_test_mangle)
 
 END_FILE

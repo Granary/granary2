@@ -152,7 +152,6 @@ static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
       frag->attr.is_app_code = true;
       frag->attr.has_flag_split_hint = false;
     }
-
     if (!frag->attr.is_app_code && !frag->attr.has_flag_split_hint) {
       TryAddFlagSplitHint(frag, ninstr);
     }

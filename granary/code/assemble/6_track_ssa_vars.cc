@@ -12,25 +12,6 @@
 
 namespace granary {
 
-// TODO!!!!!!!!!!!!!!!!!!!!!
-//     !!!!!!!!!!!!!!!!!!!!!
-// If the fragment has a branch_instr that has an indirect target that is a
-// virtual register, then add the virtual register to the outgoing defs of
-// the source frag, and the incoming defs of the dest frag.
-
-// TODO!!!!!!!!!!!!!!!!!!!!!
-// Potential optimization for mangling:
-//      If the base reg is [RAX] or [RAX*1] the always convert that into
-//      an LEA + use of VR, so that we hoist the use of RAX outside of the
-//      potentially instrumented instruction, and therefore avoid potential
-//      ugly flag save/restore issues!!!!
-
-//      Add a fragment break hint during Append in build fragment list that
-//      will try to break a fragment when it seems like a prefix of the fragment
-//      that doesn't play with the flags uses RAX.
-//      ---> Forcibly make the prefix fragment into app code?
-
-
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
 // clearing the value of `A` and not reading it for the sake of reading it.
@@ -561,12 +542,11 @@ static void ShareIndirectCFIReg(CodeFragment *source) {
   RegisterOperand target_reg;
   if (source->branch_instr->MatchOperands(ReadOnlyFrom(target_reg))) {
     auto pc_reg = target_reg.Register();
-    if (pc_reg.IsGeneralPurpose()) {
+    if (pc_reg.IsVirtual()) {
       if (auto node = FindDefForUse(source, pc_reg)) {
         if (!source->ssa.exit_nodes.Exists(pc_reg)) {
           source->ssa.exit_nodes[pc_reg] = node;
         }
-
         // Note: We don't add it into the `dest` fragment because later code
         //       that injects compensations will do it for us.
       }
@@ -624,4 +604,3 @@ void TrackSSAVars(FragmentList * const frags) {
 }
 
 }  // namespace granary
-

@@ -223,6 +223,7 @@ static SSASpillStorage *LocalStorageForNode(SSAFragment *frag, SSANode *node) {
     auto partition = frag->partition.Value();
     partition->num_local_slots = std::max(partition->num_local_slots,
                                           storage->slot + 1);
+    partition->num_slots = partition->num_local_slots;
     return storage;
   }
 }
@@ -863,6 +864,11 @@ static void SchedulePartitionLocalRegs(FragmentList *frags) {
         GRANARY_ASSERT(-1 == vr->slot);
         vr->slot = ssa_frag->spill.AllocateSpillSlot(
             partition->num_local_slots);
+
+        // Keep track of how many slots have been allocated to this partition.
+        // This is used later when actually allocating the slots on the stack
+        // or globally.
+        partition->num_slots = std::max(partition->num_slots, vr->slot + 1);
       }
 
       if (found_vr || FragUsesVR(ssa_frag, vr)) {

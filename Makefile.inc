@@ -121,6 +121,7 @@ endif
 GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
+GRANARY_COMMON_ARCH_FLAGS += -minline-all-stringops
 
 ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3

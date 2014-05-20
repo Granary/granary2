@@ -71,6 +71,24 @@ class SpillInfo {
   void FreeSpillSlot(int slot);
 };
 
+// Tracks the size of the stack frame within the current fragment/partition.
+// We are guaranteed that the fragments within a partition form a DAG, so if
+// the stack is valid, then we can set bounds on the stack's size, and then
+// spill/fill virtual registers from the stack.
+class StackFrameInfo {
+ public:
+  inline StackFrameInfo(void)
+      : entry_offset(0),
+        exit_offset(0),
+        min_offset(0),
+        max_offset(0) {}
+
+  int entry_offset;
+  int exit_offset;
+  int min_offset;
+  int max_offset;
+};
+
 // Information about the partition to which a fragment belongs.
 class PartitionInfo {
  public:
@@ -93,8 +111,9 @@ class PartitionInfo {
 
   const int id;
 
-  // The current "round" of partition-local scheduling.
-  int scheduler_round;
+  // The number of slots allocated in this partition. This includes fragment-
+  // local and partition-local slots.
+  int num_slots;
 
   // Maximum number of spill slots used by fragments somewhere in this
   // partition.
@@ -213,6 +232,10 @@ class Fragment {
   Fragment *successors[2];
   NativeInstruction *branch_instr;
 
+  // Tracks information gathered about the current function's activation frame
+  // within this fragment.
+  StackFrameInfo stack_frame;
+
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Fragment);
 };
@@ -220,6 +243,12 @@ class Fragment {
 typedef ListOfListHead<Fragment> FragmentList;
 typedef ListHeadIterator<Fragment> FragmentListIterator;
 typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
+
+// Forward declarations.
+enum LogLevel : int;
+
+// Log a list of fragments as a DOT digraph.
+void Log(LogLevel level, FragmentList *frags);
 
 // Maintains information about flags usage within a "zone" (a group of non-
 // application fragments that are directly connected by control flow). Flag
@@ -266,11 +295,7 @@ class StackUsageInfo {
  public:
   StackUsageInfo(void)
       : is_valid(false),
-        is_checked(false),
-#if 0
-        has_stack_changing_cfi(false),
-#endif
-        overall_change(0) {}
+        is_checked(false) {}
 
   // Tells us whether or not the stack pointer in this block appears to
   // reference a valid thread (user or kernel space) stack.
@@ -278,18 +303,6 @@ class StackUsageInfo {
 
   // Tells us whether or not we have decided on the value of `is_valid`.
   bool is_checked;
-
-#if 0
-  // Does this fragment contain a control-flow instruction that modifies the
-  // stack pointer?
-  bool has_stack_changing_cfi;
-#endif
-
-  // Summarizes the overall change made to the stack pointer across this
-  // fragment.
-  //
-  // TODO(pag): Track this!!
-  int overall_change;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(StackUsageInfo);
 };

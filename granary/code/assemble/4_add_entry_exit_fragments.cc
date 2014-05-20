@@ -180,34 +180,40 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 // Returns true if the transition between `curr` and `next` represents a
 // partition entry point.
 static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
-  if (curr->partition == next->partition) return false;
   if (IsA<PartitionEntryFragment *>(curr)) return false;
   if (IsA<PartitionEntryFragment *>(next)) return false;
-  if (IsA<ExitFragment *>(next)) return false;
-  if (auto next_code = DynamicCast<CodeFragment *>(next)) {
-    if (!next_code->attr.can_add_to_partition) return false;
+
+  auto next_code = DynamicCast<CodeFragment *>(next);
+  if (curr->partition == next->partition) {
+    // Interesting special case: things like self-loops back to a block head
+    // are considered partition entry/exit points because we want to make sure
+    // that later stack frame size analysis determines a fixed stack frame size
+    // for every partition.
+    if (next_code && next_code->attr.is_block_head) return true;
+    return false;
   }
+  if (IsA<ExitFragment *>(next)) return false;
+  if (next_code && !next_code->attr.can_add_to_partition) return false;
   return true;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
 // partition exit point.
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
-  if (curr->partition == next->partition) return false;
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
-  if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
+  auto curr_code = DynamicCast<CodeFragment *>(curr);
+  if (curr_code) {
     if (!curr_code->attr.can_add_to_partition) return false;
   }
   if (IsA<ExitFragment *>(next)) return true;
   if (IsA<PartitionEntryFragment *>(next)) {
-    if (auto curr_code = DynamicCast<CodeFragment *>(curr)) {
-      if (curr_code->attr.branches_to_edge_code) {
-        return false;  // This is a fall-through.
-      }
+    if (curr_code && curr_code->attr.branches_to_edge_code) {
+      return false;  // This is a fall-through.
     }
     return true;
   }
+  if (curr->partition == next->partition) return false;
   if (auto next_code = DynamicCast<CodeFragment *>(next)) {
     if (!next_code->attr.can_add_to_partition) return true;
   }
@@ -233,10 +239,6 @@ static void AddExitFragment(FragmentList *frags,
       frags->InsertAfter(curr, exit_frag);
       *succ_ptr = exit_frag;
       back_link = exit_frag;
-
-      // Propagate flags usage info.
-      exit_frag->flags.exit_live_flags = succ->flags.entry_live_flags;
-      exit_frag->flags.entry_live_flags = exit_frag->flags.exit_live_flags;
     }
   }
 }
@@ -274,10 +276,6 @@ static void AddEntryFragment(FragmentList *frags,
       frags->InsertAfter(curr, entry_frag);
       *succ_ptr = entry_frag;
       back_link = entry_frag;
-
-      // Propagate flags usage info.
-      entry_frag->flags.exit_live_flags = succ->flags.entry_live_flags;
-      entry_frag->flags.entry_live_flags = entry_frag->flags.exit_live_flags;
     }
   }
 }
@@ -288,6 +286,11 @@ static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
   Fragment *frag = new T;
   frag->successors[0] = succ;
   frag->partition.Union(frag, inherit);
+
+  // Propagate flags usage info.
+  frag->flags.exit_live_flags = succ->flags.entry_live_flags;
+  frag->flags.entry_live_flags = frag->flags.exit_live_flags;
+
   return frag;
 }
 
@@ -295,7 +298,6 @@ static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
 static void AddEntryFragments(FragmentList * const frags,
                               bool (*is_end)(Fragment *, Fragment *),
                               Fragment *(*make_frag)(Fragment *, Fragment *)) {
-  ResetTempData(frags);
   for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
       if (succ) {
@@ -325,12 +327,15 @@ static void LabelPartitions(FragmentList *frags) {
 void AddEntryAndExitFragments(FragmentList *frags) {
   AnalyzeFlagsUse(frags);
 
-  AddEntryFragments(frags, IsPartitionEntry,
-                    MakeFragment<PartitionEntryFragment>);
-
   // Guarantee that there is a partition entry fragment.
   auto first_frag = frags->First();
-  frags->Prepend(MakeFragment<PartitionEntryFragment>(first_frag, first_frag));
+  auto first_entry = MakeFragment<PartitionEntryFragment>(first_frag,
+                                                          first_frag);
+  frags->Prepend(first_entry);
+  ResetTempData(frags);
+  first_frag->temp.entry_exit_frag = first_entry;
+  AddEntryFragments(frags, IsPartitionEntry,
+                    MakeFragment<PartitionEntryFragment>);
 
   AddExitFragments(frags, IsPartitionExit,
                    MakeFragment<PartitionExitFragment>);
@@ -341,7 +346,7 @@ void AddEntryAndExitFragments(FragmentList *frags) {
   // to inject fewer flag saving/restoring instructions.
   CountInstrumentedPredecessors(frags);
   ConvertToAppFrags(frags);
-
+  ResetTempData(frags);
   AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
 
   AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);

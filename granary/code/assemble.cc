@@ -17,12 +17,12 @@
 #include "granary/code/assemble/6_track_ssa_vars.h"
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
-#include "granary/code/assemble/9_log_fragments.h"
+#include "granary/code/assemble/9_allocate_slots.h"
 
 #include "granary/logging.h"
 #include "granary/util.h"
 
-GRANARY_DEFINE_bool(debug_log_assembled_fragments, false,
+GRANARY_DEFINE_bool(debug_log_fragments, false,
     "Log the assembled fragments before doing final linking. The default is "
     "false.");
 
@@ -76,7 +76,7 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // locations.
   ScheduleRegisters(&frags);
 
-  if (FLAG_debug_log_assembled_fragments) {
+  if (FLAG_debug_log_fragments) {
     Log(LogDebug, &frags);
   }
 
