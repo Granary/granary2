@@ -30,6 +30,9 @@ extern "C" {
 void granary_test_mangle(void);
 }
 
+GRANARY_DEFINE_bool(help, false,
+    "Print this message.");
+
 namespace granary {
 namespace {
 
@@ -54,14 +57,18 @@ void Init(const char *granary_path) {
   // module registration picks up on existing clients.
   LoadClients(granary_path);
 
-  auto &env = envs[curr_env];
-  env.Construct();
+  if (!FLAG_help) {
+    auto &env = envs[curr_env];
+    env.Construct();
 
-  // TODO(pag): Remove me.
-  AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
+    // TODO(pag): Remove me.
+    AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
-  env->Setup();
-  env->AttachToAppPC(pc);
+    env->Setup();
+    env->AttachToAppPC(pc);
+  } else {
+    PrintAllOptions();
+  }
 }
 
 }  // namespace granary

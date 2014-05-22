@@ -4,6 +4,7 @@
 #define GRANARY_BASE_OPTION_H_
 
 #include "granary/base/base.h"
+#include "granary/base/list.h"
 
 #define GRANARY_FLAG_NAME(name) GRANARY_CAT(FLAG_, name)
 #define GRANARY_INTERNAL_FLAG_NAME(name) GRANARY_CAT(INTERNAL_FLAG_, name)
@@ -62,11 +63,16 @@ struct Option {
   const char * const docstring;
 };
 
+typedef LinkedListIterator<Option> OptionIterator;
+
 // Initialize the options from an environment variable.
 GRANARY_INTERNAL_DEFINITION void InitOptions(const char *env);
 
 // Initialize the options from the command-line arguments.
 GRANARY_INTERNAL_DEFINITION void InitOptions(int argc, const char **argv);
+
+// Works for --help option: print out each options along with their document.
+GRANARY_INTERNAL_DEFINITION void PrintAllOptions(void);
 
 namespace detail {
 

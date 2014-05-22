@@ -5,6 +5,7 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
+#include "granary/logging.h"
 
 namespace granary {
 namespace {
@@ -178,6 +179,17 @@ void InitOptions(int argc, const char **argv) {
   ProcessOptionString();
   OPTIONS_INITIALIZED = true;
   ProcessPendingOptions();
+}
+
+// Works for --help option: print out each options along with their document.
+void PrintAllOptions(void) {
+  Log(LogOutput, "Usage for user space: granary.out clients-and-tools-and"
+      "-args\n\n");
+
+  for (auto option : OptionIterator(OPTIONS)) {
+    Log(LogOutput, "--\033[1m%s\033[m\n\t%s\n", option->name,
+        option->docstring);
+  }
 }
 
 namespace detail {
