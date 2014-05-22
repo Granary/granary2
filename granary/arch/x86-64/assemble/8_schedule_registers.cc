@@ -4,10 +4,8 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/arch/x86-64/builder.h"
-#include "granary/arch/x86-64/select.h"
 
 #include "granary/base/base.h"
-#include "granary/base/cast.h"
 
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"

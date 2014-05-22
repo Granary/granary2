@@ -68,6 +68,25 @@ class InstructionInterface {
   // value, otherwise returns false.
   bool ShiftsStackPointer(void) const;
 
+  // Returns the statically know amount by which an instruction shifts the
+  // stack pointer.
+  //
+  // Note: This should only be used after early mangling.
+  int StackPointerShiftAmount(void) const;
+
+  // If this instruction computes an address that is below (or possibly below)
+  // the current stack pointer, then this function returns an estimate on that
+  // amount. The value returned is either negative or zero.
+  //
+  // Note: This should only be used after early mangling.
+  //
+  // Note: If a dynamic offset is computed (e.g. stack pointer + register), then
+  //       an ABI-specific value is returned. For example, for OSes running on
+  //       x86-64/amd64 architectures, the user space red zone amount (-128) is
+  //       returned, regardless of if Granary+ is instrumenting user space or
+  //       kernel code.
+  int ComputedOffsetBelowStackPointer(void) const;
+
   // Returns true if an instruction reads the flags.
   bool ReadsFlags(void) const;
 

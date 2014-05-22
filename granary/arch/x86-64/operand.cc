@@ -260,7 +260,11 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
-      str->Format("[0x%lx]", addr.as_uint);
+      if (is_annot_encoded_pc) {
+        str->Format("[return address]");
+      } else {
+        str->Format("[0x%lx]", addr.as_uint);
+      }
       break;
   }
 }

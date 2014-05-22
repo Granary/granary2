@@ -79,14 +79,10 @@ class StackFrameInfo {
  public:
   inline StackFrameInfo(void)
       : entry_offset(0),
-        exit_offset(0),
-        min_offset(0),
-        max_offset(0) {}
+        exit_offset(0) {}
 
   int entry_offset;
   int exit_offset;
-  int min_offset;
-  int max_offset;
 };
 
 // Information about the partition to which a fragment belongs.
@@ -132,6 +128,14 @@ class PartitionInfo {
 
   // Partition-local spill info.
   SpillInfo spill;
+
+  // For sanity checking: our stack analysis might yield undefined behavior of
+  // a partition has more than one entry points.
+  GRANARY_IF_DEBUG( int num_partition_entry_frags; )
+
+  // Should we analyze the stack frames?
+  bool analyze_stack_frame;
+  int min_frame_offset;
 
  private:
   PartitionInfo(void) = delete;

@@ -58,16 +58,21 @@ bool Instruction::WritesToStackPointer(void) const {
 bool Instruction::ShiftsStackPointer(void) const {
   switch (iclass) {
     case XED_ICLASS_POP:
-      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) {
-        return false;
-      } else {
-        return true;
-      }
+      return !(ops[0].IsRegister() && ops[0].reg.IsStackPointer());
+
+    case XED_ICLASS_PUSHA:
+    case XED_ICLASS_POPA:
+    case XED_ICLASS_PUSHAD:
+    case XED_ICLASS_POPAD:
+    case XED_ICLASS_PUSHF:
+    case XED_ICLASS_POPF:
+    case XED_ICLASS_PUSHFD:
+    case XED_ICLASS_POPFD:
+    case XED_ICLASS_PUSHFQ:
+    case XED_ICLASS_POPFQ:
     case XED_ICLASS_PUSH:
     case XED_ICLASS_CALL_NEAR:
-    case XED_ICLASS_CALL_FAR:
     case XED_ICLASS_RET_NEAR:
-    case XED_ICLASS_RET_FAR:
     case XED_ICLASS_ENTER:
       return true;
 
@@ -83,8 +88,112 @@ bool Instruction::ShiftsStackPointer(void) const {
              XED_REG_INVALID == ops[1].mem.reg_index &&
              0 != ops[1].mem.disp;
 
+    // Things that appear, but aren't, constant stack pointer shifts that fall
+    // into this category are: `IRET`, `CALL_FAR`, `RET_FAR`, and `LEAVE`.
     default:
       return false;
+  }
+}
+
+// Returns the statically know amount by which an instruction shifts the
+// stack pointer.
+//
+// Note: This should only be used after early mangling, as it assumes an
+//       absence of `ENTER` and `LEAVE`.
+int Instruction::StackPointerShiftAmount(void) const {
+  int mult = -1;
+  switch (iclass) {
+    case XED_ICLASS_PUSHA:
+    case XED_ICLASS_POPA:
+    case XED_ICLASS_PUSHAD:
+    case XED_ICLASS_POPAD:
+    case XED_ICLASS_PUSHFD:
+    case XED_ICLASS_POPFD:
+      GRANARY_ASSERT(false);  // Not allowed in 64-bit mode.
+      return 0;
+    case XED_ICLASS_PUSHF:
+      return -2;
+    case XED_ICLASS_POPF:
+      return 2;
+    case XED_ICLASS_PUSHFQ:
+      return -8;
+    case XED_ICLASS_POPFQ:
+      return 8;
+    case XED_ICLASS_POP:
+      if (!(ops[0].IsRegister() && ops[0].reg.IsStackPointer())) {
+        if (-1 != effective_operand_width) {
+          return effective_operand_width / 8;
+        } else {
+          return 8;
+        }
+      }
+      break;
+    case XED_ICLASS_PUSH:
+      if (-1 != effective_operand_width) {
+        return -effective_operand_width / 8;
+      } else {
+        return -8;
+      }
+    case XED_ICLASS_CALL_NEAR:
+      return -8;
+    case XED_ICLASS_RET_NEAR:
+      return 8;
+
+    // Assume that this is caught by early mangling, and that no `ENTER`
+    // instructions make it into the instruction stream. `LEAVE` does not shift
+    // the stack by a constant amount; however, this is a good spot to verify
+    // its absence (it should also be early mangled).
+    case XED_ICLASS_ENTER:
+    case XED_ICLASS_LEAVE:
+      GRANARY_ASSERT(false);
+      break;
+
+    case XED_ICLASS_ADD:
+      mult = 1;  // Fall-through.
+    case XED_ICLASS_SUB:
+      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
+          ops[1].IsImmediate()) {
+        return static_cast<int>(ops[1].imm.as_int) * mult;
+      }
+      break;
+
+    case XED_ICLASS_LEA:
+      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
+          ops[1].IsMemory() && ops[1].is_compound &&
+          XED_REG_RSP == ops[1].mem.reg_base &&
+          XED_REG_INVALID == ops[1].mem.reg_index &&
+          0 != ops[1].mem.disp) {
+        return static_cast<int>(ops[1].mem.disp);
+      }
+      break;
+
+    default:
+      break;
+  }
+  return 0;
+}
+
+// If this instruction computes an address that is below (or possibly below)
+// the current stack pointer, then this function returns an estimate on that
+// amount. The value returned is either negative or zero.
+//
+// Note: This should only be used after early mangling.
+//
+// Note: If a dynamic offset is computed (e.g. stack pointer + register), then
+//       an ABI-specific value is returned. For example, for OSes running on
+//       x86-64/amd64 architectures, the user space red zone amount (-128) is
+//       returned, regardless of if Granary+ is instrumenting user space or
+//       kernel code.
+int Instruction::ComputedOffsetBelowStackPointer(void) const {
+  if (XED_ICLASS_LEA != iclass) return 0;
+  if (!ops[1].is_compound) return 0;
+  if (XED_REG_RSP != ops[1].mem.reg_base) return 0;
+  if (XED_REG_INVALID == ops[1].mem.reg_index) {
+    if (0 <= ops[1].mem.disp) return 0;
+    return ops[1].mem.disp;
+  } else {
+    if (0 <= ops[1].mem.disp) return -128;
+    return ops[1].mem.disp - 128;
   }
 }
 

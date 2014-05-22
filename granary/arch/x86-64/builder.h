@@ -52,12 +52,19 @@ class ImmediateBuilder {
   template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_uint_, xed_encoder_operand_type_t type_)
       : as_uint(static_cast<uintptr_t>(as_uint_)),
-        type(type_) {}
+        type(type_),
+        width(-1) {}
 
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_int_, xed_encoder_operand_type_t type_)
       : as_int(static_cast<intptr_t>(as_int_)),
-        type(type_) {}
+        type(type_),
+        width(-1) {}
+
+  inline ImmediateBuilder(const Operand &that, xed_encoder_operand_type_t type_)
+      : as_uint(that.imm.as_uint),
+        type(type_),
+        width(that.width) {}
 
   // Add this immediate as an operand to the instruction `instr`.
   void Build(Instruction *instr);
@@ -68,6 +75,7 @@ class ImmediateBuilder {
     intptr_t as_int;
   };
   xed_encoder_operand_type_t type;
+  int width;
 };
 
 // Builder for a memory operand.
@@ -175,6 +183,23 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
+                                    int width=-1) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  if (disp) {
+    op.is_compound = true;
+    op.mem.disp = disp;
+    op.mem.reg_base = base_reg;
+  } else {
+    op.is_compound = false;
+    op.reg.DecodeFromNative(base_reg);
+  }
+  op.width = static_cast<int8_t>(width);
+  return op;
 }
 
 }  // namespace arch

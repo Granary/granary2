@@ -185,7 +185,8 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
 }
 
 // Pull out an immediate operand from the XED instruction.
-static void ConvertImmediateOperand(Operand *instr_op,
+static void ConvertImmediateOperand(Instruction *instr,
+                                    Operand *instr_op,
                                     const xed_decoded_inst_t *xedd,
                                     xed_operand_enum_t op_name) {
   if (XED_OPERAND_IMM0SIGNED == op_name) {
@@ -205,6 +206,18 @@ static void ConvertImmediateOperand(Operand *instr_op,
   }
   instr_op->width = static_cast<int8_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
+
+  // Ensure that we reflect the size of the stack pointer change in the size of
+  // the immediate. This is a special case, where early mangling will lift the
+  // immediate out of the `PUSH`.
+  if (XED_ICLASS_PUSH == instr->iclass &&
+      instr->effective_operand_width > instr_op->width) {
+    instr_op->width = instr->effective_operand_width;
+
+    // Get XED to do the appropriate sign-extension for us ;-)
+    instr_op->imm.as_int = static_cast<intptr_t>(
+        xed_decoded_inst_get_signed_immediate(xedd));
+  }
 }
 
 // Convert a `xed_operand_t` into an `Operand`. This operates on explicit
@@ -239,7 +252,7 @@ static bool ConvertDecodedOperand(Instruction *instr,
     ConvertBaseDisp(instr, instr_op, xedd, 1);
   } else if (XED_OPERAND_TYPE_IMM == op_type ||
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
-    ConvertImmediateOperand(instr_op, xedd, op_name);
+    ConvertImmediateOperand(instr, instr_op, xedd, op_name);
   } else {
     // Ignore `XED_OPERAND_AGEN`, which is only for LEA.
     instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;

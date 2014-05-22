@@ -81,7 +81,11 @@ void ImmediateBuilder::Build(Instruction *instr) {
   op.imm.as_uint = as_uint;
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
-  op.width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
+  if (-1 == width) {
+    op.width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
+  } else {
+    op.width = static_cast<int8_t>(width);
+  }
   op.is_explicit = true;
 }
 

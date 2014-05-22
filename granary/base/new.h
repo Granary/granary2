@@ -37,7 +37,6 @@ namespace granary {
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
 
-
 namespace internal {
 
 // Dummy singly-linked list for free objects.
@@ -45,7 +44,6 @@ class FreeList {
  public:
   FreeList *next;
 };
-
 
 // Meta-data for a memory slab. The meta-data of each slab knows the range of
 // allocation numbers that can be serviced by the allocator.
@@ -61,7 +59,6 @@ class SlabList {
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SlabList);
 };
-
 
 // Simple, lock-free allocator. This allocator operates at a page granularity,
 // where each page begins with some meta-data (`SlabList`) and then contains
@@ -99,7 +96,6 @@ class SlabAllocator {
 };
 
 }  // namespace internal
-
 
 // Simple, slab-based allocator used to service operators `new` and `delete` for
 // simple types. This allocator does not support allocating arrays of objects
@@ -160,7 +156,6 @@ class OperatorNewAllocator {
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(OperatorNewAllocator, (T));
 };
-
 
 // Static initialization of the (typeless) internal slab allocator.
 template <typename T>

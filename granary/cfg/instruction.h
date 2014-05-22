@@ -169,6 +169,11 @@ enum InstructionAnnotation {
   // Target of a branch instruction.
   IA_LABEL,
 
+  // A special label that refers to the location of a return address after
+  // a function call instruction. This is primarily used during late mangling
+  // of indirect call instructions.
+  IA_RETURN_ADDRESS,
+
   // Marks the stack as changing to a valid or undefined stack pointer value.
   IA_UNDEFINED_STACK,
   IA_UNKNOWN_STACK,

@@ -21,6 +21,7 @@ namespace granary {
 // Forward declarations.
 class Operand;
 class NativeInstruction;
+class AnnotationInstruction;
 
 namespace arch {
 
@@ -34,7 +35,8 @@ class Operand : public OperandInterface {
         is_sticky(false),
         is_explicit(false),
         is_compound(false),
-        is_effective_address(false) {
+        is_effective_address(false),
+        is_annot_encoded_pc(false) {
     imm.as_uint = 0;
   }
 
@@ -125,6 +127,9 @@ class Operand : public OperandInterface {
       uint8_t scale;
     } __attribute__((packed)) mem;
 
+    // Annotation instruction representing the location of a return address.
+    AnnotationInstruction *ret_address;
+
   } __attribute__((packed));
 
   xed_encoder_operand_type_t type:8;
@@ -143,6 +148,11 @@ class Operand : public OperandInterface {
   // Does this memory operand access memory? An example of a case where a memory
   // operand does not access memory is `LEA`.
   bool is_effective_address:1;
+
+  // Does this pointer memory operand refer to an annotation instruction's
+  // encoded program counter? This is used when mangling indirect calls, because
+  // we need to manually PUSH the return address onto the stack.
+  bool is_annot_encoded_pc:1;
 
 } __attribute__((packed));
 

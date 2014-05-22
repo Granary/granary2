@@ -105,21 +105,6 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   }
 }
 
-// Make a simple base/displacement memory operand.
-static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg) {
-  Operand op;
-  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
-  if (disp) {
-    op.is_compound = true;
-    op.mem.disp = disp;
-    op.mem.reg_base = base_reg;
-  } else {
-    op.is_compound = false;
-    op.reg.DecodeFromNative(base_reg);
-  }
-  return op;
-}
-
 // Add in an extra instruction for a read from the stack pointer. The purpose
 // of this is that if an instruction reads from the stack pointer, then we'll
 // potentially need to emulate what the intended stack pointer read is later
@@ -131,7 +116,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
     Instruction ni;
     auto sp = block->AllocateVirtualRegister();
     sp.ConvertToVirtualStackPointer();
-    APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP)));
+    APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP, 64)));
     sp.Widen(op.reg.ByteWidth());
     op.reg = sp;  // Replace the operand.
   }
@@ -145,7 +130,6 @@ void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
     if (op.is_explicit) {
       if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
         MangleExplicitMemOp(block, op);
-
       } else if (op.IsRegister() && op.reg.IsStackPointer()) {
         MangleExplicitStackPointerRegOp(block, op);
       }
@@ -163,14 +147,59 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
 
 // Mangle a `PUSH_MEMv` instruction.
 static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
+  GRANARY_ASSERT(-1 != instr->effective_operand_width);
   auto op = instr->ops[0];
-  if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
-    Instruction ni;
-    auto vr = block->AllocateVirtualRegister();
-    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
-    APP(MOV_MEMv_GPRv(&ni, BaseDispMemOp(0, XED_REG_RSP), vr));
-    LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-8, XED_REG_RSP));
-    AnalyzedStackUsage(instr, true, true);
+  auto stack_shift = instr->effective_operand_width / 8;
+  auto vr = block->AllocateVirtualRegister(stack_shift);
+  auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
+                                    instr->effective_operand_width);
+  Instruction ni;
+  APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
+  APP(MOV_MEMv_GPRv(&ni, stack_mem_op, vr));
+  LEA_GPRv_AGEN(instr, XED_REG_RSP,
+                BaseDispMemOp(-stack_shift, XED_REG_RSP, 64));
+  AnalyzedStackUsage(instr, true, true);
+}
+
+// Mangle `PUSH_IMMz` and `PUSH_IMMb` instructions.
+//
+// Note: During decoding, we will have done the correct sign-extension.
+static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
+  auto op = instr->ops[0];
+  auto vr = block->AllocateVirtualRegister(op.ByteWidth());
+  Instruction ni;
+  APP(MOV_GPRv_IMMz(&ni, vr, op));
+  instr->iform = XED_IFORM_PUSH_GPRv_50;
+  instr->ops[0].reg = vr;
+  instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
+}
+
+// Mangle a `PUSH_FS` or `PUSH_GS` instruction. We do this mangling ahead of
+// time and not during virtual register slot mangling (assembly step 9) because
+// it's convenient.
+//
+// Note: Need to do the proper zero-extension of the 16 bit value.
+static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  auto vr_16 = block->AllocateVirtualRegister(2);
+  auto vr_32 = vr_16.WidenedTo(4);
+  APP(MOV_GPRv_SEG(&ni, vr_16, instr->ops[0].reg));
+  APP(MOVZX_GPRv_GPR16(&ni, vr_32, vr_16));
+  instr->iform = XED_IFORM_PUSH_GPRv_50;
+  instr->ops[0].reg = vr_16;
+  instr->ops[0].reg.Widen(instr->ops[0].ByteWidth());
+}
+
+// Mangle a `PUSH_*` instruction.
+static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
+  if (XED_ENCODER_OPERAND_TYPE_MEM == instr->ops[0].type) {
+    ManglePushMemOp(block, instr);
+  } else if (XED_ENCODER_OPERAND_TYPE_IMM0 == instr->ops[0].type ||
+      XED_ENCODER_OPERAND_TYPE_SIMM0 == instr->ops[0].type) {
+    ManglePushImmOp(block, instr);
+  } else if (XED_IFORM_PUSH_FS == instr->iform ||
+             XED_IFORM_PUSH_GS == instr->iform) {
+    ManglePushSegReg(block, instr);
   }
 }
 
@@ -178,18 +207,26 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
 static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
   Instruction ni;
-  auto vr = block->AllocateVirtualRegister();
-  APP(MOV_GPRv_MEMv(&ni, vr, BaseDispMemOp(0, XED_REG_RSP)));
+  GRANARY_ASSERT(-1 != instr->effective_operand_width);
+  auto stack_shift = instr->effective_operand_width / 8;
+  auto vr = block->AllocateVirtualRegister(stack_shift);
+  auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
+                                    instr->effective_operand_width);
+  APP(MOV_GPRv_MEMv(&ni, vr, stack_mem_op));
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
-  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(8, XED_REG_RSP));
+  LEA_GPRv_AGEN(instr, XED_REG_RSP,
+                BaseDispMemOp(stack_shift, XED_REG_RSP, 64));
   AnalyzedStackUsage(instr, true, true);
 }
 
 // Mangle a `POP_GPRv` instruction, where the popped GPR is the stack pointer.
 static void ManglePopStackPointer(DecodedBasicBlock *block,
                                   Instruction *instr) {
+  GRANARY_ASSERT(-1 != instr->effective_operand_width);
   auto decoded_pc = instr->decoded_pc;
-  MOV_GPRv_MEMv(instr, instr->ops[0].reg, BaseDispMemOp(0, XED_REG_RSP));
+  auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
+                                    instr->effective_operand_width);
+  MOV_GPRv_MEMv(instr, instr->ops[0].reg, stack_mem_op);
   instr->decoded_pc = decoded_pc;
   AnalyzedStackUsage(instr, true, true);
   MangleDecodedInstruction(block, instr, true);
@@ -227,7 +264,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
-  APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP)));
+  APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, 64)));
   APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP));
 
   // In the case of something like watchpoints, where `RBP` is being tracked,
@@ -235,13 +272,13 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   // somehow watched), then we want to see these memory writes.
   for (auto i = 0UL; i < num_args; ++i) {
     auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
-    APP_NATIVE_MANGLED(PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP)));
+    APP_NATIVE_MANGLED(PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP, 64)));
   }
 
   if (frame_size) {
     APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
                       BaseDispMemOp(-static_cast<int32_t>(frame_size),
-                                    XED_REG_RSP)));
+                                    XED_REG_RSP, 64)));
 
     // Enter finishes with a memory write that is "unused". This is to detect
     // stack segment issues and page faults. We don't even bother with this
@@ -269,6 +306,26 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   AnalyzedStackUsage(instr, true, true);
 }
 
+// This is a big hack: it is our way of ensuring that during late mangling, we
+// have access to some kind of virtual register for `PUSHF` and `PUSHFQ`.
+static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
+  auto flag_size = XED_ICLASS_PUSHF == instr->iclass ? 2 : 8;
+  instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
+  instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
+  instr->ops[0].rw = XED_OPERAND_ACTION_W;
+  ++(instr->num_explicit_ops);
+}
+
+// This is a big hack: it is our way of ensuring that during late mangling, we
+// have access to some kind of virtual register for `POPF` and `POPFQ`.
+static void ManglePopFlags(DecodedBasicBlock *block, Instruction *instr) {
+  auto flag_size = XED_ICLASS_PUSHF == instr->iclass ? 2 : 8;
+  instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
+  instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
+  instr->ops[0].rw = XED_OPERAND_ACTION_W;
+  ++(instr->num_explicit_ops);
+}
+
 }  // namespace
 
 // Perform "early" mangling of some instructions. This is primary to make the
@@ -293,8 +350,23 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
             new AnnotationInstruction(IA_VALID_STACK));
       }
     } else {
-      block->UnsafeAppendInstruction(
-          new AnnotationInstruction(IA_UNDEFINED_STACK));
+      switch (instr->iclass) {
+        // These instruction's don't shift the stack pointer by a constant
+        // amount, but still signal that it's valid.
+        case XED_ICLASS_RET_FAR:
+        case XED_ICLASS_CALL_FAR:
+        case XED_ICLASS_IRET:
+          block->UnsafeAppendInstruction(
+             new AnnotationInstruction(IA_VALID_STACK));
+          break;
+
+        // An instruction like `LEAVE` is first caught here, then later mangled
+        // so that the end result is:
+        //      `<unknown stack>; MOV RSP, RBP; <valid stack>; POP RBP`
+        default:
+          block->UnsafeAppendInstruction(
+              new AnnotationInstruction(IA_UNDEFINED_STACK));
+      }
     }
   }
 
@@ -306,7 +378,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_LEA:
       break;
     case XED_ICLASS_PUSH:
-      ManglePushMemOp(block, instr);
+      ManglePush(block, instr);
       break;
     case XED_ICLASS_POP:
       ManglePop(block, instr);
@@ -319,6 +391,14 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       break;
     case XED_ICLASS_LEAVE:
       MangleLeave(block, instr);
+      break;
+    case XED_ICLASS_PUSHF:
+    case XED_ICLASS_PUSHFQ:
+      ManglePushFlags(block, instr);
+      break;
+    case XED_ICLASS_POPF:
+    case XED_ICLASS_POPFQ:
+      ManglePopFlags(block, instr);
       break;
     default:
       MangleExplicitOps(block, instr);

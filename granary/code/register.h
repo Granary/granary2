@@ -174,6 +174,12 @@ union VirtualRegister {
   // Note: This has an architecture-specific implementation.
   void Widen(int dest_byte_width);
 
+  inline VirtualRegister WidenedTo(int dest_byte_width) const {
+    auto widened = *this;
+    widened.Widen(dest_byte_width);
+    return widened;
+  }
+
   // Compare one virtual register with another.
   //
   // Note: This does not consider bit width.

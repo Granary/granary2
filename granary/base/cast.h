@@ -23,7 +23,7 @@ ToT UnsafeCast(FromT);
 
 #else
 
-// Non-integral, non-pointer type to something else.
+// Integral or pointer type to some non-integral/pointer type.
 //
 // Note: `__builtin_memcpy` is used instead of `memcpy`, mostly for the
 //     sake of kernel code where it sometimes seems that the optimisation
@@ -32,8 +32,8 @@ template <
   typename ToT,
   typename FromT,
   typename EnableIf<
-    !IsPointer<FromT>() && !IsInteger<FromT>() &&
-    !IsPointer<ToT>() && !IsInteger<ToT>()
+    !IsPointer<ToT>() && !IsInteger<ToT>() &&
+    (IsPointer<FromT>() || IsInteger<FromT>())
   >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {

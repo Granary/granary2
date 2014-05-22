@@ -535,7 +535,14 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
         frag->stack.is_checked = true;
         frag->stack.is_valid = false;
         return SplitFragment(frags, frag, block, next);
+
+      // Special case related to indirect call mangling. Indirect calls might
+      // be mangled into pushes of a return address, followed by indirect
+      // jumps.
+      } else if (IA_RETURN_ADDRESS == annot->annotation) {
+        frag = Append(frags, block, frag, instr);
       }
+
       instr = next;
 
     // Extend block with this instruction and move to the next instruction.

@@ -11,8 +11,8 @@ const char *NULTerminatedStringIterator::EOS = "";
 
 // Returns the length of a C string, i.e. the number of non-'\0' characters up
 // to but excluding the first '\0' character.
-unsigned long StringLength(const char *ch) {
-  unsigned long len(0);
+uint64_t StringLength(const char *ch) {
+  uint64_t len(0);
   if (ch) {
     for (; *ch; ++ch) {
       ++len;
@@ -24,7 +24,7 @@ unsigned long StringLength(const char *ch) {
 // Copy at most `buffer_len` characters from the C string `str` into `buffer`.
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`. Returns
 // the number of characters copied, exluding the trailing '\0'.
-unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
+uint64_t CopyString(char * __restrict buffer, uint64_t buffer_len,
                          const char * __restrict str) {
   if (buffer && str) {
     WriteBuffer buff(buffer, buffer_len);
@@ -54,13 +54,25 @@ namespace {
 
 typedef decltype('\0') CharLiteral;
 
+enum : uint64_t {
+  HIGH_BIT_SET = 1ULL << 63
+};
+
+inline static bool IsSignedNegative(uint64_t num) {
+  return HIGH_BIT_SET == (HIGH_BIT_SET & num);
+}
+
 // Write an integer into a string.
-static void FormatGenericInt(WriteBuffer &buff, unsigned long data,
-                             unsigned long base) {
+static void FormatGenericInt(WriteBuffer &buff, uint64_t data, uint64_t base) {
   if (!data) {
     buff.Write('0');
     return;
   }
+  if (IsSignedNegative(data)) {
+    buff.Write('-');
+    data = static_cast<uint64_t>(-static_cast<int64_t>(data));
+  }
+
   auto max_base = base;
   for (; data / max_base; max_base *= base) {}
   for (max_base /= base; max_base; max_base /= base) {
@@ -75,14 +87,14 @@ static void FormatGenericInt(WriteBuffer &buff, unsigned long data,
 }
 
 // De-format a hexadecimal digit.
-static bool DeFormatHexadecimal(char digit, unsigned long *value) {
-  unsigned long increment(0);
+static bool DeFormatHexadecimal(char digit, uint64_t *value) {
+  uint64_t increment(0);
   if ('0' <= digit && digit <= '9') {
-    increment = static_cast<unsigned long>(digit - '0');
+    increment = static_cast<uint64_t>(digit - '0');
   } else if ('a' <= digit && digit <= 'f') {
-    increment = static_cast<unsigned long>(digit - 'a') + 10;
+    increment = static_cast<uint64_t>(digit - 'a') + 10;
   } else if ('A' <= digit && digit <= 'F') {
-    increment = static_cast<unsigned long>(digit - 'A') + 10;
+    increment = static_cast<uint64_t>(digit - 'A') + 10;
   } else {
     return false;
   }
@@ -91,19 +103,19 @@ static bool DeFormatHexadecimal(char digit, unsigned long *value) {
 }
 
 // Deformat a decimal digit.
-static bool DeFormatDecimal(char digit, unsigned long *value) {
+static bool DeFormatDecimal(char digit, uint64_t *value) {
   if ('0' <= digit && digit <= '9') {
-    *value = (*value * 10) + static_cast<unsigned long>(digit - '0');
+    *value = (*value * 10) + static_cast<uint64_t>(digit - '0');
     return true;
   }
   return false;
 }
 
 // De-format a generic integer.
-static unsigned long DeFormatGenericInt(const char *buffer, void *data,
-                                        bool is_64_bit, bool is_signed,
-                                        unsigned long base) {
-  unsigned long len(0);
+static uint64_t DeFormatGenericInt(const char *buffer, void *data,
+                                   bool is_64_bit, bool is_signed,
+                                   uint64_t base) {
+  uint64_t len(0);
   bool is_negative(false);
   if (is_signed && '-' == buffer[0]) {
     len++;
@@ -112,12 +124,12 @@ static unsigned long DeFormatGenericInt(const char *buffer, void *data,
   }
 
   // Decode the value.
-  unsigned long value(0);
+  uint64_t value(0);
   auto get_digit = (16 == base) ? DeFormatHexadecimal : DeFormatDecimal;
   for (; get_digit(buffer[0], &value); ++buffer, ++len) {}
 
   if (is_negative) {
-    value = static_cast<unsigned long>(-static_cast<long>(value));
+    value = static_cast<uint64_t>(-static_cast<long>(value));
   }
 
   // Store the decoded value.
@@ -137,8 +149,8 @@ static unsigned long DeFormatGenericInt(const char *buffer, void *data,
 }  // namespace
 
 // Similar to `vsnprintf`. Returns the number of formatted characters.
-unsigned long VarFormat(char * __restrict buffer, unsigned long len,
-                        const char * __restrict format, va_list args) {
+uint64_t VarFormat(char * __restrict buffer, uint64_t len,
+                   const char * __restrict format, va_list args) {
   if (!buffer || !format || !len) {
     return 0;
   }
@@ -182,7 +194,7 @@ unsigned long VarFormat(char * __restrict buffer, unsigned long len,
           buff.Write('-');
           generic_int = -generic_int;
         }
-        FormatGenericInt(buff, static_cast<unsigned long>(generic_int), 10);
+        FormatGenericInt(buff, static_cast<uint64_t>(generic_int), 10);
       } else if ('u' == format_ch || 'x' == format_ch || 'p' == format_ch) {
         if ('x' == format_ch) {
           base = 16;
@@ -190,11 +202,11 @@ unsigned long VarFormat(char * __restrict buffer, unsigned long len,
           base = 16;
           is_long = true;
         }
-        unsigned long generic_uint(0);
+        uint64_t generic_uint(0);
         if (is_long) {
-          generic_uint = va_arg(args, unsigned long);
+          generic_uint = va_arg(args, uint64_t);
         } else {
-          generic_uint = static_cast<unsigned long>(va_arg(args, unsigned));
+          generic_uint = static_cast<uint64_t>(va_arg(args, unsigned));
         }
         if ('p' == format_ch) {
           if (!generic_uint) {
@@ -217,7 +229,7 @@ unsigned long VarFormat(char * __restrict buffer, unsigned long len,
 
 // Similar to `snprintf`. Returns the number of formatted characters.
 __attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char * __restrict buffer, unsigned long len,
+uint64_t Format(char * __restrict buffer, uint64_t len,
                      const char * __restrict format, ...) {
   va_list args;
   va_start(args, format);
@@ -236,7 +248,7 @@ int DeFormat(const char * __restrict buffer,
   int num_args(0);
   bool is_64_bit(false);
   bool is_signed(false);
-  unsigned long base(10);
+  uint64_t base(10);
 
   for (; buffer[0] && format[0]; ) {
     if ('%' != format[0]) {  // Treat `%%` as a single char.

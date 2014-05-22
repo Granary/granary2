@@ -25,6 +25,12 @@ extern void RelativizeDirectCFI(ControlFlowInstruction *cfi,
                                 arch::Instruction *instr, PC target_pc,
                                 bool target_is_far_away);
 
+// Performs mangling of an indirect CFI instruction.
+//
+// Note: This has an architecture-specific implementation.
+extern void MangleIndirectCFI(DecodedBasicBlock *block,
+                              ControlFlowInstruction *cfi);
+
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
 //
@@ -114,6 +120,8 @@ class BlockMangler {
         auto target_pc = target_block->StartAppPC();
         RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
                             AddressNeedsRelativizing(target_pc));
+      } else {
+        MangleIndirectCFI(block, cfi);
       }
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {
@@ -121,6 +129,7 @@ class BlockMangler {
       if (cfi->MatchOperands(ReadFrom(mloc))) {
         RelativizeMemOp(cfi, mloc);
       }
+      MangleIndirectCFI(block, cfi);
 
     // Need to mangle the indirect direct (with meta-data) into a return to
     // a different program counter.

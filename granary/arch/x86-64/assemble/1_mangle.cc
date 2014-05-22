@@ -177,6 +177,36 @@ void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
   }
 }
 
+// Performs mangling of an indirect CFI instruction.
+void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
+  if (!cfi->IsFunctionCall()) return;
+  auto ret_address = new AnnotationInstruction(IA_RETURN_ADDRESS);
+  arch::Instruction instr;
+  arch::Operand op;
+  auto ret_address_reg = block->AllocateVirtualRegister();
+  auto decoded_pc = cfi->instruction.decoded_pc;
+  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
+  op.is_effective_address = true;
+  op.is_annot_encoded_pc = true;
+  op.ret_address = ret_address;
+  LEA_GPRv_AGEN(&instr, ret_address_reg, op);
+  cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
+  PUSH_GPRv_50(&instr, ret_address_reg);
+  instr.decoded_pc = decoded_pc;  // Mark as application.
+  instr.AnalyzeStackUsage();
+  cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
+  auto indirect_target_op = cfi->instruction.ops[0];
+  if (indirect_target_op.IsRegister()) {
+    JMP_GPRv(&(cfi->instruction), indirect_target_op.reg);
+  } else if (indirect_target_op.IsMemory()) {
+    JMP_MEMv(&(cfi->instruction), indirect_target_op);
+  } else {
+    GRANARY_ASSERT(false);
+  }
+  cfi->instruction.decoded_pc = decoded_pc;
+  cfi->UnsafeInsertAfter(ret_address);
+}
+
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
 void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,

@@ -74,7 +74,10 @@ PartitionInfo::PartitionInfo(int id_)
       num_uses_of_gpr{0},
       preferred_gpr_num(-1),
       vr_being_scheduled(nullptr),
-      spill() {}
+      spill(),
+      GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
+      analyze_stack_frame(true),
+      min_frame_offset(0) {}
 
 // Clear out the number of usage count of registers in this partition.
 void PartitionInfo::ClearGPRUseCounters(void) {

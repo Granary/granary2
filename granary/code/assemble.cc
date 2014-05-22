@@ -76,6 +76,11 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // locations.
   ScheduleRegisters(&frags);
 
+  // Allocate space for the virtual registers, and perform final mangling of
+  // instructions so that all abstract spill slots are converted into concrete
+  // spill slots.
+  AllocateSlots(&frags);
+
   if (FLAG_debug_log_fragments) {
     Log(LogDebug, &frags);
   }
