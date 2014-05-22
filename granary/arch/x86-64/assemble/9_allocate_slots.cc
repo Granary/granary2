@@ -3,9 +3,18 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+// Append a non-native, created instruction to the block.
+#define INSERT_AFTER(...) \
+  do { \
+    __VA_ARGS__; \
+    frag->instrs.InsertAfter(instr, new NativeInstruction(&ni)); \
+  } while (0)
+
 #include "granary/arch/x86-64/builder.h"
 
 #include "granary/cfg/instruction.h"
+
+#include "granary/code/assemble/fragment.h"
 
 namespace granary {
 
@@ -14,7 +23,7 @@ namespace granary {
 NativeInstruction *AllocateStackSpace(int num_bytes) {
   arch::Instruction instr;
   LEA_GPRv_AGEN(&instr, XED_REG_RSP,
-                arch::BaseDispMemOp(num_bytes, XED_REG_RSP));
+                arch::BaseDispMemOp(num_bytes, XED_REG_RSP, 64));
   instr.AnalyzeStackUsage();
   return new NativeInstruction(&instr);
 }
@@ -29,12 +38,64 @@ NativeInstruction *FreeStackSpace(int num_bytes) {
 
 namespace {
 
+// Mangle `PUSH_GPRv_*` into a `MOV_MEMv_GPRv` that simulates the `PUSH`
+// instruction. We don't need to simulate changes to the stack pointer.
 static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
   auto op = instr->instruction.ops[0];
   if (op.IsRegister()) {
-    GRANARY_UNUSED(adjusted_offset);
+    auto mem_width = instr->instruction.effective_operand_width;
+    GRANARY_ASSERT(-1 != mem_width);
+    MOV_MEMv_GPRv(
+        &(instr->instruction),
+        arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width),
+        op.reg);
+
+  // Things like `PUSH_IMMv`, `PUSH_FS/GS`, and `PUSH_MEMv` should have already
+  // been early mangled.
   } else {
     GRANARY_ASSERT(false);
+  }
+}
+
+// Mangle `POP_GPRv_*` into a `MOV_GPRv_MEMv` that simulates the `PUSH`
+// instruction. We don't need to simulate changes to the stack pointer.
+static void ManglePop(NativeInstruction *instr, int adjusted_offset) {
+  auto op = instr->instruction.ops[0];
+  if (op.IsRegister()) {
+    auto mem_width = instr->instruction.effective_operand_width;
+    GRANARY_ASSERT(-1 != mem_width);
+    MOV_GPRv_MEMv(
+        &(instr->instruction),
+        op.reg,
+        arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width));
+
+  // Things like `POP_FS/GS` and `POP_MEMv` should have already been
+  // early mangled.
+  } else {
+    GRANARY_ASSERT(false);
+  }
+}
+
+// Returns true if an architectural operand looks like a spill slot.
+static bool IsSpillSlot(const arch::Operand &op) {
+  return op.IsMemory() && !op.is_compound && op.reg.IsVirtualSlot();
+}
+
+// Mangle a `MOV_GPRv_MEMv` or `MOV_MEMv_GPRv` instruction, where the `MEMv`
+// operand is assumed to be a abstract spill slot.
+static void MangleMov(NativeInstruction *instr) {
+  auto &ainstr(instr->instruction);
+  arch::Operand *mem_op(nullptr);
+  if (IsSpillSlot(ainstr.ops[0])) {
+    mem_op = &(ainstr.ops[0]);
+  } else if (IsSpillSlot(ainstr.ops[1])) {
+    mem_op = &(ainstr.ops[1]);
+  }
+  if (mem_op) {
+    const auto new_mem_op = arch::BaseDispMemOp(mem_op->reg.Number() * 8,
+                                                XED_REG_RSP, 64);
+    mem_op->mem = new_mem_op.mem;
+    mem_op->is_compound = new_mem_op.is_compound;
   }
 }
 
@@ -46,25 +107,32 @@ static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
 // Returns the next instruction on which we should operate.
 //
 // Note: This function has an architecture-specific implementation.
-Instruction *AdjustStackInstruction(NativeInstruction *instr,
-                                    int adjusted_frame_size,
-                                    int offset, int *next_offset) {
+Instruction *AdjustStackInstruction(Fragment *frag,
+                                    NativeInstruction *instr,
+                                    int adjusted_offset,
+                                    int *next_offset) {
   GRANARY_UNUSED(next_offset);
-
-  auto adjusted_offset = offset - adjusted_frame_size;
+  GRANARY_UNUSED(frag);
 
   auto &ainstr(instr->instruction);
+  const auto next = instr->Next();
+
   switch (ainstr.iclass) {
     case XED_ICLASS_PUSH:
       ManglePush(instr, adjusted_offset);
       break;
     case XED_ICLASS_POP:
+      ManglePop(instr, adjusted_offset);
+      break;
     case XED_ICLASS_PUSHF:
     case XED_ICLASS_PUSHFQ:
     case XED_ICLASS_POPF:
     case XED_ICLASS_POPFQ:
     case XED_ICLASS_RET_NEAR:
     case XED_ICLASS_MOV:
+      MangleMov(instr);
+      break;
+
     case XED_ICLASS_LEA:
       // TODO!
       break;
@@ -86,7 +154,7 @@ Instruction *AdjustStackInstruction(NativeInstruction *instr,
       // TODO!
       break;
   }
-  return instr->Next();
+  return next;
 }
 
 }

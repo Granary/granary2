@@ -353,6 +353,10 @@ static ControlFlowInstruction *NextUninterruptedCFI(Instruction *next) {
   return nullptr;
 }
 
+// Append a CFI to a fragment, and potentially make a new fragment for the CFI.
+//
+// TODO(pag): Clean up this function; it is incredibly complicated and I'm
+//            unlikely to remember all the nuances in the future.
 static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
                                DecodedBasicBlock *block,
                                Fragment *target_frag,
@@ -365,20 +369,45 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
   if (auto target_cfrag = DynamicCast<CodeFragment *>(target_frag)) {
     targets_edge_code = target_cfrag->attr.is_edge_code;
   }
-  if (frag->attr.has_native_instrs && makes_stack_valid &&
-      frag->stack.is_checked && !frag->stack.is_valid) {
-    ret_frag = nullptr;
+  if (frag->attr.has_native_instrs) {
+    // This CFI is not compatible with the current fragment because this CFI
+    // makes the stack valid, but the `frag`s stack isn't valid.
+    if (makes_stack_valid && frag->stack.is_checked && !frag->stack.is_valid) {
+      ret_frag = nullptr;
+    }
+
+    // Force things like direct jumps and calls into their own fragments.
+    // Indirect jumps, indirect calls, and specialized returns can be placed
+    // in the same fragment as other code because the edge code will share
+    // virtual register scope with the instructions before the jump/call/return.
+    if (!cfi->HasIndirectTarget() && !cfi->IsConditionalJump()) {
+      ret_frag = nullptr;
+      if (targets_edge_code) {
+        can_add_to_partition = false;
+      }
+    }
   }
+
+  // Handle cases like unspecialized returnes, interrupt returns, and system
+  // returns, making sure that we never put them in the same partition with
+  // some other code, otherwise we risk saving/restoring regs before/after this
+  // instruction, and control will never reach "after" this instruction as it
+  // will have gone somewhere else.
   if (!targets_edge_code && cfi->instruction.WritesToStackPointer()) {
     if (frag->attr.has_native_instrs) ret_frag = nullptr;
     can_add_to_partition = false;
   }
+
+  // We need to add a new fragment for this CFI.
   if (!ret_frag) {
     auto label = new LabelInstruction;
     auto succ = MakeEmptyLabelFragment(frags, block, label);
     frag->successors[0] = succ;
     ret_frag = succ;
   }
+
+  // This CFI is something like a function call / return, i.e. it makes the
+  // stack pointer appear to point to a C-style call stack.
   if (makes_stack_valid) {
     ret_frag->stack.is_valid = true;
     ret_frag->stack.is_checked = true;

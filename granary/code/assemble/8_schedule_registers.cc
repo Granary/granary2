@@ -241,6 +241,7 @@ class LocalScheduler {
         live_regs(),
         next_live_regs(frag->regs.live_on_exit),
         preferred_gpr_num(preferred_gpr_num_) {
+    for (auto &homable : gpr_is_occupiable) homable = false;
     for (auto &vr : vr_occupying_gpr) vr = nullptr;
     for (auto &slot : slot_containing_gpr) slot = -1;
   }
@@ -255,6 +256,22 @@ class LocalScheduler {
 
       // Mark the storage for this node as not being backed.
       vr->reg = VirtualRegister();
+
+      // This GPR will be restored from a slot, but the GPR is available to
+      // be re-used by the VR system, therefore we need to save the GPR to
+      // the slot, but we don't need to expect a def/use earlier in the
+      // instruction stream.
+      if (gpr_is_occupiable[n]) {
+        frag->instrs.InsertAfter(
+            instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+        vr = nullptr;
+        slot = -1;
+        gpr_is_occupiable[n] = false;
+        continue;
+      }
+
+      // We expect a def/use earlier in the instruction stream, and so we will
+      // try to move where the VR is currently located.
 
       auto new_gpr_num = -1;
       auto stole_new_gpr = TryStealGPR(new_gpr_num);
@@ -287,7 +304,7 @@ class LocalScheduler {
   int GetMinUsedDeadReg(int &gpr_num) {
     int lowest_num_uses = NUM_USES_MAX;
     for (auto n = NUM_GPRS - 1; n >= 0; --n) {
-      if (vr_occupying_gpr[n]) continue;  // Used by another VR.
+      if (vr_occupying_gpr[n] && !gpr_is_occupiable[n]) continue;  // In use.
       if (used_regs.IsLive(n)) {
         if (next_live_regs.IsLive(n)) {
           continue;  // Used in the instruction, and remains live.
@@ -309,7 +326,7 @@ class LocalScheduler {
   int GetMinUsedUnusedReg(int &gpr_num) {
     int lowest_num_uses = NUM_USES_MAX;
     for (auto n = NUM_GPRS - 1; n >= 0; --n) {
-      if (vr_occupying_gpr[n]) continue;  // Used by another VR.
+      if (vr_occupying_gpr[n] && !gpr_is_occupiable[n]) continue;  // In use.
       if (used_regs.IsLive(n)) {
         continue;  // Used in the instruction.
       }
@@ -381,14 +398,33 @@ class LocalScheduler {
     auto gpr_num = -1;
     auto is_stolen = TryStealGPR(gpr_num);
     GRANARY_ASSERT(-1 != gpr_num);
-    GRANARY_ASSERT(-1 == slot_containing_gpr[gpr_num]);
     GRANARY_ASSERT(-1 != vr->slot);
+
+    const auto was_occupiable = gpr_is_occupiable[gpr_num];
+
+    // Are we re-using an already stolen slot? If so, mark the slot at no longer
+    // occupiable and mantain our expected invariants.
+    if (was_occupiable) {
+      GRANARY_ASSERT(nullptr != vr_occupying_gpr[gpr_num]);
+      if (-1 != slot_containing_gpr[gpr_num] &&
+        vr->slot != slot_containing_gpr[gpr_num]) {
+        frag->instrs.InsertBefore(
+              instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+      }
+      slot_containing_gpr[gpr_num] = -1;
+      gpr_is_occupiable[gpr_num] = false;
+    } else {
+      GRANARY_ASSERT(-1 == slot_containing_gpr[gpr_num]);
+    }
+
     vr_occupying_gpr[gpr_num] = vr;
     vr->reg = NthArchGPR(gpr_num);
     if (!is_stolen) {
       slot_containing_gpr[gpr_num] = vr->slot;
-      frag->instrs.InsertAfter(
-          instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
+      if (!was_occupiable) {
+        frag->instrs.InsertAfter(
+            instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
+      }
     }
   }
 
@@ -397,6 +433,13 @@ class LocalScheduler {
     auto gpr_num = vr->reg.Number();
     vr_occupying_gpr[gpr_num] = nullptr;
     slot_containing_gpr[gpr_num] = -1;
+  }
+
+  // Mark the GPR associated with `vr->reg` as occupiable. That is, a VR
+  // previously occupied in, but no longer needs to occupy it.
+  void MarkGPRAsOccupiable(SSASpillStorage *vr) {
+    frag->spill.FreeSpillSlot(vr->slot);
+    gpr_is_occupiable[vr->reg.Number()] = true;
   }
 
   SSAFragment *frag;
@@ -408,6 +451,7 @@ class LocalScheduler {
   // The preferred reguster to steal, if it's not used.
   int preferred_gpr_num;
 
+  bool gpr_is_occupiable[NUM_GPRS];
   SSASpillStorage *vr_occupying_gpr[NUM_GPRS];
   int slot_containing_gpr[NUM_GPRS];
 
@@ -473,9 +517,7 @@ static void ScheduleFragLocalRegDefs(LocalScheduler *sched,
         sched->StealOrFillSpilledGPR(instr, vr);
       }
       if (SSAOperandAction::WRITE == def.action) {
-        sched->frag->instrs.InsertBefore(
-            instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
-        sched->MarkGPRAsHomed(vr);
+        sched->MarkGPRAsOccupiable(vr);
       }
       ReplaceOperand(def);
     }

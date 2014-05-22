@@ -27,9 +27,10 @@ extern NativeInstruction *FreeStackSpace(int num_bytes);
 // Returns the next instruction on which we should operate.
 //
 // Note: This function has an architecture-specific implementation.
-extern Instruction *AdjustStackInstruction(NativeInstruction *instr,
-                                           int adjusted_frame_size,
-                                           int offset, int *next_offset);
+extern Instruction *AdjustStackInstruction(Fragment *frag,
+                                           NativeInstruction *instr,
+                                           int adjusted_offset,
+                                           int *next_offset);
 
 namespace {
 
@@ -60,7 +61,8 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
         auto has_succ = false;
         for (auto succ : frag->successors) {
           if (succ) {
-            if (succ->partition != frag->partition) {
+            if (succ->partition != frag->partition &&
+                !code_frag->attr.branches_to_edge_code) {
               partition->analyze_stack_frame = false;
             }
             has_succ = true;
@@ -178,15 +180,11 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       auto adjust = ninstr->MetaData<FrameAdjust>();
       next_offset = adjust.shift;
-
-      if (ninstr->instruction.ReadsFromStackPointer() ||
-          ninstr->instruction.WritesToStackPointer()) {
-        instr = AdjustStackInstruction(
-            ninstr, frame_space, offset, &next_offset);
-        continue;
-      }
+      instr = AdjustStackInstruction(frag, ninstr, offset - frame_space,
+                                     &next_offset);
+    } else {
+      instr = instr->Next();
     }
-    instr = instr->Next();
   }
 }
 
@@ -195,8 +193,9 @@ static void AllocateStackSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     auto partition = frag->partition.Value();
     if (!partition->analyze_stack_frame) continue;
-    const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES;
-    if (!vr_space) continue;
+    const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
+                          arch::REDZONE_SIZE_BYTES;
+    if (vr_space == arch::REDZONE_SIZE_BYTES) continue;
     const auto frame_space = partition->min_frame_offset - vr_space;
 
     if (IsA<PartitionEntryFragment *>(frag)) {
@@ -204,7 +203,7 @@ static void AllocateStackSlots(FragmentList *frags) {
     } else if (IsA<PartitionExitFragment *>(frag)) {
       frag->instrs.Append(FreeStackSpace(
           -(frame_space - frag->stack_frame.entry_offset)));
-    } else if (IsA<CodeFragment *>(frag)) {
+    } else if (IsA<SSAFragment *>(frag)) {
       AdjustStackInstructions(frag, frame_space);
     }
   }

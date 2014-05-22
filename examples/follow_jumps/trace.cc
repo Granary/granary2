@@ -15,8 +15,6 @@ class JumpFollower : public Tool {
         continue;
       }
       for (auto succ : block->Successors()) {
-        factory->RequestBlock(succ.block);  // TODO(pag): Remove me!
-        continue;  // TODO(pag): Remove me!
 
         if (succ.cti->IsConditionalJump()) {
           // Expand the target of a conditional jump only if it's a back-edge.

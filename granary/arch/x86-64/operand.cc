@@ -202,6 +202,7 @@ static void EncodeMemOpToString(const Operand *op, OperandString *str) {
   }
   if (op->mem.disp) {
     if (op->mem.disp > 0) {
+      GRANARY_ASSERT(op->mem.reg_base || op->mem.reg_index);
       str->UpdateFormat(" + %d", op->mem.disp);
     } else {
       str->UpdateFormat(" - %d", -op->mem.disp);

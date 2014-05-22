@@ -8,6 +8,8 @@
 
 #define GRANARY_ARCH_PAGE_FRAME_SIZE 4096
 
+#include "granary/base/base.h"
+
 namespace granary {
 namespace arch {
 
@@ -19,6 +21,8 @@ enum {
 
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,
+
+  REDZONE_SIZE_BYTES = GRANARY_IF_USER_ELSE(128, 0),
 
   // Size of widest general purpose registers.
   GPR_WIDTH_BYTES = ADDRESS_WIDTH_BYTES,

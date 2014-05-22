@@ -29,6 +29,7 @@ namespace arch {
   do { \
     __VA_ARGS__; \
     ni.decoded_pc = instr->decoded_pc; \
+    ni.effective_operand_width = instr->effective_operand_width; \
     ni.AnalyzeStackUsage(); \
     block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
@@ -40,6 +41,7 @@ namespace arch {
   do { \
     __VA_ARGS__; \
     ni.decoded_pc = instr->decoded_pc; \
+    ni.effective_operand_width = instr->effective_operand_width; \
     MangleDecodedInstruction(block, &ni, true); \
     block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
@@ -105,20 +107,38 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   }
 }
 
+// Mangle a `MOV_GPRv_GPRv_89 <gpr>, RSP` into an `LEA_GPRv_AGEN <gpr>, [RSP]`.
+// This plays nicer with later slot allocation.
+static void MoveStackPointerToGPR(Instruction *instr) {
+  auto decoded_pc = instr->decoded_pc;
+  LEA_GPRv_AGEN(instr, instr->ops[0].reg, BaseDispMemOp(0, XED_REG_RSP, 64));
+  instr->effective_operand_width = 64;
+  instr->decoded_pc = decoded_pc;
+}
+
 // Add in an extra instruction for a read from the stack pointer. The purpose
 // of this is that if an instruction reads from the stack pointer, then we'll
 // potentially need to emulate what the intended stack pointer read is later
 // on when virtual register spilling might have changed the actual stack
 // pointer.
 static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
+                                            Instruction *instr,
                                             Operand &op) {
+
+  // We special case `MOV_GPRv_GPRv <reg>, RSP` so that later we can potentially
+  // avoid virtual register usage on function prologues.
   if (!op.IsWrite()) {
-    Instruction ni;
-    auto sp = block->AllocateVirtualRegister();
-    sp.ConvertToVirtualStackPointer();
-    APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP, 64)));
-    sp.Widen(op.reg.ByteWidth());
-    op.reg = sp;  // Replace the operand.
+    if (XED_IFORM_MOV_GPRv_GPRv_89 == instr->iform &&
+        64 == instr->effective_operand_width) {
+      MoveStackPointerToGPR(instr);
+    } else {
+      Instruction ni;
+      auto sp = block->AllocateVirtualRegister();
+      sp.ConvertToVirtualStackPointer();
+      APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP, 64)));
+      sp.Widen(op.reg.ByteWidth());
+      op.reg = sp;  // Replace the operand.
+    }
   }
 }
 
@@ -131,7 +151,7 @@ void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
       if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
         MangleExplicitMemOp(block, op);
       } else if (op.IsRegister() && op.reg.IsStackPointer()) {
-        MangleExplicitStackPointerRegOp(block, op);
+        MangleExplicitStackPointerRegOp(block, instr, op);
       }
     }
   }
@@ -224,12 +244,40 @@ static void ManglePopStackPointer(DecodedBasicBlock *block,
                                   Instruction *instr) {
   GRANARY_ASSERT(-1 != instr->effective_operand_width);
   auto decoded_pc = instr->decoded_pc;
+  auto op_size = instr->effective_operand_width;
   auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
                                     instr->effective_operand_width);
   MOV_GPRv_MEMv(instr, instr->ops[0].reg, stack_mem_op);
   instr->decoded_pc = decoded_pc;
+  instr->effective_operand_width = op_size;
   AnalyzedStackUsage(instr, true, true);
   MangleDecodedInstruction(block, instr, true);
+}
+
+// Mangle a `POP_FS` or `POP_GS` instruction. We do this mangling ahead of
+// time and not during virtual register slot mangling (assembly step 9) because
+// it's convenient.
+//
+// Note: Need to do the proper zero-extension of the 16 bit value.
+static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
+  Instruction ni;
+  auto stack_shift = instr->effective_operand_width / 8;
+  auto vr = block->AllocateVirtualRegister(stack_shift);
+  auto vr_16 = vr.WidenedTo(2);
+  auto seg_reg = instr->ops[0].reg;
+
+  // Pop into a GPR instead of into the segment.
+  instr->ops[0].reg = vr;
+  instr->ops[0].width = instr->effective_operand_width;
+  instr->iform = XED_IFORM_POP_GPRv_51;
+  block->UnsafeAppendInstruction(new NativeInstruction(instr));
+
+  // Replace `instr` with a `MOV` into the segment reg with the value that was
+  // popped off the top of the stack.
+  auto decoded_pc = instr->decoded_pc;
+  MOV_SEG_GPR16(instr, seg_reg, vr_16);
+  instr->decoded_pc = decoded_pc;
+  instr->effective_operand_width = 16;
 }
 
 // Mangle a `POP_*` instruction.
@@ -239,6 +287,9 @@ static void ManglePop(DecodedBasicBlock *block, Instruction *instr) {
     ManglePopMemOp(block, instr);
   } else if (op.IsRegister() && op.reg.IsStackPointer()) {
     ManglePopStackPointer(block, instr);
+  } else if (XED_IFORM_POP_FS == instr->iform ||
+             XED_IFORM_POP_GS == instr->iform) {
+    ManglePopSegReg(block, instr);
   }
 }
 
@@ -265,7 +316,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
   APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, 64)));
-  APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP));
+  APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP); ni.effective_operand_width = 64;);
 
   // In the case of something like watchpoints, where `RBP` is being tracked,
   // and where the application is doing something funky with `RBP` (e.g. it's
@@ -289,6 +340,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   }
   MOV_GPRv_GPRv_89(instr, XED_REG_RBP, temp_rbp);
   instr->decoded_pc = decoded_pc;
+  instr->effective_operand_width = 64;
   AnalyzedStackUsage(instr, false, false);
 }
 
@@ -303,6 +355,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   block->UnsafeAppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
+  instr->effective_operand_width = 64;
   AnalyzedStackUsage(instr, true, true);
 }
 
