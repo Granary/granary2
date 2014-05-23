@@ -132,6 +132,8 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
     if (XED_IFORM_MOV_GPRv_GPRv_89 == instr->iform &&
         arch::GPR_WIDTH_BITS == instr->effective_operand_width) {
       MoveStackPointerToGPR(instr);
+    } else if (XED_ICLASS_LEA == instr->iclass) {
+      return;  // Mangling would be redundant.
     } else {
       Instruction ni;
       auto sp = block->AllocateVirtualRegister();

@@ -20,6 +20,7 @@ DEFINE_FUNC(granary_test_mangle)
     mov    %rsp,%rbp
     sub    $0x10,%rsp
     mov    %edi,-0x4(%rbp)
+    call *%rax;
     mov    %rsi,-0x10(%rbp)
     mov    %rbp,%rsp
     pop    %rbp

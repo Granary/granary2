@@ -134,6 +134,30 @@ static void MangleMov(NativeInstruction *instr) {
   }
 }
 
+// Mangle a `LEA` instruction.
+static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
+  auto &ainstr(instr->instruction);
+  const auto &dst(ainstr.ops[0]);
+  auto &src(ainstr.ops[1]);
+  if (dst.reg.IsStackPointer()) {  // Stack pointer shift.
+    if (src.is_compound) {
+      GRANARY_ASSERT(XED_REG_RSP == src.mem.reg_base &&
+                     XED_REG_INVALID == src.mem.reg_index);
+    } else {  // Nop.
+      GRANARY_ASSERT(src.reg.IsStackPointer());
+    }
+    NOP_90(&ainstr);
+  } else if (src.is_compound) {
+    if (XED_REG_RSP == src.mem.reg_base) {  // Read of an offset stack pointer.
+      GRANARY_ASSERT(XED_REG_INVALID == src.mem.reg_index);
+      src.mem.disp += adjusted_offset;
+    }
+  } else if (src.reg.IsStackPointer()) {  // Copy of the stack pointer.
+    src = arch::BaseDispMemOp(
+        adjusted_offset, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS);
+  }
+}
+
 // Mangle simple arithmetic instructions that make constant changes to the
 // stack pointer into `TEST` instructions based on the stack pointer, so as
 // to approximately conserve the flags behavior.
@@ -156,12 +180,8 @@ static void MangleArith(NativeInstruction *instr) {
 //
 // Note: This function has an architecture-specific implementation.
 void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
-                            int adjusted_offset, int *next_offset) {
-  GRANARY_UNUSED(next_offset);
-  GRANARY_UNUSED(frag);
-
+                            int adjusted_offset) {
   auto &ainstr(instr->instruction);
-
   switch (ainstr.iclass) {
     case XED_ICLASS_PUSH:
       ManglePush(instr, adjusted_offset);
@@ -181,11 +201,9 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
     case XED_ICLASS_MOV:
       MangleMov(instr);
       break;
-
     case XED_ICLASS_LEA:
-      // TODO!
+      MangleLEA(instr, adjusted_offset);
       break;
-
     case XED_ICLASS_SUB:
     case XED_ICLASS_ADD:
     case XED_ICLASS_INC:
@@ -207,7 +225,8 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
 
     default:
-      // TODO!
+      GRANARY_ASSERT(!ainstr.ReadsFromStackPointer() &&
+                     !ainstr.WritesToStackPointer());
       break;
   }
 }

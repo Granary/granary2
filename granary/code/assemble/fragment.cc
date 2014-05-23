@@ -284,6 +284,9 @@ static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
 static void LogInstructions(LogLevel level, const Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      auto &ainstr(ninstr->instruction);
+      if (ainstr.IsNoOp()) continue;  // Skip no-ops.
+
       if (!ninstr->IsAppInstruction()) {
         Log(level, "&nbsp;  ");
       }
