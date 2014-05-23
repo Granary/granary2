@@ -94,6 +94,9 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
     }
   } else {
     auto mem_reg = block->AllocateVirtualRegister();
+    if (XED_REG_INVALID != op.segment) {
+      mem_reg.ConvertToSegmentOffset();
+    }
     if (op.is_compound) {
       if (XED_REG_RSP == op.mem.reg_base) {
         mem_reg.ConvertToVirtualStackPointer();
@@ -150,14 +153,32 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
   }
 }
 
+static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
+  Instruction ni;
+  auto offset = block->AllocateVirtualRegister();
+  offset.ConvertToSegmentOffset();
+
+  MOV_GPRv_IMMz(&ni, offset.WidenedTo(32),
+                static_cast<uint32_t>(op.addr.as_uint) & 0xFFFFFFU);
+  ni.effective_operand_width = 32;
+  APP();
+
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op.reg = offset;
+}
+
 // Mangle an explicit memory operand. This will expand memory operands into
 // `LEA` instructions.
-void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   for (auto &op : instr->ops) {
     if (op.is_explicit) {
       if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
         MangleExplicitMemOp(block, op);
+      } else if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
+        if (XED_REG_INVALID != op.segment) {
+          MangleSegmentOffset(block, op);
+        }
       } else if (op.IsRegister() && op.reg.IsStackPointer()) {
         MangleExplicitStackPointerRegOp(block, instr, op);
       }

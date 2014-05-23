@@ -39,6 +39,7 @@ class Watchpoints : public Tool {
     // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
     if (!watched_addr.IsGeneralPurpose()) return;
     if (watched_addr.IsVirtualStackPointer()) return;
+    if (watched_addr.IsSegmentOffset()) return;
 
     VirtualRegister unwatched_addr(bb->AllocateVirtualRegister());
     RegisterOperand unwatched_addr_reg(unwatched_addr);

@@ -154,6 +154,15 @@ union VirtualRegister {
     return VR_KIND_VIRTUAL_STACK == kind;
   }
 
+  // Is this register used as an offset from the base address of a memory
+  // segment (i.e. in the computation of a segmented address)?
+  //
+  // Note: If the architecture does not support memory segmentation then this
+  //       always returns `false`.
+  inline bool IsSegmentOffset(void) const {
+    return is_segment_offset;
+  }
+
   // Is this the instruction pointer?
   //
   // Note: This has an architecture-specific implementation.
@@ -200,6 +209,11 @@ union VirtualRegister {
     kind = VR_KIND_VIRTUAL_STACK;
   }
 
+  GRANARY_INTERNAL_DEFINITION
+  inline void ConvertToSegmentOffset(void) {
+    is_segment_offset = true;
+  }
+
  private:
   struct {
     // Register number. In the case of architectural registers, this is some
@@ -226,6 +240,12 @@ union VirtualRegister {
     // if `byte_mask == (byte_mask | preserved_byte_mask)`, i.e. if all bytes
     // not represented by the register are not preserved.
     uint8_t preserved_byte_mask;
+
+    // Is this register an offset from a memory segment?
+    //
+    // Note: This is architecture-specific. If the architecture does not
+    //       support memory segmentation then this is always false.
+    bool is_segment_offset;
   } __attribute__((packed));
 
   uint64_t value;
