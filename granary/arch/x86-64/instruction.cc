@@ -81,6 +81,10 @@ bool Instruction::ShiftsStackPointer(void) const {
       return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
              ops[1].IsImmediate();
 
+    case XED_ICLASS_INC:
+    case XED_ICLASS_DEC:
+      return ops[0].IsRegister() && ops[0].reg.IsStackPointer();
+
     case XED_ICLASS_LEA:
       return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
              ops[1].IsMemory() && ops[1].is_compound &&
@@ -154,6 +158,14 @@ int Instruction::StackPointerShiftAmount(void) const {
       if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
           ops[1].IsImmediate()) {
         return static_cast<int>(ops[1].imm.as_int) * mult;
+      }
+      break;
+
+    case XED_ICLASS_INC:
+      mult = 1;  // Fall-through.
+    case XED_ICLASS_DEC:
+      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) {
+        return mult;
       }
       break;
 

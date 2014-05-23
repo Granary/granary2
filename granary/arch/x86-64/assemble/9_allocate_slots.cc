@@ -134,6 +134,19 @@ static void MangleMov(NativeInstruction *instr) {
   }
 }
 
+// Mangle simple arithmetic instructions that make constant changes to the
+// stack pointer into `TEST` instructions based on the stack pointer, so as
+// to approximately conserve the flags behavior.
+static void MangleArith(NativeInstruction *instr) {
+  auto &ainstr(instr->instruction);
+  if (!ainstr.ops[0].IsRegister()) return;
+  if (!ainstr.ops[0].reg.IsStackPointer()) return;
+  if (XED_ICLASS_ADD == ainstr.iclass || XED_ICLASS_SUB == ainstr.iclass) {
+    GRANARY_ASSERT(ainstr.ops[1].IsImmediate());
+  }
+  arch::TEST_GPRv_GPRv(&ainstr, XED_REG_RSP, XED_REG_RSP);
+}
+
 }  // namespace
 
 // Adjusts / mangles an instruction (potentially more than one) so that the
@@ -171,6 +184,13 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
 
     case XED_ICLASS_LEA:
       // TODO!
+      break;
+
+    case XED_ICLASS_SUB:
+    case XED_ICLASS_ADD:
+    case XED_ICLASS_INC:
+    case XED_ICLASS_DEC:
+      MangleArith(instr);
       break;
 
     // Shouldn't be seen!
