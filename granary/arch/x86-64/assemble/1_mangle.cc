@@ -189,17 +189,17 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
   op.ret_address = ret_address;
-  LEA_GPRv_AGEN(&instr, ret_address_reg, op);
+  arch::LEA_GPRv_AGEN(&instr, ret_address_reg, op);
   cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
-  PUSH_GPRv_50(&instr, ret_address_reg);
+  arch::PUSH_GPRv_50(&instr, ret_address_reg);
   instr.decoded_pc = decoded_pc;  // Mark as application.
   instr.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
   auto indirect_target_op = cfi->instruction.ops[0];
   if (indirect_target_op.IsRegister()) {
-    JMP_GPRv(&(cfi->instruction), indirect_target_op.reg);
+    arch::JMP_GPRv(&(cfi->instruction), indirect_target_op.reg);
   } else if (indirect_target_op.IsMemory()) {
-    JMP_MEMv(&(cfi->instruction), indirect_target_op);
+    arch::JMP_MEMv(&(cfi->instruction), indirect_target_op);
   } else {
     GRANARY_ASSERT(false);
   }
@@ -211,10 +211,11 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
 // value from `mem_addr`
 void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                      const MemoryOperand &mloc, const void *mem_addr) {
-  arch::Instruction lea;
+  arch::Instruction ni;
   auto addr_reg = block->AllocateVirtualRegister(arch::ADDRESS_WIDTH_BYTES);
-  LEA_GPRv_IMMv(&lea, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
-  ninstr->UnsafeInsertBefore(new NativeInstruction(&lea));
+  arch::MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
+  ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
+  ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
 
   MemoryOperand rel_mloc(addr_reg, mloc.ByteWidth());
   GRANARY_IF_DEBUG(auto replaced = ) mloc.Ref().ReplaceWith(rel_mloc);

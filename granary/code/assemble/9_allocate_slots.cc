@@ -27,10 +27,8 @@ extern NativeInstruction *FreeStackSpace(int num_bytes);
 // Returns the next instruction on which we should operate.
 //
 // Note: This function has an architecture-specific implementation.
-extern Instruction *AdjustStackInstruction(Fragment *frag,
-                                           NativeInstruction *instr,
-                                           int adjusted_offset,
-                                           int *next_offset);
+extern void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
+                                   int adjusted_offset, int *next_offset);
 
 namespace {
 
@@ -175,15 +173,14 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
   auto instr = frag->instrs.First();
   auto offset = frag->stack_frame.entry_offset;
   auto next_offset = 0;
-  for (; instr; offset = next_offset) {
+  for (Instruction *next_instr(nullptr); instr;
+       offset = next_offset, instr = next_instr) {
     next_offset = offset;
+    next_instr = instr->Next();
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       auto adjust = ninstr->MetaData<FrameAdjust>();
       next_offset = adjust.shift;
-      instr = AdjustStackInstruction(frag, ninstr, offset - frame_space,
-                                     &next_offset);
-    } else {
-      instr = instr->Next();
+      AdjustStackInstruction(frag, ninstr, offset - frame_space, &next_offset);
     }
   }
 }

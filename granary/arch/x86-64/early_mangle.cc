@@ -111,8 +111,9 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
 // This plays nicer with later slot allocation.
 static void MoveStackPointerToGPR(Instruction *instr) {
   auto decoded_pc = instr->decoded_pc;
-  LEA_GPRv_AGEN(instr, instr->ops[0].reg, BaseDispMemOp(0, XED_REG_RSP, 64));
-  instr->effective_operand_width = 64;
+  LEA_GPRv_AGEN(instr, instr->ops[0].reg,
+                BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
+  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   instr->decoded_pc = decoded_pc;
 }
 
@@ -129,13 +130,14 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
   // avoid virtual register usage on function prologues.
   if (!op.IsWrite()) {
     if (XED_IFORM_MOV_GPRv_GPRv_89 == instr->iform &&
-        64 == instr->effective_operand_width) {
+        arch::GPR_WIDTH_BITS == instr->effective_operand_width) {
       MoveStackPointerToGPR(instr);
     } else {
       Instruction ni;
       auto sp = block->AllocateVirtualRegister();
       sp.ConvertToVirtualStackPointer();
-      APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP, 64)));
+      APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
+                                               arch::ADDRESS_WIDTH_BITS)));
       sp.Widen(op.reg.ByteWidth());
       op.reg = sp;  // Replace the operand.
     }
@@ -176,8 +178,8 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
   APP(MOV_MEMv_GPRv(&ni, stack_mem_op, vr));
-  LEA_GPRv_AGEN(instr, XED_REG_RSP,
-                BaseDispMemOp(-stack_shift, XED_REG_RSP, 64));
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-stack_shift, XED_REG_RSP,
+                                                  arch::ADDRESS_WIDTH_BITS));
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -234,8 +236,8 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
                                     instr->effective_operand_width);
   APP(MOV_GPRv_MEMv(&ni, vr, stack_mem_op));
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
-  LEA_GPRv_AGEN(instr, XED_REG_RSP,
-                BaseDispMemOp(stack_shift, XED_REG_RSP, 64));
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift, XED_REG_RSP,
+                                                  arch::ADDRESS_WIDTH_BITS));
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -304,7 +306,7 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
   APP(LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX));
   MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
   instr->decoded_pc = decoded_pc;
-  instr->ops[1].width = 8;
+  instr->ops[1].width = 8;  // Bits.
 }
 
 // Mangle an `ENTER` instruction.
@@ -315,21 +317,26 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
-  APP_NATIVE(LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, 64)));
-  APP_NATIVE(PUSH_GPRv_50(&ni, XED_REG_RBP); ni.effective_operand_width = 64;);
+  APP_NATIVE(LEA_GPRv_AGEN(
+      &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
+  APP_NATIVE(
+      PUSH_GPRv_50(&ni, XED_REG_RBP);
+      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // In the case of something like watchpoints, where `RBP` is being tracked,
   // and where the application is doing something funky with `RBP` (e.g. it's
   // somehow watched), then we want to see these memory writes.
   for (auto i = 0UL; i < num_args; ++i) {
     auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
-    APP_NATIVE_MANGLED(PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP, 64)));
+    APP_NATIVE_MANGLED(PUSH_MEMv(
+        &ni, BaseDispMemOp(offset, XED_REG_RBP, arch::GPR_WIDTH_BITS)));
   }
 
   if (frame_size) {
     APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
                       BaseDispMemOp(-static_cast<int32_t>(frame_size),
-                                    XED_REG_RSP, 64)));
+                                    XED_REG_RSP,
+                                    arch::ADDRESS_WIDTH_BITS)));
 
     // Enter finishes with a memory write that is "unused". This is to detect
     // stack segment issues and page faults. We don't even bother with this
@@ -340,7 +347,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   }
   MOV_GPRv_GPRv_89(instr, XED_REG_RBP, temp_rbp);
   instr->decoded_pc = decoded_pc;
-  instr->effective_operand_width = 64;
+  instr->effective_operand_width = arch::GPR_WIDTH_BITS;
   AnalyzedStackUsage(instr, false, false);
 }
 
@@ -355,27 +362,20 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   block->UnsafeAppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
-  instr->effective_operand_width = 64;
+  instr->effective_operand_width = arch::GPR_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);
 }
 
 // This is a big hack: it is our way of ensuring that during late mangling, we
 // have access to some kind of virtual register for `PUSHF` and `PUSHFQ`.
 static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
-  auto flag_size = XED_ICLASS_PUSHF == instr->iclass ? 2 : 8;
+  auto flag_size = instr->effective_operand_width / 8;
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
   instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
   instr->ops[0].rw = XED_OPERAND_ACTION_W;
-  ++(instr->num_explicit_ops);
-}
-
-// This is a big hack: it is our way of ensuring that during late mangling, we
-// have access to some kind of virtual register for `POPF` and `POPFQ`.
-static void ManglePopFlags(DecodedBasicBlock *block, Instruction *instr) {
-  auto flag_size = XED_ICLASS_PUSHF == instr->iclass ? 2 : 8;
-  instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
-  instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
-  instr->ops[0].rw = XED_OPERAND_ACTION_W;
+  instr->ops[0].width = static_cast<int8_t>(flag_size * 8);
+  instr->ops[0].is_explicit = true;
+  instr->ops[0].is_sticky = false;
   ++(instr->num_explicit_ops);
 }
 
@@ -448,10 +448,8 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_PUSHF:
     case XED_ICLASS_PUSHFQ:
       ManglePushFlags(block, instr);
-      break;
-    case XED_ICLASS_POPF:
-    case XED_ICLASS_POPFQ:
-      ManglePopFlags(block, instr);
+    // Note: Don't need to do anything for `POPF` or `POPFQ` as we late mangle
+    //       it into a `PUSH [RSP + offset]; POPF`.
       break;
     default:
       MangleExplicitOps(block, instr);

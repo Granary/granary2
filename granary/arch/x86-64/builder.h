@@ -168,15 +168,6 @@ inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
 }
 
 // Custom LEA instruction builder for source immediate operands.
-template <typename A0, typename A1>
-inline static void LEA_GPRv_IMMv(Instruction *instr, A0 a0, A1 a1) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
-                   XED_CATEGORY_MISC);
-  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
-  ImmediateBuilder(a1, XED_ENCODER_OPERAND_TYPE_PTR).Build(instr);
-}
-
-// Custom LEA instruction builder for source immediate operands.
 template <typename A0>
 inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,

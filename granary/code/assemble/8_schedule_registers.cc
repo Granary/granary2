@@ -522,7 +522,6 @@ static void ScheduleFragLocalRegDefs(LocalScheduler *sched,
       ReplaceOperand(def);
     }
   }
-
 }
 
 // Handle the special case where we're copying a VR to a GPR. This is

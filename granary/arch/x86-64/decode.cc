@@ -309,11 +309,16 @@ static void ConvertDecodedInstruction(Instruction *instr,
 // Decode an x86-64 instruction into a Granary `Instruction`, by first going
 // through XED's `xed_decoded_inst_t` IR.
 AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
-  if (pc) {
+  while (pc) {
     xed_decoded_inst_t xedd;
     if (XED_ERROR_NONE == DecodeBytes(&xedd, pc)) {
-      ConvertDecodedInstruction(instr, &xedd, pc);
-      return pc + instr->decoded_length;
+      const auto category = xed_decoded_inst_get_category(&xedd);
+      if (XED_CATEGORY_NOP == category) {  // Skip NOPs.
+        pc += xed_decoded_inst_get_length(&xedd);
+      } else {
+        ConvertDecodedInstruction(instr, &xedd, pc);
+        return pc + instr->decoded_length;
+      }
     }
   }
   return nullptr;
