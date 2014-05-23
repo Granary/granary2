@@ -107,12 +107,11 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
   } else if (mem_op) {
     if (mem_op->IsPointer()) return;
 
-    VirtualRegister r1, r2, r3;
+    VirtualRegister r1, r2;
     auto num_gprs = 0;
-    if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+    if (mem_op->CountMatchedRegisters({&r1, &r2})) {
       if (r1.IsGeneralPurpose()) ++num_gprs;
       if (r2.IsGeneralPurpose()) ++num_gprs;
-      if (r3.IsGeneralPurpose()) ++num_gprs;
     }
     if (!num_gprs) return;  // E.g. referencing memory directly on the stack.
   }
@@ -282,12 +281,12 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
       node = new_node;
 
     } else {  // `SSAOperandAction::READ`, register or memory operand.
-      VirtualRegister regs[3];
+      VirtualRegister regs[2];
       if (op.is_reg) {
         regs[0] = GetRegister(op);
       } else {
         MemoryOperand mem_op(op.operand);
-        mem_op.CountMatchedRegisters({&(regs[0]), &(regs[1]), &(regs[2])});
+        mem_op.CountMatchedRegisters({&(regs[0]), &(regs[1])});
       }
 
       // Treat register and memory operands uniformly. For each read register,

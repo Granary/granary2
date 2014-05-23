@@ -32,6 +32,7 @@ class Operand : public OperandInterface {
       : type(XED_ENCODER_OPERAND_TYPE_INVALID),
         width(0),
         rw(XED_OPERAND_ACTION_INVALID),
+        segment(XED_REG_INVALID),
         is_sticky(false),
         is_explicit(false),
         is_compound(false),
@@ -121,7 +122,6 @@ class Operand : public OperandInterface {
     // Combined memory operation. Used as part of encoding.
     struct {
       int32_t disp;
-      xed_reg_enum_t reg_seg:8;
       xed_reg_enum_t reg_base:8;
       xed_reg_enum_t reg_index:8;
       uint8_t scale;
@@ -135,6 +135,7 @@ class Operand : public OperandInterface {
   xed_encoder_operand_type_t type:8;
   int8_t width;  // Operand width in bits.
   xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
+  xed_reg_enum_t segment:8;  // Used for memory operations.
 
   // This operand cannot be changed.
   bool is_sticky:1;

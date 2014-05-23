@@ -131,11 +131,10 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
     if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
       gpr_counter(reg_op->Register());
     } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2, r3;
-      if (mem_op->CountMatchedRegisters({&r1, &r2, &r3})) {
+      VirtualRegister r1, r2;
+      if (mem_op->CountMatchedRegisters({&r1, &r2})) {
         gpr_counter(r1);
         gpr_counter(r2);
-        gpr_counter(r3);
       }
     }
   };

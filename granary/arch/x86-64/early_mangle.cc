@@ -101,7 +101,11 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
     } else {
       if (op.reg.IsStackPointer()) mem_reg.ConvertToVirtualStackPointer();
     }
-    APP(LEA_GPRv_AGEN(&ni, mem_reg, op));
+    LEA_GPRv_AGEN(&ni, mem_reg, op);
+    ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
+    ni.ops[1].segment = XED_REG_INVALID;
+    APP();
+
     op.is_compound = false;
     op.reg = mem_reg;
   }

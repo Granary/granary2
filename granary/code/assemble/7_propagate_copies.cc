@@ -205,7 +205,7 @@ static bool CopyPropagateMem(ReachingDefinintions &defs,
   if (!replacement_operand) {
     return false;
   }
-  VirtualRegister mem_regs[3];
+  VirtualRegister mem_regs[2];
 
   // Register to base address of a memory operand.
   if (replacement_operand->is_reg) {
@@ -217,8 +217,7 @@ static bool CopyPropagateMem(ReachingDefinintions &defs,
     MemoryOperand effective_address(replacement_operand->operand);
     if (!effective_address.IsEffectiveAddress()) return false;
     if (!effective_address.CountMatchedRegisters({&(mem_regs[0]),
-                                                  &(mem_regs[1]),
-                                                  &(mem_regs[2])})) {
+                                                  &(mem_regs[1])})) {
       return false;
     }
   }

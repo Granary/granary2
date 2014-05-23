@@ -90,11 +90,10 @@ void UsedRegisterTracker::Visit(NativeInstruction *instr) {
   }
   instr->ForEachOperand([=] (Operand *op) {
     if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2, r3;
-      mloc->CountMatchedRegisters({&r1, &r2, &r3});
+      VirtualRegister r1, r2;
+      mloc->CountMatchedRegisters({&r1, &r2});
       Revive(r1);
       Revive(r2);
-      Revive(r3);
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       Revive(rloc->Register());
     }
@@ -113,11 +112,10 @@ void LiveRegisterTracker::Visit(NativeInstruction *instr) {
     // All registers participating in a memory operand are reads, because
     // they are used to compute the effective address of the memory operand.
     if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2, r3;
-      mloc->CountMatchedRegisters({&r1, &r2, &r3});
+      VirtualRegister r1, r2;
+      mloc->CountMatchedRegisters({&r1, &r2});
       Revive(r1);
       Revive(r2);
-      Revive(r3);
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       auto reg = rloc->Register();
       if (reg.IsNative() && reg.IsGeneralPurpose()) {
@@ -156,11 +154,10 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
     // All registers participating in a memory operand are reads, because
     // they are used to compute the effective address of the memory operand.
     if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2, r3;
-      mloc->CountMatchedRegisters({&r1, &r2, &r3});
+      VirtualRegister r1, r2;
+      mloc->CountMatchedRegisters({&r1, &r2});
       Revive(r1);
       Revive(r2);
-      Revive(r3);
 
     // If this register operand doesn't write, then it's a read.
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {

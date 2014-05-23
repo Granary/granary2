@@ -25,12 +25,14 @@ bool OperandRef::ReplaceWith(const Operand &repl_op) {
     const auto rw = op->rw;
     const auto width = op->width;
     const auto is_ea = op->is_effective_address;
+    const auto segment = op->segment;
     *op = *(repl_op.op.AddressOf());
     if (-1 != width) op->width = width;
     op->rw = rw;
     op->is_effective_address = is_ea;
     op->is_explicit = true;
     op->is_sticky = false;
+    if (XED_REG_INVALID != segment) op->segment = segment;
     return true;
   }
 }
@@ -158,7 +160,6 @@ size_t MemoryOperand::CountMatchedRegisters(
   size_t num_matched(0);
   if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
     if (op->is_compound) {
-      MatchNextRegister(op->mem.reg_seg, regs, &num_matched);
       MatchNextRegister(op->mem.reg_base, regs, &num_matched);
       MatchNextRegister(op->mem.reg_index, regs, &num_matched);
     } else if (0 < regs.size()) {
@@ -188,9 +189,6 @@ Operand::Operand(const Operand &op) {
 namespace {
 // Encode a compressed memory operand into a string.
 static void EncodeMemOpToString(const Operand *op, OperandString *str) {
-  if (op->mem.reg_seg) {
-    str->UpdateFormat("%s:", xed_reg_enum_t2str(op->mem.reg_seg));
-  }
   str->UpdateFormat("[");
   if (op->mem.reg_base) {
     str->UpdateFormat("%s%s", xed_reg_enum_t2str(op->mem.reg_base),
@@ -228,6 +226,9 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
+      if (XED_REG_INVALID != segment) {
+        str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
+      }
       if (is_compound) {
         EncodeMemOpToString(this, str);
         break;
@@ -241,13 +242,13 @@ void Operand::EncodeToString(OperandString *str) const {
     case XED_ENCODER_OPERAND_TYPE_SEG1:
       if (reg.IsNative()) {
         auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        str->Format("%s%s%s", prefix, xed_reg_enum_t2str(arch_reg), suffix);
+        str->UpdateFormat("%s%s%s", prefix, xed_reg_enum_t2str(arch_reg), suffix);
       } else if (reg.IsVirtual()) {
-        str->Format("%s%%%u%s", prefix, reg.Number(), suffix);
+        str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
       } else if (reg.IsVirtualSlot()) {
-        str->Format("%sSLOT:%d%s", prefix, reg.Number(), suffix);
+        str->UpdateFormat("%sSLOT:%d%s", prefix, reg.Number(), suffix);
       } else {
-        str->Format("%s?reg?%s", prefix, suffix);
+        str->UpdateFormat("%s?reg?%s", prefix, suffix);
       }
       break;
 

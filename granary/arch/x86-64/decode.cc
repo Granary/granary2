@@ -146,20 +146,43 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   auto base_reg = xed_decoded_inst_get_base_reg(xedd, index);
   auto index_reg = xed_decoded_inst_get_index_reg(xedd, index);
 
-  if (XED_REG_INVALID == segment_reg &&
-      ((XED_REG_INVALID == index_reg && !disp) ||
-       (XED_REG_INVALID == base_reg && 1 == disp)) &&
-      XED_REG_RSP != base_reg) {
+  // On 64 bit, all segment registers except `GS` and `FS` are zero. Some
+  // instructions (e.g. `MOVS`) implicitly use `ES` and `DS`, but we're only
+  // decoding explicit operands.
+  switch (segment_reg) {
+    case XED_REG_CS:
+    case XED_REG_DS:
+    case XED_REG_ES:
+    case XED_REG_SS:
+      segment_reg = XED_REG_INVALID;
+      break;
+    default:
+      // `LEA` doesn't go to memory (GDT or LDT) and therefore ignores any
+      // segment selectors present on the memory ops.
+      if (XED_ICLASS_LEA == instr->iclass) {
+        segment_reg = XED_REG_INVALID;
+      }
+      break;
+  }
+
+  // Try to simplify the memory operand to a non-compound one.
+  if (XED_REG_INVALID == base_reg && !disp && 1 == scale &&
+      XED_REG_RSP != index_reg) {
+    instr_op->reg.DecodeFromNative(static_cast<int>(index_reg));
+    instr_op->is_compound = false;
+  } else if (XED_REG_INVALID == index_reg && !disp &&
+             XED_REG_RSP != base_reg) {
     instr_op->reg.DecodeFromNative(static_cast<int>(base_reg));
+    instr_op->is_compound = false;
   } else {
     instr_op->mem.disp = static_cast<int32_t>(disp);
     instr_op->mem.reg_base = base_reg;
     instr_op->mem.reg_index = index_reg;
-    instr_op->mem.reg_seg = segment_reg;
     instr_op->mem.scale = static_cast<uint8_t>(scale);
     instr_op->is_compound = true;
   }
 
+  instr_op->segment = segment_reg;
   instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
