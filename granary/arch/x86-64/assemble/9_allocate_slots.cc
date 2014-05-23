@@ -157,4 +157,4 @@ Instruction *AdjustStackInstruction(Fragment *frag,
   return next;
 }
 
-}
+}  // namespace granary
