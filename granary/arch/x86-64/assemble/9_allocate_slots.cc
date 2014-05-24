@@ -180,24 +180,26 @@ static void MangleArith(NativeInstruction *instr) {
 //
 // Note: This function has an architecture-specific implementation.
 void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
-                            int adjusted_offset) {
+                            int adjusted_offset, int next_adjusted_offset) {
   auto &ainstr(instr->instruction);
   switch (ainstr.iclass) {
     case XED_ICLASS_PUSH:
-      ManglePush(instr, adjusted_offset);
+      ManglePush(instr, next_adjusted_offset);
       break;
     case XED_ICLASS_POP:
       ManglePop(instr, adjusted_offset);
       break;
     case XED_ICLASS_PUSHF:
     case XED_ICLASS_PUSHFQ:
-      ManglePushFlags(frag, instr, adjusted_offset);
+      ManglePushFlags(frag, instr, next_adjusted_offset);
       break;
     case XED_ICLASS_POPF:
     case XED_ICLASS_POPFQ:
       ManglePopFlags(frag, instr, adjusted_offset);
       break;
     case XED_ICLASS_RET_NEAR:
+      // TODO(pag): Handle specialized return!!!
+      break;
     case XED_ICLASS_MOV:
       MangleMov(instr);
       break;

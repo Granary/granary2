@@ -141,7 +141,11 @@ int Instruction::StackPointerShiftAmount(void) const {
     case XED_ICLASS_CALL_NEAR:
       return -8;
     case XED_ICLASS_RET_NEAR:
-      return 8;
+      if (ops[0].IsImmediate()) {
+        return 8 + static_cast<int>(ops[0].imm.as_uint);
+      } else {
+        return 8;
+      }
 
     // Assume that this is caught by early mangling, and that no `ENTER`
     // instructions make it into the instruction stream. `LEAVE` does not shift
