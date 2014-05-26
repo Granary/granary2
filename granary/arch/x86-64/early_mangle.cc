@@ -159,7 +159,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   offset.ConvertToSegmentOffset();
 
   MOV_GPRv_IMMz(&ni, offset.WidenedTo(32),
-                static_cast<uint32_t>(op.addr.as_uint) & 0xFFFFFFU);
+                static_cast<uint32_t>(op.addr.as_uint) & 0xFFFFFFFFU);
   ni.effective_operand_width = 32;
   APP();
 

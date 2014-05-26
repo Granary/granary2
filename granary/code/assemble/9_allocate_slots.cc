@@ -31,6 +31,12 @@ extern void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
                                    int adjusted_offset,
                                    int next_adjusted_offset);
 
+// Allocates all remaining non-stack spill slots in some architecture and
+// potentially mode (e.g. kernel/user) specific way.
+//
+// Note: This function has an architecture-specific implementation.
+extern void ArchAllocateSlots(FragmentList *frags);
+
 namespace {
 
 // Make sure that we only analyze stack usage within fragments where the stack
@@ -214,6 +220,7 @@ void AllocateSlots(FragmentList *frags) {
   InitStackFrameAnalysis(frags);
   FindFrameSizes(frags);
   AllocateStackSlots(frags);
+  ArchAllocateSlots(frags);
 }
 
 }  // namespace granary

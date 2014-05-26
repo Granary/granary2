@@ -233,4 +233,68 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
   }
 }
 
+#if defined(GRANARY_WHERE_kernel) || !defined(GRANARY_WHERE_user)
+# error "TODO(pag): Implement `ArchAllocateSlots` for kernel space."
+#else
+
+namespace {
+
+extern "C" {
+// Get the base address of the current thread's TLS. We use this address to
+// compute `FS`-based offsets from the TLS base. We assume that the base address
+// returned by this function is the address associated with `FS:0`.
+extern intptr_t granary_arch_get_tls_base(void);
+}
+
+// Per-thread spill slots.
+//
+// Note: This depends on a link-time TLS implementation, as is the case on
+//       systems like Linux.
+static __thread struct {
+  intptr_t slots[SpillInfo::MAX_NUM_SPILL_SLOTS];
+} SPILL_SLOTS;
+
+static void ArchAllocateSlot(arch::Operand &op) {
+  auto slot = op.reg.Number();
+  auto this_slot = &(SPILL_SLOTS.slots[slot]);
+  auto this_slot_addr = reinterpret_cast<intptr_t>(this_slot);
+  auto slot_offset = this_slot_addr - granary_arch_get_tls_base();
+  op.segment = XED_REG_FS;  // Linux-specific.
+  op.is_compound = true;
+  op.mem.disp = static_cast<int32_t>(slot_offset);
+  op.mem.reg_base = XED_REG_INVALID;
+  op.mem.reg_index = XED_REG_INVALID;
+  op.mem.scale = 0;
+}
+
+// Replace any abstract spill slots in an instruction with concrete, segment-
+// based spill slots.
+static void ArchAllocateSlots(NativeInstruction *instr) {
+  if (!instr) return;
+  auto &ainstr(instr->instruction);
+  if (XED_ICLASS_MOV != ainstr.iclass) return;
+
+  if (ainstr.ops[0].IsMemory()) {
+    if (ainstr.ops[0].reg.IsVirtualSlot()) ArchAllocateSlot(ainstr.ops[0]);
+  } else if (ainstr.ops[1].IsMemory()) {
+    if (ainstr.ops[1].reg.IsVirtualSlot()) ArchAllocateSlot(ainstr.ops[1]);
+  }
+}
+
+}  // namespace
+
+// Allocates all remaining non-stack spill slots in some architecture and
+// potentially mode (e.g. kernel/user) specific way.
+void ArchAllocateSlots(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (IsA<SSAFragment *>(frag)) {
+      for (auto instr : InstructionListIterator(frag->instrs)) {
+        ArchAllocateSlots(DynamicCast<NativeInstruction *>(instr));
+      }
+    }
+  }
+}
+
+#endif  // User-space implementation of slots.
+
 }  // namespace granary
