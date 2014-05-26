@@ -108,6 +108,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
 static void GroupFragments(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (!cfrag->attr.can_add_to_partition) continue;
       for (auto succ : cfrag->successors) {
         if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ)) {
           if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;

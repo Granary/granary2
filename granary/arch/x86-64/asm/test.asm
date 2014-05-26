@@ -25,8 +25,11 @@ DEFINE_FUNC(granary_test_mangle)
     mov    %rsi,-0x10(%rbp)
     mov    %rbp,%rsp
     pop    %rbp */
-    mov (%rax), %rdx;
-    mov %fs:(%rax,%rbx), %rdx;
+    mov %rsi, %rsp;
+    cli;
+    sti;
+    mov %rdi, %rsi;
+    push %rdi;
     /*
     mov %gs:(%rcx), %rdx;
     mov %es:(%rcx), %rdx;

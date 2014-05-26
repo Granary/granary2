@@ -54,6 +54,12 @@ namespace granary {
 extern void TryAddFlagSplitHint(CodeFragment *frag,
                                 const NativeInstruction *instr);
 
+// Returns true if this instruction can change the interrupt enabled state on
+// this CPU.
+//
+// Note: This function has an architecture-specific implementation.
+extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
+
 namespace {
 
 // Make a new code fragment.
@@ -481,6 +487,23 @@ static void SplitFragment(FragmentList *frags, CodeFragment *frag,
   ExtendFragment(frags, succ, block, next);
 }
 
+// Split a fragment at an instruction that changes the interrupt state.
+static void SplitFragmentAtInterruptChange(FragmentList *frags,
+                                           CodeFragment *frag,
+                                           DecodedBasicBlock *block,
+                                           Instruction *instr) {
+  auto next = instr->Next();
+  if (frag->attr.has_native_instrs) {
+    auto label = new LabelInstruction;
+    auto succ = MakeEmptyLabelFragment(frags, block, label);
+    frag->successors[0] = succ;
+    frag = succ;
+  }
+  frag->attr.can_add_to_partition = false;
+  frag = Append(frags, block, frag, instr);
+  SplitFragment(frags, frag, block, next);
+}
+
 // Extend a fragment with the instructions from a particular basic block.
 // This might end up generating many more fragments.
 static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
@@ -504,7 +527,9 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     // affect the flags, regardless of if it's native/instrumented, it goes
     // into whatever the previous section of code is (app or inst).
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (frag->attr.is_app_code) {
+      if (ChangesInterruptDeliveryState(ninstr)) {
+        return SplitFragmentAtInterruptChange(frags, frag, block, instr);
+      } else if (frag->attr.is_app_code) {
         if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
           return SplitFragment(frags, frag, block, instr);
         }
