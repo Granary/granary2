@@ -394,13 +394,18 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
     }
   }
 
-  // Handle cases like unspecialized returnes, interrupt returns, and system
+  // Handle cases like unspecialized returns, interrupt returns, and system
   // returns, making sure that we never put them in the same partition with
   // some other code, otherwise we risk saving/restoring regs before/after this
   // instruction, and control will never reach "after" this instruction as it
   // will have gone somewhere else.
   if (!targets_edge_code && cfi->instruction.WritesToStackPointer()) {
     if (frag->attr.has_native_instrs) ret_frag = nullptr;
+    can_add_to_partition = false;
+  }
+
+  if (can_add_to_partition && cfi->instruction.WritesToStackPointer() &&
+      !cfi->HasIndirectTarget()) {
     can_add_to_partition = false;
   }
 
@@ -433,14 +438,13 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
   auto next = cfi->Next();
   auto target_block = cfi->TargetBlock();
   auto is_branch = !cfi->IsUnconditionalJump() || cfi->HasIndirectTarget();
-
   if (is_branch) {
     auto target_frag = FragmentForTargetBlock(frags, frag, target_block);
     frag = AppendCFI(frags, frag, block, target_frag, cfi);
     frag->successors[FRAG_SUCC_BRANCH] = target_frag;
     frag->branch_instr = cfi;
     if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
-        cfi->IsSystemReturn()) {
+        cfi->IsSystemReturn() || cfi->IsUnconditionalJump()) {
       return;
     }
   } else {

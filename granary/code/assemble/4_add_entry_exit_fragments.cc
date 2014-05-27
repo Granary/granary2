@@ -188,7 +188,9 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
     // are considered partition entry/exit points because we want to make sure
     // that later stack frame size analysis determines a fixed stack frame size
     // for every partition.
-    if (next_code && next_code->attr.is_block_head) return true;
+    if (next_code && next_code->attr.is_block_head) {
+      return next_code->attr.can_add_to_partition;
+    }
     return false;
   }
   if (IsA<ExitFragment *>(next)) return false;
@@ -214,7 +216,13 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   }
   if (curr->partition == next->partition) return false;
   if (auto next_code = DynamicCast<CodeFragment *>(next)) {
-    if (!next_code->attr.can_add_to_partition) return true;
+    if (!next_code->attr.can_add_to_partition) {
+      if (curr_code && curr_code->attr.branches_to_edge_code &&
+          curr_code->branch_instr->HasIndirectTarget()) {
+        return false;
+      }
+      return true;
+    }
   }
   return false;
 }

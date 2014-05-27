@@ -171,6 +171,11 @@ static void MangleArith(NativeInstruction *instr) {
   arch::TEST_GPRv_GPRv(&ainstr, XED_REG_RSP, XED_REG_RSP);
 }
 
+// Mangle an indirect call into a NOP, as it will fall-through to edge code.
+static void MangleIndirectCFI(NativeInstruction *instr) {
+  arch::NOP_90(&(instr->instruction));
+}
+
 }  // namespace
 
 // Adjusts / mangles an instruction (potentially more than one) so that the
@@ -233,18 +238,34 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
   }
 }
 
+// Mangle all indirect calls and jumps into NOPs.
+void RemoveIndirectCallsAndJumps(Fragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!(ninstr->IsUnconditionalJump() || ninstr->IsFunctionCall())) {
+        continue;
+      }
+      if (ninstr->HasIndirectTarget()) {
+        MangleIndirectCFI(ninstr);  // Convert to a NO-OP.
+      }
+    }
+  }
+
+}
+
 #if defined(GRANARY_WHERE_kernel) || !defined(GRANARY_WHERE_user)
 # error "TODO(pag): Implement `ArchAllocateSlots` for kernel space."
 #else
 
 namespace {
-
 extern "C" {
+
 // Get the base address of the current thread's TLS. We use this address to
 // compute `FS`-based offsets from the TLS base. We assume that the base address
 // returned by this function is the address associated with `FS:0`.
 extern intptr_t granary_arch_get_tls_base(void);
-}
+
+}  // extern C
 
 // Per-thread spill slots.
 //
@@ -289,7 +310,9 @@ void ArchAllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
       for (auto instr : InstructionListIterator(frag->instrs)) {
-        ArchAllocateSlots(DynamicCast<NativeInstruction *>(instr));
+        if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+          ArchAllocateSlots(ninstr);
+        }
       }
     }
   }

@@ -195,16 +195,10 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   instr.decoded_pc = decoded_pc;  // Mark as application.
   instr.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
-  auto indirect_target_op = cfi->instruction.ops[0];
-  if (indirect_target_op.IsRegister()) {
-    arch::JMP_GPRv(&(cfi->instruction), indirect_target_op.reg);
-  } else if (indirect_target_op.IsMemory()) {
-    arch::JMP_MEMv(&(cfi->instruction), indirect_target_op);
-  } else {
-    GRANARY_ASSERT(false);
-  }
-  cfi->instruction.decoded_pc = decoded_pc;
   cfi->UnsafeInsertAfter(ret_address);
+
+  // Note: The final mangling of indirect calls and indirect jumps happens in
+  //       `9_allocate_slots.cc` in the function `RemoveIndirectCallsAndJumps`.
 }
 
 // Relativize a instruction with a memory operand, where the operand loads some

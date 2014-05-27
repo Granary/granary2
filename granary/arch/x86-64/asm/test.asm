@@ -25,19 +25,20 @@ DEFINE_FUNC(granary_test_mangle)
     mov    %rsi,-0x10(%rbp)
     mov    %rbp,%rsp
     pop    %rbp */
+    /*
     mov (%rdi), %rsp;
     mov (%rdi), %rsp;
     mov (%rdi), %rsp;
-
+    */
     /*
     mov %gs:(%rcx), %rdx;
     mov %es:(%rcx), %rdx;
     mov %cs:(%rcx), %rdx;
     mov %ds:(%rcx), %rdx;
     mov %ss:(%rcx), %rdx;
-    movsw; */
-    retq
-/*
+    movsw;
+    retq */
+
 push   %rbp
 mov    %rsp,%rbp
 sub    $0x20,%rsp
@@ -57,7 +58,8 @@ callq  .LUnsafeCast
 mov    %rax,-0x18(%rbp)
 mov    -0x10(%rbp),%rdi
 callq  .LContainer_Access
-mov    %rax,%rdi
+mov     %rax,%rdi
+call    *%rdi;
 callq  .LEnvironment_Setup
 mov    -0x10(%rbp),%rdi
 callq  .LContainer_Access
@@ -66,7 +68,8 @@ mov    %rax,%rdi
 callq  .LEnvironment_AttachToAppPC
 add    $0x20,%rsp
 pop    %rbp
-retq */
+jmp *%rbx;
+retq
 
     /*pushfw;
     popfw;

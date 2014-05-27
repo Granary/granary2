@@ -21,6 +21,11 @@ extern NativeInstruction *AllocateStackSpace(int num_bytes);
 // Note: This function has an architecture-specific implementation.
 extern NativeInstruction *FreeStackSpace(int num_bytes);
 
+// Mangle all indirect calls and jumps into NOPs.
+//
+// Note: This function has an architecture-specific implementation.
+void RemoveIndirectCallsAndJumps(Fragment *frag);
+
 // Adjusts / mangles an instruction (potentially more than one) so that the
 // usage of the stack pointer remains transparent, despite the fact that the
 // native stack pointer has been changed to accommodate virtual register spills.
@@ -43,6 +48,7 @@ namespace {
 // pointer behaves like it's on a C-style call stack.
 static void InitStackFrameAnalysis(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
+    RemoveIndirectCallsAndJumps(frag);
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       GRANARY_ASSERT(code_frag->stack.is_checked);
       auto partition = code_frag->partition.Value();
