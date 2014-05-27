@@ -9,7 +9,7 @@
 #include "granary/arch/init.h"
 
 #include "granary/client.h"
-#include "granary/environment.h"
+#include "granary/context.h"
 #include "granary/init.h"
 #include "granary/logging.h"
 
@@ -27,14 +27,13 @@ GRANARY_DEFINE_string(attach_to, "*",
 #endif  // GRANARY_STANDALONE
 
 extern "C" {
-void granary_test_mangle(void);
+extern void granary_test_mangle(void);
 }
 
 namespace granary {
 namespace {
 
-static int curr_env = 0;
-GRANARY_EARLY_GLOBAL static Container<Environment> envs[2];
+GRANARY_EARLY_GLOBAL static Container<Context> context;
 
 }  // namespace
 
@@ -54,14 +53,13 @@ void Init(const char *granary_path) {
   // module registration picks up on existing clients.
   LoadClients(granary_path);
 
-  auto &env = envs[curr_env];
-  env.Construct();
+  context.Construct();
 
   // TODO(pag): Remove me.
   AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
-  env->Setup();
-  env->AttachToAppPC(pc);
+  auto meta = context->AllocateBlockMetaData(pc);
+  context->Compile(meta);
 }
 
 }  // namespace granary

@@ -3,8 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/code/assemble/fragment.h"
-#include "granary/code/assemble/ssa.h"
+#include "granary/code/fragment.h"
+#include "granary/code/ssa.h"
 
 #include "granary/breakpoint.h"
 #include "granary/util.h"  // For `GetMetaData`.

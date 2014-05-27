@@ -4,27 +4,65 @@
 
 #include "granary/arch/base.h"
 
+#include "granary/base/option.h"
+#include "granary/base/string.h"
+
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/cache.h"
 #include "granary/code/assemble.h"
+#include "granary/code/metadata.h"
 #include "granary/instrument.h"
 
 #include "granary/context.h"
-#include "granary/metadata.h"
-#include "granary/module.h"
-#include "granary/tool.h"
+
+GRANARY_DEFINE_string(tools, "",
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--clients=print_bbs,follow_jumps`.");
+
+GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
+    "The number of pages allocated at once to store edge code. Each "
+    "environment maintains its own edge code allocator. The default value is "
+    "1 pages per slab.");
 
 namespace granary {
 
 ContextInterface::ContextInterface(void) {}
+
+Context::Context(void)
+    : module_manager(this),
+      metadata_manager(),
+      tool_manager(this),
+      edge_code_cache(FLAG_edge_cache_slab_size) {
+
+  // Register internal metadata.
+  metadata_manager.Register<ModuleMetaData>();
+  metadata_manager.Register<CacheMetaData>();
+  metadata_manager.Register<LiveRegisterMetaData>();
+  metadata_manager.Register<StackMetaData>();
+
+  // Tell this environment about all loaded modules.
+  module_manager.RegisterAllBuiltIn();
+
+  // Tell Granary about all loaded tools.
+  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+      FLAG_tools,
+      [&] (const char *tool_name) {
+        tool_manager.Register(tool_name);
+      });
+
+  // Do a dummy allocation and free of all tools. Tools register meta-data
+  // through their constructors and so this will get all tool+option-specific
+  // meta-data registered.
+  tool_manager.FreeTools(tool_manager.AllocateTools());
+}
 
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
 // `ModuleMetaData` within the `BlockMetaData`.
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
   auto meta = AllocateEmptyBlockMetaData();
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_manager->FindByAppPC(start_pc);
+  auto module = module_manager.FindByAppPC(start_pc);
   module_meta->start_pc = start_pc;
   module_meta->source = module->OffsetOf(start_pc);
   return meta;
@@ -32,27 +70,27 @@ BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
 
 // Allocate and initialize some empty `BlockMetaData`.
 BlockMetaData *Context::AllocateEmptyBlockMetaData(void) {
-  return metadata_manager->Allocate();
+  return metadata_manager.Allocate();
 }
 
 // Allocate some edge code from the edge code cache.
 CachePC Context::AllocateEdgeCode(int num_bytes) {
-  return edge_code_cache->AllocateBlock(num_bytes);
+  return edge_code_cache.AllocateBlock(num_bytes);
 }
 
 // Register some meta-data with Granary.
 void Context::RegisterMetaData(const MetaDataDescription *desc) {
-  metadata_manager->Register(const_cast<MetaDataDescription *>(desc));
+  metadata_manager.Register(const_cast<MetaDataDescription *>(desc));
 }
 
 // Allocate instances of the tools that will be used to instrument blocks.
 Tool *Context::AllocateTools(void) {
-  return tool_manager->AllocateTools(this);
+  return tool_manager.AllocateTools();
 }
 
 // Free the allocated tools.
 void Context::FreeTools(Tool *tools) {
-  tool_manager->FreeTools(tools);
+  tool_manager.FreeTools(tools);
 }
 
 // Flush an entire code cache.
@@ -84,7 +122,8 @@ void Context::Compile(BlockMetaData *meta) {
   //            --> This would be well suited towards a lock in the environment.
 
   Instrument(this, &cfg, meta);
-  Assemble(this, module_meta->GetCodeCache(), &cfg);
+  auto frags = Assemble(module_meta->GetCodeCache(), &cfg);
+  GRANARY_UNUSED(frags);   // TODO(pag): Encode.
 }
 
 }  // namespace granary

@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_IR_LIR_H_
-#define GRANARY_IR_LIR_H_
+#ifndef GRANARY_CFG_LIR_H_
+#define GRANARY_CFG_LIR_H_
 
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
@@ -37,4 +37,4 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 }  // namespace lir
 }  // namespace granary
 
-#endif  // GRANARY_IR_LIR_H_
+#endif  // GRANARY_CFG_LIR_H_

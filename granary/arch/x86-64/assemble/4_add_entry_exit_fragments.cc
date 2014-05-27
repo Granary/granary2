@@ -5,7 +5,7 @@
 
 #include "granary/arch/x86-64/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 
 namespace granary {
 namespace arch {

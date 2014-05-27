@@ -7,7 +7,7 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/ssa.h"
+#include "granary/code/ssa.h"
 
 #include "granary/breakpoint.h"
 

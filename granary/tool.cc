@@ -192,12 +192,13 @@ void Tool::RegisterMetaData(const MetaDataDescription *desc) {
 }
 
 // Initialize an empty tool manager.
-ToolManager::ToolManager(void)
+ToolManager::ToolManager(ContextInterface *context_)
     : max_align(0),
       max_size(0),
       is_finalized(false),
       num_registed(0),
-      allocator() {
+      allocator(),
+      context(context_) {
   memset(&(is_registered[0]), 0, sizeof is_registered);
   memset(&(descriptions[0]), 0, sizeof descriptions);
 }
@@ -234,7 +235,7 @@ void ToolManager::Register(const ToolDescription *desc) {
 
 // Allocate all the tools managed by this `ToolManager` instance, and chain
 // then into a linked list.
-Tool *ToolManager::AllocateTools(ContextInterface *context) {
+Tool *ToolManager::AllocateTools(void) {
   if (GRANARY_UNLIKELY(!is_finalized)) {
     is_finalized = true;
     InitAllocator();

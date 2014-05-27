@@ -7,7 +7,7 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 
 namespace granary {
 
@@ -248,9 +248,9 @@ extern intptr_t granary_arch_get_tls_base(void);
 
 // Per-thread spill slots.
 //
-// Note: This depends on a link-time TLS implementation, as is the case on
+// Note: This depends on a load-time TLS implementation, as is the case on
 //       systems like Linux.
-static __thread struct {
+static __thread __attribute__((tls_model("initial-exec"))) struct {
   intptr_t slots[SpillInfo::MAX_NUM_SPILL_SLOTS];
 } SPILL_SLOTS;
 

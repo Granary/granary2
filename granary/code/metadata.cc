@@ -11,14 +11,14 @@
 
 namespace granary {
 
-RegisterMetaData::RegisterMetaData(void) {
+LiveRegisterMetaData::LiveRegisterMetaData(void) {
   live_regs.ReviveAll();
 }
 
 // Tells us if we can unify our (uncommitted) meta-data with some existing
 // meta-data.
-UnificationStatus RegisterMetaData::CanUnifyWith(
-    const RegisterMetaData *that) const {
+UnificationStatus LiveRegisterMetaData::CanUnifyWith(
+    const LiveRegisterMetaData *that) const {
 
   // Narrow down onto the "best" set of live registers on entry to this basic
   // block. We start with a conservative estimate.
@@ -28,7 +28,7 @@ UnificationStatus RegisterMetaData::CanUnifyWith(
 }
 
 // Update the register meta-data given a block.
-bool RegisterMetaData::AnalyzeBlock(DecodedBasicBlock *block) {
+bool LiveRegisterMetaData::AnalyzeBlock(DecodedBasicBlock *block) {
   LiveRegisterTracker regs;
   for (auto instr : block->ReversedInstructions()) {
     if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
@@ -44,7 +44,7 @@ bool RegisterMetaData::AnalyzeBlock(DecodedBasicBlock *block) {
 
       // Bring in register info from existing blocks.
       if (auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
-        auto meta = GetMetaData<RegisterMetaData>(inst_block);
+        auto meta = GetMetaData<LiveRegisterMetaData>(inst_block);
         if (cfi->IsConditionalJump()) {
           regs.Union(meta->live_regs);
         } else {

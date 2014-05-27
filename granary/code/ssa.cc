@@ -7,8 +7,8 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
-#include "granary/code/assemble/ssa.h"
+#include "granary/code/fragment.h"
+#include "granary/code/ssa.h"
 
 #include "granary/util.h"
 

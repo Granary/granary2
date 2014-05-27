@@ -5,7 +5,7 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 #include "granary/code/metadata.h"
 
 #include "granary/metadata.h"
@@ -57,7 +57,8 @@ static void InitLiveRegsOnExit(FragmentList *frags) {
 
         case FRAG_EXIT_FUTURE_BLOCK:
         case FRAG_EXIT_EXISTING_BLOCK:
-          auto meta = MetaDataCast<RegisterMetaData *>(exit_frag->block_meta);
+          auto meta = MetaDataCast<LiveRegisterMetaData *>(
+              exit_frag->block_meta);
           if (meta) {
             frag->regs.live_on_entry = meta->live_regs;
           } else {

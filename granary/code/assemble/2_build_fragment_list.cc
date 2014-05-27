@@ -7,7 +7,7 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 
 #include "granary/util.h"

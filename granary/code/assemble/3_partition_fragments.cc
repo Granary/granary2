@@ -7,7 +7,7 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 #include "granary/code/assemble/3_partition_fragments.h"
 
 #include "granary/code/metadata.h"

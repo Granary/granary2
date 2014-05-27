@@ -8,8 +8,7 @@
 
 #include "granary/cfg/instruction.h"
 
-#include "granary/code/assemble/fragment.h"
-
+#include "granary/code/fragment.h"
 #include "granary/code/register.h"
 
 // Append a non-native, created instruction to the fragment.

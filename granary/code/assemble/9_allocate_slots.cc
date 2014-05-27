@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 
 namespace granary {
 

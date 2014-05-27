@@ -5,8 +5,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
-
-#include "granary/ir/lir.h"
+#include "granary/cfg/lir.h"
 
 namespace granary {
 namespace lir {

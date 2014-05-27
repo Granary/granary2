@@ -5,7 +5,7 @@
 #include "granary/base/option.h"
 
 #include "granary/code/assemble.h"
-#include "granary/code/assemble/fragment.h"
+#include "granary/code/fragment.h"
 
 // Stages of assembly.
 #include "granary/code/assemble/0_compile_inline_assembly.h"
@@ -18,6 +18,7 @@
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_allocate_slots.h"
+#include "granary/code/assemble/10_add_connecting_jumps.h"
 
 #include "granary/logging.h"
 #include "granary/util.h"
@@ -29,8 +30,8 @@ GRANARY_DEFINE_bool(debug_log_fragments, false,
 namespace granary {
 
 // Assemble the local control-flow graph.
-void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
-              LocalControlFlowGraph *cfg) {
+FragmentList Assemble(CodeCacheInterface *code_cache,
+                      LocalControlFlowGraph *cfg) {
 
   // Compile all inline assembly instructions by parsing the inline assembly
   // instructions and doing code generation for them.
@@ -81,11 +82,15 @@ void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
   // spill slots.
   AllocateSlots(&frags);
 
+  // Add final connecting jumps (where needed) between predecessor and
+  // successor fragments.
+  AddConnectingJumps(&frags);
+
   if (FLAG_debug_log_fragments) {
     Log(LogDebug, &frags);
   }
 
-  GRANARY_UNUSED(env);
+  return frags;
 }
 
 }  // namespace granary

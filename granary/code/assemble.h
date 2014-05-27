@@ -7,6 +7,8 @@
 # error "This code is internal to Granary."
 #endif
 
+#include "granary/code/fragment.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -15,8 +17,8 @@ class ContextInterface;
 class LocalControlFlowGraph;
 
 // Assemble the local control-flow graph.
-void Assemble(ContextInterface* env, CodeCacheInterface *code_cache,
-              LocalControlFlowGraph *cfg);
+FragmentList Assemble(CodeCacheInterface *code_cache,
+                      LocalControlFlowGraph *cfg);
 }  // namespace granary
 
 #endif  // GRANARY_CODE_ASSEMBLE_H_

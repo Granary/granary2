@@ -16,13 +16,13 @@ namespace granary {
 // Forward declarations.
 class DecodedBasicBlock;
 
-class RegisterMetaData : public UnifiableMetaData<RegisterMetaData> {
+class LiveRegisterMetaData : public UnifiableMetaData<LiveRegisterMetaData> {
  public:
-  RegisterMetaData(void);
+  LiveRegisterMetaData(void);
 
   // Tells us if we can unify our (uncommitted) meta-data with some existing
   // meta-data.
-  UnificationStatus CanUnifyWith(const RegisterMetaData *that) const;
+  UnificationStatus CanUnifyWith(const LiveRegisterMetaData *that) const;
 
   // Update the register meta-data given a block. Returns true if the analysis
   // resulted in any changes to the meta-data.

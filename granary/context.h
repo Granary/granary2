@@ -10,6 +10,11 @@
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
+#include "granary/cache.h"
+#include "granary/metadata.h"
+#include "granary/module.h"
+#include "granary/tool.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -72,18 +77,10 @@ class ContextInterface {
 // instructions as potentially faulting.
 class Context : public ContextInterface {
  public:
-  Context(void) = delete;
   virtual ~Context(void) = default;
 
   // Initialize the Context.
-  inline Context(ModuleManager *module_manager_,
-                 MetaDataManager *metadata_manager_,
-                 ToolManager *tool_manager_,
-                 CodeCacheInterface *edge_code_cache_)
-      : module_manager(module_manager_),
-        metadata_manager(metadata_manager_),
-        tool_manager(tool_manager_),
-        edge_code_cache(edge_code_cache_) {}
+  Context(void);
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
@@ -122,18 +119,18 @@ class Context : public ContextInterface {
  private:
 
   // Manages all modules allocated/understood by this environment.
-  ModuleManager * const module_manager;
+  ModuleManager module_manager;
 
   // Manages all metadata allocated/understood by this environment.
-  MetaDataManager * const metadata_manager;
+  MetaDataManager metadata_manager;
 
   // Manages all tools that instrument code that is taken over by this
   // environment.
-  ToolManager * const tool_manager;
+  ToolManager tool_manager;
 
   // Manages all edge code allocated/understood by this environment. Code cache
   // code is managed on a per-module address range basis.
-  CodeCacheInterface * const edge_code_cache;
+  CodeCache edge_code_cache;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

@@ -25,7 +25,8 @@ GRANARY_INTERNAL_DEFINITION class ContextInterface;
 GRANARY_INTERNAL_DEFINITION class InlineAssembly;
 
 GRANARY_INTERNAL_DEFINITION enum {
-  MAX_NUM_MANAGED_TOOLS = 32
+  MAX_NUM_MANAGED_TOOLS = 32,
+  MAX_TOOL_NAME_LEN = 32
 };
 
 // Describes the structure of tools.
@@ -205,7 +206,7 @@ typedef LinkedListIterator<Tool> ToolIterator;
 class ToolManager {
  public:
   // Initialize an empty tool manager.
-  ToolManager(void);
+  explicit ToolManager(ContextInterface *context);
   ~ToolManager(void);
 
   // Register a tool with this manager using the tool's name. This will look
@@ -218,13 +219,15 @@ class ToolManager {
   // This ensures that tools are allocated and inserted into the list according
   // to the order of their dependencies, whilst also trying to preserve the
   // tool order specified at the command-line.
-  Tool *AllocateTools(ContextInterface *context);
+  Tool *AllocateTools(void);
 
   // Free all allocated tool objects. This expects a list of `Tool` objects, as
   // allocated by `ToolManager::AllocateTools`.
   void FreeTools(Tool *tool);
 
  private:
+
+  ToolManager(void) = delete;
 
   // Register a tool with this manager using the tool's description.
   void Register(const ToolDescription *desc);
@@ -250,6 +253,9 @@ class ToolManager {
 
   // Slab allocator for allocating tool instrumentation objects.
   Container<internal::SlabAllocator> allocator;
+
+  // Context to which thios tool manager belongs.
+  ContextInterface *context;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ToolManager);
 };

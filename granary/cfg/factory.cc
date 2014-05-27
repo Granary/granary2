@@ -9,12 +9,11 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/lir.h"
 #include "granary/cfg/factory.h"
 
 #include "granary/code/metadata.h"
 #include "granary/code/register.h"
-
-#include "granary/ir/lir.h"
 
 #include "granary/context.h"
 #include "granary/module.h"
@@ -224,7 +223,7 @@ void BlockFactory::AnalyzeNewBlocks(void) {
     changed = false;
     for (auto block : cfg->NewBlocks()) {
       if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-        auto meta = GetMetaData<RegisterMetaData>(decoded_block);
+        auto meta = GetMetaData<LiveRegisterMetaData>(decoded_block);
         changed = meta->AnalyzeBlock(decoded_block) || changed;
       }
     }

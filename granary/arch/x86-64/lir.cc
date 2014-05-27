@@ -7,11 +7,10 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/lir.h"
 #include "granary/cfg/operand.h"
 
 #include "granary/arch/x86-64/builder.h"
-
-#include "granary/ir/lir.h"
 
 #include "granary/breakpoint.h"
 

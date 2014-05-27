@@ -7,7 +7,7 @@
 
 #include "granary/cfg/instruction.h"  // For `NativeInstruction`.
 
-#include "granary/code/assemble/ssa.h"  // For `SSAInstruction`, `SSAOperand`.
+#include "granary/code/ssa.h"  // For `SSAInstruction`, `SSAOperand`.
 
 #include "granary/breakpoint.h"
 #include "granary/util.h"  // For `GetMetaData`.
