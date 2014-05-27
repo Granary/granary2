@@ -56,9 +56,9 @@ void Init(const char *granary_path) {
   // module registration picks up on existing clients.
   LoadClients(granary_path);
 
-  if (!FLAG_help) {
-    context.Construct();
+  context.Construct();
 
+  if (!FLAG_help) {
     // TODO(pag): Remove me.
     AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 

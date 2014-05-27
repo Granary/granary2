@@ -152,7 +152,7 @@ const char *FindValueForName(const char *name) {
 // Process the pending options. Pending options represent internal Granary
 // options.
 static void ProcessPendingOptions(void) {
-  for (Option *option(OPTIONS); option; option = option->next) {
+  for (auto option : OptionIterator(OPTIONS)) {
     option->parse(option);
   }
 }
@@ -200,9 +200,10 @@ void RegisterOption(Option *option) {
   // Client/tool options.
   if (OPTIONS_INITIALIZED) {
     option->parse(option);
+  }
 
   // Internal Granary options.
-  } else if (!option->next) {
+  if (!option->next) {
     option->next = OPTIONS;
     OPTIONS = option;
   }

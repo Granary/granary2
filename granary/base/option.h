@@ -71,7 +71,7 @@ GRANARY_INTERNAL_DEFINITION void InitOptions(const char *env);
 // Initialize the options from the command-line arguments.
 GRANARY_INTERNAL_DEFINITION void InitOptions(int argc, const char **argv);
 
-// Works for --help option: print out each options along with their document.
+// Works for `--help` option: print out each options along with their document.
 GRANARY_INTERNAL_DEFINITION void PrintAllOptions(void);
 
 namespace detail {
