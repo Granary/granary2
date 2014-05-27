@@ -196,13 +196,9 @@ namespace detail {
 
 // Initialize an option.
 void RegisterOption(Option *option) {
-
-  // Client/tool options.
   if (OPTIONS_INITIALIZED) {
-    option->parse(option);
+    option->parse(option);  // Client/tool options.
   }
-
-  // Internal Granary options.
   if (!option->next) {
     option->next = OPTIONS;
     OPTIONS = option;

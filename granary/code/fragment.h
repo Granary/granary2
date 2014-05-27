@@ -196,10 +196,21 @@ enum {
   FRAG_SUCC_BRANCH = 1
 };
 
+// Adds a total ordering to fragments in terms of an encoding order.
+class EncodedFragment {
+ public:
+  EncodedFragment(void)
+      : next(nullptr),
+        was_encode_ordered(false) {}
+
+  Fragment *next;
+  bool was_encode_ordered;
+};
+
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
-class Fragment {
+class Fragment : public EncodedFragment {
  public:
   Fragment(void);
 
@@ -247,6 +258,7 @@ class Fragment {
 typedef ListOfListHead<Fragment> FragmentList;
 typedef ListHeadIterator<Fragment> FragmentListIterator;
 typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
+typedef LinkedListIterator<Fragment> EncodeOrderedFragmentIterator;
 
 // Forward declarations.
 enum LogLevel : int;
