@@ -160,6 +160,8 @@ class Instruction : public InstructionInterface {
   union {
     AppPC decoded_pc;
     uintptr_t decoded_addr;
+    CachePC encoded_pc;
+    uintptr_t encoded_addr;
   } __attribute__((packed));
 
   // Instruction class. This roughly corresponds to an opcode.
@@ -168,7 +170,10 @@ class Instruction : public InstructionInterface {
   xed_category_enum_t category:8;
 
   // Decoded length of this instruction, or 0 if it wasn't decoded.
-  uint8_t decoded_length;
+  union {
+    uint8_t decoded_length;
+    uint8_t encoded_length;
+  };
 
   // Instruction prefixes.
   //

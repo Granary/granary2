@@ -20,11 +20,17 @@ namespace arch {
 // Forward declarations.
 class Instruction;
 
+enum class InstructionEncodeKind {
+  STAGED,
+  COMMIT
+};
+
 // Manages encoding and decoding of instructions.
 class InstructionEncoder {
  public:
   // Initialize the instruction decoder.
-  InstructionEncoder(void);
+  inline explicit InstructionEncoder(InstructionEncodeKind encode_kind_)
+      : encode_kind(encode_kind_) {}
 
   // Encode an instruction, and update the program counter by reference
   // to point to the next logical instruction. Returns `true` if the
@@ -36,9 +42,13 @@ class InstructionEncoder {
   bool Encode(Instruction *, CachePC);
 
  private:
+  InstructionEncoder(void) = delete;
+
   // Internal APIs for encoding instructions. These APIs directly
   // interact with the driver.
   CachePC EncodeInternal(Instruction *, CachePC);
+
+  InstructionEncodeKind encode_kind;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstructionEncoder);
 };

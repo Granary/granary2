@@ -11,6 +11,7 @@
 
 #include "granary/cache.h"
 #include "granary/code/assemble.h"
+#include "granary/code/encode.h"
 #include "granary/code/metadata.h"
 #include "granary/instrument.h"
 
@@ -123,7 +124,7 @@ void Context::Compile(BlockMetaData *meta) {
 
   Instrument(this, &cfg, meta);
   auto frags = Assemble(module_meta->GetCodeCache(), &cfg);
-  GRANARY_UNUSED(frags);   // TODO(pag): Encode.
+  StageEncode(&frags);
 }
 
 }  // namespace granary

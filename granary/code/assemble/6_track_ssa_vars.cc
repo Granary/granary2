@@ -119,7 +119,7 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
   SSAOperand ssa_op;
 
   GRANARY_ASSERT(op->Ref().IsValid());
-  ssa_op.operand = const_cast<arch::Operand *>(op->UnsafeExtract());
+  ssa_op.operand = op->UnsafeExtract();
   GRANARY_ASSERT(nullptr != ssa_op.operand);
 
   ssa_op.is_reg = nullptr != reg_op;

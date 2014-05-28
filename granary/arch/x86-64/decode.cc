@@ -172,6 +172,8 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;
     instr_op->addr.as_int = disp;
     instr_op->is_compound = false;
+    segment_reg = XED_REG_INVALID == segment_reg ? XED_REG_DS : segment_reg;
+
   // Try to simplify the memory operand to a non-compound one.
   } else if (XED_REG_INVALID == base_reg && !disp && 1 == scale &&
       XED_REG_RSP != index_reg) {
@@ -214,6 +216,16 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
     instr_op->width = static_cast<int8_t>(
         xed3_operand_get_mem_width(xedd) * 8); // Width of addressed memory.
+
+    // Try to convert a RIP-relative address into an absolute address. This
+    // assumes that the address is < 32 bits in size.
+    auto addr32 = static_cast<uint32_t>(instr_op->addr.as_uint);
+    if (XED_ICLASS_LEA != instr->iclass &&
+        instr_op->addr.as_uint == static_cast<uintptr_t>(addr32)) {
+      instr_op->segment = XED_REG_DS;
+      instr_op->addr.as_uint = 0;
+      instr_op->mem.disp = static_cast<int32_t>(addr32);
+    }
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
   }

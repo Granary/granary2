@@ -3,22 +3,34 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "granary/arch/encode.h"
+
 #include "granary/code/encode.h"
 
 namespace granary {
 namespace {
 
 // Stage encode an individual fragment.
-static void StageEncode(Fragment *frag, EncodeResult *result) {
-  /*
-  int num_bytes = 0;
-  if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-    if (code_frag->a)
+static CachePC StageEncode(Fragment *frag, EncodeResult *result,
+                           CachePC encode_addr) {
+  arch::InstructionEncoder encoder(arch::InstructionEncodeKind::STAGED);
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!ninstr->instruction.IsNoOp()) {
+        GRANARY_IF_DEBUG( bool encoded = ) encoder.EncodeNext(
+            &(ninstr->instruction), &encode_addr);
+        GRANARY_ASSERT(encoded);
+      }
+    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (IA_LABEL == annot->annotation ||
+          IA_RETURN_ADDRESS == annot->annotation) {
+        annot->data = reinterpret_cast<uintptr_t>(encode_addr);
+      }
+    }
   }
-  for (auto instr : InstructionListIterator)
-  */
-  GRANARY_UNUSED(frag);
   GRANARY_UNUSED(result);
+
+  return encode_addr;
 }
 
 }  // namespace
@@ -29,8 +41,9 @@ static void StageEncode(Fragment *frag, EncodeResult *result) {
 // specific instructions.
 EncodeResult StageEncode(FragmentList *frags) {
   EncodeResult result = {0, 0, 0, 0};
+  CachePC encode_addr(nullptr);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    StageEncode(frag, &result);
+    encode_addr = StageEncode(frag, &result, encode_addr);
   }
   return result;
 }

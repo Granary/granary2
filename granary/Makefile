@@ -28,10 +28,10 @@ GRANARY_OTHER_OBJ_FILES := $(filter-out $(GRANARY_MERGED_BC_BC),$(GRANARY_OTHER_
 GRANARY_EXCLUDE_FIND = 
 GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/$(GRANARY_NOT_WHERE)/*"
 GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/arch/*"
-GRANARY_EXCLUDE_FIND += -not -path "$(GRANARY_SRC_DIR)/granary/arch/*"
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.cc' $(GRANARY_EXCLUDE_FIND))
+GRANARY_CC_SRC_FILES += $(shell find $(GRANARY_SRC_DIR)/granary/arch -maxdepth 1 -type f -name '*.cc')
 GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.bc))
 
 # Find assembly files specific to the architecture being instrumented (e.g. x86-64).

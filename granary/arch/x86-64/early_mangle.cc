@@ -145,8 +145,10 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
       Instruction ni;
       auto sp = block->AllocateVirtualRegister();
       sp.ConvertToVirtualStackPointer();
-      APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
-                                               arch::ADDRESS_WIDTH_BITS)));
+      APP(
+          LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
+                                               arch::ADDRESS_WIDTH_BITS));
+          ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
       sp.Widen(op.reg.ByteWidth());
       op.reg = sp;  // Replace the operand.
     }
@@ -158,7 +160,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   auto offset = block->AllocateVirtualRegister();
   offset.ConvertToSegmentOffset();
 
-  MOV_GPRv_IMMz(&ni, offset.WidenedTo(32),
+  MOV_GPRv_IMMz(&ni, offset.WidenedTo(4 /* bytes */),
                 static_cast<uint32_t>(op.addr.as_uint) & 0xFFFFFFFFU);
   ni.effective_operand_width = 32;
   APP();
@@ -176,7 +178,7 @@ static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
       if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
         MangleExplicitMemOp(block, op);
       } else if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
-        if (XED_REG_INVALID != op.segment) {
+        if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
           MangleSegmentOffset(block, op);
         }
       } else if (op.IsRegister() && op.reg.IsStackPointer()) {
@@ -207,6 +209,7 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   APP(MOV_MEMv_GPRv(&ni, stack_mem_op, vr));
   LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-stack_shift, XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
+  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -265,6 +268,7 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
   LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift, XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
+  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -330,7 +334,9 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
   auto addr = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   APP(MOVZX_GPRv_GPR8(&ni, addr, XED_REG_AL));
-  APP(LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX));
+  APP(
+      LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX);
+      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
   instr->decoded_pc = decoded_pc;
   instr->ops[1].width = 8;  // Bits.
@@ -344,8 +350,10 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
-  APP_NATIVE(LEA_GPRv_AGEN(
-      &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
+  APP_NATIVE(
+      LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP,
+                                                 arch::ADDRESS_WIDTH_BITS));
+      ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
   APP_NATIVE(
       PUSH_GPRv_50(&ni, XED_REG_RBP);
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
@@ -360,10 +368,12 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   }
 
   if (frame_size) {
-    APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+    APP(
+        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
                       BaseDispMemOp(-static_cast<int32_t>(frame_size),
                                     XED_REG_RSP,
-                                    arch::ADDRESS_WIDTH_BITS)));
+                                    arch::ADDRESS_WIDTH_BITS));
+        ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
 
     // Enter finishes with a memory write that is "unused". This is to detect
     // stack segment issues and page faults. We don't even bother with this

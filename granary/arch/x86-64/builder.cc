@@ -3,34 +3,13 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
+#include "granary/arch/util.h"
 
 #include "granary/arch/x86-64/builder.h"
 #include "granary/arch/x86-64/instruction.h"
 
 namespace granary {
 namespace arch {
-
-namespace {
-// Returns the bit width of an immediate integer. This is to calculate operand
-// width when using the instruction builder IR.
-static int ImmediateWidthBits(uint64_t imm) {
-  enum : uint64_t {
-    WIDTH_8   = 0x0FFUL,
-    WIDTH_16  = WIDTH_8 | (WIDTH_8 << 8),
-    WIDTH_32  = WIDTH_16 | (WIDTH_16 << 16)
-  };
-  if (!imm) return 1;
-  if ((imm | ~WIDTH_8) == imm) return 8;  // Signed.
-  if ((imm & WIDTH_8) == imm) return 8;  // Unsigned.
-
-  if ((imm | ~WIDTH_16) == imm) return 16;  // Signed.
-  if ((imm & WIDTH_16) == imm) return 16;  // Unsigned.
-
-  if ((imm | ~WIDTH_32) == imm) return 32;  // Signed.
-  if ((imm & WIDTH_32) == imm) return 32;  // Unsigned.
-  return 64;
-}
-}  // namespace
 
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.

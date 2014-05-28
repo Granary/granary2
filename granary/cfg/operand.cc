@@ -92,7 +92,7 @@ const arch::Operand *Operand::Extract(void) const {
 
 // Returns a pointer to the internal, arch-specific memory operand that is
 // *referenced* by this `Operand`.
-const arch::Operand *Operand::UnsafeExtract(void) const {
+arch::Operand *Operand::UnsafeExtract(void) const {
   return op_ptr;
 }
 

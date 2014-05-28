@@ -205,15 +205,22 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
 // value from `mem_addr`
 void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                      const MemoryOperand &mloc, const void *mem_addr) {
+  auto op = mloc.UnsafeExtract();
+  if (XED_ENCODER_OPERAND_TYPE_PTR != op->type) return;
+
+  // 32-bit absolute address (seg=DS), RIP-relative address that was converted
+  // into 32-bit absolute (seg=DS), or segment-offsetted address (seg=GS/FS).
+  if (XED_REG_INVALID != op->segment) return;
+
   arch::Instruction ni;
   auto addr_reg = block->AllocateVirtualRegister(arch::ADDRESS_WIDTH_BYTES);
   arch::MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
   ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
 
-  MemoryOperand rel_mloc(addr_reg, mloc.ByteWidth());
-  GRANARY_IF_DEBUG(auto replaced = ) mloc.Ref().ReplaceWith(rel_mloc);
-  GRANARY_ASSERT(replaced);
+  GRANARY_ASSERT(!op->is_sticky && op->is_explicit && !op->is_compound);
+  op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op->reg = addr_reg;
 }
 
 }  // namespace granary

@@ -150,7 +150,7 @@ class Operand {
   // Returns a pointer to the internal, arch-specific memory operand that is
   // *referenced* by this `Operand`.
   GRANARY_INTERNAL_DEFINITION
-  const arch::Operand *UnsafeExtract(void) const;
+  arch::Operand *UnsafeExtract(void) const;
 
   GRANARY_DECLARE_BASE_CLASS(Operand)
 
