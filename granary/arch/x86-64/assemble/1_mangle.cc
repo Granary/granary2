@@ -189,10 +189,12 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
   op.ret_address = ret_address;
+  op.width = arch::ADDRESS_WIDTH_BITS;
   arch::LEA_GPRv_AGEN(&instr, ret_address_reg, op);
   cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
   arch::PUSH_GPRv_50(&instr, ret_address_reg);
   instr.decoded_pc = decoded_pc;  // Mark as application.
+  instr.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   instr.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
   cfi->UnsafeInsertAfter(ret_address);

@@ -147,15 +147,6 @@ class BranchTargetBuilder {
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, xed_category_enum_t category);
 
-// Custom LEA instruction builder for source register operands.
-template <typename A0, typename A1>
-inline static void LEA_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1) {
-  BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
-                   XED_CATEGORY_MISC);
-  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
-  RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
-}
-
 // Custom LEA instruction builder for source register operands. This is like
 // doing `dest = src1 + src2`.
 template <typename A0, typename A1, typename A2>
@@ -189,6 +180,19 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
   }
+  op.width = static_cast<int8_t>(width);
+  return op;
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
+                                    xed_reg_enum_t index_reg, int width=-1) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op.is_compound = true;
+  op.mem.disp = disp;
+  op.mem.reg_base = base_reg;
+  op.mem.reg_index = index_reg;
   op.width = static_cast<int8_t>(width);
   return op;
 }

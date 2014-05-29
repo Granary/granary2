@@ -170,9 +170,14 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   // Hard-coded offset from a segment register.
   if (XED_REG_INVALID == base_reg && XED_REG_INVALID == index_reg) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-    instr_op->addr.as_int = disp;
     instr_op->is_compound = false;
-    segment_reg = XED_REG_INVALID == segment_reg ? XED_REG_DS : segment_reg;
+    instr_op->addr.as_int = disp;
+    if (XED_REG_INVALID == segment_reg) {
+      segment_reg = XED_REG_DS;
+      instr_op->addr.as_uint &= 0x0FFFFFFFFULL;  // Truncate to 32 bits.
+    } else {
+      instr_op->addr.as_uint &= 0x0FFFFFFULL;  // Truncate to 24 bits.
+    }
 
   // Try to simplify the memory operand to a non-compound one.
   } else if (XED_REG_INVALID == base_reg && !disp && 1 == scale &&
@@ -226,9 +231,14 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
       instr_op->addr.as_uint = 0;
       instr_op->mem.disp = static_cast<int32_t>(addr32);
     }
+
+    if (!instr_op->width) {
+      instr_op->width = instr->effective_operand_width;
+    }
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
   }
+  GRANARY_ASSERT(0 != instr_op->width);
 }
 
 // Pull out an immediate operand from the XED instruction.

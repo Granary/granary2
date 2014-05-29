@@ -22,6 +22,7 @@ Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
   gpr.Widen(arch::GPR_WIDTH_BYTES);
   slot.Widen(arch::ADDRESS_WIDTH_BYTES);
   arch::MOV_MEMv_GPRv(&ninstr, slot, gpr);
+  ninstr.ops[0].width = arch::GPR_WIDTH_BITS;
   return new NativeInstruction(&ninstr);
 }
 
@@ -33,6 +34,7 @@ Instruction *RestoreGPRFromSlot(VirtualRegister gpr, VirtualRegister slot) {
   gpr.Widen(arch::GPR_WIDTH_BYTES);
   slot.Widen(arch::ADDRESS_WIDTH_BYTES);
   arch::MOV_GPRv_MEMv(&ninstr, gpr, slot);
+  ninstr.ops[1].width = arch::GPR_WIDTH_BITS;
   return new NativeInstruction(&ninstr);
 }
 
@@ -59,6 +61,7 @@ Instruction *SwapGPRWithSlot(VirtualRegister gpr, VirtualRegister slot) {
   gpr.Widen(arch::GPR_WIDTH_BYTES);
   slot.Widen(arch::ADDRESS_WIDTH_BYTES);
   arch::XCHG_MEMv_GPRv(&ninstr, slot, gpr);
+  ninstr.ops[0].width = arch::GPR_WIDTH_BITS;
   return new NativeInstruction(&ninstr);
 }
 

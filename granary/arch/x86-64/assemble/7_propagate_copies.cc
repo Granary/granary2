@@ -34,7 +34,7 @@ SSAOperand *GetCopiedOperand(const NativeInstruction *instr) {
     if (!instruction.ops[0].IsRegister()) return nullptr;
     if (!instruction.ops[1].IsRegister()) return nullptr;
     copied_reg = instruction.ops[1].reg;
-  } else if (XED_ICLASS_LEA == iclass) {
+  } else if (XED_ICLASS_LEA == iclass && 2 == instruction.num_explicit_ops) {
     if (instruction.ops[1].is_compound) {
       copied_reg = VirtualRegister::FromNative(instruction.ops[1].mem.reg_base);
     } else {

@@ -283,6 +283,7 @@ class InlineAssemblyParser {
   // the assembled operands.
   void FixupOperands(void) {
     auto xedi = SelectInstruction(&data);
+    int8_t op_size = 0;
     GRANARY_ASSERT(nullptr != xedi);
     auto i = 0U;
     for (auto &instr_op : data.ops) {
@@ -296,8 +297,10 @@ class InlineAssemblyParser {
             !instr_op.reg.IsGeneralPurpose()) {
           instr_op.is_sticky = true;
         }
+        op_size = std::max(op_size, instr_op.width);
       }
     }
+    data.effective_operand_width = op_size;
   }
 
   // Finalize the instruction by adding it to the basic block's instruction

@@ -103,12 +103,10 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
   xedo->u.mem.seg = op.segment;
   if (op.is_compound) {
     xedo->u.mem.base = op.mem.reg_base;
-    xedo->u.mem.disp.displacement = static_cast<uint64_t>(
-        static_cast<int64_t>(op.mem.disp));
-    if (xedo->u.mem.disp.displacement) {
+    if (op.mem.disp) {
+      xedo->u.mem.disp.displacement = static_cast<uint64_t>(op.mem.disp);
       xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(
           ImmediateWidthBits(op.mem.disp));
-    } else {
       TruncateDisplacementToWidth(&(xedo->u.mem.disp));
     }
     xedo->u.mem.index = op.mem.reg_index;
@@ -120,20 +118,23 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
 
 // Encode a pointer memory operand.
 static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
-                      CachePC next_pc) {
+                      CachePC next_pc, xed_iclass_enum_t iclass) {
   // Absolute address, or segment offset.
   if (XED_REG_INVALID != op.segment) {
     xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
-    xedo->u.mem.seg = XED_REG_DS == op.segment ? XED_REG_INVALID : op.segment;
-    xedo->u.mem.disp.displacement = static_cast<uint64_t>(
-        static_cast<int64_t>(op.mem.disp));
-    xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(
-        ImmediateWidthBits(op.mem.disp));
-    TruncateDisplacementToWidth(&(xedo->u.mem.disp));
+    xedo->u.mem.disp.displacement = op.addr.as_uint;
+    if (XED_REG_DS == op.segment) {  // 32-bit, zero-extended absolute address.
+      xedo->u.mem.disp.displacement_width = XED_ICLASS_MOV == iclass ? 64 : 32;
+      xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;
+
+    } else {  // Offset from a segment register.
+      xedo->u.mem.disp.displacement_width = 24;
+      xedo->u.mem.seg = op.segment;
+    }
 
   // RIP-relative address.
   } else {
-    xedo->type = XED_ENCODER_OPERAND_TYPE_PTR;
+    xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
     auto next_addr = reinterpret_cast<intptr_t>(next_pc);
     intptr_t mem_addr = 0;
     if (op.is_annot_encoded_pc) {
@@ -141,9 +142,36 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     } else {
       mem_addr = op.addr.as_int;
     }
-
-    xedo->u.brdisp = static_cast<int32_t>(mem_addr - next_addr);
+    xedo->u.mem.disp.displacement = static_cast<uint32_t>(mem_addr - next_addr);
+    xedo->u.mem.disp.displacement_width = 32;
+    xedo->u.mem.base = XED_REG_RIP;
+    //xedo->type = XED_ENCODER_OPERAND_TYPE_PTR;
+    //xedo->u.brdisp = static_cast<int32_t>(mem_addr - next_addr);
   }
+}
+
+// Perform late-mangling of an LEA instruction.
+static void LateMangleLEA(Instruction *instr) {
+  GRANARY_ASSERT(3 == instr->num_explicit_ops);
+  GRANARY_ASSERT(instr->ops[1].IsRegister());
+  GRANARY_ASSERT(instr->ops[2].IsRegister());
+  GRANARY_ASSERT(instr->ops[1].reg.IsNative());
+  GRANARY_ASSERT(instr->ops[2].reg.IsNative());
+  GRANARY_ASSERT(instr->ops[1].reg.IsGeneralPurpose());
+  GRANARY_ASSERT(instr->ops[2].reg.IsGeneralPurpose());
+  auto base_reg = static_cast<xed_reg_enum_t>(
+      instr->ops[1].reg.EncodeToNative());
+  auto index_reg = static_cast<xed_reg_enum_t>(
+      instr->ops[2].reg.EncodeToNative());
+  instr->ops[1].type = XED_ENCODER_OPERAND_TYPE_REG;
+  instr->ops[2].type = XED_ENCODER_OPERAND_TYPE_INVALID;
+  instr->ops[1].is_effective_address = true;
+  auto &mem(instr->ops[1].mem);
+  mem.disp = 0;
+  mem.reg_base = base_reg;
+  mem.reg_index = index_reg;
+  mem.scale = 1;
+  instr->num_explicit_ops = 2;
 }
 
 }  // namespace
@@ -153,6 +181,13 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 // an instruction can be encoded.
 CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   xed_encoder_instruction_t xede;
+
+  // Make sure that something like the `LEA` produced from mangling `XLAT` is
+  // correctly handled.
+  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == instr->iclass &&
+                       2 != instr->num_explicit_ops)) {
+    LateMangleLEA(instr);
+  }
 
   // Step 1: Convert Granary IR into XED encoder IR.
   InitEncoderInstruction(instr, &xede);
@@ -168,8 +203,11 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
     GRANARY_ASSERT(0 < instr->encoded_length);
   }
 
+  auto op_width = 0;
   for (auto &op : instr->ops) {
     auto &xedo(xede.operands[op_index++]);
+    xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
+    op_width = std::max(op_width, op.BitWidth());
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
         EncodeBrDisp(op, &xedo, pc + instr->encoded_length);
@@ -186,15 +224,18 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
         EncodeMem(op, &xedo);
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
-        EncodePtr(op, &xedo, pc + instr->encoded_length);
+        EncodePtr(op, &xedo, pc + instr->encoded_length, instr->iclass);
         break;
       case XED_ENCODER_OPERAND_TYPE_INVALID:
       default:
         break;
     }
-    if (!xedo.width) {
-      xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
-    }
+  }
+
+  // Make sure that we've got an effective operand width.
+  if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
+    instr->effective_operand_width = static_cast<int8_t>(op_width);
+    xede.effective_operand_width = static_cast<uint32_t>(op_width);
   }
 
   xed_state_t dstate;

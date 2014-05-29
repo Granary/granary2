@@ -123,11 +123,8 @@ bool MemoryOperand::IsPointer(void) const {
 // Try to match this memory operand as a pointer value.
 bool MemoryOperand::MatchPointer(const void *&ptr) const {
   if (XED_ENCODER_OPERAND_TYPE_PTR == op->type) {
-    if (XED_REG_INVALID == op->segment) {
+    if (XED_REG_INVALID == op->segment || XED_REG_DS == op->segment) {
       ptr = op->addr.as_ptr;
-      return true;
-    } else if (XED_REG_DS == op->segment) {
-      ptr = reinterpret_cast<void *>(static_cast<uintptr_t>(op->mem.disp));
       return true;
     }
   }
@@ -268,14 +265,12 @@ void Operand::EncodeToString(OperandString *str) const {
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
       if (XED_REG_INVALID != segment) {
-        str->Format("[%s:0x%x]", xed_reg_enum_t2str(segment),
-                    mem.disp);
+        str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
+      }
+      if (is_annot_encoded_pc) {
+        str->UpdateFormat("[return address]");
       } else {
-        if (is_annot_encoded_pc) {
-          str->Format("[return address]");
-        } else {
-          str->Format("[0x%lx]", addr.as_uint);
-        }
+        str->UpdateFormat("[0x%lx]", addr.as_uint);
       }
       break;
   }

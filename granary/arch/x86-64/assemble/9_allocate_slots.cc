@@ -38,7 +38,7 @@ static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
   auto op = instr->instruction.ops[0];
   if (op.IsRegister()) {
     auto mem_width = instr->instruction.effective_operand_width;
-    GRANARY_ASSERT(-1 != mem_width);
+    GRANARY_ASSERT(0 < mem_width);
     arch::MOV_MEMv_GPRv(
         &(instr->instruction),
         arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width),
@@ -57,7 +57,7 @@ static void ManglePop(NativeInstruction *instr, int adjusted_offset) {
   auto op = instr->instruction.ops[0];
   if (op.IsRegister()) {
     auto mem_width = instr->instruction.effective_operand_width;
-    GRANARY_ASSERT(-1 != mem_width);
+    GRANARY_ASSERT(0 < mem_width);
     arch::MOV_GPRv_MEMv(
         &(instr->instruction),
         op.reg,
@@ -86,6 +86,7 @@ static void ManglePushFlags(Fragment *frag, NativeInstruction *instr,
   auto &ainstr(instr->instruction);
   auto flag_access_reg = ainstr.ops[0].reg;
   auto op_width = instr->instruction.effective_operand_width;
+  GRANARY_ASSERT(0 < op_width);
   arch::MOV_MEMv_GPRv(
       &ni,
       arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, op_width),
@@ -110,6 +111,7 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
                            int adjusted_offset) {
   arch::Instruction ni;
   auto op_width = instr->instruction.effective_operand_width;
+  GRANARY_ASSERT(0 < op_width);
   arch::PUSH_MEMv(&ni,
                   arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, op_width));
   ni.effective_operand_width = op_width;

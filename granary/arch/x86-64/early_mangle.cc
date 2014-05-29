@@ -105,7 +105,6 @@ void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
       if (op.reg.IsStackPointer()) mem_reg.ConvertToVirtualStackPointer();
     }
     LEA_GPRv_AGEN(&ni, mem_reg, op);
-    ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
     ni.ops[1].segment = XED_REG_INVALID;
     APP();
 
@@ -120,7 +119,6 @@ static void MoveStackPointerToGPR(Instruction *instr) {
   auto decoded_pc = instr->decoded_pc;
   LEA_GPRv_AGEN(instr, instr->ops[0].reg,
                 BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
-  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   instr->decoded_pc = decoded_pc;
 }
 
@@ -145,10 +143,8 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
       Instruction ni;
       auto sp = block->AllocateVirtualRegister();
       sp.ConvertToVirtualStackPointer();
-      APP(
-          LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
-                                               arch::ADDRESS_WIDTH_BITS));
-          ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
+      APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
+                                               arch::ADDRESS_WIDTH_BITS)));
       sp.Widen(op.reg.ByteWidth());
       op.reg = sp;  // Replace the operand.
     }
@@ -161,7 +157,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   offset.ConvertToSegmentOffset();
 
   MOV_GPRv_IMMz(&ni, offset.WidenedTo(4 /* bytes */),
-                static_cast<uint32_t>(op.addr.as_uint) & 0xFFFFFFFFU);
+                static_cast<uint32_t>(op.addr.as_uint));
   ni.effective_operand_width = 32;
   APP();
 
@@ -209,7 +205,6 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   APP(MOV_MEMv_GPRv(&ni, stack_mem_op, vr));
   LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-stack_shift, XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
-  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -268,7 +263,6 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
   LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift, XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
-  instr->effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);
 }
 
@@ -334,9 +328,7 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
   auto addr = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   APP(MOVZX_GPRv_GPR8(&ni, addr, XED_REG_AL));
-  APP(
-      LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX);
-      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+  APP(LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX));
   MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
   instr->decoded_pc = decoded_pc;
   instr->ops[1].width = 8;  // Bits.
@@ -350,10 +342,8 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
-  APP_NATIVE(
-      LEA_GPRv_AGEN(&ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP,
-                                                 arch::ADDRESS_WIDTH_BITS));
-      ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
+  APP_NATIVE(LEA_GPRv_AGEN(
+      &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
   APP_NATIVE(
       PUSH_GPRv_50(&ni, XED_REG_RBP);
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
@@ -363,17 +353,17 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   // somehow watched), then we want to see these memory writes.
   for (auto i = 0UL; i < num_args; ++i) {
     auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
-    APP_NATIVE_MANGLED(PUSH_MEMv(
-        &ni, BaseDispMemOp(offset, XED_REG_RBP, arch::GPR_WIDTH_BITS)));
+    APP_NATIVE_MANGLED(
+        PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP,
+                                     arch::GPR_WIDTH_BITS));
+        ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   }
 
   if (frame_size) {
-    APP(
-        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+    APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
                       BaseDispMemOp(-static_cast<int32_t>(frame_size),
                                     XED_REG_RSP,
-                                    arch::ADDRESS_WIDTH_BITS));
-        ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
+                                    arch::ADDRESS_WIDTH_BITS)));
 
     // Enter finishes with a memory write that is "unused". This is to detect
     // stack segment issues and page faults. We don't even bother with this
