@@ -11,19 +11,21 @@ namespace arch {
 // sign-extended from a smaller width, then the smaller width will be returned.
 int ImmediateWidthBits(uint64_t imm) {
   enum : uint64_t {
-    WIDTH_8   = 0x0FFUL,
-    WIDTH_16  = WIDTH_8 | (WIDTH_8 << 8),
-    WIDTH_32  = WIDTH_16 | (WIDTH_16 << 16)
+    WIDTH_8_SIGNED = 0xFFFFFFFFFFFFFF80ULL,
+    WIDTH_8_UNSIGNED = ~WIDTH_8_SIGNED
   };
   if (!imm) return 8;
-  if ((imm | ~WIDTH_8) == imm) return 8;  // Signed.
-  if ((imm & WIDTH_8) == imm) return 8;  // Unsigned.
 
-  if ((imm | ~WIDTH_16) == imm) return 16;  // Signed.
-  if ((imm & WIDTH_16) == imm) return 16;  // Unsigned.
+  auto leading_zeros = __builtin_clzl(imm);
+  if (56 < leading_zeros) return 8;
+  if (48 < leading_zeros) return 16;
+  if (32 < leading_zeros) return 32;
 
-  if ((imm | ~WIDTH_32) == imm) return 32;  // Signed.
-  if ((imm & WIDTH_32) == imm) return 32;  // Unsigned.
+  leading_zeros = __builtin_clzl(~imm);
+  if (56 < leading_zeros) return 8;
+  if (48 < leading_zeros) return 16;
+  if (32 < leading_zeros) return 32;
+
   return 64;
 }
 

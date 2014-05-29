@@ -53,13 +53,13 @@ class ImmediateBuilder {
   inline ImmediateBuilder(T as_uint_, xed_encoder_operand_type_t type_)
       : as_uint(static_cast<uintptr_t>(as_uint_)),
         type(type_),
-        width(-1) {}
+        width(sizeof(T)) {}
 
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_int_, xed_encoder_operand_type_t type_)
       : as_int(static_cast<intptr_t>(as_int_)),
         type(type_),
-        width(-1) {}
+        width(sizeof(T)) {}
 
   inline ImmediateBuilder(const Operand &that, xed_encoder_operand_type_t type_)
       : as_uint(that.imm.as_uint),

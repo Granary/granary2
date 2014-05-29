@@ -44,6 +44,13 @@ static bool HasInEdgeCode(Fragment *frag) {
 
 // Add the fragments to a total ordering.
 static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
+  if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+    if (cfrag->attr.is_edge_code) {
+      auto partition = cfrag->partition.Value();
+      partition->is_edge_code = true;
+    }
+  }
+
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any).
   if (frag->branch_instr && HasInEdgeCode(frag)) {
@@ -70,6 +77,8 @@ void AddConnectingJumps(FragmentList *frags) {
   OrderFragment(first, next_ptr);
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
     if (frag->branch_instr && HasInEdgeCode(frag)) {
+      auto partition = frag->partition.Value();
+      partition->is_indirect_edge_code = partition->is_edge_code;
       continue;  // Don't add a fall-through; handled via other means.
     }
     if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {

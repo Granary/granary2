@@ -105,8 +105,9 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
     xedo->u.mem.base = op.mem.reg_base;
     if (op.mem.disp) {
       xedo->u.mem.disp.displacement = static_cast<uint64_t>(op.mem.disp);
-      xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(
-          ImmediateWidthBits(op.mem.disp));
+      auto width = ImmediateWidthBits(op.mem.disp);
+      width = 16 == width ? 32 : std::min(32, width);
+      xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(width);
       TruncateDisplacementToWidth(&(xedo->u.mem.disp));
     }
     xedo->u.mem.index = op.mem.reg_index;
@@ -163,14 +164,15 @@ static void LateMangleLEA(Instruction *instr) {
       instr->ops[1].reg.EncodeToNative());
   auto index_reg = static_cast<xed_reg_enum_t>(
       instr->ops[2].reg.EncodeToNative());
-  instr->ops[1].type = XED_ENCODER_OPERAND_TYPE_REG;
+  auto &op1(instr->ops[1]);
   instr->ops[2].type = XED_ENCODER_OPERAND_TYPE_INVALID;
-  instr->ops[1].is_effective_address = true;
-  auto &mem(instr->ops[1].mem);
-  mem.disp = 0;
-  mem.reg_base = base_reg;
-  mem.reg_index = index_reg;
-  mem.scale = 1;
+  op1.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op1.is_effective_address = true;
+  op1.is_compound = true;
+  op1.mem.disp = 0;
+  op1.mem.reg_base = base_reg;
+  op1.mem.reg_index = index_reg;
+  op1.mem.scale = 1;
   instr->num_explicit_ops = 2;
 }
 
@@ -256,6 +258,11 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   GRANARY_ASSERT(XED_ERROR_NONE == xed_error);
 
   instr->encoded_length = static_cast<uint8_t>(encoded_length);
+
+  if (InstructionEncodeKind::COMMIT == encode_kind) {
+    memcpy(pc, &(itext[0]), instr->encoded_length);
+  }
+
   return pc + instr->encoded_length;
 }
 

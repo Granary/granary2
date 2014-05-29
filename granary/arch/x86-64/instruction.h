@@ -42,8 +42,20 @@ class Instruction : public InstructionInterface {
     return decoded_pc;
   }
 
+  inline int EncodedLength(void) const {
+   return static_cast<int>(encoded_length);
+ }
+
+  inline CachePC EncodedPC(void) const {
+    return encoded_pc;
+  }
+
   inline void SetDecodedPC(PC decoded_pc_) {
     decoded_pc = decoded_pc_;
+  }
+
+  inline void SetEncodedPC(CachePC encoded_pc_) {
+    encoded_pc = encoded_pc_;
   }
 
   // Get the PC-relative branch target.

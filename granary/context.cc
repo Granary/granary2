@@ -123,8 +123,9 @@ void Context::Compile(BlockMetaData *meta) {
   //            --> This would be well suited towards a lock in the environment.
 
   Instrument(this, &cfg, meta);
-  auto frags = Assemble(module_meta->GetCodeCache(), &cfg);
-  StageEncode(&frags);
+  auto block_code_cache = module_meta->GetCodeCache();
+  auto frags = Assemble(block_code_cache, &cfg);
+  Encode(&frags, block_code_cache, &edge_code_cache);
 }
 
 }  // namespace granary

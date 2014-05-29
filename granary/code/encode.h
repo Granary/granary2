@@ -11,17 +11,12 @@
 
 namespace granary {
 
-struct EncodeResult {
-  int num_block_bytes;
-  int num_direct_edge_bytes;
-  int num_in_edge_bytes;
-  int num_out_edge_bytes;
-};
+// Forward declaration.
+class CodeCacheInterface;
 
-// Performs stage encoding of a fragment list. This determines the size of each
-// fragment and returns the size (in bytes) of the block-specific and edge-
-// specific instructions.
-EncodeResult StageEncode(FragmentList *frags);
+// Encodes the fragments into the specified code caches.
+void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
+            CodeCacheInterface *edge_cache);
 
 }  // namespace granary
 

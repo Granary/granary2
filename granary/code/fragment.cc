@@ -77,7 +77,9 @@ PartitionInfo::PartitionInfo(int id_)
       spill(),
       GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
       analyze_stack_frame(true),
-      min_frame_offset(0) {}
+      min_frame_offset(0),
+      is_edge_code(false),
+      is_indirect_edge_code(false) {}
 
 // Clear out the number of usage count of registers in this partition.
 void PartitionInfo::ClearGPRUseCounters(void) {

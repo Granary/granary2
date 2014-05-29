@@ -16,11 +16,23 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+    mov -168(%rax), %rax;
+    mov 8(%rax), %rax;
+    mov -8(%rax), %rax;
+
+    movsb;
+    xlat;
+
     lea .Lgranary_arch_Init(%rip), %rax;
     movslq 0x7db9cb, %rax;
     mov 0xCAFE0000, %rax;
     movzbl %al, %ebx;
     mov %ecx, %gs:0xABADC0;
+    mov %gs:(%rcx), %rdx;
+    mov %es:(%rcx), %rdx;
+    mov %cs:(%rcx), %rdx;
+    mov %ds:(%rcx), %rdx;
+    mov %ss:(%rcx), %rdx;
 /*
     push   %rbp
     mov    %rsp,%rbp
@@ -36,11 +48,7 @@ DEFINE_FUNC(granary_test_mangle)
     mov (%rdi), %rsp;
     */
     /*
-    mov %gs:(%rcx), %rdx;
-    mov %es:(%rcx), %rdx;
-    mov %cs:(%rcx), %rdx;
-    mov %ds:(%rcx), %rdx;
-    mov %ss:(%rcx), %rdx;
+
     movsw;
     retq */
 
@@ -73,7 +81,7 @@ mov    %rax,%rdi
 callq  .LEnvironment_AttachToAppPC
 add    $0x20,%rsp
 pop    %rbp
-jmp *%rbx;
+/*jmp *%rbx; */
 retq
 
     /*pushfw;

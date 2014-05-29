@@ -137,6 +137,10 @@ class PartitionInfo {
   bool analyze_stack_frame;
   int min_frame_offset;
 
+  // Should this partition be allocated in some direct edge code location?
+  bool is_edge_code;
+  bool is_indirect_edge_code;
+
  private:
   PartitionInfo(void) = delete;
 };
@@ -199,12 +203,16 @@ enum {
 // Adds a total ordering to fragments in terms of an encoding order.
 class EncodedFragment {
  public:
-  EncodedFragment(void)
+  inline EncodedFragment(void)
       : next(nullptr),
-        was_encode_ordered(false) {}
+        was_encode_ordered(false),
+        encoded_size(0),
+        encoded_pc(nullptr) {}
 
   Fragment *next;
   bool was_encode_ordered;
+  int encoded_size;
+  CachePC encoded_pc;
 };
 
 // Represents a fragment of instructions. Fragments are like basic blocks.

@@ -159,6 +159,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   MOV_GPRv_IMMz(&ni, offset.WidenedTo(4 /* bytes */),
                 static_cast<uint32_t>(op.addr.as_uint));
   ni.effective_operand_width = 32;
+  ni.ops[1].width = 32;
   APP();
 
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
