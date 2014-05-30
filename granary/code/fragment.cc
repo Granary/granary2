@@ -351,4 +351,40 @@ void Log(LogLevel level, FragmentList *frags) {
   Log(level, "}\n");
 }
 
+namespace {
+
+// Free the instructions from a fragment.
+static void FreeInstructions(Fragment *frag) {
+  auto instr = frag->instrs.First();
+  for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
+    next_instr = instr->Next();
+    instr->UnsafeUnlink();  // Will self-destruct.
+  }
+}
+
+// Free the partition info for a fragment.
+static void FreePartitionInfo(Fragment *frag) {
+  auto &partition(frag->partition.Value());
+  if (partition) {
+    delete partition;
+    partition = nullptr;
+  }
+}
+
+}  // namespace
+
+// Free all fragments, their instructions, etc.
+void FreeFragments(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    FreeInstructions(frag);
+    FreePartitionInfo(frag);
+  }
+  Fragment *frag(frags->First());
+  Fragment *next_frag(nullptr);
+  for (; frag; frag = next_frag) {
+    next_frag = frag->next;
+    delete frag;
+  }
+}
+
 }  // namespace granary

@@ -47,18 +47,22 @@ static auto global_env = AddGlobalTestEnvironment(new ToolEnvironment);
 
 class InstrumentTest : public Test {
  protected:
-  InstrumentTest(void) {
+  InstrumentTest(void)
+      : m1(&context),
+        m2(&context),
+        m3(&context) {
     m1.Register("a");
     m2.Register("b");  // Registers `ToolA` and `ToolB`.
     m3.Register("c");  // Registers `ToolA`, `ToolB`, and `ToolC`.
   }
   virtual ~InstrumentTest(void) = default;
 
+  MockContext context;
+
   ToolManager m1;
   ToolManager m2;
   ToolManager m3;
 
-  MockContext context;
   MetaDataManager metadata_manager;
 };
 
@@ -72,7 +76,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
         metadata_manager.Register(module_meta_desc);
       }));
 
-  Tool *tool_a_generic = m1.AllocateTools(&context);
+  Tool *tool_a_generic = m1.AllocateTools();
   ToolA *tool_a = UnsafeCast<ToolA *>(tool_a_generic);
 
   EXPECT_CALL(context, AllocateTools())

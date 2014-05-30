@@ -352,7 +352,7 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
 class ReturnBasicBlock final : public InstrumentedBasicBlock {
  public:
   GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(BlockMetaData *meta_);
-  virtual ~ReturnBasicBlock(void) = default;
+  virtual ~ReturnBasicBlock(void);
 
   // Returns true if this return basic block has meta-data. If it has meta-data
   // then the way that the branch is resolved is slightly more complicated.

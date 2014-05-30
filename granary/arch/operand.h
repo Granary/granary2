@@ -15,7 +15,7 @@ namespace arch {
 
 // Documents the methods that must be provided by driver operands. This
 // interface class cannot be used as-is as the methods don't exist.
-class OperandInterface {
+class alignas(16) OperandInterface {
  public:
   bool IsRead(void) const;
 

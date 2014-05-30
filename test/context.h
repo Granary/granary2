@@ -38,7 +38,7 @@ class MockContext : public granary::ContextInterface {
 
   // Compile some code into one of the code caches.
   MOCK_METHOD1(Compile,
-               void (granary::BlockMetaData *meta));
+               void (granary::LocalControlFlowGraph *cfg));
 
   // Allocate instances of the tools that will be used to instrument blocks.
   MOCK_METHOD0(AllocateTools,

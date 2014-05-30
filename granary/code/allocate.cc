@@ -34,6 +34,15 @@ CodeAllocator::CodeAllocator(int num_pages_)
       slab(&slab_sentinel),
       slab_lock() {}
 
+CodeAllocator::~CodeAllocator(void) {
+  internal::CodeSlab *next_slab(nullptr);
+  for (; slab && &slab_sentinel != slab; slab = next_slab) {
+    next_slab = slab->next;
+    FreePages(slab->begin, num_pages, MemoryIntent::EXECUTABLE);
+    delete slab;
+  }
+}
+
 // Allocates some executable code of size `size` with alignment `alignment`.
 CachePC CodeAllocator::Allocate(int alignment, int size) {
   int old_offset(0);

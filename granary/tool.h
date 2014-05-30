@@ -226,7 +226,6 @@ class ToolManager {
   void FreeTools(Tool *tool);
 
  private:
-
   ToolManager(void) = delete;
 
   // Register a tool with this manager using the tool's description.

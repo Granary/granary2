@@ -51,7 +51,7 @@ namespace {
 // Mangle an indirect CALL or JMP through memory into a MOV of the memory
 // location into a virtual register, then an indirect call through the
 // virtual register.
-void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
   if (XED_ENCODER_OPERAND_TYPE_MEM == instr->ops[0].type) {
     Instruction ni;
     auto target_loc = block->AllocateVirtualRegister();
@@ -64,7 +64,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
 
 // Mangle an explicit memory operand. This will expand memory operands into
 // `LEA` instructions.
-void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
+static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   Instruction ni;
 
   // Special consideration is given to non-compound stack operands, e.g.

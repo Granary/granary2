@@ -80,9 +80,12 @@ void Init(const char *granary_path) {
       }
     }
 
+    context.Destroy();
   } else {
     PrintAllOptions();
   }
+
+  UnloadClients();
 }
 
 }  // namespace granary

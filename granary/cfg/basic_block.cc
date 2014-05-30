@@ -196,9 +196,9 @@ void DecodedBasicBlock::UnsafeAppendInstruction(Instruction *instr) {
 }
 
 // Free all of the instructions in the basic block. This is invoked by
-// LocalControlFlowGraph::~LocalControlFlowGraph, as the freeing of instructions
-// interacts with the ownership model of basic blocks inside of basic block
-// lists.
+// `LocalControlFlowGraph::~LocalControlFlowGraph`, as the freeing of
+// instructions interacts with the ownership model of basic blocks inside
+// of basic block lists.
 void DecodedBasicBlock::FreeInstructionList(void) {
   for (Instruction *instr(first), *next_instr(nullptr); instr;) {
     next_instr = instr->Next();
@@ -230,10 +230,20 @@ ReturnBasicBlock::ReturnBasicBlock(BlockMetaData *meta_)
     : InstrumentedBasicBlock(nullptr),
       lazy_meta(meta_) {}
 
+ReturnBasicBlock::~ReturnBasicBlock(void) {
+  if (!meta && lazy_meta) {
+    delete lazy_meta;
+    lazy_meta = nullptr;
+  }
+}
+
 // Return this basic block's meta-data. Accessing a return basic block's meta-
 // data will "create" it for the block.
 BlockMetaData *ReturnBasicBlock::MetaData(void) {
-  return meta = lazy_meta;
+  if (GRANARY_UNLIKELY(!meta)) {
+    std::swap(lazy_meta, meta);
+  }
+  return meta;
 }
 
 // Returns the starting PC of this basic block.

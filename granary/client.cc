@@ -10,34 +10,46 @@
 
 namespace granary {
 namespace {
-
 enum {
   MAX_NUM_REGISTERED_CLIENTS = 32
 };
 
 static int num_registered_clients = 0;
 
-static char registered_clients[MAX_NUM_REGISTERED_CLIENTS]
-                              [MAX_CLIENT_NAME_LEN] = {{'\0'}};
+static internal::Client registered_clients[MAX_NUM_REGISTERED_CLIENTS] = {
+  {{'\0'}, nullptr}
+};
+
 }  // namespace
+
+// Unloads all clients.
+void UnloadClients(void) {
+  for (auto &client : registered_clients) {
+    if (client.handle) {
+      UnloadClient(client.handle);
+      client.handle = nullptr;
+    }
+  }
+}
 
 // Registers a client (given its name as `client_name`). Returns `true` if the
 // client was registered, or `false` if the client has already been registered.
-bool RegisterClient(const char *client_name) {
+internal::Client *RegisterClient(const char *client_name) {
   if (!ClientIsRegistered(client_name)) {
     GRANARY_ASSERT(MAX_NUM_REGISTERED_CLIENTS > num_registered_clients);
-    CopyString(registered_clients[num_registered_clients++],
-               MAX_CLIENT_NAME_LEN, client_name);
-    return true;
+    auto &client(registered_clients[num_registered_clients++]);
+    CopyString(client.name,
+               internal::MAX_CLIENT_NAME_LEN, client_name);
+    return &client;
   }
-  return false;
+  return nullptr;
 }
 
 // Returns true if any client with name `client_name` has been loaded.
 bool ClientIsRegistered(const char *client_name) {
-  for (auto name : registered_clients) {
-    if (*name) {
-      if (StringsMatch(name, client_name)) {
+  for (auto &client : registered_clients) {
+    if (client.name[0]) {
+      if (StringsMatch(client.name, client_name)) {
         return true;
       }
     } else {

@@ -101,6 +101,7 @@ void Context::FreeTools(Tool *tools) {
 //       to be freed).
 void Context::FlushCodeCache(CodeCacheInterface *cache) {
   // TODO(pag): Implement me!
+  delete cache;  // TODO(pag): This isn't actually right!!!
   GRANARY_UNUSED(cache);
 }
 
@@ -119,6 +120,7 @@ void Context::Compile(LocalControlFlowGraph *cfg) {
   auto block_code_cache = module_meta->GetCodeCache();
   auto frags = Assemble(block_code_cache, cfg);
   Encode(&frags, block_code_cache, &edge_code_cache);
+  FreeFragments(&frags);
 }
 
 }  // namespace granary

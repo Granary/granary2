@@ -28,13 +28,6 @@ class ModuleAddressRange {
         perms(perms_),
         code_cache(nullptr) {}
 
-  // Destroy the address range.
-  ~ModuleAddressRange(void) {
-    if (code_cache) {
-      delete code_cache;
-    }
-  }
-
   // Next range. Module ranges are arranged in a sorted linked list such that
   // for two adjacent ranges `r1` and `r2` in the list, the following
   // relationships hold:
@@ -129,6 +122,15 @@ Module::Module(ModuleKind kind_, const char *name_)
       ranges_lock() {
   memset(&(name[0]), 0, MAX_NAME_LEN);
   CopyString(&(name[0]), MAX_NAME_LEN, name_);
+}
+
+Module::~Module(void) {
+  for (ModuleAddressRange *next_range(nullptr); ranges; ranges = next_range) {
+    next_range = ranges->next;
+    FlushCodeCache(context, ranges);
+    delete ranges;
+  }
+  context = nullptr;
 }
 
 // Return a module offset object for a program counter (that is expected to
@@ -312,6 +314,15 @@ ModuleManager::ModuleManager(ContextInterface *context_)
     : context(context_),
       modules(nullptr),
       modules_lock() {}
+
+ModuleManager::~ModuleManager(void) {
+  Module *next_module(nullptr);
+  for (; modules; modules = next_module) {
+    next_module = modules->next;
+    delete modules;
+  }
+  context = nullptr;
+}
 
 // Find a module given a program counter.
 GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {

@@ -8,6 +8,7 @@
 #endif
 
 #include "granary/arch/base.h"
+
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
@@ -41,6 +42,8 @@ class CodeAllocator {
  public:
   // Initialize a new code allocator.
   explicit CodeAllocator(int num_pages_);
+
+  ~CodeAllocator(void);
 
   // Allocates some executable code of size `size` with alignment `alignment`.
   CachePC Allocate(int alignment, int size);

@@ -93,6 +93,8 @@ class Module {
   GRANARY_INTERNAL_DEFINITION
   Module(ModuleKind kind_, const char *name_);
 
+  GRANARY_INTERNAL_DEFINITION ~Module(void);
+
   // Return a module offset object for a program counter (that is expected to
   // be contained inside of the module). If the program counter is not part of
   // the module then the returned object is all nulled.
@@ -232,6 +234,8 @@ class ModuleManager {
   // passed through to modules so that modules can notify the context when
   // code cache flushes must occur.
   explicit ModuleManager(ContextInterface *context_);
+
+  ~ModuleManager(void);
 
   // Find a module given a program counter.
   Module *FindByAppPC(AppPC pc);

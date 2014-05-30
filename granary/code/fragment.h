@@ -278,6 +278,9 @@ enum LogLevel : int;
 // Log a list of fragments as a DOT digraph.
 void Log(LogLevel level, FragmentList *frags);
 
+// Free all fragments, their instructions, etc.
+void FreeFragments(FragmentList *frags);
+
 // Maintains information about flags usage within a "zone" (a group of non-
 // application fragments that are directly connected by control flow). Flag
 // zones are delimited by `FlagEntry` and `FlagExit` fragments.
