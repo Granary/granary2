@@ -141,6 +141,10 @@ class PartitionInfo {
   bool is_edge_code;
   bool is_indirect_edge_code;
 
+  // The first fragment in this partition. This will either be a
+  // `PartitionEntryFragment` or a `CodeFragment`.
+  Fragment *entry_frag;
+
  private:
   PartitionInfo(void) = delete;
 };

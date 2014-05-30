@@ -7,13 +7,13 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
+#include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/cache.h"
 #include "granary/code/assemble.h"
 #include "granary/code/encode.h"
 #include "granary/code/metadata.h"
-#include "granary/instrument.h"
 
 #include "granary/context.h"
 
@@ -113,18 +113,11 @@ CodeCacheInterface *Context::AllocateCodeCache(void) {
 }
 
 // Compile some code into one of the code caches.
-void Context::Compile(BlockMetaData *meta) {
-  LocalControlFlowGraph cfg;
+void Context::Compile(LocalControlFlowGraph *cfg) {
+  auto meta = cfg->EntryBlock()->MetaData();
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-
-  // TODO(pag): Would need to put some kind of guard (e.g. r/w lock) around this
-  //            function so that on "reads", we write to the code cache, on on
-  //            "writes" we flush parts of the cache or kill allocators.
-  //            --> This would be well suited towards a lock in the environment.
-
-  Instrument(this, &cfg, meta);
   auto block_code_cache = module_meta->GetCodeCache();
-  auto frags = Assemble(block_code_cache, &cfg);
+  auto frags = Assemble(block_code_cache, cfg);
   Encode(&frags, block_code_cache, &edge_code_cache);
 }
 

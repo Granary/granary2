@@ -49,7 +49,7 @@ class ContextInterface {
   virtual void RegisterMetaData(const MetaDataDescription *desc) = 0;
 
   // Compile some code into one of the code caches.
-  virtual void Compile(BlockMetaData *meta) = 0;
+  virtual void Compile(LocalControlFlowGraph *cfg) = 0;
 
   // Allocate instances of the tools that will be used to instrument blocks.
   virtual Tool *AllocateTools(void) = 0;
@@ -95,7 +95,7 @@ class Context : public ContextInterface {
   virtual void RegisterMetaData(const MetaDataDescription *desc) override;
 
   // Compile some code into one of the code caches.
-  virtual void Compile(BlockMetaData *meta) override;
+  virtual void Compile(LocalControlFlowGraph *cfg) override;
 
   // Allocate instances of the tools that will be used to instrument blocks.
   virtual Tool *AllocateTools(void) override;

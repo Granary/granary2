@@ -5,11 +5,17 @@
 START_FILE
 
 .Lgranary_arch_Init:
+  ret;
 .LLoadClients:
+  ret;
 .LContainer_Environment_Construct:
+  ret;
 .LUnsafeCast:
+  ret;
 .LContainer_Access:
+  ret;
 .LEnvironment_Setup:
+  ret;
 .LEnvironment_AttachToAppPC:
   ret;
 

@@ -79,7 +79,8 @@ PartitionInfo::PartitionInfo(int id_)
       analyze_stack_frame(true),
       min_frame_offset(0),
       is_edge_code(false),
-      is_indirect_edge_code(false) {}
+      is_indirect_edge_code(false),
+      entry_frag(nullptr) {}
 
 // Clear out the number of usage count of registers in this partition.
 void PartitionInfo::ClearGPRUseCounters(void) {

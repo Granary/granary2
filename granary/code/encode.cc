@@ -101,41 +101,27 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
 static void RelativizeCode(FragmentList *frags, CachePC cache_code,
                            CachePC edge_code) {
   PartitionInfo *last_partition = nullptr;
-  auto entry_pc = cache_code;
-
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     auto partition = frag->partition.Value();
 
     // Direct edge code.
     if (partition->is_edge_code && !partition->is_indirect_edge_code) {
+      // Different edge code, so make sure each direct edge block is cache-line
+      // aligned.
       if (last_partition != partition) {
-        last_partition = partition;
-        auto edge_code_addr = reinterpret_cast<uintptr_t>(edge_code);
-        edge_code_addr = GRANARY_ALIGN_TO(edge_code_addr,
-                                          arch::CACHE_LINE_SIZE_BYTES);
-        edge_code = reinterpret_cast<CachePC>(edge_code_addr);
+        const auto edge_code_addr = reinterpret_cast<uintptr_t>(edge_code);
+        edge_code = reinterpret_cast<CachePC>(
+            GRANARY_ALIGN_TO(edge_code_addr, arch::CACHE_LINE_SIZE_BYTES));
       }
-
       frag->encoded_pc = edge_code;
       edge_code += frag->encoded_size;
 
-    // Basic block code.
-    } else {
-      if (GRANARY_UNLIKELY(nullptr != entry_pc)) {
-        // Make sure the entry block has its meta-data updated.
-        if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-          auto cache_meta = MetaDataCast<CacheMetaData *>(
-              cfrag->attr.block_meta);
-          GRANARY_ASSERT(nullptr != cache_meta);
-          GRANARY_ASSERT(nullptr == cache_meta->cache_pc);
-          cache_meta->cache_pc = entry_pc;
-          entry_pc = nullptr;
-        }
-      }
-
+    } else {  // Basic block code.
       frag->encoded_pc = cache_code;
       cache_code += frag->encoded_size;
     }
+
+    last_partition = partition;
     RelativizeInstructions(frag, frag->encoded_pc);
   }
 }
@@ -145,28 +131,15 @@ static void RelativizeCFIs(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-        if (cfi->IsNoOp()) continue;  // Might have been elided.
         if (cfi->HasIndirectTarget()) continue;  // No target PC.
         GRANARY_ASSERT(frag->branch_instr == cfi);
         auto target_frag = frag->successors[FRAG_SUCC_BRANCH];
         GRANARY_ASSERT(nullptr != target_frag);
-        auto target_pc = frag->encoded_pc;
+        auto target_pc = target_frag->encoded_pc;
         GRANARY_ASSERT(nullptr != target_pc);
-        cfi->instruction.SetBranchTarget(target_pc);
 
-        // Update the target block's meta-data with where this block will be
-        // encoded. At first sight, this is sort of a backwards way of doing
-        // things, but it's reasonable
-        auto target_block = DynamicCast<InstrumentedBasicBlock *>(
-            cfi->TargetBlock());
-        GRANARY_ASSERT(nullptr != target_block);
-        if (auto cache_meta = GetMetaData<CacheMetaData>(target_block)) {
-          GRANARY_ASSERT(nullptr == cache_meta->cache_pc);
-          cache_meta->cache_pc = target_pc;
-
-          // TODO(pag): This sets `cache_pc` to the edge code PC, which might
-          //            be undesirable.
-        }
+        // Set the target PC if this wasn't a fall-through that was elided.
+        if (!cfi->IsNoOp()) cfi->instruction.SetBranchTarget(target_pc);
 
       } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
         auto target = branch->TargetInstruction();
@@ -195,6 +168,33 @@ static void EncodeInRange(FragmentList *frags, CachePC begin, CachePC end) {
   }
 }
 
+// Assign `CacheMetaData::cache_pc` for each basic block.
+static void AssignBlockCacheLocations(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (!cfrag->attr.is_block_head) continue;
+      auto partition = cfrag->partition.Value();
+      partition->entry_frag = frag;
+    }
+  }
+  for (auto frag : FragmentListIterator(frags)) {
+    if (IsA<PartitionEntryFragment *>(frag)) {
+      auto partition = frag->partition.Value();
+      partition->entry_frag = frag;
+    }
+  }
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (!cfrag->attr.is_block_head) continue;
+      auto cache_meta = MetaDataCast<CacheMetaData *>(cfrag->attr.block_meta);
+      auto partition = cfrag->partition.Value();
+      auto entry_frag = partition->entry_frag;
+      GRANARY_ASSERT(nullptr == cache_meta->cache_pc);
+      cache_meta->cache_pc = entry_frag->encoded_pc;
+    }
+  }
+}
+
 }  // namespace
 
 // Encodes the fragments into the specified code caches.
@@ -216,6 +216,7 @@ void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
   EncodeInRange(frags, cache_code, cache_code + result.block_size);
   block_cache->EndTransaction();
 
+  AssignBlockCacheLocations(frags);
 }
 
 }  // namespace granary

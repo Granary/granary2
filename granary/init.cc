@@ -2,15 +2,20 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/arch/init.h"
+
 #include "granary/base/container.h"
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
-#include "granary/arch/init.h"
+// TODO(pag): Remove these once instrumenting is moved out of `Init`.
+#include "granary/cfg/basic_block.h"
+#include "granary/cfg/control_flow_graph.h"
 
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
+#include "granary/instrument.h"
 #include "granary/logging.h"
 
 // TODO(pag): Remove me.
@@ -63,7 +68,18 @@ void Init(const char *granary_path) {
     AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
     auto meta = context->AllocateBlockMetaData(pc);
-    context->Compile(meta);
+    LocalControlFlowGraph cfg;
+    Instrument(context.operator->(), &cfg, meta);
+    context->Compile(&cfg);
+
+    for (auto block : cfg.Blocks()) {
+      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+        Log(LogOutput, "block %p compiled to %p\n",
+            decoded_block->StartAppPC(),
+            decoded_block->StartCachePC());
+      }
+    }
+
   } else {
     PrintAllOptions();
   }

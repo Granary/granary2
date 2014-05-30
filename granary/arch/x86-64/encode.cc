@@ -120,9 +120,10 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
 // Encode a pointer memory operand.
 static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
                       CachePC next_pc, xed_iclass_enum_t iclass) {
+  xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
+
   // Absolute address, or segment offset.
   if (XED_REG_INVALID != op.segment) {
-    xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
     xedo->u.mem.disp.displacement = op.addr.as_uint;
     if (XED_REG_DS == op.segment) {  // 32-bit, zero-extended absolute address.
       xedo->u.mem.disp.displacement_width = XED_ICLASS_MOV == iclass ? 64 : 32;
@@ -135,7 +136,6 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 
   // RIP-relative address.
   } else {
-    xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
     auto next_addr = reinterpret_cast<intptr_t>(next_pc);
     intptr_t mem_addr = 0;
     if (op.is_annot_encoded_pc) {
@@ -146,8 +146,6 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(mem_addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;
-    //xedo->type = XED_ENCODER_OPERAND_TYPE_PTR;
-    //xedo->u.brdisp = static_cast<int32_t>(mem_addr - next_addr);
   }
 }
 
