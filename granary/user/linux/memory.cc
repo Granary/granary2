@@ -6,7 +6,9 @@
 #include "granary/base/base.h"
 #include "granary/memory.h"
 
-#define PROT_ALL (~0)
+#ifndef PROT_NONE
+# define PROT_NONE 0
+#endif
 #ifndef MAP_ANONYMOUS
 # ifdef MAP_ANON
 #   define MAP_ANONYMOUS MAP_ANON
@@ -22,11 +24,13 @@ namespace granary {
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
-void *AllocatePages(int num, MemoryIntent) {
+void *AllocatePages(int num, MemoryIntent intent) {
+  auto prot = MemoryIntent::EXECUTABLE == intent ? PROT_WRITE :
+                                                   PROT_READ | PROT_WRITE;
   void *ret(mmap(
       nullptr,
       static_cast<size_t>(arch::PAGE_SIZE_BYTES * num),
-      PROT_READ | PROT_WRITE,
+      prot,
       MAP_PRIVATE | MAP_ANONYMOUS,
       -1,
       0));
@@ -43,7 +47,7 @@ void FreePages(void *addr, int num, MemoryIntent) {
 void ProtectPages(void *addr, int num, MemoryProtection prot) {
   int prot_bits(0);
   if (MemoryProtection::EXECUTABLE == prot) {
-    prot_bits = PROT_EXEC | PROT_READ | PROT_WRITE;
+    prot_bits = PROT_EXEC;
   } else if (MemoryProtection::READ_ONLY == prot) {
     prot_bits = PROT_READ;
   } else if (MemoryProtection::READ_WRITE == prot) {

@@ -208,14 +208,14 @@ void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
   RelativizeCode(frags, cache_code, edge_code);
   RelativizeCFIs(frags);
 
-  edge_cache->BeginTransaction();
-  EncodeInRange(frags, edge_code, edge_code + edge_allocation);
-  edge_cache->EndTransaction();
-
-  block_cache->BeginTransaction();
-  EncodeInRange(frags, cache_code, cache_code + result.block_size);
-  block_cache->EndTransaction();
-
+  if (auto edge_code_end = edge_code + edge_allocation) {
+    CodeCacheTransaction transaction(edge_cache, edge_code, edge_code_end);
+    EncodeInRange(frags, edge_code, edge_code_end);
+  }
+  if (auto cache_code_end = cache_code + result.block_size) {
+    CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
+    EncodeInRange(frags, cache_code, cache_code_end);
+  }
   AssignBlockCacheLocations(frags);
 }
 

@@ -10,7 +10,7 @@ namespace granary {
 // execute permissions; however, limiting to these three kinds of protections
 // serves as a good discipline.
 enum class MemoryProtection {
-  EXECUTABLE,  // Implies read/write.
+  EXECUTABLE,  // Implies read.
   READ_ONLY,
   READ_WRITE,
   INACCESSIBLE

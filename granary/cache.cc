@@ -7,6 +7,7 @@
 #include "granary/base/option.h"
 
 #include "granary/cache.h"
+#include "granary/memory.h"
 
 GRANARY_DEFINE_positive_int(code_cache_slab_size, 8,
     "The number of pages allocated at once to store cache code. Each "
@@ -33,18 +34,42 @@ CachePC CodeCache::AllocateBlock(int size) {
   }
 }
 
+namespace {
+
+// Apply some memory page protections to some range of memory.
+static void ProtectRange(CachePC begin, CachePC end, MemoryProtection prot) {
+  auto begin_addr = reinterpret_cast<uintptr_t>(begin);
+  auto end_addr = reinterpret_cast<uintptr_t>(end);
+
+  begin_addr -= begin_addr % arch::PAGE_SIZE_BYTES;
+  end_addr += GRANARY_ALIGN_FACTOR(end_addr, arch::PAGE_SIZE_BYTES);
+  auto diff_pages = (end_addr - begin_addr) / arch::PAGE_SIZE_BYTES;
+
+  ProtectPages(reinterpret_cast<void *>(begin_addr),
+               static_cast<int>(diff_pages), prot);
+}
+
+}  // namespace
+
 // Begin a transaction that will read or write to the code cache.
 //
 // Note: Transactions are distinct from allocations. Therefore, many threads/
 //       cores can simultaneously allocate from a code cache, but only one
 //       should be able to read/write data to the cache at a given time.
-void CodeCache::BeginTransaction(void) {
+void CodeCache::BeginTransaction(CachePC begin, CachePC end) {
+
+  // TODO(pag): Need some kind of signaling mechanism that allows us to handle
+  //            faults happening when code in a protected region is being
+  //            modified.
+
+  ProtectRange(begin, end, MemoryProtection::READ_WRITE);
   lock.Acquire();
 }
 
 // End a transaction that will read or write to the code cache.
-void CodeCache::EndTransaction(void) {
+void CodeCache::EndTransaction(CachePC begin, CachePC end) {
   lock.Release();
+  ProtectRange(begin, end, MemoryProtection::EXECUTABLE);
 }
 
 }  // namespace granary

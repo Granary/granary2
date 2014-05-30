@@ -20,7 +20,6 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
         AllocatePages(num_pages, MemoryIntent::EXECUTABLE));
     memset(begin, arch::EXEC_MEMORY_POISON_BYTE,
            static_cast<unsigned long>(num_bytes));
-    ProtectPages(begin, num_pages, MemoryProtection::EXECUTABLE);
     VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
   }
 }

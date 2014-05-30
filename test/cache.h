@@ -20,8 +20,8 @@ class MockCodeCache : public granary::CodeCacheInterface {
                granary::CachePC(int size));
 
   // Lock the code cache.
-  MOCK_METHOD0(BeginTransaction, void());
-  MOCK_METHOD0(EndTransaction, void());
+  MOCK_METHOD2(BeginTransaction, void(granary::CachePC, granary::CachePC));
+  MOCK_METHOD2(EndTransaction, void(granary::CachePC, granary::CachePC));
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockCodeCache);

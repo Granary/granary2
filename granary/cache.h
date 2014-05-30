@@ -16,6 +16,9 @@
 
 namespace granary {
 
+// Forward declaration.
+class CodeCacheTransaction;
+
 // Interface for code caches.
 class CodeCacheInterface {
  public:
@@ -25,34 +28,42 @@ class CodeCacheInterface {
   // Allocate a block of code from this code cache.
   virtual CachePC AllocateBlock(int size) = 0;
 
+ protected:
+  friend class CodeCacheTransaction;
+
   // Begin a transaction that will read or write to the code cache.
   //
   // Note: Transactions are distinct from allocations. Therefore, many threads/
   //       cores can simultaneously allocate from a code cache, but only one
   //       should be able to read/write data to the cache at a given time.
-  virtual void BeginTransaction(void) = 0;
+  virtual void BeginTransaction(CachePC begin, CachePC end) = 0;
 
   // End a transaction that will read or write to the code cache.
-  virtual void EndTransaction(void) = 0;
+  virtual void EndTransaction(CachePC begin, CachePC end) = 0;
 };
 
 // Transaction on the code cache. Wrapper around `BeginTransaction` and
 // `EndTransaction` that ensures the two are lexically matched.
 class CodeCacheTransaction {
  public:
-  inline explicit CodeCacheTransaction(CodeCacheInterface *cache_)
-      : cache(cache_) {
-    cache->BeginTransaction();
+  inline CodeCacheTransaction(CodeCacheInterface *cache_,
+                              CachePC begin_, CachePC end_)
+      : cache(cache_),
+        begin(begin_),
+        end(end_) {
+    cache->BeginTransaction(begin, end);
   }
 
   ~CodeCacheTransaction(void) {
-    cache->EndTransaction();
+    cache->EndTransaction(begin, end);
   }
 
  private:
   CodeCacheTransaction(void) = delete;
 
   CodeCacheInterface *cache;
+  CachePC begin;
+  CachePC end;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCacheTransaction);
 };
@@ -71,10 +82,10 @@ class CodeCache : public CodeCacheInterface {
   // Note: Transactions are distinct from allocations. Therefore, many threads/
   //       cores can simultaneously allocate from a code cache, but only one
   //       should be able to read/write data to the cache at a given time.
-  virtual void BeginTransaction(void) override;
+  virtual void BeginTransaction(CachePC begin, CachePC end) override;
 
   // End a transaction that will read or write to the code cache.
-  virtual void EndTransaction(void) override;
+  virtual void EndTransaction(CachePC begin, CachePC end) override;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeCache, {
     SHARED = true,
