@@ -19,15 +19,21 @@ using namespace ::testing;
 class ModuleManagerTest : public Test {
  protected:
   ModuleManagerTest(void)
-      : m1(nullptr),
-        m2(nullptr),
-        mod(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
+      : context(),
+        m1(&context),
+        m2(&context),
+        mod(new Module(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING)) {
+
+    EXPECT_CALL(context, AllocateCodeCache())
+      .WillRepeatedly(Return(nullptr));
+
     m2.RegisterAllBuiltIn();
   }
 
+  MockContext context;
   ModuleManager m1;
   ModuleManager m2;
-  Module mod;
+  Module *mod;
 };
 
 TEST_F(ModuleManagerTest, EmptyDoesNotFindLibC) {
@@ -55,16 +61,18 @@ TEST_F(ModuleManagerTest, WithBuiltinFindsLibDL) {
 }
 
 TEST_F(ModuleManagerTest, FindRegisteredModule) {
-  m1.Register(&mod);
-  ASSERT_TRUE(nullptr != m1.FindByName(GRANARY_NAME_STRING));
+  m1.Register(mod);
+  auto found_mod = m1.FindByName(GRANARY_NAME_STRING);
+  ASSERT_TRUE(nullptr != found_mod);
+  ASSERT_EQ(mod, found_mod);
 }
 
 TEST_F(ModuleManagerTest, FindRegisteredModulePC) {
-  m1.Register(&mod);
-  mod.AddRange(100, 200, 0, 0);
+  m1.Register(mod);
+  mod->AddRange(100, 200, 0, 0);
   for (auto addr = 0UL; addr < 300; ++addr) {
     if (100 <= addr && 200 > addr) {
-      EXPECT_EQ(&mod, m1.FindByAppPC(UnsafeCast<AppPC>(addr)));
+      EXPECT_EQ(mod, m1.FindByAppPC(UnsafeCast<AppPC>(addr)));
     } else {
       EXPECT_TRUE(nullptr == m1.FindByAppPC(UnsafeCast<AppPC>(addr)));
     }
