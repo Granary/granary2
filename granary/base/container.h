@@ -30,6 +30,10 @@ class Container {
     return reinterpret_cast<T *>(&(storage[0]));
   }
 
+  inline T *AddressOf(void) {
+    return reinterpret_cast<T *>(&(storage[0]));
+  }
+
   inline const T *operator->(void) const {
     return reinterpret_cast<const T *>(&(storage[0]));
   }

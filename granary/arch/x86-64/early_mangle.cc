@@ -199,14 +199,11 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
   auto stack_shift = instr->effective_operand_width / 8;
   auto vr = block->AllocateVirtualRegister(stack_shift);
-  auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
-                                    instr->effective_operand_width);
   Instruction ni;
   APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
-  APP(MOV_MEMv_GPRv(&ni, stack_mem_op, vr));
-  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-stack_shift, XED_REG_RSP,
-                                                  arch::ADDRESS_WIDTH_BITS));
-  AnalyzedStackUsage(instr, true, true);
+  instr->iform = XED_IFORM_PUSH_GPRv_50;
+  instr->ops[0].reg = vr;
+  instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
 }
 
 // Mangle `PUSH_IMMz` and `PUSH_IMMb` instructions.

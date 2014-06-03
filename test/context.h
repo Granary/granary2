@@ -28,10 +28,6 @@ class MockContext : public granary::ContextInterface {
   MOCK_METHOD0(AllocateEmptyBlockMetaData,
                granary::BlockMetaData *());
 
-  // Allocate some edge code from the edge code cache.
-  MOCK_METHOD1(AllocateEdgeCode,
-               granary::CachePC(int num_bytes));
-
   // Register some meta-data with Granary.
   MOCK_METHOD1(RegisterMetaData,
                void (const granary::MetaDataDescription *desc));

@@ -42,9 +42,6 @@ class ContextInterface {
   // Allocate and initialize some empty `BlockMetaData`.
   virtual BlockMetaData *AllocateEmptyBlockMetaData(void) = 0;
 
-  // Allocate some edge code from the edge code cache.
-  virtual CachePC AllocateEdgeCode(int num_bytes) = 0;
-
   // Register some meta-data with Granary.
   virtual void RegisterMetaData(const MetaDataDescription *desc) = 0;
 
@@ -87,9 +84,6 @@ class Context : public ContextInterface {
 
   // Allocate and initialize some empty `BlockMetaData`.
   virtual BlockMetaData *AllocateEmptyBlockMetaData(void) override;
-
-  // Allocate some edge code from the edge code cache.
-  virtual CachePC AllocateEdgeCode(int num_bytes) override;
 
   // Register some meta-data with Granary.
   virtual void RegisterMetaData(const MetaDataDescription *desc) override;

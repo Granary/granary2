@@ -8,11 +8,9 @@
 #include "granary/base/string.h"
 
 #include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
 
 #include "granary/cache.h"
-#include "granary/code/assemble.h"
-#include "granary/code/encode.h"
+#include "granary/code/compile.h"
 #include "granary/code/metadata.h"
 
 #include "granary/context.h"
@@ -74,11 +72,6 @@ BlockMetaData *Context::AllocateEmptyBlockMetaData(void) {
   return metadata_manager.Allocate();
 }
 
-// Allocate some edge code from the edge code cache.
-CachePC Context::AllocateEdgeCode(int num_bytes) {
-  return edge_code_cache.AllocateBlock(num_bytes);
-}
-
 // Register some meta-data with Granary.
 void Context::RegisterMetaData(const MetaDataDescription *desc) {
   metadata_manager.Register(const_cast<MetaDataDescription *>(desc));
@@ -115,12 +108,7 @@ CodeCacheInterface *Context::AllocateCodeCache(void) {
 
 // Compile some code into one of the code caches.
 void Context::Compile(LocalControlFlowGraph *cfg) {
-  auto meta = cfg->EntryBlock()->MetaData();
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto block_code_cache = module_meta->GetCodeCache();
-  auto frags = Assemble(block_code_cache, cfg);
-  Encode(&frags, block_code_cache, &edge_code_cache);
-  FreeFragments(&frags);
+  granary::Compile(cfg, &edge_code_cache);
 }
 
 }  // namespace granary

@@ -67,7 +67,7 @@ $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o: $(GRANARY_GMOCK_SRCS)
 $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.S
 	@echo "Building AS object $@"
 	@mkdir -p $(@D)
-	$(GRANARY_CXX) $(GRANARY_TEST_CXX_FLAGS) -c $< -o $@
+	$(GRANARY_CXX) $(GRANARY_ASM_FLAGS) -c $< -o $@
 
 $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.cc
 	@echo "Building CXX object $@"

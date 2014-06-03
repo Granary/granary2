@@ -119,8 +119,9 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
 }
 
 // Mangle a `MOV_GPRv_MEMv` or `MOV_MEMv_GPRv` instruction, where the `MEMv`
-// operand is assumed to be a abstract spill slot.
-static void MangleMov(NativeInstruction *instr) {
+// operand might be an abstract spill slot or might be a stack pointer
+// reference.
+static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
   auto &ainstr(instr->instruction);
   arch::Operand *mem_op(nullptr);
   if (IsSpillSlot(ainstr.ops[0])) {
@@ -128,11 +129,27 @@ static void MangleMov(NativeInstruction *instr) {
   } else if (IsSpillSlot(ainstr.ops[1])) {
     mem_op = &(ainstr.ops[1]);
   }
-  if (mem_op) {
+  if (mem_op) {  // Found a spill slot.
     const auto new_mem_op = arch::BaseDispMemOp(
         mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
+    return;
+  }
+
+  if (ainstr.ops[0].IsMemory()) {
+    mem_op = &(ainstr.ops[0]);
+  } else if (ainstr.ops[1].IsMemory()) {
+    mem_op = &(ainstr.ops[1]);
+  }
+
+  if (mem_op->is_compound) {
+    if (XED_REG_RSP == mem_op->mem.reg_base) {
+      mem_op->mem.disp += adjusted_offset;
+    }
+  } else if (mem_op->reg.IsStackPointer()) {
+    *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
+                                  arch::GPR_WIDTH_BITS);
   }
 }
 
@@ -208,7 +225,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       // TODO(pag): Handle specialized return!!!
       break;
     case XED_ICLASS_MOV:
-      MangleMov(instr);
+      MangleMov(instr, adjusted_offset);
       break;
     case XED_ICLASS_LEA:
       MangleLEA(instr, adjusted_offset);

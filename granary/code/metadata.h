@@ -16,6 +16,7 @@ namespace granary {
 // Forward declarations.
 class DecodedBasicBlock;
 
+// Meta-data that tracks live architectural general-purpose registers.
 class LiveRegisterMetaData : public UnifiableMetaData<LiveRegisterMetaData> {
  public:
   LiveRegisterMetaData(void);
@@ -32,6 +33,8 @@ class LiveRegisterMetaData : public UnifiableMetaData<LiveRegisterMetaData> {
   mutable LiveRegisterTracker live_regs;
 } __attribute__((packed));
 
+// Meta-data that tracks whether or not the stack is "safe" and behaves like a
+// C-style call stack.
 class StackMetaData : public UnifiableMetaData<StackMetaData> {
  public:
   // Initialize the stack meta-data.

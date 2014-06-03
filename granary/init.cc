@@ -69,7 +69,7 @@ void Init(const char *granary_path) {
 
     auto meta = context->AllocateBlockMetaData(pc);
     LocalControlFlowGraph cfg;
-    Instrument(context.operator->(), &cfg, meta);
+    Instrument(context.AddressOf(), &cfg, meta);
     context->Compile(&cfg);
 
     for (auto block : cfg.Blocks()) {

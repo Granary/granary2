@@ -4,12 +4,15 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/arch/encode.h"
-
+\
+#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 
-#include "granary/code/encode.h"
+#include "granary/code/assemble.h"
+#include "granary/code/compile.h"
 
 #include "granary/cache.h"
+#include "granary/module.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -73,10 +76,6 @@ StageEncodeResult StageEncode(FragmentList *frags) {
       result.block_size += frag->encoded_size;
     }
   }
-
-  // Align direct edge code chunks to be sized according to the cache lines.
-  result.max_edge_size = GRANARY_ALIGN_TO(result.max_edge_size,
-                                          arch::CACHE_LINE_SIZE_BYTES);
   return result;
 }
 
@@ -195,12 +194,15 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
   }
 }
 
-}  // namespace
-
 // Encodes the fragments into the specified code caches.
-void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
-            CodeCacheInterface *edge_cache) {
+static void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
+                   CodeCacheInterface *edge_cache) {
   auto result = StageEncode(frags);
+
+  // Align direct edge code chunks to be sized according to the cache lines.
+  result.max_edge_size = GRANARY_ALIGN_TO(result.max_edge_size,
+                                          arch::CACHE_LINE_SIZE_BYTES);
+
   auto edge_allocation = result.max_edge_size * result.num_direct_edges;
   auto cache_code = block_cache->AllocateBlock(result.block_size);
   auto edge_code = edge_cache->AllocateBlock(edge_allocation);
@@ -217,6 +219,18 @@ void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
     EncodeInRange(frags, cache_code, cache_code_end);
   }
   AssignBlockCacheLocations(frags);
+}
+
+}  // namespace
+
+// Compile some instrumented code.
+void Compile(LocalControlFlowGraph *cfg, CodeCacheInterface *edge_cache) {
+  auto meta = cfg->EntryBlock()->MetaData();
+  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
+  auto block_code_cache = module_meta->GetCodeCache();
+  auto frags = Assemble(block_code_cache, cfg);
+  Encode(&frags, block_code_cache, edge_cache);
+  FreeFragments(&frags);
 }
 
 }  // namespace granary
