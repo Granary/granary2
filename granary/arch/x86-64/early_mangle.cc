@@ -392,7 +392,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   AnalyzedStackUsage(instr, false, false);
 }
 
-// Mangle a `LEAVE` instruction. By making the `MOV RSP, RBP` explicit, we help
+// Mangle a `LEAVE` instruction. By making the `MOV RSP <- RBP` explicit, we help
 // the stack analysis in `granary/assemble/2_partition_fragments.cc` easier,
 // and by making the `POP RBP` explicit, we make the next fragment get marked
 // as having a valid stack.

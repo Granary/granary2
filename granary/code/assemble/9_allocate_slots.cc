@@ -207,7 +207,8 @@ static void AllocateStackSlots(FragmentList *frags) {
     const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
                           arch::REDZONE_SIZE_BYTES;
     if (vr_space == arch::REDZONE_SIZE_BYTES) continue;
-    const auto frame_space = partition->min_frame_offset - vr_space;
+    const auto frame_space = GRANARY_ALIGN_TO(
+        partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
 
     if (IsA<PartitionEntryFragment *>(frag)) {
       frag->instrs.Append(AllocateStackSpace(frame_space));

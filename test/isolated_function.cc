@@ -37,7 +37,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
 
   memset(&regs1, 0, sizeof regs1);
   setup_state(&regs1);
-  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.stack));
+  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
   memcpy(&regs2, &regs1, sizeof regs1);
 
@@ -46,13 +46,13 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   memset(&regs1, 0, sizeof regs1);
   memset(&(regs1.stack), 0xAB, sizeof regs1.stack);
   setup_state(&regs1);
-  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.stack));
+  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
   memcpy(&regs3, &regs1, sizeof regs1);
 
   memset(&regs1, 0, sizeof regs1);
   setup_state(&regs1);
-  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.stack));
+  regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   RunFunctionInContext(reinterpret_cast<void *>(instrumented_func), &regs1);
 
   // Compare bytes that are the same across the two native runs. This ensures

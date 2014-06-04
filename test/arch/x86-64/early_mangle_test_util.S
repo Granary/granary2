@@ -190,3 +190,33 @@ BEGIN_FUNC(TestEarlyMangle_ENTER_16)
     add $16 + 8 + 16 * 8, %rsp;
     ret;
 END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_ENTER_0_LEAVE)
+    enter $16, $0;
+    leave;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_ENTER_1_LEAVE)
+    enter $16, $1;
+    leave;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_ENTER_16_LEAVE)
+    enter $16, $16;
+    leave;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_PUSHFW)
+    pushfw;
+    popw %ax;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_PUSHFQ)
+    pushfq;
+    pop %rax;
+    ret;
+END_FUNC

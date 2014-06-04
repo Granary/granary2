@@ -107,3 +107,13 @@ TEST_EARLY_MANGLE(ENTER_1,
     regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEF); )
 TEST_EARLY_MANGLE(ENTER_16,
     regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEFS[16]); )
+
+TEST_EARLY_MANGLE(ENTER_0_LEAVE,
+    regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEF); )
+TEST_EARLY_MANGLE(ENTER_1_LEAVE,
+    regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEF); )
+TEST_EARLY_MANGLE(ENTER_16_LEAVE,
+    regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEFS[16]); )
+
+TEST_EARLY_MANGLE(PUSHFW)
+TEST_EARLY_MANGLE(PUSHFQ)
