@@ -141,7 +141,9 @@ static void ForEachImplicitOperand(
 static size_t CountImplicitOperands(void) {
   size_t num_implicit_ops(0);
   auto func = [&] (const xed_inst_t *instr, const xed_operand_t *, unsigned) {
-    ++NUM_IMPLICIT_OPERANDS[xed_inst_iclass(instr)];
+    auto iclass = xed_inst_iclass(instr);
+    GRANARY_IF_DEBUG( auto new_num_ops = ) ++NUM_IMPLICIT_OPERANDS[iclass];
+    GRANARY_ASSERT(11 >= new_num_ops);  // Max case is `PUSHAD`.
     ++num_implicit_ops;
   };
   ForEachImplicitOperand(std::cref(func));
@@ -281,25 +283,28 @@ static void InitImplicitOperands(Operand *op) {
 //
 // TODO(pag): These tables could likely be compressed by quite a bit.
 static void InitOperandTables(void) {
-  if (!IMPLICIT_OPERANDS[0]) {
-    auto ops = AllocateImplicitOperands();
-    InitImplicitOperands(ops);
-    ProtectPages(ops, num_implicit_operand_pages, MemoryProtection::READ_ONLY);
-  }
+  auto ops = AllocateImplicitOperands();
+  InitImplicitOperands(ops);
+  ProtectPages(ops, num_implicit_operand_pages, MemoryProtection::READ_ONLY);
 }
+
+static bool arch_is_initialized = false;
 
 }  // namespace
 
 // Initialize the driver (instruction encoder/decoder).
 void Init(void) {
-  xed_tables_init();
-  xed_state_zero(&XED_STATE);
-  xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
-                 XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
-  InitIclassTables();
-  InitIclassFlags();
-  InitIformFlags();
-  InitOperandTables();
+  if (!arch_is_initialized) {
+    arch_is_initialized = true;
+    xed_tables_init();
+    xed_state_zero(&XED_STATE);
+    xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
+                   XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
+    InitIclassTables();
+    InitIclassFlags();
+    InitIformFlags();
+    InitOperandTables();
+  }
 }
 
 }  // namespace arch

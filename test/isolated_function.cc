@@ -2,6 +2,10 @@
 
 #include <gmock/gmock.h>
 
+#define _BSD_SOURCE 1
+#include <signal.h>
+#include <unistd.h>
+
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
@@ -11,11 +15,24 @@ extern "C" {
   extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
 }
 
+namespace {
+static char signal_stack[SIGSTKSZ];
+static stack_t alternate_stack = {
+  .ss_size = SIGSTKSZ,
+  .ss_sp = &(signal_stack[0])
+};
+
+}  // namespace
+
 // Runs a function and an instrumented function in an "isolated" context
 // (almost full machine state), and then
 void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
                          void *func,
                          void *instrumented_func) {
+  // Switch the signal stack so that the isolated regs stack is not signalled.
+  stack_t orig_signal_stack;
+  sigaltstack(&alternate_stack, &orig_signal_stack);
+
   IsolatedRegState regs1, regs2, regs3;
 
   memset(&regs1, 0, sizeof regs1);
@@ -47,7 +64,13 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   for (auto i = 0ULL; i < sizeof regs1; ++i) {
     if (regs2_bytes[i] == regs3_bytes[i]) {
       EXPECT_EQ(regs1_bytes[i], regs2_bytes[i]);
+      if (regs1_bytes[i] != regs2_bytes[i]) {
+        break;
+      }
     }
   }
+
+  // Switch back to the original stack.
+  sigaltstack(&orig_signal_stack, 0);
 }
 

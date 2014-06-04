@@ -35,7 +35,6 @@ struct IsolatedRegState {
     uint64_t R13;
     uint64_t R14;
     uint64_t R15;
-    uint64_t RFLAGS;
   };
   uint8_t redzone_low[1024];
   uint8_t stack[2048];

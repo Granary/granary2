@@ -60,11 +60,10 @@ void ImmediateBuilder::Build(Instruction *instr) {
   op.imm.as_uint = as_uint;
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
-  auto computed_width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
   if (-1 == width) {
-    op.width = computed_width;
+    op.width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
   } else {
-    op.width = std::min(computed_width, static_cast<int8_t>(width));
+    op.width = static_cast<int8_t>(width);
   }
   op.is_explicit = true;
 }

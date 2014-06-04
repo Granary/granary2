@@ -204,8 +204,12 @@ static void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
                                           arch::CACHE_LINE_SIZE_BYTES);
 
   auto edge_allocation = result.max_edge_size * result.num_direct_edges;
+
+  GRANARY_ASSERT(0 < result.block_size);
   auto cache_code = block_cache->AllocateBlock(result.block_size);
-  auto edge_code = edge_cache->AllocateBlock(edge_allocation);
+
+  CachePC edge_code = nullptr;
+  if (edge_allocation) edge_code = edge_cache->AllocateBlock(edge_allocation);
 
   RelativizeCode(frags, cache_code, edge_code);
   RelativizeCFIs(frags);

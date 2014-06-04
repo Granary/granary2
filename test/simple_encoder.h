@@ -5,8 +5,6 @@
 
 #include "granary/arch/init.h"
 
-#include "granary/cfg/control_flow_graph.h"
-
 #include "granary/metadata.h"
 #include "granary/module.h"
 
@@ -37,7 +35,6 @@ class SimpleEncoderTest : public testing::Test {
   granary::Module module;
   granary::CodeCache code_cache;
   granary::CodeCache edge_cache;
-  granary::LocalControlFlowGraph cfg;
   granary::MetaDataManager meta_manager;
 };
 

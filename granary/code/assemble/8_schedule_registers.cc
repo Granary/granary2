@@ -307,7 +307,7 @@ class LocalScheduler {
       if (vr_occupying_gpr[n] && !gpr_is_occupiable[n]) continue;  // In use.
       if (used_regs.IsLive(n)) {
         if (next_live_regs.IsLive(n)) {
-          continue;  // Used in the instruction, and remains live.
+          continue;  // Live at the instruction.
         }
       } else if (live_regs.IsLive(n)) {
         continue;  // Not dead, and not killed by the instruction.

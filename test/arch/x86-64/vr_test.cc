@@ -14,48 +14,49 @@ extern uint64_t PushMem_RIP(void);
 extern uint64_t PushMem_STACK_DOWN(void);
 extern uint64_t PushMem_STACK_TOP(void);
 extern uint64_t PushMem_STACK_UP(void);
-extern uint64_t PushImm(void);
+extern uint64_t PushImmWord(void);
+extern uint64_t PushImmQuadWord(void);
+extern uint64_t PushRSP(void);
 }  // extern C
 
 namespace {
 static uint64_t DEADBEEF = 0xDEADBEEFULL;
 }  // namespace
 
-TEST_F(SimpleEncoderTest, PushMem_GPR) {
-  std::function<void(IsolatedRegState *)> setup([=] (IsolatedRegState *regs) {
-    using namespace granary;
-    regs->ARG1 = reinterpret_cast<uint64_t>(&DEADBEEF);
-  });
-  RunIsolatedFunction(
-      setup,
-      reinterpret_cast<void *>(PushMem_GPR),
-      reinterpret_cast<void *>(InstrumentAndEncode(PushMem_GPR)));
-}
+#define TEST_F_ASM(name, func, ...) \
+  TEST_F(SimpleEncoderTest, name) { \
+    std::function<void(IsolatedRegState *)> setup( \
+        [=] (IsolatedRegState *regs) { \
+          GRANARY_UNUSED(regs); \
+          __VA_ARGS__ \
+        }); \
+    RunIsolatedFunction( \
+        setup, \
+        reinterpret_cast<void *>(func), \
+        reinterpret_cast<void *>(InstrumentAndEncode(func))); \
+  }
 
-TEST_F(SimpleEncoderTest, PushMem_GPR_GPR) {
+TEST_F_ASM(PushMem_GPR, PushMem_GPR,
+           regs->ARG1 = reinterpret_cast<uint64_t>(&DEADBEEF); )
 
-}
+TEST_F_ASM(PushMem_GPR_GPR, PushMem_GPR_GPR,
+           regs->ARG1 = reinterpret_cast<uint64_t>(&((&DEADBEEF)[-1]));
+           regs->ARG2 = 8; )
 
-TEST_F(SimpleEncoderTest, PushMem_RIP) {
+TEST_F_ASM(PushMem_RIP, PushMem_RIP)
 
-}
+TEST_F_ASM(PushMem_STACK_DOWN, PushMem_STACK_DOWN,
+           regs->ARG1 = DEADBEEF; )
 
-TEST_F(SimpleEncoderTest, PushMem_STACK_DOWN) {
+TEST_F_ASM(PushMem_STACK_TOP, PushMem_STACK_TOP,
+           regs->ARG1 = DEADBEEF; )
 
-}
+TEST_F_ASM(PushMem_STACK_UP, PushMem_STACK_UP,
+           regs->ARG1 = DEADBEEF; )
 
-TEST_F(SimpleEncoderTest, PushMem_STACK_TOP) {
+TEST_F_ASM(PushImmWord, PushImmWord)
 
-}
+TEST_F_ASM(PushImmQuadWord, PushImmQuadWord)
 
-TEST_F(SimpleEncoderTest, PushMem_STACK_UP) {
+TEST_F_ASM(PushRSP, PushRSP)
 
-}
-
-TEST_F(SimpleEncoderTest, PushImm) {
-
-}
-
-TEST_F(SimpleEncoderTest, PushRSP) {
-
-}

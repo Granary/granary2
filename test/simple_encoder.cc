@@ -7,6 +7,8 @@
 
 #include "test/simple_encoder.h"
 
+#include "granary/cfg/control_flow_graph.h"
+
 #include "granary/code/compile.h"
 #include "granary/code/metadata.h"
 
@@ -47,6 +49,7 @@ granary::BlockMetaData *SimpleEncoderTest::AllocateMeta(granary::AppPC pc) {
 
 granary::CachePC SimpleEncoderTest::InstrumentAndEncode(granary::AppPC pc) {
   using namespace granary;
+  LocalControlFlowGraph cfg;
 
   auto meta = AllocateMeta(pc);
 

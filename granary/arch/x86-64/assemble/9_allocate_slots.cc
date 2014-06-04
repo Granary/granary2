@@ -143,13 +143,15 @@ static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
     mem_op = &(ainstr.ops[1]);
   }
 
-  if (mem_op->is_compound) {
-    if (XED_REG_RSP == mem_op->mem.reg_base) {
-      mem_op->mem.disp += adjusted_offset;
+  if (mem_op) {
+    if (mem_op->is_compound) {
+      if (XED_REG_RSP == mem_op->mem.reg_base) {
+        mem_op->mem.disp += adjusted_offset;
+      }
+    } else if (mem_op->reg.IsStackPointer()) {
+      *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
+                                    arch::GPR_WIDTH_BITS);
     }
-  } else if (mem_op->reg.IsStackPointer()) {
-    *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
-                                  arch::GPR_WIDTH_BITS);
   }
 }
 
@@ -187,6 +189,12 @@ static void MangleArith(NativeInstruction *instr) {
   if (XED_ICLASS_ADD == ainstr.iclass || XED_ICLASS_SUB == ainstr.iclass) {
     GRANARY_ASSERT(ainstr.ops[1].IsImmediate());
   }
+
+  // Note: This is not a perfect solution, but we don't really expect it to
+  //       be all that bad either.
+  //
+  //       Things that this doesn't do a good job of preserving are the
+  //       BCD adjust / auxiliary carry flag, and the parity flag.
   arch::TEST_GPRv_GPRv(&ainstr, XED_REG_RSP, XED_REG_RSP);
 }
 
@@ -230,6 +238,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
     case XED_ICLASS_LEA:
       MangleLEA(instr, adjusted_offset);
       break;
+
     case XED_ICLASS_SUB:
     case XED_ICLASS_ADD:
     case XED_ICLASS_INC:
