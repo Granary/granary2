@@ -168,4 +168,25 @@ BEGIN_FUNC(TestEarlyMangle_AccesTLSBase_Indirect64)
     ret;
 END_FUNC
 
+BEGIN_FUNC(TestEarlyMangle_XLAT)
+    xlat;
+    ret;
+END_FUNC
 
+BEGIN_FUNC(TestEarlyMangle_ENTER_0)
+    enter $16, $0;
+    add $16 + 8, %rsp;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_ENTER_1)
+    enter $16, $1;
+    add $16 + 8 + 8, %rsp;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_ENTER_16)
+    enter $16, $16;
+    add $16 + 8 + 16 * 8, %rsp;
+    ret;
+END_FUNC

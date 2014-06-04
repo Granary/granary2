@@ -348,20 +348,28 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   temp_rbp.ConvertToVirtualStackPointer();
-  APP_NATIVE(LEA_GPRv_AGEN(
-      &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
+
   APP_NATIVE(
       PUSH_GPRv_50(&ni, XED_REG_RBP);
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+  APP_NATIVE(LEA_GPRv_AGEN(
+      &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
 
-  // In the case of something like watchpoints, where `RBP` is being tracked,
-  // and where the application is doing something funky with `RBP` (e.g. it's
-  // somehow watched), then we want to see these memory writes.
-  for (auto i = 0UL; i < num_args; ++i) {
-    auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
-    APP_NATIVE_MANGLED(
-        PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP,
-                                     arch::GPR_WIDTH_BITS));
+  if (num_args) {
+    for (auto i = 1UL; i < num_args; ++i) {
+      auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
+
+      // In the case of something like watchpoints, where `RBP` is being
+      // tracked, and where the application is doing something funky with
+      // `RBP` (e.g. it's somehow watched), then we want to see these memory
+      // writes.
+      APP_NATIVE_MANGLED(
+          PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP,
+                                       arch::GPR_WIDTH_BITS));
+          ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+    }
+    APP_NATIVE(
+        PUSH_GPRv_50(&ni, temp_rbp);
         ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   }
 
