@@ -77,9 +77,9 @@ $(GRANARY_BIN_DIR)/granary/%.o :: $(GRANARY_BIN_DIR)/granary/%.bc
 # Link together all compiled .bc files into a single .bc file.
 $(GRANARY_MERGED_BC_OBJ) :: $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES)
 	@echo "Linking intermediate bitcode files into $(GRANARY_MERGED_BC_OBJ)."
-	@/usr/bin/llvm-link-3.4 $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES) \
+	@$(GRANARY_LLVM_LINK) $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES) \
 		-o $(GRANARY_MERGED_BC_BC)
-	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) \
+	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS:--coverage=) \
 		-c $(GRANARY_MERGED_BC_BC) \
 		-o $(GRANARY_MERGED_BC_OBJ)
 

@@ -247,6 +247,9 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
   }
+  if (GRANARY_UNLIKELY(!instr_op->width && XED_ICLASS_LEA == instr->iclass)) {
+    instr_op->width = instr->effective_operand_width;
+  }
   GRANARY_ASSERT(0 != instr_op->width);
 }
 

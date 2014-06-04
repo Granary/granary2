@@ -230,9 +230,10 @@ static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
   auto vr_32 = vr_16.WidenedTo(4);
   APP(MOV_GPRv_SEG(&ni, vr_16, instr->ops[0].reg));
   APP(MOVZX_GPRv_GPR16(&ni, vr_32, vr_16));
+  auto stack_shift = instr->effective_operand_width / 8;
   instr->iform = XED_IFORM_PUSH_GPRv_50;
-  instr->ops[0].reg = vr_16;
-  instr->ops[0].reg.Widen(instr->ops[0].ByteWidth());
+  instr->ops[0].reg = vr_16.WidenedTo(stack_shift);
+  instr->ops[0].width = instr->effective_operand_width;
 }
 
 // Mangle a `PUSH_*` instruction.
@@ -258,6 +259,13 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
                                     instr->effective_operand_width);
   APP(MOV_GPRv_MEMv(&ni, vr, stack_mem_op));
+  if (op.is_compound) {
+    if (XED_REG_RSP == op.mem.reg_base || XED_REG_ESP == op.mem.reg_base) {
+      op.mem.disp += stack_shift;
+    }
+  } else if (op.reg.IsStackPointer()) {
+    op = BaseDispMemOp(stack_shift, XED_REG_RSP, op.width);
+  }
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
   LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift, XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
