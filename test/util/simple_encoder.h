@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef TEST_SIMPLE_ENCODER_H_
-#define TEST_SIMPLE_ENCODER_H_
+#ifndef TEST_UTIL_SIMPLE_ENCODER_H_
+#define TEST_UTIL_SIMPLE_ENCODER_H_
 
 #include "granary/arch/init.h"
 
@@ -38,4 +38,4 @@ class SimpleEncoderTest : public testing::Test {
   granary::MetaDataManager meta_manager;
 };
 
-#endif  // TEST_SIMPLE_ENCODER_H_
+#endif  // TEST_UTIL_SIMPLE_ENCODER_H_

@@ -166,7 +166,7 @@ static Operand *AllocateImplicitOperands(void) {
 static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int8_t>(instr_op->reg.BitWidth());
+  instr_op->width = static_cast<int16_t>(instr_op->reg.BitWidth());
   instr_op->is_sticky = true;
 }
 

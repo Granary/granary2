@@ -209,7 +209,7 @@ class Instruction : public InstructionInterface {
   uint8_t num_explicit_ops:4;
 
   // The effective operand width (in bits) at decode time, or -1 if unknown.
-  int8_t effective_operand_width;
+  int16_t effective_operand_width;
 
   // All operands that Granary can make sense of. This includes implicit and
   // suppressed operands. The order between these and those referenced via

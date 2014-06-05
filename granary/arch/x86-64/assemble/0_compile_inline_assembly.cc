@@ -283,7 +283,7 @@ class InlineAssemblyParser {
   // the assembled operands.
   void FixupOperands(void) {
     auto xedi = SelectInstruction(&data);
-    int8_t op_size = 0;
+    int16_t op_size = 0;
     GRANARY_ASSERT(nullptr != xedi);
     auto i = 0U;
     for (auto &instr_op : data.ops) {

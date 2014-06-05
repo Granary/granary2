@@ -89,7 +89,7 @@ static void ConvertRegisterOperand(Instruction *instr, Operand *instr_op,
   auto reg = xed_decoded_inst_get_reg(xedd, op_name);
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int8_t>(xed_get_register_width_bits64(reg));
+  instr_op->width = static_cast<int16_t>(xed_get_register_width_bits64(reg));
 
   // Update the stack pointer tracking.
   if (GRANARY_UNLIKELY(instr_op->reg.IsStackPointer())) {
@@ -203,7 +203,7 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   }
 
   instr_op->segment = segment_reg;
-  instr_op->width = static_cast<int8_t>(xed3_operand_get_mem_width(xedd) * 8);
+  instr_op->width = static_cast<int16_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
   instr_op->is_effective_address = XED_ICLASS_LEA == instr->iclass;
 }
@@ -216,11 +216,12 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 //       `xed_agen`.
 static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
                             const xed_decoded_inst_t *xedd, unsigned index) {
+  auto mem_op_width = static_cast<int16_t>(
+      xed3_operand_get_mem_width(xedd) * 8);
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
-    instr_op->width = static_cast<int8_t>(
-        xed3_operand_get_mem_width(xedd) * 8); // Width of addressed memory.
+    instr_op->width = mem_op_width; // Width of addressed memory.
 
     // Try to convert a RIP-relative address into an absolute address. This
     // assumes that the address is < 32 bits in size.
@@ -247,8 +248,12 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
   }
-  if (GRANARY_UNLIKELY(!instr_op->width && XED_ICLASS_LEA == instr->iclass)) {
-    instr_op->width = instr->effective_operand_width;
+  if (GRANARY_UNLIKELY(!instr_op->width)) {
+    if (XED_ICLASS_LEA == instr->iclass) {
+      instr_op->width = instr->effective_operand_width;
+    } else if (mem_op_width) {
+      instr_op->width = mem_op_width;
+    }
   }
   GRANARY_ASSERT(0 != instr_op->width);
 }
@@ -273,7 +278,7 @@ static void ConvertImmediateOperand(Instruction *instr,
     instr_op->imm.as_uint = static_cast<uintptr_t>(
         xed_decoded_inst_get_second_immediate(xedd));
   }
-  instr_op->width = static_cast<int8_t>(
+  instr_op->width = static_cast<int16_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
 
   // Ensure that we reflect the size of the stack pointer change in the size of
@@ -368,7 +373,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
       xed_decoded_inst_get_length(xedd));
   ConvertDecodedPrefixes(instr, xedd);
   instr->is_atomic = xed_operand_values_get_atomic(xedd);
-  instr->effective_operand_width = static_cast<int8_t>(
+  instr->effective_operand_width = static_cast<int16_t>(
       xed_decoded_inst_get_operand_width(xedd));
   ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
   instr->AnalyzeStackUsage();

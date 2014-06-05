@@ -414,7 +414,7 @@ static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
   instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
   instr->ops[0].rw = XED_OPERAND_ACTION_W;
-  instr->ops[0].width = static_cast<int8_t>(flag_size * 8);
+  instr->ops[0].width = instr->effective_operand_width;
   instr->ops[0].is_explicit = true;
   instr->ops[0].is_sticky = false;
   ++(instr->num_explicit_ops);
@@ -463,7 +463,6 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       }
     }
   }
-
   switch (instr->iclass) {
     case XED_ICLASS_CALL_NEAR:
     case XED_ICLASS_JMP:

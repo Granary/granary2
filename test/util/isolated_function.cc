@@ -9,7 +9,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "test/isolated_function.h"
+#include "test/util/isolated_function.h"
 
 extern "C" {
   extern void RunFunctionInContext(void *func, IsolatedRegState *inout);

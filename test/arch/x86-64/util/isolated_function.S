@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "test/arch/x86-64/include.S"
+#include "test/arch/x86-64/util/include.S"
 
     .text
 

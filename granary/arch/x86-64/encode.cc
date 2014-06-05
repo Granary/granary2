@@ -234,7 +234,7 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   // Make sure that we've got an effective operand width.
   if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
-    instr->effective_operand_width = static_cast<int8_t>(op_width);
+    instr->effective_operand_width = static_cast<int16_t>(op_width);
     xede.effective_operand_width = static_cast<uint32_t>(op_width);
   }
 

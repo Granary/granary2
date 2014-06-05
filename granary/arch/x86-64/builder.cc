@@ -41,7 +41,7 @@ void RegisterBuilder::Build(Instruction *instr) {
   op.type = XED_ENCODER_OPERAND_TYPE_REG;
   op.reg = reg;
   op.rw = action;
-  op.width = static_cast<int8_t>(reg.BitWidth());
+  op.width = static_cast<int16_t>(reg.BitWidth());
   op.is_explicit = true;
 
   // Registers AH through BH are tricky to handle due to their location, so we
@@ -61,9 +61,9 @@ void ImmediateBuilder::Build(Instruction *instr) {
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
   if (-1 == width) {
-    op.width = static_cast<int8_t>(ImmediateWidthBits(as_uint));
+    op.width = static_cast<int16_t>(ImmediateWidthBits(as_uint));
   } else {
-    op.width = static_cast<int8_t>(width);
+    op.width = static_cast<int16_t>(width);
   }
   op.is_explicit = true;
 }

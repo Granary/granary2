@@ -225,7 +225,7 @@ union VirtualRegister {
     VirtualRegisterKind kind;
 
     // Width (in bytes) of this register.
-    uint8_t num_bytes;
+    uint16_t num_bytes;
 
     // Mask of which bytes of an architectural register this value represents.
     // For example, on x86 the class of registers [rax, eax, ax, ah, al] all

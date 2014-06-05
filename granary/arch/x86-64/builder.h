@@ -180,7 +180,7 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
   }
-  op.width = static_cast<int8_t>(width);
+  op.width = static_cast<int16_t>(width);
   return op;
 }
 
@@ -193,7 +193,7 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
   op.mem.disp = disp;
   op.mem.reg_base = base_reg;
   op.mem.reg_index = index_reg;
-  op.width = static_cast<int8_t>(width);
+  op.width = static_cast<int16_t>(width);
   return op;
 }
 

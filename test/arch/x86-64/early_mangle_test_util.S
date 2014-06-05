@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "test/arch/x86-64/include.S"
+#include "test/arch/x86-64/util/include.S"
 
     .data
 
@@ -218,5 +218,19 @@ END_FUNC
 BEGIN_FUNC(TestEarlyMangle_PUSHFQ)
     pushfq;
     pop %rax;
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_PREFETCH)
+    prefetcht0 (%rdi);
+    prefetcht1 (%rdi);
+    prefetcht2 (%rdi);
+    .byte 0x0F; .byte 0x18; .byte 0x07;// prefetchtnta (%rdi);
+    ret;
+END_FUNC
+
+BEGIN_FUNC(TestEarlyMangle_XMM_SAVE_RESTORE)
+    movaps (%rdi), %xmm0;
+    movaps %xmm0, (%rdi);
     ret;
 END_FUNC

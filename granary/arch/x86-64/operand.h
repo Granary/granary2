@@ -133,7 +133,7 @@ class Operand : public OperandInterface {
   } __attribute__((packed));
 
   xed_encoder_operand_type_t type:8;
-  int8_t width;  // Operand width in bits.
+  int16_t width;  // Operand width in bits.
   xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
   xed_reg_enum_t segment:8;  // Used for memory operations.
 

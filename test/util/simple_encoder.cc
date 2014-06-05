@@ -5,7 +5,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "test/simple_encoder.h"
+#include "test/util/simple_encoder.h"
 
 #include "granary/cfg/control_flow_graph.h"
 

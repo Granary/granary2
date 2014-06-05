@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef TEST_ISOLATED_FUNCTION_H_
-#define TEST_ISOLATED_FUNCTION_H_
+#ifndef TEST_UTIL_ISOLATED_FUNCTION_H_
+#define TEST_UTIL_ISOLATED_FUNCTION_H_
 
 #include "granary/base/base.h"
 
@@ -47,4 +47,4 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
                          void *func,
                          void *instrumented_func);
 
-#endif  // TEST_ISOLATED_FUNCTION_H_
+#endif  // TEST_UTIL_ISOLATED_FUNCTION_H_

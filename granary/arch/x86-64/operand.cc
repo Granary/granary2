@@ -80,7 +80,7 @@ VirtualRegister RegisterOperand::Register(void) const {
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->width = static_cast<int8_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -92,7 +92,7 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
   op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op->width = static_cast<int8_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -175,7 +175,7 @@ size_t MemoryOperand::CountMatchedRegisters(
 // Initialize a new register operand from a virtual register.
 RegisterOperand::RegisterOperand(const VirtualRegister reg) {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  op->width = static_cast<int8_t>(reg.BitWidth());
+  op->width = static_cast<int16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;

@@ -4,8 +4,8 @@
 
 #define GRANARY_INTERNAL
 
-#include "test/isolated_function.h"
-#include "test/simple_encoder.h"
+#include "test/util/isolated_function.h"
+#include "test/util/simple_encoder.h"
 
 namespace {
 static uint64_t DEADBEEF = 0xDEADBEEFULL;
@@ -117,3 +117,9 @@ TEST_EARLY_MANGLE(ENTER_16_LEAVE,
 
 TEST_EARLY_MANGLE(PUSHFW)
 TEST_EARLY_MANGLE(PUSHFQ)
+
+TEST_EARLY_MANGLE(PREFETCH,
+    regs->ARG1 = reinterpret_cast<uint64_t>(&DEADBEEF); )
+
+TEST_EARLY_MANGLE(XMM_SAVE_RESTORE,
+    regs->ARG1 = reinterpret_cast<uint64_t>(&(DEADBEEFS[0])); )
