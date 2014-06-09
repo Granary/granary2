@@ -174,7 +174,6 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
     instr_op->addr.as_int = disp;
     if (XED_REG_INVALID == segment_reg) {
       segment_reg = XED_REG_DS;
-      instr_op->addr.as_uint &= 0x0FFFFFFFFULL;  // Truncate to 32 bits.
     } else {
       instr_op->addr.as_uint &= 0x0FFFFFFULL;  // Truncate to 24 bits.
     }
@@ -294,6 +293,28 @@ static void ConvertImmediateOperand(Instruction *instr,
   }
 }
 
+// Returns `true` if a particular operand is a register operand. In practice
+// `BASE0` and `BASE1` never show up as explicit operands, and are instead part
+// of the implicit/suppressed operands like stack pushing/popping, etc.
+static bool IsRegisterOperand(xed_operand_enum_t op_name) {
+  switch (op_name) {
+    case XED_OPERAND_REG0:
+    case XED_OPERAND_REG1:
+    case XED_OPERAND_REG2:
+    case XED_OPERAND_REG3:
+    case XED_OPERAND_REG4:
+    case XED_OPERAND_REG5:
+    case XED_OPERAND_REG6:
+    case XED_OPERAND_REG7:
+    case XED_OPERAND_REG8:
+    case XED_OPERAND_BASE0:
+    case XED_OPERAND_BASE1:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // Convert a `xed_operand_t` into an `Operand`. This operates on explicit
 // operands only, and when an increments `instr->num_ops` when a new explicit
 // operand is found.
@@ -316,7 +337,7 @@ static bool ConvertDecodedOperand(Instruction *instr,
   instr_op->is_sticky = false;
   instr_op->is_explicit = true;
 
-  if (xed_operand_is_register(op_name)) {
+  if (IsRegisterOperand(op_name)) {
     ConvertRegisterOperand(instr, instr_op, xedd, op_name);
   } else if (XED_OPERAND_RELBR == op_name) {
     ConvertRelativeBranch(instr, instr_op, xedd);
@@ -352,8 +373,14 @@ static void ConvertDecodedOperands(Instruction *instr,
 // prefixes.
 static void ConvertDecodedPrefixes(Instruction *instr,
                                    const xed_decoded_inst_t *xedd) {
-  instr->has_prefix_rep = xed_operand_values_has_rep_prefix(xedd);
-  instr->has_prefix_repne = xed_operand_values_has_repne_prefix(xedd);
+  // Only get the `REP` and `REPNE` prefixes if the prefixes aren't used for
+  // instruction refinement (as is the case for SSE instructions). If we took
+  // in the repeat prefixes for those instructions and passed them through to
+  // then encoder then it will barf.
+  if (xed_operand_values_has_real_rep(xedd)) {
+    instr->has_prefix_rep = xed_operand_values_has_rep_prefix(xedd);
+    instr->has_prefix_repne = xed_operand_values_has_repne_prefix(xedd);
+  }
   instr->has_prefix_br_hint_taken = xed_operand_values_branch_taken_hint(xedd);
   instr->has_prefix_br_hint_not_taken = \
       xed_operand_values_branch_not_taken_hint(xedd);
@@ -385,15 +412,29 @@ static void ConvertDecodedInstruction(Instruction *instr,
 AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
   while (pc) {
     xed_decoded_inst_t xedd;
-    if (XED_ERROR_NONE == DecodeBytes(&xedd, pc)) {
-      const auto category = xed_decoded_inst_get_category(&xedd);
-      if (XED_CATEGORY_NOP == category) {  // Skip NOPs.
-        pc += xed_decoded_inst_get_length(&xedd);
-      } else {
-        ConvertDecodedInstruction(instr, &xedd, pc);
-        return pc + instr->decoded_length;
-      }
+    auto error = DecodeBytes(&xedd, pc);
+    if (XED_ERROR_NONE != error) {
+      GRANARY_ASSERT(false);
+      break;
     }
+    const auto category = xed_decoded_inst_get_category(&xedd);
+    if (XED_CATEGORY_NOP == category) {  // Skip NOPs.
+      pc += xed_decoded_inst_get_length(&xedd);
+      continue;
+    }
+
+    switch (xed_decoded_inst_get_iclass(&xedd)) {
+      case XED_ICLASS_XBEGIN:
+      case XED_ICLASS_XEND:
+      case XED_ICLASS_XABORT:
+      case XED_ICLASS_XTEST:
+        // TODO(pag): Implement me!!
+        return nullptr;
+      default: break;
+    }
+
+    ConvertDecodedInstruction(instr, &xedd, pc);
+    return pc + instr->decoded_length;
   }
   return nullptr;
 }

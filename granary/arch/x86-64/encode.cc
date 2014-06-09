@@ -71,12 +71,19 @@ static void EncodeReg(const Operand &op, xed_encoder_operand_t *xedo) {
 }
 
 // Encode an immediate operand.
-static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo) {
+static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo,
+                      xed_iclass_enum_t iclass) {
   xedo->type = op.type;
   if (XED_ENCODER_OPERAND_TYPE_IMM1 == op.type) {
     xedo->u.imm1 = static_cast<decltype(xedo->u.imm1)>(op.imm.as_uint);
   } else {
     xedo->u.imm0 = op.imm.as_uint;
+  }
+  if (XED_ICLASS_PUSH == iclass) {
+    xedo->width = static_cast<uint32_t>(ImmediateWidthBits(op.imm.as_uint));
+    if (16 == xedo->width) {
+      xedo->width = 32;
+    }
   }
 }
 
@@ -112,25 +119,47 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
     }
     xedo->u.mem.index = op.mem.reg_index;
     xedo->u.mem.scale = op.mem.scale;
+
+    if (XED_REG_INVALID == xedo->u.mem.base &&
+        XED_REG_INVALID != xedo->u.mem.index) {
+      xedo->u.mem.disp.displacement_width = 32;
+    }
   } else {
     xedo->u.mem.base = static_cast<xed_reg_enum_t>(op.reg.EncodeToNative());
   }
 }
 
 // Encode a pointer memory operand.
-static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
-                      CachePC next_pc, xed_iclass_enum_t iclass) {
+static void EncodePtr(const Instruction *, const Operand &op,
+                      xed_encoder_operand_t *xedo, CachePC next_pc) {
   xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
 
   // Absolute address, or segment offset.
   if (XED_REG_INVALID != op.segment) {
     xedo->u.mem.disp.displacement = op.addr.as_uint;
     if (XED_REG_DS == op.segment) {  // 32-bit, zero-extended absolute address.
-      xedo->u.mem.disp.displacement_width = XED_ICLASS_MOV == iclass ? 64 : 32;
-      xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;
+      xedo->u.mem.disp.displacement_width = arch::ADDRESS_WIDTH_BITS;
+
+      auto high_32 = op.addr.as_uint >> 32;
+      auto sign_bit_32 = 1UL & (op.addr.as_uint >> 31);
+
+      if (0x0FFFFFFFFULL == high_32) {
+        if (sign_bit_32) {
+          xedo->u.mem.disp.displacement_width = 32;
+        }
+      } else if (!high_32) {
+        if (!sign_bit_32) {
+          xedo->u.mem.disp.displacement_width = 32;
+        }
+      }
+
+      if (32 == xedo->u.mem.disp.displacement_width) {
+        xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
+      }
 
     } else {  // Offset from a segment register.
-      xedo->u.mem.disp.displacement_width = 24;
+      xedo->u.mem.disp.displacement &= 0x0FFFFFFULL;  // 24 bit mask.
+      xedo->u.mem.disp.displacement_width = 32;
       xedo->u.mem.seg = op.segment;
     }
 
@@ -174,6 +203,69 @@ static void LateMangleLEA(Instruction *instr) {
   instr->num_explicit_ops = 2;
 }
 
+// Encode the operands of the instruction.
+static void EncodeOperands(const Instruction *instr,
+                           xed_encoder_instruction_t *xede,
+                           CachePC pc) {
+  auto op_width = 0;
+  auto op_index = 0;
+
+  for (auto &op : instr->ops) {
+    auto &xedo(xede->operands[op_index++]);
+    xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
+    op_width = std::max(op_width, op.BitWidth());
+    switch (op.type) {
+      case XED_ENCODER_OPERAND_TYPE_BRDISP:
+        EncodeBrDisp(op, &xedo, pc + instr->encoded_length);
+        break;
+      case XED_ENCODER_OPERAND_TYPE_REG:
+        EncodeReg(op, &xedo);
+        break;
+      case XED_ENCODER_OPERAND_TYPE_IMM0:
+      case XED_ENCODER_OPERAND_TYPE_SIMM0:
+      case XED_ENCODER_OPERAND_TYPE_IMM1:
+        EncodeImm(op, &xedo, instr->iclass);
+        break;
+      case XED_ENCODER_OPERAND_TYPE_MEM:
+        EncodeMem(op, &xedo);
+        break;
+      case XED_ENCODER_OPERAND_TYPE_PTR:
+        EncodePtr(instr, op, &xedo, pc + instr->encoded_length);
+        break;
+      case XED_ENCODER_OPERAND_TYPE_INVALID:
+      default:
+        break;
+    }
+  }
+
+  // Make sure that we've got an effective operand width.
+  if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
+    xede->effective_operand_width = static_cast<uint32_t>(op_width);
+  }
+}
+
+// Special cases that aren't easily caught by the ambiguous operand matcher.
+//
+// Note: In the case of `IMUL`, it's trivial to specialize the below listed
+//       iforms when generating `ambiguous_operands.cc`, but they are
+//       intentionally not specialized so that we can see the second operands
+//       as registers. If we didn't see the second operands as registers then
+//       we might miss those dependencies when using only the iclass to find
+//       the implicit operands.
+static void EncodeSpecialCases(const Instruction *instr,
+                               xed_encoder_instruction_t *xede) {
+  switch (instr->iform) {
+    case XED_IFORM_IMUL_GPR8:
+    case XED_IFORM_IMUL_GPRv:
+    case XED_IFORM_IMUL_MEMb:
+    case XED_IFORM_IMUL_MEMv:
+      xede->noperands = 1;
+      break;
+    default:
+      break;
+  }
+}
+
 }  // namespace
 
 // Encode a XED instruction intermediate representation into an x86
@@ -191,7 +283,10 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   // Step 1: Convert Granary IR into XED encoder IR.
   InitEncoderInstruction(instr, &xede);
-  auto op_index = 0;
+  EncodeOperands(instr, &xede, pc);
+  EncodeSpecialCases(instr, &xede);
+
+  auto old_encoded_pc = instr->encoded_pc;
 
   // Ensure that we're always stage-encoding before encoding. Stage encoding
   // is used to compute the length of every instruction, as well as to ensure
@@ -203,47 +298,13 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
     GRANARY_ASSERT(0 < instr->encoded_length);
   }
 
-  auto op_width = 0;
-  for (auto &op : instr->ops) {
-    auto &xedo(xede.operands[op_index++]);
-    xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
-    op_width = std::max(op_width, op.BitWidth());
-    switch (op.type) {
-      case XED_ENCODER_OPERAND_TYPE_BRDISP:
-        EncodeBrDisp(op, &xedo, pc + instr->encoded_length);
-        break;
-      case XED_ENCODER_OPERAND_TYPE_REG:
-        EncodeReg(op, &xedo);
-        break;
-      case XED_ENCODER_OPERAND_TYPE_IMM0:
-      case XED_ENCODER_OPERAND_TYPE_SIMM0:
-      case XED_ENCODER_OPERAND_TYPE_IMM1:
-        EncodeImm(op, &xedo);
-        break;
-      case XED_ENCODER_OPERAND_TYPE_MEM:
-        EncodeMem(op, &xedo);
-        break;
-      case XED_ENCODER_OPERAND_TYPE_PTR:
-        EncodePtr(op, &xedo, pc + instr->encoded_length, instr->iclass);
-        break;
-      case XED_ENCODER_OPERAND_TYPE_INVALID:
-      default:
-        break;
-    }
-  }
-
-  // Make sure that we've got an effective operand width.
-  if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
-    instr->effective_operand_width = static_cast<int16_t>(op_width);
-    xede.effective_operand_width = static_cast<uint32_t>(op_width);
-  }
-
   xed_state_t dstate;
   xed_encoder_request_t enc_req;
 
   // Step 2: Convert XED encoder IR into XED decoder IR.
   dstate = XED_STATE;
   xed_encoder_request_zero_set_mode(&enc_req, &dstate);
+
   GRANARY_IF_DEBUG( auto ret = ) xed_convert_to_encoder_request(
       &enc_req, &xede);
   GRANARY_ASSERT(ret);
@@ -260,7 +321,7 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   if (InstructionEncodeKind::COMMIT == encode_kind) {
     memcpy(pc, &(itext[0]), instr->encoded_length);
   }
-
+  GRANARY_USED(old_encoded_pc);
   return pc + instr->encoded_length;
 }
 

@@ -100,7 +100,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
 
   auto meta = metadata_manager.Allocate();
   do {
-    LocalControlFlowGraph cfg;  // meta will be cleaned up.
+    LocalControlFlowGraph cfg;  // Meta-data will be cleaned up.
     Instrument(&context, &cfg, meta);
   } while (0);
 }

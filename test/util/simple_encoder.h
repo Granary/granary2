@@ -3,6 +3,8 @@
 #ifndef TEST_UTIL_SIMPLE_ENCODER_H_
 #define TEST_UTIL_SIMPLE_ENCODER_H_
 
+#include <gtest/gtest.h>
+
 #include "granary/arch/init.h"
 
 #include "granary/metadata.h"

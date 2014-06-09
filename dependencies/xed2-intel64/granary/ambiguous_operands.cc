@@ -78,7 +78,7 @@ static void GenerateDisambiguator(InstructionInfo &info) {
 // Identify instructions with ambiguous encodings.
 static void GenerateDisambiguators(void) {
   for (InstructionInfo &info : instr_table) {
-    if (info.max_num_explicit_args != info.min_num_explicit_args) {
+    if (info.has_ambigiuous_ops) {
       GenerateDisambiguator(info);
     }
   }

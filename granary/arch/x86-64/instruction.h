@@ -103,7 +103,6 @@ class Instruction : public InstructionInterface {
   }
 
   inline bool IsUnconditionalJump(void) const {
-    // TODO(pag): XABORT is included in this op category.
     return XED_CATEGORY_UNCOND_BR == category;
   }
 

@@ -10,10 +10,6 @@ namespace arch {
 // number, or an large unsigned positive number that looks like it could be
 // sign-extended from a smaller width, then the smaller width will be returned.
 int ImmediateWidthBits(uint64_t imm) {
-  enum : uint64_t {
-    WIDTH_8_SIGNED = 0xFFFFFFFFFFFFFF80ULL,
-    WIDTH_8_UNSIGNED = ~WIDTH_8_SIGNED
-  };
   if (!imm) return 8;
 
   auto leading_zeros = __builtin_clzl(imm);

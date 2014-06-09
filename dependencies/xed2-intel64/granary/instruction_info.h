@@ -25,15 +25,15 @@ struct InstructionInfo {
   std::set<const xed_inst_t *> templates;
   const xed_inst_t *xedi_with_max_ops;
   ops_bitset_t ops;
-  int min_num_explicit_args;
-  int max_num_explicit_args;
+  int num_explicit_args;
   int max_num_args;
+  bool has_ambigiuous_ops;
 };
 
 // Maps `xed_iclass_enum_t` to information about the instruction.
 static InstructionInfo instr_table[XED_ICLASS_LAST];
 static bool has_ambiguous_arg[XED_IFORM_LAST] = {false};
-static bool is_ambiguous_arg[XED_IFORM_LAST][8] = {{false}};
+static bool is_ambiguous_arg[XED_IFORM_LAST][11] = {{false}};
 
 // Populate the instruction table based on XED's internal tables.
 static void FillTable(ignored_iclass_set_t *ignored_iclasses_set) {
@@ -45,10 +45,9 @@ static void FillTable(ignored_iclass_set_t *ignored_iclasses_set) {
       continue;
     }
 
-    auto info = instr_table + iclass;
+    auto info = &(instr_table[iclass]);
     info->templates.insert(instr);
-    info->min_num_explicit_args = 999;
-    info->max_num_explicit_args = -1;
+    info->num_explicit_args = 0;
     info->max_num_args = -1;
   }
 }
@@ -60,7 +59,19 @@ static int ExplicitArgumentCount(const xed_inst_t *instr, ops_bitset_t *args) {
     auto op = xed_inst_operand(instr, i);
     if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
       if (args) args->set(i, true);
-      ++num_explicit_args;
+      num_explicit_args++;
+    }
+  }
+  return num_explicit_args;
+}
+
+static int MaxExplicitArgumentCount(const xed_inst_t *instr, ops_bitset_t *args) {
+  int num_explicit_args = 0;
+  auto num_ops = xed_inst_noperands(instr);
+  for (auto i = 0U; i < num_ops; ++i) {
+    auto op = xed_inst_operand(instr, i);
+    if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
+      num_explicit_args = i + 1;
     }
   }
   return num_explicit_args;
@@ -77,27 +88,38 @@ static void CountOperands(void) {
         info.max_num_args = num_ops;
       }
 
-      auto num = ExplicitArgumentCount(instr, &(info.ops));
-      info.max_num_explicit_args = std::max(info.max_num_explicit_args, num);
-      info.min_num_explicit_args = std::min(info.min_num_explicit_args, num);
+      auto num = MaxExplicitArgumentCount(instr, &(info.ops));
+      info.num_explicit_args = std::max(info.num_explicit_args, num);
     }
   }
 }
 
 // Output code to handle an instruction with a potentially ambiguous decoding.
 static void FindAmbiguousOperands(InstructionInfo &info) {
+  ops_bitset_t args;
   for (auto instr : info.templates) {
-    ops_bitset_t args;
-    auto num = ExplicitArgumentCount(instr, &args);
-    if (args == info.ops) {
-      continue;
-    }
+    ExplicitArgumentCount(instr, &args);
+  }
+  info.has_ambigiuous_ops = false;
+  for (auto instr : info.templates) {
     auto iform = xed_inst_iform_enum(instr);
-    auto ambiguous_args = args ^ info.ops;
-    for (auto arg_num = 0; arg_num < 8; ++arg_num) {
-      if (ambiguous_args[arg_num] && info.ops[arg_num]) {
+    auto num_ops = xed_inst_noperands(instr);
+    auto last_is_implicit = false;
+    for (auto i = 0U; i < num_ops; ++i) {
+      auto op = xed_inst_operand(instr, i);
+      if (XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(op)) {
+        last_is_implicit = true;
+        if (args[i]) {
+          info.has_ambigiuous_ops = true;
+          has_ambiguous_arg[iform] = true;
+          is_ambiguous_arg[iform][i] = true;
+        }
+
+      } else if (last_is_implicit) {
+        last_is_implicit = false;
+        info.has_ambigiuous_ops = true;
         has_ambiguous_arg[iform] = true;
-        is_ambiguous_arg[iform][arg_num] = true;
+        is_ambiguous_arg[iform][i - 1] = true;
       }
     }
   }
@@ -114,9 +136,7 @@ static bool IsAmbiguousOperand(const xed_inst_t *instr, unsigned op_num) {
 // Identify instructions with ambiguous encodings.
 static void FindAmbiguousEncodings(void) {
   for (InstructionInfo &info : instr_table) {
-    if (info.max_num_explicit_args != info.min_num_explicit_args) {
-      FindAmbiguousOperands(info);
-    }
+    FindAmbiguousOperands(info);
   }
 }
 
@@ -124,6 +144,41 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
   FillTable(ignored_iclasses_set);
   CountOperands();
   FindAmbiguousEncodings();
+
+  // Special cases.
+  instr_table[XED_ICLASS_FSCALE].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1] = true;
+  is_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1][0] = true;
+  is_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1][1] = true;
+
+  instr_table[XED_ICLASS_FSTP].has_ambigiuous_ops = true;
+  instr_table[XED_ICLASS_FSTP].num_explicit_args = 2;
+  instr_table[XED_ICLASS_FSTPNCE].has_ambigiuous_ops = true;
+  instr_table[XED_ICLASS_FSTPNCE].num_explicit_args = 2;
+  for (int iform = XED_IFORM_FSTP_MEMm64real_ST0;
+       iform <= XED_IFORM_FSTPNCE_X87_ST0;
+       iform++) {
+    has_ambiguous_arg[iform] = true;
+    is_ambiguous_arg[iform][1] = true;
+  }
+
+  is_ambiguous_arg[XED_IFORM_IMUL_GPRv_MEMv][2] = false;
+  is_ambiguous_arg[XED_IFORM_IMUL_GPRv_GPRv][2] = false;
+
+  // Far call/jmp/ret.
+  instr_table[XED_ICLASS_JMP_FAR].has_ambigiuous_ops = false;
+  instr_table[XED_ICLASS_CALL_FAR].has_ambigiuous_ops = false;
+  instr_table[XED_ICLASS_RET_FAR].has_ambigiuous_ops = false;
+  instr_table[XED_ICLASS_RET_NEAR].has_ambigiuous_ops = false;
+
+  // Out
+  instr_table[XED_ICLASS_OUT].has_ambigiuous_ops = true;
+  for (int iform = XED_IFORM_OUT_DX_AL;
+         iform <= XED_IFORM_OUT_IMMb_OeAX;
+         iform++) {
+      has_ambiguous_arg[iform] = true;
+      is_ambiguous_arg[iform][1] = true;
+    }
 }
 
 #endif  // DEPENDENCIES_XED2_INTEL64_GRANARY_INSTRUCTION_INFO_H_

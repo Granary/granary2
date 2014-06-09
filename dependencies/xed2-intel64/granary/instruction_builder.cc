@@ -75,7 +75,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
 
   ops_bitset_t explicit_args;
   auto num_explicit_ops = ExplicitArgumentCount(instr, &explicit_args);
-  auto max_num_explicit_ops = info->max_num_explicit_args;
+  auto max_num_explicit_ops = info->num_explicit_args;
   auto num_ops = xed_inst_noperands(instr);
 
   // Template typename list for arguments.

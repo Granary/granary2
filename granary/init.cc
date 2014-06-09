@@ -64,8 +64,6 @@ void Init(const char *granary_path) {
   if (!FLAG_help) {
     context.Construct();
 
-    granary_test_mangle();
-
     // TODO(pag): Remove me.
     AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
