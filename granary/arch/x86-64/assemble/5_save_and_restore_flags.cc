@@ -78,7 +78,9 @@ void InjectSaveFlags(Fragment *frag) {
         ni.ops[0].rw = XED_OPERAND_ACTION_W;
         PREP();
       } else {
-        PREP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg));
+        PREP(
+            MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg);
+            ni.is_save_restore = true; );
       }
     }
   }
@@ -111,7 +113,9 @@ void InjectRestoreFlags(Fragment *frag) {
       if (killed_reg_used) {
         APP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
       } else {
-        APP(MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg));
+        APP(
+            MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg);
+            ni.is_save_restore = true; );
       }
     }
   }

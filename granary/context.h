@@ -27,6 +27,7 @@ class MetaDataManager;
 class Tool;
 class ToolManager;
 class CodeCacheInterface;
+class DirectEdge;
 
 // Interface for environments in Granary.
 class ContextInterface {
@@ -66,6 +67,11 @@ class ContextInterface {
   //       whilst fine-grained locks are held (e.g. schedule for the allocator
   //       to be freed).
   virtual void FlushCodeCache(CodeCacheInterface *cache) = 0;
+
+  // Allocates a direct edge data structure, as well as the code needed to
+  // back the direct edge.
+  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block,
+                                         BlockMetaData *dest_block) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -108,7 +114,12 @@ class Context : public ContextInterface {
   // Note: This should be a lightweight operation as it is usually invoked
   //       whilst fine-grained locks are held (e.g. schedule for the allocator
   //       to be freed).
-  virtual void FlushCodeCache(CodeCacheInterface *cache);
+  virtual void FlushCodeCache(CodeCacheInterface *cache) override;
+
+  // Allocates a direct edge data structure, as well as the code needed to
+  // back the direct edge.
+  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block,
+                                         BlockMetaData *dest_block) override;
 
  private:
 

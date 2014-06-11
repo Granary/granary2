@@ -39,7 +39,7 @@
   } \
   bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
-#define GRANARY_DECLARE_bool( name) \
+#define GRANARY_DECLARE_bool(name) \
   extern bool &GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_positive_int(name, default_value, docstring) \

@@ -209,7 +209,7 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   }
   if (IsA<ExitFragment *>(next)) return true;
   if (IsA<PartitionEntryFragment *>(next)) {
-    if (curr_code && curr_code->attr.branches_to_edge_code) {
+    if (curr_code && curr_code->edge.branches_to_edge_code) {
       return false;  // This is a fall-through.
     }
     return true;
@@ -217,7 +217,7 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   if (curr->partition == next->partition) return false;
   if (auto next_code = DynamicCast<CodeFragment *>(next)) {
     if (!next_code->attr.can_add_to_partition) {
-      if (curr_code && curr_code->attr.branches_to_edge_code &&
+      if (curr_code && curr_code->edge.branches_to_edge_code &&
           curr_code->branch_instr->HasIndirectTarget()) {
         return false;
       }

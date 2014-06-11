@@ -273,7 +273,7 @@ void RemoveIndirectCallsAndJumps(Fragment *frag) {
       if (!(ninstr->IsUnconditionalJump() || ninstr->IsFunctionCall())) {
         continue;
       }
-      if (ninstr->HasIndirectTarget()) {
+      if (ninstr->HasIndirectTarget() && !ninstr->instruction.is_sticky) {
         MangleIndirectCFI(ninstr);  // Convert to a NO-OP.
       }
     }
@@ -288,10 +288,10 @@ void RemoveIndirectCallsAndJumps(Fragment *frag) {
 namespace {
 extern "C" {
 
-// Get the base address of the current thread's TLS. We use this address to
-// compute `FS`-based offsets from the TLS base. We assume that the base address
-// returned by this function is the address associated with `FS:0`.
-extern intptr_t granary_arch_get_tls_base(void);
+// Get the base address of the current thread/CPU's local storage. We use this
+// address to compute segment offsets. We assume that the base address
+// returned by this function is the address associated with `FS:0` or `GS:0`.
+extern intptr_t granary_arch_get_segment_base(void);
 
 }  // extern C
 
@@ -307,13 +307,11 @@ static void ArchAllocateSlot(arch::Operand &op) {
   auto slot = op.reg.Number();
   auto this_slot = &(SPILL_SLOTS.slots[slot]);
   auto this_slot_addr = reinterpret_cast<intptr_t>(this_slot);
-  auto slot_offset = this_slot_addr - granary_arch_get_tls_base();
+  auto slot_offset = this_slot_addr - granary_arch_get_segment_base();
+  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.segment = XED_REG_FS;  // Linux-specific.
   op.is_compound = true;
-  op.mem.disp = static_cast<int32_t>(slot_offset);
-  op.mem.reg_base = XED_REG_INVALID;
-  op.mem.reg_index = XED_REG_INVALID;
-  op.mem.scale = 0;
+  op.addr.as_int = slot_offset;
 }
 
 // Replace any abstract spill slots in an instruction with concrete, segment-

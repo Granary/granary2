@@ -92,7 +92,16 @@ BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
 
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
-    : meta(meta_),
+    : cfg(nullptr),
+      meta(meta_),
+      cached_meta_hash(0),
+      native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
+                     : nullptr) {}
+
+InstrumentedBasicBlock::InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
+                                               BlockMetaData *meta_)
+    : cfg(cfg_),
+      meta(meta_),
       cached_meta_hash(0),
       native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
                      : nullptr) {}
@@ -111,8 +120,7 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 // Initialize a decoded basic block.
 DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
                                      BlockMetaData *meta_)
-    : InstrumentedBasicBlock(meta_),
-      cfg(cfg_),
+    : InstrumentedBasicBlock(cfg_, meta_),
       first(new AnnotationInstruction(IA_BEGIN_BASIC_BLOCK,
                                       reinterpret_cast<void *>(&first))),
       last(new AnnotationInstruction(IA_END_BASIC_BLOCK,
@@ -208,8 +216,9 @@ void DecodedBasicBlock::FreeInstructionList(void) {
 }
 
 // Initialize a future basic block.
-DirectBasicBlock::DirectBasicBlock(BlockMetaData *meta_)
-    : InstrumentedBasicBlock(meta_),
+DirectBasicBlock::DirectBasicBlock(LocalControlFlowGraph *cfg_,
+                                   BlockMetaData *meta_)
+    : InstrumentedBasicBlock(cfg_, meta_),
       materialized_block(nullptr),
       materialize_strategy(REQUEST_LATER) {}
 
@@ -226,8 +235,9 @@ CachePC IndirectBasicBlock::StartCachePC(void) const {
 }
 
 // Initialize a return basic block.
-ReturnBasicBlock::ReturnBasicBlock(BlockMetaData *meta_)
-    : InstrumentedBasicBlock(nullptr),
+ReturnBasicBlock::ReturnBasicBlock(LocalControlFlowGraph *cfg_,
+                                   BlockMetaData *meta_)
+    : InstrumentedBasicBlock(cfg_, nullptr),
       lazy_meta(meta_) {}
 
 ReturnBasicBlock::~ReturnBasicBlock(void) {

@@ -4,12 +4,13 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/arch/encode.h"
-\
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 
 #include "granary/code/assemble.h"
 #include "granary/code/compile.h"
+#include "granary/code/edge.h"
 
 #include "granary/cache.h"
 #include "granary/module.h"
@@ -42,8 +43,9 @@ static int StageEncode(Fragment *frag) {
 
 struct StageEncodeResult {
   int block_size;
-  int num_direct_edges;
   int max_edge_size;
+  CachePC min_edge_pc;
+  CachePC max_edge_pc;
 };
 
 // Performs stage encoding of a fragment list. This determines the size of each
@@ -55,16 +57,20 @@ StageEncodeResult StageEncode(FragmentList *frags) {
   }
 
   PartitionInfo *last_partition = nullptr;
-  StageEncodeResult result = {0, 0, 0};
+  StageEncodeResult result = {0, 0, nullptr, nullptr};
   auto edge_size = 0;
 
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     auto partition = frag->partition.Value();
+    auto edge = partition->edge;
 
     // Direct edge code.
-    if (partition->is_edge_code && !partition->is_indirect_edge_code) {
+    if (edge && EDGE_KIND_DIRECT == edge->kind) {
       if (last_partition != partition) {
-        result.num_direct_edges += 1;
+        result.min_edge_pc = std::min(result.min_edge_pc,
+                                      edge->direct->edge_code);
+        result.max_edge_pc = std::min(result.max_edge_pc,
+                                      edge->direct->edge_code);
         last_partition = partition;
         edge_size = 0;
       }
@@ -97,25 +103,26 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
 }
 
 // Assign program counters to every fragment and instruction.
-static void RelativizeCode(FragmentList *frags, CachePC cache_code,
-                           CachePC edge_code) {
+static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
   PartitionInfo *last_partition = nullptr;
+  CachePC edge_code(nullptr);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     auto partition = frag->partition.Value();
 
     // Direct edge code.
-    if (partition->is_edge_code && !partition->is_indirect_edge_code) {
+    if (partition->edge && EDGE_KIND_DIRECT == partition->edge->kind) {
       // Different edge code, so make sure each direct edge block is cache-line
       // aligned.
-      if (last_partition != partition) {
-        const auto edge_code_addr = reinterpret_cast<uintptr_t>(edge_code);
-        edge_code = reinterpret_cast<CachePC>(
-            GRANARY_ALIGN_TO(edge_code_addr, arch::CACHE_LINE_SIZE_BYTES));
+      if (!edge_code || last_partition != partition) {
+        edge_code = partition->edge->direct->edge_code;
       }
+
       frag->encoded_pc = edge_code;
       edge_code += frag->encoded_size;
 
-    } else {  // Basic block code.
+    // TODO(pag): "out-edge" code.
+
+    } else {  // Basic block code, and/or in-edge code.
       frag->encoded_pc = cache_code;
       cache_code += frag->encoded_size;
     }
@@ -150,12 +157,13 @@ static void RelativizeCFIs(FragmentList *frags) {
   }
 }
 
-// Encode all fragments that fall into the [begin, end) range.
-static void EncodeInRange(FragmentList *frags, CachePC begin, CachePC end) {
+// Encode all fragments associated with basic block code and not with direct
+// edge or out-edge code.
+template <typename CondT>
+static void ConditionalEncode(FragmentList *frags, CondT cond) {
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::COMMIT);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (frag->encoded_pc < begin) continue;
-    if (frag->encoded_pc >= end) continue;
+    if (!cond(frag)) continue;
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
         if (ninstr->IsNoOp()) continue;
@@ -194,46 +202,73 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
   }
 }
 
+// Update all direct/indirect edge data structures to know about where their
+// data is encoded.
+static void ConnectEdgesToInstructions(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (EDGE_KIND_INVALID == cfrag->edge.kind) continue;
+
+      auto partition = cfrag->partition.Value();
+      GRANARY_ASSERT(nullptr != partition->edge);
+      GRANARY_ASSERT(EDGE_KIND_INVALID != partition->edge->kind);
+
+      if (EDGE_KIND_DIRECT == cfrag->edge.kind) {
+        GRANARY_ASSERT(EDGE_KIND_DIRECT == partition->edge->kind);
+
+        auto cfi = partition->edge_patch_instruction;
+        GRANARY_ASSERT(nullptr != cfi);
+
+        auto edge = cfrag->edge.direct;
+        GRANARY_ASSERT(nullptr != edge);
+
+        edge->patch_instruction = cfi->EncodedPC();
+      }
+    }
+  }
+}
+
 // Encodes the fragments into the specified code caches.
 static void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
                    CodeCacheInterface *edge_cache) {
   auto result = StageEncode(frags);
 
-  // Align direct edge code chunks to be sized according to the cache lines.
-  result.max_edge_size = GRANARY_ALIGN_TO(result.max_edge_size,
-                                          arch::CACHE_LINE_SIZE_BYTES);
-
-  auto edge_allocation = result.max_edge_size * result.num_direct_edges;
-
   GRANARY_ASSERT(0 < result.block_size);
+  GRANARY_ASSERT(arch::EDGE_CODE_SIZE_BYTES >= result.max_edge_size);
+
   auto cache_code = block_cache->AllocateBlock(result.block_size);
-
-  CachePC edge_code = nullptr;
-  if (edge_allocation) edge_code = edge_cache->AllocateBlock(edge_allocation);
-
-  RelativizeCode(frags, cache_code, edge_code);
+  RelativizeCode(frags, cache_code);
   RelativizeCFIs(frags);
 
-  if (auto edge_code_end = edge_code + edge_allocation) {
-    CodeCacheTransaction transaction(edge_cache, edge_code, edge_code_end);
-    EncodeInRange(frags, edge_code, edge_code_end);
+  if (result.max_edge_size) {
+    result.max_edge_pc += arch::EDGE_CODE_SIZE_BYTES;
+    CodeCacheTransaction transaction(edge_cache, result.min_edge_pc,
+                                     result.max_edge_pc);
+    ConditionalEncode(frags, [] (const Fragment *frag) {
+      const auto partition = frag->partition.Value();
+      return !partition->edge && EDGE_KIND_DIRECT == partition->edge->kind;
+    });
   }
   if (auto cache_code_end = cache_code + result.block_size) {
     CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
-    EncodeInRange(frags, cache_code, cache_code_end);
+    ConditionalEncode(frags, [] (const Fragment *frag) {
+      const auto partition = frag->partition.Value();
+      return !partition->edge || EDGE_KIND_DIRECT != partition->edge->kind;
+    });
   }
   AssignBlockCacheLocations(frags);
+  ConnectEdgesToInstructions(frags);
 }
 
 }  // namespace
 
 // Compile some instrumented code.
-void Compile(LocalControlFlowGraph *cfg, CodeCacheInterface *edge_cache) {
+void Compile(LocalControlFlowGraph *cfg, CodeCacheInterface *edge_code_cache) {
   auto meta = cfg->EntryBlock()->MetaData();
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
   auto block_code_cache = module_meta->GetCodeCache();
   auto frags = Assemble(block_code_cache, cfg);
-  Encode(&frags, block_code_cache, edge_cache);
+  Encode(&frags, block_code_cache, edge_code_cache);
   FreeFragments(&frags);
 }
 

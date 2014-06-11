@@ -89,6 +89,14 @@ void MemoryBuilder::Build(Instruction *instr) {
   instr_op.rw = action;
   instr_op.is_explicit = true;
   instr_op.is_effective_address = XED_ICLASS_LEA == instr->iclass;
+  switch (instr->category) {
+    case XED_CATEGORY_CALL:
+    case XED_CATEGORY_COND_BR:
+    case XED_CATEGORY_UNCOND_BR:
+      instr_op.width = arch::ADDRESS_WIDTH_BITS;
+      break;
+    default: break;
+  }
 }
 
 // Add this branch target as an operand to the instruction `instr`.

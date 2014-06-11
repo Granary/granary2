@@ -71,12 +71,13 @@ Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
     if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
       return new ControlFlowInstruction(
           instr,
-          new IndirectBasicBlock(context->AllocateEmptyBlockMetaData()));
+          new IndirectBasicBlock(cfg, context->AllocateEmptyBlockMetaData()));
 
     // Return, with default empty meta-data.
     } else if (instr->IsFunctionReturn()) {
       return new ControlFlowInstruction(
-          instr, new ReturnBasicBlock(context->AllocateEmptyBlockMetaData()));
+          instr, new ReturnBasicBlock(
+              cfg, context->AllocateEmptyBlockMetaData()));
 
     // System call/return, interrupt call/return.
     } else {
@@ -85,7 +86,7 @@ Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
 
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
     auto meta = context->AllocateBlockMetaData(instr->BranchTargetPC());
-    return new ControlFlowInstruction(instr, new DirectBasicBlock(meta));
+    return new ControlFlowInstruction(instr, new DirectBasicBlock(cfg, meta));
   } else {
     return new NativeInstruction(instr);
   }
@@ -337,7 +338,7 @@ void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
 std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
     AppPC start_pc) {
   return std::unique_ptr<DirectBasicBlock>(
-      new DirectBasicBlock(context->AllocateBlockMetaData(start_pc)));
+      new DirectBasicBlock(cfg, context->AllocateBlockMetaData(start_pc)));
 }
 
 }  // namespace granary

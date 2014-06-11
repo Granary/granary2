@@ -34,6 +34,7 @@ class PartitionExitFragment;
 class FlagEntryFragment;
 class FlagExitFragment;
 class SSANode;
+class DirectEdge;
 
 class SpillInfo {
  public:
@@ -83,6 +84,31 @@ class StackFrameInfo {
 
   int entry_offset;
   int exit_offset;
+};
+
+enum EdgeKind {
+  EDGE_KIND_INVALID,
+  EDGE_KIND_DIRECT,
+  EDGE_KIND_INDIRECT
+};
+
+// Edge information about a partition or fragment.
+struct EdgeInfo {
+ public:
+  inline EdgeInfo(void)
+      : kind(EDGE_KIND_INVALID),
+        branches_to_edge_code(false),
+        direct(nullptr) {}
+
+  // Should this partition be allocated in some direct edge code location?
+  EdgeKind kind;
+
+  // Does this partition and/or fragment branch to edge code?
+  bool branches_to_edge_code;
+
+  union {
+    DirectEdge *direct;
+  };
 };
 
 // Information about the partition to which a fragment belongs.
@@ -137,9 +163,12 @@ class PartitionInfo {
   bool analyze_stack_frame;
   int min_frame_offset;
 
-  // Should this partition be allocated in some direct edge code location?
-  bool is_edge_code;
-  bool is_indirect_edge_code;
+  // Pointer to one of the edge structures associated with this fragment. The
+  // edge structure is stored in one of the `CodeFragment`s.
+  const EdgeInfo *edge;
+
+  // Instruction that will get patched by this (direct) edge code.
+  NativeInstruction *edge_patch_instruction;
 
   // The first fragment in this partition. This will either be a
   // `PartitionEntryFragment` or a `CodeFragment`.
@@ -343,23 +372,19 @@ class CodeAttributes {
  public:
   CodeAttributes(void);
 
-  // True iff this code fragment is the entrypoint to some edge code.
-  bool is_edge_code;
-  bool branches_to_edge_code;
-
   // Can this fragment be added into another partition? We use this to prevent
   // fragments that only contain things like IRET, RET, etc. from being unioned
   // into an existing partition. This would be bad because we lose control at
   // things like IRET and unspecialized RETs.
-  bool can_add_to_partition;
+  bool can_add_to_partition:1;
 
   // Does this fragment have any native instructions in it, or is it just full
   // or annotations, labels, and other things? We use this to try to avoid
   // adding redundant fragments (e.g. if you had multiple labels in a row).
-  bool has_native_instrs;
+  bool has_native_instrs:1;
 
   // Does this fragment have any instructions that write to the flags?
-  bool modifies_flags;
+  bool modifies_flags:1;
 
   // Is there a hint set that we should split this fragment before a non-
   // native instruction changes the flags? This is designed as a minor
@@ -367,22 +392,22 @@ class CodeAttributes {
   // a specific register (`AH` in x86 via `LAHF` and `SAHF`), and where the
   // flag save/restore code behaves in a sub-optimal way if instrumentation code
   // uses the register `AL/AH/AX/EAX/RAX`.
-  bool has_flag_split_hint;
+  bool has_flag_split_hint:1;
 
   // Is this a fragment of application instructions? If this is false, then all
   // instructions are either injected from instrumentation, or they could be
   // some application instructions that don't read or write the flags.
-  bool is_app_code;
+  bool is_app_code:1;
 
   // Does this fragment represent the beginning of a basic block?
-  bool is_block_head;
+  bool is_block_head:1;
 
   // Is this a "compensating" fragment. This is used during register allocation
   // when we have a case like: P -> S1, P -> S2, and the register R is live from
   // P -> S1 but dead from P -> S2. In this case, we add a compensating
   // fragment P -> C -> S2, wherein we treat R as list on entry to C and
   // explicit "kill" it in C with an annotation instruction.
-  bool is_compensation_code;
+  bool is_compensation_code:1;
 
   // The number of non-application (instrumentation) predecessors.
   //
@@ -425,7 +450,8 @@ class CodeFragment : public SSAFragment {
   inline CodeFragment(void)
       : SSAFragment(),
         attr(),
-        stack() {}
+        stack(),
+        edge() {}
 
   virtual ~CodeFragment(void);
 
@@ -434,6 +460,9 @@ class CodeFragment : public SSAFragment {
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
+
+  // Pointer to one of the edge structures associated with this fragment.
+  EdgeInfo edge;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {

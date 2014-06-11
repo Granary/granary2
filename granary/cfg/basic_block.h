@@ -159,6 +159,10 @@ class InstrumentedBasicBlock : public BasicBlock {
   GRANARY_INTERNAL_DEFINITION
   explicit InstrumentedBasicBlock(BlockMetaData *meta_);
 
+  GRANARY_INTERNAL_DEFINITION
+  explicit InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
+                                  BlockMetaData *meta_);
+
   virtual ~InstrumentedBasicBlock(void);
 
   // Return this basic block's meta-data.
@@ -177,6 +181,9 @@ class InstrumentedBasicBlock : public BasicBlock {
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 
  GRANARY_PROTECTED:
+
+  // The local control-flow graph to which this block belongs.
+  GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph * const cfg;
 
   // The meta-data associated with this basic block. Points to some (usually)
   // interned meta-data that is valid on entry to this basic block.
@@ -276,9 +283,6 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION
   void FreeInstructionList(void);
 
-  // The local control-flow graph to which this block belongs.
-  GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph * const cfg;
-
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.
   //
@@ -300,7 +304,8 @@ enum BlockRequestKind : uint8_t;
 class DirectBasicBlock final : public InstrumentedBasicBlock {
  public:
   virtual ~DirectBasicBlock(void) = default;
-  GRANARY_INTERNAL_DEFINITION DirectBasicBlock(BlockMetaData *meta_);
+  GRANARY_INTERNAL_DEFINITION DirectBasicBlock(LocalControlFlowGraph *cfg_,
+                                               BlockMetaData *meta_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
   GRANARY_DEFINE_NEW_ALLOCATOR(DirectBasicBlock, {
@@ -351,7 +356,8 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
 // at this time because it's the target of an indirect jump/call.
 class ReturnBasicBlock final : public InstrumentedBasicBlock {
  public:
-  GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(BlockMetaData *meta_);
+  GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(LocalControlFlowGraph *cfg_,
+                                               BlockMetaData *meta_);
   virtual ~ReturnBasicBlock(void);
 
   // Returns true if this return basic block has meta-data. If it has meta-data

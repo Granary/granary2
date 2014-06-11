@@ -9,6 +9,7 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 
+#include "granary/context.h"
 #include "granary/breakpoint.h"
 
 namespace granary {
@@ -95,6 +96,12 @@ VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(int num_bytes) {
   GRANARY_ASSERT((1 << 16) > num_virtual_regs);
   return VirtualRegister(VR_KIND_VIRTUAL, static_cast<uint8_t>(num_bytes),
                          static_cast<uint16_t>(num_virtual_regs++));
+}
+
+// Allocate a direct edge structure.
+DirectEdge *LocalControlFlowGraph::AllocateDirectEdge(
+    const BlockMetaData *source_meta, BlockMetaData *dest_meta) {
+  return context->AllocateDirectEdge(source_meta, dest_meta);
 }
 
 }  // namespace granary

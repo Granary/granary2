@@ -58,6 +58,12 @@ class MockContext : public granary::ContextInterface {
   //       to be freed).
   MOCK_METHOD1(FlushCodeCache,
                void (granary::CodeCacheInterface *));
+
+  // Allocates a direct edge data structure, as well as the code needed to
+  // back the direct edge.
+  MOCK_METHOD2(AllocateDirectEdge,
+               granary::DirectEdge *(const granary::BlockMetaData *,
+                                     granary::BlockMetaData *));
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);
 };

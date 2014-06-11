@@ -22,16 +22,27 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+
+#if 0
     //movslq 0x7db9cb, %rax;
-    /*
-    mov 0xCAFE0000, %rax;
+    mov 0xABCAFE0000, %rax;
     mov 0xCAFE0000, %eax;
+    /*
+
     mov $0xCAFE0000, %rax;
-    mov $0xCAFE0000, %eax;
+    mov $0xCAFE0000, %eax; */
+    //jmp *%gs:(%rax);
     pushq $0;
     pushq $0xBEEF;
     pop (%rsp);
-    lea 8(%rsp), %rsp; */
+    //call *%rbx;
+    call 1f
+    jmp 2f
+   1:
+    ret
+   2:
+    //call .Lgranary_arch_Init;
+    lea 8(%rsp), %rsp;
     //movq   -0x140(%rbp),%xmm0
 
     ret;
@@ -253,6 +264,7 @@ retq
     leave;
     ret;
 */
+#endif
 END_FUNC(granary_test_mangle)
 
 END_FILE

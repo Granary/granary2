@@ -185,7 +185,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   arch::Operand op;
   auto ret_address_reg = block->AllocateVirtualRegister();
   auto decoded_pc = cfi->instruction.decoded_pc;
-  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
+  op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
   op.ret_address = ret_address;

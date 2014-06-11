@@ -27,12 +27,23 @@ static LabelInstruction *FindLabel(Fragment *frag) {
 
 }  // namespace
 
+// Adds in an instruction that forces the end of a fragment, i.e. that control-
+// flow cannot pass through. It is reasonable for this to be a debug breakpoint
+// instruction or an undefined instruction.
+void AddFragmentEnd(Fragment *frag) {
+  arch::Instruction ni;
+  UD2(&ni);
+  frag->instrs.Append(new NativeInstruction(&ni));
+}
+
 // Adds a fall-through jump, if needed, to this fragment.
-void AddFallThroughJump(Fragment *frag) {
+NativeInstruction *AddFallThroughJump(Fragment *frag,
+                                      Fragment *fall_through_frag) {
   arch::Instruction ni;
   JMP_RELBRd(&ni, nullptr);
-  auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
-  frag->instrs.Append(new BranchInstruction(&ni, FindLabel(fall_through)));
+  auto instr = new BranchInstruction(&ni, FindLabel(fall_through_frag));
+  frag->instrs.Append(instr);
+  return instr;
 }
 
 }  // namespace granary

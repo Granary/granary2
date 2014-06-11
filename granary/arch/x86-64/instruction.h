@@ -204,6 +204,13 @@ class Instruction : public InstructionInterface {
   // Is this an atomic operation?
   bool is_atomic:1;
 
+  // Is this a register save/restore operation? This is an optimization for
+  // virtual register usage.
+  bool is_save_restore:1;
+
+  // Can this instruction be removed?
+  bool is_sticky;
+
   // Number of explicit operands.
   uint8_t num_explicit_ops:4;
 

@@ -16,16 +16,20 @@ namespace granary {
 
 // Forward declarations.
 class BasicBlock;
+class BlockMetaData;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class BlockFactory;
+GRANARY_INTERNAL_DEFINITION class DirectEdge;
+GRANARY_INTERNAL_DEFINITION class ContextInterface;
 
 // A control flow graph of basic blocks to instrument.
 class LocalControlFlowGraph final {
  public:
   GRANARY_INTERNAL_DEFINITION
-  inline LocalControlFlowGraph(void)
-      : first_block(nullptr),
+  inline explicit LocalControlFlowGraph(ContextInterface *context_)
+      : context(context_),
+        first_block(nullptr),
         last_block(nullptr),
         first_new_block(nullptr),
         num_virtual_regs(0),
@@ -63,8 +67,20 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION
   VirtualRegister AllocateVirtualRegister(int num_bytes);
 
+  // Allocate a direct edge structure. This uses this LCFG's context to
+  // allocate the direct edge and it's associated code.
+  GRANARY_INTERNAL_DEFINITION
+  DirectEdge *AllocateDirectEdge(const BlockMetaData *source_meta,
+                                 BlockMetaData *dest_meta);
+
  private:
   friend class BlockFactory;  // For `first_new_block`.
+
+  LocalControlFlowGraph(void) = delete;
+
+  // Context to which this LCFG belongs. This is needed so that we can allocate
+  // edge code data structures.
+  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
 
   // List of basic blocks known to this control-flow graph.
   GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *first_block;

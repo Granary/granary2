@@ -68,7 +68,7 @@ void Init(const char *granary_path) {
     AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
     auto meta = context->AllocateBlockMetaData(pc);
-    LocalControlFlowGraph cfg;
+    LocalControlFlowGraph cfg(context.AddressOf());
     Instrument(context.AddressOf(), &cfg, meta);
     context->Compile(&cfg);
 

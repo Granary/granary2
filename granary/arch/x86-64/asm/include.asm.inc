@@ -1,9 +1,14 @@
 
+#include "granary/base/base.h"
+
 #define START_FILE .text
 #define END_FILE
 #define SYMBOL(x) x
 
 #define GLOBAL_LABEL(x) SYMBOL(x)
+
+#define DECLARE_FUNC(x) \
+    .extern SYMBOL(x)
 
 #define DEFINE_FUNC(x) \
     .align 16 @N@\
@@ -13,6 +18,7 @@
     .cfi_startproc
 
 #define END_FUNC(x) \
+    ud2 @N@\
     .cfi_endproc @N@\
 
 #define HEX(v) $0x ## v

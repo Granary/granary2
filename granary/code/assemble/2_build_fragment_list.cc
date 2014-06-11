@@ -60,6 +60,15 @@ extern void TryAddFlagSplitHint(CodeFragment *frag,
 // Note: This function has an architecture-specific implementation.
 extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
 
+// Generates some edge code for a direct control-flow transfer between two
+// basic block.
+//
+// Note: This function has an architecture-specific implementation.
+extern void GenerateDirectEdgeCode(DirectBasicBlock *block,
+                                   BlockMetaData *source_block_meta,
+                                   BlockMetaData *dest_block_meta,
+                                   CodeFragment *frag);
+
 namespace {
 
 // Make a new code fragment.
@@ -273,16 +282,21 @@ static CodeFragment *MakeEdgeFragment(FragmentList *frags,
   auto edge_frag = new CodeFragment;
   edge_frag->stack.is_valid = pred_frag->stack.is_valid;
   edge_frag->stack.is_checked = pred_frag->stack.is_checked;
-  edge_frag->attr.is_edge_code = true;
   edge_frag->attr.block_meta = block_meta;
 
   auto exit_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK);
   exit_frag->block_meta = block_meta;
 
+  if (auto direct_bb = DynamicCast<DirectBasicBlock *>(block)) {
+    edge_frag->edge.kind = EDGE_KIND_DIRECT;
+    GenerateDirectEdgeCode(direct_bb, pred_frag->attr.block_meta,
+                           block_meta, edge_frag);
+
   // If this is the target of an indirect CFI (call, jmp, ret) then make sure
   // that the edge code shares the same partition as the predecessor so that
   // virtual registers can be spread across both.
-  if (!IsA<DirectBasicBlock *>(block)) {
+  } else {
+    edge_frag->edge.kind = EDGE_KIND_INDIRECT;
     edge_frag->partition.Union(edge_frag, pred_frag);
   }
 
@@ -368,12 +382,12 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
                                Fragment *target_frag,
                                ControlFlowInstruction *cfi) {
   CodeFragment *ret_frag(frag);
-  bool makes_stack_valid = cfi->IsFunctionCall() || cfi->IsFunctionReturn() ||
+  auto makes_stack_valid = cfi->IsFunctionCall() || cfi->IsFunctionReturn() ||
                            cfi->IsInterruptReturn();
-  bool targets_edge_code = false;
-  bool can_add_to_partition = true;
+  auto targets_edge_code = false;
+  auto can_add_to_partition = true;
   if (auto target_cfrag = DynamicCast<CodeFragment *>(target_frag)) {
-    targets_edge_code = target_cfrag->attr.is_edge_code;
+    targets_edge_code = EDGE_KIND_INVALID != target_cfrag->edge.kind;
   }
   if (frag->attr.has_native_instrs) {
     // This CFI is not compatible with the current fragment because this CFI
@@ -426,7 +440,7 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
   ret_frag->attr.can_add_to_partition = can_add_to_partition;
   ret_frag = Append(frags, block, ret_frag, cfi);
   if (targets_edge_code) {
-    ret_frag->attr.branches_to_edge_code = true;
+    ret_frag->edge.branches_to_edge_code = true;
   }
   return ret_frag;
 }

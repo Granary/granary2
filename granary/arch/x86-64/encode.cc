@@ -57,8 +57,13 @@ static void InitEncoderInstruction(const Instruction *instr,
 // Encode a branch displacement operand.
 static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
                          CachePC next_pc) {
-  auto target = op.branch_target.as_int;
+  intptr_t target = 0;
   auto next_addr = reinterpret_cast<intptr_t>(next_pc);
+  if (op.is_annot_encoded_pc) {
+    target = static_cast<intptr_t>(op.ret_address->data);
+  } else {
+    target = op.branch_target.as_int;
+  }
   xedo->type = op.type;
   xedo->width = 32;
   xedo->u.brdisp = static_cast<int32_t>(target - next_addr);
@@ -130,51 +135,46 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
 }
 
 // Encode a pointer memory operand.
-static void EncodePtr(const Instruction *, const Operand &op,
-                      xed_encoder_operand_t *xedo, CachePC next_pc) {
+static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
+                      CachePC next_pc) {
   xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
 
-  // Absolute address, or segment offset.
-  if (XED_REG_INVALID != op.segment) {
+  // Segment offset.
+  if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
     xedo->u.mem.disp.displacement = op.addr.as_uint;
-    if (XED_REG_DS == op.segment) {  // 32-bit, zero-extended absolute address.
-      xedo->u.mem.disp.displacement_width = arch::ADDRESS_WIDTH_BITS;
-
-      auto high_32 = op.addr.as_uint >> 32;
-      auto sign_bit_32 = 1UL & (op.addr.as_uint >> 31);
-
-      if (0x0FFFFFFFFULL == high_32) {
-        if (sign_bit_32) {
-          xedo->u.mem.disp.displacement_width = 32;
-        }
-      } else if (!high_32) {
-        if (!sign_bit_32) {
-          xedo->u.mem.disp.displacement_width = 32;
-        }
-      }
-
-      if (32 == xedo->u.mem.disp.displacement_width) {
-        xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
-      }
-
-    } else {  // Offset from a segment register.
-      xedo->u.mem.disp.displacement &= 0x0FFFFFFULL;  // 24 bit mask.
-      xedo->u.mem.disp.displacement_width = 32;
-      xedo->u.mem.seg = op.segment;
-    }
+    xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
+    xedo->u.mem.disp.displacement_width = 32;
+    xedo->u.mem.seg = op.segment;
 
   // RIP-relative address.
-  } else {
+  } else  if (op.is_annot_encoded_pc) {
+    auto addr = static_cast<intptr_t>(op.ret_address->data);
     auto next_addr = reinterpret_cast<intptr_t>(next_pc);
-    intptr_t mem_addr = 0;
-    if (op.is_annot_encoded_pc) {
-      mem_addr = static_cast<intptr_t>(op.ret_address->data);
-    } else {
-      mem_addr = op.addr.as_int;
-    }
-    xedo->u.mem.disp.displacement = static_cast<uint32_t>(mem_addr - next_addr);
+    xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;
+
+  // Hard-coded address.
+  } else {
+    auto mem_addr = op.addr.as_uint;
+    xedo->u.mem.disp.displacement = mem_addr;
+    xedo->u.mem.disp.displacement_width = arch::ADDRESS_WIDTH_BITS;
+
+    auto high_32 = mem_addr >> 32;
+    auto sign_bit_32 = 1UL & (mem_addr >> 31);
+
+    if (0x0FFFFFFFFULL == high_32) {
+      if (sign_bit_32) {
+        xedo->u.mem.disp.displacement_width = 32;
+      }
+    } else if (!high_32) {
+      if (!sign_bit_32) {
+        xedo->u.mem.disp.displacement_width = 32;
+      }
+    }
+    if (32 == xedo->u.mem.disp.displacement_width) {
+      xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
+    }
   }
 }
 
@@ -230,7 +230,7 @@ static void EncodeOperands(const Instruction *instr,
         EncodeMem(op, &xedo);
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
-        EncodePtr(instr, op, &xedo, pc + instr->encoded_length);
+        EncodePtr(op, &xedo, pc + instr->encoded_length);
         break;
       case XED_ENCODER_OPERAND_TYPE_INVALID:
       default:

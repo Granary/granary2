@@ -9,10 +9,11 @@
 
 #include "granary/cfg/basic_block.h"
 
-#include "granary/cache.h"
 #include "granary/code/compile.h"
+#include "granary/code/edge.h"
 #include "granary/code/metadata.h"
 
+#include "granary/cache.h"
 #include "granary/context.h"
 
 GRANARY_DEFINE_string(tools, "",
@@ -77,6 +78,11 @@ void Context::RegisterMetaData(const MetaDataDescription *desc) {
   metadata_manager.Register(const_cast<MetaDataDescription *>(desc));
 }
 
+// Compile some code into one of the code caches.
+void Context::Compile(LocalControlFlowGraph *cfg) {
+  granary::Compile(cfg, &edge_code_cache);
+}
+
 // Allocate instances of the tools that will be used to instrument blocks.
 Tool *Context::AllocateTools(void) {
   return tool_manager.AllocateTools();
@@ -85,6 +91,14 @@ Tool *Context::AllocateTools(void) {
 // Free the allocated tools.
 void Context::FreeTools(Tool *tools) {
   tool_manager.FreeTools(tools);
+}
+
+// Allocate a new code cache.
+//
+// Note: This should be a lightweight operation as it is usually invoked
+//       whilst fine-grained locks are held.
+CodeCacheInterface *Context::AllocateCodeCache(void) {
+  return new CodeCache();
 }
 
 // Flush an entire code cache.
@@ -98,17 +112,14 @@ void Context::FlushCodeCache(CodeCacheInterface *cache) {
   GRANARY_UNUSED(cache);
 }
 
-// Allocate a new code cache.
-//
-// Note: This should be a lightweight operation as it is usually invoked
-//       whilst fine-grained locks are held.
-CodeCacheInterface *Context::AllocateCodeCache(void) {
-  return new CodeCache();
-}
 
-// Compile some code into one of the code caches.
-void Context::Compile(LocalControlFlowGraph *cfg) {
-  granary::Compile(cfg, &edge_code_cache);
+// Allocates a direct edge data structure, as well as the code needed to
+// back the direct edge.
+DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block,
+                                        BlockMetaData *dest_block) {
+  return new DirectEdge(
+      this, source_block, dest_block,
+      edge_code_cache.AllocateBlock(arch::EDGE_CODE_SIZE_BYTES));
 }
 
 }  // namespace granary

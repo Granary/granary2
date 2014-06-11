@@ -78,8 +78,8 @@ PartitionInfo::PartitionInfo(int id_)
       GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
       analyze_stack_frame(true),
       min_frame_offset(0),
-      is_edge_code(false),
-      is_indirect_edge_code(false),
+      edge(nullptr),
+      edge_patch_instruction(nullptr),
       entry_frag(nullptr) {}
 
 // Clear out the number of usage count of registers in this partition.
@@ -150,9 +150,7 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
 
 
 CodeAttributes::CodeAttributes(void)
-    : is_edge_code(false),
-      branches_to_edge_code(false),
-      can_add_to_partition(true),
+    : can_add_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
       has_flag_split_hint(false),

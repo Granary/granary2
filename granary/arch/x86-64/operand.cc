@@ -256,11 +256,12 @@ void Operand::EncodeToString(OperandString *str) const {
 
     case XED_ENCODER_OPERAND_TYPE_IMM0:
     case XED_ENCODER_OPERAND_TYPE_IMM1:
-      str->Format("%lu", imm.as_uint);
-      break;
-
     case XED_ENCODER_OPERAND_TYPE_SIMM0:
-      str->Format("%ld", imm.as_int);
+      if (imm.as_int >= 0) {
+        str->UpdateFormat("0x%lx", imm.as_uint);
+      } else {
+        str->UpdateFormat("-0x%lx", -imm.as_int);
+      }
       break;
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
@@ -270,7 +271,11 @@ void Operand::EncodeToString(OperandString *str) const {
       if (is_annot_encoded_pc) {
         str->UpdateFormat("[return address]");
       } else {
-        str->UpdateFormat("[0x%lx]", addr.as_uint);
+        if (addr.as_int >= 0) {
+          str->UpdateFormat("[0x%lx]", addr.as_uint);
+        } else {
+          str->UpdateFormat("[-0x%lx]", -addr.as_int);
+        }
       }
       break;
   }

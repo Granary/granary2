@@ -482,7 +482,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
-    if (code_pred->attr.branches_to_edge_code &&
+    if (code_pred->edge.branches_to_edge_code &&
         succ != pred->successors[FRAG_SUCC_BRANCH]) {
       delete comp;  // E.g. fall-through after an indirect CALL.
       return;
@@ -565,7 +565,7 @@ static void AddCompensatingFragments(FragmentList *frags) {
       if (code_frag->attr.is_compensation_code) {
         continue;
       } else if (code_frag->branch_instr &&
-                 code_frag->attr.branches_to_edge_code &&
+                 code_frag->edge.branches_to_edge_code &&
                  code_frag->branch_instr->HasIndirectTarget()) {
         ShareIndirectCFIReg(code_frag);
       }

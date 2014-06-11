@@ -49,7 +49,7 @@ granary::BlockMetaData *SimpleEncoderTest::AllocateMeta(granary::AppPC pc) {
 
 granary::CachePC SimpleEncoderTest::InstrumentAndEncode(granary::AppPC pc) {
   using namespace granary;
-  LocalControlFlowGraph cfg;
+  LocalControlFlowGraph cfg(&context);
 
   auto meta = AllocateMeta(pc);
 

@@ -332,7 +332,7 @@ class InlineAssemblyParser {
       cfg->AddBlock(bb);
       new_instr.reset(new ControlFlowInstruction(&data, bb));
     } else if (data.IsFunctionReturn()) {
-      auto bb = new ReturnBasicBlock(nullptr /* no meta-data */);
+      auto bb = new ReturnBasicBlock(cfg, nullptr /* no meta-data */);
       cfg->AddBlock(bb);
       new_instr.reset(new ControlFlowInstruction(&data, bb));
     } else {

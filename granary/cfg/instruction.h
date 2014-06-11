@@ -124,6 +124,11 @@ class Instruction {
   // Used to put instructions into lists.
   GRANARY_INTERNAL_DEFINITION ListHead list;
 
+  GRANARY_INTERNAL_DEFINITION
+  CachePC EncodedPC(void) const {
+    return cache_pc;
+  }
+
  protected:
   // Where has this instruction been encoded?
   GRANARY_INTERNAL_DEFINITION CachePC cache_pc;
@@ -172,6 +177,9 @@ enum InstructionAnnotation {
   // A special label that refers to the location of a return address after
   // a function call instruction. This is primarily used during late mangling
   // of indirect call instructions.
+  //
+  // When compiling / encoding instructions, the value of this annotation
+  // becomes the address at which this annotation is logically encoded.
   IA_RETURN_ADDRESS,
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
