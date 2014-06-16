@@ -12,34 +12,10 @@
 #include "granary/arch/x86-64/builder.h"
 #include "granary/arch/x86-64/xed.h"
 
+#include "granary/cache.h"
 #include "granary/breakpoint.h"
 
 namespace granary {
-
-// Represents an allocated address that is nearby the code cache and can be used
-// to indirectly resolve the problem of PC-relative targets being too far away.
-//
-// TODO(pag): Need a mechanism of garbage collecting these on cache flushes.
-union NativeAddress {
- public:
-  NativeAddress(PC pc_)
-      : pc(pc_) {}
-
-  const void *addr;
-  PC pc;
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(NativeAddress, {
-    SHARED = true,
-    ALIGNMENT = 8
-  })
-
- private:
-  NativeAddress(void) = delete;
-} __attribute__((packed));
-
-static_assert(sizeof(NativeAddress) == sizeof(void *),
-    "Invalid packing of `union NativeAddress`. Must be pointer-sized.");
-
 namespace {
 
 // Instruction iclass reversers for conditional branches, indexed by
@@ -94,8 +70,10 @@ CFIBuilder * const kConditionalCFIBuilders[] = {
 // Relativize a conditional branch by turning it into an indirect jump through
 // a `NativeAddress`, then add instructions around the new indirect jump to
 // jump around the indirect jump when the original condition is not satisfied.
-static void RelativizeConditionalBranch(ControlFlowInstruction *cfi,
-                                        arch::Instruction *instr, PC target_pc) {
+static void RelativizeConditionalBranch(CacheMetaData *meta,
+                                        ControlFlowInstruction *cfi,
+                                        arch::Instruction *instr,
+                                        PC target_pc) {
   auto iclass = kReversedConditionalCFIs[instr->iclass - XED_ICLASS_JB];
   auto iclass_builder = kConditionalCFIBuilders[iclass - XED_ICLASS_JB];
 
@@ -113,7 +91,8 @@ static void RelativizeConditionalBranch(ControlFlowInstruction *cfi,
   cfi->UnsafeInsertAfter(label);
 
   // Overwrite the conditional branch with an indirect JMP.
-  JMP_MEMv(instr, new NativeAddress(target_pc));
+  auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+  JMP_MEMv(instr, &(addr_mloc->addr));
 }
 
 // Relativize a loop instruction. This turns an instruction like `jecxz <foo>`
@@ -121,7 +100,7 @@ static void RelativizeConditionalBranch(ControlFlowInstruction *cfi,
 //                    jmp   <try_loop>
 //        do_loop:    jmp   <foo>
 //        try_loop:   loop  <do_loop>
-static void RelativizeLoop(ControlFlowInstruction *cfi,
+static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
                            arch::Instruction *instr,
                            PC target_pc, bool target_is_far_away) {
   arch::Instruction jmp_try_loop;
@@ -132,7 +111,8 @@ static void RelativizeLoop(ControlFlowInstruction *cfi,
 
   arch::JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
   if (target_is_far_away) {
-    arch::JMP_MEMv(instr, new NativeAddress(target_pc));
+    auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+    arch::JMP_MEMv(instr, &(addr_mloc->addr));
   } else {
     arch::JMP_RELBRd<PC>(instr, target_pc);
   }
@@ -149,28 +129,31 @@ static void RelativizeLoop(ControlFlowInstruction *cfi,
 }  // namespace
 
 // Relativize a direct control-flow instruction.
-void RelativizeDirectCFI(ControlFlowInstruction *cfi, arch::Instruction *instr,
-                         PC target_pc, bool target_is_far_away) {
+void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
+                         arch::Instruction *instr, PC target_pc,
+                         bool target_is_far_away) {
   auto iclass = instr->iclass;
   if (XED_ICLASS_CALL_NEAR == iclass) {
     if (target_is_far_away) {
-      arch::CALL_NEAR_MEMv(instr, new NativeAddress(target_pc));
+      auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+      arch::CALL_NEAR_MEMv(instr, &(addr_mloc->addr));
     }
   } else if (XED_ICLASS_JMP == iclass) {
     if (target_is_far_away) {
-      arch::JMP_MEMv(instr, new NativeAddress(target_pc));
+      auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+      arch::JMP_MEMv(instr, &(addr_mloc->addr));
     }
 
   // Always need to mangle this.
   } else if (XED_ICLASS_JRCXZ == iclass ||
              (XED_ICLASS_LOOP <= iclass && XED_ICLASS_LOOPNE >= iclass)) {
-    RelativizeLoop(cfi, instr, target_pc, target_is_far_away);
+    RelativizeLoop(meta, cfi, instr, target_pc, target_is_far_away);
 
   // Conditional jumps. We translate these by converting them into a negated
   // conditional jump around an indirect jump to the far-away instruction.
   } else if (instr->IsConditionalJump()) {
     if (target_is_far_away) {
-      RelativizeConditionalBranch(cfi, instr, target_pc);
+      RelativizeConditionalBranch(meta, cfi, instr, target_pc);
     }
   } else {
     GRANARY_ASSERT(false);
@@ -185,7 +168,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   arch::Operand op;
   auto ret_address_reg = block->AllocateVirtualRegister();
   auto decoded_pc = cfi->instruction.decoded_pc;
-  op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
+  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
   op.ret_address = ret_address;

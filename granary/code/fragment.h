@@ -100,6 +100,8 @@ struct EdgeInfo {
         branches_to_edge_code(false),
         direct(nullptr) {}
 
+  ~EdgeInfo(void);
+
   // Should this partition be allocated in some direct edge code location?
   EdgeKind kind;
 
@@ -116,11 +118,6 @@ class PartitionInfo {
  public:
   explicit PartitionInfo(int id_);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionInfo, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-
   // Clear out the number of usage count of registers in this partition.
   void ClearGPRUseCounters(void);
 
@@ -130,6 +127,11 @@ class PartitionInfo {
   // Returns the most preferred arch GPR for use by partition-local register
   // scheduling.
   int PreferredGPRNum(void);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionInfo, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
 
   const int id;
 

@@ -10,11 +10,6 @@
 #include "granary/metadata.h"
 
 namespace granary {
-
-// Initialize Granary's internal translation cache meta-data.
-CacheMetaData::CacheMetaData(void)
-    : cache_pc(nullptr) {}
-
 namespace {
 // The next meta-data description ID that we can assign. Every meta-data
 // description has a unique, global ID.

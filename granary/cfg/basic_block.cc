@@ -7,8 +7,9 @@
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
 
-#include "granary/module.h"
-#include "granary/util.h"
+#include "granary/cache.h"  // For `CacheMetaData`.
+#include "granary/module.h"  // For `ModuleMetaData`.
+#include "granary/util.h"  // For `GetMetaData`.
 
 namespace granary {
 

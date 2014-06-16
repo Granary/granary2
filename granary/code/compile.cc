@@ -246,7 +246,7 @@ static void Encode(FragmentList *frags, CodeCacheInterface *block_cache,
                                      result.max_edge_pc);
     ConditionalEncode(frags, [] (const Fragment *frag) {
       const auto partition = frag->partition.Value();
-      return !partition->edge && EDGE_KIND_DIRECT == partition->edge->kind;
+      return partition->edge && EDGE_KIND_DIRECT == partition->edge->kind;
     });
   }
   if (auto cache_code_end = cache_code + result.block_size) {

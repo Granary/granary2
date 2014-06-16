@@ -14,6 +14,10 @@
 
 #include "granary/code/allocate.h"
 
+#ifdef GRANARY_INTERNAL
+# include "metadata.h"
+#endif
+
 namespace granary {
 
 // Forward declaration.
@@ -102,6 +106,65 @@ class CodeCache : public CodeCacheInterface {
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
 };
+
+#ifdef GRANARY_INTERNAL
+// Some architectures cannot encode arbitrarily (i.e. beyond 24- or 32-bits
+// of relative displacement) far jumps; however, they sometimes can encode far
+// jumps that use 32- or even 64-bit relative or absolute memory locations,
+// where the jump target is first loaded from memory.
+class NativeAddress {
+ public:
+  inline NativeAddress(PC pc_, NativeAddress *&next_)
+      : pc(pc_),
+        next(next_) {
+    next_ = this;
+  }
+
+  // Address that a far away jump or call will target.
+  union {
+    const void *addr;
+    PC pc;
+  } __attribute__((packed));
+
+  // Next far away address in this block.
+  NativeAddress *next;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(NativeAddress, {
+    SHARED = true,
+    ALIGNMENT = 8
+  })
+
+ private:
+  NativeAddress(void) = delete;
+} __attribute__((packed));
+
+// Meta-data that Granary maintains about all basic blocks that are committed to
+// the code cache. This is meta-data is private to Granary and therefore not
+// exposed (directly) to tools.
+class CacheMetaData : public MutableMetaData<CacheMetaData> {
+ public:
+  CacheMetaData(void);
+  ~CacheMetaData(void);
+
+  // Where this block is located in the code cache.
+  volatile CachePC cache_pc;
+
+  // Far-away code addresses referenced by code in this block.
+  NativeAddress *native_addresses;
+
+  // TODO(pag): Encoded size?
+  // TODO(pag): Interrupt delay regions? Again: make this a command-line
+  //            option, that registers separate meta-data.
+  // TODO(pag): Cache PCs to native PCs? If doing this, perhaps make it a
+  //            separate kind of meta-data that is only registered if a certain
+  //            command-line option is specified. That way, the overhead of
+  //            recording the extra info is reduced. Also, consider a delta
+  //            encoding, (e.g. https://docs.google.com/document/d/
+  //            1lyPIbmsYbXnpNj57a261hgOYVpNRcgydurVQIyZOz_o/pub).
+  // TODO(pag): Things that are kernel-specific (e.g. exc. table, delay regions)
+  //            should go in their own cache data structures.
+};
+#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 

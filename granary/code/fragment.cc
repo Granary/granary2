@@ -7,6 +7,7 @@
 #include "granary/cfg/iterator.h"
 #include "granary/cfg/operand.h"
 
+#include "granary/code/edge.h"
 #include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
@@ -65,6 +66,12 @@ void SpillInfo::FreeSpillSlot(int slot) {
   GRANARY_ASSERT(num_slots > slot);
   GRANARY_ASSERT(used_slots.Get(slot));
   used_slots.Set(slot, false);
+}
+
+EdgeInfo::~EdgeInfo(void) {
+  if (EDGE_KIND_DIRECT == kind) {
+    delete direct;
+  }
 }
 
 PartitionInfo::PartitionInfo(int id_)

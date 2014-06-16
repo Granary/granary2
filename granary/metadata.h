@@ -75,32 +75,6 @@ class UnifiableMetaData : public ToolMetaData<T> {
   UnificationStatus CanUnifyWith(const T *that) const;
 };
 
-#ifdef GRANARY_INTERNAL
-// Meta-data that Granary maintains about all basic blocks that are committed to
-// the code cache. This is meta-data is private to Granary and therefore not
-// exposed (directly) to tools.
-struct CacheMetaData : public MutableMetaData<CacheMetaData> {
-
-  // Initialize Granary's internal translation cache meta-data.
-  CacheMetaData(void);
-
-  // Where this block is located in the code cache.
-  CachePC cache_pc;
-
-  // TODO(pag): Encoded size?
-  // TODO(pag): Interrupt delay regions? Again: make this a command-line
-  //            option, that registers separate meta-data.
-  // TODO(pag): Cache PCs to native PCs? If doing this, perhaps make it a
-  //            separate kind of meta-data that is only registered if a certain
-  //            command-line option is specified. That way, the overhead of
-  //            recording the extra info is reduced. Also, consider a delta
-  //            encoding, (e.g. https://docs.google.com/document/d/
-  //            1lyPIbmsYbXnpNj57a261hgOYVpNRcgydurVQIyZOz_o/pub).
-  // TODO(pag): Things that are kernel-specific (e.g. exc. table, delay regions)
-  //            should go in their own cache data structures.
-};
-#endif  // GRANARY_INTERNAL
-
 // Describes whether some type is an indexable meta-data type.
 template <typename T>
 struct IsIndexableMetaData {
@@ -267,7 +241,6 @@ MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
     nullptr,
     &(detail::CanUnify<T>)
 };
-
 
 // Meta-data about a basic block.
 class BlockMetaData {

@@ -14,14 +14,16 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"
 
-#include "granary/cache.h"
+#include "granary/cache.h"  // For `CacheMetaData`.
+#include "granary/util.h"  // For `GetMetaData`.
 
 namespace granary {
 
 // Relativize a direct control-flow instruction.
 //
 // Note: This has an architecture-specific implementation.
-extern void RelativizeDirectCFI(ControlFlowInstruction *cfi,
+extern void RelativizeDirectCFI(CacheMetaData *meta,
+                                ControlFlowInstruction *cfi,
                                 arch::Instruction *instr, PC target_pc,
                                 bool target_is_far_away);
 
@@ -118,7 +120,8 @@ class BlockMangler {
       // instructions must always be relativized.
       if (!cfi->HasIndirectTarget()) {
         auto target_pc = target_block->StartAppPC();
-        RelativizeDirectCFI(cfi, &(cfi->instruction), target_pc,
+        RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), cfi,
+                            &(cfi->instruction), target_pc,
                             AddressNeedsRelativizing(target_pc));
       } else {
         MangleIndirectCFI(block, cfi);
@@ -149,11 +152,6 @@ class BlockMangler {
       MangleCFI(cfi);
     } else {
       RelativizeMemOp(instr);
-    }
-
-    auto &ainstr(instr->instruction);
-    if (ainstr.WritesToStackPointer()) {
-
     }
   }
 

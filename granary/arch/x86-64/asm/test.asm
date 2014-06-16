@@ -22,7 +22,36 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
-
+push   %rbp
+mov    %rsp,%rbp
+sub    $0x20,%rsp
+mov    %rdi,-0x8(%rbp)
+callq  .Lgranary_arch_Init
+mov    -0x8(%rbp),%rdi
+callq  .LLoadClients
+lea    0x3564cf(%rip),%rdi
+movslq 0x356498(%rip),%rax
+imul   $0x640,%rax,%rax
+add    %rax,%rdi
+mov    %rdi,-0x10(%rbp)
+mov    -0x10(%rbp),%rdi
+callq  .LContainer_Environment_Construct
+lea    0x387da(%rip),%rdi
+callq  .LUnsafeCast
+mov    %rax,-0x18(%rbp)
+mov    -0x10(%rbp),%rdi
+callq  .LContainer_Access
+mov     %rax,%rdi
+call    *%rdi;
+callq  .LEnvironment_Setup
+mov    -0x10(%rbp),%rdi
+callq  .LContainer_Access
+mov    -0x18(%rbp),%rsi
+mov    %rax,%rdi
+callq  .LEnvironment_AttachToAppPC
+add    $0x20,%rsp
+pop    %rbp
+retq
 #if 0
     //movslq 0x7db9cb, %rax;
     mov 0xABCAFE0000, %rax;
@@ -84,37 +113,7 @@ DEFINE_FUNC(granary_test_mangle)
     movsw;
     retq */
 
-push   %rbp
-mov    %rsp,%rbp
-sub    $0x20,%rsp
-mov    %rdi,-0x8(%rbp)
-callq  .Lgranary_arch_Init
-mov    -0x8(%rbp),%rdi
-callq  .LLoadClients
-lea    0x3564cf(%rip),%rdi
-movslq 0x356498(%rip),%rax
-imul   $0x640,%rax,%rax
-add    %rax,%rdi
-mov    %rdi,-0x10(%rbp)
-mov    -0x10(%rbp),%rdi
-callq  .LContainer_Environment_Construct
-lea    0x387da(%rip),%rdi
-callq  .LUnsafeCast
-mov    %rax,-0x18(%rbp)
-mov    -0x10(%rbp),%rdi
-callq  .LContainer_Access
-mov     %rax,%rdi
-call    *%rdi;
-callq  .LEnvironment_Setup
-mov    -0x10(%rbp),%rdi
-callq  .LContainer_Access
-mov    -0x18(%rbp),%rsi
-mov    %rax,%rdi
-callq  .LEnvironment_AttachToAppPC
-add    $0x20,%rsp
-pop    %rbp
-/*jmp *%rbx; */
-retq
+
 
     /*pushfw;
     popfw;

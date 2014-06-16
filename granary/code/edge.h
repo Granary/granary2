@@ -63,7 +63,7 @@ class DirectEdge {
   DirectEdge(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectEdge);
-};
+}  __attribute__((packed));
 
 static_assert(0 == offsetof(DirectEdge, cached_target),
     "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "

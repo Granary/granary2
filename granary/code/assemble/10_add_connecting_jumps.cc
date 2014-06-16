@@ -39,6 +39,11 @@ static Fragment **VisitOrderedFragment(Fragment *succ, Fragment **next_ptr) {
 
 // Returns true if `instr` branches to in-edge code, or might branch to in-edge
 // code.
+//
+// Note: We check by blocks instead of by instruction type because the indirect
+//       branch instruction itself might have been converted into a NO-OP by
+//       an earlier mangling phase. This happens because if we have in-edge
+//       code, then the in-edge code itself implements the indirect branch.
 static bool BranchesToIndirectEdge(NativeInstruction *instr) {
   if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
     auto target_block = cfi->TargetBlock();
@@ -60,7 +65,7 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
       partition->edge = &(cfrag->edge);
     }
     if (cfrag->edge.branches_to_edge_code && cfrag->branch_instr &&
-        !cfrag->branch_instr->HasIndirectTarget()) {
+        !BranchesToIndirectEdge(cfrag->branch_instr)) {
       auto branch_target_partition = branch_target_frag->partition.Value();
       GRANARY_ASSERT(partition != branch_target_partition);
       branch_target_partition->edge_patch_instruction = cfrag->branch_instr;

@@ -72,4 +72,19 @@ void CodeCache::EndTransaction(CachePC begin, CachePC end) {
   ProtectRange(begin, end, MemoryProtection::EXECUTABLE);
 }
 
+// Initialize Granary's internal translation cache meta-data.
+CacheMetaData::CacheMetaData(void)
+    : cache_pc(nullptr),
+      native_addresses(nullptr) {}
+
+// Clean up the cache meta-data, and any data structures tied in to the cached
+// code.
+CacheMetaData::~CacheMetaData(void) {
+  NativeAddress *next_addr(nullptr);
+  for (auto addr = native_addresses; addr; addr = next_addr) {
+    next_addr = addr->next;
+    delete addr;
+  }
+}
+
 }  // namespace granary
