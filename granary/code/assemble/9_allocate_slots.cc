@@ -73,7 +73,7 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
         for (auto succ : frag->successors) {
           if (succ) {
             if (succ->partition != frag->partition &&
-                !code_frag->edge.branches_to_edge_code) {
+                !code_frag->attr.branches_to_edge_code) {
               partition->analyze_stack_frame = false;
             }
             has_succ = true;

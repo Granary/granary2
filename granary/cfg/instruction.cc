@@ -133,6 +133,12 @@ NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
 
 NativeInstruction::~NativeInstruction(void) {}
 
+// Return the address in the native code from which this instruction was
+// decoded.
+AppPC NativeInstruction::DecodedPC(void) const {
+  return instruction.DecodedPC();
+}
+
 // Get the length of the instruction.
 int NativeInstruction::DecodedLength(void) const {
   return instruction.DecodedLength();

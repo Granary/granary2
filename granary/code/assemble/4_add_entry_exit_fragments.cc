@@ -203,26 +203,26 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
+
   auto curr_code = DynamicCast<CodeFragment *>(curr);
-  if (curr_code) {
-    if (!curr_code->attr.can_add_to_partition) return false;
-  }
-  if (IsA<ExitFragment *>(next)) return true;
-  if (IsA<PartitionEntryFragment *>(next)) {
-    if (curr_code && curr_code->edge.branches_to_edge_code) {
-      return false;  // This is a fall-through.
+  if (curr_code && !curr_code->attr.can_add_to_partition) return false;
+
+  if (auto next_exit = DynamicCast<ExitFragment *>(next)) {
+    return EDGE_KIND_DIRECT != next_exit->edge.kind;
+
+  } else if (IsA<PartitionEntryFragment *>(next)) {
+    // This is a fall-through from a function call, e.g. indirect function call.
+    // In the case of an indirect function call, we don't want to place a
+    // parition exit on its fall-through edge becuase the partition exiting
+    // happens at the target of the call.
+    if (curr_code && curr_code->attr.branches_to_edge_code) {
+      return false;
     }
     return true;
   }
   if (curr->partition == next->partition) return false;
-  if (auto next_code = DynamicCast<CodeFragment *>(next)) {
-    if (!next_code->attr.can_add_to_partition) {
-      if (curr_code && curr_code->edge.branches_to_edge_code &&
-          curr_code->branch_instr->HasIndirectTarget()) {
-        return false;
-      }
-      return true;
-    }
+  if (IsA<CodeFragment *>(next)) {
+    return !(curr_code && curr_code->attr.branches_to_edge_code);
   }
   return false;
 }

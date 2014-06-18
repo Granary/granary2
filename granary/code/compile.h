@@ -15,7 +15,7 @@ namespace granary {
 class CodeCacheInterface;
 
 // Compile some instrumented code.
-void Compile(LocalControlFlowGraph *cfg, CodeCacheInterface *edge_cache);
+void Compile(LocalControlFlowGraph *cfg);
 
 }  // namespace granary
 

@@ -81,18 +81,18 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
   // Template typename list for arguments.
   if (num_explicit_ops) {
     std::cout << "template <";
+    auto sep = "";
     for (auto i = 0; i < num_explicit_ops; ++i) {
-      if (0 < i) {
-        std::cout << ", ";
-      }
-      std::cout << "typename A" << i;
+      std::cout << sep << "typename A" << i;
+      sep = ", ";
     }
     std::cout << ">\n";
   }
 
   // Function name, and beginning of arg list.
+  auto iform = xed_inst_iform_enum(instr);
   std::cout << "inline static void "
-            << xed_iform_enum_t2str(xed_inst_iform_enum(instr))
+            << xed_iform_enum_t2str(iform)
             << "(Instruction *instr";
 
   // Arg list.
@@ -104,7 +104,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
             << INDENT << "BuildInstruction(instr, XED_ICLASS_"
                       << xed_iclass_enum_t2str(xed_inst_iclass(instr))
                       << ", XED_IFORM_"
-                      << xed_iform_enum_t2str(xed_inst_iform_enum(instr))
+                      << xed_iform_enum_t2str(iform)
                       << ", XED_CATEGORY_"
                       << xed_category_enum_t2str(xed_inst_category(instr))
                       << ");\n";
@@ -114,7 +114,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
     auto op = xed_inst_operand(instr, i);
     if (XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op)) {
       GenerateExplicitOperandBuilder(info, instr, op, explicit_op++);
-    } else if (i < max_num_explicit_ops) {
+    } else if (is_ambiguous_arg[iform][i]) {
       GenerateImplicitOperandBuilder(info, instr, op);
     } else {
       break;

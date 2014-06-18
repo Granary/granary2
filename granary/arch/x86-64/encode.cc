@@ -138,6 +138,7 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
 static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
                       CachePC next_pc) {
   xedo->type = XED_ENCODER_OPERAND_TYPE_MEM;
+  auto next_addr = reinterpret_cast<intptr_t>(next_pc);
 
   // Segment offset.
   if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
@@ -149,7 +150,6 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
   // RIP-relative address.
   } else  if (op.is_annot_encoded_pc) {
     auto addr = static_cast<intptr_t>(op.ret_address->data);
-    auto next_addr = reinterpret_cast<intptr_t>(next_pc);
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;
@@ -174,6 +174,15 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     }
     if (32 == xedo->u.mem.disp.displacement_width) {
       xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
+
+    // Convert into a RIP-relative displacement when it fits.
+    } else if (64 == xedo->u.mem.disp.displacement_width) {
+      auto diff = op.addr.as_int - next_addr;
+      if (32 >= ImmediateWidthBits(diff)) {
+        xedo->u.mem.disp.displacement = static_cast<uint32_t>(diff);
+        xedo->u.mem.disp.displacement_width = 32;
+        xedo->u.mem.base = XED_REG_RIP;
+      }
     }
   }
 }

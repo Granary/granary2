@@ -26,7 +26,10 @@ class DirectEdge {
   DirectEdge(ContextInterface *context_, const BlockMetaData *source_meta_,
              BlockMetaData *dest_meta_, CachePC edge_code_);
 
-  // The final resolved cache address of the block.
+  // The code targeted by this edge code. Initially, this takes on the value
+  // of some edge code, and if profiling of edges isn't enabled, then it later
+  // matches up with the `cache_pc` field of `CacheMetaData`. If profiling is
+  // enabled then it remains unchanged, and always points to edge code.
   CachePC cached_target;
 
   // The number of executions.
@@ -45,7 +48,9 @@ class DirectEdge {
   const BlockMetaData * const source_meta;
   BlockMetaData * const dest_meta;
 
-  // The code that contains this
+  // The stub code in an edge code cache that is used to context switch
+  // into Granary and find/decode/instrument the block associated with
+  // `dest_meta`.
   const CachePC edge_code;
 
   // Instruction that is patched by this direct edge.

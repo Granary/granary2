@@ -8,6 +8,7 @@
 #endif
 
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
 #include "granary/base/pc.h"
 
 #include "granary/cache.h"
@@ -46,9 +47,6 @@ class ContextInterface {
   // Register some meta-data with Granary.
   virtual void RegisterMetaData(const MetaDataDescription *desc) = 0;
 
-  // Compile some code into one of the code caches.
-  virtual void Compile(LocalControlFlowGraph *cfg) = 0;
-
   // Allocate instances of the tools that will be used to instrument blocks.
   virtual Tool *AllocateTools(void) = 0;
 
@@ -70,8 +68,8 @@ class ContextInterface {
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block,
-                                         BlockMetaData *dest_block) = 0;
+  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block_meta,
+                                         BlockMetaData *dest_block_meta) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -80,10 +78,10 @@ class ContextInterface {
 // instructions as potentially faulting.
 class Context : public ContextInterface {
  public:
-  virtual ~Context(void) = default;
-
   // Initialize the Context.
   Context(void);
+
+  virtual ~Context(void);
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
@@ -93,9 +91,6 @@ class Context : public ContextInterface {
 
   // Register some meta-data with Granary.
   virtual void RegisterMetaData(const MetaDataDescription *desc) override;
-
-  // Compile some code into one of the code caches.
-  virtual void Compile(LocalControlFlowGraph *cfg) override;
 
   // Allocate instances of the tools that will be used to instrument blocks.
   virtual Tool *AllocateTools(void) override;
@@ -118,8 +113,9 @@ class Context : public ContextInterface {
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block,
-                                         BlockMetaData *dest_block) override;
+  virtual DirectEdge *AllocateDirectEdge(
+      const BlockMetaData *source_block_meta,
+      BlockMetaData *dest_block_meta) override;
 
  private:
 
@@ -136,6 +132,17 @@ class Context : public ContextInterface {
   // Manages all edge code allocated/understood by this environment. Code cache
   // code is managed on a per-module address range basis.
   CodeCache edge_code_cache;
+
+  // Pointer to the code that performs the flag saving and stack switching for
+  // direct edge code. This code is is the first step in entering Granary via
+  // a direct edge code stub.
+  CachePC direct_edge_entry_code;
+
+  // List of patched and unpatched direct edges, as well as a lock that
+  // protects both lists.
+  FineGrainedLock edge_list_lock;
+  DirectEdge *patched_edge_list;
+  DirectEdge *unpatched_edge_list;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

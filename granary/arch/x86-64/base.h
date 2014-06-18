@@ -16,10 +16,13 @@ namespace arch {
 enum {
   PAGE_SIZE_BYTES = 4096,
 
+  CODE_ALIGN_BYTES = 16,
+
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,
 
-  EDGE_CODE_SIZE_BYTES = 64,
+  // Upper bound on the size of edge-specific direct edge code.
+  EDGE_CODE_SIZE_BYTES = 48,
 
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,
@@ -30,8 +33,12 @@ enum {
   GPR_WIDTH_BYTES = ADDRESS_WIDTH_BYTES,
   GPR_WIDTH_BITS = ADDRESS_WIDTH_BITS,
 
-  // Excludes %rsp, excludes %rip.
+  // Excludes `RSP`, excludes `RIP`.
   NUM_GENERAL_PURPOSE_REGISTERS = 15,
+
+  // Maximum number of spill slots that can be used for spilling GPRs for use
+  // by virtual registers.
+  MAX_NUM_SPILL_SLOTS = 32,
 
   // Byte value with which to poison executable memory. This should normally
   // correspond to something that .

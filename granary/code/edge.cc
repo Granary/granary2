@@ -2,13 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/option.h"
-
 #include "granary/code/edge.h"
-
-GRANARY_DEFINE_bool(profile_direct_edges, true,
-    "Should all direct edge control-flow transfers be profiled before they "
-    "are patched? Default is yes.");
 
 namespace granary {
 

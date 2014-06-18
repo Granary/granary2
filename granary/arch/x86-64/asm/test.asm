@@ -29,6 +29,7 @@ mov    %rdi,-0x8(%rbp)
 callq  .Lgranary_arch_Init
 mov    -0x8(%rbp),%rdi
 callq  .LLoadClients
+1:
 lea    0x3564cf(%rip),%rdi
 movslq 0x356498(%rip),%rax
 imul   $0x640,%rax,%rax
@@ -38,11 +39,14 @@ mov    -0x10(%rbp),%rdi
 callq  .LContainer_Environment_Construct
 lea    0x387da(%rip),%rdi
 callq  .LUnsafeCast
+jz 1b
 mov    %rax,-0x18(%rbp)
 mov    -0x10(%rbp),%rdi
 callq  .LContainer_Access
+2:
 mov     %rax,%rdi
 call    *%rdi;
+jz 2b
 callq  .LEnvironment_Setup
 mov    -0x10(%rbp),%rdi
 callq  .LContainer_Access

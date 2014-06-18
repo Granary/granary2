@@ -31,7 +31,6 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
-        cache_pc(nullptr),
         transient_meta(0) {}
 
   virtual ~Instruction(void) = default;
@@ -40,18 +39,6 @@ class Instruction {
 
   Instruction *Next(void);
   Instruction *Previous(void);
-
-  // Return the encoded location of this instruction.
-  GRANARY_INTERNAL_DEFINITION
-  inline CachePC StartCachePC(void) const {
-    return cache_pc;
-  }
-
-  // Change the cache program counter.
-  GRANARY_INTERNAL_DEFINITION
-  inline void SetStartCachePC(CachePC cache_pc_) {
-    cache_pc = cache_pc_;
-  }
 
   // Get the transient, tool-specific instruction meta-data as an arbitrary,
   // `uintptr_t`-sized type.
@@ -124,15 +111,7 @@ class Instruction {
   // Used to put instructions into lists.
   GRANARY_INTERNAL_DEFINITION ListHead list;
 
-  GRANARY_INTERNAL_DEFINITION
-  CachePC EncodedPC(void) const {
-    return cache_pc;
-  }
-
  protected:
-  // Where has this instruction been encoded?
-  GRANARY_INTERNAL_DEFINITION CachePC cache_pc;
-
   // Transient, tool-specific meta-data stored in this instruction. The lifetime
   // of this meta-data is the length of a tool's instrumentation function (i.e. 
   // `InstrumentControlFlow`, `InstrumentBlocks`, or `InstrumentBlock`). This
@@ -177,6 +156,9 @@ enum InstructionAnnotation {
   // A special label that refers to the location of a return address after
   // a function call instruction. This is primarily used during late mangling
   // of indirect call instructions.
+  //
+  // When created, the value of this annotation is the address of the native
+  // code associated with this return address.
   //
   // When compiling / encoding instructions, the value of this annotation
   // becomes the address at which this annotation is logically encoded.
@@ -277,6 +259,17 @@ class NativeInstruction : public Instruction {
   GRANARY_INTERNAL_DEFINITION
   explicit NativeInstruction(const arch::Instruction *instruction_);
 
+  // Return the address in the native code from which this instruction was
+  // decoded.
+  //
+  // Note: Granary might expand a single instruction into many instructions. In
+  //       these cases, multiple instructions might have the same `DecodedPC`
+  //       value. In practice, the only instructions in such cases that will be
+  //       treated as application instructions (thus having a decoded PC) will
+  //       be those related to operations on the *explicit* operands of the
+  //       instruction.
+  AppPC DecodedPC(void) const;
+
   // Get the decoded length of the instruction. This is independent from the
   // length of the encoded instruction, which could be wildly different as a
   // single decoded instruction might map to many encoded instructions. If the
@@ -300,7 +293,12 @@ class NativeInstruction : public Instruction {
   bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
   bool HasIndirectTarget(void) const;
+
+  // Note: See `NativeInstruction::DecodedPC` for some details related to
+  //       how native instructions might be decoded into many instructions, not
+  //       all of which necessarily have a non-NULL `DecodedPC`.
   bool IsAppInstruction(void) const;
+
   GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
 
   // Get the opcode name.

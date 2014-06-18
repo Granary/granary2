@@ -165,13 +165,22 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
   is_ambiguous_arg[XED_IFORM_IMUL_GPRv_MEMv][2] = false;
   is_ambiguous_arg[XED_IFORM_IMUL_GPRv_GPRv][2] = false;
 
-  // Far call/jmp/ret.
+  // Far call/jmp.
   instr_table[XED_ICLASS_JMP_FAR].has_ambigiuous_ops = false;
   instr_table[XED_ICLASS_CALL_FAR].has_ambigiuous_ops = false;
-  instr_table[XED_ICLASS_RET_FAR].has_ambigiuous_ops = false;
-  instr_table[XED_ICLASS_RET_NEAR].has_ambigiuous_ops = false;
 
-  // Out
+  // For returns without constant-sized additions to the stack pointer.
+  instr_table[XED_ICLASS_RET_NEAR].has_ambigiuous_ops = true;
+  is_ambiguous_arg[XED_IFORM_RET_NEAR][0] = false;
+  is_ambiguous_arg[XED_IFORM_RET_NEAR_IMMw][0] = true;
+  has_ambiguous_arg[XED_IFORM_RET_NEAR_IMMw] = true;
+
+  instr_table[XED_ICLASS_RET_FAR].has_ambigiuous_ops = true;
+  is_ambiguous_arg[XED_IFORM_RET_FAR][0] = false;
+  is_ambiguous_arg[XED_IFORM_RET_FAR_IMMw][0] = true;
+  has_ambiguous_arg[XED_IFORM_RET_FAR_IMMw] = true;
+
+  // Out.
   instr_table[XED_ICLASS_OUT].has_ambigiuous_ops = true;
   for (int iform = XED_IFORM_OUT_DX_AL;
          iform <= XED_IFORM_OUT_IMMb_OeAX;

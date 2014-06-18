@@ -12,6 +12,8 @@
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 
+#include "granary/code/compile.h"
+
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
@@ -68,13 +70,14 @@ void Init(const char *granary_path) {
     AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
 
     auto meta = context->AllocateBlockMetaData(pc);
-    LocalControlFlowGraph cfg(context.AddressOf());
-    Instrument(context.AddressOf(), &cfg, meta);
-    context->Compile(&cfg);
+    auto context_ptr = context.AddressOf();
+    LocalControlFlowGraph cfg(context_ptr);
+    Instrument(context_ptr, &cfg, meta);
+    Compile(&cfg);
 
     for (auto block : cfg.Blocks()) {
       if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-        Log(LogOutput, "block %p compiled to %p\n",
+        Log(LogOutput, "block 0x%p compiled to 0x%p\n",
             decoded_block->StartAppPC(),
             decoded_block->StartCachePC());
       }

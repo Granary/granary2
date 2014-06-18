@@ -9,18 +9,18 @@
 
 namespace granary {
 
-// Adds in an instruction that forces the end of a fragment, i.e. that control-
-// flow cannot pass through. It is reasonable for this to be a debug breakpoint
-// instruction or an undefined instruction.
-//
-// Note: This has an architecture-specific implementation.
-extern void AddFragmentEnd(Fragment *frag);
-
 // Adds a fall-through jump, if needed, to this fragment.
 //
 // Note: This has an architecture-specific implementation.
 extern NativeInstruction *AddFallThroughJump(Fragment *frag,
                                              Fragment *fall_through_frag);
+
+// Adds in an instruction that forces the end of a fragment, i.e. that control-
+// flow cannot pass through. It is reasonable for this to be a debug breakpoint
+// instruction or an undefined instruction.
+//
+// Note: This has an architecture-specific implementation.
+void AddFragmentEnd(Fragment *frag);
 
 namespace {
 
@@ -37,46 +37,12 @@ static Fragment **VisitOrderedFragment(Fragment *succ, Fragment **next_ptr) {
   }
 }
 
-// Returns true if `instr` branches to in-edge code, or might branch to in-edge
-// code.
-//
-// Note: We check by blocks instead of by instruction type because the indirect
-//       branch instruction itself might have been converted into a NO-OP by
-//       an earlier mangling phase. This happens because if we have in-edge
-//       code, then the in-edge code itself implements the indirect branch.
-static bool BranchesToIndirectEdge(NativeInstruction *instr) {
-  if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-    auto target_block = cfi->TargetBlock();
-    if (IsA<IndirectBasicBlock *>(target_block) ||
-        IsA<ReturnBasicBlock *>(target_block)) {
-      return !cfi->IsSystemCall() && !cfi->IsInterruptCall();
-    }
-  }
-  return false;
-}
-
 // Add the fragments to a total ordering.
 static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
-  auto partition = frag->partition.Value();
-  auto branch_target_frag = frag->successors[FRAG_SUCC_BRANCH];
-  if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-    if (EDGE_KIND_INVALID != cfrag->edge.kind) {
-      GRANARY_ASSERT(nullptr == partition->edge);
-      partition->edge = &(cfrag->edge);
-    }
-    if (cfrag->edge.branches_to_edge_code && cfrag->branch_instr &&
-        !BranchesToIndirectEdge(cfrag->branch_instr)) {
-      auto branch_target_partition = branch_target_frag->partition.Value();
-      GRANARY_ASSERT(partition != branch_target_partition);
-      branch_target_partition->edge_patch_instruction = cfrag->branch_instr;
-    }
-  }
-
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any).
-  if (partition->edge &&
-      EDGE_KIND_INDIRECT == partition->edge->kind &&
-      BranchesToIndirectEdge(frag->branch_instr)) {
+  auto branch_target_frag = frag->successors[FRAG_SUCC_BRANCH];
+  if (frag->branch_instr && frag->branch_instr->HasIndirectTarget()) {
     next_ptr = VisitOrderedFragment(branch_target_frag, next_ptr);
   }
 
@@ -91,49 +57,41 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
 
 }  // namespace
 
-// Adds connectign (direct) control-flow instructions (branches/jumps) between
+// Adds connection (direct) control-flow instructions (branches/jumps) between
 // fragments, where fall-through is not possible.
 void AddConnectingJumps(FragmentList *frags) {
   auto first = frags->First();
   auto next_ptr = &(first->next);
+  Fragment *last_frag = nullptr;
   OrderFragment(first, next_ptr);
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
-    auto partition = frag->partition.Value();
     auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
     auto frag_next = frag->next;
 
-    // We have no fall-through, but some fragment will be encoded after this
-    // one in the code cache.
+    if (!IsA<ExitFragment *>(frag)) {
+      last_frag = frag;
+    }
+
+    // No fall-through.
     if (!fall_through) {
-      if (frag_next) {
-        AddFragmentEnd(frag);
-      }
       continue;
-    }
 
-    // The fall-through fragment begins some direct edge code. Add a fall-
-    // through jump, and this jump will be treated as the code that is patched
-    // by Granary to link blocks in the cache.
-    auto fall_through_partition = fall_through->partition.Value();
-    if (partition != fall_through_partition &&
-        fall_through_partition->edge &&
-        EDGE_KIND_DIRECT == fall_through_partition->edge->kind) {
-      GRANARY_ASSERT(nullptr == fall_through_partition->edge_patch_instruction);
-      fall_through_partition->edge_patch_instruction = AddFallThroughJump(
-          frag, fall_through);
-      continue;
-    }
+    // Last fragment in the list, but it has a fall-through.
+    } else if (!frag_next) {
+      AddFallThroughJump(frag, fall_through);
 
-    // Catches cases like `frag_next == nullptr != fall_through`.
-    if (fall_through != frag_next) {
-      if (partition->edge &&
-          EDGE_KIND_INDIRECT == partition->edge->kind &&
-          BranchesToIndirectEdge(frag->branch_instr)) {
-        continue;
-      }
+    // Has a fall-through that's not the next fragment.
+    } else if (fall_through != frag_next) {
       AddFallThroughJump(frag, fall_through);
     }
   }
+
+  // Architecture-specific, but can be used to add an instruction that will
+  // prevent prefetching beyond the last instruction of what we're encoding.
+  // This can make the difference between self/cross-modifying code (modifying
+  // existing instructions), and dynamic code generation (adding new code
+  // somewhere where execution has never reached).
+  AddFragmentEnd(last_frag);
 }
 
 }  // namespace granary

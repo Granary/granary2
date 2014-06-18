@@ -55,7 +55,8 @@ static void InitLiveRegsOnExit(FragmentList *frags) {
           frag->regs.live_on_entry.ReviveAll();
           break;
 
-        case FRAG_EXIT_FUTURE_BLOCK:
+        case FRAG_EXIT_FUTURE_BLOCK_DIRECT:
+        case FRAG_EXIT_FUTURE_BLOCK_INDIRECT:
         case FRAG_EXIT_EXISTING_BLOCK:
           auto meta = MetaDataCast<LiveRegisterMetaData *>(
               exit_frag->block_meta);

@@ -163,7 +163,8 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
 // Performs mangling of an indirect CFI instruction.
 void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   if (!cfi->IsFunctionCall()) return;
-  auto ret_address = new AnnotationInstruction(IA_RETURN_ADDRESS);
+  auto ret_address = new AnnotationInstruction(
+      IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
   arch::Instruction instr;
   arch::Operand op;
   auto ret_address_reg = block->AllocateVirtualRegister();

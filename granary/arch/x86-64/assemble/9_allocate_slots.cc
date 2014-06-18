@@ -4,6 +4,7 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/arch/x86-64/builder.h"
+#include "granary/arch/x86-64/slot.h"
 
 #include "granary/cfg/instruction.h"
 
@@ -278,40 +279,12 @@ void RemoveIndirectCallsAndJumps(Fragment *frag) {
       }
     }
   }
-
 }
 
-#if defined(GRANARY_WHERE_kernel) || !defined(GRANARY_WHERE_user)
-# error "TODO(pag): Implement `ArchAllocateSlots` for kernel space."
-#else
-
 namespace {
-extern "C" {
-
-// Get the base address of the current thread/CPU's local storage. We use this
-// address to compute segment offsets. We assume that the base address
-// returned by this function is the address associated with `FS:0` or `GS:0`.
-extern intptr_t granary_arch_get_segment_base(void);
-
-}  // extern C
-
-// Per-thread spill slots.
-//
-// Note: This depends on a load-time TLS implementation, as is the case on
-//       systems like Linux.
-static __thread __attribute__((tls_model("initial-exec"))) struct {
-  intptr_t slots[SpillInfo::MAX_NUM_SPILL_SLOTS];
-} SPILL_SLOTS;
 
 static void ArchAllocateSlot(arch::Operand &op) {
-  auto slot = op.reg.Number();
-  auto this_slot = &(SPILL_SLOTS.slots[slot]);
-  auto this_slot_addr = reinterpret_cast<intptr_t>(this_slot);
-  auto slot_offset = this_slot_addr - granary_arch_get_segment_base();
-  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op.segment = XED_REG_FS;  // Linux-specific.
-  op.is_compound = true;
-  op.addr.as_int = slot_offset;
+  op = arch::SlotMemOp(arch::SLOT_VIRTUAL_REGISTER, op.reg.Number());
 }
 
 // Replace any abstract spill slots in an instruction with concrete, segment-
@@ -343,7 +316,5 @@ void ArchAllocateSlots(FragmentList *frags) {
     }
   }
 }
-
-#endif  // User-space implementation of slots.
 
 }  // namespace granary

@@ -47,7 +47,7 @@ int SpillInfo::AllocateSpillSlot(int offset) {
     }
   }
   num_slots = std::max(num_slots, offset);
-  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + num_slots));
+  GRANARY_ASSERT(arch::MAX_NUM_SPILL_SLOTS > (1 + num_slots));
   used_slots.Set(num_slots, true);
   return num_slots++;
 }
@@ -55,7 +55,7 @@ int SpillInfo::AllocateSpillSlot(int offset) {
 // Mark a spill slot as being used.
 void SpillInfo::MarkSlotAsUsed(int slot) {
   GRANARY_ASSERT(slot >= 0);
-  GRANARY_ASSERT(MAX_NUM_SPILL_SLOTS > (1 + slot));
+  GRANARY_ASSERT(arch::MAX_NUM_SPILL_SLOTS > (1 + slot));
   used_slots.Set(slot, true);
   num_slots = std::max(num_slots, slot + 1);
 }
@@ -66,12 +66,6 @@ void SpillInfo::FreeSpillSlot(int slot) {
   GRANARY_ASSERT(num_slots > slot);
   GRANARY_ASSERT(used_slots.Get(slot));
   used_slots.Set(slot, false);
-}
-
-EdgeInfo::~EdgeInfo(void) {
-  if (EDGE_KIND_DIRECT == kind) {
-    delete direct;
-  }
 }
 
 PartitionInfo::PartitionInfo(int id_)
@@ -85,8 +79,6 @@ PartitionInfo::PartitionInfo(int id_)
       GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
       analyze_stack_frame(true),
       min_frame_offset(0),
-      edge(nullptr),
-      edge_patch_instruction(nullptr),
       entry_frag(nullptr) {}
 
 // Clear out the number of usage count of registers in this partition.
@@ -155,9 +147,9 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
   }
 }
 
-
 CodeAttributes::CodeAttributes(void)
-    : can_add_to_partition(true),
+    : branches_to_edge_code(false),
+      can_add_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
       has_flag_split_hint(false),
@@ -247,11 +239,9 @@ static const char *FragmentBorder(const Fragment *frag) {
 // meant to be a visual cue, not a perfect association with the fragment's
 // partition id.
 static const char *FragmentBackground(const Fragment *frag) {
-  if (!IsA<ExitFragment *>(frag)) {
-    if (auto partition_info = frag->partition.Value()) {
-      if (auto stack_id = static_cast<size_t>(partition_info->id)) {
-        return partition_color[stack_id % NUM_COLORS];
-      }
+  if (auto partition_info = frag->partition.Value()) {
+    if (auto stack_id = static_cast<size_t>(partition_info->id)) {
+      return partition_color[stack_id % NUM_COLORS];
     }
   }
   return "white";
@@ -316,8 +306,13 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     Log(level, "save flags|");
   } else if (IsA<FlagExitFragment *>(frag)) {
     Log(level, "restore flags|");
-  } else if (IsA<ExitFragment *>(frag)) {
-    Log(level, "exit");
+  } else if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
+    switch (exit_frag->kind) {
+      case FRAG_EXIT_NATIVE: Log(level, "native"); break;
+      case FRAG_EXIT_FUTURE_BLOCK_DIRECT: Log(level, "direct edge"); break;
+      case FRAG_EXIT_FUTURE_BLOCK_INDIRECT: Log(level, "indirect edge"); break;
+      case FRAG_EXIT_EXISTING_BLOCK: Log(level, "existing block"); break;
+    }
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
     if (code->attr.block_meta && code->attr.is_block_head) {
       auto meta = MetaDataCast<ModuleMetaData *>(code->attr.block_meta);

@@ -70,7 +70,7 @@ granary::CachePC SimpleEncoderTest::InstrumentAndEncode(granary::AppPC pc) {
       .Times(1);
 
   Instrument(&context, &cfg, meta);
-  Compile(&cfg, &edge_cache);
+  Compile(&cfg);
 
   auto block = cfg.EntryBlock();
   auto cache_meta = GetMetaData<CacheMetaData>(block);

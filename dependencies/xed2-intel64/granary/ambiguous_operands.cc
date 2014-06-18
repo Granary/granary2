@@ -57,6 +57,8 @@ static void GenerateOperandCheckEpilogue(bool has_ambiguous) {
 // Output code to handle an instruction with a potentially ambiguous decoding.
 static void GenerateDisambiguator(InstructionInfo &info) {
   auto has_ambiguous_iclass = false;
+  if (!info.templates.size()) return;
+
   GenerateIclassCheck(*(info.templates.begin()));
   for (auto instr : info.templates) {
     if (HasAmbiguousOperands(instr)) {

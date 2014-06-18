@@ -38,10 +38,6 @@ class DirectEdge;
 
 class SpillInfo {
  public:
-  enum {
-    MAX_NUM_SPILL_SLOTS = 32
-  };
-
   inline SpillInfo(void)
       : num_slots(0),
         used_slots(),
@@ -53,7 +49,7 @@ class SpillInfo {
   int num_slots;
 
   // Tracks which spill slots are allocated.
-  BitSet<MAX_NUM_SPILL_SLOTS> used_slots;
+  BitSet<arch::MAX_NUM_SPILL_SLOTS> used_slots;
 
   // If a GPR is live in `entry_gprs_holding_vrs`, then on entry to the current
   // fragment, the GPR contains the value of a VR.
@@ -97,16 +93,10 @@ struct EdgeInfo {
  public:
   inline EdgeInfo(void)
       : kind(EDGE_KIND_INVALID),
-        branches_to_edge_code(false),
         direct(nullptr) {}
-
-  ~EdgeInfo(void);
 
   // Should this partition be allocated in some direct edge code location?
   EdgeKind kind;
-
-  // Does this partition and/or fragment branch to edge code?
-  bool branches_to_edge_code;
 
   union {
     DirectEdge *direct;
@@ -164,13 +154,6 @@ class PartitionInfo {
   // Should we analyze the stack frames?
   bool analyze_stack_frame;
   int min_frame_offset;
-
-  // Pointer to one of the edge structures associated with this fragment. The
-  // edge structure is stored in one of the `CodeFragment`s.
-  const EdgeInfo *edge;
-
-  // Instruction that will get patched by this (direct) edge code.
-  NativeInstruction *edge_patch_instruction;
 
   // The first fragment in this partition. This will either be a
   // `PartitionEntryFragment` or a `CodeFragment`.
@@ -374,6 +357,9 @@ class CodeAttributes {
  public:
   CodeAttributes(void);
 
+  // Does this partition and/or fragment branch to edge code?
+  bool branches_to_edge_code:1;
+
   // Can this fragment be added into another partition? We use this to prevent
   // fragments that only contain things like IRET, RET, etc. from being unioned
   // into an existing partition. This would be bad because we lose control at
@@ -452,8 +438,7 @@ class CodeFragment : public SSAFragment {
   inline CodeFragment(void)
       : SSAFragment(),
         attr(),
-        stack(),
-        edge() {}
+        stack() {}
 
   virtual ~CodeFragment(void);
 
@@ -462,9 +447,6 @@ class CodeFragment : public SSAFragment {
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
-
-  // Pointer to one of the edge structures associated with this fragment.
-  EdgeInfo edge;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {
@@ -542,7 +524,8 @@ class FlagExitFragment : public SSAFragment {
 
 enum ExitFragmentKind {
   FRAG_EXIT_NATIVE,
-  FRAG_EXIT_FUTURE_BLOCK,
+  FRAG_EXIT_FUTURE_BLOCK_DIRECT,
+  FRAG_EXIT_FUTURE_BLOCK_INDIRECT,
   FRAG_EXIT_EXISTING_BLOCK
 };
 
@@ -554,7 +537,9 @@ class ExitFragment : public Fragment {
  public:
   explicit ExitFragment(ExitFragmentKind kind_)
       : Fragment(),
-        kind(kind_) {}
+        kind(kind_),
+        block_meta(nullptr),
+        edge() {}
 
   virtual ~ExitFragment(void);
 
@@ -566,9 +551,11 @@ class ExitFragment : public Fragment {
 
   ExitFragmentKind kind;
 
-  union {
-    BlockMetaData *block_meta;
-  };
+  // Meta-data associated with the block targeted by this exit.
+  BlockMetaData *block_meta;
+
+  // Pointer to one of the edge structures associated with this fragment.
+  EdgeInfo edge;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ExitFragment);

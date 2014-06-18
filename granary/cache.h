@@ -147,7 +147,7 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
   ~CacheMetaData(void);
 
   // Where this block is located in the code cache.
-  volatile CachePC cache_pc;
+  CachePC cache_pc;
 
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;

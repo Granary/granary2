@@ -18,6 +18,105 @@
 namespace granary {
 namespace {
 
+
+// Returns true if this fragment has some useful instructions. Here we really
+// mean some labels that are targeted by at least one other fragment.
+static bool HasUsefulInstructions(CodeFragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (annot->data) return true;
+    } else {
+      // Elsewise `has_native_instrs` would be `true` for `frag`.
+      GRANARY_ASSERT(!IsA<NativeInstruction *>(instr));
+    }
+  }
+  return false;
+}
+
+// Removes a fragment that has been identified as being useless.
+static Fragment *UnlinkUselessFrag(Fragment *prev, CodeFragment *frag,
+                                   Fragment **removed_list) {
+  frag->list.Unlink();
+  frag->next = *removed_list;
+  *removed_list = frag;
+  return prev;
+}
+
+// Returns `true` if `frag` is linked in to a larger list of fragments.
+static bool IsLinked(Fragment *frag) {
+  return frag->list.GetNext(frag) || frag->list.GetPrevious(frag);
+}
+
+// Assuming that `frag` is not linked to a fragment list, this function returns
+// a pointer to the next linked fragment that is reachable by following one or
+// more fall-through branches.
+//
+// TODO(pag): In some unusual circumstances this could actually be an infinite
+//            loop. Most likely it would occur if instrumentation injected an
+//            empty infinite loop.
+static Fragment *NextLinkedFallThrough(Fragment *frag) {
+  do {
+    if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
+      frag = fall_through;
+    } else {
+      frag = frag->successors[FRAG_SUCC_BRANCH];
+    }
+  } while (!IsLinked(frag));
+  return frag;
+}
+
+// Free the instructions from a fragment.
+static void FreeInstructions(Fragment *frag) {
+  auto instr = frag->instrs.First();
+  for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
+    next_instr = instr->Next();
+    instr->UnsafeUnlink();  // Will self-destruct.
+  }
+}
+
+// Removes "useless" fragments so that we don't clutter the fragment list with
+// an excessive number of partition/flag entry/exit fragments that surround an
+// otherwise empty fragment.
+static void RemoveUselessFrags(FragmentList *frags) {
+  auto prev = frags->First();
+  auto curr = prev->list.GetNext(prev);
+  Fragment *removed_list(nullptr);
+
+  // Find the fragments that we want to remove, and unlink them from the
+  // fragment list.
+  for (; curr; ) {
+    while (auto cfrag = DynamicCast<CodeFragment *>(curr)) {
+      if (cfrag->attr.has_native_instrs) break;
+      if (cfrag->attr.is_block_head) break;
+      if (cfrag->branch_instr) break;
+      if (cfrag->successors[FRAG_SUCC_BRANCH]) break;
+      if (HasUsefulInstructions(cfrag)) break;
+      curr = UnlinkUselessFrag(prev, cfrag, &removed_list);
+      break;
+    }
+    prev = curr;
+    curr = prev->list.GetNext(prev);
+  }
+
+  if (!removed_list) return;
+
+  // Unlink the fragments that we want to remove from the control-flow graph.
+  for (auto frag : FragmentListIterator(frags)) {
+    for (auto &succ : frag->successors) {
+      if (!IsA<CodeFragment *>(succ) || IsLinked(succ)) continue;
+      succ = NextLinkedFallThrough(succ);
+    }
+  }
+
+  // Remove the fragments in the `remove_list`.
+  do {
+    auto next = removed_list->next;
+    FreeInstructions(removed_list);
+    delete removed_list;
+    removed_list = next;
+  } while (removed_list);
+}
+
 // Try to mark some fragment's stack as valid / invalid based on meta-data
 // associated with `frag`.
 static void AnalyzeFragFromMetadata(Fragment *frag, StackUsageInfo *stack) {
@@ -27,7 +126,8 @@ static void AnalyzeFragFromMetadata(Fragment *frag, StackUsageInfo *stack) {
       block_meta = code->attr.block_meta;
     } else if (auto exit_ = DynamicCast<ExitFragment *>(frag)) {
       if (FRAG_EXIT_EXISTING_BLOCK == exit_->kind ||
-          FRAG_EXIT_FUTURE_BLOCK == exit_->kind) {
+          FRAG_EXIT_FUTURE_BLOCK_DIRECT == exit_->kind ||
+          FRAG_EXIT_FUTURE_BLOCK_INDIRECT == exit_->kind) {
         block_meta = exit_->block_meta;
       }
     }
@@ -127,6 +227,7 @@ static void GroupFragments(FragmentList *frags) {
 // group (partition) iff they are connected by control flow, if they belong to
 // the same basic block, and if the stack pointer does not change between them.
 void PartitionFragments(FragmentList *frags) {
+  RemoveUselessFrags(frags);
   auto first = DynamicCast<CodeFragment *>(frags->First());
   AnalyzeFragFromMetadata(first, &(first->stack));
   AnalyzeStackUsage(frags);
