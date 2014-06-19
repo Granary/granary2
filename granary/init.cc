@@ -67,7 +67,7 @@ void Init(const char *granary_path) {
     context.Construct();
 
     // TODO(pag): Remove me.
-    AppPC pc(UnsafeCast<AppPC>(&granary_test_mangle));
+    AppPC pc(UnsafeCast<AppPC>(&arch::Init));
 
     auto meta = context->AllocateBlockMetaData(pc);
     auto context_ptr = context.AddressOf();
@@ -82,6 +82,10 @@ void Init(const char *granary_path) {
             decoded_block->StartCachePC());
       }
     }
+
+    auto start_pc = cfg.EntryBlock()->StartCachePC();
+    auto arch_init = UnsafeCast<void (*)(void)>(start_pc);
+    arch_init();
 
     context.Destroy();
   } else {

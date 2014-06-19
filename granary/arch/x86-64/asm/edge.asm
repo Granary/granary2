@@ -78,7 +78,7 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     call    granary_enter_direct_edge
 
     // Restore the old stack alignment.
-    pop     %rsp
+    mov     8(%rsp), %rsp
 
     // Restore the regs (except `RDI`)
     pop     %r15
