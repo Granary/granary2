@@ -23,14 +23,22 @@ class ContextInterface;
 // Granary.
 class DirectEdge {
  public:
-  DirectEdge(ContextInterface *context_, const BlockMetaData *source_meta_,
-             BlockMetaData *dest_meta_, CachePC edge_code_);
+  DirectEdge(const BlockMetaData *source_meta_, BlockMetaData *dest_meta_,
+             CachePC edge_code_);
 
-  // The code targeted by this edge code. Initially, this takes on the value
-  // of some edge code, and if profiling of edges isn't enabled, then it later
-  // matches up with the `cache_pc` field of `CacheMetaData`. If profiling is
-  // enabled then it remains unchanged, and always points to edge code.
-  CachePC cached_target;
+  ~DirectEdge(void);
+
+  // On entry to an edge, this address is targeted by an indirect jump. This
+  // allows an edge to go right to the resolved block if the block address is
+  // known and profiling is enabled.
+  CachePC entry_target;
+
+  // On exit from an edge, this is the address targeted by an indirect jump. By
+  // default, this has the same value is `edge_code`, and so if two threads
+  // execute the edge code, then one will end up in a busy loop that increments
+  // `num_executions`. Eventually, when the target block is resolved, this is
+  // changed to be the `cache_pc` of the target block.
+  CachePC exit_target;
 
   // The number of executions.
   uint32_t num_executions;
@@ -38,15 +46,19 @@ class DirectEdge {
   // The number of times the execution counter overflowed.
   uint32_t num_execution_overflows;
 
-  // The context to which this edge belongs.
-  ContextInterface * const context;
-
   // Next direct edge in a chain of all direct edges.
   DirectEdge *next;
 
-  // Meta-data associated with the block that must be translated.
+  // Meta-data associated with the predecessor block.
   const BlockMetaData * const source_meta;
-  BlockMetaData * const dest_meta;
+
+  // Meta-data associated with the block that must be translated. If this is
+  // null then it means that this block has either been translated, or is in
+  // the process of being translated.
+  //
+  // If this is null then the meta-data must be looked up in the code cache
+  // index.
+  std::atomic<BlockMetaData *> dest_meta;
 
   // The stub code in an edge code cache that is used to context switch
   // into Granary and find/decode/instrument the block associated with
@@ -70,17 +82,21 @@ class DirectEdge {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectEdge);
 }  __attribute__((packed));
 
-static_assert(0 == offsetof(DirectEdge, cached_target),
+static_assert(0 == offsetof(DirectEdge, entry_target),
     "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "
     "routines depend on this.");
 
-static_assert(8 == offsetof(DirectEdge, num_executions),
-    "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "
+static_assert(8 == offsetof(DirectEdge, exit_target),
+    "Field `DirectEdge::exit_target` must be at offset `8`, as assembly "
     "routines depend on this.");
 
-static_assert(12 == offsetof(DirectEdge, num_execution_overflows),
-    "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "
+static_assert(16 == offsetof(DirectEdge, num_executions),
+    "Field `DirectEdge::num_executions` must be at offset `16`, as assembly "
     "routines depend on this.");
+
+static_assert(20 == offsetof(DirectEdge, num_execution_overflows),
+    "Field `DirectEdge::num_execution_overflows` must be at offset `24`, "
+    "as assembly routines depend on this.");
 
 static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
     "The `DirectEdge` structure should fit into an individual cache line.");

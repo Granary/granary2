@@ -58,10 +58,13 @@ template <typename T>
 class MutableMetaData : public ToolMetaData<T> {};
 
 // Used to decide whether two pieces of unifiable meta-data can unify.
-enum class UnificationStatus {
-  ACCEPT = 0, // Unifies perfectly.
-  ADAPT = 2,  // Does not unify perfectly, but can be adapted.
-  REJECT = 1  // Cannot be unified / adapted.
+//
+// Note: The particular values are significant, as they allow us to do a `MAX`
+//       operation to find what the status is of many "sub meta-datas".
+enum class UnificationStatus : int {
+  ACCEPT  = 0,  // Unifies perfectly.
+  ADAPT   = 1,  // Does not unify perfectly, but can be adapted.
+  REJECT  = 2  // Cannot be unified / adapted.
 };
 
 // Unifiable meta-data, i.e. meta-data that behaves a bit like indexable meta-

@@ -8,16 +8,10 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
-// TODO(pag): Remove these once instrumenting is moved out of `Init`.
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
-
-#include "granary/code/compile.h"
-
 #include "granary/client.h"
 #include "granary/context.h"
+#include "granary/dispatch.h"
 #include "granary/init.h"
-#include "granary/instrument.h"
 #include "granary/logging.h"
 
 // TODO(pag): Remove me.
@@ -45,6 +39,12 @@ namespace {
 
 GRANARY_EARLY_GLOBAL static Container<Context> context;
 
+static int fibonacci(int n) {
+  if (!n) return n;
+  if (1 == n) return 1;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
 }  // namespace
 
 // Initialize Granary.
@@ -66,26 +66,10 @@ void Init(const char *granary_path) {
   if (!FLAG_help) {
     context.Construct();
 
-    // TODO(pag): Remove me.
-    AppPC pc(UnsafeCast<AppPC>(&arch::Init));
-
-    auto meta = context->AllocateBlockMetaData(pc);
-    auto context_ptr = context.AddressOf();
-    LocalControlFlowGraph cfg(context_ptr);
-    Instrument(context_ptr, &cfg, meta);
-    Compile(&cfg);
-
-    for (auto block : cfg.Blocks()) {
-      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-        Log(LogOutput, "block 0x%p compiled to 0x%p\n",
-            decoded_block->StartAppPC(),
-            decoded_block->StartCachePC());
-      }
-    }
-
-    auto start_pc = cfg.EntryBlock()->StartCachePC();
-    auto arch_init = UnsafeCast<void (*)(void)>(start_pc);
-    arch_init();
+    auto start_pc = Dispatch(context.AddressOf(), fibonacci);
+    auto fib = UnsafeCast<int (*)(int)>(start_pc);
+    auto result = fib(10);
+    Log(LogOutput, "pc = 0x%p ... fibonacci(10) = %d\n", start_pc, result);
 
     context.Destroy();
   } else {

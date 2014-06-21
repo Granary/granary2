@@ -151,18 +151,6 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
 
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;
-
-  // TODO(pag): Encoded size?
-  // TODO(pag): Interrupt delay regions? Again: make this a command-line
-  //            option, that registers separate meta-data.
-  // TODO(pag): Cache PCs to native PCs? If doing this, perhaps make it a
-  //            separate kind of meta-data that is only registered if a certain
-  //            command-line option is specified. That way, the overhead of
-  //            recording the extra info is reduced. Also, consider a delta
-  //            encoding, (e.g. https://docs.google.com/document/d/
-  //            1lyPIbmsYbXnpNj57a261hgOYVpNRcgydurVQIyZOz_o/pub).
-  // TODO(pag): Things that are kernel-specific (e.g. exc. table, delay regions)
-  //            should go in their own cache data structures.
 };
 #endif  // GRANARY_INTERNAL
 

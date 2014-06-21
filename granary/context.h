@@ -12,6 +12,7 @@
 #include "granary/base/pc.h"
 
 #include "granary/cache.h"
+#include "granary/index.h"
 #include "granary/metadata.h"
 #include "granary/module.h"
 #include "granary/tool.h"
@@ -70,6 +71,9 @@ class ContextInterface {
   // back the direct edge.
   virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block_meta,
                                          BlockMetaData *dest_block_meta) = 0;
+
+  // Get a pointer to this context's code cache index.
+  virtual LockedIndex *CodeCacheIndex(void) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -117,6 +121,9 @@ class Context : public ContextInterface {
       const BlockMetaData *source_block_meta,
       BlockMetaData *dest_block_meta) override;
 
+  // Get a pointer to this context's code cache index.
+  virtual LockedIndex *CodeCacheIndex(void) override;
+
  private:
 
   // Manages all modules allocated/understood by this environment.
@@ -143,6 +150,9 @@ class Context : public ContextInterface {
   FineGrainedLock edge_list_lock;
   DirectEdge *patched_edge_list;
   DirectEdge *unpatched_edge_list;
+
+  // Code cache index, and associated lock.
+  LockedIndex code_cache_index;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

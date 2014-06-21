@@ -3,3 +3,4 @@
 --memcheck:show-reachable=yes
 --suppressions=dependencies/valgrind/valgrind.supp
 --trace-children=yes
+--smc-check=all

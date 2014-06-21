@@ -45,7 +45,7 @@ LocalControlFlowGraph::~LocalControlFlowGraph(void) {
 
 // Return the entry basic block of this control-flow graph.
 DecodedBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
-  return first_block;
+  return entry_block;
 }
 
 // Returns an object that can be used inside of a range-based for loop.
@@ -65,16 +65,20 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
     GRANARY_ASSERT(-1 != block->Id());
     return;  // Already in the CFG.
   }
-
   block->id = num_basic_blocks++;
 
-  // The control-flow graph has sole ownership over the initial basic block.
-  // All other basic blocks are owned by control-transfer instructions.
   if (!first_block) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    GRANARY_ASSERT(nullptr != decoded_block);
+    first_block = block;
+
+    // We assume that the first added block is one of a `DecodedBasicBlock`
+    // (and by extension a `CompensationBasicBlock`) or a `CachedBasicBlock`.
+    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      entry_block = decoded_block;
+    }
+
+    // The control-flow graph has sole ownership over the entry basic block.
+    // All other basic blocks are owned by control-transfer instructions.
     block->MarkAsPermanent();
-    first_block = decoded_block;
   } else {
     last_block->list.SetNext(last_block, block);
   }

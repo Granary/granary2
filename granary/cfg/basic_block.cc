@@ -19,15 +19,17 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
       (InstrumentedBasicBlock, 2 * 5),
         (CachedBasicBlock, 2 * 5 * 7),
         (DecodedBasicBlock, 2 * 5 * 11),
-        (DirectBasicBlock, 2 * 5 * 13),
-        (IndirectBasicBlock, 2 * 5 * 17),
-        (ReturnBasicBlock, 2 * 5 * 19))
+          (CompensationBasicBlock, 2 * 5 * 11 * 13),
+        (DirectBasicBlock, 2 * 5 * 17),
+        (IndirectBasicBlock, 2 * 5 * 19),
+        (ReturnBasicBlock, 2 * 5 * 23))
 
 GRANARY_DEFINE_BASE_CLASS(BasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
+GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, CompensationBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
 GRANARY_DEFINE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
@@ -90,7 +92,7 @@ BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
 BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
   return meta;
 }
-
+/*
 // Initialize an instrumented basic block.
 InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
     : cfg(nullptr),
@@ -98,12 +100,11 @@ InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
       cached_meta_hash(0),
       native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
                      : nullptr) {}
-
+*/
 InstrumentedBasicBlock::InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_)
     : cfg(cfg_),
       meta(meta_),
-      cached_meta_hash(0),
       native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
                      : nullptr) {}
 
@@ -114,7 +115,8 @@ AppPC InstrumentedBasicBlock::StartAppPC(void) const {
 
 // Returns the starting PC of this basic block in the code cache.
 CachePC InstrumentedBasicBlock::StartCachePC(void) const {
-  return MetaDataCast<CacheMetaData *>(meta)->cache_pc;
+  const auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  return cache_meta->cache_pc;
 }
 
 
@@ -129,14 +131,8 @@ DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
   first->InsertAfter(std::unique_ptr<Instruction>(last));
 }
 
-// Clean up an instrumented basic block. If the meta-data hasn't already been
-// unlinked by now then we assume this basic block is unreachable, as is its
-// meta-data.
 InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
-  if (meta) {
-    delete meta;
-    meta = nullptr;
-  }
+  meta = nullptr;
 }
 
 // Return an iterator of the successor blocks of this basic block.
@@ -244,8 +240,8 @@ ReturnBasicBlock::ReturnBasicBlock(LocalControlFlowGraph *cfg_,
 ReturnBasicBlock::~ReturnBasicBlock(void) {
   if (!meta && lazy_meta) {
     delete lazy_meta;
-    lazy_meta = nullptr;
   }
+  lazy_meta = nullptr;
 }
 
 // Return this basic block's meta-data. Accessing a return basic block's meta-

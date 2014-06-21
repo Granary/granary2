@@ -4,7 +4,6 @@
 #define GRANARY_CFG_FACTORY_H_
 
 #include "granary/base/base.h"
-#include "granary/base/bloom_filter.h"
 #include "granary/base/pc.h"
 
 namespace granary {
@@ -51,6 +50,16 @@ enum BlockRequestKind : uint8_t {
   // Materialization request cannot be satisfied. This happens when we try to
   // materialize a block accross a module boundary.
   REQUEST_DENIED
+
+#ifdef GRANARY_INTERNAL
+  // Internal request that looks for a block in either the code cache index or
+  // in the LCFG, but does *not* decode any blocks. This internal request is
+  // submitted for each `DirectBasicBlock` in the LCFG when no other pending
+  // requests are outstanding. This can result in extra compensation fragments
+  // being added, and therefore a new invocation of
+  // `Tool::InstrumentControlFlow`.
+  , REQUEST_CHECK_INDEX_AND_LCFG_ONLY
+#endif  // GRANARY_INTERNAL
 };
 
 
@@ -77,6 +86,11 @@ class BlockFactory {
   void RequestBlock(
       DirectBasicBlock *block,
       BlockRequestKind strategy=REQUEST_CHECK_INDEX_AND_LCFG);
+
+  // Request a block from the code cache index. If an existing block can be
+  // adapted, then we will use that.
+  GRANARY_INTERNAL_DEFINITION
+  InstrumentedBasicBlock *RequestIndexedBlock(BlockMetaData **meta_ptr);
 
   // Satisfy all materialization requests.
   GRANARY_INTERNAL_DEFINITION void MaterializeRequestedBlocks(void);
@@ -126,9 +140,6 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION
   void DecodeInstructionList(DecodedBasicBlock *block);
 
-  // Hash the meta data of all basic blocks.
-  GRANARY_INTERNAL_DEFINITION void HashBlockMetaDatas(HashFunction *hasher);
-
   // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
   GRANARY_INTERNAL_DEFINITION bool MaterializeDirectBlocks(void);
 
@@ -144,7 +155,7 @@ class BlockFactory {
 
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION
-  BasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);
+  InstrumentedBasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);
 
   // Returns true if we can try to materialize this block.
   GRANARY_INTERNAL_DEFINITION
@@ -153,10 +164,6 @@ class BlockFactory {
   // Materialize a direct basic block.
   GRANARY_INTERNAL_DEFINITION
   bool MaterializeBlock(DirectBasicBlock *block);
-
-  // Used for fast checking on whether or not a block already exists in the
-  // LCFG.
-  GRANARY_INTERNAL_DEFINITION BloomFilter<256> meta_data_filter;
 
   // Then environment in which we're decoding.
   GRANARY_INTERNAL_DEFINITION ContextInterface *context;

@@ -17,8 +17,12 @@ class ContextInterface;
 // Instrument some initial code (described by `meta`) and fills the LCFG `cfg`
 // with the instrumented code. `meta` is taken as being "owned", i.e. no one
 // should be concurrently modifying `meta`!
-void Instrument(ContextInterface *env, LocalControlFlowGraph *cfg,
-                BlockMetaData *meta);
+//
+// Note: `meta` might be deleted if some block with the same meta-data already
+//       exists in the code cache index. Therefore, one must use the returned
+//       meta-data hereafter.
+BlockMetaData *Instrument(ContextInterface *env, LocalControlFlowGraph *cfg,
+                          BlockMetaData *meta);
 
 }  // namespace granary
 

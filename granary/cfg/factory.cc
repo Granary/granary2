@@ -2,8 +2,6 @@
 
 #define GRANARY_INTERNAL
 
-#include "dependencies/xxhash/hash.h"
-
 #include "granary/arch/driver.h"
 
 #include "granary/cfg/control_flow_graph.h"
@@ -26,16 +24,14 @@ namespace granary {
 // is needed so that blocks can be added.
 BlockFactory::BlockFactory(ContextInterface *context_,
                            LocalControlFlowGraph *cfg_)
-    : meta_data_filter(),
-      context(context_),
+    : context(context_),
       cfg(cfg_),
       has_pending_request(false) {}
 
 // Request that a block be materialized. This does nothing if the block is
 // not a `DirectBasicBlock`.
 void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
-  auto direct_block = DynamicCast<DirectBasicBlock *>(block);
-  if (direct_block) {
+  if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
     RequestBlock(direct_block, strategy);
   }
 }
@@ -53,16 +49,16 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 
 namespace {
 
-// Hash some basic block meta-data.
-static uint32_t HashMetaData(HashFunction *hasher,
-                             InstrumentedBasicBlock *block) {
-  hasher->Reset();
-  if (auto meta = block->UnsafeMetaData()) {
-    meta->Hash(hasher);
-  }
-  hasher->Finalize();
-  return hasher->Extract32();
+// Create an intermediate basic block that adapts one version of a block to
+// another version.
+static InstrumentedBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
+                                            BlockMetaData *meta,
+                                            BasicBlock *existing_block) {
+  auto adapt_block = new CompensationBasicBlock(cfg, meta);
+  adapt_block->AppendInstruction(lir::Jump(existing_block));
+  return adapt_block;
 }
+
 }  // namespace
 
 // Convert a decoded instruction into the internal Granary instruction IR.
@@ -91,7 +87,6 @@ Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
     return new NativeInstruction(instr);
   }
 }
-
 
 // Add the fall-through instruction for a block.
 void BlockFactory::AddFallThroughInstruction(
@@ -160,22 +155,6 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   AddFallThroughInstruction(&decoder, block, instr, pc);
 }
 
-// Hash the meta data of all basic blocks. This resets the `materialized_block`
-// of any `DirectBasicBlock` from prior materialization runs.
-void BlockFactory::HashBlockMetaDatas(HashFunction *hasher) {
-  for (auto block : cfg->Blocks()) {
-    if (auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
-      meta_block->cached_meta_hash = HashMetaData(hasher, meta_block);
-      auto direct_block = DynamicCast<DirectBasicBlock *>(block);
-      if (!direct_block) {
-        meta_data_filter.Add({meta_block->cached_meta_hash});
-      } else {
-        direct_block->materialized_block = nullptr;
-      }
-    }
-  }
-}
-
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
 // Returns `true` if any changes were made to the LCFG.
 bool BlockFactory::MaterializeDirectBlocks(void) {
@@ -234,20 +213,39 @@ void BlockFactory::AnalyzeNewBlocks(void) {
 // Search an LCFG for a block whose meta-data matches the meta-data of
 // `exclude`. The returned block, if any, is guaranteed not to be `exclude`,
 // as well as not being another `DirectBasicBlock` instance.
-BasicBlock *BlockFactory::MaterializeFromLCFG(DirectBasicBlock *exclude) {
+InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
+    DirectBasicBlock *exclude) {
   // Note: Can't use block iterator as it might GC some of the blocks that are
   //       as-of-yet unreferenced!
+  InstrumentedBasicBlock *adapt_block(nullptr);
+  auto exclude_meta = exclude->meta;
   for (BasicBlock *block(cfg->first_block);
        block != cfg->first_new_block;
        block = block->list.GetNext(block)) {
-    auto meta_block = DynamicCast<InstrumentedBasicBlock *>(block);
-    if (meta_block &&
-        meta_block != exclude &&
-        meta_block->cached_meta_hash == exclude->cached_meta_hash &&
-        !IsA<DirectBasicBlock *>(meta_block) &&
-        meta_block->meta->Equals(exclude->meta)) {
-      return meta_block;
+    if (block == exclude) continue;
+    auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
+    if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
+      continue;
     }
+    auto block_meta = inst_block->meta;
+    if (!block_meta || !exclude_meta->Equals(block_meta)) {
+      continue;  // Indexable meta-data doesn't match.
+    }
+    switch (exclude_meta->CanUnifyWith(block_meta)) {
+      case UnificationStatus::ACCEPT:
+        delete exclude->meta;  // No longer needed.
+        exclude->meta = nullptr;
+        return inst_block;  // Perfect match.
+      case UnificationStatus::ADAPT:
+        adapt_block = inst_block;  // Need compensation code.
+        break;
+      case UnificationStatus::REJECT:
+        break;
+    }
+  }
+  if (adapt_block) {  // Need to create some compensation code.
+    exclude->meta = nullptr;  // Steal.
+    return AdaptToBlock(cfg, exclude_meta, adapt_block);
   }
   return nullptr;
 }
@@ -264,7 +262,7 @@ bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
       REQUEST_DENIED == block->materialize_strategy) {
     return false;
   } else {
-    auto first_meta = GetMetaData<ModuleMetaData>(cfg->first_block);
+    auto first_meta = GetMetaData<ModuleMetaData>(cfg->entry_block);
     if (!first_meta->CanMaterializeWith(GetMetaData<ModuleMetaData>(block))) {
       block->materialize_strategy = REQUEST_DENIED;
       return false;  // Modules of requested and first blocks don't match.
@@ -274,47 +272,72 @@ bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
   }
 }
 
+// Request a block from the code cache index. If an existing block can be
+// adapted, then we will use that.
+InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
+    BlockMetaData **meta_ptr) {
+  auto meta = *meta_ptr;
+  auto index = context->CodeCacheIndex();
+  const auto response = index->Request(meta);
+  switch (response.status) {
+    case UnificationStatus::ACCEPT: {
+      auto new_block = new CachedBasicBlock(cfg, response.meta);
+      cfg->AddBlock(new_block);
+      if (response.meta != meta) delete meta;  // No longer needed.
+      *meta_ptr = nullptr;
+      return new_block;
+    }
+    case UnificationStatus::ADAPT: {
+      auto cached_block = new CachedBasicBlock(cfg, response.meta);
+      auto adapt_block = AdaptToBlock(cfg, meta, cached_block);
+      cfg->AddBlock(cached_block);
+      *meta_ptr = nullptr;  // Steal.
+      return adapt_block;
+    }
+    case UnificationStatus::REJECT:
+      return nullptr;
+  }
+}
+
 // Materialize a basic block if there is a pending request.
 bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
-  if (CanMaterializeBlock(block)) {
-    switch (block->materialize_strategy) {
-      case REQUEST_CHECK_INDEX_AND_LCFG:
-        // TODO(pag): Implement me.
-        // Fall-through.
-
-      case REQUEST_CHECK_LCFG:
-        if (meta_data_filter.MightContain({block->cached_meta_hash})) {
-          if (BasicBlock *found_block = MaterializeFromLCFG(block)) {
-            block->materialized_block = found_block;
-            return true;
-          }
-        }
-        // Fall-through.
-
-      case REQUEST_NOW: {
-        auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
-        block->meta = nullptr;  // Steal.
-        DecodeInstructionList(decoded_block);
-        cfg->AddBlock(decoded_block);
-        block->materialized_block = decoded_block;
-        return true;
+  if (!CanMaterializeBlock(block)) return false;
+  switch (block->materialize_strategy) {
+    case REQUEST_CHECK_INDEX_AND_LCFG:
+    case REQUEST_CHECK_INDEX_AND_LCFG_ONLY:
+      if ((block->materialized_block = RequestIndexedBlock(&(block->meta)))) {
+        break;
       }
-
-      case REQUEST_NATIVE:
-        block->materialized_block = new NativeBasicBlock(block->StartAppPC());
-        return true;
-
-      default: {}  // REQUEST_LATER, REQUEST_DENIED.
+      // Fall-through.
+    case REQUEST_CHECK_LCFG:
+      if ((block->materialized_block = MaterializeFromLCFG(block)) ||
+          REQUEST_CHECK_INDEX_AND_LCFG_ONLY == block->materialize_strategy) {
+        break;
+      }
+      // Fall-through.
+    case REQUEST_NOW: {
+      auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
+      block->meta = nullptr;  // Steal.
+      block->materialized_block = decoded_block;
+      DecodeInstructionList(decoded_block);
+      cfg->AddBlock(decoded_block);
+      break;
     }
+    case REQUEST_NATIVE: {
+      auto native_block = new NativeBasicBlock(block->StartAppPC());
+      delete block->meta;
+      block->materialized_block = native_block;
+      block->meta = nullptr;  // No longer needed.
+      cfg->AddBlock(native_block);
+      break;
+    }
+    default: {}  // REQUEST_LATER, REQUEST_DENIED.
   }
-  return false;
+  return nullptr != block->materialized_block;
 }
 
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
-  xxhash::HashFunction hasher(0xDEADBEEFUL);
-  meta_data_filter.Clear();
-  HashBlockMetaDatas(&hasher);
   cfg->first_new_block = nullptr;
   has_pending_request = false;
   if (MaterializeDirectBlocks() || cfg->first_new_block) {

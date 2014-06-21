@@ -16,7 +16,8 @@ namespace arch {
 enum {
   PAGE_SIZE_BYTES = 4096,
 
-  CODE_ALIGN_BYTES = 16,
+  // Alignment for blocks allocated in the code cache.
+  CODE_ALIGN_BYTES = 1,
 
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,

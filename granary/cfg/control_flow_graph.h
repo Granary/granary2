@@ -29,6 +29,7 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION
   inline explicit LocalControlFlowGraph(ContextInterface *context_)
       : context(context_),
+        entry_block(nullptr),
         first_block(nullptr),
         last_block(nullptr),
         first_new_block(nullptr),
@@ -83,7 +84,8 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION ContextInterface *context;
 
   // List of basic blocks known to this control-flow graph.
-  GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *first_block;
+  GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *entry_block;
+  GRANARY_INTERNAL_DEFINITION BasicBlock *first_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_new_block;
 

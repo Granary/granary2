@@ -12,6 +12,7 @@
 #include "granary/code/compile.h"
 #include "granary/code/metadata.h"
 
+#include "granary/index.h"
 #include "granary/instrument.h"
 #include "granary/util.h"
 
@@ -21,6 +22,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<granary::CacheMetaData>();
   meta_manager.Register<granary::LiveRegisterMetaData>();
   meta_manager.Register<granary::StackMetaData>();
+  meta_manager.Register<granary::IndexMetaData>();
   granary::arch::Init();
 
   // Called for the "lazy" meta-data on the function return.

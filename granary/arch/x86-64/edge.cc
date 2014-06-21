@@ -14,8 +14,6 @@
 #include "granary/code/edge.h"
 
 #include "granary/breakpoint.h"
-#include "granary/cache.h"
-#include "granary/util.h"
 
 #define ENC(...) \
   do { \
@@ -43,7 +41,11 @@ static const auto kEnterDirect = granary_arch_enter_direct_edge;
 
 // Generates the direct edge entry code for getting onto a Granary private
 // stack, disabling interrupts, etc.
-void GenerateDirectEdgeEntryCode(CachePC pc) {
+//
+// This code takes a pointer to the context so that the code generated will
+// be able to pass the context pointer directly to `granary::EnterGranary`.
+// This allows us to avoid saving the context pointer in the `DirectEdge`.
+void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -57,6 +59,11 @@ void GenerateDirectEdgeEntryCode(CachePC pc) {
   GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
                                         XED_REG_RSP)); )
 
+  // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
+  // `granary::EnterGranary`.
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RSI));
+  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RSI, reinterpret_cast<uintptr_t>(context)));
+
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
   auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
@@ -67,6 +74,8 @@ void GenerateDirectEdgeEntryCode(CachePC pc) {
   } else {
     ENC(CALL_NEAR_MEMv(&ni, &kEnterDirect));
   }
+
+  ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
   // Swap stacks. After swapping stacks, we are susceptible to re-entrancy
   // issues related to interrupts and signals.
@@ -90,19 +99,12 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   auto pc = edge->edge_code;
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
-  // Make it so that if two threads are racing to be the first to translate,
-  // one will enter a busy loop of incrementing the loop counter over and over
-  // again until `meta->cache_pc` is eventually resolved to the correct
-  // target.
-  auto meta = MetaDataCast<CacheMetaData *>(edge->dest_meta);
-  meta->cache_pc = pc;
-
   // The first time this is executed, it will jump to the next instruction,
   // which also agrees with pretetching and predicting of unknown branches.
   // If profiling isn't enabled, then later executions will jump directly
   // to where they are meant to go.
-  ENC(JMP_MEMv(&ni, &(edge->cached_target)));
-  edge->cached_target = pc;  // `pc` is the address of the next instruction.
+  ENC(JMP_MEMv(&ni, &(edge->entry_target)));
+  edge->entry_target = pc;  // `pc` is the address of the next instruction.
 
   // Slides the stack pointer down. Assumes a "safe" stack, regardless of
   // prior proof.
@@ -138,7 +140,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // we'll observe is that one of them will "win" and the others will jump
   // back into the edge code because `meta->cache_pc` is initialized above
   // to point to into the edge code.
-  ENC(JMP_MEMv(&ni, &(meta->cache_pc)));
+  ENC(JMP_MEMv(&ni, &(edge->exit_target)));
 
   // Make it so that the CPU doesn't prefetch after the `JMP`. It's typical for
   // the first execution of an indirect jump to predict the target as the next

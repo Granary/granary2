@@ -15,7 +15,6 @@ class JumpFollower : public Tool {
         continue;
       }
       for (auto succ : block->Successors()) {
-
         if (succ.cti->IsConditionalJump()) {
           // Expand the target of a conditional jump only if it's a back-edge.
           // The default branch prediction behavior on x86, absent any prior

@@ -15,6 +15,7 @@
 
 #include "granary/cache.h"
 #include "granary/context.h"
+#include "granary/index.h"
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
@@ -35,8 +36,13 @@ namespace arch {
 // Generates the direct edge entry code for getting onto a Granary private
 // stack, disabling interrupts, etc.
 //
+// This code takes a pointer to the context so that the code generated will
+// be able to pass the context pointer directly to `granary::EnterGranary`.
+// This allows us to avoid saving the context pointer in the `DirectEdge`.
+//
 // Note: This has an architecture-specific implementation.
-extern void GenerateDirectEdgeEntryCode(CachePC edge);
+extern void GenerateDirectEdgeEntryCode(ContextInterface *context,
+                                        CachePC edge);
 
 // Generates the direct edge code for a given `DirectEdge` structure.
 //
@@ -46,12 +52,36 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 }  // namespace arch
 namespace {
 
-static CachePC CreateDirectEntryCode(CodeCache *edge_code_cache) {
+static CachePC CreateDirectEntryCode(ContextInterface *context,
+                                     CodeCache *edge_code_cache) {
   auto entry_code = edge_code_cache->AllocateBlock(arch::EDGE_CODE_SIZE_BYTES);
   CodeCacheTransaction transaction(edge_code_cache, entry_code,
                                    entry_code + arch::EDGE_CODE_SIZE_BYTES);
-  arch::GenerateDirectEdgeEntryCode(entry_code);
+  arch::GenerateDirectEdgeEntryCode(context, entry_code);
   return entry_code;
+}
+
+// Register internal meta-data.
+static void InitMetaData(MetaDataManager &metadata_manager) {
+  metadata_manager.Register<ModuleMetaData>();
+  metadata_manager.Register<CacheMetaData>();
+  metadata_manager.Register<LiveRegisterMetaData>();
+  metadata_manager.Register<StackMetaData>();
+  metadata_manager.Register<IndexMetaData>();
+}
+
+// Tell Granary about all loaded tools.
+static void InitTools(ToolManager &tool_manager) {
+  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+      FLAG_tools,
+      [&] (const char *tool_name) {
+        tool_manager.Register(tool_name);
+      });
+
+  // Do a dummy allocation and free of all tools. Tools register meta-data
+  // through their constructors and so this will get all tool+option-specific
+  // meta-data registered.
+  tool_manager.FreeTools(tool_manager.AllocateTools());
 }
 
 }  // namespace
@@ -63,31 +93,17 @@ Context::Context(void)
       metadata_manager(),
       tool_manager(this),
       edge_code_cache(FLAG_edge_cache_slab_size),
-      direct_edge_entry_code(CreateDirectEntryCode(&edge_code_cache)),
+      direct_edge_entry_code(CreateDirectEntryCode(this, &edge_code_cache)),
       edge_list_lock(),
       patched_edge_list(nullptr),
-      unpatched_edge_list(nullptr) {
-
-  // Register internal metadata.
-  metadata_manager.Register<ModuleMetaData>();
-  metadata_manager.Register<CacheMetaData>();
-  metadata_manager.Register<LiveRegisterMetaData>();
-  metadata_manager.Register<StackMetaData>();
+      unpatched_edge_list(nullptr),
+      code_cache_index(new Index) {
+  InitMetaData(metadata_manager);
 
   // Tell this environment about all loaded modules.
   module_manager.RegisterAllBuiltIn();
 
-  // Tell Granary about all loaded tools.
-  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
-      FLAG_tools,
-      [&] (const char *tool_name) {
-        tool_manager.Register(tool_name);
-      });
-
-  // Do a dummy allocation and free of all tools. Tools register meta-data
-  // through their constructors and so this will get all tool+option-specific
-  // meta-data registered.
-  tool_manager.FreeTools(tool_manager.AllocateTools());
+  InitTools(tool_manager);
 }
 
 namespace {
@@ -164,8 +180,7 @@ void Context::FlushCodeCache(CodeCacheInterface *cache) {
 DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
                                         BlockMetaData *dest_block_meta) {
   auto edge_code = edge_code_cache.AllocateBlock(arch::EDGE_CODE_SIZE_BYTES);
-  auto edge = new DirectEdge(this, source_block_meta,
-                             dest_block_meta, edge_code);
+  auto edge = new DirectEdge(source_block_meta, dest_block_meta, edge_code);
 
   do {  // Generate a small stub of code specific to this `DirectEdge`.
     CodeCacheTransaction transaction(
@@ -181,6 +196,11 @@ DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
   } while (0);
 
   return edge;
+}
+
+// Get a pointer to this context's code cache index.
+LockedIndex *Context::CodeCacheIndex(void) {
+  return &code_cache_index;
 }
 
 }  // namespace granary

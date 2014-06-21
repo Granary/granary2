@@ -81,7 +81,7 @@ void BlockMetaData::Hash(HashFunction *hasher) const {
 }
 
 // Compare the serializable components of two generic meta-data instances for
-  // strict equality.
+// strict equality.
 bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);

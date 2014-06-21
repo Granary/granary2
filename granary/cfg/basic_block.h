@@ -157,11 +157,10 @@ class BasicBlock : protected UnownedCountedObject {
 class InstrumentedBasicBlock : public BasicBlock {
  public:
   GRANARY_INTERNAL_DEFINITION
-  explicit InstrumentedBasicBlock(BlockMetaData *meta_);
+  //explicit InstrumentedBasicBlock(BlockMetaData *meta_);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
-                                  BlockMetaData *meta_);
+  InstrumentedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
 
   virtual ~InstrumentedBasicBlock(void);
 
@@ -194,8 +193,6 @@ class InstrumentedBasicBlock : public BasicBlock {
 
   InstrumentedBasicBlock(void) = delete;
 
-  GRANARY_INTERNAL_DEFINITION uint32_t cached_meta_hash;
-
   // The starting PC of this basic block, if any.
   GRANARY_INTERNAL_DEFINITION AppPC native_pc;
 
@@ -223,7 +220,7 @@ class CachedBasicBlock final : public InstrumentedBasicBlock {
 };
 
 // A basic block that has been decoded but not yet committed to the code cache.
-class DecodedBasicBlock final : public InstrumentedBasicBlock {
+class DecodedBasicBlock : public InstrumentedBasicBlock {
  public:
   virtual ~DecodedBasicBlock(void) = default;
 
@@ -295,6 +292,19 @@ class DecodedBasicBlock final : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST last;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBasicBlock);
+};
+
+// Represents a decoded basic block that is meant as compensation code that
+// points to an existing block.
+class CompensationBasicBlock : public DecodedBasicBlock {
+ public:
+  using DecodedBasicBlock::DecodedBasicBlock;
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CompensationBasicBlock)
+  GRANARY_DEFINE_NEW_ALLOCATOR(CompensationBasicBlock, {
+    SHARED = true,
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+  })
 };
 
 // Forward declaration.

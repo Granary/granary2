@@ -6,8 +6,8 @@ START_FILE
 
 DECLARE_FUNC(granary_enter_direct_edge)
 
-#define DirectEdge_num_executions 8
-#define DirectEdge_num_execution_overflows 12
+#define DirectEdge_num_executions 16
+#define DirectEdge_num_execution_overflows 20
 
 // Context switch into granary. This is used by `edge.asm` to generate a
 // profiled and an unprofiled version of the edge entrypoint code. The profiled
@@ -16,7 +16,8 @@ DECLARE_FUNC(granary_enter_direct_edge)
 //
 // Note: We assume flags are save before this function is invoked.
 //
-// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure.
+// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure, and
+//       `RSI` is a pointer to the `ContextInferface` data structure.
 DEFINE_FUNC(granary_arch_enter_direct_edge)
     // Save the flags.
     pushfq
@@ -31,12 +32,12 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     // If we've already translated the target block, then increment the
     // execution counter. This is a saturating counter, where one counter
     // counts up to 32 bits, and the other counts the number of overflows.
-    push    %rsi
-    mov     $1, %rsi
-    xadd    %rsi, DirectEdge_num_executions(%rdi)
+    push    %rax
+    mov     $1, %rax
+    xadd    %rax, DirectEdge_num_executions(%rdi)
     jo      .Ledge_counter_overflowed
 
-    test    %rsi, %rsi
+    test    %rax, %rax
     jnz     .Lback_to_code_cache  // Already executed
 
     // We'll assume that if the value before incrementing was zero that we "won"
@@ -55,8 +56,7 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     jmp     .Lback_to_code_cache
 
   .Ltranslate_block:
-    // Save all regs, except `RDI`.
-    push    %rax
+    // Save all regs, except `RDI` and `RSI`.
     push    %rcx
     push    %rdx
     push    %rbx
@@ -80,7 +80,7 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     // Restore the old stack alignment.
     mov     8(%rsp), %rsp
 
-    // Restore the regs (except `RDI`)
+    // Restore the regs, except `RDI` and `RSI`.
     pop     %r15
     pop     %r14
     pop     %r13
@@ -93,10 +93,9 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     pop     %rbx
     pop     %rdx
     pop     %rcx
-    pop     %rax
 
   .Lback_to_code_cache:
-    pop     %rsi
+    pop     %rax
     popfq  // Will restore interrupts if disabled.
     ret
 END_FUNC(granary_arch_enter_direct_edge)

@@ -4,19 +4,26 @@
 
 #include "granary/code/edge.h"
 
+#include "granary/metadata.h"
+
 namespace granary {
 
-DirectEdge::DirectEdge(ContextInterface *context_,
-                       const BlockMetaData *source_meta_,
+DirectEdge::DirectEdge(const BlockMetaData *source_meta_,
                        BlockMetaData *dest_meta_, CachePC edge_code_)
-    : cached_target(nullptr),
+    : entry_target(nullptr),
+      exit_target(edge_code_),
       num_executions(0),
       num_execution_overflows(0),
-      context(context_),
       next(nullptr),
       source_meta(source_meta_),
-      dest_meta(dest_meta_),
+      dest_meta(ATOMIC_VAR_INIT(dest_meta_)),
       edge_code(edge_code_),
       patch_instruction(nullptr) {}
+
+DirectEdge::~DirectEdge(void) {
+  if (auto meta = dest_meta.exchange(nullptr, std::memory_order_relaxed)) {
+    delete meta;
+  }
+}
 
 }  // namespace granary

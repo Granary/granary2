@@ -164,6 +164,7 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
       auto cache_meta = MetaDataCast<CacheMetaData *>(cfrag->attr.block_meta);
       auto partition = cfrag->partition.Value();
       auto entry_frag = partition->entry_frag;
+
       GRANARY_ASSERT(nullptr == cache_meta->cache_pc);
       cache_meta->cache_pc = entry_frag->encoded_pc;
     }

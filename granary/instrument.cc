@@ -20,17 +20,39 @@
 namespace granary {
 namespace {
 
+// Try to finalize the control-flow bt converting any remaining
+// `DirectBasicBlock`s into `CachedBasicBlock`s (which are potentially preceded
+// by `CompensationBasicBlock`.
+static void FinalizeControlFlow(BlockFactory *factory,
+                                LocalControlFlowGraph *cfg) {
+  for (auto block : cfg->Blocks()) {
+    for (auto succ : block->Successors()) {
+      factory->RequestBlock(succ.block, REQUEST_CHECK_INDEX_AND_LCFG_ONLY);
+    }
+  }
+}
+
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic blocks.
 static void InstrumentControlFlow(Tool *tools,
                                   BlockFactory *factory,
                                   LocalControlFlowGraph *cfg) {
-  for (;; factory->MaterializeRequestedBlocks()) {
+  for (auto finalized = false; ; factory->MaterializeRequestedBlocks()) {
     for (auto tool : ToolIterator(tools)) {
       tool->InstrumentControlFlow(factory, cfg);
     }
     if (!factory->HasPendingMaterializationRequest()) {
-      break;
+      if (finalized) {
+        break;
+
+      // Try to force one more round of control-flow requests so that we can
+      // submit requests to look into the code cache index.
+      } else {
+        finalized = true;
+        FinalizeControlFlow(factory, cfg);
+      }
+    } else {
+      finalized = false;
     }
   }
 }
@@ -69,23 +91,45 @@ static uint32_t HashMetaData(BlockMetaData *meta) {
 
 // Instrument one or more basic blocks (contained in the local control-
 // flow graph, or materialized during `InstrumentControlFlow`).
-void Instrument(ContextInterface *context,
-                LocalControlFlowGraph *cfg,
-                BlockMetaData *meta) {
+//
+// Note: `meta` might be deleted if some block with the same meta-data already
+//       exists in the code cache index. Therefore, one must use the returned
+//       meta-data hereafter.
+BlockMetaData *Instrument(ContextInterface *context,
+                          LocalControlFlowGraph *cfg,
+                          BlockMetaData *meta) {
   GRANARY_IF_DEBUG( auto meta_hash = ) HashMetaData(meta);
 
   BlockFactory factory(context, cfg);
-  factory.MaterializeInitialBlock(meta);
 
-  auto tools = context->AllocateTools();
-  InstrumentControlFlow(tools, &factory, cfg);
-  InstrumentBlocks(tools, cfg);
-  InstrumentBlock(tools, cfg);
-  context->FreeTools(tools);
+  // Try to find the block in the code cache, otherwise manually decode it.
+  GRANARY_IF_DEBUG( const auto original_meta = meta; )
+  auto entry_block = factory.RequestIndexedBlock(&meta);
+  if (!entry_block) {
+    factory.MaterializeInitialBlock(meta);
+    entry_block = cfg->EntryBlock();
+  }
 
-  // Verify that the indexable meta-data for the entry basic block has not
-  // changed during the instrumentation process.
-  GRANARY_ASSERT(HashMetaData(meta) == meta_hash);
+  // If we have a decoded block, then instrument it.
+  if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(entry_block)) {
+    auto tools = context->AllocateTools();
+    InstrumentControlFlow(tools, &factory, cfg);
+    InstrumentBlocks(tools, cfg);
+    InstrumentBlock(tools, cfg);
+    context->FreeTools(tools);
+
+    // Verify that the indexable meta-data for the entry basic block has not
+    // changed during the instrumentation process.
+    GRANARY_ASSERT(original_meta == meta);
+    GRANARY_ASSERT(meta == decoded_block->MetaData());
+    GRANARY_ASSERT(HashMetaData(meta) == meta_hash);
+    return meta;
+
+  // If we don't have a decoded block, then we must have a cached block.
+  } else {
+    GRANARY_ASSERT(IsA<CachedBasicBlock *>(entry_block));
+    return entry_block->MetaData();
+  }
 }
 
 }  // namespace granary

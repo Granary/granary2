@@ -382,47 +382,15 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
   // match anymore.
   auto targets_edge_code = false;
   auto targets_direct_edge_code = false;
+  auto can_add_to_partition = false;
+  auto force_add_to_frag = !frag->attr.has_native_instrs;
+
   if (cfi->HasIndirectTarget()) {
     targets_edge_code = IsA<CodeFragment *>(target_frag);
+    can_add_to_partition = targets_edge_code;
   } else if (auto exit_target_frag = DynamicCast<ExitFragment *>(target_frag)) {
     targets_edge_code = EDGE_KIND_INVALID != exit_target_frag->edge.kind;
     targets_direct_edge_code = EDGE_KIND_DIRECT == exit_target_frag->edge.kind;
-  }
-
-  // Can we add `target_frag` to the same partition that its predecessor,
-  // `frag`, belongs to?
-  auto can_add_to_partition = true;
-  auto force_add_to_frag = !frag->attr.has_native_instrs;
-
-  // Function call/return, interrupt call/return, system call/return.
-  if (cfi->instruction.WritesToStackPointer()) {
-    if (targets_direct_edge_code) {  // Direct call.
-      GRANARY_ASSERT(!cfi->HasIndirectTarget());
-      can_add_to_partition = false;
-
-    } else if (targets_edge_code) {  // Indirect call, specialized return.
-      GRANARY_ASSERT(cfi->HasIndirectTarget());
-
-    // Unspecialized returns, system/interrupt calls/returns.
-    } else if (cfi->HasIndirectTarget()) {
-      can_add_to_partition = false;
-    }
-
-  } else if (targets_direct_edge_code) {  // Direct and conditional jumps.
-    can_add_to_partition = false;
-
-  } else if (targets_edge_code) {  // Indirect jumps.
-    GRANARY_ASSERT(cfi->HasIndirectTarget());
-
-  } else if (cfi->IsConditionalJump() && !cfi->HasIndirectTarget()) {
-    can_add_to_partition = false;  // Direct conditional jumps.
-  }
-
-  // If this CFI makes the stack valid, but the last fragment's stack wasn't
-  // valid, then force us into a new partition.
-  if (can_add_to_partition && makes_stack_valid && frag->stack.is_checked &&
-      !frag->stack.is_valid) {
-    can_add_to_partition = nullptr;
   }
 
   // We need to add a new fragment for this CFI.
@@ -432,6 +400,9 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
     auto succ = MakeEmptyLabelFragment(frags, block, label);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     frag_with_cfi = succ;
+
+  } else if (!cfi->HasIndirectTarget()) {
+    GRANARY_ASSERT(!cfi->IsFunctionCall());
   }
 
   frag_with_cfi = Append(frags, block, frag_with_cfi, cfi);

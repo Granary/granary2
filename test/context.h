@@ -64,6 +64,10 @@ class MockContext : public granary::ContextInterface {
   MOCK_METHOD2(AllocateDirectEdge,
                granary::DirectEdge *(const granary::BlockMetaData *,
                                      granary::BlockMetaData *));
+
+  // Get a pointer to this context's code cache index.
+  MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());
+
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);
 };

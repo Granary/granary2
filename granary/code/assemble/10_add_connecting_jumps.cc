@@ -15,13 +15,6 @@ namespace granary {
 extern NativeInstruction *AddFallThroughJump(Fragment *frag,
                                              Fragment *fall_through_frag);
 
-// Adds in an instruction that forces the end of a fragment, i.e. that control-
-// flow cannot pass through. It is reasonable for this to be a debug breakpoint
-// instruction or an undefined instruction.
-//
-// Note: This has an architecture-specific implementation.
-void AddFragmentEnd(Fragment *frag);
-
 namespace {
 
 static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr);
@@ -63,6 +56,7 @@ void AddConnectingJumps(FragmentList *frags) {
   auto first = frags->First();
   auto next_ptr = &(first->next);
   Fragment *last_frag = nullptr;
+  first->was_encode_ordered = true;
   OrderFragment(first, next_ptr);
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
     auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
@@ -85,13 +79,6 @@ void AddConnectingJumps(FragmentList *frags) {
       AddFallThroughJump(frag, fall_through);
     }
   }
-
-  // Architecture-specific, but can be used to add an instruction that will
-  // prevent prefetching beyond the last instruction of what we're encoding.
-  // This can make the difference between self/cross-modifying code (modifying
-  // existing instructions), and dynamic code generation (adding new code
-  // somewhere where execution has never reached).
-  AddFragmentEnd(last_frag);
 }
 
 }  // namespace granary

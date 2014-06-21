@@ -37,13 +37,4 @@ NativeInstruction *AddFallThroughJump(Fragment *frag,
   return instr;
 }
 
-// Adds in an instruction that forces the end of a fragment, i.e. that control-
-// flow cannot pass through. It is reasonable for this to be a debug breakpoint
-// instruction or an undefined instruction.
-void AddFragmentEnd(Fragment *frag) {
-  arch::Instruction ni;
-  UD2(&ni);
-  frag->instrs.Append(new NativeInstruction(&ni));
-}
-
 }  // namespace granary
