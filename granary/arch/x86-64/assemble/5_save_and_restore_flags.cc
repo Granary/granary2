@@ -105,7 +105,7 @@ void InjectRestoreFlags(Fragment *frag) {
     }
 
     if (flags.s.of) {
-      APP(ADD_GPR8_IMMb_80r0(&ni, XED_REG_AL, 0x7F));
+      APP(ADD_GPR8_IMMb_80r0(&ni, XED_REG_AL, static_cast<uint8_t>(0x7F)));
     }
 
     APP(SAHF(&ni));

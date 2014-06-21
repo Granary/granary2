@@ -41,20 +41,24 @@ static void CountInstrumentedPredecessors(FragmentList *frags) {
   }
 }
 
+// Returns the live flags on entry to a fragment.
+static uint32_t LiveFlagsOnEntry(Fragment *frag) {
+  if (IsA<ExitFragment *>(frag)) {
+    return AllArithmeticFlags();
+  } else {
+    return frag->flags.entry_live_flags;
+  }
+}
+
 // Returns the live flags on exit from a fragment.
 static uint32_t LiveFlagsOnExit(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
     return AllArithmeticFlags();
+  } else if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
+    return LiveFlagsOnEntry(fall_through);
+  } else {
+    return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
   }
-  auto exit_live_flags = 0U;
-  for (auto succ : frag->successors) {
-    if (IsA<ExitFragment *>(succ)) {
-      exit_live_flags = AllArithmeticFlags();
-    } else if (auto succ_code = DynamicCast<CodeFragment *>(succ)) {
-      exit_live_flags |= succ_code->flags.entry_live_flags;
-    }
-  }
-  return exit_live_flags;
 }
 
 // Analyzes and updates the flag use for a fragment. If the fragment's flag
@@ -68,6 +72,17 @@ static bool AnalyzeFlagUse(Fragment *frag) {
 
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (instr == frag->branch_instr) {
+        auto succ_flags = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+
+        // If we call another fragment, then we ignore whatever flags are live
+        // after the call, as the call itself takes precedence.
+        if (frag->branch_instr->IsFunctionCall()) {
+          flags.entry_live_flags = succ_flags;
+        } else {
+          flags.entry_live_flags |= succ_flags;
+        }
+      }
       VisitInstructionFlags(ninstr->instruction, &flags);
     }
   }

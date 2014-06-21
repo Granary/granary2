@@ -7,6 +7,7 @@
 
 #include "granary/code/compile.h"
 
+#include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/dispatch.h"
@@ -43,6 +44,7 @@ CachePC Dispatch(ContextInterface *context, BlockMetaData *meta) {
     Compile(&cfg);
     IndexBlocks(index, &cfg);
   }
+  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
   return cache_meta->cache_pc;
 }
 

@@ -155,7 +155,9 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
-      partition->entry_frag = frag;
+      if (partition->entry_frag) {
+        partition->entry_frag = frag;
+      }
     }
   }
   for (auto frag : FragmentListIterator(frags)) {

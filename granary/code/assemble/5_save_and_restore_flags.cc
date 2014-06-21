@@ -142,7 +142,8 @@ static void VerifyFragment(Fragment *frag) {
 }
 #endif
 
-// Identify the "flag zones" by making sure every fragment
+// Identify the "flag zones" by making sure every fragment is unioned into some
+// flag zone set.
 static void IdentifyFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     GRANARY_IF_DEBUG( VerifyFragment(frag); )
