@@ -68,8 +68,9 @@ void Init(const char *granary_path) {
 
     auto start_pc = Dispatch(context.AddressOf(), fibonacci);
     auto fib = UnsafeCast<int (*)(int)>(start_pc);
-    auto result = fib(10);
-    Log(LogOutput, "pc = 0x%p ... fibonacci(10) = %d\n", start_pc, result);
+    for (auto i = 0; i < 30; ++i) {
+      Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i, fibonacci(i), i, fib(i));
+    }
 
     context.Destroy();
   } else {

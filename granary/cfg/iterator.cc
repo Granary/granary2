@@ -60,17 +60,7 @@ void BackwardAppInstructionIterator::operator++(void) {
 
 // Move the iterator to the next basic block.
 void BasicBlockIterator::operator++(void) {
-  BasicBlock *curr(cursor->list.GetNext(cursor));
-  BasicBlock *next(nullptr);
-
-  // Auto-clean up blocks while iterating over them.
-  for (; curr && curr->CanDestroy(); curr = next) {
-    next = curr->list.GetNext(curr);
-    curr->list.Unlink();
-    delete curr;
-  }
-
-  cursor = curr;
+  cursor = cursor->list.GetNext(cursor);
 }
 
 // Get a basic block out of the iterator.

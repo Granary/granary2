@@ -220,13 +220,13 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
-  inline T GetData(void) const {
+  inline T Data(void) const {
     return UnsafeCast<T>(data);
   }
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
-  inline T *GetDataPtr(void) const {
+  inline T *DataPtr(void) const {
     return UnsafeCast<T *>(&data);
   }
 
@@ -237,7 +237,7 @@ class AnnotationInstruction : public Instruction {
 };
 
 // A label instruction. Just a specialized annotation instruction. Enforces at
-// the type leven that local control-flow instructions (within a block) must
+// the type level that local control-flow instructions (within a block) must
 // target a label. This makes it easier to identify fragment heads down the
 // line when doing register allocation and assembling.
 class LabelInstruction final : public AnnotationInstruction {
@@ -363,6 +363,10 @@ class BranchInstruction final : public NativeInstruction {
   // Return the targeted instruction of this branch.
   LabelInstruction *TargetInstruction(void) const;
 
+  // Modify this branch to target a different label.
+  GRANARY_INTERNAL_DEFINITION
+  void SetTargetInstruction(LabelInstruction *label);
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
     SHARED = true,
@@ -374,7 +378,7 @@ class BranchInstruction final : public NativeInstruction {
 
   // Instruction targeted by this branch. Assumed to be within the same
   // basic block as this instruction.
-  GRANARY_INTERNAL_DEFINITION LabelInstruction * const target;
+  GRANARY_INTERNAL_DEFINITION LabelInstruction * GRANARY_CONST target;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BranchInstruction);
 };

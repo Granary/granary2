@@ -166,6 +166,10 @@ class LockedIndex {
       : index(index_),
         index_lock() {}
 
+  ~LockedIndex(void) {
+    delete index;
+  }
+
   // Perform a lookup in the index. Lookups can execute concurrently.
   inline IndexFindResponse Request(BlockMetaData *meta) {
     ReadLocked locker(&index_lock);

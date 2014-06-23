@@ -16,17 +16,16 @@ namespace granary {
 
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
-
   // Start by marking every block as owned; we're destroying them anyway so
   // this sets up a simple invariant regarding the interaction between freeing
   // instructions and basic blocks.
-  for (BasicBlock *curr(first_block); curr; curr = curr->list.GetNext(curr)) {
-    curr->Acquire();
+  for (auto block : BasicBlockIterator(first_block)) {
+    block->Acquire();
   }
 
   // Free up all of the instruction lists.
-  for (BasicBlock *curr(first_block); curr; curr = curr->list.GetNext(curr)) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(curr);
+  for (auto block : BasicBlockIterator(first_block)) {
+    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
       decoded_block->FreeInstructionList();
     }
@@ -38,6 +37,8 @@ LocalControlFlowGraph::~LocalControlFlowGraph(void) {
     delete curr;
   }
 
+  context = nullptr;
+  entry_block = nullptr;
   first_block = nullptr;
   last_block = nullptr;
   first_new_block = nullptr;

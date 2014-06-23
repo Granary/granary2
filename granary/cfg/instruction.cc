@@ -62,7 +62,7 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   // not continue to reference the branch.
   auto branch = DynamicCast<BranchInstruction *>(instr);
   if (branch) {
-    *(branch->TargetInstruction()->GetDataPtr<void *>()) = nullptr;
+    *(branch->TargetInstruction()->DataPtr<void *>()) = nullptr;
   }
 
   return std::unique_ptr<Instruction>(instr);
@@ -230,12 +230,19 @@ BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
       target(target_) {
 
   // Mark this label as being targeted by some instruction.
-  *target->GetDataPtr<uint64_t>() += 1;
+  *target->DataPtr<uint64_t>() += 1;
 }
 
 // Return the targeted instruction of this branch.
 LabelInstruction *BranchInstruction::TargetInstruction(void) const {
   return target;
+}
+
+// Modify this branch to target a different label.
+void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
+  *target->DataPtr<uint64_t>() -= 1;
+  *label->DataPtr<uint64_t>() += 1;
+  target = label;
 }
 
 // Initialize a control-flow transfer instruction.

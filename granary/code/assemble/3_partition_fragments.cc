@@ -24,6 +24,8 @@ namespace {
 static bool HasUsefulInstructions(CodeFragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      // Labels that are targeted by at least one branch.
+      // Return addresses.
       if (annot->data) return true;
     } else {
       // Elsewise `has_native_instrs` would be `true` for `frag`.

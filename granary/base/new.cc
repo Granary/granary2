@@ -14,14 +14,15 @@
 namespace granary {
 namespace internal {
 
-#ifndef GRANARY_WITH_VALGRIND  // Use slab-style allocation.
-
 // Constants that define how we will initialize various chunks of memory.
 enum {
   UNALLOCATED_MEMORY_POISON = 0xAB,
   DEALLOCATED_MEMORY_POISON = 0xBC,
   UNINITIALIZED_MEMORY_POISON = 0xCD,
 };
+
+
+#ifndef GRANARY_WITH_VALGRIND  // Use slab-style allocation.
 
 // Initialize a new slab list. Once initialized, slab lists are never changed.
 SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
@@ -179,6 +180,7 @@ void *SlabAllocator::Allocate(void) {
 
 // Free some memory from heap.
 void SlabAllocator::Free(void *address) {
+  memset(address, internal::DEALLOCATED_MEMORY_POISON, aligned_size);
   free(address);
 }
 

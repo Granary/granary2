@@ -71,7 +71,7 @@ static Instruction *FindDefiningInstruction(SSAControlPhiNode *phi) {
   for (auto instr : InstructionListIterator(phi->frag->instrs)) {
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       if (IA_SSA_NODE_DEF == ainstr->annotation) {
-        if (ainstr->GetData<SSANode *>() == phi) return instr;
+        if (ainstr->Data<SSANode *>() == phi) return instr;
         continue;
       }
     }
@@ -240,7 +240,7 @@ static SSANode *DefinedNodeForReg(NativeInstruction *instr,
 static SSANode *DefinedNodeForReg(AnnotationInstruction *instr,
                                   VirtualRegister reg) {
   if (IA_SSA_NODE_DEF == instr->annotation) {
-    auto node = instr->GetData<SSANode *>();
+    auto node = instr->Data<SSANode *>();
     if (node->reg == reg) {
       return node;
     }

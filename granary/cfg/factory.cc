@@ -55,7 +55,7 @@ static InstrumentedBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
                                             BlockMetaData *meta,
                                             BasicBlock *existing_block) {
   auto adapt_block = new CompensationBasicBlock(cfg, meta);
-  adapt_block->AppendInstruction(lir::Jump(existing_block));
+  adapt_block->AppendInstruction(std::move(lir::Jump(existing_block)));
   return adapt_block;
 }
 
@@ -102,12 +102,12 @@ void BlockFactory::AddFallThroughInstruction(
     // instruction for the fall-through.
     arch::Instruction dinstr;
     if (!decoder->Decode(&dinstr, pc)) {
-      block->AppendInstruction(lir::Jump(new NativeBasicBlock(pc)));
+      block->AppendInstruction(std::move(lir::Jump(new NativeBasicBlock(pc))));
     } else if (dinstr.IsUnconditionalJump()) {
       decoder->Mangle(block, &dinstr);
       block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
-      block->AppendInstruction(lir::Jump(this, pc));
+      block->AppendInstruction(std::move(lir::Jump(this, pc)));
     }
   }
 }
@@ -144,7 +144,8 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     arch::Instruction dinstr;
     auto before_instr = block->LastInstruction()->Previous();
     if (!decoder.DecodeNext(&dinstr, &pc)) {
-      block->AppendInstruction(lir::Jump(new NativeBasicBlock(decoded_pc)));
+      block->AppendInstruction(std::move(lir::Jump(
+          new NativeBasicBlock(decoded_pc))));
       return;
     }
     decoder.Mangle(block, &dinstr);
@@ -158,19 +159,11 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.
 // Returns `true` if any changes were made to the LCFG.
 bool BlockFactory::MaterializeDirectBlocks(void) {
-  // Note: Can't use block iterator as it might GC some of the blocks that are
-  //       as-of-yet unreferenced!
-  bool materialized_a_block(false);
-  for (BasicBlock *block = cfg->first_block, *last_block = cfg->last_block;
-       nullptr != block;
-       block = block->list.GetNext(block)) {
-
+  auto materialized_a_block = false;
+  for (auto block : BasicBlockIterator(cfg->first_block)) {
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
     if (direct_block && MaterializeBlock(direct_block)) {
       materialized_a_block = true;
-    }
-    if (block == last_block) {
-      break;  // Can't materialize newly added blocks.
     }
   }
   return materialized_a_block;
@@ -179,18 +172,36 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
 // Unlink old blocks from the control-flow graph by changing the targets of
 // CTIs going to now-materialized `DirectBasicBlock`s.
 void BlockFactory::RelinkCFIs(void) {
-  // Note: Can't use block iterator as it might GC some of the blocks that are
-  //       as-of-yet unreferenced!
-  for (BasicBlock *block(cfg->first_block);
-       block != cfg->first_new_block;
-       block = block->list.GetNext(block)) {
+  for (auto block : BasicBlockIterator(cfg->first_block)) {
+    if (block == cfg->first_new_block) break;
 
     for (auto succ : block->Successors()) {
       auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
       if (direct_block && direct_block->materialized_block) {
-        succ.cti->ChangeTarget(direct_block->materialized_block);
+        auto materialized_block = direct_block->materialized_block;
+        cfg->AddBlock(materialized_block);
+        succ.cti->ChangeTarget(materialized_block);
       }
     }
+  }
+}
+
+// Remove blocks that are now unnecessary.
+void BlockFactory::RemoveOldBlocks(void) {
+  BasicBlock *prev(cfg->first_block);
+  for (auto block = cfg->first_block; block; ) {
+    if (block == cfg->first_new_block) break;
+    auto next_block = block->list.GetNext(block);
+    if (block->CanDestroy()) {
+      block->list.Unlink();
+      if (cfg->last_block == block) {
+        cfg->last_block = prev;
+      }
+      delete block;
+    } else {
+      prev = block;
+    }
+    block = next_block;
   }
 }
 
@@ -215,13 +226,9 @@ void BlockFactory::AnalyzeNewBlocks(void) {
 // as well as not being another `DirectBasicBlock` instance.
 InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
     DirectBasicBlock *exclude) {
-  // Note: Can't use block iterator as it might GC some of the blocks that are
-  //       as-of-yet unreferenced!
   InstrumentedBasicBlock *adapt_block(nullptr);
   auto exclude_meta = exclude->meta;
-  for (BasicBlock *block(cfg->first_block);
-       block != cfg->first_new_block;
-       block = block->list.GetNext(block)) {
+  for (auto block : BasicBlockIterator(cfg->first_block)) {
     if (block == exclude) continue;
     auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
     if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
@@ -282,7 +289,6 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
   switch (response.status) {
     case UnificationStatus::ACCEPT: {
       auto new_block = new CachedBasicBlock(cfg, response.meta);
-      cfg->AddBlock(new_block);
       if (response.meta != meta) delete meta;  // No longer needed.
       *meta_ptr = nullptr;
       return new_block;
@@ -290,7 +296,6 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
     case UnificationStatus::ADAPT: {
       auto cached_block = new CachedBasicBlock(cfg, response.meta);
       auto adapt_block = AdaptToBlock(cfg, meta, cached_block);
-      cfg->AddBlock(cached_block);
       *meta_ptr = nullptr;  // Steal.
       return adapt_block;
     }
@@ -320,7 +325,6 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       block->meta = nullptr;  // Steal.
       block->materialized_block = decoded_block;
       DecodeInstructionList(decoded_block);
-      cfg->AddBlock(decoded_block);
       break;
     }
     case REQUEST_NATIVE: {
@@ -328,7 +332,6 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       delete block->meta;
       block->materialized_block = native_block;
       block->meta = nullptr;  // No longer needed.
-      cfg->AddBlock(native_block);
       break;
     }
     default: {}  // REQUEST_LATER, REQUEST_DENIED.
@@ -340,8 +343,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
 void BlockFactory::MaterializeRequestedBlocks(void) {
   cfg->first_new_block = nullptr;
   has_pending_request = false;
-  if (MaterializeDirectBlocks() || cfg->first_new_block) {
+  if (MaterializeDirectBlocks()) {
     RelinkCFIs();
+    RemoveOldBlocks();
     AnalyzeNewBlocks();
   }
 }

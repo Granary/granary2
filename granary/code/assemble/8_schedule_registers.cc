@@ -83,7 +83,7 @@ static void ForEachDefinitionImpl(Instruction *instr,
                                   std::function<void(SSANode *)> &func) {
   if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
     if (IA_SSA_NODE_DEF == ainstr->annotation) {
-      if (auto def_node = ainstr->GetData<SSANode *>()) {
+      if (auto def_node = ainstr->Data<SSANode *>()) {
         func(def_node);
       }
     }
@@ -141,7 +141,7 @@ static void FreeSSAData(FragmentList *frags) {
         }
       } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
         if (IA_SSA_NODE_DEF == ainstr->annotation) {
-          delete ainstr->GetData<SSANode *>();
+          delete ainstr->Data<SSANode *>();
         }
       }
     }
@@ -781,7 +781,7 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
       // Handle compensation instructions.
       if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
         if (IA_SSA_NODE_UNDEF == ainstr->annotation) {
-          auto node_vr = StorageOf(ainstr->GetData<SSANode *>());
+          auto node_vr = StorageOf(ainstr->Data<SSANode *>());
           if (node_vr == vr) {
             local_sched.RestorePreferredGPR(ainstr, vr);
           }

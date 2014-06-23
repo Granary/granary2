@@ -92,15 +92,7 @@ BlockMetaData *InstrumentedBasicBlock::MetaData(void) {
 BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
   return meta;
 }
-/*
-// Initialize an instrumented basic block.
-InstrumentedBasicBlock::InstrumentedBasicBlock(BlockMetaData *meta_)
-    : cfg(nullptr),
-      meta(meta_),
-      cached_meta_hash(0),
-      native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
-                     : nullptr) {}
-*/
+
 InstrumentedBasicBlock::InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_)
     : cfg(cfg_),
@@ -119,6 +111,11 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
   return cache_meta->cache_pc;
 }
 
+DecodedBasicBlock::~DecodedBasicBlock(void) {
+  if (!list.IsAttached()) {
+    FreeInstructionList();
+  }
+}
 
 // Initialize a decoded basic block.
 DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
@@ -210,6 +207,12 @@ void DecodedBasicBlock::FreeInstructionList(void) {
     delete instr;
     instr = next_instr;
   }
+  first = nullptr;
+  last = nullptr;
+}
+
+DirectBasicBlock::~DirectBasicBlock(void) {
+  materialized_block = nullptr;
 }
 
 // Initialize a future basic block.

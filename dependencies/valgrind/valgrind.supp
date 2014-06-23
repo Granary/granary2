@@ -1,0 +1,13 @@
+{
+   ReleaseCodeCacheIndexWriteLock
+   Memcheck:Value8
+   fun:_ZN7granary16ReaderWriterLock12WriteReleaseEv
+   fun:_ZN7granary6detail22LockedIndexTransactionD2Ev
+   ...
+}
+{
+   LookupBlockMetaDataInCodeCacheIndex
+   Memcheck:Value8
+   fun:_ZN7granary6detail22LockedIndexTransaction6InsertEPNS_13BlockMetaDataE
+   ...
+}

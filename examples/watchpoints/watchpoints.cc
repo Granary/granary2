@@ -13,8 +13,7 @@ using namespace granary;
 // TODO(pag): Eventually handle user space addresses being de-referenced in
 //            kernel space.
 
-// Implements the instrumentation needed to do address watchpoints. Address
-// watchpoints work by tainting memory addresses, such that
+// Implements the instrumentation needed to do address watchpoints.
 //
 // Address watchpoints is a mechanism that enables selective memory shadowing
 // by tainting memory addresses. The 48th bit of an address distinguishes
@@ -69,7 +68,7 @@ class Watchpoints : public Tool {
 
     InlineBefore(instr,
                  "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
-                 GRANARY_IF_USER_ELSE("JB", "JNB") " l %2;"
+                 GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
                  "  SHL r64 %0, i8 16;"
                  "  SAR r64 %0, i8 16;"
                  "  "  // %0 now contains unwatched address.

@@ -38,6 +38,27 @@ VirtualRegister FlagKillReg(void) {
   return VirtualRegister::FromNative(XED_REG_RAX);
 }
 
+namespace {
+
+struct SaveRestore {
+  bool save_flag_killed_reg;
+  bool killed_reg_used;
+};
+
+static SaveRestore SaveRestoreKilledReg(const FlagZone *zone) {
+  SaveRestore ret = {false, false};
+  if (zone->flag_killed_reg.IsNative() &&
+      zone->live_regs.IsLive(zone->flag_killed_reg.Number())) {
+    ret.save_flag_killed_reg = true;
+  }
+  if ((ret.killed_reg_used = zone->used_regs.IsLive(zone->flag_killed_reg))) {
+    ret.save_flag_killed_reg = true;
+  }
+  return ret;
+}
+
+}  // namespace
+
 // Inserts instructions that saves the flags within the fragment `frag`.
 void InjectSaveFlags(Fragment *frag) {
   arch::Instruction ni;
@@ -53,13 +74,10 @@ void InjectSaveFlags(Fragment *frag) {
     GRANARY_ASSERT(!killed_flags.s.df);
     GRANARY_ASSERT(zone->flag_save_reg != zone->flag_killed_reg);
 
-    auto save_flag_killed_reg = zone->flag_killed_reg.IsNative() &&
-        zone->live_regs.IsLive(zone->flag_killed_reg.Number());
-
-    auto killed_reg_used = zone->used_regs.IsLive(zone->flag_killed_reg);
+    const auto sr = SaveRestoreKilledReg(zone);
 
     // Restore the native version of `flag_killed_reg` from `flag_save_reg`.
-    if (save_flag_killed_reg && killed_reg_used) {
+    if (sr.save_flag_killed_reg && sr.killed_reg_used) {
       PREP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
     }
 
@@ -70,8 +88,8 @@ void InjectSaveFlags(Fragment *frag) {
     PREP(LAHF(&ni));  // Save the arithmetic flags.
 
     // Save the native version of `flag_killed_reg` into `flag_save_reg`.
-    if (save_flag_killed_reg) {
-      if (killed_reg_used) {
+    if (sr.save_flag_killed_reg) {
+      if (sr.killed_reg_used) {
         // A bit of a hack: Try the XCHG into thinking that `flag_save_reg` is
         // a write-only operand instead of read/write.
         XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg);
@@ -96,11 +114,8 @@ void InjectRestoreFlags(Fragment *frag) {
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
-    auto save_flag_killed_reg = zone->flag_killed_reg.IsNative() &&
-        zone->live_regs.IsLive(zone->flag_killed_reg.Number());
-    auto killed_reg_used = zone->used_regs.IsLive(zone->flag_killed_reg);
-
-    if (save_flag_killed_reg && killed_reg_used) {
+    const auto sr = SaveRestoreKilledReg(zone);
+    if (sr.save_flag_killed_reg && sr.killed_reg_used) {
       APP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
     }
 
@@ -109,8 +124,8 @@ void InjectRestoreFlags(Fragment *frag) {
     }
 
     APP(SAHF(&ni));
-    if (save_flag_killed_reg) {
-      if (killed_reg_used) {
+    if (sr.save_flag_killed_reg) {
+      if (sr.killed_reg_used) {
         APP(XCHG_GPRv_GPRv(&ni, zone->flag_save_reg, zone->flag_killed_reg));
       } else {
         APP(

@@ -49,11 +49,11 @@ namespace granary {
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
 
-// Try to add a flag split hint to a code fragment.
+// Does this instruction hint that the fragment should be split before the next
+// modification of the flags?
 //
 // Note: This function has an architecture-specific implementation.
-extern void TryAddFlagSplitHint(CodeFragment *frag,
-                                const NativeInstruction *instr);
+bool InstructionHintsAtFlagSplit(const NativeInstruction *instr);
 
 // Returns true if this instruction can change the interrupt enabled state on
 // this CPU.
@@ -136,37 +136,72 @@ static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
 static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
                             CodeFragment *frag, Instruction *instr) {
   instr->UnsafeUnlink().release();
-  if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-    if (ninstr->WritesConditionCodes()) {
+  auto ninstr = DynamicCast<NativeInstruction *>(instr);
+  if (!ninstr) {
+    frag->instrs.Append(instr);
+    return frag;
+  }
 
-      // Try to split the fragment before appending the instruction so that
-      // we can (hopefully) optimize on some flag save/restore code.
-      if (frag->attr.has_flag_split_hint && !ninstr->IsAppInstruction()) {
-        GRANARY_ASSERT(!frag->attr.modifies_flags);
+  const auto modifies_flags = ninstr->WritesConditionCodes();
+  auto hints_at_split = false;
+  auto makes_frag_into_app = InstrMakesFragmentIntoAppCode(ninstr);
+
+  if (frag->attr.is_app_code) {
+    // Non-application instruction being added to an application fragment, need
+    // to split.
+    if (modifies_flags && !makes_frag_into_app) {
+      goto split;
+    }
+  } else {
+    if (makes_frag_into_app) {
+
+      // Adding an application instruction to a non-app fragment that already
+      // has (non-app) instructions that modify the flags.
+      if (frag->attr.modifies_flags) goto split;
+
+    // Instruction modifies the flags, and some prior instruction in the
+    // fragment has hinted that the fragment should be split instead of
+    // allowing flag-modifying instructions to be appended.
+    } else if (frag->attr.has_flag_split_hint && modifies_flags) {
+
+      // Early conversion of an instrumentation fragment into an application
+      // fragment.
+      if (!frag->attr.modifies_flags) {
         frag->attr.is_app_code = true;
-        auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
-        frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-        frag = succ;
       }
-      frag->attr.modifies_flags = true;
-      frag->attr.has_flag_split_hint = false;
-    }
-    frag->attr.has_native_instrs = true;
+      goto split;
 
-    // If the app instruction reads/writes the flags, then to maintain the
-    // flag save/restore invariant, we must make this into an app fragment.
-    // Also, if the app instruction writes to the stack pointer, then we want
-    // to try to prevent such an instruction from being placed inside of a
-    // flag save/restore zone.
-    if (!frag->attr.is_app_code && InstrMakesFragmentIntoAppCode(ninstr)) {
-      frag->attr.is_app_code = true;
-      frag->attr.has_flag_split_hint = false;
-    }
-    if (!frag->attr.is_app_code && !frag->attr.has_flag_split_hint) {
-      TryAddFlagSplitHint(frag, ninstr);
+    // Instruction doesn't modify the flags or make the fragment into app code,
+    // but might make us want to split this fragment (and ideally convert it
+    // into an app fragment) before an instrumentation instruction next modifies
+    // the flags.
+    } else {
+      hints_at_split = InstructionHintsAtFlagSplit(ninstr);
+
+      // Early conversion into app code for app instructions that hint at
+      // flag splits.
+      const auto is_app_instr = ninstr->IsAppInstruction();
+      if(hints_at_split && is_app_instr) {
+        makes_frag_into_app = true;
+        hints_at_split = false;
+        if (frag->attr.modifies_flags) goto split;
+      }
     }
   }
-  frag->instrs.Append(instr);
+  goto append;
+
+  split: {
+    auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
+    frag = succ;
+  }
+  append: {
+    frag->attr.has_native_instrs = true;
+    if (makes_frag_into_app) frag->attr.is_app_code = true;
+    if (modifies_flags) frag->attr.modifies_flags = true;
+    if (hints_at_split) frag->attr.has_flag_split_hint = true;
+    frag->instrs.Append(instr);
+  }
   return frag;
 }
 

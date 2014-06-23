@@ -30,44 +30,58 @@ extern const int NUM_IMPLICIT_OPERANDS[];
 
 namespace {
 
-bool HintFragment(const arch::Operand &op) {
+// Returns true if `reg` is one of the registers encompassed by `RAX`.
+static bool HintFragment(int reg) {
+  switch (static_cast<xed_reg_enum_t>(reg)) {
+    case XED_REG_AL:
+    case XED_REG_AH:
+    case XED_REG_AX:
+    case XED_REG_EAX:
+    case XED_REG_RAX:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Returns true if `op` uses `RAX` (or some other version of it).
+static bool HintFragment(const arch::Operand &op) {
   if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
     if (op.is_compound) {
-      return XED_REG_RAX == op.mem.reg_base ||
-             XED_REG_RAX == op.mem.reg_index;
+      return HintFragment(op.mem.reg_base) || HintFragment(op.mem.reg_index);
+    } else {
+      // Handled by `op.reg` case below.
     }
   } else if (XED_ENCODER_OPERAND_TYPE_REG != op.type) {
     return false;
   }
-  if (op.reg.IsGeneralPurpose()) {
-    auto reg = op.reg;
-    reg.Widen(arch::GPR_WIDTH_BYTES);
-    return XED_REG_RAX == reg.EncodeToNative();
+  if (op.reg.IsGeneralPurpose() && op.reg.IsNative()) {
+    return HintFragment(op.reg.EncodeToNative());
   }
   return false;
 }
 
 }  // namespace
 
-// Try to add a flag split hint to a code fragment.
-void TryAddFlagSplitHint(CodeFragment *frag, const NativeInstruction *instr) {
+// Does this instruction hint that the fragment should be split before the next
+// modification of the flags?
+bool InstructionHintsAtFlagSplit(const NativeInstruction *instr) {
   auto &ainstr(instr->instruction);
   for (auto &op : ainstr.ops) {
     if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
       break;
     }
     if (HintFragment(op)) {
-      frag->attr.has_flag_split_hint = true;
-      return;
+      return true;
     }
   }
   auto implicit_ops = arch::IMPLICIT_OPERANDS[ainstr.iclass];
   for (auto i = 0; i < arch::NUM_IMPLICIT_OPERANDS[ainstr.iclass]; ++i) {
     if (HintFragment(implicit_ops[i])) {
-      frag->attr.has_flag_split_hint = true;
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 // Returns true if this instruction can change the interrupt enabled state on

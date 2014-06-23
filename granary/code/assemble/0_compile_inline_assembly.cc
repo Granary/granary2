@@ -32,7 +32,7 @@ void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
         if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
           if (IA_INLINE_ASSEMBLY == annot->annotation) {
             auto asm_block = reinterpret_cast<InlineAssemblyBlock *>(
-                annot->GetData<void *>());
+                annot->Data<void *>());
             CompileInlineAssemblyBlock(cfg, dblock, instr, asm_block);
             delete asm_block;
             instr->UnsafeUnlink();

@@ -134,7 +134,7 @@ class BasicBlock : protected UnownedCountedObject {
 
   GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
- private:
+ protected:
   friend class BasicBlockIterator;
   friend class ControlFlowInstruction;
   friend class LocalControlFlowGraph;  // For `list` and `id`.
@@ -147,7 +147,7 @@ class BasicBlock : protected UnownedCountedObject {
 
   // Unique ID for this block within its local control-flow graph. Defaults to
   // `-1` if the block does not belong to an LCFG.
-  int id;
+  GRANARY_INTERNAL_DEFINITION int id;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
@@ -156,9 +156,6 @@ class BasicBlock : protected UnownedCountedObject {
 // is in the process of being instrumented, or will (likely) be instrumented.
 class InstrumentedBasicBlock : public BasicBlock {
  public:
-  GRANARY_INTERNAL_DEFINITION
-  //explicit InstrumentedBasicBlock(BlockMetaData *meta_);
-
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
 
@@ -222,7 +219,7 @@ class CachedBasicBlock final : public InstrumentedBasicBlock {
 // A basic block that has been decoded but not yet committed to the code cache.
 class DecodedBasicBlock : public InstrumentedBasicBlock {
  public:
-  virtual ~DecodedBasicBlock(void) = default;
+  virtual ~DecodedBasicBlock(void);
 
   GRANARY_INTERNAL_DEFINITION
   explicit DecodedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
@@ -273,6 +270,7 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   void UnsafeAppendInstruction(Instruction *instr);
 
  private:
+  friend class BlockFactory;
   friend class LocalControlFlowGraph;
 
   DecodedBasicBlock(void) = delete;
@@ -313,7 +311,7 @@ enum BlockRequestKind : uint8_t;
 // A basic block that has not yet been decoded, and might eventually be decoded.
 class DirectBasicBlock final : public InstrumentedBasicBlock {
  public:
-  virtual ~DirectBasicBlock(void) = default;
+  virtual ~DirectBasicBlock(void);
   GRANARY_INTERNAL_DEFINITION DirectBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_);
 

@@ -35,7 +35,12 @@ void *MetaDataArray::operator new(std::size_t) {
   return memset(AllocatePages(1), 0, arch::PAGE_SIZE_BYTES);
 }
 
+enum {
+  DEALLOCATED_MEMORY_POISON = 0xBC
+};
+
 void MetaDataArray::operator delete(void *address) {
+  memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
   return FreePages(address, 1);
 }
 

@@ -117,7 +117,7 @@ static void RelativizeCFIs(FragmentList *frags) {
 
       } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
         auto target = branch->TargetInstruction();
-        auto target_pc = target->GetData<CachePC>();
+        auto target_pc = target->Data<CachePC>();
         GRANARY_ASSERT(nullptr != target_pc);
         branch->instruction.SetBranchTarget(target_pc);
       }

@@ -4,6 +4,7 @@
 #define GRANARY_BASE_CONTAINER_H_
 
 #include "granary/base/base.h"
+#include "granary/base/string.h"
 
 namespace granary {
 
@@ -18,6 +19,7 @@ class Container {
   // Destroy the contained object.
   void Destroy(void) {
     operator->()->~T();
+    memset(storage, 0xAB, sizeof(T));
   }
 
   // Construct the contained object.
