@@ -57,16 +57,16 @@ def combine_output_files(source_dir):
   return (system_headers, combined_lines)
 
 # Run the C pre-processor the combined lines.
-def preprocess_combined_files(source_dir, lines):
+def preprocess_combined_files(source_dir, lines, extra_flags):
   open("/tmp/granary_export0.h", "w").write("\n".join(lines))
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL "
+      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -x c++ /tmp/granary_export0.h "
-      "> /tmp/granary_export1.h" % source_dir)
+      "> /tmp/granary_export1.h" % (source_dir, extra_flags))
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL "
+      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -dM -x c++ /tmp/granary_export0.h"
-      " > /tmp/granary_export2.h" % source_dir)
+      " > /tmp/granary_export2.h" % (source_dir, extra_flags))
   os.system(
       "clang++ -std=c++11 -dM -E -x c++ /dev/null > /tmp/granary_export3.h")
 
@@ -137,9 +137,9 @@ def strip_combined_files(new_lines):
         last_line_was_space = False
         new_lines.append(line)
 
-def main(where, source_dir, export_dir):
+def main(where, source_dir, export_dir, extra_flags):
   system_includes, lines = combine_output_files(source_dir)
-  preprocess_combined_files(source_dir, lines)
+  preprocess_combined_files(source_dir, lines, extra_flags)
   new_lines = combine_system_headers(system_includes)
   new_lines.extend(filter_macros(
       "/tmp/granary_export2.h", "/tmp/granary_export3.h"))
@@ -148,4 +148,4 @@ def main(where, source_dir, export_dir):
       "\n".join(new_lines))
 
 if "__main__" == __name__:
-  main(sys.argv[1], sys.argv[2], sys.argv[3])
+  main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])

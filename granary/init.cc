@@ -50,7 +50,7 @@ static int fibonacci(int n) {
 // Initialize Granary.
 void Init(const char *granary_path) {
 
-  // Initialize the driver (e.g. DynamoRIO). This usually performs from
+  // Initialize the driver (e.g. XED, DynamoRIO). This usually performs from
   // architecture-specific checks to determine which architectural features
   // are enabled.
   arch::Init();
