@@ -240,6 +240,10 @@ class Fragment : public EncodedFragment {
  public:
   Fragment(void);
 
+  // Relink a branch instruction in this fragment to point to a label in
+  // `new_succ`.
+  void RelinkBranchInstr(Fragment *new_succ);
+
   virtual ~Fragment(void) = default;
 
   GRANARY_DECLARE_BASE_CLASS(Fragment)

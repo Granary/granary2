@@ -154,30 +154,6 @@ static void ResetTempData(FragmentList *frags) {
   }
 }
 
-// Returns the label that identifies the current fragment.
-static LabelInstruction *GetFragEntryLabel(Fragment *frag) {
-  for (auto instr : InstructionListIterator(frag->instrs)) {
-    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
-      if (GetMetaData<Fragment *>(label) == frag) {
-        return label;
-      }
-    }
-  }
-  GRANARY_ASSERT(false);
-  return nullptr;
-}
-
-// Relink a branch instruction in `curr` that targets `succ` to point instead
-// to `new_succ`.
-static void RelinkBranchInstr(Fragment *curr, Fragment *succ,
-                              Fragment *new_succ) {
-  if (succ == new_succ) return;
-  if (!curr->branch_instr) return;
-  auto branch = DynamicCast<BranchInstruction *>(curr->branch_instr);
-  if (!branch) return;
-  branch->SetTargetInstruction(GetFragEntryLabel(new_succ));
-}
-
 // Returns true if the transition between `curr` and `next` represents a flags
 // entry point.
 //
@@ -286,8 +262,7 @@ static void AddExitFragment(FragmentList *frags,
       *succ_ptr = exit_frag;
       back_link = exit_frag;
     }
-
-    RelinkBranchInstr(curr, succ, back_link);
+    curr->RelinkBranchInstr(back_link);
   }
 }
 
@@ -325,8 +300,7 @@ static void AddEntryFragment(FragmentList *frags,
       *succ_ptr = entry_frag;
       back_link = entry_frag;
     }
-
-    RelinkBranchInstr(curr, succ, back_link);
+    curr->RelinkBranchInstr(back_link);
   }
 }
 

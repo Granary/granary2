@@ -13,6 +13,7 @@
 #include "granary/breakpoint.h"
 #include "granary/logging.h"
 #include "granary/module.h"
+#include "granary/util.h"
 
 namespace granary {
 
@@ -169,6 +170,33 @@ Fragment::Fragment(void)
       successors{nullptr, nullptr},
       branch_instr(nullptr),
       stack_frame() { }
+
+namespace {
+
+// Returns the label that identifies the current fragment.
+static LabelInstruction *GetFragEntryLabel(Fragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
+      if (GetMetaData<Fragment *>(label) == frag) {
+        return label;
+      }
+    }
+  }
+  GRANARY_ASSERT(false);
+  return nullptr;
+}
+
+}  // namespace
+
+// Relink a branch instruction in this fragment to point to a label in
+// `new_succ`.
+void Fragment::RelinkBranchInstr(Fragment *new_succ) {
+  if (!branch_instr) return;
+  if (new_succ != successors[FRAG_SUCC_BRANCH]) return;
+  auto branch = DynamicCast<BranchInstruction *>(branch_instr);
+  if (!branch) return;
+  branch->SetTargetInstruction(GetFragEntryLabel(new_succ));
+}
 
 SSAFragment::~SSAFragment(void) {}
 CodeFragment::~CodeFragment(void) {}
