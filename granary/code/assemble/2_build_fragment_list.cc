@@ -181,7 +181,7 @@ static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
       // Early conversion into app code for app instructions that hint at
       // flag splits.
       const auto is_app_instr = ninstr->IsAppInstruction();
-      if(hints_at_split && is_app_instr) {
+      if (hints_at_split && is_app_instr) {
         makes_frag_into_app = true;
         hints_at_split = false;
         if (frag->attr.modifies_flags) goto split;

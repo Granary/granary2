@@ -8,10 +8,11 @@
 #include "granary/metadata.h"
 #include "granary/module.h"
 
-#include "test/tool.h"
 #include "test/context.h"
+#include "test/index.h"
+#include "test/tool.h"
 
-using namespace ::testing;
+using namespace testing;
 using namespace granary;
 
 class ToolA : public MockTool {
@@ -50,7 +51,9 @@ class InstrumentTest : public Test {
   InstrumentTest(void)
       : m1(&context),
         m2(&context),
-        m3(&context) {
+        m3(&context),
+        index(new MockIndex),
+        locked_index(index) {
     m1.Register("a");
     m2.Register("b");  // Registers `ToolA` and `ToolB`.
     m3.Register("c");  // Registers `ToolA`, `ToolB`, and `ToolC`.
@@ -64,6 +67,9 @@ class InstrumentTest : public Test {
   ToolManager m3;
 
   MetaDataManager metadata_manager;
+
+  MockIndex *index;
+  granary::LockedIndex locked_index;
 };
 
 // Test running ToolA on invalid (nullptr) code.
@@ -78,6 +84,13 @@ TEST_F(InstrumentTest, InstrumentNothing) {
 
   Tool *tool_a_generic = m1.AllocateTools();
   ToolA *tool_a = UnsafeCast<ToolA *>(tool_a_generic);
+  auto meta = metadata_manager.Allocate();
+
+  EXPECT_CALL(context, CodeCacheIndex())
+      .WillRepeatedly(Return(&locked_index));
+
+  EXPECT_CALL(*index, Request(meta))
+     .WillOnce(Return(IndexFindResponse{UnificationStatus::REJECT, nullptr}));
 
   EXPECT_CALL(context, AllocateTools())
       .Times(1)
@@ -98,7 +111,6 @@ TEST_F(InstrumentTest, InstrumentNothing) {
         m1.FreeTools(tools);
       }));
 
-  auto meta = metadata_manager.Allocate();
   do {
     LocalControlFlowGraph cfg(&context);  // Meta-data will be cleaned up.
     Instrument(&context, &cfg, meta);

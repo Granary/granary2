@@ -7,7 +7,7 @@
 #include "granary/code/edge.h"
 
 #include "granary/context.h"
-#include "granary/dispatch.h"
+#include "granary/translate.h"
 
 GRANARY_DECLARE_bool(profile_direct_edges);
 
@@ -40,7 +40,7 @@ void EnterGranary(DirectEdge *edge, ContextInterface *context) {
     // exclusion over edge translation.
     return;
   }
-  UpdateEdge(edge, Dispatch(context, meta));
+  UpdateEdge(edge, Translate(context, meta));
 }
 
 }  // namespace granary

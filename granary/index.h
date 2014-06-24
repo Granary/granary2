@@ -109,7 +109,7 @@ class Index : public IndexInterface {
   static void operator delete[](void *) = delete;
 
  private:
-  // The `- 1` assumes a vtable pointer :-/
+  // The `- 1` is to account for a vtable pointer.
   internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE - 1];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Index);

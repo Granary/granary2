@@ -23,13 +23,14 @@ namespace {
 // Try to finalize the control-flow bt converting any remaining
 // `DirectBasicBlock`s into `CachedBasicBlock`s (which are potentially preceded
 // by `CompensationBasicBlock`.
-static void FinalizeControlFlow(BlockFactory *factory,
+static bool FinalizeControlFlow(BlockFactory *factory,
                                 LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     for (auto succ : block->Successors()) {
       factory->RequestBlock(succ.block, REQUEST_CHECK_INDEX_AND_LCFG_ONLY);
     }
   }
+  return factory->HasPendingMaterializationRequest();
 }
 
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
@@ -43,13 +44,13 @@ static void InstrumentControlFlow(Tool *tools,
     }
     if (!factory->HasPendingMaterializationRequest()) {
       if (finalized) {
-        break;
+        return;
 
       // Try to force one more round of control-flow requests so that we can
       // submit requests to look into the code cache index.
       } else {
         finalized = true;
-        FinalizeControlFlow(factory, cfg);
+        if (!FinalizeControlFlow(factory, cfg)) return;
       }
     } else {
       finalized = false;

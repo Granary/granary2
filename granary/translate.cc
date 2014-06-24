@@ -10,9 +10,9 @@
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
-#include "granary/dispatch.h"
 #include "granary/index.h"
 #include "granary/instrument.h"
+#include "granary/translate.h"
 
 namespace granary {
 namespace {
@@ -30,12 +30,12 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
-CachePC Dispatch(ContextInterface *context, AppPC pc) {
-  return Dispatch(context, context->AllocateBlockMetaData(pc));
+CachePC Translate(ContextInterface *context, AppPC pc) {
+  return Translate(context, context->AllocateBlockMetaData(pc));
 }
 
 // Instrument, compile, and index some basic blocks.
-CachePC Dispatch(ContextInterface *context, BlockMetaData *meta) {
+CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
   LocalControlFlowGraph cfg(context);
   auto index = context->CodeCacheIndex();
   meta = Instrument(context, &cfg, meta);

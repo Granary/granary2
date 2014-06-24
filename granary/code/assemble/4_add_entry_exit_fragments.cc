@@ -64,11 +64,10 @@ static uint32_t LiveFlagsOnExit(Fragment *frag) {
 // Analyzes and updates the flag use for a fragment. If the fragment's flag
 // use was changed then this returns true.
 static bool AnalyzeFlagUse(Fragment *frag) {
-  auto exit_live_flags = LiveFlagsOnExit(frag);
   FlagUsageInfo flags;
   flags.all_written_flags = 0U;
-  flags.exit_live_flags = exit_live_flags;
-  flags.entry_live_flags = exit_live_flags;
+  flags.exit_live_flags = LiveFlagsOnExit(frag);
+  flags.entry_live_flags = flags.exit_live_flags;
 
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -88,6 +87,8 @@ static bool AnalyzeFlagUse(Fragment *frag) {
   }
   if (flags.entry_live_flags != frag->flags.entry_live_flags ||
       flags.exit_live_flags != frag->flags.exit_live_flags) {
+    GRANARY_ASSERT(flags.entry_live_flags >= frag->flags.entry_live_flags);
+    GRANARY_ASSERT(flags.exit_live_flags >= frag->flags.exit_live_flags);
     frag->flags = flags;
     return true;
   } else {

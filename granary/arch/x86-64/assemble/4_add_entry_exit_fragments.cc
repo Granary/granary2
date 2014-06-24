@@ -16,19 +16,27 @@ extern const FlagsSet IFORM_FLAGS[];
 
 }  // namespace arch
 
+enum {
+  ALL_AFLAGS_WITH_DF = 3285U,
+  ALL_AFLAGS_WITHOUT_DF = 2261U
+};
+
 // Visits an instructions within the fragment and revives/kills architecture-
 // specific flags stored in the `FlagUsageInfo` object.
 void VisitInstructionFlags(const arch::Instruction &instr,
                            FlagUsageInfo *flags) {
   auto &instr_flags(arch::IFORM_FLAGS[instr.iform]);
-  flags->all_written_flags |= instr_flags.written.flat;
-  flags->all_read_flags |= instr_flags.read.flat;
-  flags->entry_live_flags &= ~instr_flags.written.flat;
-  flags->entry_live_flags |= instr_flags.read.flat;
+  flags->all_written_flags |= instr_flags.written.flat & ALL_AFLAGS_WITH_DF;
+  flags->all_read_flags |= instr_flags.read.flat & ALL_AFLAGS_WITH_DF;
+  flags->entry_live_flags &= ~instr_flags.written.flat & ALL_AFLAGS_WITH_DF;
+  flags->entry_live_flags |= instr_flags.read.flat & ALL_AFLAGS_WITH_DF;
 }
 
 // Returns a bitmap representing all arithmetic flags being live.
 uint32_t AllArithmeticFlags(void) {
+  return ALL_AFLAGS_WITHOUT_DF;
+
+  // For documentation purposes only.
   xed_flag_set_t flags;
   flags.s.of = 1;
   flags.s.sf = 1;

@@ -16,22 +16,27 @@
 #include "granary/instrument.h"
 #include "granary/util.h"
 
+using namespace granary;
+using namespace testing;
+
 SimpleEncoderTest::SimpleEncoderTest(void)
-    : module(granary::ModuleKind::GRANARY, "granary") {
-  meta_manager.Register<granary::ModuleMetaData>();
-  meta_manager.Register<granary::CacheMetaData>();
-  meta_manager.Register<granary::LiveRegisterMetaData>();
-  meta_manager.Register<granary::StackMetaData>();
-  meta_manager.Register<granary::IndexMetaData>();
-  granary::arch::Init();
+    : module(ModuleKind::GRANARY, "granary"),
+      index(new MockIndex),
+      locked_index(index) {
+  meta_manager.Register<ModuleMetaData>();
+  meta_manager.Register<CacheMetaData>();
+  meta_manager.Register<LiveRegisterMetaData>();
+  meta_manager.Register<StackMetaData>();
+  meta_manager.Register<IndexMetaData>();
+  arch::Init();
 
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, AllocateCodeCache())
       .Times(1)
-      .WillOnce(testing::Return(&code_cache));
+      .WillOnce(Return(&code_cache));
 
   module.SetContext(&context);
-  module.AddRange(0, ~0ULL, 0, granary::MODULE_EXECUTABLE);
+  module.AddRange(0, ~0ULL, 0, MODULE_EXECUTABLE);
 }
 
 SimpleEncoderTest::~SimpleEncoderTest(void) {
@@ -40,32 +45,38 @@ SimpleEncoderTest::~SimpleEncoderTest(void) {
       .Times(1);
 }
 
-granary::BlockMetaData *SimpleEncoderTest::AllocateMeta(granary::AppPC pc) {
+BlockMetaData *SimpleEncoderTest::AllocateMeta(AppPC pc) {
   auto meta = meta_manager.Allocate();
-  auto module_meta = granary::MetaDataCast<granary::ModuleMetaData *>(meta);
+  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
   module_meta->start_pc = pc;
   module_meta->source.module = &module;
   module_meta->source.offset = 0;
   return meta;
 }
 
-granary::CachePC SimpleEncoderTest::InstrumentAndEncode(granary::AppPC pc) {
+CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
   using namespace granary;
   LocalControlFlowGraph cfg(&context);
 
   auto meta = AllocateMeta(pc);
 
+  EXPECT_CALL(context, CodeCacheIndex())
+      .WillRepeatedly(Return(&locked_index));
+
+  EXPECT_CALL(*index, Request(meta))
+      .WillOnce(Return(IndexFindResponse{UnificationStatus::REJECT, nullptr}));
+
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, AllocateEmptyBlockMetaData())
       .Times(1)
-      .WillOnce(testing::InvokeWithoutArgs([&] {
+      .WillOnce(InvokeWithoutArgs([&] {
         return meta_manager.Allocate();
       }));
 
   // Allocate all tools to instrument the first block.
   EXPECT_CALL(context, AllocateTools())
       .Times(1)
-      .WillOnce(testing::Return(nullptr));
+      .WillOnce(Return(nullptr));
 
   // Free all tools after instrumenting the LCFG.
   EXPECT_CALL(context, FreeTools(nullptr))

@@ -10,9 +10,9 @@
 
 #include "granary/client.h"
 #include "granary/context.h"
-#include "granary/dispatch.h"
 #include "granary/init.h"
 #include "granary/logging.h"
+#include "granary/translate.h"
 
 // TODO(pag): Remove me.
 #include "granary/base/cast.h"
@@ -66,7 +66,7 @@ void Init(const char *granary_path) {
   if (!FLAG_help) {
     context.Construct();
 
-    auto start_pc = Dispatch(context.AddressOf(), fibonacci);
+    auto start_pc = Translate(context.AddressOf(), fibonacci);
     auto fib = UnsafeCast<int (*)(int)>(start_pc);
     for (auto i = 0; i < 30; ++i) {
       Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i, fibonacci(i), i, fib(i));
