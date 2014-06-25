@@ -4,6 +4,7 @@
 #define TEST_UTIL_ISOLATED_FUNCTION_H_
 
 #include "granary/base/base.h"
+#include "granary/base/cast.h"
 
 struct IsolatedRegState {
   struct {
@@ -46,5 +47,30 @@ struct IsolatedRegState {
 void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
                          void *func,
                          void *instrumented_func);
+
+namespace detail {
+
+inline static void SetArg(int, std::initializer_list<uint64_t *>) {}
+
+// Set an argument in the `IsolatedRegState` structure.
+template <typename T, typename... Args>
+inline static void SetArg(int arg_num, std::initializer_list<uint64_t *> regs,
+                          T arg, Args... rest) {
+  *(regs.begin()[arg_num]) = granary::UnsafeCast<uint64_t>(arg);
+  SetArg(arg_num + 1, regs, rest...);
+}
+
+}  // namespace detail
+
+template <typename R, typename... Args>
+void RunIsolatedFunction(R (*func)(Args...), void *instrumented_func,
+                         Args... args) {
+  std::function<void(IsolatedRegState *)> setup([=] (IsolatedRegState *regs) {
+    auto arg_regs = {&(regs->ARG1), &(regs->ARG2), &(regs->ARG3)};
+    detail::SetArg(0, arg_regs, args...);
+  });
+  RunIsolatedFunction(setup, granary::UnsafeCast<void *>(func),
+                      instrumented_func);
+}
 
 #endif  // TEST_UTIL_ISOLATED_FUNCTION_H_

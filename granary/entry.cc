@@ -9,7 +9,13 @@
 #include "granary/context.h"
 #include "granary/translate.h"
 
-GRANARY_DECLARE_bool(profile_direct_edges);
+GRANARY_DEFINE_bool(profile_direct_edges, false,
+    "Should all direct edge control-flow transfers be profiled before they "
+    "are patched? The default is no. If this is enabled then it will likely "
+    "incur substantial overheads.");
+
+// TODO(pag): Add an option that says put edge code in for all blocks, even if
+//            not needed.
 
 namespace granary {
 namespace {

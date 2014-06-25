@@ -212,12 +212,6 @@ static void UpdateFlagZones(FragmentList *frags) {
         flag_zone->live_regs.Union(flag_exit->regs.live_on_entry);
         flag_zone->live_flags |= flag_exit->flags.exit_live_flags;
       }
-    } else {
-#ifdef GRANARY_DEBUG
-      if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        GRANARY_ASSERT(code->attr.is_app_code);
-      }
-#endif
     }
   }
 }

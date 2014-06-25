@@ -106,6 +106,8 @@ static void RelativizeCFIs(FragmentList *frags) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
         if (cfi->HasIndirectTarget()) continue;  // No target PC.
+        if (IsA<NativeBasicBlock *>(cfi->TargetBlock())) continue;
+
         GRANARY_ASSERT(frag->branch_instr == cfi);
         auto target_frag = frag->successors[FRAG_SUCC_BRANCH];
         GRANARY_ASSERT(nullptr != target_frag);

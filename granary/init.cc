@@ -31,6 +31,10 @@ extern "C" {
 extern void granary_test_mangle(void);
 }
 
+GRANARY_DEFINE_string(tools, "",
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--clients=print_bbs,follow_jumps`.");
+
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
 
@@ -64,7 +68,7 @@ void Init(const char *granary_path) {
   LoadClients(granary_path);
 
   if (!FLAG_help) {
-    context.Construct();
+    context.Construct(FLAG_tools);
 
     auto start_pc = Translate(context.AddressOf(), fibonacci);
     auto fib = UnsafeCast<int (*)(int)>(start_pc);

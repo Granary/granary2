@@ -93,6 +93,7 @@ static void RelativizeConditionalBranch(CacheMetaData *meta,
   // Overwrite the conditional branch with an indirect JMP.
   auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
   JMP_MEMv(instr, &(addr_mloc->addr));
+  instr->is_sticky = true;
 }
 
 // Relativize a loop instruction. This turns an instruction like `jecxz <foo>`
@@ -113,6 +114,7 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
   if (target_is_far_away) {
     auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
     arch::JMP_MEMv(instr, &(addr_mloc->addr));
+    instr->is_sticky = true;
   } else {
     arch::JMP_RELBRd<PC>(instr, target_pc);
   }
@@ -137,11 +139,13 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
     if (target_is_far_away) {
       auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
       arch::CALL_NEAR_MEMv(instr, &(addr_mloc->addr));
+      instr->is_sticky = true;
     }
   } else if (XED_ICLASS_JMP == iclass) {
     if (target_is_far_away) {
       auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
       arch::JMP_MEMv(instr, &(addr_mloc->addr));
+      instr->is_sticky = true;
     }
 
   // Always need to mangle this.

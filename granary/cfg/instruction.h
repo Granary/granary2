@@ -292,7 +292,7 @@ class NativeInstruction : public Instruction {
   bool IsJump(void) const;
   bool IsUnconditionalJump(void) const;
   bool IsConditionalJump(void) const;
-  bool HasIndirectTarget(void) const;
+  virtual bool HasIndirectTarget(void) const;
 
   // Note: See `NativeInstruction::DecodedPC` for some details related to
   //       how native instructions might be decoded into many instructions, not
@@ -395,6 +395,8 @@ class ControlFlowInstruction final : public NativeInstruction {
   GRANARY_INTERNAL_DEFINITION
   ControlFlowInstruction(const arch::Instruction *instruction_,
                          BasicBlock *target_);
+
+  virtual bool HasIndirectTarget(void) const;
 
   // Return the target block of this CFI.
   BasicBlock *TargetBlock(void) const;

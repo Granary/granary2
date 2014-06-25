@@ -49,8 +49,8 @@ static ToolDescription *FindDescByName(const char *name) {
 // it hasn't already got an ID, and then adds the tool into the global list of
 // all registered tools.
 static void RegisterToolDescription(ToolDescription *desc, const char *name) {
-  FineGrainedLocked locker(&next_tool_id_lock);
   if (-1 == desc->id) {
+    FineGrainedLocked locker(&next_tool_id_lock);
     GRANARY_ASSERT(MAX_NUM_MANAGED_TOOLS > next_tool_id);
     desc->id = next_tool_id++;
     desc->next = descriptions.load(std::memory_order_acquire);
@@ -251,6 +251,7 @@ Tool *ToolManager::AllocateTools(void) {
         auto tool = reinterpret_cast<Tool *>(mem);
         tool->context = context;  // Initialize before constructing!
         desc->initialize(mem);
+        GRANARY_ASSERT(context == tool->context);
         VALGRIND_MALLOCLIKE_BLOCK(tool, desc->size, 0, 0);
 
         *next_tool = tool;

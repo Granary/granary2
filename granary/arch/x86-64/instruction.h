@@ -208,7 +208,11 @@ class Instruction : public InstructionInterface {
   // virtual register usage.
   bool is_save_restore:1;
 
-  // Can this instruction be removed?
+  // Can this instruction be removed? This comes up in cases like late mangling
+  // (`1_mangle.cc`) and VR slot allocation (`9_allocate_slots.cc`) interacting
+  // with indirect calls and jumps, where the mangler has converted a native
+  // call/jump into an indirect call/jump because the native target is too far
+  // away from the code cache.
   bool is_sticky;
 
   // Number of explicit operands.

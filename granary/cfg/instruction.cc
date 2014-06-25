@@ -268,6 +268,21 @@ ControlFlowInstruction::~ControlFlowInstruction(void) {
   }
 }
 
+// Special case that breaks some of our abstractions: sometimes we convert
+// direct control-flow instructions into indirect ones, because the native
+// targets are too far away. When we do that, we still want to pretend that
+// these instructions (after conversion to having an indirect target operand)
+// are still direct.
+bool ControlFlowInstruction::HasIndirectTarget(void) const {
+  if (this->NativeInstruction::HasIndirectTarget()) {
+    if (auto native_target = DynamicCast<NativeBasicBlock *>(target)) {
+      return nullptr == native_target->StartAppPC();
+    }
+    return true;
+  }
+  return false;
+}
+
 // Return the target block of this CFI.
 BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
   return target;

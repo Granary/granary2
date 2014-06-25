@@ -184,7 +184,7 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
     if (code_curr->attr.is_app_code) return false;
     if (IsA<PartitionEntryFragment *>(next)) return false;
     if (IsA<PartitionExitFragment *>(next)) return true;
-    if (IsA<ExitFragment *>(next)) return true;
+    if (IsA<ExitFragment *>(next)) return false;
     auto code_next = DynamicCast<CodeFragment *>(next);
     GRANARY_ASSERT(nullptr != code_next);
     return code_next->attr.is_app_code;

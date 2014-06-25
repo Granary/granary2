@@ -82,8 +82,9 @@ class ContextInterface {
 // instructions as potentially faulting.
 class Context : public ContextInterface {
  public:
-  // Initialize the Context.
-  Context(void);
+  // Initialize the this instrumentation contexts with a comma-separated list
+  // of tools that should be used during instrumentation.
+  explicit Context(const char *tool_names);
 
   virtual ~Context(void);
 
@@ -125,6 +126,7 @@ class Context : public ContextInterface {
   virtual LockedIndex *CodeCacheIndex(void) override;
 
  private:
+  Context(void) = delete;
 
   // Manages all modules allocated/understood by this environment.
   ModuleManager module_manager;

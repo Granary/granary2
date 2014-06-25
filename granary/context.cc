@@ -17,18 +17,10 @@
 #include "granary/context.h"
 #include "granary/index.h"
 
-GRANARY_DEFINE_string(tools, "",
-    "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--clients=print_bbs,follow_jumps`.");
-
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
     "The number of pages allocated at once to store edge code. Each "
     "environment maintains its own edge code allocator. The default value is "
     "1 pages per slab.");
-
-GRANARY_DEFINE_bool(profile_direct_edges, false,
-    "Should all direct edge control-flow transfers be profiled before they "
-    "are patched? The default is no.");
 
 namespace granary {
 namespace arch {
@@ -62,33 +54,33 @@ static CachePC CreateDirectEntryCode(ContextInterface *context,
 }
 
 // Register internal meta-data.
-static void InitMetaData(MetaDataManager &metadata_manager) {
-  metadata_manager.Register<ModuleMetaData>();
-  metadata_manager.Register<CacheMetaData>();
-  metadata_manager.Register<LiveRegisterMetaData>();
-  metadata_manager.Register<StackMetaData>();
-  metadata_manager.Register<IndexMetaData>();
+static void InitMetaData(MetaDataManager *metadata_manager) {
+  metadata_manager->Register<ModuleMetaData>();
+  metadata_manager->Register<CacheMetaData>();
+  metadata_manager->Register<LiveRegisterMetaData>();
+  metadata_manager->Register<StackMetaData>();
+  metadata_manager->Register<IndexMetaData>();
 }
 
 // Tell Granary about all loaded tools.
-static void InitTools(ToolManager &tool_manager) {
+static void InitTools(ToolManager *tool_manager, const char *tool_names) {
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
-      FLAG_tools,
-      [&] (const char *tool_name) {
-        tool_manager.Register(tool_name);
+      tool_names,
+      [=] (const char *tool_name) {
+        tool_manager->Register(tool_name);
       });
 
   // Do a dummy allocation and free of all tools. Tools register meta-data
   // through their constructors and so this will get all tool+option-specific
   // meta-data registered.
-  tool_manager.FreeTools(tool_manager.AllocateTools());
+  tool_manager->FreeTools(tool_manager->AllocateTools());
 }
 
 }  // namespace
 
 ContextInterface::ContextInterface(void) {}
 
-Context::Context(void)
+Context::Context(const char *tool_names)
     : module_manager(this),
       metadata_manager(),
       tool_manager(this),
@@ -98,12 +90,12 @@ Context::Context(void)
       patched_edge_list(nullptr),
       unpatched_edge_list(nullptr),
       code_cache_index(new Index) {
-  InitMetaData(metadata_manager);
+  InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
   module_manager.RegisterAllBuiltIn();
 
-  InitTools(tool_manager);
+  InitTools(&tool_manager, tool_names);
 }
 
 namespace {

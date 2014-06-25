@@ -168,6 +168,7 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
     } else {  // Nop.
       GRANARY_ASSERT(src.reg.IsStackPointer());
     }
+    GRANARY_ASSERT(!ainstr.is_sticky);
     NOP_90(&ainstr);
   } else if (src.is_compound) {
     if (XED_REG_RSP == src.mem.reg_base) {  // Read of an offset stack pointer.

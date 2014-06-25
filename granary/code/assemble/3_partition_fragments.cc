@@ -36,9 +36,10 @@ static bool HasUsefulInstructions(CodeFragment *frag) {
 }
 
 // Removes a fragment that has been identified as being useless.
-static Fragment *UnlinkUselessFrag(Fragment *prev, CodeFragment *frag,
+static Fragment *UnlinkUselessFrag(FragmentList *frags, Fragment *prev,
+                                   CodeFragment *frag,
                                    Fragment **removed_list) {
-  frag->list.Unlink();
+  frags->Remove(frag);
   frag->next = *removed_list;
   *removed_list = frag;
   return prev;
@@ -93,7 +94,7 @@ static void RemoveUselessFrags(FragmentList *frags) {
       if (cfrag->branch_instr) break;
       if (cfrag->successors[FRAG_SUCC_BRANCH]) break;
       if (HasUsefulInstructions(cfrag)) break;
-      curr = UnlinkUselessFrag(prev, cfrag, &removed_list);
+      curr = UnlinkUselessFrag(frags, prev, cfrag, &removed_list);
       break;
     }
     prev = curr;
