@@ -264,6 +264,8 @@ static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
 // Analyze this instruction's use of the stack pointer.
 void Instruction::AnalyzeStackUsage(void) const {
   analyzed_stack_usage = true;
+  reads_from_stack_pointer = false;
+  writes_to_stack_pointer = false;
   auto self = const_cast<Instruction *>(this);
   for (auto &op : ops) {
     if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {

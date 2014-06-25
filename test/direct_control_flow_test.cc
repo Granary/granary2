@@ -4,6 +4,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/arch/init.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
@@ -12,8 +14,6 @@
 #include "granary/context.h"
 #include "granary/tool.h"
 #include "granary/translate.h"
-
-#include "test/util/isolated_function.h"
 
 using namespace granary;
 using namespace testing;
@@ -126,6 +126,7 @@ class NativeCallTool : public Tool {
       virtual ~tool_name ## _DirectControlFlowTest(void) = default; \
       \
       static void SetUpTestCase(void) { \
+        arch::Init(); \
         RegisterTool<tool_name>(#tool_name); \
       } \
       \

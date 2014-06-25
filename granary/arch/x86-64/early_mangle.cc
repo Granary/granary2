@@ -170,6 +170,9 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
 // `LEA` instructions.
 static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
+  auto unmangled_uses_sp = instr->ReadsFromStackPointer() ||
+                           instr->WritesToStackPointer();
+
   for (auto &op : instr->ops) {
     if (op.is_explicit) {
       if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
@@ -182,6 +185,12 @@ static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
         MangleExplicitStackPointerRegOp(block, instr, op);
       }
     }
+  }
+
+  // Re-analyze this instruction so that we don't later report that some
+  // instruction is operating on the stack when it isn't.
+  if (unmangled_uses_sp) {
+    instr->AnalyzeStackUsage();
   }
 }
 
