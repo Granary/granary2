@@ -20,7 +20,7 @@ namespace {
 
 // Instruction iclass reversers for conditional branches, indexed by
 // `instr->iclass - XED_ICLASS_JB`.
-const xed_iclass_enum_t kReversedConditionalCFIs[] = {
+static const xed_iclass_enum_t kReversedConditionalCFIs[] = {
   XED_ICLASS_JNB,
   XED_ICLASS_JNBE,
   XED_ICLASS_JNL,
@@ -45,7 +45,7 @@ const xed_iclass_enum_t kReversedConditionalCFIs[] = {
 // Instruction builders for conditional branches, indexed by
 // `instr->iclass - XED_ICLASS_JB`.
 typedef void (CFIBuilder)(arch::Instruction *, PC);
-CFIBuilder * const kConditionalCFIBuilders[] = {
+static CFIBuilder * const kConditionalCFIBuilders[] = {
   arch::JB_RELBRd<PC>,
   arch::JBE_RELBRd<PC>,
   arch::JL_RELBRd<PC>,
@@ -66,6 +66,16 @@ CFIBuilder * const kConditionalCFIBuilders[] = {
   arch::JS_RELBRd<PC>,
   arch::JZ_RELBRd<PC>
 };
+
+// Inserts a `UD2` instruction after a CFI. The idea here is that if we're
+// mangling jumps to native code, then we don't want the (first) predicted
+// target of the indirect jump to be the next instruction, so we hint at the
+// processor to stop prefetching via the `UD2`.
+static void InsertUD2AfterCFI(ControlFlowInstruction *cfi) {
+  arch::Instruction ni;
+  UD2(&ni);
+  cfi->UnsafeInsertAfter(new NativeInstruction(&ni));
+}
 
 // Relativize a conditional branch by turning it into an indirect jump through
 // a `NativeAddress`, then add instructions around the new indirect jump to
@@ -94,6 +104,8 @@ static void RelativizeConditionalBranch(CacheMetaData *meta,
   auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
   JMP_MEMv(instr, &(addr_mloc->addr));
   instr->is_sticky = true;
+
+  InsertUD2AfterCFI(cfi);
 }
 
 // Relativize a loop instruction. This turns an instruction like `jecxz <foo>`
@@ -115,6 +127,8 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
     auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
     arch::JMP_MEMv(instr, &(addr_mloc->addr));
     instr->is_sticky = true;
+
+    InsertUD2AfterCFI(cfi);
   } else {
     arch::JMP_RELBRd<PC>(instr, target_pc);
   }
@@ -146,6 +160,8 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
       auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
       arch::JMP_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
+
+      InsertUD2AfterCFI(cfi);
     }
 
   // Always need to mangle this.
