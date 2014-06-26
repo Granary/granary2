@@ -71,6 +71,13 @@ class Instruction : public InstructionInterface {
   // Set the PC-relative branch target.
   inline void SetBranchTarget(PC pc) {
     ops[0].branch_target.as_pc = pc;
+    ops[0].is_annot_encoded_pc = false;
+  }
+
+  // Set a branch target to be an annotation instruction.
+  inline void SetBranchTarget(AnnotationInstruction *instr) {
+    ops[0].ret_address = instr;
+    ops[0].is_annot_encoded_pc = true;
   }
 
   inline bool IsFunctionCall(void) const {

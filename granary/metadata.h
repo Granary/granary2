@@ -285,6 +285,15 @@ class BlockMetaData {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
 
+// For code editing purposes only. Sometimes Eclipse has trouble with all the
+// `EnableIf` specializations, so this serves to satisfy its type checker.
+#ifdef GRANARY_ECLIPSE
+
+template <typename T>
+T MetaDataCast(BlockMetaData *);
+
+#else
+
 // Cast some generic meta-data into some specific meta-data.
 template <typename T, typename EnableIf<IsMetaDataPointer<T>::RESULT>::Type=0>
 inline T MetaDataCast(BlockMetaData *meta) {
@@ -293,6 +302,8 @@ inline T MetaDataCast(BlockMetaData *meta) {
       ? reinterpret_cast<T>(meta->Cast(MetaDataDescription::Get<M>()))
       : nullptr;
 }
+
+#endif  // GRANARY_ECLIPSE
 
 #ifdef GRANARY_INTERNAL
 // Manages all metadata within a particular environment.

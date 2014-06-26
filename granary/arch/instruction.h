@@ -13,6 +13,10 @@
 #include "granary/base/pc.h"
 
 namespace granary {
+
+// Forward declarations.
+class AnnotationInstruction;
+
 namespace arch {
 
 // Documents the methods that must be provided by driver instructions. This
@@ -33,6 +37,9 @@ class InstructionInterface {
       const std::function<void(granary::Operand *)> &func);
 
   void SetBranchTarget(PC pc);
+
+  // Set a branch target to be an annotation instruction.
+  void SetBranchTarget(AnnotationInstruction *instr);
 
   bool IsFunctionCall(void) const;
 

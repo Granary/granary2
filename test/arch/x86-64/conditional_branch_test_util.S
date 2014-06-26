@@ -71,3 +71,40 @@
 
 FOR_EACH_CBR(MAKE_CBR_TEST_FUNC)
 
+BEGIN_FUNC(jcc_jecxz_true)
+    xor     %eax, %eax;
+    mov     $0, %rcx;
+    jecxz   1f;
+    mov     $0, %rax;
+    jmp     2f;
+1:  mov     $1, %rax;
+2:  ret;
+END_FUNC
+
+BEGIN_FUNC(jcc_jecxz_false)
+    mov $1, %rcx;
+    jecxz 1f;
+    mov $1, %rax;
+    jmp 2f;
+1:  mov $0, %rax;
+2:  ret;
+END_FUNC
+
+BEGIN_FUNC(jcc_jrcxz_true)
+    xor     %eax, %eax;
+    mov     $0, %rcx;
+    jrcxz   1f;
+    mov     $0, %rax;
+    jmp     2f;
+1:  mov     $1, %rax;
+2:  ret;
+END_FUNC
+
+BEGIN_FUNC(jcc_jrcxz_false)
+    mov $1, %rcx;
+    jrcxz 1f;
+    mov $1, %rax;
+    jmp 2f;
+1:  mov $0, %rax;
+2:  ret;
+END_FUNC

@@ -25,12 +25,16 @@ inline static T *GetMetaDataStrict(InstrumentedBasicBlock *block) {
   return MetaDataCast<T *>(block->MetaData());
 }
 
-#ifdef GRANARY_ECLIPSE
-
 // For code editing purposes only. Sometimes Eclipse has trouble with all the
 // `EnableIf` specializations, so this serves to satisfy its type checker.
+#ifdef GRANARY_ECLIPSE
+
 template <typename T>
 T GetMetaData(const Instruction *instr);
+
+template <typename T>
+void SetMetaData(Instruction *, T);
+
 
 #else
 
@@ -52,13 +56,6 @@ inline static T GetMetaData(const Instruction *instr) {
   return instr->MetaData<T>();
 }
 
-#endif  // GRANARY_ECLIPSE
-
-// Get an instruction's meta-data.
-inline static void ClearMetaData(Instruction *instr) {
-  instr->ClearMetaData();
-}
-
 // Set an instruction's meta-data.
 inline static void SetMetaData(Instruction *instr, uintptr_t val) {
   instr->SetMetaData(val);
@@ -71,6 +68,13 @@ template <
 >
 inline static void SetMetaData(Instruction *instr, T val) {
   instr->SetMetaData<T>(val);
+}
+
+#endif  // GRANARY_ECLIPSE
+
+// Clear an instruction's meta-data.
+inline static void ClearMetaData(Instruction *instr) {
+  instr->ClearMetaData();
 }
 
 }  // namespace granary

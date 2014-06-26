@@ -14,12 +14,18 @@
 
 namespace granary {
 
-#ifdef GRANARY_ECLIPSE
-
 // For code editing purposes only. Sometimes Eclipse has trouble with all the
 // `EnableIf` specializations, so this serves to satisfy its type checker.
+#ifdef GRANARY_ECLIPSE
+
 template <typename ToT, typename FromT>
 ToT UnsafeCast(FromT);
+
+template <typename ToT, typename FromT>
+ToT DynamicCast(FromT);
+
+template <typename T, typename U>
+bool IsA(U *);
 
 #else
 
@@ -77,7 +83,6 @@ inline ToT UnsafeCast(const FromT v) {
   return static_cast<ToT>(reinterpret_cast<uintptr_t>(v));
 }
 
-
 // Pointer to pointer type.
 template <
   typename ToT,
@@ -87,7 +92,6 @@ template <
 inline ToT UnsafeCast(const FromT v) {
   return reinterpret_cast<ToT>(reinterpret_cast<uintptr_t>(v));
 }
-
 
 // Integral to pointer type.
 template <
@@ -107,6 +111,36 @@ template <
 >
 inline ToT UnsafeCast(const FromT v) {
   return static_cast<ToT>(v);
+}
+
+// Base type to derived type cast.
+template <
+  typename PointerT,
+  typename BaseT,
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
+>
+inline PointerT DynamicCast(const BaseT *ptr) {
+  if (!ptr) {
+    return nullptr;
+  }
+  typedef typename RemoveConst<
+      typename RemovePointer<PointerT>::Type>::Type DerivedT;
+  if (ptr && DerivedT::IsDerivedFrom(ptr)) {
+    return UnsafeCast<PointerT>(ptr);
+  }
+  return nullptr;
+}
+
+// Base type to derived type cast.
+template <
+  typename PointerT,
+  typename BaseT,
+  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
+>
+inline bool IsA(const BaseT *ptr) {
+  typedef typename RemoveConst<
+      typename RemovePointer<PointerT>::Type>::Type DerivedT;
+  return ptr && DerivedT::IsDerivedFrom(ptr);
 }
 
 #endif  // GRANARY_ECLIPSE
@@ -160,36 +194,6 @@ inline ToT UnsafeCast(const FromT v) {
   static bool IsDerivedFrom(const derived_type *); \
   static bool IsDerivedFrom(const base_type *base); \
   virtual int TypeId(void) const;
-
-// Base type to derived type cast.
-template <
-  typename PointerT,
-  typename BaseT,
-  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
->
-inline PointerT DynamicCast(const BaseT *ptr) {
-  if (!ptr) {
-    return nullptr;
-  }
-  typedef typename RemoveConst<
-      typename RemovePointer<PointerT>::Type>::Type DerivedT;
-  if (ptr && DerivedT::IsDerivedFrom(ptr)) {
-    return UnsafeCast<PointerT>(ptr);
-  }
-  return nullptr;
-}
-
-// Base type to derived type cast.
-template <
-  typename PointerT,
-  typename BaseT,
-  typename EnableIf<!!IsPointer<PointerT>::RESULT>::Type=0
->
-inline bool IsA(const BaseT *ptr) {
-  typedef typename RemoveConst<
-      typename RemovePointer<PointerT>::Type>::Type DerivedT;
-  return ptr && DerivedT::IsDerivedFrom(ptr);
-}
 
 }  // namespace granary
 

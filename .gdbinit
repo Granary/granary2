@@ -1,10 +1,10 @@
 set logging off
 set breakpoint pending on
 set print demangle on
-set print asm-demangle on
+set print asm-demangle off
 set print object on
 set print static-members on
-set disassembly-flavor att
+set disassembly-flavor intel
 set language c++
 
 # set-user-detect

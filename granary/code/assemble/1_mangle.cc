@@ -33,6 +33,12 @@ extern void RelativizeDirectCFI(CacheMetaData *meta,
 extern void MangleIndirectCFI(DecodedBasicBlock *block,
                               ControlFlowInstruction *cfi);
 
+// Performs mangling of an direct CFI instruction.
+//
+// Note: This has an architecture-specific implementation.
+extern void MangleDirectCFI(DecodedBasicBlock *block,
+                            ControlFlowInstruction *cfi, AppPC target_pc);
+
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
 //
@@ -139,6 +145,15 @@ class BlockMangler {
     } else if (auto return_bb = DynamicCast<ReturnBasicBlock *>(target_block)) {
       if (return_bb->UnsafeMetaData()) {
         MangleSpecializedReturn(cfi);
+      }
+
+    // Some CFIs (e.g. very short conditional jumps) might need to be mangled
+    // into a form that uses branches.
+    } else {
+      if (IsA<CachedBasicBlock *>(target_block)) {
+        MangleDirectCFI(block, cfi, target_block->StartCachePC());
+      } else {
+        MangleDirectCFI(block, cfi, target_block->StartAppPC());
       }
     }
   }

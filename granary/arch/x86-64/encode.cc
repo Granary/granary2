@@ -56,7 +56,8 @@ static void InitEncoderInstruction(const Instruction *instr,
 
 // Encode a branch displacement operand.
 static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
-                         CachePC next_pc) {
+                         CachePC next_pc, xed_iclass_enum_t iclass
+                         GRANARY_IF_DEBUG(, bool check_reachable)) {
   intptr_t target = 0;
   auto next_addr = reinterpret_cast<intptr_t>(next_pc);
   if (op.is_annot_encoded_pc) {
@@ -65,8 +66,26 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
     target = op.branch_target.as_int;
   }
   xedo->type = op.type;
-  xedo->width = 32;
-  xedo->u.brdisp = static_cast<int32_t>(target - next_addr);
+  const auto brdisp_64 = target - next_addr;
+  const auto brdisp_32 = static_cast<int32_t>(brdisp_64);
+
+  GRANARY_ASSERT(!check_reachable || brdisp_32 == brdisp_64);
+
+  switch (iclass) {
+    case XED_ICLASS_JRCXZ:
+    case XED_ICLASS_LOOP:
+    case XED_ICLASS_LOOPE:
+    case XED_ICLASS_LOOPNE:
+      xedo->width = 8;
+      xedo->u.brdisp = static_cast<int8_t>(brdisp_32);
+      GRANARY_ASSERT(!check_reachable || xedo->u.brdisp == brdisp_32);
+      break;
+
+    default:
+      xedo->width = 32;
+      xedo->u.brdisp = brdisp_32;
+      break;
+  }
 }
 
 // Encode a register operand.
@@ -214,8 +233,8 @@ static void LateMangleLEA(Instruction *instr) {
 
 // Encode the operands of the instruction.
 static void EncodeOperands(const Instruction *instr,
-                           xed_encoder_instruction_t *xede,
-                           CachePC pc) {
+                           xed_encoder_instruction_t *xede, CachePC pc
+                           GRANARY_IF_DEBUG(, bool check_reachable)) {
   auto op_width = 0;
   auto op_index = 0;
 
@@ -225,7 +244,8 @@ static void EncodeOperands(const Instruction *instr,
     op_width = std::max(op_width, op.BitWidth());
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
-        EncodeBrDisp(op, &xedo, pc + instr->encoded_length);
+        EncodeBrDisp(op, &xedo, pc + instr->encoded_length, instr->iclass
+                     GRANARY_IF_DEBUG(, check_reachable));
         break;
       case XED_ENCODER_OPERAND_TYPE_REG:
         EncodeReg(op, &xedo);
@@ -239,6 +259,8 @@ static void EncodeOperands(const Instruction *instr,
         EncodeMem(op, &xedo);
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
+        // TODO(pag): Do reachability checks in `EncodePtr`, as is
+        //            done in `EncodeBrDisp`.
         EncodePtr(op, &xedo, pc + instr->encoded_length);
         break;
       case XED_ENCODER_OPERAND_TYPE_INVALID:
@@ -282,6 +304,7 @@ static void EncodeSpecialCases(const Instruction *instr,
 // an instruction can be encoded.
 CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   xed_encoder_instruction_t xede;
+  const auto is_stage_encoding = InstructionEncodeKind::STAGED == encode_kind;
 
   // Make sure that something like the `LEA` produced from mangling `XLAT` is
   // correctly handled.
@@ -292,7 +315,7 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   // Step 1: Convert Granary IR into XED encoder IR.
   InitEncoderInstruction(instr, &xede);
-  EncodeOperands(instr, &xede, pc);
+  EncodeOperands(instr, &xede, pc GRANARY_IF_DEBUG(, !is_stage_encoding));
   EncodeSpecialCases(instr, &xede);
 
   auto old_encoded_pc = instr->encoded_pc;
@@ -301,7 +324,7 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   // is used to compute the length of every instruction, as well as to ensure
   // that every instruction can indeed be encoded.
   instr->encoded_pc = pc;
-  if (InstructionEncodeKind::STAGED == encode_kind) {
+  if (is_stage_encoding) {
     instr->encoded_length = 0;
   } else {
     GRANARY_ASSERT(0 < instr->encoded_length);

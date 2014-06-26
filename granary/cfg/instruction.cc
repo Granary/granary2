@@ -277,6 +277,8 @@ bool ControlFlowInstruction::HasIndirectTarget(void) const {
   if (this->NativeInstruction::HasIndirectTarget()) {
     if (auto native_target = DynamicCast<NativeBasicBlock *>(target)) {
       return nullptr == native_target->StartAppPC();
+    } else if (IsA<CachedBasicBlock *>(target)) {
+      return false;
     }
     return true;
   }

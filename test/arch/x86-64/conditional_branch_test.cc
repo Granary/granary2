@@ -57,6 +57,15 @@ enum {
 
 extern "C" {
 FOR_EACH_CBR(DECLARE_COND_JUMP_TESTER)
+
+extern bool jcc_jcxz_true(void);
+extern bool jcc_jcxz_false(void);
+
+extern bool jcc_jecxz_true(void);
+extern bool jcc_jecxz_false(void);
+
+extern bool jcc_jrcxz_true(void);
+extern bool jcc_jrcxz_false(void);
 }
 
 using namespace granary;
@@ -104,3 +113,6 @@ class ConditionalBranchTest : public Test {
     }
 
 FOR_EACH_CBR(JCC_TEST)
+
+JCC_TEST(jecxz)
+JCC_TEST(jrcxz)

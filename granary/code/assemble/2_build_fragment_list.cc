@@ -381,6 +381,9 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
   // Direct jump / conditional jump to an unresolved block, need to add in
   // some edge code.
   } else if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+    // TODO(pag): If the number of predecessors of this block is >= 2 then it
+    //            would be nice if they could share the same edge code via some
+    //            intermediate fragment with the patchable jump.
     return MakeDirectEdgeFragment(frags, pred_frag, direct_block,
                                   direct_block->MetaData());
 

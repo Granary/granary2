@@ -108,6 +108,12 @@ static void RelativizeConditionalBranch(CacheMetaData *meta,
   InsertUD2AfterCFI(cfi);
 }
 
+// Returns `true` if this is an looping instruction.
+static bool IsLoopInstruction(xed_iclass_enum_t iclass) {
+  return XED_ICLASS_JRCXZ == iclass ||
+         (XED_ICLASS_LOOP <= iclass && XED_ICLASS_LOOPNE >= iclass);
+}
+
 // Relativize a loop instruction. This turns an instruction like `jecxz <foo>`
 // or `loop <foo>` into:
 //                    jmp   <try_loop>
@@ -120,7 +126,6 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
   arch::Instruction loop_do_loop;
 
   memcpy(&loop_do_loop, instr, sizeof loop_do_loop);
-  loop_do_loop.SetBranchTarget(nullptr);
 
   arch::JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
   if (target_is_far_away) {
@@ -136,10 +141,13 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
   auto do_loop = new LabelInstruction;
   auto try_loop = new LabelInstruction;
 
-  do_loop->UnsafeInsertBefore(new BranchInstruction(&jmp_try_loop, try_loop));
+  loop_do_loop.SetBranchTarget(do_loop);
+
+  cfi->UnsafeInsertBefore(new BranchInstruction(&jmp_try_loop, try_loop));
   cfi->UnsafeInsertBefore(do_loop);
+
+  cfi->UnsafeInsertAfter(new BranchInstruction(&loop_do_loop, do_loop));
   cfi->UnsafeInsertAfter(try_loop);
-  try_loop->UnsafeInsertAfter(new BranchInstruction(&loop_do_loop, do_loop));
 }
 
 }  // namespace
@@ -165,8 +173,7 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
     }
 
   // Always need to mangle this.
-  } else if (XED_ICLASS_JRCXZ == iclass ||
-             (XED_ICLASS_LOOP <= iclass && XED_ICLASS_LOOPNE >= iclass)) {
+  } else if (IsLoopInstruction(iclass)) {
     RelativizeLoop(meta, cfi, instr, target_pc, target_is_far_away);
 
   // Conditional jumps. We translate these by converting them into a negated
@@ -205,6 +212,17 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
 
   // Note: The final mangling of indirect calls and indirect jumps happens in
   //       `9_allocate_slots.cc` in the function `RemoveIndirectCallsAndJumps`.
+}
+
+// Performs mangling of an direct CFI instruction.
+//
+// Note: This has an architecture-specific implementation.
+void MangleDirectCFI(DecodedBasicBlock *, ControlFlowInstruction *cfi,
+                     AppPC target_pc) {
+  auto &instr(cfi->instruction);
+  if (IsLoopInstruction(instr.iclass)) {
+    RelativizeLoop(nullptr, cfi, &instr, target_pc, false);
+  }
 }
 
 // Relativize a instruction with a memory operand, where the operand loads some
