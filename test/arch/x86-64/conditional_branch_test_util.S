@@ -82,11 +82,11 @@ BEGIN_FUNC(jcc_jecxz_true)
 END_FUNC
 
 BEGIN_FUNC(jcc_jecxz_false)
-    mov $1, %rcx;
-    jecxz 1f;
-    mov $1, %rax;
-    jmp 2f;
-1:  mov $0, %rax;
+    mov     $1, %rcx;
+    jecxz   1f;
+    mov     $1, %rax;
+    jmp     2f;
+1:  mov     $0, %rax;
 2:  ret;
 END_FUNC
 
@@ -101,10 +101,42 @@ BEGIN_FUNC(jcc_jrcxz_true)
 END_FUNC
 
 BEGIN_FUNC(jcc_jrcxz_false)
-    mov $1, %rcx;
-    jrcxz 1f;
-    mov $1, %rax;
-    jmp 2f;
-1:  mov $0, %rax;
+    mov     $1, %rcx;
+    jrcxz   1f;
+    mov     $1, %rax;
+    jmp     2f;
+1:  mov     $0, %rax;
 2:  ret;
+END_FUNC
+
+BEGIN_FUNC(loop_return_5)
+    mov     $0, %rax;
+    mov     $5, %rcx;
+1:  inc     %rax;
+    loop    2f;
+    jmp     3f;
+2:  jmp     1b;
+3:  ret;
+END_FUNC
+
+
+BEGIN_FUNC(loope_return_5)
+    mov     $0, %rax;
+    mov     $5, %rcx;
+1:  inc     %rax;
+    xor     %edx, %edx;  // Ensure ZF=1.
+    loope   2f;
+    jmp     3f;
+2:  jmp     1b;
+3:  ret;
+END_FUNC
+
+BEGIN_FUNC(loopne_return_5)
+    mov     $0, %rax;
+    mov     $5, %rcx;
+1:  inc     %rax;
+    loopne  2f;  // Will test the flags set by the `INC`, which will have ZF=0.
+    jmp     3f;
+2:  jmp     1b;
+3:  ret;
 END_FUNC

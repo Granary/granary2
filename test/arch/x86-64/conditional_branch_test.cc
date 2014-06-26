@@ -66,6 +66,10 @@ extern bool jcc_jecxz_false(void);
 
 extern bool jcc_jrcxz_true(void);
 extern bool jcc_jrcxz_false(void);
+
+extern int loop_return_5(void);
+extern int loope_return_5(void);
+extern int loopne_return_5(void);
 }
 
 using namespace granary;
@@ -116,3 +120,15 @@ FOR_EACH_CBR(JCC_TEST)
 
 JCC_TEST(jecxz)
 JCC_TEST(jrcxz)
+
+#define LOOP_TEST(opcode, ...) \
+    TEST_F(ConditionalBranchTest, opcode) { \
+      auto inst = Translate(&context, opcode ## _return_5); \
+      EXPECT_EQ(5, opcode ## _return_5()); \
+      auto inst_func = UnsafeCast<int(*)(void)>(inst); \
+      EXPECT_EQ(5, inst_func()); \
+    }
+
+LOOP_TEST(loop)
+LOOP_TEST(loope)
+LOOP_TEST(loopne)
