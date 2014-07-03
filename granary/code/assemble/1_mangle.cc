@@ -18,6 +18,7 @@
 #include "granary/util.h"  // For `GetMetaData`.
 
 namespace granary {
+namespace arch {
 
 // Relativize a direct control-flow instruction.
 //
@@ -46,6 +47,7 @@ extern void MangleDirectCFI(DecodedBasicBlock *block,
 extern void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                             const MemoryOperand &op, const void *mem_addr);
 
+}  // namespace arch
 namespace {
 
 template <unsigned num_bits>
@@ -93,7 +95,7 @@ class BlockMangler {
   void RelativizeMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
     const void *mptr(nullptr);
     if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
-      granary::RelativizeMemOp(block, instr, mloc, mptr);
+      arch::RelativizeMemOp(block, instr, mloc, mptr);
     }
   }
 
@@ -130,7 +132,7 @@ class BlockMangler {
                             &(cfi->instruction), target_pc,
                             AddressNeedsRelativizing(target_pc));
       } else {
-        MangleIndirectCFI(block, cfi);
+        arch::MangleIndirectCFI(block, cfi);
       }
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {
@@ -138,7 +140,7 @@ class BlockMangler {
       if (cfi->MatchOperands(ReadFrom(mloc))) {
         RelativizeMemOp(cfi, mloc);
       }
-      MangleIndirectCFI(block, cfi);
+      arch::MangleIndirectCFI(block, cfi);
 
     // Need to mangle the indirect direct (with meta-data) into a return to
     // a different program counter.
@@ -151,9 +153,9 @@ class BlockMangler {
     // into a form that uses branches.
     } else {
       if (IsA<CachedBasicBlock *>(target_block)) {
-        MangleDirectCFI(block, cfi, target_block->StartCachePC());
+        arch::MangleDirectCFI(block, cfi, target_block->StartCachePC());
       } else {
-        MangleDirectCFI(block, cfi, target_block->StartAppPC());
+        arch::MangleDirectCFI(block, cfi, target_block->StartAppPC());
       }
     }
   }

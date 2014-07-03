@@ -80,14 +80,6 @@ static void InstrumentBlock(Tool *tools, LocalControlFlowGraph *cfg) {
   }
 }
 
-static uint32_t HashMetaData(BlockMetaData *meta) {
-  xxhash::HashFunction hasher(0xDEADBEEFUL);
-  hasher.Reset();
-  meta->Hash(&hasher);
-  hasher.Finalize();
-  return hasher.Extract32();
-}
-
 }  // namespace
 
 // Instrument one or more basic blocks (contained in the local control-
@@ -99,8 +91,6 @@ static uint32_t HashMetaData(BlockMetaData *meta) {
 BlockMetaData *Instrument(ContextInterface *context,
                           LocalControlFlowGraph *cfg,
                           BlockMetaData *meta) {
-  GRANARY_IF_DEBUG( auto meta_hash = ) HashMetaData(meta);
-
   BlockFactory factory(context, cfg);
 
   // Try to find the block in the code cache, otherwise manually decode it.
@@ -121,9 +111,11 @@ BlockMetaData *Instrument(ContextInterface *context,
 
     // Verify that the indexable meta-data for the entry basic block has not
     // changed during the instrumentation process.
+    //
+    // TODO(pag): Previously, hashes were also compared. This might be a
+    //            reasonable thing to do again.
     GRANARY_ASSERT(original_meta == meta);
     GRANARY_ASSERT(meta == decoded_block->MetaData());
-    GRANARY_ASSERT(HashMetaData(meta) == meta_hash);
     return meta;
 
   // If we don't have a decoded block, then we must have a cached block.

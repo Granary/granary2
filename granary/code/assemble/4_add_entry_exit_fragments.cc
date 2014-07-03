@@ -11,6 +11,7 @@
 #include "granary/util.h"
 
 namespace granary {
+namespace arch {
 
 // Visits an instructions within the fragment and revives/kills architecture-
 // specific flags stored in the `FlagUsageInfo` object.
@@ -24,6 +25,7 @@ extern void VisitInstructionFlags(const arch::Instruction &instr,
 // Note: This has an architecture-specific implementation.
 extern uint32_t AllArithmeticFlags(void);
 
+}  // namespace arch
 namespace {
 
 // Counts the number of instrumented predecessors.
@@ -44,7 +46,7 @@ static void CountInstrumentedPredecessors(FragmentList *frags) {
 // Returns the live flags on entry to a fragment.
 static uint32_t LiveFlagsOnEntry(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
-    return AllArithmeticFlags();
+    return arch::AllArithmeticFlags();
   } else {
     return frag->flags.entry_live_flags;
   }
@@ -53,7 +55,7 @@ static uint32_t LiveFlagsOnEntry(Fragment *frag) {
 // Returns the live flags on exit from a fragment.
 static uint32_t LiveFlagsOnExit(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
-    return AllArithmeticFlags();
+    return arch::AllArithmeticFlags();
   } else if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
     return LiveFlagsOnEntry(fall_through);
   } else {

@@ -138,20 +138,37 @@ class NativeAddress {
   NativeAddress(void) = delete;
 } __attribute__((packed));
 
+// Forward declaration.
+class IndirectEdge;
+
 // Meta-data that Granary maintains about all basic blocks that are committed to
 // the code cache. This is meta-data is private to Granary and therefore not
 // exposed (directly) to tools.
 class CacheMetaData : public MutableMetaData<CacheMetaData> {
  public:
   CacheMetaData(void);
+
+  // Don't copy anything over.
+  CacheMetaData(const CacheMetaData &)
+      : cache_pc(nullptr),
+        native_addresses(nullptr) {}
+
   ~CacheMetaData(void);
 
   // Where this block is located in the code cache.
+  //
+  // If the value is non-null, then this points to the location of the first
+  // instruction of the block in the code cache. If the value is null, then
+  // either this block has not been encoded, or it represents the meta-data
+  // of the target of an indirect control-flow instruction. For the latter case,
+  // see `IndirectEdgeMetaData::~IndirectEdgeMetaData` for the interaction
+  // between these two classes.
   CachePC cache_pc;
 
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;
-};
+
+} __attribute__((packed));
 #endif  // GRANARY_INTERNAL
 
 }  // namespace granary

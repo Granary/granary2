@@ -26,8 +26,6 @@ extern const Operand * const IMPLICIT_OPERANDS[];
 // Number of implicit operands for each iclass.
 extern const int NUM_IMPLICIT_OPERANDS[];
 
-}  // namespace arch
-
 namespace {
 
 // Returns true if `reg` is one of the registers encompassed by `RAX`.
@@ -96,4 +94,5 @@ bool ChangesInterruptDeliveryState(const NativeInstruction *instr) {
   return XED_ICLASS_STI == iclass || XED_ICLASS_CLI == iclass;
 }
 
+}  // namespace arch
 }  // namespace granary

@@ -6,6 +6,7 @@
 #include "granary/code/fragment.h"
 
 namespace granary {
+namespace arch {
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -40,15 +41,16 @@ extern void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
 // potentially mode (e.g. kernel/user) specific way.
 //
 // Note: This function has an architecture-specific implementation.
-extern void ArchAllocateSlots(FragmentList *frags);
+extern void AllocateSlots(FragmentList *frags);
 
+}  // namespace arch
 namespace {
 
 // Make sure that we only analyze stack usage within fragments where the stack
 // pointer behaves like it's on a C-style call stack.
 static void InitStackFrameAnalysis(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    RemoveIndirectCallsAndJumps(frag);
+    arch::RemoveIndirectCallsAndJumps(frag);
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       GRANARY_ASSERT(code_frag->stack.is_checked);
       auto partition = code_frag->partition.Value();
@@ -78,9 +80,9 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
             }
             has_succ = true;
           }
-          if (!has_succ) {
-            partition->analyze_stack_frame = false;
-          }
+        }
+        if (!has_succ) {
+          partition->analyze_stack_frame = false;
         }
       }
     }
@@ -193,7 +195,7 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       auto adjust = ninstr->MetaData<FrameAdjust>();
       next_offset += adjust.shift;
-      AdjustStackInstruction(
+      arch::AdjustStackInstruction(
           frag, ninstr, offset - frame_space, next_offset - frame_space);
     }
   }
@@ -211,9 +213,9 @@ static void AllocateStackSlots(FragmentList *frags) {
         partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
 
     if (IsA<PartitionEntryFragment *>(frag)) {
-      frag->instrs.Append(AllocateStackSpace(frame_space));
+      frag->instrs.Append(arch::AllocateStackSpace(frame_space));
     } else if (IsA<PartitionExitFragment *>(frag)) {
-      frag->instrs.Append(FreeStackSpace(
+      frag->instrs.Append(arch::FreeStackSpace(
           -(frame_space - frag->stack_frame.entry_offset)));
     } else if (IsA<SSAFragment *>(frag)) {
       AdjustStackInstructions(frag, frame_space);
@@ -227,7 +229,7 @@ void AllocateSlots(FragmentList *frags) {
   InitStackFrameAnalysis(frags);
   FindFrameSizes(frags);
   AllocateStackSlots(frags);
-  ArchAllocateSlots(frags);
+  arch::AllocateSlots(frags);
 }
 
 }  // namespace granary

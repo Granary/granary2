@@ -11,6 +11,7 @@
 #include "granary/util.h"
 
 namespace granary {
+namespace arch {
 
 // Returns a valid `SSAOperand` pointer to the operand being copied if this
 // instruction is a copy instruction, otherwise returns `nullptr`.
@@ -21,23 +22,26 @@ extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr);
 // Create an instruction to copy a GPR to a spill slot.
 //
 // Note: This has an architecture-specific implementation.
-extern Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot);
+extern granary::Instruction *SaveGPRToSlot(VirtualRegister gpr,
+                                           VirtualRegister slot);
 
 // Create an instruction to copy the value of a spill slot to a GPR.
 //
 // Note: This has an architecture-specific implementation.
-extern Instruction *RestoreGPRFromSlot(VirtualRegister gpr,
-                                       VirtualRegister slot);
+extern granary::Instruction *RestoreGPRFromSlot(VirtualRegister gpr,
+                                                VirtualRegister slot);
 
 // Swaps the value of one GPR with another.
 //
 // Note: This has an architecture-specific implementation.
-extern Instruction *SwapGPRWithGPR(VirtualRegister gpr1, VirtualRegister gpr2);
+extern granary::Instruction *SwapGPRWithGPR(VirtualRegister gpr1,
+                                            VirtualRegister gpr2);
 
 // Swaps the value of one GPR with a slot.
 //
 // Note: This has an architecture-specific implementation.
-extern Instruction *SwapGPRWithSlot(VirtualRegister gpr1, VirtualRegister slot);
+extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
+                                             VirtualRegister slot);
 
 // Returns the GPR that is copied by this instruction into a virtual
 // register. If this instruction is not a simple copy operation of this form,
@@ -52,6 +56,8 @@ extern VirtualRegister GPRCopiedToVR(const NativeInstruction *instr);
 //
 // Note: This has an architecture-specific implementation.
 extern VirtualRegister GPRCopiedFromVR(const NativeInstruction *instr);
+
+}  // namespace arch
 namespace {
 
 // Applies a function to each `SSAOperand` that defines a register within the
@@ -156,7 +162,7 @@ static SSASpillStorage *StorageOf(SSANode *node) {
 // Try to eliminate a redundant copy instruction.
 static bool TryRemoveCopyInstruction(SSAFragment *frag,
                                      NativeInstruction *instr) {
-  if (!GetCopiedOperand(instr)) return false;
+  if (!arch::GetCopiedOperand(instr)) return false;
 
   auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
   auto dest_node = ssa_instr->defs[0].nodes[0];
@@ -263,7 +269,7 @@ class LocalScheduler {
       // instruction stream.
       if (gpr_is_occupiable[n]) {
         frag->instrs.InsertAfter(
-            instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+            instr, arch::SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
         vr = nullptr;
         slot = -1;
         gpr_is_occupiable[n] = false;
@@ -279,10 +285,11 @@ class LocalScheduler {
       auto spill_slot = NthSpillSlot(slot);
 
       if (-1 != slot) {  // `used_reg` was restored by later instructions.
-        frag->instrs.InsertAfter(instr, SwapGPRWithSlot(new_gpr, spill_slot));
+        frag->instrs.InsertAfter(instr,
+                                 arch::SwapGPRWithSlot(new_gpr, spill_slot));
       }
 
-      frag->instrs.InsertAfter(instr, SwapGPRWithGPR(used_gpr, new_gpr));
+      frag->instrs.InsertAfter(instr, arch::SwapGPRWithGPR(used_gpr, new_gpr));
 
       if (!stole_new_gpr) {
         slot_containing_gpr[new_gpr_num] = vr->slot;
@@ -386,7 +393,7 @@ class LocalScheduler {
     vr->reg = NthArchGPR(preferred_gpr_num);
     slot_containing_gpr[preferred_gpr_num] = vr->slot;
     frag->instrs.InsertAfter(
-        instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
+        instr, arch::RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
     next_live_regs.Revive(preferred_gpr_num);
   }
 
@@ -409,7 +416,7 @@ class LocalScheduler {
       if (-1 != slot_containing_gpr[gpr_num] &&
         vr->slot != slot_containing_gpr[gpr_num]) {
         frag->instrs.InsertBefore(
-              instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+              instr, arch::SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
       }
       slot_containing_gpr[gpr_num] = -1;
       gpr_is_occupiable[gpr_num] = false;
@@ -423,7 +430,7 @@ class LocalScheduler {
       slot_containing_gpr[gpr_num] = vr->slot;
       if (!was_occupiable) {
         frag->instrs.InsertAfter(
-            instr, RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
+            instr, arch::RestoreGPRFromSlot(vr->reg, NthSpillSlot(vr->slot)));
       }
     }
   }
@@ -489,10 +496,11 @@ static bool SpecialCaseCopyGPRToVR(LocalScheduler *sched,
                                    NativeInstruction *instr,
                                    SSAInstruction *ssa_instr,
                                    SSASpillStorage *vr) {
-  auto gpr_copied_to_vr = GPRCopiedToVR(instr);
+  auto gpr_copied_to_vr = arch::GPRCopiedToVR(instr);
   if (!gpr_copied_to_vr.IsValid()) return false;
 
-  auto new_copy_instr = SaveGPRToSlot(gpr_copied_to_vr, NthSpillSlot(vr->slot));
+  auto new_copy_instr = arch::SaveGPRToSlot(gpr_copied_to_vr,
+                                            NthSpillSlot(vr->slot));
   sched->frag->instrs.InsertBefore(instr, new_copy_instr);
   SetMetaData(new_copy_instr, ssa_instr);
   ClearMetaData(instr);
@@ -544,15 +552,15 @@ static bool SpecialCaseCopyVRToGPR(LocalScheduler *sched,
 
   // The native instruction that defines this register does so as a copy of
   // a GPR into the VR.
-  if (!GPRCopiedToVR(reg_def_instr).IsValid()) return false;
+  if (!arch::GPRCopiedToVR(reg_def_instr).IsValid()) return false;
 
   // This use of the VR is simple a restoration of whatever was saved by the
   // instruction that defines this VR.
-  auto gpr_copied_to_vr = GPRCopiedFromVR(instr);
+  auto gpr_copied_to_vr = arch::GPRCopiedFromVR(instr);
   if (!gpr_copied_to_vr.IsValid()) return false;
 
-  auto new_copy_instr = RestoreGPRFromSlot(gpr_copied_to_vr,
-                                           NthSpillSlot(vr->slot));
+  auto new_copy_instr = arch::RestoreGPRFromSlot(gpr_copied_to_vr,
+                                                 NthSpillSlot(vr->slot));
   sched->frag->instrs.InsertBefore(instr, new_copy_instr);
   SetMetaData(new_copy_instr, ssa_instr);
   ClearMetaData(instr);
@@ -594,7 +602,7 @@ static void FillRemainingStolenGPRs(const LocalScheduler &sched) {
       GRANARY_ASSERT(gpr_num == vr->reg.Number());
       GRANARY_ASSERT(-1 != vr->slot);
       sched.frag->instrs.InsertBefore(
-          instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+          instr, arch::SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
     }
     gpr_num += 1;
   }
@@ -704,25 +712,34 @@ class SlotScheduler {
   SlotScheduler(void) = delete;
 };
 
+// Returns the `SSAOperand` from `ops` that has a node whose storage is
+// backed by `vr`.
+static SSAOperand *OperandForVR(SSAOperandPack &ops, SSASpillStorage *vr) {
+  for (auto &def : ops) {
+    for (auto node : def.nodes) {
+      if (!node->reg.IsVirtual()) continue;
+      if (StorageOf(node) != vr) continue;
+      return &def;
+    }
+  }
+  return nullptr;
+}
+
 // Perform fragment-local register scheduling.
 static void SchedulePartitionLocalRegDef(LocalScheduler *sched,
                                          NativeInstruction *instr,
                                          SSAInstruction *ssa_instr,
                                          SSASpillStorage *vr) {
-  for (auto &def : ssa_instr->defs) {
-    for (auto node : def.nodes) {
-      if (!node->reg.IsVirtual()) continue;
-      if (StorageOf(node) != vr) continue;
-      if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
-        sched->StealOrFillSpilledGPR(instr, vr);
-      }
-      if (SSAOperandAction::WRITE == def.action) {
-        sched->frag->instrs.InsertBefore(
-            instr, SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
-        sched->MarkGPRAsHomed(vr);
-      }
-      ReplaceOperand(def);
+  if (auto def = OperandForVR(ssa_instr->defs, vr)) {
+    if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
+      sched->StealOrFillSpilledGPR(instr, vr);
     }
+    if (SSAOperandAction::WRITE == def->action) {
+      sched->frag->instrs.InsertBefore(
+          instr, arch::SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+      sched->MarkGPRAsHomed(vr);
+    }
+    ReplaceOperand(*def);
   }
 }
 
@@ -731,15 +748,11 @@ static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
                                          NativeInstruction *instr,
                                          SSAInstruction *ssa_instr,
                                          SSASpillStorage *vr) {
-  for (auto &use : ssa_instr->uses) {
-    for (auto node : use.nodes) {
-      if (!node->reg.IsVirtual()) continue;
-      if (StorageOf(node) != vr) continue;
-      if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
-        sched->StealOrFillSpilledGPR(instr, vr);
-      }
-      ReplaceOperand(use);
+  if (auto use = OperandForVR(ssa_instr->uses, vr)) {
+    if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
+      sched->StealOrFillSpilledGPR(instr, vr);
     }
+    ReplaceOperand(*use);
   }
 }
 
@@ -817,18 +830,18 @@ static void SchedulePartitionLocalReg(const SlotScheduler &sched,
 
       // Predecessor assumes its stolen, so we need to restore native GPR from
       // its slot.
-      frag->instrs.Prepend(RestoreGPRFromSlot(sched.preferred_steal_gpr,
-                                              vr->reg));
+      frag->instrs.Prepend(arch::RestoreGPRFromSlot(sched.preferred_steal_gpr,
+                                                    vr->reg));
 
     } else if (vr->reg.IsNative()) {
       if (preferred_gpr_is_busy) {  // Need to put it into its slot.
-        frag->instrs.Prepend(SwapGPRWithSlot(vr->reg, spill_slot));
+        frag->instrs.Prepend(arch::SwapGPRWithSlot(vr->reg, spill_slot));
 
       } else {  // Need to put it into its preferred GPR.
-        frag->instrs.Prepend(SwapGPRWithSlot(sched.preferred_steal_gpr,
-                                             spill_slot));
-        frag->instrs.Prepend(SwapGPRWithGPR(vr->reg,
-                                            sched.preferred_steal_gpr));
+        frag->instrs.Prepend(arch::SwapGPRWithSlot(sched.preferred_steal_gpr,
+                                                   spill_slot));
+        frag->instrs.Prepend(arch::SwapGPRWithGPR(vr->reg,
+                                                  sched.preferred_steal_gpr));
       }
     } else {
       GRANARY_ASSERT(false);

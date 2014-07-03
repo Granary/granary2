@@ -167,6 +167,11 @@ class Instruction : public InstructionInterface {
   // Get the opcode name.
   const char *OpCodeName(void) const;
 
+  // Is this a specially inserted virtual register save or restore instruction?
+  inline bool IsVirtualRegSaveRestore(void) const {
+    return is_save_restore;
+  }
+
   // Apply a function on every operand.
   void ForEachOperand(const std::function<void(granary::Operand *)> &func);
 

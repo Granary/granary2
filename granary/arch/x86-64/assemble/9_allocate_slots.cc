@@ -11,6 +11,7 @@
 #include "granary/code/fragment.h"
 
 namespace granary {
+namespace arch {
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -284,21 +285,21 @@ void RemoveIndirectCallsAndJumps(Fragment *frag) {
 
 namespace {
 
-static void ArchAllocateSlot(arch::Operand &op) {
+static void AllocateSlot(Operand &op) {
   op = arch::SlotMemOp(arch::SLOT_VIRTUAL_REGISTER, op.reg.Number());
 }
 
 // Replace any abstract spill slots in an instruction with concrete, segment-
 // based spill slots.
-static void ArchAllocateSlots(NativeInstruction *instr) {
+static void AllocateSlots(NativeInstruction *instr) {
   if (!instr) return;
   auto &ainstr(instr->instruction);
   if (XED_ICLASS_MOV != ainstr.iclass) return;
 
   if (ainstr.ops[0].IsMemory()) {
-    if (ainstr.ops[0].reg.IsVirtualSlot()) ArchAllocateSlot(ainstr.ops[0]);
+    if (ainstr.ops[0].reg.IsVirtualSlot()) AllocateSlot(ainstr.ops[0]);
   } else if (ainstr.ops[1].IsMemory()) {
-    if (ainstr.ops[1].reg.IsVirtualSlot()) ArchAllocateSlot(ainstr.ops[1]);
+    if (ainstr.ops[1].reg.IsVirtualSlot()) AllocateSlot(ainstr.ops[1]);
   }
 }
 
@@ -306,16 +307,17 @@ static void ArchAllocateSlots(NativeInstruction *instr) {
 
 // Allocates all remaining non-stack spill slots in some architecture and
 // potentially mode (e.g. kernel/user) specific way.
-void ArchAllocateSlots(FragmentList *frags) {
+void AllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
       for (auto instr : InstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-          ArchAllocateSlots(ninstr);
+          AllocateSlots(ninstr);
         }
       }
     }
   }
 }
 
+}  // namespace arch
 }  // namespace granary

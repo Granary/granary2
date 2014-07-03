@@ -23,6 +23,10 @@ class IndexMetaData : public MutableMetaData<IndexMetaData> {
   inline IndexMetaData(void)
       : next(nullptr) {}
 
+  // Don't copy anything over.
+  inline IndexMetaData(const IndexMetaData &)
+      : next(nullptr) {}
+
   // The next meta-data chunk stored in the same spot in the code cache index.
   //
   // Note: If this is non-null, then this block is stored in the code cache

@@ -22,8 +22,14 @@ enum {
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,
 
-  // Upper bound on the size of edge-specific direct edge code.
-  EDGE_CODE_SIZE_BYTES = 48,
+  // Upper bound on the size of edge-specific direct edge code. Ideally this
+  // should be as small as possible.
+  DIRECT_EDGE_CODE_SIZE_BYTES = 48,
+
+  // Upper bound on the size of indirect out-edge code. This needs to be
+  // sufficiently large to handle the case where many registers need to be
+  // restored in the out-edge code.
+  INDIRECT_EDGE_CODE_SIZE_BYTES = 112,
 
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,

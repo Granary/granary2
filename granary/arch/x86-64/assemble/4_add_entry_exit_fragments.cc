@@ -14,8 +14,6 @@ namespace arch {
 // selection of that iclass.
 extern const FlagsSet IFORM_FLAGS[];
 
-}  // namespace arch
-
 enum {
   ALL_AFLAGS_WITH_DF = 3285U,
   ALL_AFLAGS_WITHOUT_DF = 2261U
@@ -47,5 +45,5 @@ uint32_t AllArithmeticFlags(void) {
   return flags.flat;
 }
 
+}  // namespace arch
 }  // namespace granary
-

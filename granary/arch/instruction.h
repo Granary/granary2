@@ -100,6 +100,9 @@ class InstructionInterface {
   // Returns true if an instruction writes to the flags.
   bool WritesFlags(void) const;
 
+  // Is this a specially inserted virtual register save or restore instruction?
+  bool IsVirtualRegSaveRestore(void) const;
+
   const char *OpCodeName(void) const;
 
   // Apply a function to every operand.

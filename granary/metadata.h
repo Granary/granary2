@@ -6,7 +6,6 @@
 #include "granary/base/base.h"
 #include "granary/base/container.h"
 #include "granary/base/new.h"
-#include "granary/base/hash.h"
 #include "granary/base/operator.h"
 #include "granary/base/type_trait.h"
 #include "granary/base/pc.h"
@@ -48,7 +47,6 @@ class ToolMetaData {
 template <typename T>
 class IndexableMetaData : public ToolMetaData<T> {
  public:
-  void Hash(HashFunction *hasher) const;
   bool Equals(const T *that) const;
 };
 
@@ -145,7 +143,6 @@ class MetaDataDescription {
   void (* const initialize)(void *);
   void (* const copy_initialize)(void *, const void *);
   void (* const destroy)(void *);
-  void (* const hash)(HashFunction *, const void *);
   bool (* const compare_equals)(const void *, const void *);
   UnificationStatus (* const can_unify)(const void *, const void *);
 
@@ -183,12 +180,6 @@ struct MetaDataDescriptor<T, false, false, true> {
 
 namespace detail {
 
-// Hash some meta-data.
-template <typename T>
-void Hash(HashFunction *hasher, const void *mem) {
-  reinterpret_cast<const T *>(mem)->Hash(hasher);
-}
-
 // Compare some meta-data for equality.
 template <typename T>
 bool CompareEquals(const void *a, const void *b) {
@@ -212,7 +203,6 @@ MetaDataDescription MetaDataDescriptor<T, true, false, false>::kDescription = {
     &(Construct<T>),
     &(CopyConstruct<T>),
     &(Destruct<T>),
-    &(detail::Hash<T>),
     &(detail::CompareEquals<T>),
     nullptr
 };
@@ -227,7 +217,6 @@ MetaDataDescription MetaDataDescriptor<T, false, true, false>::kDescription = {
     &(CopyConstruct<T>),
     &(Destruct<T>),
     nullptr,
-    nullptr,
     nullptr
 };
 
@@ -240,7 +229,6 @@ MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
     &(Construct<T>),
     &(CopyConstruct<T>),
     &(Destruct<T>),
-    nullptr,
     nullptr,
     &(detail::CanUnify<T>)
 };
@@ -261,9 +249,6 @@ class BlockMetaData {
   // Create a copy of some meta-data and return a new instance of the copied
   // meta-data.
   GRANARY_INTERNAL_DEFINITION BlockMetaData *Copy(void) const;
-
-  // Hash all serializable meta-data contained within this generic meta-data.
-  GRANARY_INTERNAL_DEFINITION void Hash(HashFunction *hasher) const;
 
   // Compare the serializable components of two generic meta-data instances for
   // strict equality.

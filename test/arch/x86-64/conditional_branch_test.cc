@@ -15,14 +15,12 @@
 #include "granary/tool.h"
 #include "granary/translate.h"
 
-#include "test/util/isolated_function.h"
-
 // For each jump type, expand some macro with enough info to generate test
 // code.
 //
 // Note: Not all possible condition codes need to be set here (especially for
-//  things like jle where one of two conditions can be met); only one
-//  satisfying condition needs to be met.
+//       things like jle where one of two conditions can be met); only one
+//       satisfying condition needs to be met.
 #define FOR_EACH_CBR(macro, ...) \
     macro(jo, OF, ~0, ##__VA_ARGS__) \
     macro(jno, 0, ~OF, ##__VA_ARGS__) \

@@ -10,6 +10,7 @@
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/code/compile.h"
+#include "granary/code/edge.h"
 #include "granary/code/metadata.h"
 
 #include "granary/index.h"
@@ -28,6 +29,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<LiveRegisterMetaData>();
   meta_manager.Register<StackMetaData>();
   meta_manager.Register<IndexMetaData>();
+  meta_manager.Register<IndirectEdgeMetaData>();
   arch::Init();
 
   // Called for the "lazy" meta-data on the function return.

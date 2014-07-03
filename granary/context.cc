@@ -46,9 +46,9 @@ namespace {
 
 static CachePC CreateDirectEntryCode(ContextInterface *context,
                                      CodeCache *edge_code_cache) {
-  auto entry_code = edge_code_cache->AllocateBlock(arch::EDGE_CODE_SIZE_BYTES);
+  auto entry_code = edge_code_cache->AllocateBlock(arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   CodeCacheTransaction transaction(edge_code_cache, entry_code,
-                                   entry_code + arch::EDGE_CODE_SIZE_BYTES);
+                                   entry_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   arch::GenerateDirectEdgeEntryCode(context, entry_code);
   return entry_code;
 }
@@ -60,6 +60,7 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<LiveRegisterMetaData>();
   metadata_manager->Register<StackMetaData>();
   metadata_manager->Register<IndexMetaData>();
+  metadata_manager->Register<IndirectEdgeMetaData>();
 }
 
 // Tell Granary about all loaded tools.
@@ -171,13 +172,13 @@ void Context::FlushCodeCache(CodeCacheInterface *cache) {
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
                                         BlockMetaData *dest_block_meta) {
-  auto edge_code = edge_code_cache.AllocateBlock(arch::EDGE_CODE_SIZE_BYTES);
+  auto edge_code = edge_code_cache.AllocateBlock(arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   auto edge = new DirectEdge(source_block_meta, dest_block_meta, edge_code);
 
   do {  // Generate a small stub of code specific to this `DirectEdge`.
     CodeCacheTransaction transaction(
         &edge_code_cache, edge_code,
-        edge_code + arch::EDGE_CODE_SIZE_BYTES);
+        edge_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
     arch::GenerateDirectEdgeCode(edge, direct_edge_entry_code);
   } while (0);
 

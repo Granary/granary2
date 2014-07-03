@@ -28,6 +28,7 @@
   } while (0)
 
 namespace granary {
+namespace arch {
 
 // Returns the architectural register that is potentially killed by the
 // instructions injected to save/restore flags.
@@ -136,4 +137,5 @@ void InjectRestoreFlags(Fragment *frag) {
   }
 }
 
+}  // namespace arch
 }  // namespace granary

@@ -128,18 +128,35 @@ class BranchTargetBuilder {
   BranchTargetBuilder(const BranchTargetBuilder &that) = default;
   BranchTargetBuilder(BranchTargetBuilder &&that) = default;
 
+  inline explicit BranchTargetBuilder(std::nullptr_t)
+      : pc(nullptr),
+        kind(BRANCH_TARGET_PC) {}
+
   inline explicit BranchTargetBuilder(PC pc_)
-      : pc(pc_) {}
+      : pc(pc_),
+        kind(BRANCH_TARGET_PC) {}
+
+  inline explicit BranchTargetBuilder(AnnotationInstruction *label_)
+      : label(label_),
+        kind(BRANCH_TARGET_LABEL) {}
 
   template <typename RetT, typename... ArgsT>
   inline explicit BranchTargetBuilder(RetT (*pc_)(ArgsT...))
-      : pc(UnsafeCast<PC>(pc_)) {}
+      : pc(UnsafeCast<PC>(pc_)),
+        kind(BRANCH_TARGET_PC) {}
 
   // Add this branch target as an operand to the instruction `instr`.
   void Build(Instruction *instr);
 
  private:
-  PC pc;
+  union {
+    PC pc;
+    AnnotationInstruction *label;
+  };
+  enum {
+    BRANCH_TARGET_PC,
+    BRANCH_TARGET_LABEL
+  } kind;
 };
 
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,

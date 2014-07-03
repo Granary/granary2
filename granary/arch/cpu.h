@@ -8,6 +8,8 @@ namespace cpu {
 
 void Relax(void);
 
+void SynchronizePipeline(void);
+
 }  // namespace cpu
 }  // namespace granary
 

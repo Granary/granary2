@@ -45,6 +45,12 @@ class FreeList {
   FreeList *next;
 };
 
+enum {
+  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 2,
+  SLAB_ALLOCATOR_SLAB_SIZE_BYTES = arch::PAGE_SIZE_BYTES *
+                                   SLAB_ALLOCATOR_SLAB_SIZE_PAGES
+};
+
 // Meta-data for a memory slab. The meta-data of each slab knows the range of
 // allocation numbers that can be serviced by the allocator.
 class SlabList {
@@ -72,6 +78,9 @@ class SlabAllocator {
 
   void *Allocate(void);
   void Free(void *address);
+
+  // For those cases where a slab allocator is non-global.
+  void Destroy(void);
 
  private:
   void *AllocateFromFreeList(void);
@@ -134,8 +143,8 @@ class OperatorNewAllocator {
     ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(
         sizeof(internal::SlabList), ALIGNMENT),
 
-    // Figure out the number of allocations that can fit into a one-page slab.
-    MAX_ALLOCATABLE_SPACE = GRANARY_ARCH_PAGE_FRAME_SIZE -
+    // Figure out the number of allocations that can fit into a slab.
+    MAX_ALLOCATABLE_SPACE = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES -
                             ALGINED_SLAB_LIST_SIZE,
     NUM_ALLOCS_PER_SLAB = MAX_ALLOCATABLE_SPACE / ALIGNED_OBJECT_SIZE,
 
@@ -147,7 +156,7 @@ class OperatorNewAllocator {
   static_assert(OBJECT_SIZE <= ALIGNED_OBJECT_SIZE,
       "Error computing the aligned object size.");
 
-  static_assert(PAGE_USAGE <= GRANARY_ARCH_PAGE_FRAME_SIZE,
+  static_assert(PAGE_USAGE <= internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES,
       "Error computing the layout of meta-data and objects on page frames.");
 
   OperatorNewAllocator(void) = delete;

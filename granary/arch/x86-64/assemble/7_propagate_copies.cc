@@ -13,6 +13,7 @@
 #include "granary/util.h"  // For `GetMetaData`.
 
 namespace granary {
+namespace arch {
 
 // Returns a valid `SSAOperand` pointer to the operand being copied if this
 // instruction is a copy instruction, otherwise returns `nullptr`.
@@ -53,4 +54,5 @@ extern bool CanPropagate(VirtualRegister source, VirtualRegister dest) {
   return source.BitWidth() == dest.BitWidth() && 32 <= source.BitWidth();
 }
 
+}  // namespace arch
 }  // namespace granary

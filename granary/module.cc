@@ -299,11 +299,6 @@ bool ModuleMetaData::CanMaterializeWith(const ModuleMetaData *that) const {
   return false;
 }
 
-// Hash the translation meta-data.
-void ModuleMetaData::Hash(HashFunction *hasher) const {
-  hasher->Accumulate(this);
-}
-
 // Compare two translation meta-data objects for equality.
 bool ModuleMetaData::Equals(const ModuleMetaData *meta) const {
   return source == meta->source && start_pc == meta->start_pc;

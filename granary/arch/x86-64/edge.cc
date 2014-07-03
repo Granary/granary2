@@ -11,7 +11,12 @@
 #include "granary/base/base.h"
 #include "granary/base/option.h"
 
+#include "granary/cfg/basic_block.h"
+#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/instruction.h"
+
 #include "granary/code/edge.h"
+#include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
 
@@ -22,6 +27,12 @@
     GRANARY_ASSERT(ret); \
     GRANARY_IF_DEBUG( ret = ) commit_enc.EncodeNext(&ni, &pc); \
     GRANARY_ASSERT(ret); \
+  } while (0)
+
+#define APP(edge, ...) \
+  do { \
+    __VA_ARGS__ ; \
+    edge->instrs.Append(new NativeInstruction(&ni)); \
   } while (0)
 
 extern "C" {
@@ -88,7 +99,7 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Return back into the edge code.
   ENC(RET_NEAR(&ni); ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
 
-  GRANARY_ASSERT(arch::EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+  GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
 }
 
 // Generates the direct edge code for a given `DirectEdge` structure.
@@ -147,7 +158,57 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // instruction.
   ENC(UD2(&ni));
 
-  GRANARY_ASSERT(arch::EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+  GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+}
+
+// Generates some indirect edge code that is used to look up the target of an
+// indirect jump.
+IndirectEdge *GenerateIndirectEdgeCode(ControlFlowInstruction *cfi,
+                                       CodeFragment *in_edge,
+                                       CodeFragment *out_edge) {
+  GRANARY_ASSERT(!cfi->IsFunctionReturn());
+
+  auto edge = new IndirectEdge;
+  auto target_block = DynamicCast<InstrumentedBasicBlock *>(cfi->TargetBlock());
+  GRANARY_ASSERT(nullptr != target_block);
+
+  Instruction ni;
+
+  // Get the target of the CFI into a register.
+  const auto &target_op(cfi->instruction.ops[0]);
+  GRANARY_ASSERT(target_op.IsRegister());  // Enforced by `1_mangle.cc`.
+
+  // Manually save `RCX`.
+  auto saved_rcx = target_block->cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
+  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX);
+               ni.is_save_restore = true; );
+
+  // Copy the target, just in case it's stored in `RCX`.
+  auto saved_target = target_block->cfg->AllocateVirtualRegister(
+      GPR_WIDTH_BYTES);
+  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_target, target_op.reg);
+               ni.is_save_restore = true; );
+
+  APP(in_edge, JMP_MEMv(&ni, &(edge->in_edge));
+               ni.is_sticky = true; );
+  in_edge->branch_instr = DynamicCast<NativeInstruction *>(
+      in_edge->instrs.Last());
+  APP(in_edge, UD2(&ni));
+
+  auto compare_target = target_block->cfg->AllocateVirtualRegister(
+      GPR_WIDTH_BYTES);
+  APP(out_edge, MOV_GPRv_IMMz(&ni, compare_target, static_cast<uint64_t>(0)));
+  APP(out_edge, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, compare_target,
+                                                     saved_target));
+  auto hit = new LabelInstruction;
+  APP(out_edge, JRCXZ_RELBRb(&ni, hit));
+
+  // Restore `RCX`.
+  out_edge->instrs.Append(hit);
+  APP(out_edge, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx);
+                ni.is_save_restore = true;);
+
+  return edge;
 }
 
 }  // namespace arch

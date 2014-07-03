@@ -16,6 +16,7 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace arch {
 namespace {
 
 // Instruction iclass reversers for conditional branches, indexed by
@@ -44,27 +45,27 @@ static const xed_iclass_enum_t kReversedConditionalCFIs[] = {
 
 // Instruction builders for conditional branches, indexed by
 // `instr->iclass - XED_ICLASS_JB`.
-typedef void (CFIBuilder)(arch::Instruction *, PC);
+typedef void (CFIBuilder)(Instruction *, PC);
 static CFIBuilder * const kConditionalCFIBuilders[] = {
-  arch::JB_RELBRd<PC>,
-  arch::JBE_RELBRd<PC>,
-  arch::JL_RELBRd<PC>,
-  arch::JLE_RELBRd<PC>,
+  JB_RELBRd<PC>,
+  JBE_RELBRd<PC>,
+  JL_RELBRd<PC>,
+  JLE_RELBRd<PC>,
   nullptr,
   nullptr,
-  arch::JNB_RELBRd<PC>,
-  arch::JNBE_RELBRd<PC>,
-  arch::JNL_RELBRd<PC>,
-  arch::JNLE_RELBRd<PC>,
-  arch::JNO_RELBRd<PC>,
-  arch::JNP_RELBRd<PC>,
-  arch::JNS_RELBRd<PC>,
-  arch::JNZ_RELBRd<PC>,
-  arch::JO_RELBRd<PC>,
-  arch::JP_RELBRd<PC>,
+  JNB_RELBRd<PC>,
+  JNBE_RELBRd<PC>,
+  JNL_RELBRd<PC>,
+  JNLE_RELBRd<PC>,
+  JNO_RELBRd<PC>,
+  JNP_RELBRd<PC>,
+  JNS_RELBRd<PC>,
+  JNZ_RELBRd<PC>,
+  JO_RELBRd<PC>,
+  JP_RELBRd<PC>,
   nullptr,
-  arch::JS_RELBRd<PC>,
-  arch::JZ_RELBRd<PC>
+  JS_RELBRd<PC>,
+  JZ_RELBRd<PC>
 };
 
 // Inserts a `UD2` instruction after a CFI. The idea here is that if we're
@@ -72,7 +73,7 @@ static CFIBuilder * const kConditionalCFIBuilders[] = {
 // target of the indirect jump to be the next instruction, so we hint at the
 // processor to stop prefetching via the `UD2`.
 static void InsertUD2AfterCFI(ControlFlowInstruction *cfi) {
-  arch::Instruction ni;
+  Instruction ni;
   UD2(&ni);
   cfi->UnsafeInsertAfter(new NativeInstruction(&ni));
 }
@@ -82,12 +83,12 @@ static void InsertUD2AfterCFI(ControlFlowInstruction *cfi) {
 // jump around the indirect jump when the original condition is not satisfied.
 static void RelativizeConditionalBranch(CacheMetaData *meta,
                                         ControlFlowInstruction *cfi,
-                                        arch::Instruction *instr,
+                                        Instruction *instr,
                                         PC target_pc) {
   auto iclass = kReversedConditionalCFIs[instr->iclass - XED_ICLASS_JB];
   auto iclass_builder = kConditionalCFIBuilders[iclass - XED_ICLASS_JB];
 
-  arch::Instruction neg_bri;
+  Instruction neg_bri;
   iclass_builder(&neg_bri, static_cast<PC>(nullptr));
 
   auto label = new LabelInstruction;
@@ -120,22 +121,22 @@ static bool IsLoopInstruction(xed_iclass_enum_t iclass) {
 //        do_loop:    jmp   <foo>
 //        try_loop:   loop  <do_loop>
 static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
-                           arch::Instruction *instr,
+                           Instruction *instr,
                            PC target_pc, bool target_is_far_away) {
-  arch::Instruction jmp_try_loop;
-  arch::Instruction loop_do_loop;
+  Instruction jmp_try_loop;
+  Instruction loop_do_loop;
 
   memcpy(&loop_do_loop, instr, sizeof loop_do_loop);
 
-  arch::JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
+  JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
   if (target_is_far_away) {
     auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
-    arch::JMP_MEMv(instr, &(addr_mloc->addr));
+    JMP_MEMv(instr, &(addr_mloc->addr));
     instr->is_sticky = true;
 
     InsertUD2AfterCFI(cfi);
   } else {
-    arch::JMP_RELBRd<PC>(instr, target_pc);
+    JMP_RELBRd<PC>(instr, target_pc);
   }
 
   auto do_loop = new LabelInstruction;
@@ -154,19 +155,19 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
 
 // Relativize a direct control-flow instruction.
 void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
-                         arch::Instruction *instr, PC target_pc,
+                         Instruction *instr, PC target_pc,
                          bool target_is_far_away) {
   auto iclass = instr->iclass;
   if (XED_ICLASS_CALL_NEAR == iclass) {
     if (target_is_far_away) {
       auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
-      arch::CALL_NEAR_MEMv(instr, &(addr_mloc->addr));
+      CALL_NEAR_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
     }
   } else if (XED_ICLASS_JMP == iclass) {
     if (target_is_far_away) {
       auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
-      arch::JMP_MEMv(instr, &(addr_mloc->addr));
+      JMP_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
 
       InsertUD2AfterCFI(cfi);
@@ -187,28 +188,77 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
   }
 }
 
-// Performs mangling of an indirect CFI instruction.
-void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
-  if (!cfi->IsFunctionCall()) return;
+// Mangle a specialized indirect return into an indirect jump.
+static void MangleIndirectReturn(DecodedBasicBlock *block,
+                                 ControlFlowInstruction *cfi) {
+  auto target = block->AllocateVirtualRegister();
+  Instruction ni;
+
+  auto shift = cfi->instruction.StackPointerShiftAmount();
+  if (ADDRESS_WIDTH_BYTES == shift) {
+    POP_GPRv_51(&ni, target);
+  } else {
+    MOV_GPRv_MEMv(&ni, target, BaseDispMemOp(0, XED_REG_RSP,
+                                             ADDRESS_WIDTH_BITS));
+    cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+    LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(shift, XED_REG_RSP,
+                                                  ADDRESS_WIDTH_BITS));
+  }
+  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+
+  // Convert the `RET_NEAR` into an indirect jump.
+  JMP_GPRv(&(cfi->instruction), target);
+}
+
+// Mangle an indirect function call.
+static void MangleIndirectCall(DecodedBasicBlock *block,
+                               ControlFlowInstruction *cfi) {
+  Instruction ni;
+  Operand op;
   auto ret_address = new AnnotationInstruction(
       IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
-  arch::Instruction instr;
-  arch::Operand op;
+
   auto ret_address_reg = block->AllocateVirtualRegister();
   auto decoded_pc = cfi->instruction.decoded_pc;
   op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
   op.ret_address = ret_address;
-  op.width = arch::ADDRESS_WIDTH_BITS;
-  arch::LEA_GPRv_AGEN(&instr, ret_address_reg, op);
-  cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
-  arch::PUSH_GPRv_50(&instr, ret_address_reg);
-  instr.decoded_pc = decoded_pc;  // Mark as application.
-  instr.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
-  instr.AnalyzeStackUsage();
-  cfi->UnsafeInsertBefore(new NativeInstruction(&instr));
+  op.width = ADDRESS_WIDTH_BITS;
+  LEA_GPRv_AGEN(&ni, ret_address_reg, op);
+  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+  PUSH_GPRv_50(&ni, ret_address_reg);
+  ni.decoded_pc = decoded_pc;  // Mark as application.
+  ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+  ni.AnalyzeStackUsage();
+  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
   cfi->UnsafeInsertAfter(ret_address);
+}
+
+// Performs mangling of an indirect CFI instruction. This ensures that the
+// target of any specialized indirect CFI instruction is stored in a register.
+void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
+  if (cfi->IsFunctionReturn()) {
+    auto target_block = cfi->TargetBlock();
+    if (auto return_block = DynamicCast<ReturnBasicBlock *>(target_block)) {
+      if (return_block->UnsafeMetaData()) {
+        MangleIndirectReturn(block, cfi);
+      }
+    }
+    return;
+  } else if (cfi->IsFunctionCall()) {
+    MangleIndirectCall(block, cfi);
+  }
+
+  // Make sure the target is stored in a register.
+  auto &target_op(cfi->instruction.ops[0]);
+  if (target_op.IsMemory()) {
+    Instruction ni;
+    auto target = block->AllocateVirtualRegister();
+    MOV_GPRv_MEMv(&ni, target, target_op);
+    cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+    CALL_NEAR_GPRv(&(cfi->instruction), target);
+  }
 
   // Note: The final mangling of indirect calls and indirect jumps happens in
   //       `9_allocate_slots.cc` in the function `RemoveIndirectCallsAndJumps`.
@@ -236,10 +286,10 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
   // into 32-bit absolute (seg=DS), or segment-offsetted address (seg=GS/FS).
   if (XED_REG_INVALID != op->segment) return;
 
-  arch::Instruction ni;
-  auto addr_reg = block->AllocateVirtualRegister(arch::ADDRESS_WIDTH_BYTES);
-  arch::MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
-  ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
+  Instruction ni;
+  auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);
+  MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
+  ni.effective_operand_width = ADDRESS_WIDTH_BITS;
   ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
 
   GRANARY_ASSERT(!op->is_sticky && op->is_explicit && !op->is_compound);
@@ -247,4 +297,5 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
   op->reg = addr_reg;
 }
 
+}  // namespace arch
 }  // namespace granary

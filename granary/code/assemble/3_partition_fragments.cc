@@ -18,7 +18,6 @@
 namespace granary {
 namespace {
 
-
 // Returns true if this fragment has some useful instructions. Here we really
 // mean some labels that are targeted by at least one other fragment.
 static bool HasUsefulInstructions(CodeFragment *frag) {

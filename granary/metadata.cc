@@ -11,6 +11,7 @@
 
 namespace granary {
 namespace {
+
 // The next meta-data description ID that we can assign. Every meta-data
 // description has a unique, global ID.
 static int next_description_id(0);
@@ -69,17 +70,6 @@ BlockMetaData *BlockMetaData::Copy(void) const {
   return reinterpret_cast<BlockMetaData *>(that_ptr);
 }
 
-// Hash all serializable meta-data contained within this generic meta-data.
-void BlockMetaData::Hash(HashFunction *hasher) const {
-  auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto desc : manager->descriptions) {
-    if (desc && desc->hash) {
-      auto offset = manager->offsets[desc->id];
-      desc->hash(hasher, reinterpret_cast<const void *>(this_ptr + offset));
-    }
-  }
-}
-
 // Compare the serializable components of two generic meta-data instances for
 // strict equality.
 bool BlockMetaData::Equals(const BlockMetaData *that) const {
@@ -132,6 +122,7 @@ MetaDataManager::MetaDataManager(void)
 }
 
 MetaDataManager::~MetaDataManager(void) {
+  allocator->Destroy();
   allocator.Destroy();
 }
 
@@ -186,7 +177,7 @@ void MetaDataManager::Finalize(void) {
 // Initialize the allocator for meta-data managed by this manager.
 void MetaDataManager::InitAllocator(void) {
   auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
-  auto remaining_size = GRANARY_ARCH_PAGE_FRAME_SIZE - offset;
+  auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
   auto max_num_allocs = remaining_size / size;
   allocator.Construct(max_num_allocs, offset, size, size);
 }

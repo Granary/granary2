@@ -301,6 +301,8 @@ class NativeInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
 
+  GRANARY_INTERNAL_DEFINITION bool IsVirtualRegSaveRestore(void) const;
+
   // Get the opcode name.
   const char *OpCodeName(void) const;
 

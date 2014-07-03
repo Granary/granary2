@@ -11,6 +11,7 @@
 #include "granary/util.h"
 
 namespace granary {
+namespace arch {
 
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
@@ -27,6 +28,7 @@ extern void ConvertOperandActions(const NativeInstruction *instr,
 // Note: This function has an architecture-specific implementation.
 extern VirtualRegister GetRegister(const SSAOperand &op);
 
+}  // namespace arch
 namespace {
 
 // Returns true of we find a read register operand in the `operands` pack that
@@ -36,14 +38,14 @@ namespace {
 //       a `WRITE`.
 static bool FindReadFromReg(const SSAOperand &op,
                             const SSAOperandPack &operands) {
-  const auto op_reg = GetRegister(op);
+  const auto op_reg = arch::GetRegister(op);
   for (auto &related_op : operands) {
     if (SSAOperandAction::WRITE == related_op.action ||
         SSAOperandAction::CLEARED == related_op.action ||
         !related_op.is_reg) {
       continue;
     }
-    if (op_reg == GetRegister(related_op)) return true;
+    if (op_reg == arch::GetRegister(related_op)) return true;
   }
   return false;
 }
@@ -171,7 +173,7 @@ static void CreateSSAInstructions(FragmentList *frags) {
             AddSSAOperand(operands, op);
           });
           ConvertOperandActions(operands);  // Generic.
-          ConvertOperandActions(ninstr, operands);  // Arch-specific.
+          arch::ConvertOperandActions(ninstr, operands);  // Arch-specific.
           SetMetaData(ninstr, BuildSSAInstr(operands));
         }
       }
@@ -210,7 +212,7 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
   // Update any existing nodes on writes to be `SSARegisterNode`s, and share
   // the register nodes with `CLEAR`ed operands.
   for (auto &op : ssa_instr->defs) {
-    auto reg = GetRegister(op);
+    auto reg = arch::GetRegister(op);
     auto &node(frag->ssa.entry_nodes[reg]);
     if (SSAOperandAction::WRITE == op.action) {
 
@@ -245,7 +247,7 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
   // inherited by other instructions.
   for (auto &op : ssa_instr->defs) {
     if (SSAOperandAction::WRITE == op.action) {
-      frag->ssa.entry_nodes.Remove(GetRegister(op));
+      frag->ssa.entry_nodes.Remove(arch::GetRegister(op));
     }
   }
 }
@@ -255,7 +257,7 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
   for (auto &op : ssa_instr->uses) {
     if (SSAOperandAction::READ_WRITE == op.action) {  // Read-only, must be reg.
       GRANARY_ASSERT(op.is_reg);
-      auto reg = GetRegister(op);
+      auto reg = arch::GetRegister(op);
       auto &node(frag->ssa.entry_nodes[reg]);
 
       // We're doing a read/write, so while we are making a new definition, it
@@ -283,7 +285,7 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
     } else {  // `SSAOperandAction::READ`, register or memory operand.
       VirtualRegister regs[2];
       if (op.is_reg) {
-        regs[0] = GetRegister(op);
+        regs[0] = arch::GetRegister(op);
       } else {
         MemoryOperand mem_op(op.operand);
         mem_op.CountMatchedRegisters({&(regs[0]), &(regs[1])});

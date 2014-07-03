@@ -69,11 +69,14 @@ void Init(const char *granary_path) {
 
   if (!FLAG_help) {
     context.Construct(FLAG_tools);
-
-    auto start_pc = Translate(context.AddressOf(), fibonacci);
-    auto fib = UnsafeCast<int (*)(int)>(start_pc);
-    for (auto i = 0; i < 30; ++i) {
-      Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i, fibonacci(i), i, fib(i));
+    if (false) {
+      auto start_pc = Translate(context.AddressOf(), fibonacci);
+      auto fib = UnsafeCast<int (*)(int)>(start_pc);
+      for (auto i = 0; i < 30; ++i) {
+        Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i, fibonacci(i), i, fib(i));
+      }
+    } else {
+      Translate(context.AddressOf(), granary_test_mangle);
     }
 
     context.Destroy();

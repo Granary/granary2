@@ -119,7 +119,6 @@ BEGIN_FUNC(loop_return_5)
 3:  ret;
 END_FUNC
 
-
 BEGIN_FUNC(loope_return_5)
     mov     $0, %rax;
     mov     $5, %rcx;

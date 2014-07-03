@@ -11,6 +11,24 @@
 
 namespace granary {
 
+// Convert writes to register operates into read/writes if there is another
+// read from the same register (that isn't a memory operand) in the current
+// operand pack.
+//
+// The things we want to handle here are instruction's like `MOV A, A`.
+//
+// Note: This function is defined in `6_track_ssa_vars`.
+extern bool ConvertOperandActions(SSAOperandPack &operands);
+
+// Decompose an `SSAOperandPack` containing all kinds of operands into the
+// canonical format required by `SSAInstruction`.
+//
+// Note: This function is defined in `6_track_ssa_vars`.
+extern void AddInstructionOperands(SSAInstruction *instr,
+                                   SSAOperandPack &operands);
+
+namespace arch {
+
 // Get the virtual register associated with an arch operand.
 //
 // Note: This assumes that the arch operand is indeed a register operand!
@@ -30,15 +48,6 @@ extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr);
 // Note: This has an architecture-specific implementation.
 extern bool CanPropagate(VirtualRegister source, VirtualRegister dest);
 
-// Convert writes to register operates into read/writes if there is another
-// read from the same register (that isn't a memory operand) in the current
-// operand pack.
-//
-// The things we want to handle here are instruction's like `MOV A, A`.
-//
-// Note: This function is defined in `6_track_ssa_vars`.
-extern bool ConvertOperandActions(SSAOperandPack &operands);
-
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
 // clearing the value of `A` and not reading it for the sake of reading it.
@@ -47,12 +56,7 @@ extern bool ConvertOperandActions(SSAOperandPack &operands);
 extern void ConvertOperandActions(const NativeInstruction *instr,
                                   SSAOperandPack &operands);
 
-// Decompose an `SSAOperandPack` containing all kinds of operands into the
-// canonical format required by `SSAInstruction`.
-//
-// Note: This function is defined in `6_track_ssa_vars`.
-void AddInstructionOperands(SSAInstruction *instr, SSAOperandPack &operands);
-
+}  // namespace arch
 namespace {
 
 // Represents a potentially copy-able operand.
@@ -97,7 +101,7 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
                                   SSAInstruction *instr) {
   for (const auto &op : instr->defs) {
     if (SSAOperandAction::WRITE == op.action) {
-      auto &reg_value(defs[GetRegister(op)]);
+      auto &reg_value(defs[arch::GetRegister(op)]);
       reg_value.reg_node = op.nodes[0];
       reg_value.reg_value = nullptr;
     } else {
@@ -106,7 +110,7 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
   }
   for (const auto &op : instr->uses) {
     if (SSAOperandAction::READ_WRITE == op.action) {
-      auto &reg_value(defs[GetRegister(op)]);
+      auto &reg_value(defs[arch::GetRegister(op)]);
       reg_value.reg_node = op.nodes[0];
       reg_value.reg_value = nullptr;
     } else {
@@ -125,9 +129,9 @@ static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
     }
   } else if (auto ninstr = DynamicCast<const NativeInstruction *>(instr)) {
     if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
-      if (auto copied_value = GetCopiedOperand(ninstr)) {
+      if (auto copied_value = arch::GetCopiedOperand(ninstr)) {
         auto &reg_operand(ssa_instr->defs[0]);
-        auto defined_reg = GetRegister(reg_operand);
+        auto defined_reg = arch::GetRegister(reg_operand);
         auto &reg_value(defs[defined_reg]);
         reg_value.reg_node = reg_operand.nodes[0];
 
@@ -149,7 +153,7 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
     return false;
   }
 
-  auto reg_to_replace = GetRegister(dest_operand);
+  auto reg_to_replace = arch::GetRegister(dest_operand);
   auto replacement_operand = defs[reg_to_replace];
   auto source_operand = replacement_operand.reg_value;
   if (!source_operand) {
@@ -157,14 +161,14 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
   }
   VirtualRegister replacement_reg;
   if (source_operand->is_reg) {  // Register to register.
-    replacement_reg = GetRegister(*source_operand);
+    replacement_reg = arch::GetRegister(*source_operand);
 
   } else {  // Effective address to register.
     MemoryOperand effective_address(source_operand->operand);
     if (!effective_address.IsEffectiveAddress()) return false;
     if (!effective_address.MatchRegister(replacement_reg)) return false;
   }
-  if (!CanPropagate(replacement_reg, reg_to_replace)) {
+  if (!arch::CanPropagate(replacement_reg, reg_to_replace)) {
     return false;
   }
   auto replacement_reg_node_at_copy = source_operand->nodes[0];
@@ -209,7 +213,7 @@ static bool CopyPropagateMem(ReachingDefinintions &defs,
 
   // Register to base address of a memory operand.
   if (replacement_operand->is_reg) {
-    mem_regs[0] = GetRegister(*replacement_operand);
+    mem_regs[0] = arch::GetRegister(*replacement_operand);
     if (arch::ADDRESS_WIDTH_BITS != mem_regs[0].BitWidth()) {
       return false;
     }
@@ -278,7 +282,7 @@ static void FixInstruction(NativeInstruction *ninstr,
     operands.Append(use);
   }
   if (ConvertOperandActions(operands)) {  // Generic.
-    ConvertOperandActions(ninstr, operands);  // Arch-specific.
+    arch::ConvertOperandActions(ninstr, operands);  // Arch-specific.
     ssa_instr->defs.Clear();
     ssa_instr->uses.Clear();
     AddInstructionOperands(ssa_instr, operands);

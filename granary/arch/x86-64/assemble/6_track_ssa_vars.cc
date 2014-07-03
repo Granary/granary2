@@ -12,10 +12,11 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace arch {
 namespace {
 
 // Look for the pattern `XOR A, A`.
-static void UpdateIfClearedByXor(const arch::Operand *arch_ops,
+static void UpdateIfClearedByXor(const Operand *arch_ops,
                                  SSAOperandPack &ssa_ops) {
   if (!arch_ops[0].IsRegister()) return;
   if (!arch_ops[1].IsRegister()) return;
@@ -29,7 +30,7 @@ static void UpdateIfClearedByXor(const arch::Operand *arch_ops,
 }
 
 // Look for the pattern `SUB A, A`.
-static void UpdateIfClearedBySub(const arch::Operand *arch_ops,
+static void UpdateIfClearedBySub(const Operand *arch_ops,
                                  SSAOperandPack &ssa_ops) {
   if (!arch_ops[0].IsRegister()) return;
   if (!arch_ops[1].IsRegister()) return;
@@ -40,7 +41,7 @@ static void UpdateIfClearedBySub(const arch::Operand *arch_ops,
 }
 
 // Look for the pattern `AND A, 0`.
-static void UpdateIfClearedByAnd(const arch::Operand *arch_ops,
+static void UpdateIfClearedByAnd(const Operand *arch_ops,
                                  SSAOperandPack &ssa_ops) {
   if (!arch_ops[0].IsRegister()) return;
   if (!arch_ops[1].IsImmediate()) return;
@@ -80,4 +81,5 @@ VirtualRegister GetRegister(const SSAOperand &op) {
   return op.operand->reg;
 }
 
+}  // namespace arch
 }  // namespace granary

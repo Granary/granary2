@@ -17,7 +17,6 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
-
 namespace arch {
 
 // Categories of every iclass.
@@ -372,17 +371,20 @@ class InlineAssemblyParser {
 };
 }  // namespace
 
+namespace arch {
+
 // Compile this inline assembly into some instructions within the block
 // `block`. This places the inlined instructions before `instr`, which is
 // assumed to be the `AnnotationInstruction` containing the inline assembly
 // instructions.
 void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
                                 DecodedBasicBlock *block,
-                                Instruction *instr,
+                                granary::Instruction *instr,
                                 InlineAssemblyBlock *asm_block) {
   InlineAssemblyParser parser(cfg, asm_block->scope, block,
                               instr, asm_block->assembly);
   parser.ParseInstructions();
 }
 
+}  // namespace arch
 }  // namespace granary

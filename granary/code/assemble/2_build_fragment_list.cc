@@ -11,9 +11,11 @@
 #include "granary/code/fragment.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 
+#include "granary/cache.h"
 #include "granary/util.h"
 
 namespace granary {
+namespace arch {
 
 // The high-level goal of this stage of assembly is to take input basic blocks
 // from a local-control-flow graph and turn them into "true" basic blocks (with
@@ -61,6 +63,15 @@ bool InstructionHintsAtFlagSplit(const NativeInstruction *instr);
 // Note: This function has an architecture-specific implementation.
 extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
 
+// Generates some indirect edge code that is used to look up the target of an
+// indirect jump.
+//
+// Note: This function has an architecture-specific implementation.
+extern IndirectEdge *GenerateIndirectEdgeCode(ControlFlowInstruction *cfi,
+                                              CodeFragment *in_edge,
+                                              CodeFragment *out_edge);
+
+}  // namespace arch
 namespace {
 
 // Make a new code fragment.
@@ -176,7 +187,7 @@ static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
     // into an app fragment) before an instrumentation instruction next modifies
     // the flags.
     } else {
-      hints_at_split = InstructionHintsAtFlagSplit(ninstr);
+      hints_at_split = arch::InstructionHintsAtFlagSplit(ninstr);
 
       // Early conversion into app code for app instructions that hint at
       // flag splits.
@@ -322,28 +333,54 @@ Fragment *MakeDirectEdgeFragment(FragmentList *frags,
   return edge_frag;
 }
 
-// Make an edge fragment and an exit fragment for some future block.
-static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
-                                          CodeFragment *pred_frag,
-                                          BlockMetaData *dest_block_meta) {
-  auto in_edge_frag = new CodeFragment;
-  in_edge_frag->stack.is_valid = pred_frag->stack.is_valid;
-  in_edge_frag->stack.is_checked = pred_frag->stack.is_checked;
-  in_edge_frag->attr.block_meta = dest_block_meta;
+// Update the attribute info of an indirect edge fragment.
+static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
+                                   CodeFragment *pred_frag,
+                                   BlockMetaData *dest_block_meta) {
+  edge_frag->stack.is_valid = pred_frag->stack.is_valid;
+  edge_frag->stack.is_checked = pred_frag->stack.is_checked;
+  edge_frag->attr.block_meta = dest_block_meta;
+  edge_frag->attr.is_app_code = false;
 
   // Prevent this fragment from being reaped by `RemoveUselessFrags` in
   // `3_partition_fragments.cc`.
-  in_edge_frag->attr.has_native_instrs = true;
+  edge_frag->attr.has_native_instrs = true;
 
   // Make sure that the edge code shares the same partition as the predecessor
   // so that virtual registers can be spread across both.
-  in_edge_frag->partition.Union(in_edge_frag, pred_frag);
+  edge_frag->attr.can_add_to_partition = true;
+  edge_frag->partition.Union(edge_frag, pred_frag);
+}
+
+// Make an edge fragment and an exit fragment for some future block.
+static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
+                                          CodeFragment *pred_frag,
+                                          BlockMetaData *dest_block_meta,
+                                          ControlFlowInstruction *cfi) {
+  auto in_edge_frag = new CodeFragment;
+  in_edge_frag->attr.is_in_edge_code = true;
+  UpdateIndirectEdgeFrag(in_edge_frag, pred_frag, dest_block_meta);
+
+  auto out_edge_frag = new CodeFragment;
+  out_edge_frag->attr.is_in_edge_code = false;
+  UpdateIndirectEdgeFrag(out_edge_frag, in_edge_frag, dest_block_meta);
+
+  auto dest_cache_meta = MetaDataCast<IndirectEdgeMetaData *>(dest_block_meta);
+  dest_cache_meta->edge = arch::GenerateIndirectEdgeCode(
+      cfi, in_edge_frag, out_edge_frag);
+  auto pred_block_meta = MetaDataCast<IndirectEdgeMetaData *>(
+      pred_frag->attr.block_meta);
+  pred_block_meta->AddIndirectEdge(dest_block_meta);
 
   auto exit_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
   exit_frag->edge.kind = EDGE_KIND_INDIRECT;
   exit_frag->block_meta = dest_block_meta;
-  in_edge_frag->successors[0] = exit_frag;
+  in_edge_frag->successors[FRAG_SUCC_BRANCH] = out_edge_frag;
+  // Note: `in_edge_frag->branch_instr` is initialized by
+  //       `arch::GenerateIndirectEdgeCode`.
+  out_edge_frag->successors[FRAG_SUCC_FALL_THROUGH] = exit_frag;
   frags->Append(in_edge_frag);
+  frags->Append(out_edge_frag);
   frags->Append(exit_frag);
 
   return in_edge_frag;
@@ -359,7 +396,8 @@ static ExitFragment *MakeExitFragment(FragmentList *frags) {
 // instruction.
 static Fragment *FragmentForTargetBlock(FragmentList *frags,
                                         CodeFragment *pred_frag,
-                                        BasicBlock *block) {
+                                        BasicBlock *target_block,
+                                        ControlFlowInstruction *cfi) {
   // Function/interrupt/system return. In these cases, we can't be sure (at
   // instrumentation time) that execution returns to the code cache.
   //
@@ -367,41 +405,45 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
   //
   // Direct call/jump to native; interrupt call, system call. All regs
   // must be homed on exit of this block lets things really screw up.
-  if (auto native_block = DynamicCast<NativeBasicBlock *>(block)) {
+  if (auto native_block = DynamicCast<NativeBasicBlock *>(target_block)) {
     return MakeNativeFragment(frags, native_block);
+  }
 
   // Direct call/jump/conditional jump to a decoded block.
-  } else if (IsA<DecodedBasicBlock *>(block)) {
-    return FragmentForBlock(frags, DynamicCast<DecodedBasicBlock *>(block));
+  if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(target_block)) {
+    return FragmentForBlock(frags, decoded_block);
+  }
 
   // Direct call/jump/conditional jump to a cached block.
-  } else if (IsA<CachedBasicBlock *>(block)) {
-    return MakeCachedFragment(frags, DynamicCast<CachedBasicBlock *>(block));
+  if (auto cached_block = DynamicCast<CachedBasicBlock *>(target_block)) {
+    return MakeCachedFragment(frags, cached_block);
+  }
 
   // Direct jump / conditional jump to an unresolved block, need to add in
   // some edge code.
-  } else if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+  if (auto direct_block = DynamicCast<DirectBasicBlock *>(target_block)) {
     // TODO(pag): If the number of predecessors of this block is >= 2 then it
     //            would be nice if they could share the same edge code via some
     //            intermediate fragment with the patchable jump.
     return MakeDirectEdgeFragment(frags, pred_frag, direct_block,
                                   direct_block->MetaData());
+  }
 
   // Indirect call/jump, or direct call/jump/conditional jump
   // to a future block.
-  } else if (IsA<ReturnBasicBlock *>(block) ||
-             IsA<IndirectBasicBlock *>(block)) {
-    auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
+  if (IsA<ReturnBasicBlock *>(target_block) ||
+      IsA<IndirectBasicBlock *>(target_block)) {
+    auto inst_block = DynamicCast<InstrumentedBasicBlock *>(target_block);
     auto block_meta = inst_block->UnsafeMetaData();
     if (block_meta) {
-      return MakeIndirectEdgeFragment(frags, pred_frag, block_meta);
+      return MakeIndirectEdgeFragment(frags, pred_frag, block_meta, cfi);
     } else {
       return MakeExitFragment(frags);
     }
-  } else {
-    GRANARY_ASSERT(false);
-    return nullptr;
   }
+
+  GRANARY_ASSERT(false);
+  return nullptr;
 }
 
 // Append a CFI to a fragment, and potentially make a new fragment for the CFI.
@@ -464,7 +506,7 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
                                ControlFlowInstruction *cfi) {
   auto next = cfi->Next();
   auto target_block = cfi->TargetBlock();
-  auto target_frag = FragmentForTargetBlock(frags, frag, target_block);
+  auto target_frag = FragmentForTargetBlock(frags, frag, target_block, cfi);
 
   // Direct jump to another block.
   if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget() &&
@@ -559,7 +601,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     // affect the flags, regardless of if it's native/instrumented, it goes
     // into whatever the previous section of code is (app or inst).
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (ChangesInterruptDeliveryState(ninstr)) {
+      if (arch::ChangesInterruptDeliveryState(ninstr)) {
         return SplitFragmentAtInterruptChange(frags, frag, block, instr);
       } else if (frag->attr.is_app_code) {
         if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
@@ -588,7 +630,8 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       auto next = instr->Next();
       if (IA_VALID_STACK == annot->annotation) {
-        if (frag->stack.is_checked && !frag->stack.is_valid) {
+        if (frag->stack.is_checked && !frag->stack.is_valid &&
+            frag->attr.has_native_instrs) {
           return SplitFragmentAtStackChange(frags, frag, block, next, true);
         } else {
           frag->stack.is_checked = true;

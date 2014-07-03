@@ -9,6 +9,7 @@
 #include "granary/code/inline_assembly.h"
 
 namespace granary {
+namespace arch {
 
 // Compile this inline assembly into some instructions within the block
 // `block`. This places the inlined instructions before `instr`, which is
@@ -18,8 +19,10 @@ namespace granary {
 // Note: This has an architecture-specific implementation.
 extern void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
                                        DecodedBasicBlock *block,
-                                       Instruction *instr,
+                                       granary::Instruction *instr,
                                        InlineAssemblyBlock *asm_block);
+
+}  // namespace arch
 
 // Compile all inline assembly instructions by parsing the inline assembly
 // instructions and doing code generation for them.
@@ -33,7 +36,7 @@ void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
           if (IA_INLINE_ASSEMBLY == annot->annotation) {
             auto asm_block = reinterpret_cast<InlineAssemblyBlock *>(
                 annot->Data<void *>());
-            CompileInlineAssemblyBlock(cfg, dblock, instr, asm_block);
+            arch::CompileInlineAssemblyBlock(cfg, dblock, instr, asm_block);
             delete asm_block;
             instr->UnsafeUnlink();
           }

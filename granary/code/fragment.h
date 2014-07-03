@@ -401,6 +401,12 @@ class CodeAttributes {
   // explicit "kill" it in C with an annotation instruction.
   bool is_compensation_code:1;
 
+  // Is this fragment some in-edge code? If so, that means that it will indirect
+  // jump to some *incomplete* out-edge code, i.e. it will jump to a flag exit/
+  // partition exit fragment. This tail will NOT be emitted along with the
+  // rest of code, but will be emitted to a special cache.
+  bool is_in_edge_code:1;
+
   // The number of non-application (instrumentation) predecessors.
   //
   // Note: We don't care if this value overflows or goes out of sync, as it is

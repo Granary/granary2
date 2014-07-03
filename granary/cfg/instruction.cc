@@ -206,6 +206,10 @@ void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
   instruction.SetDecodedPC(decoded_pc);
 }
 
+bool NativeInstruction::IsVirtualRegSaveRestore(void) const {
+  return instruction.IsVirtualRegSaveRestore();
+}
+
 // Get the opcode name.
 const char *NativeInstruction::OpCodeName(void) const {
   return instruction.OpCodeName();

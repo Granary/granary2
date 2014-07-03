@@ -204,9 +204,6 @@ class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
   GRANARY_INTERNAL_DEFINITION
   bool CanMaterializeWith(const ModuleMetaData *that) const;
 
-  // Hash the translation meta-data.
-  void Hash(HashFunction *hasher) const;
-
   // Compare two translation meta-data objects for equality.
   bool Equals(const ModuleMetaData *meta) const;
 

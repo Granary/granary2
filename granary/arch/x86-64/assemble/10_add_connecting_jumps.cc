@@ -12,6 +12,7 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace arch {
 namespace {
 
 static LabelInstruction *FindLabel(Fragment *frag) {
@@ -37,4 +38,5 @@ NativeInstruction *AddFallThroughJump(Fragment *frag,
   return instr;
 }
 
+}  // namespace arch
 }  // namespace granary

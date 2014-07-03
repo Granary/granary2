@@ -13,10 +13,11 @@
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
+#include "granary/metadata.h"
+
 namespace granary {
 
 // Forward declarations.
-class BlockMetaData;
 class ContextInterface;
 
 // Used to resolve direct control-flow transfers between the code cache and
@@ -105,7 +106,63 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 // Granary.
 class IndirectEdge {
  public:
+  IndirectEdge(void);
+
+  // The entrypoint to the in-edge code. Initially this is a
+  std::atomic<CachePC> in_edge;
+
+  // Template of encoded instructions for the indirect out-edge code.
+  uint8_t out_edge_template[arch::INDIRECT_EDGE_CODE_SIZE_BYTES];
+
+  // Size (in bytes) of the instructions encoded in `out_edge_template`.
+  int encoded_size;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
+    SHARED = true,
+
+    // We want this cache-line aligned because the `num_executions` and
+    // `num_execution_overflows` are potentially operated on atomically.
+    ALIGNMENT = 1
+  })
+} __attribute__((packed));
+
+static_assert(sizeof(std::atomic<CachePC>) == sizeof(CachePC),
+    "Invalid structure packing of `std::atomic<CachePC>`. Suggest switching "
+    "to `volatile CachePC` and then using compiler intrinsics or memory fences "
+    "for memory ordering issues.");
+
+// Meta-data that Granary maintains about all basic blocks that are committed to
+// the code cache. This is meta-data is private to Granary and therefore not
+// exposed (directly) to tools.
+class IndirectEdgeMetaData : public MutableMetaData<IndirectEdgeMetaData> {
+ public:
+  inline IndirectEdgeMetaData(void)
+      : target_meta(nullptr) {}
+
+  // Don't copy anything over.
+  IndirectEdgeMetaData(const IndirectEdgeMetaData &)
+      : target_meta(nullptr) {}
+
+  ~IndirectEdgeMetaData(void);
+
+  // Add some indirect block meta-data to the list of indirect block meta-data
+  // templates targeted by this block.
+  void AddIndirectEdge(BlockMetaData *meta);
+
+  union {
+    // For a block with one or more indirect jumps: Linked list of meta-data
+    // "templates".
+    BlockMetaData *target_meta;
+
+    // For a meta-data template that is the specialization info of a block
+    // targeted by an indirect CFI.
+    IndirectEdge *edge;
+  } __attribute__((packed));
 };
+
+static_assert(offsetof(IndirectEdgeMetaData, target_meta) ==
+              offsetof(IndirectEdgeMetaData, edge),
+    "Invalid structure packing of `IndirectEdgeMetaData`.");
 
 }  // namespace granary
 

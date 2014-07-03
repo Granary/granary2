@@ -23,6 +23,7 @@
 //            partition.
 
 namespace granary {
+namespace arch {
 
 // Returns the architectural register that is potentially killed by the
 // instructions injected to save/restore flags.
@@ -43,6 +44,7 @@ extern void InjectSaveFlags(Fragment *frag);
 // Note: This has an architecture-specific implementation.
 extern void InjectRestoreFlags(Fragment *frag);
 
+}  // namespace arch
 namespace {
 
 // Initialize the set of live in all exit fragments. All other fragments start
@@ -168,7 +170,7 @@ static void AllocateFlagZones(FragmentList * const frags,
       if (!flag_zone) {
         flag_zone = new FlagZone(
             cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES),
-            FlagKillReg());
+            arch::FlagKillReg());
       }
     }
   }
@@ -221,9 +223,9 @@ static void UpdateFlagZones(FragmentList *frags) {
 static void SaveAndRestoreFlags(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto flag_entry = DynamicCast<FlagEntryFragment *>(frag)) {
-      InjectSaveFlags(flag_entry);
+      arch::InjectSaveFlags(flag_entry);
     } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {
-      InjectRestoreFlags(flag_exit);
+      arch::InjectRestoreFlags(flag_exit);
     }
   }
 }

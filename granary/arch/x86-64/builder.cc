@@ -102,9 +102,14 @@ void MemoryBuilder::Build(Instruction *instr) {
 // Add this branch target as an operand to the instruction `instr`.
 void BranchTargetBuilder::Build(Instruction *instr) {
   auto &op(instr->ops[instr->num_explicit_ops++]);
-  op.branch_target.as_pc = pc;
-  op.rw = XED_OPERAND_ACTION_R;
+  if (BRANCH_TARGET_LABEL == kind) {
+    op.is_annot_encoded_pc = true;
+    op.ret_address = label;
+  } else {
+    op.branch_target.as_pc = pc;
+  }
   op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
+  op.rw = XED_OPERAND_ACTION_R;
   op.width = arch::ADDRESS_WIDTH_BITS;
   op.is_explicit = true;
 }

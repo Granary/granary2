@@ -13,9 +13,10 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace arch {
 
 // Create an instruction to copy a GPR to a spill slot.
-Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
+granary::Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());
   GRANARY_ASSERT(slot.IsVirtualSlot());
   arch::Instruction ninstr;
@@ -27,7 +28,8 @@ Instruction *SaveGPRToSlot(VirtualRegister gpr, VirtualRegister slot) {
 }
 
 // Create an instruction to copy the value of a spill slot to a GPR.
-Instruction *RestoreGPRFromSlot(VirtualRegister gpr, VirtualRegister slot) {
+granary::Instruction *RestoreGPRFromSlot(VirtualRegister gpr,
+                                         VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());
   GRANARY_ASSERT(slot.IsVirtualSlot());
   arch::Instruction ninstr;
@@ -39,9 +41,8 @@ Instruction *RestoreGPRFromSlot(VirtualRegister gpr, VirtualRegister slot) {
 }
 
 // Swaps the value of one GPR with another.
-//
-// Note: This has an architecture-specific implementation.
-Instruction *SwapGPRWithGPR(VirtualRegister gpr1, VirtualRegister gpr2) {
+granary::Instruction *SwapGPRWithGPR(VirtualRegister gpr1,
+                                     VirtualRegister gpr2) {
   GRANARY_ASSERT(gpr1.IsNative());
   GRANARY_ASSERT(gpr2.IsNative());
   arch::Instruction ninstr;
@@ -52,9 +53,8 @@ Instruction *SwapGPRWithGPR(VirtualRegister gpr1, VirtualRegister gpr2) {
 }
 
 // Swaps the value of one GPR with a slot.
-//
-// Note: This has an architecture-specific implementation.
-Instruction *SwapGPRWithSlot(VirtualRegister gpr, VirtualRegister slot) {
+granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr,
+                                      VirtualRegister slot) {
   GRANARY_ASSERT(gpr.IsNative());
   GRANARY_ASSERT(slot.IsVirtualSlot());
   arch::Instruction ninstr;
@@ -115,4 +115,5 @@ VirtualRegister GPRCopiedFromVR(const NativeInstruction *instr) {
   return VirtualRegister();
 }
 
+}  // namespace arch
 }  // namespace granary

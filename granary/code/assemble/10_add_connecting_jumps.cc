@@ -8,6 +8,7 @@
 #include "granary/code/fragment.h"
 
 namespace granary {
+namespace arch {
 
 // Adds a fall-through jump, if needed, to this fragment.
 //
@@ -15,6 +16,7 @@ namespace granary {
 extern NativeInstruction *AddFallThroughJump(Fragment *frag,
                                              Fragment *fall_through_frag);
 
+}  // namespace arch
 namespace {
 
 static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr);
@@ -35,8 +37,12 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any).
   auto branch_target_frag = frag->successors[FRAG_SUCC_BRANCH];
-  if (frag->branch_instr && frag->branch_instr->HasIndirectTarget()) {
-    next_ptr = VisitOrderedFragment(branch_target_frag, next_ptr);
+  if (auto cfi = DynamicCast<ControlFlowInstruction *>(frag->branch_instr)) {
+    auto target_block = cfi->TargetBlock();
+    if (IsA<IndirectBasicBlock *>(target_block) ||
+        IsA<ReturnBasicBlock *>(target_block)) {
+      next_ptr = VisitOrderedFragment(branch_target_frag, next_ptr);
+    }
   }
 
   // Default: depth-first order, where fall-through naturally comes up as a
@@ -72,11 +78,11 @@ void AddConnectingJumps(FragmentList *frags) {
 
     // Last fragment in the list, but it has a fall-through.
     } else if (!frag_next) {
-      AddFallThroughJump(frag, fall_through);
+      arch::AddFallThroughJump(frag, fall_through);
 
     // Has a fall-through that's not the next fragment.
     } else if (fall_through != frag_next) {
-      AddFallThroughJump(frag, fall_through);
+      arch::AddFallThroughJump(frag, fall_through);
     }
   }
 }

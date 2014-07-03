@@ -157,6 +157,7 @@ CodeAttributes::CodeAttributes(void)
       is_app_code(false),
       is_block_head(false),
       is_compensation_code(false),
+      is_in_edge_code(false),
       num_inst_preds(0),
       block_meta(nullptr) {}
 

@@ -55,11 +55,12 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
   const size_t slab_number(next_slab_number.fetch_add(1));
-  void *slab_memory(AllocatePages(1));
-  memset(slab_memory, UNALLOCATED_MEMORY_POISON, GRANARY_ARCH_PAGE_FRAME_SIZE);
+  void *slab_memory(AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
+  memset(slab_memory, UNALLOCATED_MEMORY_POISON,
+         SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
   VALGRIND_MAKE_MEM_UNDEFINED(
       reinterpret_cast<char *>(slab_memory) + start_offset,
-      (GRANARY_ARCH_PAGE_FRAME_SIZE - start_offset));
+      (SLAB_ALLOCATOR_SLAB_SIZE_BYTES - start_offset));
   return new (slab_memory) SlabList(
       prev_slab,
       slab_number * num_allocations_per_slab,
@@ -127,6 +128,17 @@ void SlabAllocator::Free(void *address) {
   } while (!free_list.compare_exchange_strong(next, list));
 }
 
+// For those cases where a slab allocator is non-global.
+void SlabAllocator::Destroy(void) {
+  const SlabList *slab = slab_list_head.exchange(nullptr);
+  const SlabList *next_slab(nullptr);
+  for (; slab; slab = next_slab) {
+    next_slab = slab->next;
+    FreePages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
+              SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
+  }
+}
+
 // Allocate an object from the free list, if possible. Returns `nullptr` if
 // no object can be allocated.
 void *SlabAllocator::AllocateFromFreeList(void) {
@@ -183,6 +195,8 @@ void SlabAllocator::Free(void *address) {
   memset(address, internal::DEALLOCATED_MEMORY_POISON, aligned_size);
   free(address);
 }
+
+void SlabAllocator::Destroy(void) {}
 
 #endif  // GRANARY_WITH_VALGRIND
 
