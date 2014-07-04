@@ -16,18 +16,24 @@ namespace granary {
 class ContextInterface;
 class BlockMetaData;
 
+enum TargetStackValidity {
+  TRANSLATE_STACK_VALID,
+  TRANSLATE_STACK_UNKNOWN
+};
+
+// Instrument, compile, and index some basic blocks.
+CachePC Translate(ContextInterface *context, AppPC pc,
+                  TargetStackValidity stack_valid=TRANSLATE_STACK_UNKNOWN);
+
+// Instrument, compile, and index some basic blocks.
+CachePC Translate(ContextInterface *context, BlockMetaData *meta);
+
 // Instrument, compile, and index some basic blocks.
 template <typename R, typename... Args>
 static inline CachePC Translate(ContextInterface *context,
                                 R (*func_ptr)(Args...)) {
-  return Translate(context, UnsafeCast<AppPC>(func_ptr));
+  return Translate(context, UnsafeCast<AppPC>(func_ptr), TRANSLATE_STACK_VALID);
 }
-
-// Instrument, compile, and index some basic blocks.
-CachePC Translate(ContextInterface *context, AppPC pc);
-
-// Instrument, compile, and index some basic blocks.
-CachePC Translate(ContextInterface *context, BlockMetaData *meta);
 
 }  // namespace granary
 

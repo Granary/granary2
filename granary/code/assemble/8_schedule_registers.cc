@@ -43,19 +43,8 @@ extern granary::Instruction *SwapGPRWithGPR(VirtualRegister gpr1,
 extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
                                              VirtualRegister slot);
 
-// Returns the GPR that is copied by this instruction into a virtual
-// register. If this instruction is not a simple copy operation of this form,
-// then an invalid virtual register is returned.
-//
-// Note: This has an architecture-specific implementation.
-extern VirtualRegister GPRCopiedToVR(const NativeInstruction *instr);
-
-// Returns the GPR that is copied by this instruction from a virtual
-// register. If this instruction is not a simple copy operation of this form,
-// then an invalid virtual register is returned.
-//
-// Note: This has an architecture-specific implementation.
-extern VirtualRegister GPRCopiedFromVR(const NativeInstruction *instr);
+// Performs some minor peephole optimization on the scheduled registers.
+extern void PeepholeOptimize(Fragment *frag);
 
 }  // namespace arch
 namespace {
@@ -455,11 +444,29 @@ class LocalScheduler {
   LiveRegisterTracker live_regs;
   LiveRegisterTracker next_live_regs;
 
-  // The preferred reguster to steal, if it's not used.
+  // The preferred register to steal, if it's not used. If this is `-1` (in the
+  // case of the fragment-local register scheduler), then we don't have any
+  // preference over what GPR we steal.
+  //
+  // For partition-local register scheduling, we use the `preferred_gpr_num` to
+  // try to be consistent about what register is actually scheduled.
   int preferred_gpr_num;
 
+  // Tells us whether or not a GPR can be occupied by a VR. The idea here is
+  // that we want to coalesce the saves/restores of multiple virtual registers
+  // when possible. To do so, we take a lazy approach to spilling: instead of
+  // spilling the GPR just before the first definition of a VR, we spill the
+  // GPR just after the next earlier use / beginning of fragment (whichever
+  // comes first). That way, when we need to fill the last use of a different
+  // VR, we can do so using the occupiable GPR.
   bool gpr_is_occupiable[NUM_GPRS];
+
+  // Which VR is currently occupying a GPR? If this is non-NULL, then the GPR
+  // is stolen.
   SSASpillStorage *vr_occupying_gpr[NUM_GPRS];
+
+  // Which spill slot is associated with a GPR? This is similar to
+  // `vr_occupying_gpr`.
   int slot_containing_gpr[NUM_GPRS];
 
  private:
@@ -488,85 +495,27 @@ static void ReplaceOperand(SSAOperand &op) {
   }
 }
 
-// Handle the special case where we're copying a GPR to a VR. This is
-// targeted at cases where a flag zone contains only a single code
-// fragment, and where the flags save/restore code is inlined into that
-// fragment instead of being part of a flag entry/exit fragment.
-static bool SpecialCaseCopyGPRToVR(LocalScheduler *sched,
-                                   NativeInstruction *instr,
-                                   SSAInstruction *ssa_instr,
-                                   SSASpillStorage *vr) {
-  auto gpr_copied_to_vr = arch::GPRCopiedToVR(instr);
-  if (!gpr_copied_to_vr.IsValid()) return false;
-
-  auto new_copy_instr = arch::SaveGPRToSlot(gpr_copied_to_vr,
-                                            NthSpillSlot(vr->slot));
-  sched->frag->instrs.InsertBefore(instr, new_copy_instr);
-  SetMetaData(new_copy_instr, ssa_instr);
-  ClearMetaData(instr);
-  sched->frag->instrs.Remove(instr);
-  delete instr;
-  return true;
-}
-
 // Perform fragment-local register scheduling.
 static void ScheduleFragLocalRegDefs(LocalScheduler *sched,
                                      NativeInstruction *instr,
                                      SSAInstruction *ssa_instr) {
   for (auto &def : ssa_instr->defs) {
+    GRANARY_IF_DEBUG( auto replaced = false; )
     for (auto node : def.nodes) {
       if (!node->reg.IsVirtual()) continue;
       auto vr = LocalStorageForNode(sched->frag, node);
       if (!vr) continue;
+      GRANARY_ASSERT(!replaced);
       if (!vr->reg.IsValid()) {  // Need to allocate a register for `vr`.
-        if (SpecialCaseCopyGPRToVR(sched, instr, ssa_instr, vr)) {
-          return;
-        }
         sched->StealOrFillSpilledGPR(instr, vr);
       }
       if (SSAOperandAction::WRITE == def.action) {
         sched->MarkGPRAsOccupiable(vr);
       }
+      GRANARY_IF_DEBUG( replaced = true; );
       ReplaceOperand(def);
     }
   }
-}
-
-// Handle the special case where we're copying a VR to a GPR. This is
-// targeted at cases where a flag zone contains only a single code
-// fragment, and where the flags save/restore code is inlined into that
-// fragment instead of being part of a flag entry/exit fragment.
-static bool SpecialCaseCopyVRToGPR(LocalScheduler *sched,
-                                   NativeInstruction *instr,
-                                   SSAInstruction *ssa_instr,
-                                   SSANode *node,
-                                   SSASpillStorage *vr) {
-  // There are no intermediate uses of this register between this use and its
-  // definition.
-  auto reg_node = DynamicCast<SSARegisterNode *>(UnaliasedNode(node));
-  if (!reg_node) return false;
-
-  // The register is defined by a native instruction in this fragment.
-  auto reg_def_instr = DynamicCast<NativeInstruction *>(reg_node->instr);
-  if (!reg_def_instr) return false;
-
-  // The native instruction that defines this register does so as a copy of
-  // a GPR into the VR.
-  if (!arch::GPRCopiedToVR(reg_def_instr).IsValid()) return false;
-
-  // This use of the VR is simple a restoration of whatever was saved by the
-  // instruction that defines this VR.
-  auto gpr_copied_to_vr = arch::GPRCopiedFromVR(instr);
-  if (!gpr_copied_to_vr.IsValid()) return false;
-
-  auto new_copy_instr = arch::RestoreGPRFromSlot(gpr_copied_to_vr,
-                                                 NthSpillSlot(vr->slot));
-  sched->frag->instrs.InsertBefore(instr, new_copy_instr);
-  SetMetaData(new_copy_instr, ssa_instr);
-  ClearMetaData(instr);
-  sched->frag->instrs.Remove(instr);
-  delete instr;
-  return true;
 }
 
 // Perform fragment-local register scheduling.
@@ -580,13 +529,12 @@ static void ScheduleFragLocalRegUses(LocalScheduler *sched,
       auto vr = LocalStorageForNode(sched->frag, node);
       if (!vr) continue;
       if (!vr->reg.IsValid()) {  // Need to allocate a register for `vr`.
-        if (SpecialCaseCopyVRToGPR(sched, instr, ssa_instr, node, vr)) {
-          return;
-        }
         sched->StealOrFillSpilledGPR(instr, vr);
       }
       replace = true;
     }
+
+    // One or more registers might be used in a memory operand.
     if (replace) ReplaceOperand(use);
   }
 }
@@ -962,6 +910,13 @@ static void FreeFlagZones(FragmentList *frags) {
   }
 }
 
+// Optimizes saves and restores of registers, where possible.
+static void OptimizeSavesAndRestores(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    arch::PeepholeOptimize(frag);
+  }
+}
+
 }  // namespace
 
 // Schedule virtual registers.
@@ -972,6 +927,7 @@ void ScheduleRegisters(FragmentList *frags) {
   FreeSpillStorage(frags);
   FreeSSAData(frags);
   FreeFlagZones(frags);
+  OptimizeSavesAndRestores(frags);
 }
 
 }  // namespace granary

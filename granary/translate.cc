@@ -6,6 +6,7 @@
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/code/compile.h"
+#include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
@@ -30,8 +31,14 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
-CachePC Translate(ContextInterface *context, AppPC pc) {
-  return Translate(context, context->AllocateBlockMetaData(pc));
+CachePC Translate(ContextInterface *context, AppPC pc,
+                  TargetStackValidity stack_valid) {
+  auto meta = context->AllocateBlockMetaData(pc);
+  if (TRANSLATE_STACK_VALID == stack_valid) {
+    auto stack_meta = MetaDataCast<StackMetaData *>(meta);
+    stack_meta->MarkStackAsValid();
+  }
+  return Translate(context, meta);
 }
 
 // Instrument, compile, and index some basic blocks.

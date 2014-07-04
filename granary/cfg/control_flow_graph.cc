@@ -103,7 +103,8 @@ VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(int num_bytes) {
                          static_cast<uint16_t>(num_virtual_regs++));
 }
 
-// Allocate a direct edge structure.
+// Allocate a direct edge structure. This uses this LCFG's context to
+  // allocate the direct edge and it's associated code.
 DirectEdge *LocalControlFlowGraph::AllocateDirectEdge(
     const BlockMetaData *source_meta, BlockMetaData *dest_meta) {
   return context->AllocateDirectEdge(source_meta, dest_meta);

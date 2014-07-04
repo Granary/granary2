@@ -108,14 +108,17 @@ class IndirectEdge {
  public:
   IndirectEdge(void);
 
-  // The entrypoint to the in-edge code. Initially this is a
-  std::atomic<CachePC> in_edge;
+  // The entrypoint to the in-edge code. Initially this will jump to an
+  // address that will context switch into Granary.
+  volatile CachePC in_edge_pc;
 
-  // Template of encoded instructions for the indirect out-edge code.
-  uint8_t out_edge_template[arch::INDIRECT_EDGE_CODE_SIZE_BYTES];
-
-  // Size (in bytes) of the instructions encoded in `out_edge_template`.
-  int encoded_size;
+  // Pointer to the beginning and end of some executable code that is used as
+  // a template for out edges.
+  //
+  // Note: These pointers are updated at JIT-compile time via an annotation
+  //       instruction using `IA_UPDATE_ENCODED_ADDRESS`.
+  CachePC begin_out_edge_template;
+  CachePC end_out_edge_template;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,
@@ -124,12 +127,11 @@ class IndirectEdge {
     // `num_execution_overflows` are potentially operated on atomically.
     ALIGNMENT = 1
   })
-} __attribute__((packed));
 
-static_assert(sizeof(std::atomic<CachePC>) == sizeof(CachePC),
-    "Invalid structure packing of `std::atomic<CachePC>`. Suggest switching "
-    "to `volatile CachePC` and then using compiler intrinsics or memory fences "
-    "for memory ordering issues.");
+ private:
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectEdge);
+} __attribute__((packed));
 
 // Meta-data that Granary maintains about all basic blocks that are committed to
 // the code cache. This is meta-data is private to Granary and therefore not

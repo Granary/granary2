@@ -64,9 +64,6 @@ static SaveRestore SaveRestoreKilledReg(const FlagZone *zone) {
 void InjectSaveFlags(Fragment *frag) {
   arch::Instruction ni;
   auto zone = frag->flag_zone.Value();
-  if (1 == zone->num_frags_in_zone) {
-    frag = zone->only_frag;
-  }
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {
@@ -109,9 +106,6 @@ void InjectSaveFlags(Fragment *frag) {
 void InjectRestoreFlags(Fragment *frag) {
   arch::Instruction ni;
   auto zone = frag->flag_zone.Value();
-  if (1 == zone->num_frags_in_zone) {
-    frag = zone->only_frag;
-  }
   xed_flag_set_t flags;
   flags.flat = zone->killed_flags & zone->live_flags;
   if (flags.flat) {

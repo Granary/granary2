@@ -175,7 +175,11 @@ enum InstructionAnnotation {
 
   // An "undefinition" of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
-  IA_SSA_NODE_UNDEF
+  IA_SSA_NODE_UNDEF,
+
+  // An annotation that, when encoded, updates the value of some pointer with
+  // the encoded address.
+  IA_UPDATE_ENCODED_ADDRESS
 };
 
 // An annotation instruction is an environment-specific and implementation-

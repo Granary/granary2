@@ -214,9 +214,7 @@ FlagZone::FlagZone(VirtualRegister flag_save_reg_,
       flag_save_reg(flag_save_reg_),
       flag_killed_reg(flag_killed_reg_),
       used_regs(),
-      live_regs(),
-      num_frags_in_zone(0),
-      only_frag(nullptr) {}
+      live_regs() {}
 
 namespace {
 // Log an individual edge between two fragments.

@@ -68,7 +68,7 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Swap stacks. After swapping stacks, we are susceptible to re-entrancy
   // issues related to interrupts and signals.
   GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
-                                        XED_REG_RSP)); )
+                                             XED_REG_RSP)); )
 
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`.
@@ -165,12 +165,14 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
 // indirect jump.
 IndirectEdge *GenerateIndirectEdgeCode(ControlFlowInstruction *cfi,
                                        CodeFragment *in_edge,
-                                       CodeFragment *out_edge) {
+                                       CodeFragment *out_edge_miss,
+                                       CodeFragment *out_edge_hit,
+                                       ExitFragment *out_edge_exit) {
   GRANARY_ASSERT(!cfi->IsFunctionReturn());
 
-  auto edge = new IndirectEdge;
   auto target_block = DynamicCast<InstrumentedBasicBlock *>(cfi->TargetBlock());
-  GRANARY_ASSERT(nullptr != target_block);
+  auto cfg = target_block->cfg;
+  auto edge = new IndirectEdge;
 
   Instruction ni;
 
@@ -178,35 +180,80 @@ IndirectEdge *GenerateIndirectEdgeCode(ControlFlowInstruction *cfi,
   const auto &target_op(cfi->instruction.ops[0]);
   GRANARY_ASSERT(target_op.IsRegister());  // Enforced by `1_mangle.cc`.
 
+  auto begin_template = new AnnotationInstruction(
+      IA_UPDATE_ENCODED_ADDRESS, &(edge->begin_out_edge_template));
+  auto end_template = new AnnotationInstruction(
+      IA_UPDATE_ENCODED_ADDRESS, &(edge->end_out_edge_template));
+
   // Manually save `RCX`.
-  auto saved_rcx = target_block->cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
-  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX);
-               ni.is_save_restore = true; );
+  auto saved_rcx = cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
+  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX); );
 
   // Copy the target, just in case it's stored in `RCX`.
-  auto saved_target = target_block->cfg->AllocateVirtualRegister(
-      GPR_WIDTH_BYTES);
-  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_target, target_op.reg);
-               ni.is_save_restore = true; );
+  auto saved_target = target_op.reg;
+  if (VirtualRegister::FromNative(XED_REG_RCX) == saved_target) {
+    saved_target = target_block->cfg->AllocateVirtualRegister(
+        GPR_WIDTH_BYTES);
+    APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_target, target_op.reg); );
+  }
 
-  APP(in_edge, JMP_MEMv(&ni, &(edge->in_edge));
+  APP(in_edge, JMP_MEMv(&ni, &(edge->in_edge_pc));
                ni.is_sticky = true; );
   in_edge->branch_instr = DynamicCast<NativeInstruction *>(
       in_edge->instrs.Last());
-  APP(in_edge, UD2(&ni));
 
-  auto compare_target = target_block->cfg->AllocateVirtualRegister(
-      GPR_WIDTH_BYTES);
-  APP(out_edge, MOV_GPRv_IMMz(&ni, compare_target, static_cast<uint64_t>(0)));
-  APP(out_edge, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, compare_target,
-                                                     saved_target));
+  // First execution of the indirect jump will target this label,
+  auto miss = new LabelInstruction();
+  auto miss_addr = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
+                                             &(edge->in_edge_pc));
+  in_edge->instrs.Append(miss);
+  in_edge->instrs.Append(miss_addr);
+
+  // Store the branch target into `RCX` and the meta-data pointer
+  // in `RDI` (arg1 of the Itanium C++ ABI).
+  auto saved_arg1 = cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
+  APP(out_edge_miss, MOV_GPRv_GPRv_89(&ni, saved_arg1, XED_REG_RDI);
+                     ni.is_save_restore = true; );
+  APP(out_edge_miss, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_target); );
+  APP(out_edge_miss, MOV_GPRv_IMMz(&ni, XED_REG_RDI,
+                                        reinterpret_cast<uint64_t>(
+                                            in_edge->attr.block_meta)));
+  APP(out_edge_miss, MOV_GPRv_GPRv_89(&ni, XED_REG_RDI, saved_arg1);
+                     ni.is_save_restore = true; );
+  APP(out_edge_miss, JMP_MEMv(&ni, &(edge->in_edge_pc));
+                     ni.is_sticky = true; );
+  out_edge_miss->branch_instr = DynamicCast<NativeInstruction *>(
+      out_edge_miss->instrs.Last());
+  APP(out_edge_miss, UD2(&ni));
+
+  out_edge_hit->instrs.Append(begin_template);
+
+  // Gets updated later with the target of the control-flow instruction to
+  // check.
+  APP(out_edge_hit, MOV_GPRv_IMMz(&ni, XED_REG_RCX, static_cast<uint64_t>(0)));
+
+  APP(out_edge_hit, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
+                                                         saved_target));
   auto hit = new LabelInstruction;
-  APP(out_edge, JRCXZ_RELBRb(&ni, hit));
+  APP(out_edge_hit, JRCXZ_RELBRb(&ni, hit));
 
-  // Restore `RCX`.
-  out_edge->instrs.Append(hit);
-  APP(out_edge, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx);
-                ni.is_save_restore = true;);
+  // Go back into Granary.
+  APP(out_edge_hit, JMP_RELBRd(&ni, miss));
+  out_edge_hit->branch_instr = DynamicCast<NativeInstruction *>(
+      out_edge_hit->instrs.Last());
+
+  // Manually restore `RCX`.
+  out_edge_hit->instrs.Append(hit);
+  APP(out_edge_hit, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx); );
+
+  out_edge_exit->instrs.Append(end_template);
+  APP(out_edge_exit, UD2(&ni));
+
+  // Don't surround this code in flag save fragments as we don't modify the
+  // flags.
+  in_edge->attr.is_app_code = true;
+  out_edge_miss->attr.is_app_code = true;
+  out_edge_hit->attr.is_app_code = true;
 
   return edge;
 }

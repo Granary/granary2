@@ -29,16 +29,16 @@ DirectEdge::~DirectEdge(void) {
 }
 
 IndirectEdge::IndirectEdge(void)
-    : in_edge(ATOMIC_VAR_INIT(nullptr)),
-      encoded_size(0) {}
+    : in_edge_pc(nullptr),
+      begin_out_edge_template(nullptr),
+      end_out_edge_template(nullptr) {}
 
 // Key idea: template meta-datas are never deleted directly, they are only
 //           reachable indirectly through another mechanism.
 IndirectEdgeMetaData::~IndirectEdgeMetaData(void) {
-  if (!target_meta) return;
-
   BlockMetaData *next_target_meta(nullptr);
-  for (; target_meta; target_meta = next_target_meta) {
+  for (; GRANARY_UNLIKELY(nullptr != target_meta);
+       target_meta = next_target_meta) {
     auto index_meta = MetaDataCast<IndexMetaData *>(target_meta);
     auto edge_meta = MetaDataCast<IndirectEdgeMetaData *>(target_meta);
 

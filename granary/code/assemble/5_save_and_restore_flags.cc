@@ -80,16 +80,19 @@ static bool AnalyzeFragRegs(Fragment *frag) {
   LiveRegisterTracker regs;
   if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
     regs = fall_through->regs.live_on_entry;
-  }
-  if (auto branch = frag->successors[FRAG_SUCC_BRANCH]) {
-    if (frag->branch_instr->IsConditionalJump()) {
-      regs.Union(branch->regs.live_on_entry);
-    } else {
-      regs = branch->regs.live_on_entry;
-    }
+  } else {
+    regs.ReviveAll();
   }
   frag->regs.live_on_exit = regs;
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
+    if (frag->branch_instr == instr) {
+      auto branch = frag->successors[FRAG_SUCC_BRANCH];
+      if (frag->branch_instr->IsConditionalJump()) {
+        regs.Union(branch->regs.live_on_entry);
+      } else {
+        regs = branch->regs.live_on_entry;
+      }
+    }
     regs.Visit(DynamicCast<NativeInstruction *>(instr));
   }
   auto changed = !frag->regs.live_on_entry.Equals(regs);
@@ -182,12 +185,6 @@ static void AllocateFlagZones(FragmentList * const frags,
       GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
     }
 #endif  // GRANARY_DEBUG
-    if (IsA<CodeFragment *>(frag)) {
-      if (auto zone = frag->flag_zone.Value()) {
-        zone->num_frags_in_zone += 1;
-        zone->only_frag = frag;
-      }
-    }
   }
 }
 

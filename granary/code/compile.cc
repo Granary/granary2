@@ -49,15 +49,6 @@ static int StageEncodeNativeInstructions(Fragment *frag,
   return static_cast<int>(encode_pc - estimated_encode_pc);
 }
 
-// Get the `IndirectEdge` structure associated with `frag`s indirect CFI.
-static IndirectEdge *GetIndirectEdge(CodeFragment *frag) {
-  if (!frag || !frag->attr.is_in_edge_code) return nullptr;
-  auto succ_cfrag = DynamicCast<CodeFragment *>(
-      frag->successors[FRAG_SUCC_BRANCH]);
-  auto meta = MetaDataCast<IndirectEdgeMetaData *>(succ_cfrag->attr.block_meta);
-  return meta->edge;
-}
-
 // Performs stage encoding of a fragment list. This determines the size of each
 // fragment and returns the size (in bytes) of the block-specific and edge-
 // specific instructions.
@@ -70,36 +61,11 @@ int StageEncode(FragmentList *frags, CachePC estimated_encode_pc) {
     StageEncodeLabels(frag, estimated_encode_pc);
   }
 
-  IndirectEdge *out_edge(nullptr);
-  CachePC out_edge_pc(nullptr);
-
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
-    if (IsA<ExitFragment *>(frag)) {
-      out_edge = nullptr;
-      out_edge_pc = nullptr;
-      continue;
-    }
-    GRANARY_ASSERT(nullptr == frag->encoded_pc);
-
-    // Make it so that out edges are marked as being encoded in a different
-    // region of code.
-    if (out_edge) {
-      if (!out_edge_pc) out_edge_pc = &(out_edge->out_edge_template[0]);
-
-      frag->encoded_pc = out_edge_pc;
-      frag->encoded_size = StageEncodeNativeInstructions(frag, out_edge_pc);
-      out_edge_pc += frag->encoded_size;
-      out_edge->encoded_size += frag->encoded_size;
-
-      // Make sure we don't overflow the `out_edge_template` size.
-      GRANARY_ASSERT(arch::INDIRECT_EDGE_CODE_SIZE_BYTES >=
-                     out_edge->encoded_size);
-    } else {
-      frag->encoded_size = StageEncodeNativeInstructions(frag,
-                                                         estimated_encode_pc);
-      num_bytes += frag->encoded_size;
-      out_edge = GetIndirectEdge(DynamicCast<CodeFragment *>(frag));
-    }
+    if (frag->encoded_pc) continue;
+    frag->encoded_size = StageEncodeNativeInstructions(frag,
+                                                       estimated_encode_pc);
+    num_bytes += frag->encoded_size;
   }
   return num_bytes;
 }
@@ -113,9 +79,15 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
         curr_pc += ninstr->instruction.EncodedLength();
       }
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      // Make labels and return addresses aware of their encoded addresses.
       if (IA_LABEL == annot->annotation ||
           IA_RETURN_ADDRESS == annot->annotation) {
         annot->data = reinterpret_cast<uintptr_t>(curr_pc);
+
+      // Update some pointer somewhere with the encoded address of this
+      // instruction.
+      } else if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
+        *reinterpret_cast<CachePC *>(annot->data) = curr_pc;
       }
     }
   }
@@ -124,12 +96,10 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
 // Assign program counters to every fragment and instruction.
 static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (!IsA<ExitFragment *>(frag)) {  // Basic block and/or in-edge code.
-      if (!frag->encoded_pc) {
-        frag->encoded_pc = cache_code;
-        cache_code += frag->encoded_size;
-      }
-    }
+    if (frag->encoded_pc) continue;
+
+    frag->encoded_pc = cache_code;
+    cache_code += frag->encoded_size;
     RelativizeInstructions(frag, frag->encoded_pc);
   }
 }
@@ -137,7 +107,9 @@ static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
 // Relativize all control-flow instructions.
 static void RelativizeCFIs(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (IsA<ExitFragment *>(frag)) continue;
+    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
+      if (FRAG_EXIT_FUTURE_BLOCK_INDIRECT != exit_frag->kind) continue;
+    }
 
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {

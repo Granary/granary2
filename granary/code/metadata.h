@@ -40,12 +40,21 @@ class StackMetaData : public UnifiableMetaData<StackMetaData> {
   // Initialize the stack meta-data.
   inline StackMetaData(void)
       : has_stack_hint(false),
-        behaves_like_callstack(false),
-        is_leaf_function(false) {}
+        behaves_like_callstack(false) {}
 
   // Tells us if we can unify our (uncommitted) meta-data with some existing
   // meta-data.
   UnificationStatus CanUnifyWith(const StackMetaData *that) const;
+
+  inline void MarkStackAsValid(void) {
+    has_stack_hint = true;
+    behaves_like_callstack = true;
+  }
+
+  inline void MarkStackAsInvalid(void) {
+    has_stack_hint = true;
+    behaves_like_callstack = false;
+  }
 
   // Can we depend on the stack hint being setup?
   mutable bool has_stack_hint:1;
@@ -53,10 +62,6 @@ class StackMetaData : public UnifiableMetaData<StackMetaData> {
   // Is the stack pointer being used in a way that is consistent with a
   // C-style call stack?
   mutable bool behaves_like_callstack:1;
-
-  // Does this basic block look like it's part of a leaf function? That is,
-  // have we accesses below the current stack pointer.
-  mutable bool is_leaf_function:1;
 
 } __attribute__((packed));
 

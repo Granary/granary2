@@ -46,9 +46,11 @@ namespace {
 
 static CachePC CreateDirectEntryCode(ContextInterface *context,
                                      CodeCache *edge_code_cache) {
-  auto entry_code = edge_code_cache->AllocateBlock(arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-  CodeCacheTransaction transaction(edge_code_cache, entry_code,
-                                   entry_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+  auto entry_code = edge_code_cache->AllocateBlock(
+      arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+  CodeCacheTransaction transaction(
+      edge_code_cache, entry_code,
+      entry_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   arch::GenerateDirectEdgeEntryCode(context, entry_code);
   return entry_code;
 }
@@ -172,7 +174,8 @@ void Context::FlushCodeCache(CodeCacheInterface *cache) {
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
                                         BlockMetaData *dest_block_meta) {
-  auto edge_code = edge_code_cache.AllocateBlock(arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+  auto edge_code = edge_code_cache.AllocateBlock(
+      arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   auto edge = new DirectEdge(source_block_meta, dest_block_meta, edge_code);
 
   do {  // Generate a small stub of code specific to this `DirectEdge`.
@@ -190,7 +193,6 @@ DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
 
   return edge;
 }
-
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;

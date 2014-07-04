@@ -77,13 +77,11 @@ UnificationStatus StackMetaData::CanUnifyWith(const StackMetaData *that) const {
     if (that->has_stack_hint) {
       has_stack_hint = true;
       behaves_like_callstack = that->behaves_like_callstack;
-      is_leaf_function = that->is_leaf_function;
     }
     return UnificationStatus::ACCEPT;
 
   // Be conservative about all else.
-  } else if (behaves_like_callstack == that->behaves_like_callstack &&
-             is_leaf_function == that->is_leaf_function) {
+  } else if (behaves_like_callstack == that->behaves_like_callstack) {
     return UnificationStatus::ACCEPT;
   } else {
     return UnificationStatus::REJECT;

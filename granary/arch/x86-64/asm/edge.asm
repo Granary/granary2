@@ -5,6 +5,7 @@
 START_FILE
 
 DECLARE_FUNC(granary_enter_direct_edge)
+DECLARE_FUNC(granary_enter_indirect_edge)
 
 #define DirectEdge_num_executions 16
 #define DirectEdge_num_execution_overflows 20
@@ -99,5 +100,29 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     popfq  // Will restore interrupts if disabled.
     ret
 END_FUNC(granary_arch_enter_direct_edge)
+
+// Context switch into granary. This is used by `edge.asm` to generate a
+// profiled and an unprofiled version of the edge entrypoint code. The profiled
+// version will increment edge counters, whereas the unprofiled version will
+// not.
+//
+// Note: We assume flags are save before this function is invoked.
+//
+// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure, and
+//       `RSI` is a pointer to the `ContextInferface` data structure.
+DEFINE_FUNC(granary_arch_enter_indirect_edge)
+    // Save the flags.
+    pushfq
+
+    // Disable interrupts. This still leaves two opportunities for interruption.
+    //      1) In the edge code, after the stack switch, and in this function
+    //         before the `CLI`.
+    //      2) In this code after the `POPF`, and in the edge code before the
+    //         stack switch back to native.
+    GRANARY_IF_KERNEL( cli )
+
+    popfq  // Will restore interrupts if disabled.
+    ret
+END_FUNC(granary_arch_enter_indirect_edge)
 
 END_FILE

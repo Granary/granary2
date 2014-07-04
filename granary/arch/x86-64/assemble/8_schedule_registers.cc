@@ -10,6 +10,8 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"
 
+#include "granary/code/fragment.h"
+
 #include "granary/breakpoint.h"
 
 namespace granary {
@@ -65,54 +67,87 @@ granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr,
   return new NativeInstruction(&ninstr);
 }
 
-// Returns the GPR that is copied by this instruction into a virtual
-// register. If this instruction is not a simple copy operation of this form,
-// then an invalid virtual register is returned.
-VirtualRegister GPRCopiedToVR(const NativeInstruction *instr) {
-  const auto &ainstr(instr->instruction);
-  if (XED_ICLASS_MOV == ainstr.iclass) {
-    if (ainstr.ops[0].IsRegister() && ainstr.ops[0].reg.IsVirtual() &&
-        ainstr.ops[1].IsRegister() && ainstr.ops[1].reg.IsNative() &&
-        ainstr.ops[1].reg.IsGeneralPurpose() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[0].reg.ByteWidth() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[1].reg.ByteWidth()) {
-      return ainstr.ops[1].reg;
-    }
-  } else if (XED_ICLASS_LEA == ainstr.iclass) {
-    if (ainstr.ops[0].IsRegister() && ainstr.ops[0].reg.IsVirtual() &&
-        !ainstr.ops[1].is_compound && ainstr.ops[1].reg.IsNative() &&
-        ainstr.ops[1].reg.IsGeneralPurpose() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[0].reg.ByteWidth() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[1].reg.ByteWidth()) {
-      return ainstr.ops[1].reg;
-    }
+namespace {
+
+// Try to peephole optimize the following pattern that represents the filling of
+// a spilled native register.
+//      MOV_GPRv_GPRv_89 <native>, <spill>
+//      MOV_GPRv_MEMv <spill>, [slot:N]
+// Into:
+//      MOV_GPRv_MEMv <native>, [slot:N]
+static granary::Instruction *OptRestoreGPR(NativeInstruction *instr,
+                                           NativeInstruction *next_instr) {
+  auto &ainstr(instr->instruction);
+  auto &next_ainstr(next_instr->instruction);
+  if (next_ainstr.is_save_restore ||
+      XED_IFORM_MOV_GPRv_GPRv_89 != ainstr.iform ||
+      XED_IFORM_MOV_GPRv_MEMv != next_ainstr.iform ||
+      !next_ainstr.ops[1].reg.IsVirtualSlot() ||
+      ainstr.ops[1].reg != next_ainstr.ops[0].reg ||
+      ainstr.ops[1].reg.ByteWidth() != next_ainstr.ops[0].reg.ByteWidth()) {
+    return next_instr;
   }
-  return VirtualRegister();
+
+  next_ainstr.ops[0] = ainstr.ops[0];
+  NOP_90(&ainstr);
+
+  return next_instr->Next();
 }
 
-// Returns the GPR that is copied by this instruction from a virtual
-// register. If this instruction is not a simple copy operation of this form,
-// then an invalid virtual register is returned.
-VirtualRegister GPRCopiedFromVR(const NativeInstruction *instr) {
-  const auto &ainstr(instr->instruction);
-  if (XED_ICLASS_MOV == ainstr.iclass) {
-    if (ainstr.ops[0].IsRegister() && ainstr.ops[0].reg.IsNative() &&
-        ainstr.ops[0].reg.IsGeneralPurpose() &&
-        ainstr.ops[1].IsRegister() && ainstr.ops[1].reg.IsVirtual() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[0].reg.ByteWidth() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[1].reg.ByteWidth()) {
-      return ainstr.ops[0].reg;
-    }
-  } else if (XED_ICLASS_LEA == ainstr.iclass) {
-    if (ainstr.ops[0].IsRegister() && ainstr.ops[0].reg.IsNative() &&
-        ainstr.ops[0].reg.IsGeneralPurpose() &&
-        !ainstr.ops[1].is_compound && ainstr.ops[1].reg.IsVirtual() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[0].reg.ByteWidth() &&
-        arch::GPR_WIDTH_BYTES == ainstr.ops[1].reg.ByteWidth()) {
-      return ainstr.ops[0].reg;
+// Try to peephole optimize the following pattern that represents the spilling
+// of a native register.
+//      MOV_MEMv_GPRv [slot:N], <spill>
+//      MOV_GPRv_GPRv_89 <spill>, <native>
+// Into:
+//      MOV_MEMv_GPRv [slot:N], <native>
+static granary::Instruction *OptSaveGPR(NativeInstruction *instr,
+                                        NativeInstruction *next_instr) {
+  auto &ainstr(instr->instruction);
+  auto &next_ainstr(next_instr->instruction);
+  if (ainstr.is_save_restore ||
+      XED_IFORM_MOV_MEMv_GPRv != ainstr.iform ||
+      XED_IFORM_MOV_GPRv_GPRv_89 != next_ainstr.iform ||
+      !ainstr.ops[0].reg.IsVirtualSlot() ||
+      ainstr.ops[1].reg != next_ainstr.ops[0].reg ||
+      ainstr.ops[1].reg.ByteWidth() != next_ainstr.ops[0].reg.ByteWidth()) {
+    return next_instr;
+  }
+
+  ainstr.ops[1] = next_ainstr.ops[1];
+  NOP_90(&next_ainstr);
+
+  return next_instr->Next();
+}
+
+// Returns the next instruction (either a label instruction or a native
+// instruction, while allowing other annotation instructions to be skipped).
+static granary::Instruction *NextInstruction(granary::Instruction *curr) {
+  for (; curr; curr = curr->Next()) {
+    if (IsA<LabelInstruction *>(curr)) return curr;
+    if (IsA<NativeInstruction *>(curr)) return curr;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+// Performs some minor peephole optimization on the scheduled registers.
+void PeepholeOptimize(Fragment *frag) {
+  auto instr(frag->instrs.First());
+  granary::Instruction *next_instr(nullptr);
+  for (; instr; instr = next_instr) {
+    next_instr = NextInstruction(instr->Next());
+    auto ninstr = DynamicCast<NativeInstruction *>(instr);
+    if (!ninstr) continue;
+    auto next_ninstr = DynamicCast<NativeInstruction *>(next_instr);
+    if (!next_ninstr) continue;
+
+    if (ninstr->instruction.is_save_restore) {
+      next_instr = OptRestoreGPR(ninstr, next_ninstr);
+    } else if (next_ninstr->instruction.is_save_restore) {
+      next_instr = OptSaveGPR(ninstr, next_ninstr);
     }
   }
-  return VirtualRegister();
 }
 
 }  // namespace arch

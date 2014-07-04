@@ -20,16 +20,16 @@
 namespace granary {
 
 // Forward declarations.
-class Instruction;
-class DecodedBasicBlock;
 class BlockMetaData;
+class CodeCacheInterface;
+class DecodedBasicBlock;
+class DirectEdge;
+class Instruction;
 class MetaDataDescription;
-class ModuleManager;
 class MetaDataManager;
+class ModuleManager;
 class Tool;
 class ToolManager;
-class CodeCacheInterface;
-class DirectEdge;
 
 // Interface for environments in Granary.
 class ContextInterface {

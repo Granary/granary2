@@ -100,6 +100,12 @@ class MemoryBuilder {
     reg.DecodeFromNative(reg_);
   }
 
+  inline MemoryBuilder(const volatile void *ptr_,
+                       xed_operand_action_enum_t action_)
+      : ptr(const_cast<const void *>(ptr_)),
+        action(action_),
+        kind(BUILD_POINTER)  {}
+
   inline MemoryBuilder(const void *ptr_, xed_operand_action_enum_t action_)
       : ptr(ptr_),
         action(action_),
