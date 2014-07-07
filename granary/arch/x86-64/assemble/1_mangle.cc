@@ -211,8 +211,8 @@ static void MangleIndirectReturn(DecodedBasicBlock *block,
 }
 
 // Mangle an indirect function call.
-static void MangleIndirectCall(DecodedBasicBlock *block,
-                               ControlFlowInstruction *cfi) {
+static VirtualRegister MangleIndirectCall(DecodedBasicBlock *block,
+                                          ControlFlowInstruction *cfi) {
   Instruction ni;
   Operand op;
   auto ret_address = new AnnotationInstruction(
@@ -233,6 +233,7 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   ni.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
   cfi->UnsafeInsertAfter(ret_address);
+  return ret_address_reg;
 }
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
@@ -246,18 +247,28 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
       }
     }
     return;
-  } else if (cfi->IsFunctionCall()) {
-    MangleIndirectCall(block, cfi);
-  }
 
-  // Make sure the target is stored in a register.
-  auto &target_op(cfi->instruction.ops[0]);
-  if (target_op.IsMemory()) {
+  } else if (cfi->IsFunctionCall()) {
     Instruction ni;
-    auto target = block->AllocateVirtualRegister();
-    MOV_GPRv_MEMv(&ni, target, target_op);
-    cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
-    CALL_NEAR_GPRv(&(cfi->instruction), target);
+    auto &orig_target_op(cfi->instruction.ops[0]);
+    auto new_target_reg = MangleIndirectCall(block, cfi);
+    if (orig_target_op.IsMemory()) {
+      MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
+      cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+      CALL_NEAR_GPRv(&(cfi->instruction), new_target_reg);
+    }
+
+  } else if (cfi->IsUnconditionalJump()) {
+    Instruction ni;
+    auto &orig_target_op(cfi->instruction.ops[0]);
+    if (orig_target_op.IsMemory()) {
+      auto new_target_reg = block->AllocateVirtualRegister();
+      MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
+      cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+      JMP_GPRv(&(cfi->instruction), new_target_reg);
+    }
+  } else {
+    GRANARY_ASSERT(false);
   }
 
   // Note: The final mangling of indirect calls and indirect jumps happens in

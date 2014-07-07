@@ -13,11 +13,10 @@
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
-#include "granary/metadata.h"
-
 namespace granary {
 
 // Forward declarations.
+class BlockMetaData;
 class ContextInterface;
 
 // Used to resolve direct control-flow transfers between the code cache and
@@ -106,11 +105,35 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 // Granary.
 class IndirectEdge {
  public:
-  IndirectEdge(void);
+  IndirectEdge(const BlockMetaData *source_meta_,
+               const BlockMetaData *dest_meta_,
+               CachePC indirect_edge_entrypoint);
+  ~IndirectEdge(void);
 
-  // The entrypoint to the in-edge code. Initially this will jump to an
-  // address that will context switch into Granary.
+  // The entrypoint to the in-edge code. The value changes as follows:
+  //
+  //    1)  At allocation time, the value of this pointer will Granary's
+  //        indirect edge entrypoint.
+  //    2)  At edge code compile time, the value is changed to be the address
+  //        of the first instruction in the "miss" case of indirect edge
+  //        lookup. This is achieved via an `IA_UPDATE_ENCODED_ADDRESS`
+  //        annotation instruction. The "miss" code transfers control to
+  //        the indirect edge entrypoint (1).
+  //    3)  After the first edge lookup is performed, this value is changed
+  //        to be the address of the instantiated out-edge template, that
+  //        checks to see if the target pc of the indirect CFI matches with
+  //        the target block of the template, and if so jumps to the block, and
+  //        otherwise jumps to the next instantiated template (inductive case)
+  //        or jumps to the "miss" code (2; base case), which transfers control
+  //        to (1).
   volatile CachePC in_edge_pc;
+
+  // Meta-data template associated with this indirect edge.
+  const BlockMetaData * const source_meta;
+  const BlockMetaData * const dest_meta;
+
+  // Next edge in a linked list of all indirect edges in some context.
+  IndirectEdge *next;
 
   // Pointer to the beginning and end of some executable code that is used as
   // a template for out edges.
@@ -129,42 +152,14 @@ class IndirectEdge {
   })
 
  private:
+  IndirectEdge(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectEdge);
 } __attribute__((packed));
 
-// Meta-data that Granary maintains about all basic blocks that are committed to
-// the code cache. This is meta-data is private to Granary and therefore not
-// exposed (directly) to tools.
-class IndirectEdgeMetaData : public MutableMetaData<IndirectEdgeMetaData> {
- public:
-  inline IndirectEdgeMetaData(void)
-      : target_meta(nullptr) {}
-
-  // Don't copy anything over.
-  IndirectEdgeMetaData(const IndirectEdgeMetaData &)
-      : target_meta(nullptr) {}
-
-  ~IndirectEdgeMetaData(void);
-
-  // Add some indirect block meta-data to the list of indirect block meta-data
-  // templates targeted by this block.
-  void AddIndirectEdge(BlockMetaData *meta);
-
-  union {
-    // For a block with one or more indirect jumps: Linked list of meta-data
-    // "templates".
-    BlockMetaData *target_meta;
-
-    // For a meta-data template that is the specialization info of a block
-    // targeted by an indirect CFI.
-    IndirectEdge *edge;
-  } __attribute__((packed));
-};
-
-static_assert(offsetof(IndirectEdgeMetaData, target_meta) ==
-              offsetof(IndirectEdgeMetaData, edge),
-    "Invalid structure packing of `IndirectEdgeMetaData`.");
+static_assert(0 == offsetof(IndirectEdge, in_edge_pc),
+    "Field `IndirectEdge::in_edge_pc` must be at offset `0`, as assembly "
+    "routines depend on this.");
 
 }  // namespace granary
 

@@ -41,6 +41,17 @@ extern void GenerateDirectEdgeEntryCode(ContextInterface *context,
 // Note: This has an architecture-specific implementation.
 extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 
+// Generates the indirect edge entry code for getting onto a Granary private
+// stack, disabling interrupts, etc.
+//
+// This code takes a pointer to the context so that the code generated will
+// be able to pass the context pointer directly to `granary::EnterGranary`.
+// This allows us to avoid saving the context pointer in the `IndirectEdge`.
+//
+// Note: This has an architecture-specific implementation.
+extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
+                                          CachePC edge);
+
 }  // namespace arch
 namespace {
 
@@ -55,6 +66,17 @@ static CachePC CreateDirectEntryCode(ContextInterface *context,
   return entry_code;
 }
 
+static CachePC CreateIndirectEntryCode(ContextInterface *context,
+                                       CodeCache *edge_code_cache) {
+  auto entry_code = edge_code_cache->AllocateBlock(
+      arch::INDIRECT_EDGE_CODE_SIZE_BYTES);
+  CodeCacheTransaction transaction(
+      edge_code_cache, entry_code,
+      entry_code + arch::INDIRECT_EDGE_CODE_SIZE_BYTES);
+  arch::GenerateIndirectEdgeEntryCode(context, entry_code);
+  return entry_code;
+}
+
 // Register internal meta-data.
 static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<ModuleMetaData>();
@@ -62,7 +84,6 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<LiveRegisterMetaData>();
   metadata_manager->Register<StackMetaData>();
   metadata_manager->Register<IndexMetaData>();
-  metadata_manager->Register<IndirectEdgeMetaData>();
 }
 
 // Tell Granary about all loaded tools.
@@ -89,9 +110,12 @@ Context::Context(const char *tool_names)
       tool_manager(this),
       edge_code_cache(FLAG_edge_cache_slab_size),
       direct_edge_entry_code(CreateDirectEntryCode(this, &edge_code_cache)),
+      indirect_edge_entry_code(CreateIndirectEntryCode(this, &edge_code_cache)),
       edge_list_lock(),
       patched_edge_list(nullptr),
       unpatched_edge_list(nullptr),
+      indirect_edge_list_lock(),
+      indirect_edge_list(nullptr),
       code_cache_index(new Index) {
   InitMetaData(&metadata_manager);
 
@@ -104,8 +128,9 @@ Context::Context(const char *tool_names)
 namespace {
 
 // Free a linked list of edges.
-static void FreeEdgeList(DirectEdge *edge) {
-  DirectEdge *next_edge = nullptr;
+template <typename EdgeT>
+static void FreeEdgeList(EdgeT *edge) {
+  EdgeT *next_edge = nullptr;
   for (; edge; edge = next_edge) {
     next_edge = edge->next;
     delete edge;
@@ -117,6 +142,7 @@ static void FreeEdgeList(DirectEdge *edge) {
 Context::~Context(void) {
   FreeEdgeList(patched_edge_list);
   FreeEdgeList(unpatched_edge_list);
+  FreeEdgeList(indirect_edge_list);
 }
 
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
@@ -193,6 +219,19 @@ DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
 
   return edge;
 }
+
+// Allocates an indirect edge data structure.
+IndirectEdge *Context::AllocateIndirectEdge(
+    const BlockMetaData *source_block_meta,
+    const BlockMetaData *dest_block_meta) {
+  auto edge = new IndirectEdge(source_block_meta, dest_block_meta,
+                               indirect_edge_entry_code);
+  FineGrainedLocked locker(&indirect_edge_list_lock);
+  edge->next = indirect_edge_list;
+  indirect_edge_list = edge;
+  return edge;
+}
+
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;

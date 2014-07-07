@@ -24,6 +24,7 @@ class BlockMetaData;
 class CodeCacheInterface;
 class DecodedBasicBlock;
 class DirectEdge;
+class IndirectEdge;
 class Instruction;
 class MetaDataDescription;
 class MetaDataManager;
@@ -71,6 +72,11 @@ class ContextInterface {
   // back the direct edge.
   virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block_meta,
                                          BlockMetaData *dest_block_meta) = 0;
+
+  // Allocates an indirect edge data structure.
+  virtual IndirectEdge *AllocateIndirectEdge(
+      const BlockMetaData *source_block_meta,
+      const BlockMetaData *dest_block_meta) = 0;
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
@@ -122,6 +128,11 @@ class Context : public ContextInterface {
       const BlockMetaData *source_block_meta,
       BlockMetaData *dest_block_meta) override;
 
+  // Allocates an indirect edge data structure.
+  virtual IndirectEdge *AllocateIndirectEdge(
+      const BlockMetaData *source_block_meta,
+      const BlockMetaData *dest_block_meta) override;
+
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;
 
@@ -143,15 +154,20 @@ class Context : public ContextInterface {
   CodeCache edge_code_cache;
 
   // Pointer to the code that performs the flag saving and stack switching for
-  // direct edge code. This code is is the first step in entering Granary via
-  // a direct edge code stub.
+  // in/direct edge code. This code is is the first step in entering Granary
+  // via a direct edge code stub / in-edge jump.
   CachePC direct_edge_entry_code;
+  CachePC indirect_edge_entry_code;
 
-  // List of patched and unpatched direct edges, as well as a lock that
+  // List of patched and not-yet-patched direct edges, as well as a lock that
   // protects both lists.
   FineGrainedLock edge_list_lock;
   DirectEdge *patched_edge_list;
   DirectEdge *unpatched_edge_list;
+
+  // List of indirect edges.
+  FineGrainedLock indirect_edge_list_lock;
+  IndirectEdge *indirect_edge_list;
 
   // Code cache index, and associated lock.
   LockedIndex code_cache_index;

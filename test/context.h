@@ -65,6 +65,12 @@ class MockContext : public granary::ContextInterface {
                granary::DirectEdge *(const granary::BlockMetaData *,
                                      granary::BlockMetaData *));
 
+  // Allocates a direct edge data structure, as well as the code needed to
+  // back the direct edge.
+  MOCK_METHOD2(AllocateIndirectEdge,
+               granary::IndirectEdge *(const granary::BlockMetaData *,
+                                       const granary::BlockMetaData *));
+
   // Get a pointer to this context's code cache index.
   MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());
 

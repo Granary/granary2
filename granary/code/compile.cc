@@ -107,10 +107,6 @@ static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
 // Relativize all control-flow instructions.
 static void RelativizeCFIs(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
-      if (FRAG_EXIT_FUTURE_BLOCK_INDIRECT != exit_frag->kind) continue;
-    }
-
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
         if (cfi->HasIndirectTarget()) continue;  // No target PC.
@@ -140,8 +136,6 @@ static void RelativizeCFIs(FragmentList *frags) {
 static void Encode(FragmentList *frags) {
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::COMMIT);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (IsA<ExitFragment *>(frag)) continue;  // E.g. direct edge code.
-
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
         if (ninstr->IsNoOp()) continue;
@@ -210,7 +204,6 @@ static void Encode(FragmentList *frags, CodeCacheInterface *block_cache) {
 
   RelativizeCode(frags, cache_code);
   RelativizeCFIs(frags);
-
   if (auto cache_code_end = cache_code + num_bytes) {
     CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
     Encode(frags);

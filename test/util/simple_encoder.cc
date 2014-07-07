@@ -29,7 +29,6 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<LiveRegisterMetaData>();
   meta_manager.Register<StackMetaData>();
   meta_manager.Register<IndexMetaData>();
-  meta_manager.Register<IndirectEdgeMetaData>();
   arch::Init();
 
   // Called for the "lazy" meta-data on the function return.

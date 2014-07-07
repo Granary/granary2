@@ -357,13 +357,21 @@ static void LabelPartitions(FragmentList *frags) {
 void AddEntryAndExitFragments(FragmentList *frags) {
   AnalyzeFlagsUse(frags);
 
-  // Guarantee that there is a partition entry fragment.
-  auto first_frag = frags->First();
-  auto first_entry = MakeFragment<PartitionEntryFragment>(first_frag,
-                                                          first_frag);
-  frags->Prepend(first_entry);
+  // Guarantee that there is a partition entry fragment. The one special case
+  // against this entry fragment is that the first instruction of the first
+  // fragment is a function call / return / something else that can't be
+  // added to a partition.
   ResetTempData(frags);
-  first_frag->temp.entry_exit_frag = first_entry;
+  auto first_frag = frags->First();
+  auto first_cfrag = DynamicCast<CodeFragment *>(first_frag);
+  if (!first_cfrag ||
+      (first_cfrag && first_cfrag->attr.can_add_to_partition)) {
+    auto first_entry = MakeFragment<PartitionEntryFragment>(first_frag,
+                                                            first_frag);
+    frags->Prepend(first_entry);
+    first_frag->temp.entry_exit_frag = first_entry;
+  }
+
   AddEntryFragments(frags, IsPartitionEntry,
                     MakeFragment<PartitionEntryFragment>);
 

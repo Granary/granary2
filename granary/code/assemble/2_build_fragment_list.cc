@@ -67,11 +67,12 @@ extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
 // indirect jump.
 //
 // Note: This function has an architecture-specific implementation.
-extern IndirectEdge *GenerateIndirectEdgeCode(ControlFlowInstruction *cfi,
-                                              CodeFragment *in_edge,
-                                              CodeFragment *out_edge_miss,
-                                              CodeFragment *out_edge_hit,
-                                              ExitFragment *out_edge_exit);
+void GenerateIndirectEdgeCode(IndirectEdge *edge,
+                              ControlFlowInstruction *cfi,
+                              CodeFragment *in_edge,
+                              CodeFragment *out_edge_miss,
+                              CodeFragment *out_edge_hit,
+                              ExitFragment *out_edge_exit);
 
 }  // namespace arch
 namespace {
@@ -356,6 +357,7 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 // Make an edge fragment and an exit fragment for some future block.
 static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
                                           CodeFragment *pred_frag,
+                                          InstrumentedBasicBlock *dest_block,
                                           BlockMetaData *dest_block_meta,
                                           ControlFlowInstruction *cfi) {
   auto in_edge_frag = new CodeFragment;
@@ -374,17 +376,12 @@ static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
   exit_frag->edge.kind = EDGE_KIND_INDIRECT;
   exit_frag->block_meta = dest_block_meta;
 
-  // Create the `IndirectEdge` data structure and attach it to the destination
-  // block meta-data template.
-  auto dest_cache_meta = MetaDataCast<IndirectEdgeMetaData *>(dest_block_meta);
-  dest_cache_meta->edge = arch::GenerateIndirectEdgeCode(
-      cfi, in_edge_frag, out_edge_frag_miss, out_edge_frag_hit, exit_frag);
+  auto cfg = dest_block->cfg;
+  auto edge = cfg->AllocateIndirectEdge(pred_frag->attr.block_meta,
+                                        dest_block_meta);
 
-  // Link the destination block meta-data template as being to the source
-  // block's meta-data.
-  auto pred_block_meta = MetaDataCast<IndirectEdgeMetaData *>(
-      pred_frag->attr.block_meta);
-  pred_block_meta->AddIndirectEdge(dest_block_meta);
+  arch::GenerateIndirectEdgeCode(edge, cfi, in_edge_frag, out_edge_frag_miss,
+                                 out_edge_frag_hit, exit_frag);
 
   // Note: `branch_instr` of `in_edge_frag` and `out_edge_frag_hit` are
   //       initialized by `arch::GenerateIndirectEdgeCode`.
@@ -453,9 +450,9 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
   if (IsA<ReturnBasicBlock *>(target_block) ||
       IsA<IndirectBasicBlock *>(target_block)) {
     auto inst_block = DynamicCast<InstrumentedBasicBlock *>(target_block);
-    auto block_meta = inst_block->UnsafeMetaData();
-    if (block_meta) {
-      return MakeIndirectEdgeFragment(frags, pred_frag, block_meta, cfi);
+    if (auto block_meta = inst_block->UnsafeMetaData()) {
+      return MakeIndirectEdgeFragment(frags, pred_frag, inst_block,
+                                      block_meta, cfi);
     } else {
       return MakeExitFragment(frags);
     }
@@ -499,9 +496,6 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
     auto succ = MakeEmptyLabelFragment(frags, block, label);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     frag_with_cfi = succ;
-
-  } else if (!cfi->HasIndirectTarget()) {
-    GRANARY_ASSERT(!cfi->IsFunctionCall());
   }
 
   frag_with_cfi = Append(frags, block, frag_with_cfi, cfi);

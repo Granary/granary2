@@ -160,9 +160,7 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
   // If the value is non-null, then this points to the location of the first
   // instruction of the block in the code cache. If the value is null, then
   // either this block has not been encoded, or it represents the meta-data
-  // of the target of an indirect control-flow instruction. For the latter case,
-  // see `IndirectEdgeMetaData::~IndirectEdgeMetaData` for the interaction
-  // between these two classes.
+  // of the target of an indirect control-flow instruction.
   CachePC cache_pc;
 
   // Far-away code addresses referenced by code in this block.

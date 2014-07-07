@@ -7,6 +7,7 @@
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/index.h"
+#include "granary/metadata.h"
 
 namespace granary {
 
@@ -28,35 +29,18 @@ DirectEdge::~DirectEdge(void) {
   }
 }
 
-IndirectEdge::IndirectEdge(void)
-    : in_edge_pc(nullptr),
+IndirectEdge::IndirectEdge(const BlockMetaData *source_meta_,
+                           const BlockMetaData *dest_meta_,
+                           CachePC indirect_edge_entrypoint)
+    : in_edge_pc(indirect_edge_entrypoint),
+      source_meta(source_meta_),
+      dest_meta(dest_meta_),
+      next(nullptr),
       begin_out_edge_template(nullptr),
       end_out_edge_template(nullptr) {}
 
-// Key idea: template meta-datas are never deleted directly, they are only
-//           reachable indirectly through another mechanism.
-IndirectEdgeMetaData::~IndirectEdgeMetaData(void) {
-  BlockMetaData *next_target_meta(nullptr);
-  for (; GRANARY_UNLIKELY(nullptr != target_meta);
-       target_meta = next_target_meta) {
-    auto index_meta = MetaDataCast<IndexMetaData *>(target_meta);
-    auto edge_meta = MetaDataCast<IndirectEdgeMetaData *>(target_meta);
-
-    next_target_meta = index_meta->next;
-    index_meta->next = nullptr;
-    GRANARY_ASSERT(nullptr != edge_meta->edge);
-    delete edge_meta->edge;
-    edge_meta->edge = nullptr;
-    delete target_meta;
-  }
-}
-
-// Add some indirect block meta-data to the list of indirect block meta-data
-// templates targeted by this block.
-void IndirectEdgeMetaData::AddIndirectEdge(BlockMetaData *meta) {
-  auto index_meta = MetaDataCast<IndexMetaData *>(meta);
-  index_meta->next = target_meta;
-  target_meta = meta;
+IndirectEdge::~IndirectEdge(void) {
+  delete dest_meta;
 }
 
 }  // namespace granary

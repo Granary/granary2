@@ -24,7 +24,7 @@ START_FILE
 DEFINE_FUNC(granary_test_mangle)
 //mov    -0x18(%rbp),%rsi
 //mov    -0x18(%rbp),%rsi
-jmpq *%rax;
+callq *%rax;
 ret;
 /*
 push   %rbp

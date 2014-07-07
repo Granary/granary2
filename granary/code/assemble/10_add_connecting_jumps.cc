@@ -37,11 +37,13 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any).
   auto branch_target_frag = frag->successors[FRAG_SUCC_BRANCH];
+  auto swap_successors = false;
   if (auto cfi = DynamicCast<ControlFlowInstruction *>(frag->branch_instr)) {
     auto target_block = cfi->TargetBlock();
     if (IsA<IndirectBasicBlock *>(target_block) ||
         IsA<ReturnBasicBlock *>(target_block)) {
       next_ptr = VisitOrderedFragment(branch_target_frag, next_ptr);
+      swap_successors = true;
     }
   }
 
@@ -49,6 +51,11 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
   // straight-line preference.
   for (auto succ : frag->successors) {
     next_ptr = VisitOrderedFragment(succ, next_ptr);
+  }
+
+  if (swap_successors) {
+    std::swap(frag->successors[FRAG_SUCC_BRANCH],
+              frag->successors[FRAG_SUCC_FALL_THROUGH]);
   }
 
   return next_ptr;
