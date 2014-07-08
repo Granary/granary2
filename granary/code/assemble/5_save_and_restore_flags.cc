@@ -8,6 +8,8 @@
 #include "granary/code/fragment.h"
 #include "granary/code/metadata.h"
 
+#include "granary/code/assemble/5_save_and_restore_flags.h"
+
 #include "granary/metadata.h"
 #include "granary/util.h"
 
@@ -177,15 +179,14 @@ static void AllocateFlagZones(FragmentList * const frags,
       }
     }
   }
-
-  for (auto frag : FragmentListIterator(frags)) {
 #ifdef GRANARY_DEBUG
+  for (auto frag : FragmentListIterator(frags)) {
     // Quick and easy verification of the flag zones.
     if (IsA<FlagEntryFragment *>(frag) || IsA<FlagExitFragment *>(frag)) {
       GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
     }
-#endif  // GRANARY_DEBUG
   }
+#endif  // GRANARY_DEBUG
 }
 
 // Tracks which registers are used anywhere in the flag zone.

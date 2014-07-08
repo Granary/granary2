@@ -22,13 +22,8 @@ static int OUTPUT_FD[] = {
 
 typedef decltype('a') CharLiteral;
 
-static char *WriteGenericInt(
-  char *buff,
-  uint64_t data,
-  bool is_64_bit,
-  bool is_signed,
-  unsigned base
-) throw() {
+static char *WriteGenericInt(char *buff, uint64_t data, bool is_64_bit,
+                             bool is_signed, unsigned base) {
   if (!data) {
     *buff++ = '0';
     return buff;
@@ -67,7 +62,7 @@ static char *WriteGenericInt(
 }  // namespace
 
 // Log something.
-int Log(LogLevel level, const char *format, ...) throw() {
+int Log(LogLevel level, const char *format, ...) {
   enum {
     WRITE_BUFF_SIZE = 255
   };

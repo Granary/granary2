@@ -1,12 +1,11 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wheader-guard"
+
 // Only include a main() or GRANARY_INIT function if we're not using the test
 // target.
 #ifndef GRANARY_TEST
-
-// Yes this is redundant. It's to avoid clang's `-Wheader-guard` errors!
-#define GRANARY_TEST
-#undef GRANARY_TEST
 
 #define GRANARY_INTERNAL
 
@@ -81,6 +80,7 @@ static const char *GetGranaryPath(const char *granary_exe_path) {
 #ifdef GRANARY_STANDALONE
 
 extern "C" {
+int main(int argc, const char *argv[]);
 int main(int argc, const char *argv[]) {
   granary::InitOptions(argc, argv);
   granary::InitDebug();
@@ -98,3 +98,4 @@ GRANARY_INIT({
 
 #endif  // GRANARY_STANDALONE
 #endif  // GRANARY_TEST
+#pragma clang diagnostic pop

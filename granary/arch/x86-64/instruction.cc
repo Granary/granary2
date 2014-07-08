@@ -157,7 +157,9 @@ int Instruction::StackPointerShiftAmount(void) const {
       break;
 
     case XED_ICLASS_ADD:
-      mult = 1;  // Fall-through.
+      mult = 1;
+
+    [[clang::fallthrough]];
     case XED_ICLASS_SUB:
       if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
           ops[1].IsImmediate()) {
@@ -166,7 +168,9 @@ int Instruction::StackPointerShiftAmount(void) const {
       break;
 
     case XED_ICLASS_INC:
-      mult = 1;  // Fall-through.
+      mult = 1;
+
+    [[clang::fallthrough]];
     case XED_ICLASS_DEC:
       if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) {
         return mult;

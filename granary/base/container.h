@@ -24,8 +24,8 @@ class Container {
 
   // Construct the contained object.
   template <typename... Args>
-  void Construct(Args... args) {
-    new (operator->()) T(args...);
+  void Construct(Args&&... args) {
+    new (operator->()) T(std::forward<Args>(args)...);
   }
 
   inline T *operator->(void) {

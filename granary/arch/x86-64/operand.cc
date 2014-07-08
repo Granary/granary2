@@ -184,8 +184,15 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg) {
 
 namespace arch {
 
-Operand::Operand(const Operand &op) {
-  memcpy(this, &op, sizeof op);
+Operand::Operand(const Operand &that) {
+  memcpy(this, &that, sizeof that);
+}
+
+Operand &Operand::operator=(const Operand &that) {
+  if (&that != this) {
+    memcpy(this, &that, sizeof that);
+  }
+  return *this;
 }
 
 namespace {
@@ -236,9 +243,9 @@ void Operand::EncodeToString(OperandString *str) const {
         break;
       } else {
         prefix = "[";
-        suffix = "]";  // Fall-through.
+        suffix = "]";
       }
-
+    [[clang::fallthrough]];
     case XED_ENCODER_OPERAND_TYPE_REG:
     case XED_ENCODER_OPERAND_TYPE_SEG0:
     case XED_ENCODER_OPERAND_TYPE_SEG1:

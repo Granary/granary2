@@ -27,8 +27,6 @@ class ModuleOffset {
       : module(nullptr),
         offset(0) {}
 
-  ModuleOffset(const ModuleOffset &) = default;
-
   // Module containing searched-for program counter, or `nullptr` if the program
   // counter is not located in the module.
   const Module * GRANARY_CONST module;
@@ -212,7 +210,7 @@ class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
 
   // The native program counter where this block begins.
   GRANARY_CONST AppPC start_pc;
-} __attribute__((packed));
+};
 
 // Specify to Granary tools that the function to get the info about
 // `ModuleMetaData` already exists.

@@ -14,6 +14,8 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"
 
+#include "granary/code/assemble/1_mangle.h"
+
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
 

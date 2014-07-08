@@ -6,6 +6,8 @@
 #include "granary/code/fragment.h"
 #include "granary/code/ssa.h"
 
+#include "granary/code/assemble/7_propagate_copies.h"
+
 #include "granary/breakpoint.h"
 #include "granary/util.h"  // For `GetMetaData`.
 
@@ -64,8 +66,6 @@ struct RegisterValue {
   inline RegisterValue(void)
       : reg_node(nullptr),
         reg_value(nullptr) {}
-
-  RegisterValue &operator=(const RegisterValue &) = default;
 
   // The `SSANode` associated with the value of this operand.
   SSANode *reg_node;

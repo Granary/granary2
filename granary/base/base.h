@@ -8,12 +8,12 @@
 #if !defined(GRANARY_ASSEMBLY) && (defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL))
 # include <algorithm>
 # include <atomic>
-# include <climits>
 # include <cstdarg>
 # include <cstddef>
 # include <cstdint>
 # include <functional>
 # include <initializer_list>
+# include <limits>
 # include <memory>
 # include <type_traits>
 #endif
@@ -150,7 +150,8 @@
 
 
 // Try to make sure that a function is not optimized.
-#define GRANARY_DISABLE_OPTIMIZER __attribute__((used, noinline))
+#define GRANARY_DISABLE_OPTIMIZER __attribute__((used, noinline, \
+                                                 visibility ("default")))
 
 
 // Determine how much should be added to a value `x` in order to align `x` to

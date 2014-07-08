@@ -318,5 +318,24 @@ int DeFormat(const char * __restrict buffer,
   va_end(args);
   return num_args;
 }
-
 }  // namespace granary
+extern "C" {
+
+// Implements libc's `memmove` by either invoking `granary_memcpy`, which does
+// a byte-oriented copy in the forward direction, or falls back on doing a
+// byte-oriented copy in the backward direction.
+void *granary_memmove(void *dest, const void *src, unsigned long num_bytes) {
+  if (num_bytes) {
+    if (dest <= src) {
+      return granary_memcpy(dest, src, num_bytes);
+    } else {
+      auto dest_bytes = reinterpret_cast<uint8_t *>(dest);
+      auto src_bytes = reinterpret_cast<const uint8_t *>(src);
+      for (; num_bytes--; ) {  // Copy backwards.
+        dest_bytes[num_bytes] = src_bytes[num_bytes];
+      }
+    }
+  }
+  return dest;
+}
+}  // extern C

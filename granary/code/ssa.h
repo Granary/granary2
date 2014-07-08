@@ -217,8 +217,7 @@ class SSAOperand {
 
   // True if this is a register operand, false if it's a memory operand.
   bool is_reg;
-
-} __attribute__((packed));
+};
 
 // Represents a small group of `SSAOperand`s that are part of an instruction.
 typedef TinyVector<SSAOperand, 2> SSAOperandPack;

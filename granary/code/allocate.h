@@ -60,14 +60,11 @@ class CodeAllocator {
   // Number of bytes per allocated slab.
   const int num_bytes;
 
-  // A "dummy" slab that is at the end of the slab list.
-  internal::CodeSlab slab_sentinel;
-
-  // Pointer to the head of the slab list.
-  alignas(GRANARY_ARCH_CACHE_LINE_SIZE) internal::CodeSlab *slab;
-
   // Lock acquired when we want to overwrite the `slab` pointer.
   FineGrainedLock slab_lock;
+
+  // Pointer to the head of the slab list.
+  std::atomic<internal::CodeSlab *> slab;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeAllocator);
 };

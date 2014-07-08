@@ -3,7 +3,6 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
-#include "granary/base/lock.h"
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
@@ -14,11 +13,8 @@ namespace {
 
 // The next meta-data description ID that we can assign. Every meta-data
 // description has a unique, global ID.
-static int next_description_id(0);
+static std::atomic<int> next_description_id(ATOMIC_VAR_INIT(0));
 
-// A lock on assigning and ID to any description, as well as to updating the
-// `next_description_id` variable.
-static FineGrainedLock next_description_id_lock;
 }  // namespace
 
 // Cast some generic meta-data into some specific meta-data.
@@ -130,10 +126,9 @@ MetaDataManager::~MetaDataManager(void) {
 // meta-data has already been registered.
 void MetaDataManager::Register(MetaDataDescription *desc) {
   if (GRANARY_UNLIKELY(!is_finalized)) {
-    FineGrainedLocked locker(&next_description_id_lock);
     if (-1 == desc->id) {
-      GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > next_description_id);
-      desc->id = next_description_id++;
+      desc->id = next_description_id.fetch_add(1);
+      GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > desc->id);
     }
     descriptions[desc->id] = desc;
   }

@@ -10,8 +10,8 @@ DECLARE_FUNC(granary_enter_indirect_edge)
 #define DirectEdge_num_executions 16
 #define DirectEdge_num_execution_overflows 20
 
-// Context switch into granary. This is used by `edge.asm` to generate a
-// profiled and an unprofiled version of the edge entrypoint code. The profiled
+// Context switch into granary. This allows the runtime to select a profiled
+// and an unprofiled version of the edge entrypoint code. The profiled
 // version will increment edge counters, whereas the unprofiled version will
 // not.
 //
@@ -20,15 +20,6 @@ DECLARE_FUNC(granary_enter_indirect_edge)
 // Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure, and
 //       `RSI` is a pointer to the `ContextInferface` data structure.
 DEFINE_FUNC(granary_arch_enter_direct_edge)
-    // Save the flags.
-    pushfq
-
-    // Disable interrupts. This still leaves two opportunities for interruption.
-    //      1) In the edge code, after the stack switch, and in this function
-    //         before the `CLI`.
-    //      2) In this code after the `POPF`, and in the edge code before the
-    //         stack switch back to native.
-    GRANARY_IF_KERNEL( cli )
 
     // If we've already translated the target block, then increment the
     // execution counter. This is a saturating counter, where one counter
@@ -97,7 +88,6 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
 
   .Lback_to_code_cache:
     pop     %rax
-    popfq  // Will restore interrupts if disabled.
     ret
 END_FUNC(granary_arch_enter_direct_edge)
 
@@ -108,20 +98,52 @@ END_FUNC(granary_arch_enter_direct_edge)
 //
 // Note: We assume flags are save before this function is invoked.
 //
-// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure, and
-//       `RSI` is a pointer to the `ContextInferface` data structure.
+// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure,
+//       `RSI` is a pointer to the `ContextInferface` data structure, and
+//       `RCX` is a pointer to the application code that must be translated.
+//
+// Note: `RDI` is live on exit, and so must be saved/restored.
 DEFINE_FUNC(granary_arch_enter_indirect_edge)
-    // Save the flags.
-    pushfq
+    // Save all regs, except `RSI`, and `RCX`.
+    push    %rax
+    push    %rdi
+    push    %rdx
+    push    %rbx
+    push    %rbp
+    push    %r8
+    push    %r9
+    push    %r10
+    push    %r11
+    push    %r12
+    push    %r13
+    push    %r14
+    push    %r15
 
-    // Disable interrupts. This still leaves two opportunities for interruption.
-    //      1) In the edge code, after the stack switch, and in this function
-    //         before the `CLI`.
-    //      2) In this code after the `POPF`, and in the edge code before the
-    //         stack switch back to native.
-    GRANARY_IF_KERNEL( cli )
+    mov     %rcx, %rdx  // Move `RCX` into `arg3`.
 
-    popfq  // Will restore interrupts if disabled.
+    // Align the stack to a 16-byte boundary.
+    push    %rsp
+    push    (%rsp)
+    and     $-16, %rsp
+
+    call    granary_enter_indirect_edge
+
+    // Restore the old stack alignment.
+    mov     8(%rsp), %rsp
+
+    pop     %r15
+    pop     %r14
+    pop     %r13
+    pop     %r12
+    pop     %r11
+    pop     %r10
+    pop     %r9
+    pop     %r8
+    pop     %rbp
+    pop     %rbx
+    pop     %rdx
+    pop     %rdi
+    pop     %rax
     ret
 END_FUNC(granary_arch_enter_indirect_edge)
 

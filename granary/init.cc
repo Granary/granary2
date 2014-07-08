@@ -38,15 +38,34 @@ GRANARY_DEFINE_string(tools, "",
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
 
+static uint64_t time_now(void) {
+  uint64_t low_order, high_order;
+  asm volatile("rdtsc" : "=a" (low_order), "=d" (high_order));
+  return (high_order << 32U) | low_order;
+}
+
+enum {
+  NUM_ITERATIONS = 10,
+  MAX_FIB = 20
+};
+
 namespace granary {
 namespace {
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
 GRANARY_EARLY_GLOBAL static Container<Context> context;
+#pragma clang diagnostic pop
 
-static int fibonacci(int n) {
+extern "C" int fibonacci(int n);
+extern "C" int (*fib_indirect)(int);
+
+extern "C" int (*fib_indirect)(int) = fibonacci;
+extern "C" int fibonacci(int n) {
   if (!n) return n;
   if (1 == n) return 1;
-  return fibonacci(n - 1) + fibonacci(n - 2);
+  return fib_indirect(n - 1) + fib_indirect(n - 2);
 }
 
 }  // namespace
@@ -69,14 +88,39 @@ void Init(const char *granary_path) {
 
   if (!FLAG_help) {
     context.Construct(FLAG_tools);
-    if (false) {
+
+    if (true) {
       auto start_pc = Translate(context.AddressOf(), fibonacci);
       auto fib = UnsafeCast<int (*)(int)>(start_pc);
       for (auto i = 0; i < 30; ++i) {
-        Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i, fibonacci(i), i, fib(i));
+        Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i,
+            fibonacci(i), i, fib(i));
       }
+
+      auto native_start = time_now();
+      for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
+        for (auto n = 0; n < MAX_FIB; ++n) {
+          fib_indirect(n);
+        }
+      }
+      auto native_end = time_now();
+
+      auto inst_start = time_now();
+      for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
+        for (auto n = 0; n < MAX_FIB; ++n) {
+          fib(n);
+        }
+      }
+      auto inst_end = time_now();
+
+
+      auto ticks_per_native = (native_end - native_start) / NUM_ITERATIONS;
+      auto ticks_per_inst = (inst_end - inst_start) / NUM_ITERATIONS;
+      Log(LogOutput, "Ticks per native = %lu\nTicks per instrumented = %lu\n",
+          ticks_per_native, ticks_per_inst);
+
     } else {
-      Translate(context.AddressOf(), granary_test_mangle);
+      //Translate(context.AddressOf(), granary_test_mangle);
     }
 
     context.Destroy();

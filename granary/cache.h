@@ -27,7 +27,9 @@ class CodeCacheTransaction;
 class CodeCacheInterface {
  public:
   CodeCacheInterface(void) = default;
-  virtual ~CodeCacheInterface(void) = default;
+
+  // Needed for linking against the base vtable.
+  virtual ~CodeCacheInterface(void);
 
   // Allocate a block of code from this code cache.
   virtual CachePC AllocateBlock(int size) = 0;
@@ -121,22 +123,22 @@ class NativeAddress {
   }
 
   // Address that a far away jump or call will target.
-  union {
+  alignas(alignof(void *)) union {
     const void *addr;
     PC pc;
-  } __attribute__((packed));
+  };
 
   // Next far away address in this block.
   NativeAddress *next;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(NativeAddress, {
     SHARED = true,
-    ALIGNMENT = 8
+    ALIGNMENT = 16
   })
 
  private:
   NativeAddress(void) = delete;
-} __attribute__((packed));
+};
 
 // Forward declaration.
 class IndirectEdge;
@@ -166,7 +168,7 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;
 
-} __attribute__((packed));
+};
 #endif  // GRANARY_INTERNAL
 
 }  // namespace granary

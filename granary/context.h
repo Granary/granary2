@@ -35,13 +35,18 @@ class ToolManager;
 // Interface for environments in Granary.
 class ContextInterface {
  public:
-  // Needed for linking against the base vtable.
-  ContextInterface(void);
+  ContextInterface(void) = default;
 
-  virtual ~ContextInterface(void) = default;
+  // Needed for linking against the base vtable.
+  virtual ~ContextInterface(void);
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
+
+  // Allocate and initialize some `BlockMetaData`, based on some existing
+  // meta-data `meta`.
+  virtual BlockMetaData *AllocateBlockMetaData(const BlockMetaData *meta,
+                                               AppPC start_pc) = 0;
 
   // Allocate and initialize some empty `BlockMetaData`.
   virtual BlockMetaData *AllocateEmptyBlockMetaData(void) = 0;
@@ -78,6 +83,13 @@ class ContextInterface {
       const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) = 0;
 
+  // Instantiates an indirect edge. This creates an out-edge that targets
+  // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
+  // `edge->in_edge_pc` is updated in place to reflect the new target.
+  virtual void InstantiateIndirectEdge(IndirectEdge *edge,
+                                       AppPC app_pc,
+                                       CachePC cache_pc) = 0;
+
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
 };
@@ -96,6 +108,11 @@ class Context : public ContextInterface {
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
+
+  // Allocate and initialize some `BlockMetaData`, based on some existing
+  // meta-data template `meta_template`.
+  virtual BlockMetaData *AllocateBlockMetaData(
+      const BlockMetaData *meta_template, AppPC start_pc) override;
 
   // Allocate and initialize some empty `BlockMetaData`.
   virtual BlockMetaData *AllocateEmptyBlockMetaData(void) override;
@@ -132,6 +149,13 @@ class Context : public ContextInterface {
   virtual IndirectEdge *AllocateIndirectEdge(
       const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) override;
+
+  // Instantiates an indirect edge. This creates an out-edge that targets
+  // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
+  // `edge->in_edge_pc` is updated in place to reflect the new target.
+  virtual void InstantiateIndirectEdge(IndirectEdge *edge,
+                                       AppPC app_pc,
+                                       CachePC cache_pc) override;
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;

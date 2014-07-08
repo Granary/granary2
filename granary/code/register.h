@@ -48,7 +48,7 @@ enum VirtualRegisterKind : uint8_t {
 };
 
 // Defines the different types of virtual registers.
-union VirtualRegister {
+union alignas(alignof(void *)) VirtualRegister {
  public:
   inline VirtualRegister(void)
       : value(0) {}
@@ -67,6 +67,12 @@ union VirtualRegister {
   // Copy constructor.
   inline VirtualRegister(const VirtualRegister &that)
       : value(that.value) {}
+
+  // Copy assignment.
+  inline VirtualRegister &operator=(const VirtualRegister &that) {
+    value = that.value;
+    return *this;
+  }
 
   // Convert an architectural register into a virtual register.
   //
@@ -215,6 +221,8 @@ union VirtualRegister {
   }
 
  private:
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpacked"
   struct {
     // Register number. In the case of architectural registers, this is some
     // identifier that maps back to the driver-specific description for
@@ -247,10 +255,9 @@ union VirtualRegister {
     //       support memory segmentation then this is always false.
     bool is_segment_offset;
   } __attribute__((packed));
-
+#pragma clang diagnostic pop
   uint64_t value;
-
-} __attribute__((packed));
+};
 
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");

@@ -155,7 +155,7 @@ class MetaDataDescription {
       IsUnifiableMetaData<T>::RESULT
     >::kDescription);
   }
-} __attribute__((packed));
+};
 
 // Descriptor for some indexable meta-data.
 template <typename T>

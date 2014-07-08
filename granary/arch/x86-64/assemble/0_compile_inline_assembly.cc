@@ -214,10 +214,12 @@ class InlineAssemblyParser {
       offset += 2;
       format = "%lx";
     }
-
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
     auto num = 0UL;
     GRANARY_IF_DEBUG( auto got = ) DeFormat(&(buff[offset]), format, &num);
     GRANARY_ASSERT(1 == got);
+#pragma clang diagnostic pop
 
     if (!num_immediates) {
       op->type = negate ? XED_ENCODER_OPERAND_TYPE_SIMM0

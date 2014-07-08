@@ -8,6 +8,8 @@
 #include "granary/code/fragment.h"
 #include "granary/code/ssa.h"
 
+#include "granary/code/assemble/8_schedule_registers.h"
+
 #include "granary/util.h"
 
 namespace granary {
@@ -294,7 +296,7 @@ class LocalScheduler {
   }
 
   enum {
-    NUM_USES_MAX = INT_MAX
+    NUM_USES_MAX = std::numeric_limits<int>::max()
   };
 
   int GetMinUsedDeadReg(int &gpr_num) {

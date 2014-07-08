@@ -180,55 +180,65 @@ class Instruction : public InstructionInterface {
   size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
 
   // Where was this instruction encoded/decoded.
-  union {
+  alignas(alignof(void *)) union {
     AppPC decoded_pc;
     uintptr_t decoded_addr;
     CachePC encoded_pc;
     uintptr_t encoded_addr;
-  } __attribute__((packed));
-
-  // Instruction class. This roughly corresponds to an opcode.
-  xed_iclass_enum_t iclass:16;
-  mutable xed_iform_enum_t iform:16;  // Original iform at decode time.
-  xed_category_enum_t category:8;
-
-  // Decoded length of this instruction, or 0 if it wasn't decoded.
-  union {
-    uint8_t decoded_length;
-    uint8_t encoded_length;
   };
 
-  // Instruction prefixes.
-  //
-  // TODO(pag): Remove branch hints? Might be needed for special non-
-  //            control-flow instructions.
-  bool has_prefix_rep:1;
-  bool has_prefix_repne:1;
-  bool has_prefix_lock:1;
-  bool has_prefix_br_hint_taken:1;
-  bool has_prefix_br_hint_not_taken:1;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpacked"
 
-  // Does/did this read or write to the stack pointer?
-  mutable bool reads_from_stack_pointer:1;
-  mutable bool writes_to_stack_pointer:1;
-  mutable bool analyzed_stack_usage:1;
+  // Instruction class. This roughly corresponds to an opcode.
+  alignas(alignof(uint64_t)) struct {
 
-  // Is this an atomic operation?
-  bool is_atomic:1;
+    xed_iclass_enum_t iclass:16;
+    mutable xed_iform_enum_t iform:16;  // Original iform at decode time.
+    xed_category_enum_t category:8;
 
-  // Is this a register save/restore operation? This is an optimization for
-  // virtual register usage.
-  bool is_save_restore:1;
+    // Decoded length of this instruction, or 0 if it wasn't decoded.
+    uint8_t decoded_length;
+    uint8_t encoded_length;
 
-  // Can this instruction be removed? This comes up in cases like late mangling
-  // (`1_mangle.cc`) and VR slot allocation (`9_allocate_slots.cc`) interacting
-  // with indirect calls and jumps, where the mangler has converted a native
-  // call/jump into an indirect call/jump because the native target is too far
-  // away from the code cache.
-  bool is_sticky;
+  } __attribute__((packed));
 
-  // Number of explicit operands.
-  uint8_t num_explicit_ops:4;
+  alignas(alignof(uint16_t)) struct {
+    // Instruction prefixes.
+    //
+    // TODO(pag): Remove branch hints? Might be needed for special non-
+    //            control-flow instructions.
+    bool has_prefix_rep:1;
+    bool has_prefix_repne:1;
+    bool has_prefix_lock:1;
+    bool has_prefix_br_hint_taken:1;
+    bool has_prefix_br_hint_not_taken:1;
+
+    // Does/did this read or write to the stack pointer?
+    mutable bool reads_from_stack_pointer:1;
+    mutable bool writes_to_stack_pointer:1;
+    mutable bool analyzed_stack_usage:1;
+
+    // Is this an atomic operation?
+    bool is_atomic:1;
+
+    // Is this a register save/restore operation? This is an optimization for
+    // virtual register usage.
+    bool is_save_restore:1;
+
+    // Can this instruction be removed? This comes up in cases like late mangling
+    // (`1_mangle.cc`) and VR slot allocation (`9_allocate_slots.cc`) interacting
+    // with indirect calls and jumps, where the mangler has converted a native
+    // call/jump into an indirect call/jump because the native target is too far
+    // away from the code cache.
+    bool is_sticky:1;
+
+    // Number of explicit operands.
+    uint8_t num_explicit_ops:4;
+
+  } __attribute__((packed));
+
+#pragma clang diagnostic pop
 
   // The effective operand width (in bits) at decode time, or -1 if unknown.
   int16_t effective_operand_width;
@@ -237,7 +247,7 @@ class Instruction : public InstructionInterface {
   // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
   Operand ops[MAX_NUM_EXPLICIT_OPS];
-} __attribute__((packed));
+};
 
 }  // namespace arch
 }  // namespace granary

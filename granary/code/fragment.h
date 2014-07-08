@@ -357,9 +357,13 @@ class StackUsageInfo {
 };
 
 // Attributes about a block of code.
-class CodeAttributes {
+class alignas(alignof(void *)) CodeAttributes {
  public:
   CodeAttributes(void);
+
+  // The meta-data associated with the basic block that this code fragment
+  // originates from.
+  BlockMetaData *block_meta;
 
   // Does this partition and/or fragment branch to edge code?
   bool branches_to_edge_code:1;
@@ -412,10 +416,6 @@ class CodeAttributes {
   // Note: We don't care if this value overflows or goes out of sync, as it is
   //       used as a heuristic in step `4_add_entry_exit_fragments`.
   uint8_t num_inst_preds;
-
-  // The meta-data associated with the basic block that this code fragment
-  // originates from.
-  BlockMetaData *block_meta;
 
 } __attribute__((packed));
 

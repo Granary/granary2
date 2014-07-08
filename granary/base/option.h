@@ -27,6 +27,7 @@
   static const char *GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring) \
   } \
+  GRANARY_DECLARE_string(name); \
   const char *&GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_string(name) \
@@ -37,6 +38,7 @@
   bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring) \
   } \
+  GRANARY_DECLARE_bool(name); \
   bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_bool(name) \
@@ -47,6 +49,7 @@
   static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring) \
   } \
+  GRANARY_DECLARE_positive_int(name); \
   int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
 
 #define GRANARY_DECLARE_positive_int( name) \

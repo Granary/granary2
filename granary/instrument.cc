@@ -15,8 +15,6 @@
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
-#include "dependencies/xxhash/hash.h"
-
 namespace granary {
 namespace {
 
@@ -94,15 +92,16 @@ BlockMetaData *Instrument(ContextInterface *context,
   BlockFactory factory(context, cfg);
 
   // Try to find the block in the code cache, otherwise manually decode it.
-  GRANARY_IF_DEBUG( const auto original_meta = meta; )
   auto entry_block = factory.RequestIndexedBlock(&meta);
   if (!entry_block) {
     factory.MaterializeInitialBlock(meta);
     entry_block = cfg->EntryBlock();
+  } else {
+    meta = entry_block->UnsafeMetaData();
   }
 
   // If we have a decoded block, then instrument it.
-  if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(entry_block)) {
+  if (IsA<DecodedBasicBlock *>(entry_block)) {
     auto tools = context->AllocateTools();
     InstrumentControlFlow(tools, &factory, cfg);
     InstrumentBlocks(tools, cfg);
@@ -114,15 +113,9 @@ BlockMetaData *Instrument(ContextInterface *context,
     //
     // TODO(pag): Previously, hashes were also compared. This might be a
     //            reasonable thing to do again.
-    GRANARY_ASSERT(original_meta == meta);
-    GRANARY_ASSERT(meta == decoded_block->MetaData());
-    return meta;
-
-  // If we don't have a decoded block, then we must have a cached block.
-  } else {
-    GRANARY_ASSERT(IsA<CachedBasicBlock *>(entry_block));
-    return entry_block->MetaData();
   }
+
+  return meta;
 }
 
 }  // namespace granary

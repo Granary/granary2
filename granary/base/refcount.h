@@ -13,7 +13,7 @@ namespace granary {
 class UnownedCountedObject {
 #ifdef GRANARY_INTERNAL
  public:
-  virtual ~UnownedCountedObject(void) = default;
+  ~UnownedCountedObject(void) = default;
   inline UnownedCountedObject(void)
       : count(0) {}
 

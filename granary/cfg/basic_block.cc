@@ -224,13 +224,13 @@ DirectBasicBlock::DirectBasicBlock(LocalControlFlowGraph *cfg_,
 
 // Returns the starting PC of this basic block.
 AppPC IndirectBasicBlock::StartAppPC(void) const {
-  granary_break_on_fault();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 
 // Returns the starting PC of this basic block in the code cache.
 CachePC IndirectBasicBlock::StartCachePC(void) const {
-  granary_break_on_fault();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 
@@ -258,13 +258,13 @@ BlockMetaData *ReturnBasicBlock::MetaData(void) {
 
 // Returns the starting PC of this basic block.
 AppPC ReturnBasicBlock::StartAppPC(void) const {
-  granary_break_on_fault();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 
 // Returns the starting PC of this basic block in the code cache.
 CachePC ReturnBasicBlock::StartCachePC(void) const {
-  granary_break_on_fault();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 
@@ -275,7 +275,7 @@ AppPC NativeBasicBlock::StartAppPC(void) const {
 
 // Returns the starting PC of this basic block in the code cache.
 CachePC NativeBasicBlock::StartCachePC(void) const {
-  granary_break_on_fault();
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 

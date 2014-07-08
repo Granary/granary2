@@ -52,6 +52,8 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
     IndexBlocks(index, &cfg);
   }
   GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
+  GRANARY_USED(cache_meta);
+  GRANARY_USED(meta);
   return cache_meta->cache_pc;
 }
 

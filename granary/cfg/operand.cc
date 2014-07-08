@@ -78,6 +78,8 @@ Operand::Operand(arch::Operand *op_)
     : op(*op_),
       op_ptr(op_) {}
 
+Operand::~Operand(void) {}
+
 // Replace the internal operand memory.
 void Operand::UnsafeReplace(arch::Operand *op_) {
   op.Construct<const arch::Operand &>(*op_);

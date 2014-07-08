@@ -13,9 +13,6 @@ where_common:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
-	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/xxhash"
-	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/xxhash \
-		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 	@echo "Entering $(GRANARY_SRC_DIR)/granary"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all

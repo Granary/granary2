@@ -54,7 +54,7 @@ struct IndexFindResponse {
 // Interface for operating on a code cache index.
 class IndexInterface {
  public:
-  virtual ~IndexInterface(void) = default;
+  virtual ~IndexInterface(void);
 
   // Perform a lookup operation in the code cache index. Lookup operations might
   // not return exact matches, as hinted at by the `status` field of the
@@ -135,6 +135,8 @@ class LockedIndexTransaction {
       : index(nullptr),
         lock(nullptr) {}
 
+  LockedIndexTransaction(LockedIndexTransaction &&) = default;
+
   inline IndexFindResponse Request(BlockMetaData *meta) {
     return index->Request(meta);
   }
@@ -158,6 +160,10 @@ class LockedIndexTransaction {
 
   IndexInterface * const index;
   ReaderWriterLock * const lock;
+
+  LockedIndexTransaction(const LockedIndexTransaction &) = delete;
+  void operator=(const LockedIndexTransaction &) = delete;
+  void operator=(LockedIndexTransaction &&) = delete;
 };
 
 }  // namespace detail

@@ -14,6 +14,7 @@ namespace arch {
 
 // Table to find the instruction selections for each iclass.
 extern const xed_inst_t * const ICLASS_SELECTIONS[];
+extern const xed_inst_t * const LAST_ICLASS_SELECTION;
 
 namespace {
 
@@ -95,7 +96,8 @@ bool MatchOperandTypes(const Instruction *instr, const xed_inst_t *xedi) {
 // of the returned selection is that the types of the operands match
 // (independent of the sizes of operands).
 const xed_inst_t *SelectInstruction(const Instruction *instr) {
-  for (auto xedi = ICLASS_SELECTIONS[instr->iclass]; ; ++xedi) {
+  for (auto xedi = ICLASS_SELECTIONS[instr->iclass];
+      xedi < LAST_ICLASS_SELECTION; ++xedi) {
     auto iclass = xed_inst_iclass(xedi);
     if (iclass != instr->iclass) {
       return nullptr;

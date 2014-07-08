@@ -2,29 +2,17 @@
 
 #include "granary/base/base.h"
 
+#include "granary/breakpoint.h"
+
 extern "C" {
 
 GRANARY_DISABLE_OPTIMIZER
 void granary_break_on_fault(void) {
-  GRANARY_INLINE_ASSEMBLY("");
-  GRANARY_UNUSED(*static_cast<void *>(nullptr));
+  __builtin_trap();
 }
 
 GRANARY_DISABLE_OPTIMIZER
 void granary_break_on_unreachable_code(void) {
-  GRANARY_INLINE_ASSEMBLY("");
-  granary_break_on_fault();
+  __builtin_trap();
 }
-
-GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_encode(const void *addr) {
-  GRANARY_USED(addr);
-}
-
-GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_decode(const void *addr) {
-  GRANARY_USED(addr);
-}
-
-}
-
+}  // extern C

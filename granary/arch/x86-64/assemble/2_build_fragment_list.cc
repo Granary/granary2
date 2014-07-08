@@ -10,14 +10,6 @@
 
 #include "granary/code/fragment.h"
 
-// Append a non-native, created instruction to the fragment.
-#define APP(...) \
-  do { \
-    __VA_ARGS__; \
-    ni.is_sticky = true; \
-    frag->instrs.Append(new NativeInstruction(&ni)); \
-  } while (0)
-
 namespace granary {
 namespace arch {
 // Table of all implicit operands.

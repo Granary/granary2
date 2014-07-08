@@ -17,6 +17,9 @@ GRANARY_LD_FLAGS_LATE += "-Wl,--export-dynamic"
 GRANARY_CXX_FLAGS += -fvisibility=hidden
 GRANARY_CC_FLAGS += -fvisibility=hidden
 
+# Client-specific disabling of some warnings.
+GRANARY_CXX_FLAGS += -Wno-weak-vtables
+
 # Generate a rule to build the LLVM bitcode files for a specific client.
 define GENRULE
 $(1)-all : $(addprefix $(GRANARY_CLIENT_DIR)/$(1)/,$($(1)-objs))

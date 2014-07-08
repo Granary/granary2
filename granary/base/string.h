@@ -3,6 +3,11 @@
 #ifndef GRANARY_BASE_STRING_H_
 #define GRANARY_BASE_STRING_H_
 
+// Try to prevent `libc++`s or `libstdc++`s cstring header files from being
+// included. This is a pretty ugly hack!
+#define _LIBCPP_CSTRING
+#define _GLIBCXX_CSTRING
+
 // Don't take over `memset` et al. when we're running test cases, as that will
 // interfere with the C++ standard library.
 #ifndef GRANARY_TEST
@@ -11,12 +16,12 @@
 extern "C" {
 #endif  // __cplusplus
 
-extern void *granary_memcpy(void * __restrict,
-                            const void * __restrict,
-                            unsigned long);
-extern void *granary_memset(void *, int, unsigned long);
-extern int granary_memcmp(const void * __restrict,
-                          const void * __restrict, unsigned long);
+void *granary_memcpy(void * __restrict, const void * __restrict,
+                     unsigned long);
+void *granary_memset(void *, int, unsigned long);
+int granary_memcmp(const void * __restrict, const void * __restrict,
+                   unsigned long);
+void *granary_memmove(void *dest, const void *src, unsigned long num_bytes);
 
 #ifdef __cplusplus
 }  // extern C
@@ -34,9 +39,29 @@ extern int granary_memcmp(const void * __restrict,
 # undef memcmp
 #endif
 
+#ifdef memmove
+# undef memmove
+#endif
+
+#ifdef __cplusplus
+namespace std {
+inline namespace __1 {
+extern "C" {
+void *granary_memcpy(void * __restrict, const void * __restrict,
+                     unsigned long);
+void *granary_memset(void *, int, unsigned long);
+int granary_memcmp(const void * __restrict, const void * __restrict,
+                   unsigned long);
+void *granary_memmove(void *dest, const void *src, unsigned long num_bytes);
+}  // extern C
+}  // namespace __1
+}  // namespace std
+#endif
+
 #define memcpy granary_memcpy
 #define memset granary_memset
 #define memcmp granary_memcmp
+#define memmove granary_memmove
 
 #endif  // GRANARY_TEST
 
@@ -291,6 +316,7 @@ void ForEachCommaSeparatedString(const char *str, F functor) {
     } while (*str);
   }
 }
+
 }  // namespace granary
 #endif
 

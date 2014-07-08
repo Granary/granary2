@@ -88,7 +88,7 @@ class Operand {
   // Initialize this operand.
   GRANARY_INTERNAL_DEFINITION Operand(arch::Operand *op_);
 
-  virtual ~Operand(void) = default;
+  virtual ~Operand(void);
 
   bool IsRead(void) const;
   bool IsWrite(void) const;
@@ -155,7 +155,7 @@ class Operand {
   GRANARY_DECLARE_BASE_CLASS(Operand)
 
  GRANARY_PROTECTED:
-  GRANARY_CONST OpaqueContainer<arch::Operand, 16> op;
+  GRANARY_CONST OpaqueContainer<arch::Operand, 16, 16> op;
 
   friend class OperandRef;
 
@@ -175,7 +175,6 @@ class Operand {
 class MemoryOperand : public Operand {
  public:
   using Operand::Operand;
-
   inline MemoryOperand(void)
       : Operand() {}
 
@@ -210,8 +209,6 @@ class MemoryOperand : public Operand {
   // Note: This has a driver-specific implementation.
   bool IsEffectiveAddress(void) const;
 
-  virtual ~MemoryOperand(void) = default;
-
   // Try to match this memory operand as a pointer value.
   //
   // Note: This has a driver-specific implementation.
@@ -244,7 +241,6 @@ class MemoryOperand : public Operand {
 class RegisterOperand : public Operand {
  public:
   using Operand::Operand;
-
   inline RegisterOperand(void)
       : Operand() {}
 
@@ -252,8 +248,6 @@ class RegisterOperand : public Operand {
   //
   // Note: This has a driver-specific implementation.
   explicit RegisterOperand(const VirtualRegister reg);
-
-  virtual ~RegisterOperand(void) = default;
 
   // Driver-specific implementations.
   bool IsNative(void) const;
@@ -269,11 +263,8 @@ class RegisterOperand : public Operand {
 class ImmediateOperand : public Operand {
  public:
   using Operand::Operand;
-
   inline ImmediateOperand(void)
       : Operand() {}
-
-  virtual ~ImmediateOperand(void) = default;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
 };

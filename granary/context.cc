@@ -17,10 +17,10 @@
 #include "granary/context.h"
 #include "granary/index.h"
 
-GRANARY_DEFINE_positive_int(edge_cache_slab_size, 1,
+GRANARY_DEFINE_positive_int(edge_cache_slab_size, 16,
     "The number of pages allocated at once to store edge code. Each "
     "environment maintains its own edge code allocator. The default value is "
-    "1 pages per slab.");
+    "16 pages per slab.");
 
 namespace granary {
 namespace arch {
@@ -52,6 +52,15 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
 
+// Instantiate an indirect out-edge template. The indirect out-edge will
+// compare the target of a CFI with `app_pc`, and if the values match, then
+// will jump to `cache_pc`, otherwise a fall-back is taken.
+//
+// Note: This function has an architecture-specific implementation.
+//
+// Note: This function is protected by `Context::indirect_edge_list_lock`.
+extern void InstantiateIndirectEdge(IndirectEdge *edge, CachePC edge_pc,
+                                    AppPC app_pc, CachePC cache_pc);
 }  // namespace arch
 namespace {
 
@@ -102,7 +111,7 @@ static void InitTools(ToolManager *tool_manager, const char *tool_names) {
 
 }  // namespace
 
-ContextInterface::ContextInterface(void) {}
+ContextInterface::~ContextInterface(void) {}
 
 Context::Context(const char *tool_names)
     : module_manager(this),
@@ -137,6 +146,14 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
+static void InitModuleMeta(ModuleManager *module_manager, BlockMetaData *meta,
+                           AppPC start_pc) {
+  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
+  auto module = module_manager->FindByAppPC(start_pc);
+  module_meta->start_pc = start_pc;
+  module_meta->source = module->OffsetOf(start_pc);
+}
+
 }  // namespace
 
 Context::~Context(void) {
@@ -149,10 +166,16 @@ Context::~Context(void) {
 // `ModuleMetaData` within the `BlockMetaData`.
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
   auto meta = AllocateEmptyBlockMetaData();
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_manager.FindByAppPC(start_pc);
-  module_meta->start_pc = start_pc;
-  module_meta->source = module->OffsetOf(start_pc);
+  InitModuleMeta(&module_manager, meta, start_pc);
+  return meta;
+}
+
+// Allocate and initialize some `BlockMetaData`, based on some existing
+// meta-data `meta`.
+BlockMetaData *Context::AllocateBlockMetaData(
+    const BlockMetaData *meta_template, AppPC start_pc) {
+  auto meta = meta_template->Copy();
+  InitModuleMeta(&module_manager, meta, start_pc);
   return meta;
 }
 
@@ -230,6 +253,22 @@ IndirectEdge *Context::AllocateIndirectEdge(
   edge->next = indirect_edge_list;
   indirect_edge_list = edge;
   return edge;
+}
+
+// Instantiates an indirect edge. This creates an out-edge that targets
+// `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
+// `edge->out_edge_pc` is updated in place to reflect the new target.
+void Context::InstantiateIndirectEdge(IndirectEdge *edge, AppPC app_pc,
+                                      CachePC cache_pc) {
+  auto alloc_amount = static_cast<int>(
+      edge->end_out_edge_template - edge->begin_out_edge_template +
+      arch::INDIRECT_OUT_EDGE_CODE_PADDING_BYTES);
+  alloc_amount += GRANARY_ALIGN_FACTOR(alloc_amount, 16);
+  auto edge_pc = edge_code_cache.AllocateBlock(alloc_amount);
+  FineGrainedLocked locker(&indirect_edge_list_lock);
+  CodeCacheTransaction transaction(&edge_code_cache,
+                                   edge_pc, edge_pc + alloc_amount);
+  arch::InstantiateIndirectEdge(edge, edge_pc, app_pc, cache_pc);
 }
 
 // Get a pointer to this context's code cache index.

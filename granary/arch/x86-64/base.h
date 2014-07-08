@@ -30,6 +30,10 @@ enum {
   // small as possible.
   INDIRECT_EDGE_CODE_SIZE_BYTES = 48,
 
+  // Number of extra bytes of padding that should be added to an indirect out-
+  // edge stub.
+  INDIRECT_OUT_EDGE_CODE_PADDING_BYTES = 16,
+
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,
 

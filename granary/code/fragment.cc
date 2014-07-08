@@ -100,7 +100,7 @@ void PartitionInfo::CountGPRUses(Fragment *frag) {
 // scheduling.
 int PartitionInfo::PreferredGPRNum(void) {
   if (-1 == preferred_gpr_num) {
-    auto min = INT_MAX;
+    auto min = std::numeric_limits<int>::max();
     for (auto i = arch::NUM_GENERAL_PURPOSE_REGISTERS - 1; i >= 0; --i) {
       if (num_uses_of_gpr[i] < min) {
         preferred_gpr_num = i;
@@ -149,7 +149,8 @@ void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
 }
 
 CodeAttributes::CodeAttributes(void)
-    : branches_to_edge_code(false),
+    : block_meta(nullptr),
+      branches_to_edge_code(false),
       can_add_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
@@ -158,8 +159,7 @@ CodeAttributes::CodeAttributes(void)
       is_block_head(false),
       is_compensation_code(false),
       is_in_edge_code(false),
-      num_inst_preds(0),
-      block_meta(nullptr) {}
+      num_inst_preds(0) {}
 
 Fragment::Fragment(void)
     : list(),

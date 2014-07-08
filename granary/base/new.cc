@@ -87,7 +87,6 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
     }
   }
   GRANARY_ASSERT(false);
-  return nullptr;
 }
 
 // Allocate some memory from the slab allocator.

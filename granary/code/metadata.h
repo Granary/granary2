@@ -31,11 +31,11 @@ class LiveRegisterMetaData : public UnifiableMetaData<LiveRegisterMetaData> {
 
   // Live architectural registers on entry to this basic block.
   mutable LiveRegisterTracker live_regs;
-} __attribute__((packed));
+};
 
 // Meta-data that tracks whether or not the stack is "safe" and behaves like a
 // C-style call stack.
-class StackMetaData : public UnifiableMetaData<StackMetaData> {
+class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
  public:
   // Initialize the stack meta-data.
   inline StackMetaData(void)

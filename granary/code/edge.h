@@ -21,7 +21,7 @@ class ContextInterface;
 
 // Used to resolve direct control-flow transfers between the code cache and
 // Granary.
-class DirectEdge {
+class alignas(alignof(void *)) DirectEdge {
  public:
   DirectEdge(const BlockMetaData *source_meta_, BlockMetaData *dest_meta_,
              CachePC edge_code_);
@@ -103,7 +103,7 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 
 // Used to resolve indirect control-flow tranfers between the code cache and
 // Granary.
-class IndirectEdge {
+class alignas(alignof(volatile void *)) IndirectEdge {
  public:
   IndirectEdge(const BlockMetaData *source_meta_,
                const BlockMetaData *dest_meta_,
@@ -126,7 +126,7 @@ class IndirectEdge {
   //        otherwise jumps to the next instantiated template (inductive case)
   //        or jumps to the "miss" code (2; base case), which transfers control
   //        to (1).
-  volatile CachePC in_edge_pc;
+  volatile CachePC out_edge_pc;
 
   // Meta-data template associated with this indirect edge.
   const BlockMetaData * const source_meta;
@@ -140,14 +140,11 @@ class IndirectEdge {
   //
   // Note: These pointers are updated at JIT-compile time via an annotation
   //       instruction using `IA_UPDATE_ENCODED_ADDRESS`.
-  CachePC begin_out_edge_template;
-  CachePC end_out_edge_template;
+  AppPC begin_out_edge_template;
+  AppPC end_out_edge_template;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,
-
-    // We want this cache-line aligned because the `num_executions` and
-    // `num_execution_overflows` are potentially operated on atomically.
     ALIGNMENT = 1
   })
 
@@ -157,7 +154,7 @@ class IndirectEdge {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectEdge);
 } __attribute__((packed));
 
-static_assert(0 == offsetof(IndirectEdge, in_edge_pc),
+static_assert(0 == offsetof(IndirectEdge, out_edge_pc),
     "Field `IndirectEdge::in_edge_pc` must be at offset `0`, as assembly "
     "routines depend on this.");
 

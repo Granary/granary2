@@ -9,12 +9,14 @@
 #include "granary/cache.h"
 #include "granary/memory.h"
 
-GRANARY_DEFINE_positive_int(code_cache_slab_size, 8,
+GRANARY_DEFINE_positive_int(code_cache_slab_size, 16,
     "The number of pages allocated at once to store cache code. Each "
     "module maintains its own cache code allocator. The default value is "
-    "8 pages per slab.");
+    "16 pages per slab.");
 
 namespace granary {
+
+CodeCacheInterface::~CodeCacheInterface(void) {}
 
 CodeCache::CodeCache(int slab_size)
     : lock(),

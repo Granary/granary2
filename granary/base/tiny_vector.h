@@ -78,14 +78,16 @@ class TinyVector {
 
   TinyVector(void)
       : num_elems(0) {
-    if (std::is_trivial<T>()) {
+    static_assert(offsetof(SelfType, num_elems) == offsetof(SelfType, next),
+                  "Invalid structure packing of `TinyVector<T>`.");
+    if (std::is_scalar<T>() || std::is_trivial<T>()) {
       memset(elems, 0, sizeof elems);
     }
   }
 
   TinyVector(const TinyVector<T, kMinSize> &that)
       : num_elems(0) {
-    if (std::is_trivial<T>()) {
+    if (std::is_scalar<T>() || std::is_trivial<T>()) {
       memset(elems, 0, sizeof elems);
     }
     for (auto &elem : that) {
@@ -210,8 +212,10 @@ class TinyVector {
   union {
     uintptr_t num_elems;
     SelfType *next;
-  } __attribute__((packed));
+  };
 };
+
+
 
 }  // namespace granary
 

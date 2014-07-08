@@ -8,6 +8,8 @@
 
 #include "granary/code/inline_assembly.h"
 
+#include "granary/code/assemble/0_compile_inline_assembly.h"
+
 namespace granary {
 namespace arch {
 

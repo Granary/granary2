@@ -28,6 +28,7 @@ xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
 
 // Table to find the instruction selections for each iclass.
 const xed_inst_t *ICLASS_SELECTIONS[XED_ICLASS_LAST] = {nullptr};
+const xed_inst_t *LAST_ICLASS_SELECTION = nullptr;
 
 // Table mapping each iclass/iform to the set of read and written flags by *any*
 // selection of that iclass/iform.
@@ -41,6 +42,7 @@ static int num_implicit_operand_pages = 0;
 
 // Initialize the table of iclass categories.
 static void InitIclassTables(void) {
+  LAST_ICLASS_SELECTION = xed_inst_table_base() + XED_MAX_INST_TABLE_NODES;
   for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
     auto instr = xed_inst_table_base() + sel;
     auto iclass = xed_inst_iclass(instr);

@@ -4,7 +4,7 @@
 
 #include "granary/arch/base.h"
 
-#include "granary/base/lock.h"
+#include "granary/base/base.h"
 #include "granary/base/string.h"
 
 #include "granary/cfg/instruction.h"
@@ -24,10 +24,7 @@ namespace {
 static std::atomic<ToolDescription *> descriptions(ATOMIC_VAR_INIT(nullptr));
 
 // Unique ID assigned to a tool.
-static int next_tool_id(0);
-
-// Lock on assigning IDs to tools.
-static FineGrainedLock next_tool_id_lock;
+static std::atomic<int> next_tool_id(ATOMIC_VAR_INIT(0));
 
 // Dependency graph between tools. If `depends_on[t1][t2]` is `true` then `t2`
 // must be run before `t1` when instrumenting code.
@@ -50,9 +47,9 @@ static ToolDescription *FindDescByName(const char *name) {
 // all registered tools.
 static void RegisterToolDescription(ToolDescription *desc, const char *name) {
   if (-1 == desc->id) {
-    FineGrainedLocked locker(&next_tool_id_lock);
-    GRANARY_ASSERT(MAX_NUM_MANAGED_TOOLS > next_tool_id);
-    desc->id = next_tool_id++;
+    auto next_id = next_tool_id.fetch_add(1);
+    GRANARY_ASSERT(MAX_NUM_MANAGED_TOOLS > next_id);
+    desc->id = next_id;
     desc->next = descriptions.load(std::memory_order_acquire);
     desc->name = name;
     descriptions.store(desc, std::memory_order_release);

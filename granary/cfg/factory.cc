@@ -313,13 +313,13 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       if ((block->materialized_block = RequestIndexedBlock(&(block->meta)))) {
         break;
       }
-      // Fall-through.
+    [[clang::fallthrough]];
     case REQUEST_CHECK_LCFG:
       if ((block->materialized_block = MaterializeFromLCFG(block)) ||
           REQUEST_CHECK_INDEX_AND_LCFG_ONLY == block->materialize_strategy) {
         break;
       }
-      // Fall-through.
+    [[clang::fallthrough]];
     case REQUEST_NOW: {
       auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
       block->meta = nullptr;  // Steal.
@@ -334,7 +334,8 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       block->meta = nullptr;  // No longer needed.
       break;
     }
-    default: {}  // REQUEST_LATER, REQUEST_DENIED.
+    case REQUEST_LATER: break;
+    case REQUEST_DENIED: break;
   }
   return nullptr != block->materialized_block;
 }

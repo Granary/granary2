@@ -22,7 +22,13 @@ class MockContext : public granary::ContextInterface {
 
   // Allocate and initialize some `BlockMetaData`.
   MOCK_METHOD1(AllocateBlockMetaData,
-               granary::BlockMetaData *(granary::AppPC pc));
+               granary::BlockMetaData *(granary::AppPC));
+
+  // Allocate and initialize some `BlockMetaData`, based on some existing
+  // meta-data template.
+  MOCK_METHOD2(AllocateBlockMetaData,
+               granary::BlockMetaData *(const granary::BlockMetaData *,
+                                        granary::AppPC pc));
 
   // Allocate and initialize some empty `BlockMetaData`.
   MOCK_METHOD0(AllocateEmptyBlockMetaData,
@@ -30,11 +36,11 @@ class MockContext : public granary::ContextInterface {
 
   // Register some meta-data with Granary.
   MOCK_METHOD1(RegisterMetaData,
-               void (const granary::MetaDataDescription *desc));
+               void (const granary::MetaDataDescription ));
 
   // Compile some code into one of the code caches.
   MOCK_METHOD1(Compile,
-               void (granary::LocalControlFlowGraph *cfg));
+               void (granary::LocalControlFlowGraph *));
 
   // Allocate instances of the tools that will be used to instrument blocks.
   MOCK_METHOD0(AllocateTools,

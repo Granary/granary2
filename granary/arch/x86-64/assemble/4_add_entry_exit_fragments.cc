@@ -33,7 +33,7 @@ void VisitInstructionFlags(const arch::Instruction &instr,
 // Returns a bitmap representing all arithmetic flags being live.
 uint32_t AllArithmeticFlags(void) {
   return ALL_AFLAGS_WITHOUT_DF;
-
+  /*
   // For documentation purposes only.
   xed_flag_set_t flags;
   flags.s.of = 1;
@@ -43,6 +43,7 @@ uint32_t AllArithmeticFlags(void) {
   flags.s.pf = 1;
   flags.s.cf = 1;
   return flags.flat;
+  */
 }
 
 }  // namespace arch

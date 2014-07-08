@@ -5,6 +5,8 @@
 
 #include "granary/code/fragment.h"
 
+#include "granary/code/assemble/9_allocate_slots.h"
+
 namespace granary {
 namespace arch {
 
@@ -102,7 +104,7 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
 struct FrameAdjust {
   int32_t shift;
   int32_t compute;
-} __attribute__((packed));
+};
 
 static_assert(sizeof(uint64_t) == sizeof(FrameAdjust),
               "Invalid structure packing of `struct FrameAdjust`.");

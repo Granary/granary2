@@ -7,6 +7,8 @@
 
 #include "granary/code/fragment.h"
 
+#include "granary/code/assemble/10_add_connecting_jumps.h"
+
 namespace granary {
 namespace arch {
 

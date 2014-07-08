@@ -19,6 +19,7 @@
 #include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
+#include "granary/context.h"
 
 #define ENC(...) \
   do { \
@@ -73,6 +74,8 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
+  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
+                                             XED_REG_RSP)); )
 
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`.
@@ -94,6 +97,8 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
   // Restore the flags, and potentially re-enable interrupts.
+  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
+                                             XED_REG_RSP)); )
   ENC(POPFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Return back into the edge code.
@@ -121,11 +126,6 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
                                          BaseDispMemOp(-REDZONE_SIZE_BYTES,
                                                        XED_REG_RSP,
                                                        ADDRESS_WIDTH_BITS))));
-
-  // Swap stacks. After swapping stacks, we are susceptible to re-entrancy
-  // issues related to interrupts and signals.
-  //ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK), XED_REG_RSP));
-
   // Steal `RDI` (arg1 on Itanium C++ ABI) to hold the address of the
   // `DirectEdge` data structure.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RDI));
@@ -144,7 +144,6 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
                                          BaseDispMemOp(REDZONE_SIZE_BYTES,
                                                        XED_REG_RSP,
                                                        ADDRESS_WIDTH_BITS))));
-  //ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK), XED_REG_RSP));
 
   // Jump to the resolved PC, independent of profiling. As mentioned above,
   // if two or more threads are racing to translate a block, then the behavior
@@ -179,9 +178,10 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
                                          BaseDispMemOp(-REDZONE_SIZE_BYTES,
                                                        XED_REG_RSP,
                                                        ADDRESS_WIDTH_BITS))));
-  //ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK), XED_REG_RSP));
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
+  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
+                                             XED_REG_RSP)); )
 
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`. `RDI` already holds the address of the
@@ -203,19 +203,21 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
+  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK),
+                                             XED_REG_RSP)); )
+
   // Restore the flags, and potentially re-enable interrupts. After this
   // instruction, it is fairly likely that we will hit an interrupt.
   ENC(POPFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Swap back to the native stack.
-  //ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(SLOT_PRIVATE_STACK), XED_REG_RSP));
   GRANARY_IF_USER(ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
                                          BaseDispMemOp(REDZONE_SIZE_BYTES,
                                                        XED_REG_RSP,
                                                        ADDRESS_WIDTH_BITS))));
 
   // Return back into the in-edge code.
-  ENC(JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, in_edge_pc),
+  ENC(JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),
                                   XED_REG_RDI, arch::ADDRESS_WIDTH_BITS)));
 
   ENC(UD2(&ni));
@@ -250,8 +252,7 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   // Manually save `RCX`.
   auto saved_rcx = cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
   auto saved_rdi = cfg->AllocateVirtualRegister(GPR_WIDTH_BYTES);
-  auto save_restore_rdi = true;
-  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX); );
+  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX));
 
   // Copy the target, just in case it's stored in `RCX` or `RDI`.
   auto saved_target = target_op.reg;
@@ -259,16 +260,14 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
     saved_target = saved_rcx;
   } else if (VirtualRegister::FromNative(XED_REG_RDI) == saved_target) {
     saved_target = saved_rdi;
-    save_restore_rdi = false;
   }
 
   // Store the pointer to the `IndirectEdge` data structure in `RDI`
   // (arg1 of the Itanium C++ ABI).
-  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rdi, XED_REG_RDI);
-               ni.is_save_restore = save_restore_rdi; );
+  APP(in_edge, MOV_GPRv_GPRv_89(&ni, saved_rdi, XED_REG_RDI));
   APP(in_edge, MOV_GPRv_IMMz(&ni, XED_REG_RDI,
                                   reinterpret_cast<uint64_t>(edge)));
-  APP(in_edge, JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, in_edge_pc),
+  APP(in_edge, JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),
                                            XED_REG_RDI,
                                            arch::ADDRESS_WIDTH_BITS));
                ni.is_sticky = true; );
@@ -279,7 +278,7 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   // lead to a context switch into Granary.
   auto miss = new LabelInstruction();
   auto miss_addr = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
-                                             &(edge->in_edge_pc));
+                                             &(edge->out_edge_pc));
   in_edge->instrs.Append(miss);
   in_edge->instrs.Append(miss_addr);
 
@@ -287,7 +286,7 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   // data structure remains in `RDI`. Jump to `edge->in_edge_pc`, which is
   // initialized to be
   APP(out_edge_miss, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_target); );
-  APP(out_edge_miss, JMP_RELBRd(&ni, edge->in_edge_pc);
+  APP(out_edge_miss, JMP_RELBRd(&ni, edge->out_edge_pc);
                      ni.is_sticky = true; );
   out_edge_miss->branch_instr = DynamicCast<NativeInstruction *>(
       out_edge_miss->instrs.Last());
@@ -312,9 +311,8 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
 
   // Manually restore `RCX` and `RDI`.
   out_edge_hit->instrs.Append(hit);
-  APP(out_edge_hit, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx); );
-  APP(out_edge_hit, MOV_GPRv_GPRv_89(&ni, XED_REG_RDI, saved_rdi);
-                    ni.is_save_restore = save_restore_rdi; );
+  APP(out_edge_hit, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
+  APP(out_edge_hit, MOV_GPRv_GPRv_89(&ni, XED_REG_RDI, saved_rdi));
 
   out_edge_exit->instrs.Append(end_template);
   APP(out_edge_exit, UD2(&ni));
@@ -324,6 +322,46 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   in_edge->attr.is_app_code = true;
   out_edge_miss->attr.is_app_code = true;
   out_edge_hit->attr.is_app_code = true;
+}
+
+enum {
+  JMP_RELBRd_SIZE_BYTES = 5
+};
+
+// Instantiate an indirect out-edge template. The indirect out-edge will
+// compare the target of a CFI with `app_pc`, and if the values match, then
+// will jump to `cache_pc`, otherwise a fall-back is taken.
+//
+// Note: This function is protected by `Context::indirect_edge_list_lock`.
+void InstantiateIndirectEdge(IndirectEdge *edge, CachePC edge_pc,
+                             AppPC app_pc, CachePC cache_pc) {
+  auto pc = edge_pc;
+  InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
+  InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
+  InstructionDecoder decoder;
+  Instruction ni;
+
+  // Replace the `IndirectEdge::out_edge_pc` with the out edge that we're
+  // creating, and make our new out edge point to the old one.
+  auto miss_pc = edge->out_edge_pc;
+  edge->out_edge_pc = edge_pc;
+
+  // Negate the pointer, so that when it's added to its non-negated self, they
+  // cancel out and trigger the `JRCXZ`.
+  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
+      Shorten_MOV_GPRv_IMMz(&ni));
+
+  for (auto template_pc(edge->begin_out_edge_template);
+       template_pc < edge->end_out_edge_template; ) {
+    decoder.DecodeNext(&ni, &template_pc);
+    if (XED_IFORM_JMP_RELBRd == ni.iform) {
+      ni.SetBranchTarget(miss_pc);  // Miss! Jump to fall-back.
+    } else if (XED_ICLASS_JRCXZ == ni.iclass) {  // Need to relativize.
+      ni.SetBranchTarget(pc + ni.decoded_length + JMP_RELBRd_SIZE_BYTES);
+    }
+    ENC();
+  }
+  ENC(JMP_RELBRd(&ni, cache_pc));  // Hit! Jump to block.
 }
 
 }  // namespace arch

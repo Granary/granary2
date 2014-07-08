@@ -19,6 +19,8 @@ namespace arch {
 // instruction is a copy instruction, otherwise returns `nullptr`.
 SSAOperand *GetCopiedOperand(const NativeInstruction *instr) {
   auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
+  if (!ssa_instr) return nullptr;  // E.g. no operands, or operates on stack.
+
   if (1UL != ssa_instr->defs.Size() || !ssa_instr->uses.Size()) {
     return nullptr;
   }

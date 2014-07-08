@@ -37,6 +37,11 @@ static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
 
 }  // namespace
 
+// Forward declarations.
+void EnterGranary(DirectEdge *edge, ContextInterface *context);
+void EnterGranary(IndirectEdge *edge, ContextInterface *context,
+                  AppPC app_pc);
+
 // Enter into Granary to begin the translation process for a direct edge.
 void EnterGranary(DirectEdge *edge, ContextInterface *context) {
   auto meta = edge->dest_meta.exchange(nullptr, std::memory_order_seq_cst);
@@ -49,6 +54,14 @@ void EnterGranary(DirectEdge *edge, ContextInterface *context) {
   UpdateEdge(edge, Translate(context, meta));
 }
 
+// Enter into Granary to begin the translation process for an indirect edge.
+void EnterGranary(IndirectEdge *edge, ContextInterface *context,
+                  AppPC app_pc) {
+  auto meta = context->AllocateBlockMetaData(edge->dest_meta, app_pc);
+  auto cache_pc = Translate(context, meta);
+  context->InstantiateIndirectEdge(edge, app_pc, cache_pc);
+}
+
 }  // namespace granary
 
 extern "C" {
@@ -58,5 +71,9 @@ extern "C" {
 void granary_enter_direct_edge(void)
     __attribute__((alias ("_ZN7granary12EnterGranaryEPNS_10DirectEdge"
                           "EPNS_16ContextInterfaceE")));
+
+void granary_enter_indirect_edge(void)
+    __attribute__((alias ("_ZN7granary12EnterGranaryEPNS_12IndirectEdgeEPNS_"
+                          "16ContextInterfaceEPKh")));
 
 }  // extern C

@@ -166,6 +166,9 @@ class OperatorNewAllocator {
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(OperatorNewAllocator, (T));
 };
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+
 // Static initialization of the (typeless) internal slab allocator.
 template <typename T>
 internal::SlabAllocator OperatorNewAllocator<T>::allocator(
@@ -173,6 +176,8 @@ internal::SlabAllocator OperatorNewAllocator<T>::allocator(
     OperatorNewAllocator<T>::ALGINED_SLAB_LIST_SIZE,
     OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE,
     OperatorNewAllocator<T>::OBJECT_SIZE);
+
+#pragma clang diagnostic pop
 
 }  // namespace granary
 

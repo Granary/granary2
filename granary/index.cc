@@ -10,6 +10,9 @@
 #include "granary/module.h"
 
 namespace granary {
+
+IndexInterface::~IndexInterface(void) {}
+
 namespace {
 
 // Tombstone pointer representing the last meta-data block in a meta-data array.

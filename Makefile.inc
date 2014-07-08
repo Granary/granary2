@@ -109,17 +109,20 @@ ifeq (kernel,$(GRANARY_WHERE))
 	GRANARY_NOT_WHERE = user
 else
 	GRANARY_NOT_WHERE = kernel
+	GRANARY_COMMON_ARCH_FLAGS += -ftls-model=initial-exec
 endif
 
 # Enable/disable features based on whether or not this is a debug or release
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
-	GRANARY_DEBUG_FLAGS += -g0
-    GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-    GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+	GRANARY_DEBUG_FLAGS += -g3
+    GRANARY_COMMON_FLAGS += -O2 $(GRANARY_DEBUG_FLAGS)
+    GRANARY_LD_FLAGS += -O2 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS) -DGRANARY_DEBUG
+	GRANARY_COMMON_ARCH_FLAGS += -fsanitize=undefined-trap
+	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
 	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_DEBUG
 	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
 endif
@@ -129,6 +132,7 @@ GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
 GRANARY_COMMON_ARCH_FLAGS += -minline-all-stringops
+GRANARY_COMMON_ARCH_FLAGS += -fno-assume-sane-operator-new
 
 ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3
@@ -150,6 +154,14 @@ endif
 # Make sure that we generate position-independent code, regardless of whether
 # or not we're in user space or kernel space.
 GRANARY_COMMON_FLAGS += -fPIC
+
+# Be crazy about warnings with debug builds.
+ifeq (debug,$(GRANARY_TARGET))
+    GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
+    GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
+    GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations
+    GRANARY_COMMON_WARN_FLAGS += -Wno-switch-enum
+endif
 
 # Enable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wall -Wextra -Werror -pedantic -pedantic-errors
