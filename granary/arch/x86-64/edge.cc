@@ -298,7 +298,8 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   //    1)  Moving the target of the control-flow instruction into `RCX`
   //        (first instruction).
   //    2)  Jumping directly to the targeted basic block (last instruction).
-
+  APP(out_edge_hit, MOV_GPRv_IMMz(&ni, XED_REG_RCX, 0UL);
+                    ni.dont_encode = true; );
   APP(out_edge_hit, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
                                                          saved_target));
   auto hit = new LabelInstruction;

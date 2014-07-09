@@ -303,6 +303,15 @@ static void EncodeSpecialCases(const Instruction *instr,
 // instruction, and return the address of the next memory location into which
 // an instruction can be encoded.
 CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
+  // Special case: some instructions exist only for their side-effects on the
+  // virtual register system, or as stand-in instructions (e.g. for out-edge
+  // templates).
+  if (GRANARY_UNLIKELY(instr->dont_encode)) {
+    instr->encoded_pc = pc;
+    instr->encoded_length = 0;
+    return pc;
+  }
+
   xed_encoder_instruction_t xede;
   const auto is_stage_encoding = InstructionEncodeKind::STAGED == encode_kind;
 

@@ -22,10 +22,92 @@ START_FILE
 // Defines a function that is used to test some of the early instruction
 // mangling of stack-pointer changing instructions.
 DEFINE_FUNC(granary_test_mangle)
+.intel_syntax noprefix
+.Lentry:
+   push   rbp
+   push   r14
+   push   rbx
+   mov    ebx,edi
+   xor    eax,eax
+   test   edi,edi
+   je     .Ln_eq_zero
+   cmp    ebx,0x1
+   jne    .Ln_neq_one
+   mov    eax,0x1
+.Ln_eq_zero:
+   pop    rbx
+   pop    r14
+   pop    rbp
+   ret
+.Ln_neq_one:
+   lea    rsp,[rsp-0xa8]
+   lea    r14,[rip+.Lentry_addr]
+   lea    edi,[rbx-0x1]
+   mov    QWORD PTR [rsp+0x8],r13
+   mov    r13,QWORD PTR [r14]
+   lea    r15,[rip+.Lreturn_fib_n1]
+   mov    QWORD PTR [rsp+0xa0],r15
+   mov    QWORD PTR [rsp+0x10],r12
+   mov    r12,rcx
+   mov    QWORD PTR [rsp+0x18],r11
+   mov    r11,rdi
+   mov    rdi,0
+   mov    rcx,0
+   rex.W jrcxz .Lhit_fib_n1
+   jmp    .Lmiss_fib_n1
+.Lhit_fib_n1:
+   mov    rcx,r12
+   mov    rdi,r11
+   mov    r13,QWORD PTR [rsp+0x8]
+   mov    r12,QWORD PTR [rsp+0x10]
+   mov    r11,QWORD PTR [rsp+0x18]
+   lea    rsp,[rsp+0xa0]
+   jmp    .Lentry
+.Lreturn_fib_n1:
+   lea    rsp,[rsp-0xa8]
+   mov    QWORD PTR [rsp],r15
+   mov    ebp,eax
+   add    ebx,0xfffffffe
+   mov    edi,ebx
+   mov    QWORD PTR [rsp+0x8],r13
+   mov    r13,QWORD PTR [r14]
+   lea    r15,[rip+.Lreturn_fib_n2]
+   mov    QWORD PTR [rsp+0xa0],r15
+   mov    r15,QWORD PTR [rsp]
+   mov    QWORD PTR [rsp+0x10],r12
+   mov    r12,rcx
+   mov    QWORD PTR [rsp+0x18],r11
+   mov    r11,rdi
+   mov rdi,0
+   mov rcx,0
+   rex.W jrcxz .Lhit_fib_n2
+   jmp    .Lmiss_fib_n2
+.Lhit_fib_n2:
+   mov    rcx,r12
+   mov    rdi,r11
+   mov    r13,QWORD PTR [rsp+0x8]
+   mov    r12,QWORD PTR [rsp+0x10]
+   mov    r11,QWORD PTR [rsp+0x18]
+   lea    rsp,[rsp+0xa0]
+   jmp    .Lentry
+.Lreturn_fib_n2:
+   add    eax,ebp
+   pop    rbx
+   pop    r14
+   pop    rbp
+   ret
+
+.Lmiss_fib_n1:
+   ud2
+.Lmiss_fib_n2:
+   ud2
+.Lentry_addr:
+   .quad .Lentry
+
 //mov    -0x18(%rbp),%rsi
 //mov    -0x18(%rbp),%rsi
-callq *%rax;
-ret;
+//callq *%rax;
+//ret;
 /*
 push   %rbp
 mov    %rsp,%rbp

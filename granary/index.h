@@ -123,50 +123,7 @@ static_assert(sizeof(Index) == arch::PAGE_SIZE_BYTES,
               "The size of `Index` must be exactly one page.");
 
 // Forward declaration.
-class LockedIndex;
-
-namespace detail {
-
-// Allows multiple operations to be "atomically" performed on a code cache
-// index.
-class LockedIndexTransaction {
- public:
-  inline LockedIndexTransaction(void)
-      : index(nullptr),
-        lock(nullptr) {}
-
-  LockedIndexTransaction(LockedIndexTransaction &&) = default;
-
-  inline IndexFindResponse Request(BlockMetaData *meta) {
-    return index->Request(meta);
-  }
-
-  inline void Insert(BlockMetaData *meta) {
-    index->Insert(meta);
-  }
-
-  inline ~LockedIndexTransaction(void) {
-    lock->WriteRelease();
-  }
-
- private:
-  friend class granary::LockedIndex;
-
-  inline LockedIndexTransaction(IndexInterface *index_, ReaderWriterLock *lock_)
-      : index(index_),
-        lock(lock_) {
-    lock->WriteAcquire();
-  }
-
-  IndexInterface * const index;
-  ReaderWriterLock * const lock;
-
-  LockedIndexTransaction(const LockedIndexTransaction &) = delete;
-  void operator=(const LockedIndexTransaction &) = delete;
-  void operator=(LockedIndexTransaction &&) = delete;
-};
-
-}  // namespace detail
+class LockedIndexTransaction;
 
 // Represents a locked code cache index that is safe to use in a multi-threaded
 // environment.
@@ -186,13 +143,9 @@ class LockedIndex {
     return index->Request(meta);
   }
 
-  // Return a new transaction. This gains mutual exclusion over the code cache
-  // index until the transaction is destroyed.
-  inline detail::LockedIndexTransaction &&Transaction(void) {
-    return std::move(detail::LockedIndexTransaction(index, &index_lock));
-  }
-
  private:
+  friend class LockedIndexTransaction;
+
   LockedIndex(void) = delete;
 
   // Index backing this `LockedIndex`.
@@ -203,6 +156,37 @@ class LockedIndex {
   ReaderWriterLock index_lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LockedIndex);
+};
+
+// Allows multiple operations to be "atomically" performed on a code cache
+// index.
+class LockedIndexTransaction {
+ public:
+  explicit LockedIndexTransaction(LockedIndex *index_)
+      : index(index_->index),
+        lock(&(index_->index_lock)) {
+    lock->WriteAcquire();
+  }
+
+  inline IndexFindResponse Request(BlockMetaData *meta) {
+    return index->Request(meta);
+  }
+
+  inline void Insert(BlockMetaData *meta) {
+    index->Insert(meta);
+  }
+
+  inline ~LockedIndexTransaction(void) {
+    lock->WriteRelease();
+  }
+
+ private:
+  LockedIndexTransaction(void) = delete;
+
+  IndexInterface * const index;
+  ReaderWriterLock * const lock;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(LockedIndexTransaction);
 };
 
 }  // namespace granary

@@ -376,7 +376,7 @@ class ReturnBasicBlock final : public InstrumentedBasicBlock {
 
   // Return this basic block's meta-data. Accessing a return basic block's meta-
   // data will "create" it for the block.
-  virtual BlockMetaData *MetaData(void);
+  virtual BlockMetaData *MetaData(void) override;
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;

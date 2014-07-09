@@ -116,13 +116,11 @@ endif
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
 	GRANARY_DEBUG_FLAGS += -g3
-    GRANARY_COMMON_FLAGS += -O2 $(GRANARY_DEBUG_FLAGS)
-    GRANARY_LD_FLAGS += -O2 $(GRANARY_DEBUG_FLAGS)
+    GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+    GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS) -DGRANARY_DEBUG
-	GRANARY_COMMON_ARCH_FLAGS += -fsanitize=undefined-trap
-	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
 	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_DEBUG
 	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
 endif
@@ -155,8 +153,11 @@ endif
 # or not we're in user space or kernel space.
 GRANARY_COMMON_FLAGS += -fPIC
 
-# Be crazy about warnings with debug builds.
-ifeq (debug,$(GRANARY_TARGET))
+# Be crazy about warnings with debug/test builds.
+ifneq (release,$(GRANARY_TARGET))
+	GRANARY_COMMON_ARCH_FLAGS += -ftrapv -fsanitize=undefined-trap
+	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
+
     GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
     GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
     GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations

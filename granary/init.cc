@@ -18,6 +18,8 @@
 #include "granary/base/cast.h"
 #include "granary/base/pc.h"
 
+#include <unistd.h>
+
 #ifndef GRANARY_STANDALONE
 GRANARY_DEFINE_string(attach_to, "*",
     "Comma-separated list of modules to which granary should attach. Default "
@@ -28,7 +30,7 @@ GRANARY_DEFINE_string(attach_to, "*",
 #endif  // GRANARY_STANDALONE
 
 extern "C" {
-extern void granary_test_mangle(void);
+extern int granary_test_mangle(int);
 }
 
 GRANARY_DEFINE_string(tools, "",
@@ -60,12 +62,14 @@ GRANARY_EARLY_GLOBAL static Container<Context> context;
 
 extern "C" int fibonacci(int n);
 extern "C" int (*fib_indirect)(int);
+extern "C" int (*fib)(int);
 
 extern "C" int (*fib_indirect)(int) = fibonacci;
+extern "C" int (*fib)(int) = nullptr;
 extern "C" int fibonacci(int n) {
   if (!n) return n;
   if (1 == n) return 1;
-  return fib_indirect(n - 1) + fib_indirect(n - 2);
+  return fibonacci(n - 1) + fibonacci(n - 2);
 }
 
 }  // namespace
@@ -89,14 +93,14 @@ void Init(const char *granary_path) {
   if (!FLAG_help) {
     context.Construct(FLAG_tools);
 
-    if (true) {
+    if (!FLAG_help) {
       auto start_pc = Translate(context.AddressOf(), fibonacci);
-      auto fib = UnsafeCast<int (*)(int)>(start_pc);
+      fib = UnsafeCast<int (*)(int)>(start_pc);
       for (auto i = 0; i < 30; ++i) {
         Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i,
-            fibonacci(i), i, fib(i));
+            fib_indirect(i), i, fib(i));
       }
-
+      sleep(1);
       auto native_start = time_now();
       for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
         for (auto n = 0; n < MAX_FIB; ++n) {
@@ -104,7 +108,7 @@ void Init(const char *granary_path) {
         }
       }
       auto native_end = time_now();
-
+      sleep(1);
       auto inst_start = time_now();
       for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
         for (auto n = 0; n < MAX_FIB; ++n) {
@@ -120,6 +124,10 @@ void Init(const char *granary_path) {
           ticks_per_native, ticks_per_inst);
 
     } else {
+      for (auto i = 0; i < 10; ++i) {
+        Log(LogOutput, "fib(%d) = %d\n", i, granary_test_mangle(i));
+      }
+      //granary_test_mangle(3);
       //Translate(context.AddressOf(), granary_test_mangle);
     }
 

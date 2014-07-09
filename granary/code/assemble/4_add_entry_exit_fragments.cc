@@ -131,6 +131,11 @@ static bool ConvertToAppFrag(CodeFragment *frag) {
   if (!(frag->flags.all_written_flags & live_flags_exit)) {
     frag->attr.is_app_code = SuccessorMakesFragConvertible(frag);
   }
+  // Handle things like fragments that are empty except for labels with
+  // `IA_RETURN_ADDRESS` annotations.
+  if (!frag->attr.is_app_code && !frag->attr.has_native_instrs) {
+    frag->attr.is_app_code = true;
+  }
   return frag->attr.is_app_code;
 }
 

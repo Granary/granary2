@@ -20,7 +20,7 @@ namespace {
 
 // Add the decoded blocks to the code cache index.
 static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
-  auto transaction(index->Transaction());
+  LockedIndexTransaction transaction(index);
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
       transaction.Insert(decoded_block->MetaData());
