@@ -5,8 +5,6 @@
 #include "granary/base/list.h"
 #include "granary/base/string.h"
 
-#include "granary/cache.h"
-
 #include "granary/breakpoint.h"
 #include "granary/context.h"
 #include "granary/module.h"
@@ -25,8 +23,7 @@ class ModuleAddressRange {
         end_addr(end_addr_),
         begin_offset(begin_offset_),
         end_offset(begin_offset + (end_addr - begin_addr)),
-        perms(perms_),
-        code_cache(nullptr) {}
+        perms(perms_) {}
 
   // Next range. Module ranges are arranged in a sorted linked list such that
   // for two adjacent ranges `r1` and `r2` in the list, the following
@@ -45,11 +42,6 @@ class ModuleAddressRange {
 
   // Permissions (e.g. readable, writable, executable).
   unsigned perms;
-
-  // Memory allocator for code from the code cache. This field can be nulled
-  // out when adding removing ranges, because the current `ContextInterface`
-  // will take ownership of the memory and delete it.
-  CodeCacheInterface *code_cache;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(ModuleAddressRange, {
     SHARED = true,
@@ -95,22 +87,6 @@ static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
   return FindRange(ranges, reinterpret_cast<uintptr_t>(addr));
 }
 
-// Flush the code cache of a module address range.
-static void FlushCodeCache(ContextInterface *context,
-                           ModuleAddressRange *range) {
-  if (context && range->code_cache) {
-    context->FlushCodeCache(range->code_cache);
-    range->code_cache = nullptr;
-  }
-}
-
-// Replenish the code cache of a module address range.
-static void ReplenishCodeCache(ContextInterface *context,
-                               ModuleAddressRange *range) {
-  if (context && !range->code_cache) {
-    range->code_cache = context->AllocateCodeCache();
-  }
-}
 }  // namespace
 
 // Initialize a new module with no ranges.
@@ -127,7 +103,6 @@ Module::Module(ModuleKind kind_, const char *name_)
 Module::~Module(void) {
   for (ModuleAddressRange *next_range(nullptr); ranges; ranges = next_range) {
     next_range = ranges->next;
-    FlushCodeCache(context, ranges);
     delete ranges;
   }
   context = nullptr;
@@ -166,11 +141,6 @@ const char *Module::Name(void) const {
 
 // Sets the current context of the module.
 void Module::SetContext(ContextInterface *context_) {
-  ConditionallyReadLocked locker(&ranges_lock, nullptr != context);
-  for (auto range : ModuleAddressRangeIterator(ranges)) {
-    FlushCodeCache(context, range);
-    ReplenishCodeCache(context_, range);
-  }
   context = context_;
 }
 
@@ -182,7 +152,6 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
   if (begin_addr < end_addr) {
     auto range = new ModuleAddressRange(begin_addr, end_addr,
                                         begin_offset, perms);
-    ReplenishCodeCache(context, range);
     ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
     AddRange(range);
   } else {
@@ -219,14 +188,12 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
     auto curr = curr_elem.Get();
     if (curr->begin_addr < end_addr &&
         curr->end_addr > begin_addr) {
-      FlushCodeCache(context, curr);
 
       if (curr->begin_addr < begin_addr) {
         if (end_addr < curr->end_addr) {  // `range` is contained in `curr`.
           auto offset = curr->begin_offset + (end_addr - curr->begin_addr);
           auto after_curr = new ModuleAddressRange(end_addr, curr->end_addr,
                                                    offset, curr->perms);
-          ReplenishCodeCache(context, after_curr);
           curr_elem.InsertAfter(after_curr);
         }
         curr->end_offset -= curr->end_addr - begin_addr;
@@ -240,11 +207,8 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
         curr->end_addr = curr->begin_addr;
       }
 
-      // Reap a range or replenish its code cache.
       if (curr->begin_addr >= curr->end_addr) {
-        curr_elem.Unlink();
-      } else {
-        ReplenishCodeCache(context, curr);
+        curr_elem.Unlink();  // Reap a range.
       }
     } else if (end_addr < curr->begin_addr) {
       break;
@@ -275,30 +239,6 @@ void ModuleMetaData::Init(ModuleOffset source_, AppPC start_pc_) {
   source = source_;
   start_pc = start_pc_;
 }
-
-// Returns the code cache allocator for this block.
-CodeCacheInterface *ModuleMetaData::GetCodeCache(void) const {
-  ReadLocked locker(&(source.module->ranges_lock));
-  auto range = FindRange(source.module->ranges, start_pc);
-  return range->code_cache;
-}
-
-// Returns true if one block's module metadata can be materialized alognside
-// another block's module metadata. For example, if two blocks all in
-// different modules then we can't materialize them together in the same
-// instrumentation session. Similarly, if two blocks fall into different
-// address ranges of the same module, then we also can't materialize them
-// in the same session.
-bool ModuleMetaData::CanMaterializeWith(const ModuleMetaData *that) const {
-  if (source.module == that->source.module) {
-    ReadLocked locker(&(source.module->ranges_lock));
-    auto this_range = FindRange(source.module->ranges, start_pc);
-    auto that_range = FindRange(source.module->ranges, that->start_pc);
-    return this_range == that_range;
-  }
-  return false;
-}
-
 // Compare two translation meta-data objects for equality.
 bool ModuleMetaData::Equals(const ModuleMetaData *meta) const {
   return source == meta->source && start_pc == meta->start_pc;
@@ -345,9 +285,7 @@ GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
 void ModuleManager::Register(Module *module) {
   GRANARY_ASSERT(nullptr == module->context);
   GRANARY_ASSERT(!FindByName(module->name));
-  if (context) {
-    module->SetContext(context);
-  }
+  module->SetContext(context);
   WriteLocked locker(&modules_lock);
   module->next = modules;
   modules = module;

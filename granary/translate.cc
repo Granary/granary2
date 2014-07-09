@@ -28,6 +28,21 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   }
 }
 
+// Instrument, compile, and index some basic blocks.
+static CachePC Translate(ContextInterface *context, BlockMetaData *meta,
+                         InstrumentRequestKind req_kind) {
+  LocalControlFlowGraph cfg(context);
+  auto index = context->CodeCacheIndex();
+  meta = Instrument(context, &cfg, meta, req_kind);
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
+    Compile(context, &cfg);
+    IndexBlocks(index, &cfg);
+  }
+  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
+  return cache_meta->cache_pc;
+}
+
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
@@ -43,18 +58,13 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
-  LocalControlFlowGraph cfg(context);
-  auto index = context->CodeCacheIndex();
-  meta = Instrument(context, &cfg, meta);
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
-    Compile(&cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
-  GRANARY_USED(cache_meta);
-  GRANARY_USED(meta);
-  return cache_meta->cache_pc;
+  return Translate(context, meta, INSTRUMENT_DIRECT);
+}
+
+// Instrument, compile, and index some basic blocks, where the entry block
+// is targeted by an indirect control-transfer instruction.
+CachePC TranslateIndirect(ContextInterface *context, BlockMetaData *meta) {
+  return Translate(context, meta, INSTRUMENT_INDIRECT);
 }
 
 }  // namespace granary

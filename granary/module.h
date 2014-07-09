@@ -17,7 +17,6 @@ class ContextInterface;
 class Module;
 class ModuleMetaData;
 class ModuleManager;
-GRANARY_INTERNAL_DEFINITION class CodeCacheInterface;
 
 // Represents a location in a module. Note that not all segments within modules
 // are necessarily contiguous, but in most cases they are.
@@ -188,19 +187,6 @@ class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
   // Initialize this meta-data for a given module offset and program counter.
   GRANARY_INTERNAL_DEFINITION
   void Init(ModuleOffset source_, AppPC start_pc_);
-
-  // Returns the code cache allocator for this block.
-  GRANARY_INTERNAL_DEFINITION
-  CodeCacheInterface *GetCodeCache(void) const;
-
-  // Returns true if one block's module metadata can be materialized alognside
-  // another block's module metadata. For example, if two blocks all in
-  // different modules then we can't materialize them together in the same
-  // instrumentation session. Similarly, if two blocks fall into different
-  // address ranges of the same module, then we also can't materialize them
-  // in the same session.
-  GRANARY_INTERNAL_DEFINITION
-  bool CanMaterializeWith(const ModuleMetaData *that) const;
 
   // Compare two translation meta-data objects for equality.
   bool Equals(const ModuleMetaData *meta) const;

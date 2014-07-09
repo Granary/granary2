@@ -32,7 +32,7 @@ struct Client {
 // Scan the `clients` command line option and load each client.
 //
 // Defined in either `granary/user/client.cc` or `granary/kernel/client.cc`.
-void LoadClients(const char *granary_path);
+void LoadClients(const char *client_names, const char *granary_path);
 
 // Unloads all clients.
 void UnloadClients(void);

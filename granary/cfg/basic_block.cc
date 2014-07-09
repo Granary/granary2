@@ -217,10 +217,12 @@ DirectBasicBlock::~DirectBasicBlock(void) {
 
 // Initialize a future basic block.
 DirectBasicBlock::DirectBasicBlock(LocalControlFlowGraph *cfg_,
-                                   BlockMetaData *meta_)
+                                   BlockMetaData *meta_,
+                                   AppPC non_transparent_pc_)
     : InstrumentedBasicBlock(cfg_, meta_),
       materialized_block(nullptr),
-      materialize_strategy(REQUEST_LATER) {}
+      materialize_strategy(REQUEST_LATER),
+      non_transparent_pc(non_transparent_pc_) {}
 
 // Returns the starting PC of this basic block.
 AppPC IndirectBasicBlock::StartAppPC(void) const {

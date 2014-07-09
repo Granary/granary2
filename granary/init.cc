@@ -33,9 +33,13 @@ extern "C" {
 extern int granary_test_mangle(int);
 }
 
-GRANARY_DEFINE_string(tools, "",
+GRANARY_DEFINE_string(clients, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
     "For example: `--clients=print_bbs,follow_jumps`.");
+
+GRANARY_DEFINE_string(tools, "",
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--tools=print_bbs,follow_jumps`.");
 
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
@@ -69,7 +73,7 @@ extern "C" int (*fib)(int) = nullptr;
 extern "C" int fibonacci(int n) {
   if (!n) return n;
   if (1 == n) return 1;
-  return fibonacci(n - 1) + fibonacci(n - 2);
+  return fib_indirect(n - 1) + fib_indirect(n - 2);
 }
 
 }  // namespace
@@ -88,10 +92,11 @@ void Init(const char *granary_path) {
   //
   // We do this before finding and registering all built-in modules so that
   // module registration picks up on existing clients.
-  LoadClients(granary_path);
+  LoadClients(FLAG_clients, granary_path);
 
   if (!FLAG_help) {
-    context.Construct(FLAG_tools);
+    context.Construct();
+    context->InitTools(FLAG_tools);
 
     if (!FLAG_help) {
       auto start_pc = Translate(context.AddressOf(), fibonacci);
@@ -116,7 +121,6 @@ void Init(const char *granary_path) {
         }
       }
       auto inst_end = time_now();
-
 
       auto ticks_per_native = (native_end - native_start) / NUM_ITERATIONS;
       auto ticks_per_inst = (inst_end - inst_start) / NUM_ITERATIONS;

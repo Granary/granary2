@@ -7,16 +7,11 @@
 
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
-#include "granary/base/option.h"
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
 #include "granary/client.h"
 #include "granary/logging.h"
-
-GRANARY_DEFINE_string(clients, "",
-    "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--clients=print_bbs,follow_jumps`.");
 
 namespace granary {
 namespace {
@@ -49,7 +44,7 @@ static char client_path_buff[MAX_CLIENT_PATH_LEN] = {'\0'};
 }  // namespace
 
 // Scan the `clients` command line option and load each client in order.
-void LoadClients(const char *granary_path) {
+void LoadClients(const char *client_names, const char *granary_path) {
   auto len = StringLength(granary_path);
   GRANARY_ASSERT((MAX_CLIENT_PATH_LEN - 2 * internal::MAX_CLIENT_NAME_LEN) >
                  len);
@@ -62,7 +57,7 @@ void LoadClients(const char *granary_path) {
 
   // Dynamically load each client.
   ForEachCommaSeparatedString<internal::MAX_CLIENT_NAME_LEN>(
-      FLAG_clients,
+      client_names,
       [=](const char *client_name) {
         if (auto client = RegisterClient(client_name)) {
           Format(client_path_buff, MAX_CLIENT_PATH_LEN,

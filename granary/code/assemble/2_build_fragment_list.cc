@@ -12,6 +12,7 @@
 #include "granary/code/assemble/2_build_fragment_list.h"
 
 #include "granary/cache.h"
+#include "granary/context.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -77,15 +78,25 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
 }  // namespace arch
 namespace {
 
+struct FragmentListBuilder {
+  ContextInterface *context;
+  LocalControlFlowGraph *cfg;
+  FragmentList *frags;
+
+  void Append(Fragment *frag) {
+    frags->Append(frag);
+  }
+};
+
 // Make a new code fragment.
-static CodeFragment *MakeFragment(FragmentList *frags) {
+static CodeFragment *MakeFragment(FragmentListBuilder *frags) {
   auto frag = new CodeFragment;
   frags->Append(frag);
   return frag;
 }
 
 // Make a fragment for a native basic block.
-static ExitFragment *MakeNativeFragment(FragmentList *frags,
+static ExitFragment *MakeNativeFragment(FragmentListBuilder *frags,
                                         NativeBasicBlock *block) {
   auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
   frags->Append(frag);
@@ -95,7 +106,7 @@ static ExitFragment *MakeNativeFragment(FragmentList *frags,
 
 // Make a block head fragment for a cached basic block. This means importing
 // its register schedule as hard constraints.
-static ExitFragment *MakeCachedFragment(FragmentList *frags,
+static ExitFragment *MakeCachedFragment(FragmentListBuilder *frags,
                                         CachedBasicBlock *block) {
   auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
   frags->Append(frag);
@@ -105,7 +116,7 @@ static ExitFragment *MakeCachedFragment(FragmentList *frags,
 }
 
 // Create a new fragment starting at a label.
-static CodeFragment *MakeEmptyLabelFragment(FragmentList *frags,
+static CodeFragment *MakeEmptyLabelFragment(FragmentListBuilder *frags,
                                             DecodedBasicBlock *block,
                                             LabelInstruction *label) {
   auto frag = MakeFragment(frags);
@@ -147,7 +158,7 @@ static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
 // Append an instruction to a fragment. This also does minor flag usage analysis
 // of the instruction to figure out if the fragment should be treated as an
 // application fragment or an instrumentation code fragment.
-static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
+static CodeFragment *Append(FragmentListBuilder *frags, DecodedBasicBlock *block,
                             CodeFragment *frag, Instruction *instr) {
   instr->UnsafeUnlink().release();
   auto ninstr = DynamicCast<NativeInstruction *>(instr);
@@ -221,11 +232,11 @@ static CodeFragment *Append(FragmentList *frags, DecodedBasicBlock *block,
 
 // Extend a fragment with the instructions from a particular basic block.
 // This might end up generating many more fragments.
-static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
+static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
                            DecodedBasicBlock *block, Instruction *instr);
 
 // Get or make the fragment starting at a label.
-static CodeFragment *GetOrMakeLabelFragment(FragmentList *frags,
+static CodeFragment *GetOrMakeLabelFragment(FragmentListBuilder *frags,
                                             DecodedBasicBlock *block,
                                             LabelInstruction *label) {
   CodeFragment *frag = GetMetaData<CodeFragment *>(label);
@@ -242,7 +253,7 @@ static CodeFragment *GetOrMakeLabelFragment(FragmentList *frags,
 // as the fall-through of our current fragment. If new `Fragment` instance
 // is associated with the label, then create one, add the association, and
 // add the instructions following the label into the new fragment.
-static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
+static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
                                  DecodedBasicBlock *block, Instruction *instr) {
   auto label_fragment = GetMetaData<CodeFragment *>(instr);
   if (label_fragment) {  // Already processed this fragment.
@@ -278,7 +289,7 @@ static void SplitFragmentAtLabel(FragmentList *frags, CodeFragment *frag,
 // create the fragment associated with the branch target. Then create a
 // fragment for the fall-through of the branch, and include remaining
 // instructions from the block into that fragment.
-static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
+static void SplitFragmentAtBranch(FragmentListBuilder *frags, CodeFragment *frag,
                                   DecodedBasicBlock *block,
                                   BranchInstruction *branch) {
   auto label = branch->TargetInstruction();
@@ -315,19 +326,18 @@ static void SplitFragmentAtBranch(FragmentList *frags, CodeFragment *frag,
 }
 
 // Get the list of fragments associated with a basic block.
-static CodeFragment *FragmentForBlock(FragmentList *frags,
+static CodeFragment *FragmentForBlock(FragmentListBuilder *frags,
                                       DecodedBasicBlock *block);
 
 // Generates some edge code for a direct control-flow transfer between two
 // basic block.
-Fragment *MakeDirectEdgeFragment(FragmentList *frags,
+Fragment *MakeDirectEdgeFragment(FragmentListBuilder *frags,
                                  CodeFragment *pred_frag,
-                                 DirectBasicBlock *block,
                                  BlockMetaData *dest_block_meta) {
   auto edge_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
-  auto cfg = block->cfg;
   auto source_block_meta = pred_frag->attr.block_meta;
-  auto edge = cfg->AllocateDirectEdge(source_block_meta, dest_block_meta);
+  auto edge = frags->context->AllocateDirectEdge(source_block_meta,
+                                                 dest_block_meta);
   edge_frag->encoded_pc = edge->edge_code;
   edge_frag->block_meta = dest_block_meta;
   edge_frag->edge.kind = EDGE_KIND_DIRECT;
@@ -355,9 +365,8 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 }
 
 // Make an edge fragment and an exit fragment for some future block.
-static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
+static Fragment *MakeIndirectEdgeFragment(FragmentListBuilder *frags,
                                           CodeFragment *pred_frag,
-                                          InstrumentedBasicBlock *dest_block,
                                           BlockMetaData *dest_block_meta,
                                           ControlFlowInstruction *cfi) {
   auto in_edge_frag = new CodeFragment;
@@ -376,8 +385,7 @@ static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
   exit_frag->edge.kind = EDGE_KIND_INDIRECT;
   exit_frag->block_meta = dest_block_meta;
 
-  auto cfg = dest_block->cfg;
-  auto edge = cfg->AllocateIndirectEdge(pred_frag->attr.block_meta,
+  auto edge = frags->context->AllocateIndirectEdge(pred_frag->attr.block_meta,
                                         dest_block_meta);
 
   arch::GenerateIndirectEdgeCode(edge, cfi, in_edge_frag, out_edge_frag_miss,
@@ -402,7 +410,7 @@ static Fragment *MakeIndirectEdgeFragment(FragmentList *frags,
   return in_edge_frag;
 }
 
-static ExitFragment *MakeExitFragment(FragmentList *frags) {
+static ExitFragment *MakeExitFragment(FragmentListBuilder *frags) {
   auto exit_frag = new ExitFragment(FRAG_EXIT_NATIVE);
   frags->Append(exit_frag);
   return exit_frag;
@@ -410,7 +418,7 @@ static ExitFragment *MakeExitFragment(FragmentList *frags) {
 
 // Return the fragment for a block that is targeted by a control-flow
 // instruction.
-static Fragment *FragmentForTargetBlock(FragmentList *frags,
+static Fragment *FragmentForTargetBlock(FragmentListBuilder *frags,
                                         CodeFragment *pred_frag,
                                         BasicBlock *target_block,
                                         ControlFlowInstruction *cfi) {
@@ -441,8 +449,7 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
     // TODO(pag): If the number of predecessors of this block is >= 2 then it
     //            would be nice if they could share the same edge code via some
     //            intermediate fragment with the patchable jump.
-    return MakeDirectEdgeFragment(frags, pred_frag, direct_block,
-                                  direct_block->MetaData());
+    return MakeDirectEdgeFragment(frags, pred_frag, direct_block->MetaData());
   }
 
   // Indirect call/jump, or direct call/jump/conditional jump
@@ -451,8 +458,7 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
       IsA<IndirectBasicBlock *>(target_block)) {
     auto inst_block = DynamicCast<InstrumentedBasicBlock *>(target_block);
     if (auto block_meta = inst_block->UnsafeMetaData()) {
-      return MakeIndirectEdgeFragment(frags, pred_frag, inst_block,
-                                      block_meta, cfi);
+      return MakeIndirectEdgeFragment(frags, pred_frag, block_meta, cfi);
     } else {
       return MakeExitFragment(frags);
     }
@@ -463,7 +469,7 @@ static Fragment *FragmentForTargetBlock(FragmentList *frags,
 }
 
 // Append a CFI to a fragment, and potentially make a new fragment for the CFI.
-static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
+static CodeFragment *AppendCFI(FragmentListBuilder *frags, CodeFragment *frag,
                                DecodedBasicBlock *block,
                                Fragment *target_frag,
                                ControlFlowInstruction *cfi) {
@@ -514,7 +520,7 @@ static CodeFragment *AppendCFI(FragmentList *frags, CodeFragment *frag,
 }
 
 // Split a fragment at a non-local control-flow instruction.
-static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
+static void SplitFragmentAtCFI(FragmentListBuilder *frags, CodeFragment *frag,
                                DecodedBasicBlock *block,
                                ControlFlowInstruction *cfi) {
   auto next = cfi->Next();
@@ -552,7 +558,7 @@ static void SplitFragmentAtCFI(FragmentList *frags, CodeFragment *frag,
 
 // Split a fragment at a place where the validness of the stack pointer changes
 // from defined to undefined, or undefined to defined.
-static void SplitFragmentAtStackChange(FragmentList *frags, CodeFragment *frag,
+static void SplitFragmentAtStackChange(FragmentListBuilder *frags, CodeFragment *frag,
                                        DecodedBasicBlock *block,
                                        Instruction *instr,
                                        bool stack_is_valid) {
@@ -566,7 +572,7 @@ static void SplitFragmentAtStackChange(FragmentList *frags, CodeFragment *frag,
 
 // Split a fragment at a point where the instructions in the block change
 // from instrumentation-added -> app, or app -> instrumentation added.
-static void SplitFragment(FragmentList *frags, CodeFragment *frag,
+static void SplitFragment(FragmentListBuilder *frags, CodeFragment *frag,
                           DecodedBasicBlock *block, Instruction *next) {
   auto label = new LabelInstruction;
   auto succ = MakeEmptyLabelFragment(frags, block, label);
@@ -575,7 +581,7 @@ static void SplitFragment(FragmentList *frags, CodeFragment *frag,
 }
 
 // Split a fragment at an instruction that changes the interrupt state.
-static void SplitFragmentAtInterruptChange(FragmentList *frags,
+static void SplitFragmentAtInterruptChange(FragmentListBuilder *frags,
                                            CodeFragment *frag,
                                            DecodedBasicBlock *block,
                                            Instruction *instr) {
@@ -593,7 +599,7 @@ static void SplitFragmentAtInterruptChange(FragmentList *frags,
 
 // Extend a fragment with the instructions from a particular basic block.
 // This might end up generating many more fragments.
-static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
+static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
                            DecodedBasicBlock *block, Instruction *instr) {
 
   const auto last_instr = block->LastInstruction();
@@ -697,7 +703,7 @@ static void ExtendFragment(FragmentList *frags, CodeFragment *frag,
 }
 
 // Get the list of fragments associated with a basic block.
-static CodeFragment *FragmentForBlock(FragmentList *frags,
+static CodeFragment *FragmentForBlock(FragmentListBuilder *frags,
                                       DecodedBasicBlock *block) {
   auto first_instr = block->FirstInstruction();
   CodeFragment *frag = GetMetaData<CodeFragment *>(first_instr);
@@ -721,7 +727,8 @@ static CodeFragment *FragmentForBlock(FragmentList *frags,
 }  // namespace
 
 // Build a fragment list out of a set of basic blocks.
-void BuildFragmentList(LocalControlFlowGraph *cfg, FragmentList *frags) {
+void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
+                       FragmentList *frags) {
   for (auto block : cfg->Blocks()) {
     auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
     if (decoded_block) {
@@ -730,7 +737,8 @@ void BuildFragmentList(LocalControlFlowGraph *cfg, FragmentList *frags) {
       }
     }
   }
-  FragmentForBlock(frags, cfg->EntryBlock());
+  FragmentListBuilder builder{context, cfg, frags};
+  FragmentForBlock(&builder, cfg->EntryBlock());
 }
 
 }  // namespace granary

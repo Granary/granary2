@@ -11,8 +11,10 @@
 #include "granary/code/assemble.h"
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
+#include "granary/code/fragment.h"
 
 #include "granary/cache.h"
+#include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"
 
@@ -215,12 +217,10 @@ static void Encode(FragmentList *frags, CodeCacheInterface *block_cache) {
 }  // namespace
 
 // Compile some instrumented code.
-void Compile(LocalControlFlowGraph *cfg) {
-  auto meta = cfg->EntryBlock()->MetaData();
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto block_code_cache = module_meta->GetCodeCache();
-  auto frags = Assemble(block_code_cache, cfg);
-  Encode(&frags, block_code_cache);
+void Compile(ContextInterface *context, LocalControlFlowGraph *cfg) {
+  auto block_cache = context->BlockCodeCache();
+  auto frags = Assemble(context, block_cache, cfg);
+  Encode(&frags, block_cache);
   FreeFragments(&frags);
 }
 

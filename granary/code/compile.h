@@ -7,15 +7,14 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/code/fragment.h"
-
 namespace granary {
 
 // Forward declaration.
-class CodeCacheInterface;
+class ContextInterface;
+class LocalControlFlowGraph;
 
 // Compile some instrumented code.
-void Compile(LocalControlFlowGraph *cfg);
+void Compile(ContextInterface *context, LocalControlFlowGraph *cfg);
 
 }  // namespace granary
 

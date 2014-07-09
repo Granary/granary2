@@ -60,19 +60,6 @@ class ContextInterface {
   // Free the allocated tools.
   virtual void FreeTools(Tool *tools) = 0;
 
-  // Allocate a new code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held.
-  virtual CodeCacheInterface *AllocateCodeCache(void) = 0;
-
-  // Flush an entire code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held (e.g. schedule for the allocator
-  //       to be freed).
-  virtual void FlushCodeCache(CodeCacheInterface *cache) = 0;
-
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
   virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block_meta,
@@ -90,6 +77,10 @@ class ContextInterface {
                                        AppPC app_pc,
                                        CachePC cache_pc) = 0;
 
+  // Returns a pointer to the code cache that is used for allocating code for
+  // basic blocks.
+  virtual CodeCacheInterface *BlockCodeCache(void) = 0;
+
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
 };
@@ -100,9 +91,11 @@ class ContextInterface {
 // instructions as potentially faulting.
 class Context : public ContextInterface {
  public:
-  // Initialize the this instrumentation contexts with a comma-separated list
-  // of tools that should be used during instrumentation.
-  explicit Context(const char *tool_names);
+  // Initialize the this instrumentation.
+  Context(void);
+
+  // Initialize all tools from a comma-separated list of tools.
+  void InitTools(const char *tool_names);
 
   virtual ~Context(void);
 
@@ -126,19 +119,6 @@ class Context : public ContextInterface {
   // Free the allocated tools.
   virtual void FreeTools(Tool *tools) override;
 
-  // Allocate a new code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held.
-  virtual CodeCacheInterface *AllocateCodeCache(void) override;
-
-  // Flush an entire code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held (e.g. schedule for the allocator
-  //       to be freed).
-  virtual void FlushCodeCache(CodeCacheInterface *cache) override;
-
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
   virtual DirectEdge *AllocateDirectEdge(
@@ -157,12 +137,14 @@ class Context : public ContextInterface {
                                        AppPC app_pc,
                                        CachePC cache_pc) override;
 
+  // Returns a pointer to the code cache that is used for allocating code for
+  // basic blocks.
+  virtual CodeCacheInterface *BlockCodeCache(void) override;
+
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;
 
  private:
-  Context(void) = delete;
-
   // Manages all modules allocated/understood by this environment.
   ModuleManager module_manager;
 
@@ -173,8 +155,12 @@ class Context : public ContextInterface {
   // environment.
   ToolManager tool_manager;
 
-  // Manages all edge code allocated/understood by this environment. Code cache
-  // code is managed on a per-module address range basis.
+  // Manages all basic block code allocated/understood by this environment.
+  Module *block_code_cache_mod;
+  CodeCache block_code_cache;
+
+  // Manages all edge code allocated/understood by this environment.
+  Module *edge_code_cache_mod;
   CodeCache edge_code_cache;
 
   // Pointer to the code that performs the flag saving and stack switching for

@@ -88,16 +88,21 @@ static void InstrumentBlock(Tool *tools, LocalControlFlowGraph *cfg) {
 //       meta-data hereafter.
 BlockMetaData *Instrument(ContextInterface *context,
                           LocalControlFlowGraph *cfg,
-                          BlockMetaData *meta) {
+                          BlockMetaData *meta,
+                          InstrumentRequestKind kind) {
   BlockFactory factory(context, cfg);
+  InstrumentedBasicBlock *entry_block(nullptr);
 
-  // Try to find the block in the code cache, otherwise manually decode it.
-  auto entry_block = factory.RequestIndexedBlock(&meta);
-  if (!entry_block) {
-    factory.MaterializeInitialBlock(meta);
-    entry_block = cfg->EntryBlock();
+  if (INSTRUMENT_DIRECT == kind) {
+    entry_block = factory.RequestIndexedBlock(&meta);
+    if (!entry_block) {  // Couldn't find or adapt to a existing block.
+      factory.MaterializeInitialBlock(meta);
+      entry_block = cfg->EntryBlock();
+    } else {
+      meta = entry_block->UnsafeMetaData();
+    }
   } else {
-    meta = entry_block->UnsafeMetaData();
+    entry_block = factory.MaterializeInitialIndirectBlock(meta);
   }
 
   // If we have a decoded block, then instrument it.

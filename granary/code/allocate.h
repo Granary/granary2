@@ -15,10 +15,14 @@
 #include "granary/base/lock.h"
 
 namespace granary {
+
+class Module;
+
 namespace internal {
 class CodeSlab {
  public:
-  CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_);
+  CodeSlab(Module *code_module, int num_pages, int num_bytes, int offset_,
+           CodeSlab *next_);
 
   CachePC begin;
   CodeSlab *next;
@@ -46,13 +50,13 @@ class CodeAllocator {
   ~CodeAllocator(void);
 
   // Allocates some executable code of size `size` with alignment `alignment`.
-  CachePC Allocate(int alignment, int size);
+  CachePC Allocate(Module *module, int alignment, int size);
 
  private:
   CodeAllocator(void) = delete;
 
   // Allocate a new slab of memory for executable code.
-  void AllocateSlab(void);
+  void AllocateSlab(Module *module);
 
   // Number of pages per allocated slab.
   const int num_pages;

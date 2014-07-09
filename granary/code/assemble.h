@@ -17,7 +17,8 @@ class ContextInterface;
 class LocalControlFlowGraph;
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(CodeCacheInterface *code_cache,
+FragmentList Assemble(ContextInterface *context,
+                      CodeCacheInterface *code_cache,
                       LocalControlFlowGraph *cfg);
 }  // namespace granary
 

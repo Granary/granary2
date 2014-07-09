@@ -5,13 +5,16 @@
 #include "granary/arch/base.h"
 #include "granary/base/string.h"
 #include "granary/code/allocate.h"
+
 #include "granary/memory.h"
+#include "granary/module.h"
 
 namespace granary {
 namespace internal {
 
 // Initialize the metadata about a generic code slab.
-CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
+CodeSlab::CodeSlab(Module *module, int num_pages, int num_bytes,
+                   int offset_, CodeSlab *next_)
     : begin(nullptr),
       next(next_),
       offset(ATOMIC_VAR_INIT(offset_)) {
@@ -21,6 +24,17 @@ CodeSlab::CodeSlab(int num_pages, int num_bytes, int offset_, CodeSlab *next_)
     memset(begin, arch::EXEC_MEMORY_POISON_BYTE,
            static_cast<unsigned long>(num_bytes));
     VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
+
+    // Add the slab to the module that is meant to represent all code allocated
+    // by this allocator.
+    if (GRANARY_LIKELY(nullptr != module)) {
+      auto begin_addr = reinterpret_cast<uintptr_t>(begin);
+      auto end_addr = begin_addr +
+                      static_cast<uintptr_t>(num_pages * arch::PAGE_SIZE_BYTES);
+      module->AddRange(
+          begin_addr, end_addr, begin_addr,
+          MODULE_READABLE | MODULE_WRITABLE | MODULE_EXECUTABLE);
+    }
   }
 }
 
@@ -30,7 +44,8 @@ namespace {
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
 // A "dummy" slab that is at the end of the slab list.
 GRANARY_EARLY_GLOBAL
-static CodeSlab kSlabSentinel(0, 0, std::numeric_limits<int>::max(), nullptr);
+static CodeSlab kSlabSentinel(nullptr, 0, 0, std::numeric_limits<int>::max(),
+                              nullptr);
 #pragma clang diagnostic pop
 }  // namespace
 }  // namespace internal
@@ -52,7 +67,7 @@ CodeAllocator::~CodeAllocator(void) {
 }
 
 // Allocates some executable code of size `size` with alignment `alignment`.
-CachePC CodeAllocator::Allocate(int alignment, int size) {
+CachePC CodeAllocator::Allocate(Module *module, int alignment, int size) {
   int old_offset(0);
   int new_offset(0);
   CachePC addr(nullptr);
@@ -60,7 +75,7 @@ CachePC CodeAllocator::Allocate(int alignment, int size) {
     auto curr_slab = slab.load(std::memory_order_acquire);
     old_offset = curr_slab->offset.load(std::memory_order_acquire);
     if (GRANARY_UNLIKELY(old_offset >= num_bytes)) {
-      AllocateSlab();
+      AllocateSlab(module);
     } else {
       auto aligned_offset = GRANARY_ALIGN_TO(old_offset, alignment);
       new_offset = aligned_offset + size;
@@ -76,7 +91,7 @@ CachePC CodeAllocator::Allocate(int alignment, int size) {
 }
 
 // Allocate a new slab of memory for executable code.
-void CodeAllocator::AllocateSlab(void) {
+void CodeAllocator::AllocateSlab(Module *module) {
   FineGrainedLocked locker(&slab_lock);
   auto curr_slab = slab.load(std::memory_order_acquire);
   if (curr_slab->offset.load(std::memory_order_acquire) < num_bytes) {
@@ -84,7 +99,8 @@ void CodeAllocator::AllocateSlab(void) {
     // acquired the lock, but a big enough slab has already been allocated.
     return;
   }
-  slab.store(new internal::CodeSlab(num_pages, num_bytes, 0, curr_slab));
+  slab.store(new internal::CodeSlab(module, num_pages, num_bytes,
+                                    0, curr_slab));
 }
 
 }  // namespace granary

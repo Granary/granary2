@@ -17,9 +17,14 @@
 #include "granary/context.h"
 #include "granary/index.h"
 
+GRANARY_DEFINE_positive_int(block_cache_slab_size, 64,
+    "The number of pages allocated at once to store basic block code. Each "
+    "context maintains its own block code allocator. The default value is "
+    "64 pages per slab.");
+
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 16,
     "The number of pages allocated at once to store edge code. Each "
-    "environment maintains its own edge code allocator. The default value is "
+    "context maintains its own edge code allocator. The default value is "
     "16 pages per slab.");
 
 namespace granary {
@@ -95,29 +100,23 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<IndexMetaData>();
 }
 
-// Tell Granary about all loaded tools.
-static void InitTools(ToolManager *tool_manager, const char *tool_names) {
-  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
-      tool_names,
-      [=] (const char *tool_name) {
-        tool_manager->Register(tool_name);
-      });
-
-  // Do a dummy allocation and free of all tools. Tools register meta-data
-  // through their constructors and so this will get all tool+option-specific
-  // meta-data registered.
-  tool_manager->FreeTools(tool_manager->AllocateTools());
+// Create a module for a Granary code cache.
+static Module *MakeCodeCacheMod(const char *name) {
+  return new Module(ModuleKind::GRANARY_CODE_CACHE, name);
 }
 
 }  // namespace
 
 ContextInterface::~ContextInterface(void) {}
 
-Context::Context(const char *tool_names)
+Context::Context(void)
     : module_manager(this),
       metadata_manager(),
       tool_manager(this),
-      edge_code_cache(FLAG_edge_cache_slab_size),
+      block_code_cache_mod(MakeCodeCacheMod("[block cache]")),
+      block_code_cache(block_code_cache_mod, FLAG_block_cache_slab_size),
+      edge_code_cache_mod(MakeCodeCacheMod("[edge cache]")),
+      edge_code_cache(edge_code_cache_mod, FLAG_edge_cache_slab_size),
       direct_edge_entry_code(CreateDirectEntryCode(this, &edge_code_cache)),
       indirect_edge_entry_code(CreateIndirectEntryCode(this, &edge_code_cache)),
       edge_list_lock(),
@@ -130,8 +129,22 @@ Context::Context(const char *tool_names)
 
   // Tell this environment about all loaded modules.
   module_manager.RegisterAllBuiltIn();
+  module_manager.Register(block_code_cache_mod);
+  module_manager.Register(edge_code_cache_mod);
+}
 
-  InitTools(&tool_manager, tool_names);
+// Initialize all tools from a comma-separated list of tools.
+void Context::InitTools(const char *tool_names) {
+  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+      tool_names,
+      [&] (const char *tool_name) {
+        tool_manager.Register(tool_name);
+      });
+
+  // Do a dummy allocation and free of all tools. Tools register meta-data
+  // through their constructors and so this will get all tool+option-specific
+  // meta-data registered.
+  tool_manager.FreeTools(tool_manager.AllocateTools());
 }
 
 namespace {
@@ -146,6 +159,7 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
+// Initialize the a block's module-specific meta-data.
 static void InitModuleMeta(ModuleManager *module_manager, BlockMetaData *meta,
                            AppPC start_pc) {
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
@@ -199,26 +213,6 @@ void Context::FreeTools(Tool *tools) {
   tool_manager.FreeTools(tools);
 }
 
-// Allocate a new code cache.
-//
-// Note: This should be a lightweight operation as it is usually invoked
-//       whilst fine-grained locks are held.
-CodeCacheInterface *Context::AllocateCodeCache(void) {
-  return new CodeCache();
-}
-
-// Flush an entire code cache.
-//
-// Note: This should be a lightweight operation as it is usually invoked
-//       whilst fine-grained locks are held (e.g. schedule for the allocator
-//       to be freed).
-void Context::FlushCodeCache(CodeCacheInterface *cache) {
-  // TODO(pag): Implement me!
-  delete cache;  // TODO(pag): This isn't actually right!!!
-  GRANARY_UNUSED(cache);
-}
-
-
 // Allocates a direct edge data structure, as well as the code needed to
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
@@ -269,6 +263,12 @@ void Context::InstantiateIndirectEdge(IndirectEdge *edge, AppPC app_pc,
   CodeCacheTransaction transaction(&edge_code_cache,
                                    edge_pc, edge_pc + alloc_amount);
   arch::InstantiateIndirectEdge(edge, edge_pc, app_pc, cache_pc);
+}
+
+// Returns a pointer to the code cache that is used for allocating code for
+// basic blocks.
+CodeCacheInterface *Context::BlockCodeCache(void) {
+  return &block_code_cache;
 }
 
 // Get a pointer to this context's code cache index.

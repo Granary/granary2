@@ -22,6 +22,7 @@ namespace granary {
 
 // Forward declaration.
 class CodeCacheTransaction;
+class Module;
 
 // Interface for code caches.
 class CodeCacheInterface {
@@ -77,7 +78,7 @@ class CodeCacheTransaction {
 // Implementation of Granary's code caches.
 class CodeCache : public CodeCacheInterface {
  public:
-  explicit CodeCache(int slab_size=0);
+  CodeCache(Module *module_, int slab_size);
   virtual ~CodeCache(void) = default;
 
   // Allocate a block of code from this code cache.
@@ -105,6 +106,10 @@ class CodeCache : public CodeCacheInterface {
 
   // Allocator used to allocate blocks from this code cache.
   CodeAllocator allocator;
+
+  // Module that represents the slabs of the allocator as ranges of mapped
+  // executable memory.
+  Module * const module;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
 };

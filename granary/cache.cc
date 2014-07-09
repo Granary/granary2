@@ -9,18 +9,14 @@
 #include "granary/cache.h"
 #include "granary/memory.h"
 
-GRANARY_DEFINE_positive_int(code_cache_slab_size, 16,
-    "The number of pages allocated at once to store cache code. Each "
-    "module maintains its own cache code allocator. The default value is "
-    "16 pages per slab.");
-
 namespace granary {
 
 CodeCacheInterface::~CodeCacheInterface(void) {}
 
-CodeCache::CodeCache(int slab_size)
+CodeCache::CodeCache(Module *module_, int slab_size)
     : lock(),
-      allocator(0 >= slab_size ? FLAG_code_cache_slab_size : slab_size) {}
+      allocator(slab_size),
+      module(module_) {}
 
 // Allocate a block of code from this code cache.
 CachePC CodeCache::AllocateBlock(int size) {
@@ -30,9 +26,9 @@ CachePC CodeCache::AllocateBlock(int size) {
     // the relativization step of instruction encoding, which needs to ensure
     // that PC-relative references in application code to application data
     // continue to work.
-    return allocator.Allocate(1, 0);
+    return allocator.Allocate(module, 1, 0);
   } else {
-    return allocator.Allocate(arch::CODE_ALIGN_BYTES, size);
+    return allocator.Allocate(module, arch::CODE_ALIGN_BYTES, size);
   }
 }
 

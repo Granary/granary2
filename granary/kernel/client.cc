@@ -3,10 +3,10 @@
 namespace granary {
 
 // Scan the `clients` command line option and load each client in order.
-void LoadClients(const char *) {}
+void LoadClients(const char *, const char *) {}
 
 // Unloads a specific client.
-void UnloadClient(void *handle) {}
+void UnloadClient(void *) {}
 
 }  // namespace granary
 

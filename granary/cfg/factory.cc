@@ -51,7 +51,7 @@ namespace {
 
 // Create an intermediate basic block that adapts one version of a block to
 // another version.
-static InstrumentedBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
+static CompensationBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
                                             BlockMetaData *meta,
                                             BasicBlock *existing_block) {
   auto adapt_block = new CompensationBasicBlock(cfg, meta);
@@ -234,6 +234,11 @@ InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
     if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
       continue;
     }
+    if (auto comp_block = DynamicCast<CompensationBasicBlock *>(block)) {
+      // This block is the compensation block created when we try to translate
+      // the target block of an indirect jump.
+      if (!comp_block->is_comparable) continue;
+    }
     auto block_meta = inst_block->meta;
     if (!block_meta || !exclude_meta->Equals(block_meta)) {
       continue;  // Indexable meta-data doesn't match.
@@ -257,26 +262,15 @@ InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
   return nullptr;
 }
 
-// Returns true if we can try to materialize this block. If it looks like
-// there's a pending request then we double check that the module of the
-// requested block matches the module of the LCFG's first block. If they don't
-// match then we permanently deny materialization within this session. The
-// reason for this is that we want all code cache allocations to be specific
-// to an individual module.
+// Returns true if we can try to materialize this block. Requires that the
+// block has not already been materialized.
 bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
   if (block->materialized_block ||
       REQUEST_LATER == block->materialize_strategy ||
       REQUEST_DENIED == block->materialize_strategy) {
     return false;
-  } else {
-    auto first_meta = GetMetaData<ModuleMetaData>(cfg->entry_block);
-    if (!first_meta->CanMaterializeWith(GetMetaData<ModuleMetaData>(block))) {
-      block->materialize_strategy = REQUEST_DENIED;
-      return false;  // Modules of requested and first blocks don't match.
-    } else {
-      return true;
-    }
   }
+  return true;
 }
 
 // Request a block from the code cache index. If an existing block can be
@@ -304,6 +298,35 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
   }
 }
 
+// Request a block that is the target of an indirect control-flow instruction.
+// To provide maximum flexibility (e.g. allow selective going native of
+// targets), we generate a dummy compensation fragment that jumps to a direct
+// basic block with a default non-`REQUEST_LATER` materialization strategy.
+InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
+    BlockMetaData *meta) {
+  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
+  auto non_transparent_pc = module_meta->start_pc;
+  auto module = module_meta->source.module;
+  BlockMetaData *dest_meta(nullptr);
+
+  if (ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
+    GRANARY_ASSERT(false);  // TODO(pag): Look it up in a return address table.
+  } else {
+    dest_meta = context->AllocateBlockMetaData(module_meta->start_pc);
+  }
+  auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);
+
+  // Default to having a materialization strategy, and make it so that no one
+  // can materialize against this block.
+  direct_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
+  auto adapt_block = AdaptToBlock(cfg, meta, direct_block);
+  adapt_block->is_comparable = false;
+
+  cfg->AddBlock(adapt_block);
+
+  return adapt_block;
+}
+
 // Materialize a basic block if there is a pending request.
 bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   if (!CanMaterializeBlock(block)) return false;
@@ -328,7 +351,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       break;
     }
     case REQUEST_NATIVE: {
-      auto native_block = new NativeBasicBlock(block->StartAppPC());
+      auto dest_pc = block->non_transparent_pc;
+      if (GRANARY_LIKELY(!dest_pc)) dest_pc = block->StartAppPC();
+      auto native_block = new NativeBasicBlock(dest_pc);
       delete block->meta;
       block->materialized_block = native_block;
       block->meta = nullptr;  // No longer needed.

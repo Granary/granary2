@@ -30,7 +30,7 @@ GRANARY_DEFINE_bool(debug_log_fragments, false,
 namespace granary {
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(CodeCacheInterface *code_cache,
+FragmentList Assemble(ContextInterface *context, CodeCacheInterface *code_cache,
                       LocalControlFlowGraph *cfg) {
 
   // Compile all inline assembly instructions by parsing the inline assembly
@@ -50,7 +50,7 @@ FragmentList Assemble(CodeCacheInterface *code_cache,
   // can contain internal control-flow. This makes further analysis more
   // complicated, so to simplify things we re-split up the blocks into fragments
   // that represent the "true" basic blocks.
-  BuildFragmentList(cfg, &frags);
+  BuildFragmentList(context, cfg, &frags);
 
   // Try to figure out the stack frame size on entry to / exit from every
   // fragment.

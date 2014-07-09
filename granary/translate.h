@@ -28,6 +28,10 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta);
 
+// Instrument, compile, and index some basic blocks, where the entry block
+// is targeted by an indirect control-transfer instruction.
+CachePC TranslateIndirect(ContextInterface *context, BlockMetaData *meta);
+
 // Instrument, compile, and index some basic blocks.
 template <typename R, typename... Args>
 static inline CachePC Translate(ContextInterface *context,

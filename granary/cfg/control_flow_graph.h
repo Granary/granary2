@@ -69,17 +69,6 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION
   VirtualRegister AllocateVirtualRegister(int num_bytes);
 
-  // Allocate a direct edge structure. This uses this LCFG's context to
-  // allocate the direct edge and it's associated code.
-  GRANARY_INTERNAL_DEFINITION
-  DirectEdge *AllocateDirectEdge(const BlockMetaData *source_meta,
-                                 BlockMetaData *dest_meta);
-
-  // Allocates an indirect edge data structure.
-  GRANARY_INTERNAL_DEFINITION
-  IndirectEdge *AllocateIndirectEdge(const BlockMetaData *source_block_meta,
-                                     const BlockMetaData *dest_block_meta);
-
  private:
   friend class BlockFactory;  // For `first_new_block`.
 

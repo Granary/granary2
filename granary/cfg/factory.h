@@ -92,6 +92,13 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock *RequestIndexedBlock(BlockMetaData **meta_ptr);
 
+  // Request a block that is the target of an indirect control-flow instruction.
+  // To provide maximum flexibility (e.g. allow selective going native of
+  // targets), we generate a dummy compensation fragment that jumps to a direct
+  // basic block with a default non-`REQUEST_LATER` materialization strategy.
+  GRANARY_INTERNAL_DEFINITION
+  InstrumentedBasicBlock *MaterializeInitialIndirectBlock(BlockMetaData *meta);
+
   // Satisfy all materialization requests.
   GRANARY_INTERNAL_DEFINITION void MaterializeRequestedBlocks(void);
 
