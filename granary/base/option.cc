@@ -181,14 +181,50 @@ void InitOptions(int argc, const char **argv) {
   ProcessPendingOptions();
 }
 
+namespace {
+enum {
+  LINE_LENGTH = 80,
+  TAB_LENGTH = 8,
+  BUFFER_MAX_LENGTH = LINE_LENGTH - TAB_LENGTH
+};
+
+// Perform line buffering of the document string.
+static const char *BufferDocString(char *buff, const char *docstring) {
+  auto last_stop = buff;
+  auto docstring_last_stop = docstring;
+  auto docstring_stop = docstring + BUFFER_MAX_LENGTH;
+  for (; docstring < docstring_stop && *docstring; ) {
+    if (' ' == *docstring) {
+      last_stop = buff;
+      docstring_last_stop = docstring + 1;
+    }
+    *buff++ = *docstring++;
+  }
+  if (docstring < docstring_stop && !*docstring) {
+    *buff = '\0';
+    return docstring;
+  } else {
+    *last_stop = '\0';
+    return docstring_last_stop;
+  }
+}
+
+}  // namespace
+
 // Works for --help option: print out each options along with their document.
 void PrintAllOptions(void) {
   Log(LogOutput, "Usage for user space: granary.out clients-and-tools-and"
       "-args\n\n");
 
+  char line_buff[LINE_LENGTH];
   for (auto option : OptionIterator(OPTIONS)) {
-    Log(LogOutput, "--\033[1m%s\033[m\n\t%s\n", option->name,
-        option->docstring);
+    Log(LogOutput, "--\033[1m%s\033[m", option->name);
+    auto docstring = option->docstring;
+    do {
+      docstring = BufferDocString(line_buff, docstring);
+      Log(LogOutput, "\n\t%s", line_buff);
+    } while (*docstring);
+    Log(LogOutput, "\n");
   }
 }
 
