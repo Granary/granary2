@@ -110,6 +110,10 @@ static int find_symbols(void *data, const char *name,
                         struct module *mod, unsigned long addr) {
   if (THIS_MODULE == mod) {
 
+    // TODO(pag): Already removed _GLOBAL__I_ from things like DEFINE_OPTION
+    //            GRANARY_INIT. Find a *real* way for getting these names, e.g.
+    //            by parsing the ELF file.
+
     // If we find a constructor for some global Granary data, then invoke it.
     // This is pretty ugly. A minor hack is used to handle command-line
     // options, which is to add `_GLOBAL__I_` into the constructor name of those

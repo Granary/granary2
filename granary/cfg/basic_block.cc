@@ -108,7 +108,7 @@ AppPC InstrumentedBasicBlock::StartAppPC(void) const {
 // Returns the starting PC of this basic block in the code cache.
 CachePC InstrumentedBasicBlock::StartCachePC(void) const {
   const auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  return cache_meta->cache_pc;
+  return cache_meta->start_pc;
 }
 
 DecodedBasicBlock::~DecodedBasicBlock(void) {

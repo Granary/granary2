@@ -76,6 +76,9 @@ class MockContext : public granary::ContextInterface {
   // Get a pointer to this context's code cache index.
   MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());
 
+  // Get a pointer to this context's shadow code cache index.
+  MOCK_METHOD0(ShadowCodeCacheIndex, granary::LockedIndex *());
+
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);
 };

@@ -148,8 +148,8 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // Jump to the resolved PC, independent of profiling. As mentioned above,
   // if two or more threads are racing to translate a block, then the behavior
   // we'll observe is that one of them will "win" and the others will jump
-  // back into the edge code because `meta->cache_pc` is initialized above
-  // to point to into the edge code.
+  // back into the edge code because `edge->exit_target` is initialized
+  // above to point to into the edge code.
   ENC(JMP_MEMv(&ni, &(edge->exit_target)));
 
   // Make it so that the CPU doesn't prefetch after the `JMP`. It's typical for

@@ -102,6 +102,20 @@ UnificationStatus BlockMetaData::CanUnifyWith(
   return can_unify;
 }
 
+// Combine this meta-data with some other meta-data.
+void BlockMetaData::JoinWith(const BlockMetaData *that) {
+  auto this_ptr = reinterpret_cast<uintptr_t>(this);
+  auto that_ptr = reinterpret_cast<uintptr_t>(that);
+  for (auto desc : manager->descriptions) {
+    if (desc) {
+      auto offset = manager->offsets[desc->id];
+      auto this_meta = reinterpret_cast<void *>(this_ptr + offset);
+      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+      desc->join(this_meta, that_meta);
+    }
+  }
+}
+
 // Dynamically free meta-data.
 void BlockMetaData::operator delete(void *address) {
   auto self = reinterpret_cast<BlockMetaData *>(address);

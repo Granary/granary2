@@ -12,7 +12,7 @@ void Init(const char *granary_path);
 
 #define GRANARY_INIT(...) \
   __attribute__((used, constructor(998))) \
-  static void GRANARY_CAT(Init_GLOBAL__I_, GRANARY_UNIQUE_SYMBOL)(void) { \
+  static void GRANARY_CAT(Init_, GRANARY_UNIQUE_SYMBOL)(void) { \
     GRANARY_USING_NAMESPACE granary; \
     __VA_ARGS__ \
   } \

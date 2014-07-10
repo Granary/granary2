@@ -33,10 +33,9 @@ class ToolMetaData {
 
   // Join some meta-data associated with an existing basic block (`existing`)
   // with the meta-data template associated with some indirect basic block
-  // (`indirect`). The default behavior here to to inherit all information from
+  // (`this`). The default behavior here to to inherit all information from
   // the existing block's meta-data.
-  void Join(const T *existing, const T *indirect) {
-    GRANARY_UNUSED(indirect);
+  void Join(const T *existing) {
     CopyConstruct<T>(this, existing);
   }
 };
@@ -145,6 +144,7 @@ class MetaDataDescription {
   void (* const destroy)(void *);
   bool (* const compare_equals)(const void *, const void *);
   UnificationStatus (* const can_unify)(const void *, const void *);
+  void (* const join)(void *, const void *);
 
   template <typename T>
   static constexpr MetaDataDescription *Get(void) {
@@ -186,6 +186,13 @@ bool CompareEquals(const void *a, const void *b) {
   return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
 }
 
+// Join / combine two an existing meta-data `b` into a requested meta-data
+// template `a`.
+template <typename T>
+void Join(void *a, const void *b) {
+  return reinterpret_cast<T *>(a)->Join(reinterpret_cast<const T *>(b));
+}
+
 // Compare some meta-data for equality.
 template <typename T>
 UnificationStatus CanUnify(const void *a, const void *b) {
@@ -204,7 +211,8 @@ MetaDataDescription MetaDataDescriptor<T, true, false, false>::kDescription = {
     &(CopyConstruct<T>),
     &(Destruct<T>),
     &(detail::CompareEquals<T>),
-    nullptr
+    nullptr,
+    &(detail::Join<T>)
 };
 
 // Mutable.
@@ -217,7 +225,8 @@ MetaDataDescription MetaDataDescriptor<T, false, true, false>::kDescription = {
     &(CopyConstruct<T>),
     &(Destruct<T>),
     nullptr,
-    nullptr
+    nullptr,
+    &(detail::Join<T>)
 };
 
 // Unifyable.
@@ -230,7 +239,8 @@ MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
     &(CopyConstruct<T>),
     &(Destruct<T>),
     nullptr,
-    &(detail::CanUnify<T>)
+    &(detail::CanUnify<T>),
+    &(detail::Join<T>)
 };
 
 // Meta-data about a basic block.
@@ -257,6 +267,10 @@ class BlockMetaData {
   // Check to see if this meta-data can unify with some other generic meta-data.
   GRANARY_INTERNAL_DEFINITION
   UnificationStatus CanUnifyWith(const BlockMetaData *meta) const;
+
+  // Combine this meta-data with some other meta-data.
+  GRANARY_INTERNAL_DEFINITION
+  void JoinWith(const BlockMetaData *meta);
 
   // Cast some generic meta-data into some specific meta-data.
   void *Cast(MetaDataDescription *desc);

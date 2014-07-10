@@ -14,9 +14,7 @@
 
 #include "granary/code/allocate.h"
 
-#ifdef GRANARY_INTERNAL
-# include "metadata.h"
-#endif
+#include "metadata.h"
 
 namespace granary {
 
@@ -131,10 +129,14 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
 
   // Don't copy anything over.
   CacheMetaData(const CacheMetaData &)
-      : cache_pc(nullptr),
+      : start_pc(nullptr),
         native_addresses(nullptr) {}
 
   ~CacheMetaData(void);
+
+  // When an indirect CFI targets a translated block, don't copy over its
+  // `start_pc` or `native_addresses`.
+  void Join(const CacheMetaData *) {}
 
   // Where this block is located in the code cache.
   //
@@ -142,11 +144,10 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
   // instruction of the block in the code cache. If the value is null, then
   // either this block has not been encoded, or it represents the meta-data
   // of the target of an indirect control-flow instruction.
-  CachePC cache_pc;
+  CachePC start_pc;
 
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;
-
 };
 #endif  // GRANARY_INTERNAL
 

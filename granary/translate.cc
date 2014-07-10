@@ -48,12 +48,12 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
   auto index = context->CodeCacheIndex();
   meta = Instrument(context, &cfg, meta, INSTRUMENT_DIRECT);
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
+  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
     Compile(context, &cfg);
     IndexBlocks(index, &cfg);
   }
-  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
-  return cache_meta->cache_pc;
+  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
+  return cache_meta->start_pc;
 }
 
 // Instrument, compile, and index some basic blocks, where the entry block
@@ -65,12 +65,12 @@ CachePC Translate(ContextInterface *context, IndirectEdge *edge,
   auto meta = context->AllocateBlockMetaData(edge->dest_meta, target_app_pc);
   meta = Instrument(context, &cfg, meta, INSTRUMENT_INDIRECT);
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
+  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
     Compile(context, &cfg, edge, target_app_pc);
     IndexBlocks(index, &cfg);
   }
-  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
-  return cache_meta->cache_pc;
+  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
+  return cache_meta->start_pc;
 }
 
 }  // namespace granary

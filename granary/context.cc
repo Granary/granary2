@@ -114,7 +114,8 @@ Context::Context(void)
       unpatched_edge_list(nullptr),
       indirect_edge_list_lock(),
       indirect_edge_list(nullptr),
-      code_cache_index(new Index) {
+      code_cache_index(new Index),
+      shadow_code_cache_index(new ShadowIndex) {
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
@@ -248,6 +249,11 @@ CodeCache *Context::BlockCodeCache(void) {
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;
+}
+
+// Get a pointer to this context's code cache index.
+LockedIndex *Context::ShadowCodeCacheIndex(void) {
+  return &shadow_code_cache_index;
 }
 
 }  // namespace granary

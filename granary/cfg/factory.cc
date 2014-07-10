@@ -13,6 +13,7 @@
 #include "granary/code/metadata.h"
 #include "granary/code/register.h"
 
+#include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"
@@ -298,22 +299,65 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
   }
 }
 
+namespace {
+
+static void JoinMetaData(ContextInterface *context, BlockMetaData *meta,
+                          AppPC cache_pc) {
+  // Set up `CacheMetaData::start_pc` as that is what the shadow index uses for
+  // lookup.
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  cache_meta->start_pc = UnsafeCast<CachePC>(cache_pc);
+
+  auto shadow_index = context->ShadowCodeCacheIndex();
+  auto response = shadow_index->Request(meta);
+
+  // TODO(pag): This case might be possible if we request that the block
+  //            immediately following a function call go native. Then we won't
+  //            necessarily have meta-data for the targeted block.
+  //
+  // TODO(pag): Another possibility is that a computation based on a return
+  //            address is performed. This case is explicitly not handled,
+  //            although an approach like DynamoRIO takes for signal-delaying
+  //            might be appropriate. It would require:
+  //                1)  Find the nearest known cache return address to the one
+  //                    being requested. Nearest being a heuristic. In practice
+  //                    this might be worth experimenting with.
+  //                2)  Apply the same displacement between the requested and
+  //                    found return address to the `ModuleMetaData::start_pc`
+  //                    associated with the found return address.
+  //                3)  Combine and translate with this block.
+  GRANARY_ASSERT(UnificationStatus::REJECT != response.status);
+
+  // Clear `CacheMetaData::start_pc` as we don't want it to look like this
+  // block has been encoded when it hasn't been.
+  cache_meta->start_pc = nullptr;
+
+  // Now combine the "fixed" meta-data with the found meta-data. This will,
+  // among other things, overwrite the `ModuleMetaData` of meta (which points
+  // into the code cache) with one that points to native code.
+  meta->JoinWith(response.meta);
+}
+
+}  // namespace
+
 // Request a block that is the target of an indirect control-flow instruction.
 // To provide maximum flexibility (e.g. allow selective going native of
 // targets), we generate a dummy compensation fragment that jumps to a direct
 // basic block with a default non-`REQUEST_LATER` materialization strategy.
 InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
     BlockMetaData *meta) {
+  AppPC non_transparent_pc(nullptr);
   auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto non_transparent_pc = module_meta->start_pc;
   auto module = module_meta->source.module;
-  BlockMetaData *dest_meta(nullptr);
 
   if (ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
-    GRANARY_ASSERT(false);  // TODO(pag): Look it up in a return address table.
-  } else {
-    dest_meta = context->AllocateBlockMetaData(module_meta->start_pc);
+    non_transparent_pc = module_meta->start_pc;
+    JoinMetaData(context, meta, non_transparent_pc);
+    module_meta = MetaDataCast<ModuleMetaData *>(meta);  // Compiler hint ;-)
+    module = nullptr;
   }
+
+  auto dest_meta = context->AllocateBlockMetaData(module_meta->start_pc);
   auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);
 
   // Default to having a materialization strategy, and make it so that no one

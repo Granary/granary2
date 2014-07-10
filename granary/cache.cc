@@ -70,7 +70,7 @@ void CodeCache::EndTransaction(CachePC begin, CachePC end) {
 
 // Initialize Granary's internal translation cache meta-data.
 CacheMetaData::CacheMetaData(void)
-    : cache_pc(nullptr),
+    : start_pc(nullptr),
       native_addresses(nullptr) {}
 
 // Clean up the cache meta-data, and any data structures tied in to the cached

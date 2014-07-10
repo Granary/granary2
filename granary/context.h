@@ -77,6 +77,9 @@ class ContextInterface {
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
+
+  // Get a pointer to this context's shadow code cache index.
+  virtual LockedIndex *ShadowCodeCacheIndex(void) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -131,6 +134,9 @@ class Context : public ContextInterface {
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;
 
+  // Get a pointer to this context's shadow code cache index.
+  virtual LockedIndex *ShadowCodeCacheIndex(void) override;
+
  private:
   // Manages all modules allocated/understood by this environment.
   ModuleManager module_manager;
@@ -166,8 +172,11 @@ class Context : public ContextInterface {
   FineGrainedLock indirect_edge_list_lock;
   IndirectEdge *indirect_edge_list;
 
-  // Code cache index, and associated lock.
+  // Code cache index for normal blocks.
   LockedIndex code_cache_index;
+
+  // Code cacge index for
+  LockedIndex shadow_code_cache_index;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

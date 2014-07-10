@@ -18,7 +18,7 @@
       docstring \
   }; \
   __attribute__((constructor(101), used)) \
-  static void GRANARY_CAT(RegisterOption__GLOBAL__I_, name)(void) { \
+  static void GRANARY_CAT(RegisterOption_, name)(void) { \
     granary::detail::RegisterOption(&GRANARY_CAT(OPTION_, name)); \
   }
 

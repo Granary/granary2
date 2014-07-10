@@ -21,18 +21,32 @@ namespace granary {
 class IndexMetaData : public MutableMetaData<IndexMetaData> {
  public:
   inline IndexMetaData(void)
-      : next(nullptr) {}
+      : next_rel32(0),
+        next_shadow_rel32(0) {}
 
   // Don't copy anything over.
   inline IndexMetaData(const IndexMetaData &)
-      : next(nullptr) {}
+      : next_rel32(0),
+        next_shadow_rel32(0) {}
+
+  // When an indirect CFI targets a translated block, don't copy over its
+  // various `next_*` pointer links otherwise that would lead to disastrous
+  // behavior.
+  void Join(const IndexMetaData *) {}
+
+  BlockMetaData *Next(void) const;
+  BlockMetaData *NextShadow(void) const;
+
+  void SetNext(BlockMetaData *next);
+  void SetNextShadow(BlockMetaData *next);
 
   // The next meta-data chunk stored in the same spot in the code cache index.
   //
   // Note: If this is non-null, then this block is stored in the code cache
   //       index. This works because some of the `next` pointers will be
   //       tombstones.
-  BlockMetaData *next;
+  int32_t next_rel32;
+  int32_t next_shadow_rel32;
 };
 
 // Response returned from a lookup request in the code cache index.
@@ -71,19 +85,34 @@ enum {
   NUM_POINTERS_PER_PAGE = arch::PAGE_SIZE_BYTES / sizeof(void *)
 };
 
-class MetaDataArray {
+// Memory management for any index-related class.
+class IndexArrayMem {
+ public:
+  static void *operator new(std::size_t);
+  static void operator delete(void *address);
+
+  static void *operator new[](std::size_t) = delete;
+  static void operator delete[](void *) = delete;
+};
+
+class MetaDataArray : public IndexArrayMem {
  public:
   // Deletes all meta-data linked into this array.
   ~MetaDataArray(void);
 
   BlockMetaData *metas[NUM_POINTERS_PER_PAGE];
+};
 
-  static void *operator new(std::size_t);
-  static void operator delete(void *address);
+class ShadowMetaDataArray : public IndexArrayMem {
+ public:
+  BlockMetaData *metas[NUM_POINTERS_PER_PAGE];
 };
 
 static_assert(sizeof(MetaDataArray) == arch::PAGE_SIZE_BYTES,
-              "The size of `Index` must be exactly one page.");
+              "The size of `MetaDataArray` must be exactly one page.");
+
+static_assert(sizeof(ShadowMetaDataArray) == arch::PAGE_SIZE_BYTES,
+              "The size of `ShadowMetaDataArray` must be exactly one page.");
 
 }  // namespace internal
 
@@ -91,7 +120,7 @@ static_assert(sizeof(MetaDataArray) == arch::PAGE_SIZE_BYTES,
 //
 // Note: This class does not handle concurrent access/modification. That must
 //       be handled at a higher layer.
-class Index : public IndexInterface {
+class Index : public IndexInterface, public internal::IndexArrayMem {
  public:
   Index(void) = default;
 
@@ -106,12 +135,6 @@ class Index : public IndexInterface {
   // Insert a block into the code cache index.
   virtual void Insert(BlockMetaData *meta) override;
 
-  static void *operator new(std::size_t);
-  static void operator delete(void *address);
-
-  static void *operator new[](std::size_t) = delete;
-  static void operator delete[](void *) = delete;
-
  private:
   // The `- 1` is to account for a vtable pointer.
   internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE - 1];
@@ -119,8 +142,34 @@ class Index : public IndexInterface {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Index);
 };
 
+// Represents a shadow index. Shadow indexes are used to relate code cache PCs
+// back to the same slots in an index that store the meta-data for blocks whose
+// encoded address is the shadow PC.
+class ShadowIndex : public IndexInterface, public internal::IndexArrayMem {
+ public:
+  ShadowIndex(void) = default;
+
+  // Deletes all shadow meta-data arrays, but *not* the referenced meta-data.
+  virtual ~ShadowIndex(void);
+
+  // Perform a lookup operation in the shadow code cache index. Lookup
+  // operations in the shadow index either return exact matches or rejections,
+  // but never adaptations.
+  virtual IndexFindResponse Request(BlockMetaData *meta) override;
+
+  // Insert a block into the code cache index.
+  virtual void Insert(BlockMetaData *meta) override;
+ private:
+  internal::ShadowMetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE - 1];
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ShadowIndex);
+};
+
 static_assert(sizeof(Index) == arch::PAGE_SIZE_BYTES,
               "The size of `Index` must be exactly one page.");
+
+static_assert(sizeof(ShadowIndex) == arch::PAGE_SIZE_BYTES,
+              "The size of `ShadowIndex` must be exactly one page.");
 
 // Forward declaration.
 class LockedIndexTransaction;

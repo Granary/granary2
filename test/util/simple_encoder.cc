@@ -86,5 +86,5 @@ CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
   auto block = cfg.EntryBlock();
   auto cache_meta = GetMetaData<CacheMetaData>(block);
 
-  return cache_meta->cache_pc;
+  return cache_meta->start_pc;
 }
