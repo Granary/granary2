@@ -279,12 +279,12 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   auto miss = new LabelInstruction();
   auto miss_addr = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
                                              &(edge->out_edge_pc));
-  in_edge->instrs.Append(miss);
-  in_edge->instrs.Append(miss_addr);
+  out_edge_miss->instrs.Append(miss);
+  out_edge_miss->instrs.Append(miss_addr);
 
   // Store the branch target into `RCX`. The address of the `IndirectEdge`
   // data structure remains in `RDI`. Jump to `edge->in_edge_pc`, which is
-  // initialized to be
+  // initialized to be the indirect edge entrypoint edge code.
   APP(out_edge_miss, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_target); );
   APP(out_edge_miss, JMP_RELBRd(&ni, edge->out_edge_pc);
                      ni.is_sticky = true; );
@@ -303,12 +303,17 @@ void GenerateIndirectEdgeCode(IndirectEdge *edge,
   APP(out_edge_hit, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
                                                          saved_target));
   auto hit = new LabelInstruction;
+
+  // Note: We add the `JRCXZ` as the branch instruction, as opposed to the
+  //       next `JMP_RELBRd` (which should be the `branch_instr`) because then
+  //       later stages will see the `JRCXZ` as conditional, and propagate
+  //       registers / flags correctly.
   APP(out_edge_hit, JRCXZ_RELBRb(&ni, hit));
+  out_edge_hit->branch_instr = DynamicCast<NativeInstruction *>(
+      out_edge_hit->instrs.Last());
 
   // Go back into Granary.
   APP(out_edge_hit, JMP_RELBRd(&ni, miss));
-  out_edge_hit->branch_instr = DynamicCast<NativeInstruction *>(
-      out_edge_hit->instrs.Last());
 
   // Manually restore `RCX` and `RDI`.
   out_edge_hit->instrs.Append(hit);
@@ -333,36 +338,57 @@ enum {
 // compare the target of a CFI with `app_pc`, and if the values match, then
 // will jump to `cache_pc`, otherwise a fall-back is taken.
 //
-// Note: This function is protected by `Context::indirect_edge_list_lock`.
-void InstantiateIndirectEdge(IndirectEdge *edge, CachePC edge_pc,
-                             AppPC app_pc, CachePC cache_pc) {
-  auto pc = edge_pc;
-  InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
-  InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
+// This function works by prepending a dummy fragment to `frags`, where the
+// instructions of the fragment
+//
+// Note: This function must be called in the context of an
+//       `IndirectEdge::out_edge_pc_lock`.
+void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
+                             AppPC app_pc) {
   InstructionDecoder decoder;
   Instruction ni;
 
+  auto first_frag = frags->First();
+  auto frag = new Fragment;
+  frags->Prepend(frag);
+  frag->next = first_frag;
+  frag->successors[FRAG_SUCC_FALL_THROUGH] = first_frag;
+
   // Replace the `IndirectEdge::out_edge_pc` with the out edge that we're
   // creating, and make our new out edge point to the old one.
-  auto miss_pc = edge->out_edge_pc;
-  edge->out_edge_pc = edge_pc;
+  auto new_out_edge_pc = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
+                                                   &(edge->out_edge_pc));
+  frag->instrs.Append(new_out_edge_pc);
+
+  BranchInstruction *jrcxz(nullptr);
+  AppPC jrcxz_target(nullptr);
 
   // Negate the pointer, so that when it's added to its non-negated self, they
   // cancel out and trigger the `JRCXZ`.
-  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
+  APP(frag,
+      MOV_GPRv_IMMz(&ni, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
       Shorten_MOV_GPRv_IMMz(&ni));
 
   for (auto template_pc(edge->begin_out_edge_template);
        template_pc < edge->end_out_edge_template; ) {
     decoder.DecodeNext(&ni, &template_pc);
-    if (XED_IFORM_JMP_RELBRd == ni.iform) {
-      ni.SetBranchTarget(miss_pc);  // Miss! Jump to fall-back.
-    } else if (XED_ICLASS_JRCXZ == ni.iclass) {  // Need to relativize.
-      ni.SetBranchTarget(pc + ni.decoded_length + JMP_RELBRd_SIZE_BYTES);
+
+    if (XED_ICLASS_JRCXZ == ni.iclass) {  // Need to relativize.
+      jrcxz = new BranchInstruction(&ni, new LabelInstruction);
+      jrcxz_target = ni.BranchTargetPC();
+      frag->instrs.Append(jrcxz);
+      continue;
+
+    } else if (XED_IFORM_JMP_RELBRd == ni.iform) {
+      ni.SetBranchTarget(edge->out_edge_pc);  // Miss! Jump to fall-back.
+
+    // Modify the target of the `JRCXZ`.
+    } else if (jrcxz_target == ni.DecodedPC()) {
+      GRANARY_ASSERT(nullptr != jrcxz);
+      frag->instrs.Append(jrcxz->TargetInstruction());
     }
-    ENC();
+    APP(frag);
   }
-  ENC(JMP_RELBRd(&ni, cache_pc));  // Hit! Jump to block.
 }
 
 }  // namespace arch

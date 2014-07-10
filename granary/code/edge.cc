@@ -33,6 +33,7 @@ IndirectEdge::IndirectEdge(const BlockMetaData *source_meta_,
                            const BlockMetaData *dest_meta_,
                            CachePC indirect_edge_entrypoint)
     : out_edge_pc(indirect_edge_entrypoint),
+      out_edge_pc_lock(),
       source_meta(source_meta_),
       dest_meta(dest_meta_),
       next(nullptr),

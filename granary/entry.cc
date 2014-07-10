@@ -55,11 +55,16 @@ void EnterGranary(DirectEdge *edge, ContextInterface *context) {
 }
 
 // Enter into Granary to begin the translation process for an indirect edge.
+// This is special because we need to do a few things:
+//      1) We need to make a compensation fragment that directly jumps to
+//         `target_app_pc`.
+//      2) We need to set up the compensation fragment such that the direct
+//         jump has a default non-`REQUEST_LATER` materialization strategy.
+//      3) We need to prepend the out-edge code to the resulting code (by
+//         "instantiating" the out edge into a fragment).
 void EnterGranary(IndirectEdge *edge, ContextInterface *context,
-                  AppPC app_pc) {
-  auto meta = context->AllocateBlockMetaData(edge->dest_meta, app_pc);
-  auto cache_pc = Translate(context, meta);
-  context->InstantiateIndirectEdge(edge, app_pc, cache_pc);
+                  AppPC target_app_pc) {
+  Translate(context, edge, target_app_pc);
 }
 
 }  // namespace granary

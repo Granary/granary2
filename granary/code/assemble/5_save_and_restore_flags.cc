@@ -56,38 +56,56 @@ static void InitLiveRegsOnExit(FragmentList *frags) {
     if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
       switch (exit_frag->kind) {
         case FRAG_EXIT_NATIVE:
-          frag->regs.live_on_entry.ReviveAll();
-          break;
-
         case FRAG_EXIT_FUTURE_BLOCK_DIRECT:
         case FRAG_EXIT_FUTURE_BLOCK_INDIRECT:
+          frag->regs.live_on_entry.ReviveAll();
+          break;
         case FRAG_EXIT_EXISTING_BLOCK:
           auto meta = MetaDataCast<LiveRegisterMetaData *>(
               exit_frag->block_meta);
-          if (meta) {
-            frag->regs.live_on_entry = meta->live_regs;
-          } else {
-            frag->regs.live_on_entry.ReviveAll();  // Return w/o meta case.
-          }
+          frag->regs.live_on_entry = meta->live_regs;
           break;
       }
     }
   }
 }
 
+static LiveRegisterTracker LiveRegsOnEntry(Fragment *frag) {
+  return frag->regs.live_on_entry;
+}
+
+// Returns the live registers on exit from a fragment.
+static LiveRegisterTracker LiveRegsOnExit(Fragment *frag) {
+  LiveRegisterTracker regs;
+  if (IsA<ExitFragment *>(frag)) {
+    regs = LiveRegsOnEntry(frag);
+  } else if (frag->branch_instr) {
+    if (frag->branch_instr->IsConditionalJump()) {
+      regs = LiveRegsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]);
+      regs.Union(LiveRegsOnEntry(frag->successors[FRAG_SUCC_BRANCH]));
+    } else {
+      regs = LiveRegsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+    }
+  } else {
+    for (auto succ : frag->successors) {
+      if (succ) {
+        regs.Union(LiveRegsOnEntry(succ));
+      }
+    }
+  }
+  return regs;
+}
+
 // Analyze the register usage within a block. Returns `true` if the set of live
 // registers on entry to this fragment has changed since the last time we
 // analyzed this fragment.
 static bool AnalyzeFragRegs(Fragment *frag) {
-  LiveRegisterTracker regs;
-  if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
-    regs = fall_through->regs.live_on_entry;
-  } else {
-    regs.ReviveAll();
-  }
+  LiveRegisterTracker regs(LiveRegsOnExit(frag));
+  auto changed = !frag->regs.live_on_exit.Equals(regs);
+  auto seen_native_instr = false;
   frag->regs.live_on_exit = regs;
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
-    if (frag->branch_instr == instr) {
+    if (seen_native_instr && frag->branch_instr == instr) {
       auto branch = frag->successors[FRAG_SUCC_BRANCH];
       if (frag->branch_instr->IsConditionalJump()) {
         regs.Union(branch->regs.live_on_entry);
@@ -95,9 +113,12 @@ static bool AnalyzeFragRegs(Fragment *frag) {
         regs = branch->regs.live_on_entry;
       }
     }
-    regs.Visit(DynamicCast<NativeInstruction *>(instr));
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      seen_native_instr = true;
+      regs.Visit(ninstr);
+    }
   }
-  auto changed = !frag->regs.live_on_entry.Equals(regs);
+  changed = changed || !frag->regs.live_on_entry.Equals(regs);
   frag->regs.live_on_entry = regs;
   return changed;
 }

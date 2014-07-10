@@ -153,8 +153,11 @@ endif
 # or not we're in user space or kernel space.
 GRANARY_COMMON_FLAGS += -fPIC
 
-# Be crazy about warnings with debug/test builds.
-ifneq (release,$(GRANARY_TARGET))
+# Be crazy about warnings with debug (but not release/test) builds. We also only
+# do this when we *aren't* debugging with Valgrind because when we debug with
+# valgrind, we mostly depend on `malloc` for allocation, which doesn't respect
+# the proper alignment requirements of many structures.
+ifeq (debug0,"$(GRANARY_TARGET)$(GRANARY_WITH_VALGRIND)")
 	GRANARY_COMMON_ARCH_FLAGS += -ftrapv -fsanitize=undefined-trap
 	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
 

@@ -121,7 +121,9 @@ class NativeCallTool : public Tool {
     class tool_name ## _DirectControlFlowTest : public Test { \
      public: \
       tool_name ## _DirectControlFlowTest(void) \
-          : context(#tool_name) {} \
+          : context() { \
+        context.InitTools(#tool_name); \
+      } \
       \
       virtual ~tool_name ## _DirectControlFlowTest(void) = default; \
       \

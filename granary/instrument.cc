@@ -118,6 +118,8 @@ BlockMetaData *Instrument(ContextInterface *context,
     //
     // TODO(pag): Previously, hashes were also compared. This might be a
     //            reasonable thing to do again.
+  } else {
+    delete entry_block;
   }
 
   return meta;

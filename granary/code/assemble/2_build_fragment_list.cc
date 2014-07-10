@@ -391,8 +391,12 @@ static Fragment *MakeIndirectEdgeFragment(FragmentListBuilder *frags,
   arch::GenerateIndirectEdgeCode(edge, cfi, in_edge_frag, out_edge_frag_miss,
                                  out_edge_frag_hit, exit_frag);
 
-  // Note: `branch_instr` of `in_edge_frag` and `out_edge_frag_hit` are
-  //       initialized by `arch::GenerateIndirectEdgeCode`.
+  // Note: `branch_instr` of `in_edge_frag` is initialized by
+  //       `arch::GenerateIndirectEdgeCode`.
+  //
+  // Note: `branch_instr` of `out_edge_frag_hit` may or may not be initialized
+  //       by `arch::GenerateIndirectEdgeCode`, depending on what code is
+  //       generated.
 
   in_edge_frag->successors[FRAG_SUCC_FALL_THROUGH] = out_edge_frag_miss;
   in_edge_frag->successors[FRAG_SUCC_BRANCH] = out_edge_frag_hit;

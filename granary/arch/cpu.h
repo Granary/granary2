@@ -10,6 +10,8 @@ void Relax(void);
 
 void SynchronizePipeline(void);
 
+unsigned long CycleCount(void);
+
 }  // namespace cpu
 }  // namespace granary
 

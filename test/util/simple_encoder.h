@@ -21,7 +21,7 @@
 class SimpleEncoderTest : public testing::Test {
  public:
   SimpleEncoderTest(void);
-  ~SimpleEncoderTest(void);
+  virtual ~SimpleEncoderTest(void) = default;
 
   template <typename R, typename... Args>
   R (*InstrumentAndEncode(R (*native_pc)(Args...)))(Args...) {
@@ -36,6 +36,8 @@ class SimpleEncoderTest : public testing::Test {
 
   MockContext context;
   granary::Module module;
+  granary::Module code_cache_mod;
+  granary::Module edge_cache_mod;
   granary::CodeCache code_cache;
   granary::CodeCache edge_cache;
   granary::MetaDataManager meta_manager;

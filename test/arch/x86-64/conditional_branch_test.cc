@@ -78,7 +78,7 @@ class AllFuncBlocks : public Tool {
  public:
   virtual ~AllFuncBlocks(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                         LocalControlFlowGraph *cfg) {
+                                     LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_CHECK_LCFG);
@@ -91,7 +91,9 @@ class ConditionalBranchTest : public Test {
  public:
   virtual ~ConditionalBranchTest(void) = default;
   ConditionalBranchTest(void)
-      : context("all_func_blocks") {}
+      : context() {
+    context.InitTools("all_func_blocks");
+  }
 
   static void SetUpTestCase(void) {
     arch::Init();

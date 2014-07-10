@@ -6,6 +6,7 @@
 #include "granary/cfg/control_flow_graph.h"
 
 #include "granary/code/compile.h"
+#include "granary/code/edge.h"
 #include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
@@ -28,21 +29,6 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   }
 }
 
-// Instrument, compile, and index some basic blocks.
-static CachePC Translate(ContextInterface *context, BlockMetaData *meta,
-                         InstrumentRequestKind req_kind) {
-  LocalControlFlowGraph cfg(context);
-  auto index = context->CodeCacheIndex();
-  meta = Instrument(context, &cfg, meta, req_kind);
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
-    Compile(context, &cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
-  return cache_meta->cache_pc;
-}
-
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
@@ -58,13 +44,33 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
-  return Translate(context, meta, INSTRUMENT_DIRECT);
+  LocalControlFlowGraph cfg(context);
+  auto index = context->CodeCacheIndex();
+  meta = Instrument(context, &cfg, meta, INSTRUMENT_DIRECT);
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
+    Compile(context, &cfg);
+    IndexBlocks(index, &cfg);
+  }
+  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
+  return cache_meta->cache_pc;
 }
 
 // Instrument, compile, and index some basic blocks, where the entry block
 // is targeted by an indirect control-transfer instruction.
-CachePC TranslateIndirect(ContextInterface *context, BlockMetaData *meta) {
-  return Translate(context, meta, INSTRUMENT_INDIRECT);
+CachePC Translate(ContextInterface *context, IndirectEdge *edge,
+                  AppPC target_app_pc) {
+  LocalControlFlowGraph cfg(context);
+  auto index = context->CodeCacheIndex();
+  auto meta = context->AllocateBlockMetaData(edge->dest_meta, target_app_pc);
+  meta = Instrument(context, &cfg, meta, INSTRUMENT_INDIRECT);
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->cache_pc) {  // Only compile if we decoded the first block.
+    Compile(context, &cfg, edge, target_app_pc);
+    IndexBlocks(index, &cfg);
+  }
+  GRANARY_ASSERT(nullptr != cache_meta->cache_pc);
+  return cache_meta->cache_pc;
 }
 
 }  // namespace granary

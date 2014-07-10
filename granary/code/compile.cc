@@ -19,6 +19,19 @@
 #include "granary/util.h"
 
 namespace granary {
+namespace arch {
+
+// Instantiate an indirect out-edge template. The indirect out-edge will
+// compare the target of a CFI with `app_pc`, and if the values match, then
+// will jump to `cache_pc`, otherwise a fall-back is taken.
+//
+// Note: This function has an architecture-specific implementation.
+//
+// Note: This function must be called in the context of an
+//       `IndirectEdge::out_edge_pc_lock`.
+extern void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
+                                    AppPC app_pc);
+}  // namespace arch
 namespace {
 
 // Mark an estimated encode address on all labels/return address annotations.
@@ -199,7 +212,7 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 }
 
 // Encodes the fragments into the specified code caches.
-static void Encode(FragmentList *frags, CodeCacheInterface *block_cache) {
+static void Encode(FragmentList *frags, CodeCache *block_cache) {
   auto estimated_addr = block_cache->AllocateBlock(0);
   auto num_bytes = StageEncode(frags, estimated_addr);
   auto cache_code = block_cache->AllocateBlock(num_bytes);
@@ -221,6 +234,19 @@ void Compile(ContextInterface *context, LocalControlFlowGraph *cfg) {
   auto block_cache = context->BlockCodeCache();
   auto frags = Assemble(context, block_cache, cfg);
   Encode(&frags, block_cache);
+  FreeFragments(&frags);
+}
+
+// Compile some instrumented code for an indirect edge.
+void Compile(ContextInterface *context, LocalControlFlowGraph *cfg,
+             IndirectEdge *edge, AppPC target_app_pc) {
+  auto block_cache = context->BlockCodeCache();
+  auto frags = Assemble(context, block_cache, cfg);
+  do {
+    FineGrainedLocked locker(&(edge->out_edge_pc_lock));
+    arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
+    Encode(&frags, block_cache);
+  } while (false);
   FreeFragments(&frags);
 }
 

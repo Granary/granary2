@@ -10,7 +10,6 @@
 #include "granary/arch/base.h"
 
 #include "granary/base/base.h"
-#include "granary/base/new.h"
 #include "granary/base/pc.h"
 #include "granary/base/lock.h"
 
@@ -19,25 +18,7 @@ namespace granary {
 class Module;
 
 namespace internal {
-class CodeSlab {
- public:
-  CodeSlab(Module *code_module, int num_pages, int num_bytes, int offset_,
-           CodeSlab *next_);
-
-  CachePC begin;
-  CodeSlab *next;
-  alignas(GRANARY_ARCH_CACHE_LINE_SIZE) std::atomic<int> offset;
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(CodeSlab, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
-  })
-
- private:
-  CodeSlab(void) = delete;
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeSlab);
-};
-
+class CodeSlab;
 }  // namespace internal
 
 // Used to allocate code that performs bump-pointer allocation from slabs of

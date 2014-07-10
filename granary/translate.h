@@ -15,6 +15,7 @@ namespace granary {
 // Forward declarations.
 class ContextInterface;
 class BlockMetaData;
+class IndirectEdge;
 
 enum TargetStackValidity {
   TRANSLATE_STACK_VALID,
@@ -30,7 +31,8 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta);
 
 // Instrument, compile, and index some basic blocks, where the entry block
 // is targeted by an indirect control-transfer instruction.
-CachePC TranslateIndirect(ContextInterface *context, BlockMetaData *meta);
+CachePC Translate(ContextInterface *context, IndirectEdge *edge,
+                  AppPC target_pc);
 
 // Instrument, compile, and index some basic blocks.
 template <typename R, typename... Args>

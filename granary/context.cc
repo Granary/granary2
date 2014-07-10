@@ -56,16 +56,6 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 // Note: This has an architecture-specific implementation.
 extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
-
-// Instantiate an indirect out-edge template. The indirect out-edge will
-// compare the target of a CFI with `app_pc`, and if the values match, then
-// will jump to `cache_pc`, otherwise a fall-back is taken.
-//
-// Note: This function has an architecture-specific implementation.
-//
-// Note: This function is protected by `Context::indirect_edge_list_lock`.
-extern void InstantiateIndirectEdge(IndirectEdge *edge, CachePC edge_pc,
-                                    AppPC app_pc, CachePC cache_pc);
 }  // namespace arch
 namespace {
 
@@ -249,25 +239,9 @@ IndirectEdge *Context::AllocateIndirectEdge(
   return edge;
 }
 
-// Instantiates an indirect edge. This creates an out-edge that targets
-// `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
-// `edge->out_edge_pc` is updated in place to reflect the new target.
-void Context::InstantiateIndirectEdge(IndirectEdge *edge, AppPC app_pc,
-                                      CachePC cache_pc) {
-  auto alloc_amount = static_cast<int>(
-      edge->end_out_edge_template - edge->begin_out_edge_template +
-      arch::INDIRECT_OUT_EDGE_CODE_PADDING_BYTES);
-  alloc_amount += GRANARY_ALIGN_FACTOR(alloc_amount, 16);
-  auto edge_pc = edge_code_cache.AllocateBlock(alloc_amount);
-  FineGrainedLocked locker(&indirect_edge_list_lock);
-  CodeCacheTransaction transaction(&edge_code_cache,
-                                   edge_pc, edge_pc + alloc_amount);
-  arch::InstantiateIndirectEdge(edge, edge_pc, app_pc, cache_pc);
-}
-
 // Returns a pointer to the code cache that is used for allocating code for
 // basic blocks.
-CodeCacheInterface *Context::BlockCodeCache(void) {
+CodeCache *Context::BlockCodeCache(void) {
   return &block_code_cache;
 }
 

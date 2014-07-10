@@ -325,11 +325,6 @@ class FlagZone {
   // Live registers on exit from this flags zone.
   LiveRegisterTracker live_regs;
 
-  // Number of fragments in this flag zone. If the number of fragments in a
-  // flag zone is `1`
-  int num_frags_in_zone;
-  Fragment *only_frag;
-
   GRANARY_DEFINE_NEW_ALLOCATOR(FlagZone, {
     SHARED = false,
     ALIGNMENT = 1

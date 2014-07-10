@@ -211,8 +211,8 @@ static void MangleIndirectReturn(DecodedBasicBlock *block,
 }
 
 // Mangle an indirect function call.
-static VirtualRegister MangleIndirectCall(DecodedBasicBlock *block,
-                                          ControlFlowInstruction *cfi) {
+static void MangleIndirectCall(DecodedBasicBlock *block,
+                               ControlFlowInstruction *cfi) {
   Instruction ni;
   Operand op;
   auto ret_address = new AnnotationInstruction(
@@ -233,7 +233,6 @@ static VirtualRegister MangleIndirectCall(DecodedBasicBlock *block,
   ni.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
   cfi->UnsafeInsertAfter(ret_address);
-  return ret_address_reg;
 }
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
@@ -251,8 +250,9 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   } else if (cfi->IsFunctionCall()) {
     Instruction ni;
     auto &orig_target_op(cfi->instruction.ops[0]);
-    auto new_target_reg = MangleIndirectCall(block, cfi);
+    MangleIndirectCall(block, cfi);
     if (orig_target_op.IsMemory()) {
+      auto new_target_reg = block->AllocateVirtualRegister();
       MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
       cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
       CALL_NEAR_GPRv(&(cfi->instruction), new_target_reg);

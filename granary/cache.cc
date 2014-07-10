@@ -11,8 +11,6 @@
 
 namespace granary {
 
-CodeCacheInterface::~CodeCacheInterface(void) {}
-
 CodeCache::CodeCache(Module *module_, int slab_size)
     : lock(),
       allocator(slab_size),

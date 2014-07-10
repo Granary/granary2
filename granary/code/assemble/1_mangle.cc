@@ -200,7 +200,7 @@ class BlockMangler {
 }  // namespace
 
 // Relativize the native instructions within a LCFG.
-void MangleInstructions(CodeCacheInterface *code_cache,
+void MangleInstructions(CodeCache *code_cache,
                         LocalControlFlowGraph* cfg) {
   auto estimated_encode_loc = code_cache->AllocateBlock(0);
 

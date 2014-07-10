@@ -10,6 +10,7 @@
 #include "granary/arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
@@ -126,7 +127,8 @@ class alignas(alignof(volatile void *)) IndirectEdge {
   //        otherwise jumps to the next instantiated template (inductive case)
   //        or jumps to the "miss" code (2; base case), which transfers control
   //        to (1).
-  volatile CachePC out_edge_pc;
+  CachePC out_edge_pc;
+  FineGrainedLock out_edge_pc_lock;
 
   // Meta-data template associated with this indirect edge.
   const BlockMetaData * const source_meta;

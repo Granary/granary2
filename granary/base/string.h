@@ -3,14 +3,14 @@
 #ifndef GRANARY_BASE_STRING_H_
 #define GRANARY_BASE_STRING_H_
 
+// Don't take over `memset` et al. when we're running test cases, as that will
+// interfere with the C++ standard library.
+#ifndef GRANARY_TEST
+
 // Try to prevent `libc++`s or `libstdc++`s cstring header files from being
 // included. This is a pretty ugly hack!
 #define _LIBCPP_CSTRING
 #define _GLIBCXX_CSTRING
-
-// Don't take over `memset` et al. when we're running test cases, as that will
-// interfere with the C++ standard library.
-#ifndef GRANARY_TEST
 
 #ifdef __cplusplus
 extern "C" {

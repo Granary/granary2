@@ -21,7 +21,8 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-class CodeCacheInterface;
+class CodeCache;
+class CompensationBasicBlock;
 class DecodedBasicBlock;
 class DirectEdge;
 class IndirectEdge;
@@ -70,16 +71,9 @@ class ContextInterface {
       const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) = 0;
 
-  // Instantiates an indirect edge. This creates an out-edge that targets
-  // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
-  // `edge->in_edge_pc` is updated in place to reflect the new target.
-  virtual void InstantiateIndirectEdge(IndirectEdge *edge,
-                                       AppPC app_pc,
-                                       CachePC cache_pc) = 0;
-
   // Returns a pointer to the code cache that is used for allocating code for
   // basic blocks.
-  virtual CodeCacheInterface *BlockCodeCache(void) = 0;
+  virtual CodeCache *BlockCodeCache(void) = 0;
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
@@ -130,16 +124,9 @@ class Context : public ContextInterface {
       const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) override;
 
-  // Instantiates an indirect edge. This creates an out-edge that targets
-  // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
-  // `edge->in_edge_pc` is updated in place to reflect the new target.
-  virtual void InstantiateIndirectEdge(IndirectEdge *edge,
-                                       AppPC app_pc,
-                                       CachePC cache_pc) override;
-
   // Returns a pointer to the code cache that is used for allocating code for
   // basic blocks.
-  virtual CodeCacheInterface *BlockCodeCache(void) override;
+  virtual CodeCache *BlockCodeCache(void) override;
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;

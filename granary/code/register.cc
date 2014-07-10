@@ -122,9 +122,9 @@ void LiveRegisterTracker::Visit(NativeInstruction *instr) {
         // Read, read/write, conditional write, or partial write.
         if (op->IsRead() || op->IsConditionalWrite() ||
             reg.PreservesBytesOnWrite()) {
-          Revive(reg);
+          Revive(reg.Number());
         } else if (op->IsWrite()) {  // Write-only.
-          Kill(reg);
+          Kill(reg.Number());
         }
       }
     }
@@ -163,7 +163,7 @@ void DeadRegisterTracker::Visit(NativeInstruction *instr) {
     } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
       auto reg = rloc->Register();
       if (!op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
-        Revive(reg);
+        Revive(reg.Number());
       }
     }
   });

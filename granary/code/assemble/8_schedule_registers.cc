@@ -514,6 +514,8 @@ static void ScheduleFragLocalRegDefs(LocalScheduler *sched,
       if (SSAOperandAction::WRITE == def.action) {
         sched->MarkGPRAsOccupiable(vr);
       }
+
+      // Only one register can be defined per `def` (operand).
       GRANARY_IF_DEBUG( replaced = true; );
       ReplaceOperand(def);
     }

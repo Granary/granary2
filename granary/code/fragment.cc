@@ -350,12 +350,33 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   }
 }
 
+static void LogLiveRegisters(LogLevel level, const Fragment *frag) {
+  auto sep = "";
+  auto logged = false;
+  if (IsA<ExitFragment *>(frag) &&
+      frag->regs.live_on_entry.begin() != frag->regs.live_on_exit.end()) {
+    Log(level, "|");
+  }
+  for (auto reg : frag->regs.live_on_entry) {
+    RegisterOperand op(reg);
+    OperandString op_str;
+    op.EncodeToString(&op_str);
+    Log(level, "%s%s", sep, op_str.Buffer());
+    sep = ",";
+    logged = true;
+  }
+  if (logged && !IsA<ExitFragment *>(frag)) {
+    Log(level, "|");
+  }
+}
+
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
   Log(level, "f%p [fillcolor=%s color=%s label=<{",
       reinterpret_cast<const void *>(frag),
       FragmentBackground(frag), FragmentBorder(frag));
   LogBlockHeader(level, frag);
+  LogLiveRegisters(level, frag);
   if (!IsA<ExitFragment *>(frag)) {
     LogInstructions(level, frag);
     Log(level, "}");

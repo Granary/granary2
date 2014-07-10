@@ -10,7 +10,6 @@
 
 #include "granary/module.h"
 
-#include "test/cache.h"
 #include "test/context.h"
 
 using namespace granary;
@@ -23,10 +22,6 @@ class ModuleManagerTest : public Test {
         m1(&context),
         m2(&context),
         mod(new Module(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING)) {
-
-    EXPECT_CALL(context, AllocateCodeCache())
-      .WillRepeatedly(Return(nullptr));
-
     m2.RegisterAllBuiltIn();
   }
 
@@ -203,159 +198,4 @@ TEST_F(ModuleRangeTest, SplitRangeCross) {
   mod.AddRange(125, 175, 25, 0);
   TestPCMembership();
   TestOffsetsInRange();
-}
-
-class ModuleCodeCacheTest : public Test {
- protected:
-  ModuleCodeCacheTest(void)
-      : mod(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
-    mod.SetContext(&context);
-  }
-
-  Module mod;
-  MockContext context;
-  MockCodeCache code_cache1;
-  MockCodeCache code_cache2;
-  MockCodeCache code_cache3;
-  MockCodeCache code_cache4;
-  MockCodeCache code_cache5;
-};
-
-// Test that we detect that splitting a range flushes code caches and creates
-// new ones.
-TEST_F(ModuleCodeCacheTest, AddAndRemoveRange) {
-  EXPECT_CALL(context, AllocateCodeCache())
-      .Times(1)
-      .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 200, 0, 0);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1))
-      .Times(1);
-  mod.RemoveRange(100, 200);
-}
-
-// Test that splitting a range into three sub ranges ends up allocating one
-// code cache, then flushing it, and allocating three more. Then we'll remove
-// all three sub-ranges at once, which should flush the three new code caches.
-TEST_F(ModuleCodeCacheTest, SplitRangeMid) {
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 200, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-      .Times(3)
-      .WillOnce(Return(&code_cache3))  // Allocate range [125,175).
-      .WillOnce(Return(&code_cache4))  // Add range [175,200).
-      .WillOnce(Return(&code_cache2));  // Replenish range [100,125).
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1))
-      .Times(1);  // Flush the range [100,200).
-
-  mod.AddRange(125, 175, 25, 0);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache2)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache3)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache4)).Times(1);
-  mod.RemoveRange(100, 200);
-}
-
-// Test that removing the middle of a range splits it into two sub-ranges, with
-// appropriately new code cache allocators.
-TEST_F(ModuleCodeCacheTest, RemoveRangeMid) {
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 200, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-      .Times(2)
-      .WillOnce(Return(&code_cache3))  // Add range [175,200).
-      .WillOnce(Return(&code_cache2));  // Replenish range [100,125).
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1))
-      .Times(1);  // Flush the range [100,200).
-
-  mod.RemoveRange(125, 175);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache2)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache3)).Times(1);
-  mod.RemoveRange(100, 200);
-}
-
-// Test that splitting two contiguous ranges into three contiguous ranges
-// results in the expected changes to code caches.
-TEST_F(ModuleCodeCacheTest, SplitRangeCross) {
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 150, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-      .Times(1)
-      .WillOnce(Return(&code_cache2));
-  mod.AddRange(150, 200, 50, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-      .Times(3)
-      .WillOnce(Return(&code_cache4))  // Allocate range [125,175).
-      .WillOnce(Return(&code_cache3))  // Replenish [100,125).
-      .WillOnce(Return(&code_cache5));  // Replenish range [175,200).
-
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1))
-      .Times(1);  // Flush the range [100,150).
-  EXPECT_CALL(context, FlushCodeCache(&code_cache2))
-      .Times(1);  // Flush the range [150,200).
-  mod.AddRange(125, 175, 25, 0);
-
-  EXPECT_CALL(context, FlushCodeCache(&code_cache3)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache4)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache5)).Times(1);
-  mod.RemoveRange(100, 200);
-}
-
-// Test that adding three contiguous ranges does not cause code caches to be
-// flushed.
-TEST_F(ModuleCodeCacheTest, ContiguousRanges) {
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 200, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache2));
-  mod.AddRange(200, 300, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache3));
-  mod.AddRange(300, 400, 0, 0);
-
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache2)).Times(1);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache3)).Times(1);
-  mod.RemoveRange(100, 400);
-}
-
-// Test that adding three non-contiguous ranges does not cause code caches to be
-// flushed.
-TEST_F(ModuleCodeCacheTest, NonContiguousRanges) {
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache1));
-  mod.AddRange(100, 200, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache2));
-  mod.AddRange(300, 400, 0, 0);
-
-  EXPECT_CALL(context, AllocateCodeCache())
-    .Times(1)
-    .WillOnce(Return(&code_cache3));
-  mod.AddRange(500, 600, 0, 0);
-
-  EXPECT_CALL(context, FlushCodeCache(&code_cache1)).Times(1);
-  mod.RemoveRange(100, 200);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache2)).Times(1);
-  mod.RemoveRange(300, 400);
-  EXPECT_CALL(context, FlushCodeCache(&code_cache3)).Times(1);
-  mod.RemoveRange(500, 600);
-
 }

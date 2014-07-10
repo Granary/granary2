@@ -321,9 +321,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
   direct_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
   auto adapt_block = AdaptToBlock(cfg, meta, direct_block);
   adapt_block->is_comparable = false;
-
   cfg->AddBlock(adapt_block);
-
   return adapt_block;
 }
 

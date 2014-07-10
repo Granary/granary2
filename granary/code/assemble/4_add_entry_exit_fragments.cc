@@ -56,10 +56,21 @@ static uint32_t LiveFlagsOnEntry(Fragment *frag) {
 static uint32_t LiveFlagsOnExit(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
     return arch::AllArithmeticFlags();
-  } else if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
-    return LiveFlagsOnEntry(fall_through);
+  } else if (frag->branch_instr) {
+    if (frag->branch_instr->IsConditionalJump()) {
+      return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]) |
+             LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+    } else {
+      return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+    }
   } else {
-    return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+    uint32_t ret(0);
+    for (auto succ : frag->successors) {
+      if (succ) {
+        ret |= LiveFlagsOnEntry(succ);
+      }
+    }
+    return ret;
   }
 }
 
@@ -70,10 +81,10 @@ static bool AnalyzeFlagUse(Fragment *frag) {
   flags.all_written_flags = 0U;
   flags.exit_live_flags = LiveFlagsOnExit(frag);
   flags.entry_live_flags = flags.exit_live_flags;
-
+  auto seen_native_instr = false;
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (instr == frag->branch_instr) {
+      if (seen_native_instr && instr == frag->branch_instr) {
         auto succ_flags = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
 
         // If we call another fragment, then we ignore whatever flags are live
@@ -84,6 +95,7 @@ static bool AnalyzeFlagUse(Fragment *frag) {
           flags.entry_live_flags |= succ_flags;
         }
       }
+      seen_native_instr = true;
       VisitInstructionFlags(ninstr->instruction, &flags);
     }
   }

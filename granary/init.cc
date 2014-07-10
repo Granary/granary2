@@ -2,6 +2,7 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/arch/cpu.h"
 #include "granary/arch/init.h"
 
 #include "granary/base/container.h"
@@ -43,12 +44,6 @@ GRANARY_DEFINE_string(tools, "",
 
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
-
-static uint64_t time_now(void) {
-  uint64_t low_order, high_order;
-  asm volatile("rdtsc" : "=a" (low_order), "=d" (high_order));
-  return (high_order << 32U) | low_order;
-}
 
 enum {
   NUM_ITERATIONS = 10,
@@ -101,31 +96,32 @@ void Init(const char *granary_path) {
     if (!FLAG_help) {
       auto start_pc = Translate(context.AddressOf(), fibonacci);
       fib = UnsafeCast<int (*)(int)>(start_pc);
-      for (auto i = 0; i < 30; ++i) {
-        Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n", i,
-            fib_indirect(i), i, fib(i));
+      for (auto i = 2; i < 30; ++i) {
+        Log(LogOutput, "fibonacci(%d) = %d; fib(%d) = %d\n",
+            i, fib(i), i, fib(i));
       }
+#if 1
       sleep(1);
-      auto native_start = time_now();
+      auto native_start = cpu::CycleCount();
       for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
         for (auto n = 0; n < MAX_FIB; ++n) {
           fib_indirect(n);
         }
       }
-      auto native_end = time_now();
+      auto native_end = cpu::CycleCount();
       sleep(1);
-      auto inst_start = time_now();
+      auto inst_start = cpu::CycleCount();
       for (auto iter = 0; iter < NUM_ITERATIONS; ++iter) {
         for (auto n = 0; n < MAX_FIB; ++n) {
           fib(n);
         }
       }
-      auto inst_end = time_now();
-
+      auto inst_end = cpu::CycleCount();
       auto ticks_per_native = (native_end - native_start) / NUM_ITERATIONS;
       auto ticks_per_inst = (inst_end - inst_start) / NUM_ITERATIONS;
       Log(LogOutput, "Ticks per native = %lu\nTicks per instrumented = %lu\n",
           ticks_per_native, ticks_per_inst);
+#endif
 
     } else {
       for (auto i = 0; i < 10; ++i) {

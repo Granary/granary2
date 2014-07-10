@@ -24,75 +24,24 @@ namespace granary {
 class CodeCacheTransaction;
 class Module;
 
-// Interface for code caches.
-class CodeCacheInterface {
- public:
-  CodeCacheInterface(void) = default;
-
-  // Needed for linking against the base vtable.
-  virtual ~CodeCacheInterface(void);
-
-  // Allocate a block of code from this code cache.
-  virtual CachePC AllocateBlock(int size) = 0;
-
- protected:
-  friend class CodeCacheTransaction;
-
-  // Begin a transaction that will read or write to the code cache.
-  //
-  // Note: Transactions are distinct from allocations. Therefore, many threads/
-  //       cores can simultaneously allocate from a code cache, but only one
-  //       should be able to read/write data to the cache at a given time.
-  virtual void BeginTransaction(CachePC begin, CachePC end) = 0;
-
-  // End a transaction that will read or write to the code cache.
-  virtual void EndTransaction(CachePC begin, CachePC end) = 0;
-};
-
-// Transaction on the code cache. Wrapper around `BeginTransaction` and
-// `EndTransaction` that ensures the two are lexically matched.
-class CodeCacheTransaction {
- public:
-  inline CodeCacheTransaction(CodeCacheInterface *cache_,
-                              CachePC begin_, CachePC end_)
-      : cache(cache_),
-        begin(begin_),
-        end(end_) {
-    cache->BeginTransaction(begin, end);
-  }
-
-  ~CodeCacheTransaction(void) {
-    cache->EndTransaction(begin, end);
-  }
-
- private:
-  CodeCacheTransaction(void) = delete;
-
-  CodeCacheInterface *cache;
-  CachePC begin;
-  CachePC end;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCacheTransaction);
-};
-
 // Implementation of Granary's code caches.
-class CodeCache : public CodeCacheInterface {
+class CodeCache {
  public:
   CodeCache(Module *module_, int slab_size);
-  virtual ~CodeCache(void) = default;
+  ~CodeCache(void) = default;
 
   // Allocate a block of code from this code cache.
-  virtual CachePC AllocateBlock(int size) override;
+  CachePC AllocateBlock(int size);
 
   // Begin a transaction that will read or write to the code cache.
   //
   // Note: Transactions are distinct from allocations. Therefore, many threads/
   //       cores can simultaneously allocate from a code cache, but only one
   //       should be able to read/write data to the cache at a given time.
-  virtual void BeginTransaction(CachePC begin, CachePC end) override;
+  void BeginTransaction(CachePC begin, CachePC end);
 
   // End a transaction that will read or write to the code cache.
-  virtual void EndTransaction(CachePC begin, CachePC end) override;
+  void EndTransaction(CachePC begin, CachePC end);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeCache, {
     SHARED = true,
@@ -112,6 +61,31 @@ class CodeCache : public CodeCacheInterface {
   Module * const module;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
+};
+
+// Transaction on the code cache. Wrapper around `BeginTransaction` and
+// `EndTransaction` that ensures the two are lexically matched.
+class CodeCacheTransaction {
+ public:
+  inline CodeCacheTransaction(CodeCache *cache_, CachePC begin_, CachePC end_)
+      : cache(cache_),
+        begin(begin_),
+        end(end_) {
+    cache->BeginTransaction(begin, end);
+  }
+
+  ~CodeCacheTransaction(void) {
+    cache->EndTransaction(begin, end);
+  }
+
+ private:
+  CodeCacheTransaction(void) = delete;
+
+  CodeCache *cache;
+  CachePC begin;
+  CachePC end;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCacheTransaction);
 };
 
 #ifdef GRANARY_INTERNAL

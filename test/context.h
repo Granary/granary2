@@ -36,7 +36,7 @@ class MockContext : public granary::ContextInterface {
 
   // Register some meta-data with Granary.
   MOCK_METHOD1(RegisterMetaData,
-               void (const granary::MetaDataDescription ));
+               void (const granary::MetaDataDescription *));
 
   // Compile some code into one of the code caches.
   MOCK_METHOD1(Compile,
@@ -50,21 +50,6 @@ class MockContext : public granary::ContextInterface {
   MOCK_METHOD1(FreeTools,
                void (granary::Tool *tools));
 
-  // Allocate a new code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held.
-  MOCK_METHOD0(AllocateCodeCache,
-               granary::CodeCacheInterface *());
-
-  // Flush an entire code cache.
-  //
-  // Note: This should be a lightweight operation as it is usually invoked
-  //       whilst fine-grained locks are held (e.g. schedule for the allocator
-  //       to be freed).
-  MOCK_METHOD1(FlushCodeCache,
-               void (granary::CodeCacheInterface *));
-
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
   MOCK_METHOD2(AllocateDirectEdge,
@@ -76,6 +61,17 @@ class MockContext : public granary::ContextInterface {
   MOCK_METHOD2(AllocateIndirectEdge,
                granary::IndirectEdge *(const granary::BlockMetaData *,
                                        const granary::BlockMetaData *));
+
+  // Instantiates an indirect edge. This creates an out-edge that targets
+  // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
+  // `edge->in_edge_pc` is updated in place to reflect the new target.
+  MOCK_METHOD3(InstantiateIndirectEdge,
+               void(granary::IndirectEdge *, granary::AppPC,
+                    granary::CompensationBasicBlock *));
+
+  // Returns a pointer to the code cache that is used for allocating code for
+  // basic blocks.
+  MOCK_METHOD0(BlockCodeCache, granary::CodeCache *(void));
 
   // Get a pointer to this context's code cache index.
   MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());

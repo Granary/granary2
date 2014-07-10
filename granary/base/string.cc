@@ -327,7 +327,7 @@ extern "C" {
 void *granary_memmove(void *dest, const void *src, unsigned long num_bytes) {
   if (num_bytes) {
     if (dest <= src) {
-      return granary_memcpy(dest, src, num_bytes);
+      return memcpy(dest, src, num_bytes);
     } else {
       auto dest_bytes = reinterpret_cast<uint8_t *>(dest);
       auto src_bytes = reinterpret_cast<const uint8_t *>(src);

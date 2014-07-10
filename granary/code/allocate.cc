@@ -3,7 +3,10 @@
 #define GRANARY_INTERNAL
 
 #include "granary/arch/base.h"
+
+#include "granary/base/new.h"
 #include "granary/base/string.h"
+
 #include "granary/code/allocate.h"
 
 #include "granary/memory.h"
@@ -12,12 +15,32 @@
 namespace granary {
 namespace internal {
 
+class CodeSlab {
+ public:
+  CodeSlab(Module *code_module, int num_pages, int num_bytes, int offset_,
+           CodeSlab *next_);
+
+  std::atomic<int> offset;
+
+  alignas(arch::CACHE_LINE_SIZE_BYTES) CachePC begin;
+  CodeSlab *next;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(CodeSlab, {
+    SHARED = true,
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+  })
+
+ private:
+  CodeSlab(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeSlab);
+};
+
 // Initialize the metadata about a generic code slab.
 CodeSlab::CodeSlab(Module *module, int num_pages, int num_bytes,
                    int offset_, CodeSlab *next_)
-    : begin(nullptr),
-      next(next_),
-      offset(ATOMIC_VAR_INIT(offset_)) {
+    : offset(ATOMIC_VAR_INIT(offset_)),
+      begin(nullptr),
+      next(next_) {
   if (GRANARY_LIKELY(0 < num_pages)) {
     begin = reinterpret_cast<CachePC>(
         AllocatePages(num_pages, MemoryIntent::EXECUTABLE));
