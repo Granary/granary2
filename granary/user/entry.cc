@@ -24,7 +24,7 @@
 
 GRANARY_DEFINE_bool(show_gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
-    "is yes.");
+    "is `yes`.");
 
 GRANARY_DECLARE_bool(help);
 

@@ -197,6 +197,10 @@ static const char *BufferDocString(char *buff, const char *docstring) {
     if (' ' == *docstring) {
       last_stop = buff;
       docstring_last_stop = docstring + 1;
+    } else if ('\n' == *docstring) {
+      last_stop = buff;
+      docstring_last_stop = docstring + 1;
+      break;
     }
     *buff++ = *docstring++;
   }
@@ -222,7 +226,7 @@ void PrintAllOptions(void) {
     auto docstring = option->docstring;
     do {
       docstring = BufferDocString(line_buff, docstring);
-      Log(LogOutput, "\n\t%s", line_buff);
+      Log(LogOutput, "\n        %s", line_buff);
     } while (*docstring);
     Log(LogOutput, "\n");
   }
