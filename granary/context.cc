@@ -83,7 +83,7 @@ static CachePC CreateIndirectEntryCode(ContextInterface *context,
 
 // Register internal meta-data.
 static void InitMetaData(MetaDataManager *metadata_manager) {
-  metadata_manager->Register<ModuleMetaData>();
+  metadata_manager->Register<AppMetaData>();
   metadata_manager->Register<CacheMetaData>();
   metadata_manager->Register<LiveRegisterMetaData>();
   metadata_manager->Register<StackMetaData>();
@@ -114,8 +114,7 @@ Context::Context(void)
       unpatched_edge_list(nullptr),
       indirect_edge_list_lock(),
       indirect_edge_list(nullptr),
-      code_cache_index(new Index),
-      shadow_code_cache_index(new ShadowIndex) {
+      code_cache_index(new Index) {
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
@@ -150,15 +149,6 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
-// Initialize the a block's module-specific meta-data.
-static void InitModuleMeta(ModuleManager *module_manager, BlockMetaData *meta,
-                           AppPC start_pc) {
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_manager->FindByAppPC(start_pc);
-  module_meta->start_pc = start_pc;
-  module_meta->source = module->OffsetOf(start_pc);
-}
-
 }  // namespace
 
 Context::~Context(void) {
@@ -167,11 +157,16 @@ Context::~Context(void) {
   FreeEdgeList(indirect_edge_list);
 }
 
+// Returns a pointer to the module containing some program counter.
+Module *Context::ModuleContaining(AppPC pc) {
+  return module_manager.FindByAppPC(pc);
+}
+
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
-// `ModuleMetaData` within the `BlockMetaData`.
+// `AppMetaData` within the `BlockMetaData`.
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
   auto meta = AllocateEmptyBlockMetaData();
-  InitModuleMeta(&module_manager, meta, start_pc);
+  MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
   return meta;
 }
 
@@ -180,7 +175,7 @@ BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
 BlockMetaData *Context::AllocateBlockMetaData(
     const BlockMetaData *meta_template, AppPC start_pc) {
   auto meta = meta_template->Copy();
-  InitModuleMeta(&module_manager, meta, start_pc);
+  MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
   return meta;
 }
 
@@ -206,11 +201,10 @@ void Context::FreeTools(Tool *tools) {
 
 // Allocates a direct edge data structure, as well as the code needed to
 // back the direct edge.
-DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
-                                        BlockMetaData *dest_block_meta) {
+DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
   auto edge_code = edge_code_cache.AllocateBlock(
       arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-  auto edge = new DirectEdge(source_block_meta, dest_block_meta, edge_code);
+  auto edge = new DirectEdge(dest_block_meta, edge_code);
 
   do {  // Generate a small stub of code specific to this `DirectEdge`.
     CodeCacheTransaction transaction(
@@ -230,10 +224,8 @@ DirectEdge *Context::AllocateDirectEdge(const BlockMetaData *source_block_meta,
 
 // Allocates an indirect edge data structure.
 IndirectEdge *Context::AllocateIndirectEdge(
-    const BlockMetaData *source_block_meta,
     const BlockMetaData *dest_block_meta) {
-  auto edge = new IndirectEdge(source_block_meta, dest_block_meta,
-                               indirect_edge_entry_code);
+  auto edge = new IndirectEdge(dest_block_meta, indirect_edge_entry_code);
   FineGrainedLocked locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;
   indirect_edge_list = edge;
@@ -249,11 +241,6 @@ CodeCache *Context::BlockCodeCache(void) {
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;
-}
-
-// Get a pointer to this context's code cache index.
-LockedIndex *Context::ShadowCodeCacheIndex(void) {
-  return &shadow_code_cache_index;
 }
 
 }  // namespace granary

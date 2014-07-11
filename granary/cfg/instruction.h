@@ -413,6 +413,10 @@ class ControlFlowInstruction final : public NativeInstruction {
     ALIGNMENT = 1
   })
 
+  // Return address instruction after this instruction, assuming that this
+  // instruction is a function call (either direct or indirect).
+  GRANARY_INTERNAL_DEFINITION AnnotationInstruction *return_address;
+
  private:
   friend class BlockFactory;
 

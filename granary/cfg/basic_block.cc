@@ -8,7 +8,7 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/cache.h"  // For `CacheMetaData`.
-#include "granary/module.h"  // For `ModuleMetaData`.
+#include "granary/module.h"  // For `AppMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
 
 namespace granary {
@@ -97,7 +97,7 @@ InstrumentedBasicBlock::InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_)
     : cfg(cfg_),
       meta(meta_),
-      native_pc(meta ? MetaDataCast<ModuleMetaData *>(meta)->start_pc
+      native_pc(meta ? MetaDataCast<AppMetaData *>(meta)->start_pc
                      : nullptr) {}
 
 // Returns the starting PC of this basic block.
@@ -254,6 +254,9 @@ ReturnBasicBlock::~ReturnBasicBlock(void) {
 BlockMetaData *ReturnBasicBlock::MetaData(void) {
   if (GRANARY_UNLIKELY(!meta)) {
     std::swap(lazy_meta, meta);
+
+    // TODO(pag): Function return specialization is not yet implemented.
+    GRANARY_ASSERT(false);
   }
   return meta;
 }

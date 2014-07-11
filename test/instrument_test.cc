@@ -18,7 +18,7 @@ using namespace granary;
 class ToolA : public MockTool {
  public:
   ToolA(void) {
-    RegisterMetaData<ModuleMetaData>();
+    RegisterMetaData<AppMetaData>();
   }
   virtual ~ToolA(void) = default;
 };
@@ -74,7 +74,7 @@ class InstrumentTest : public Test {
 
 // Test running ToolA on invalid (nullptr) code.
 TEST_F(InstrumentTest, InstrumentNothing) {
-  auto module_meta_desc = MetaDataDescription::Get<ModuleMetaData>();
+  auto module_meta_desc = MetaDataDescription::Get<AppMetaData>();
 
   EXPECT_CALL(context, RegisterMetaData(module_meta_desc))
       .Times(1)

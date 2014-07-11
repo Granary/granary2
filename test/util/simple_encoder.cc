@@ -28,7 +28,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
       edge_cache(&edge_cache_mod, 1),
       index(new MockIndex),
       locked_index(index) {
-  meta_manager.Register<ModuleMetaData>();
+  meta_manager.Register<AppMetaData>();
   meta_manager.Register<CacheMetaData>();
   meta_manager.Register<LiveRegisterMetaData>();
   meta_manager.Register<StackMetaData>();
@@ -45,10 +45,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
 
 BlockMetaData *SimpleEncoderTest::AllocateMeta(AppPC pc) {
   auto meta = meta_manager.Allocate();
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  module_meta->start_pc = pc;
-  module_meta->source.module = &module;
-  module_meta->source.offset = 0;
+  MetaDataCast<AppMetaData *>(meta)->start_pc = pc;
   return meta;
 }
 

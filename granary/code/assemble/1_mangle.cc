@@ -34,7 +34,8 @@ extern void RelativizeDirectCFI(CacheMetaData *meta,
 //
 // Note: This has an architecture-specific implementation.
 extern void MangleIndirectCFI(DecodedBasicBlock *block,
-                              ControlFlowInstruction *cfi);
+                              ControlFlowInstruction *cfi,
+                              AnnotationInstruction *ret_address);
 
 // Performs mangling of an direct CFI instruction.
 //
@@ -120,8 +121,19 @@ class BlockMangler {
     GRANARY_UNUSED(cfi);
   }
 
+  void MangleFunctionCall(ControlFlowInstruction *cfi) {
+    auto ret_address = new AnnotationInstruction(
+        IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
+    cfi->UnsafeInsertAfter(ret_address);
+    cfi->return_address = ret_address;
+  }
+
   // Relativize a control-flow instruction.
   void MangleCFI(ControlFlowInstruction *cfi) {
+    if (cfi->IsFunctionCall()) {
+      MangleFunctionCall(cfi);
+    }
+
     auto target_block = cfi->TargetBlock();
     if (IsA<NativeBasicBlock *>(target_block)) {
       // We always defer to arch-specific relativization because some
@@ -134,7 +146,7 @@ class BlockMangler {
                             &(cfi->instruction), target_pc,
                             AddressNeedsRelativizing(target_pc));
       } else {
-        arch::MangleIndirectCFI(block, cfi);
+        arch::MangleIndirectCFI(block, cfi, cfi->return_address);
       }
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {
@@ -142,7 +154,7 @@ class BlockMangler {
       if (cfi->MatchOperands(ReadFrom(mloc))) {
         RelativizeMemOp(cfi, mloc);
       }
-      arch::MangleIndirectCFI(block, cfi);
+      arch::MangleIndirectCFI(block, cfi, cfi->return_address);
 
     // Need to mangle the indirect direct (with meta-data) into a return to
     // a different program counter.

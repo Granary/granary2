@@ -45,10 +45,11 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
   LocalControlFlowGraph cfg(context);
-  auto index = context->CodeCacheIndex();
+  CacheMetaData *cache_meta(nullptr);
   meta = Instrument(context, &cfg, meta, INSTRUMENT_DIRECT);
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+    auto index = context->CodeCacheIndex();
     Compile(context, &cfg);
     IndexBlocks(index, &cfg);
   }
@@ -61,11 +62,13 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
 CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                   AppPC target_app_pc) {
   LocalControlFlowGraph cfg(context);
-  auto index = context->CodeCacheIndex();
-  auto meta = context->AllocateBlockMetaData(edge->dest_meta, target_app_pc);
+  CacheMetaData *cache_meta(nullptr);
+  auto meta = context->AllocateBlockMetaData(edge->meta_template,
+                                             target_app_pc);
   meta = Instrument(context, &cfg, meta, INSTRUMENT_INDIRECT);
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+    auto index = context->CodeCacheIndex();
     Compile(context, &cfg, edge, target_app_pc);
     IndexBlocks(index, &cfg);
   }

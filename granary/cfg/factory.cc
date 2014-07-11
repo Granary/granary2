@@ -15,6 +15,7 @@
 
 #include "granary/cache.h"
 #include "granary/context.h"
+#include "granary/index.h"
 #include "granary/module.h"
 #include "granary/util.h"
 
@@ -301,41 +302,29 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
 
 namespace {
 
-static void JoinMetaData(ContextInterface *context, BlockMetaData *meta,
-                          AppPC cache_pc) {
-  // Set up `CacheMetaData::start_pc` as that is what the shadow index uses for
-  // lookup.
+// Materialize a request to a code cache location to that exact code cache
+// location.
+//
+// Note: This is a temporary hack, while I punt on the issue of function return
+//       specialization.
+//
+// TODO(pag): This does not fit with the model of return specialization,
+//            especially in the context of something like `longjmp`.
+CachedBasicBlock *MaterializeToExistingBlock(ContextInterface *context,
+                                             LocalControlFlowGraph *cfg,
+                                             BlockMetaData *meta,
+                                             AppMetaData *module_meta) {
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  cache_meta->start_pc = UnsafeCast<CachePC>(cache_pc);
+  cache_meta->start_pc = UnsafeCast<CachePC>(module_meta->start_pc);
 
-  auto shadow_index = context->ShadowCodeCacheIndex();
-  auto response = shadow_index->Request(meta);
+  do {
+    auto index = context->CodeCacheIndex();
+    LockedIndexTransaction transaction(index);
+    transaction.Insert(meta);
+  } while (0);
 
-  // TODO(pag): This case might be possible if we request that the block
-  //            immediately following a function call go native. Then we won't
-  //            necessarily have meta-data for the targeted block.
-  //
-  // TODO(pag): Another possibility is that a computation based on a return
-  //            address is performed. This case is explicitly not handled,
-  //            although an approach like DynamoRIO takes for signal-delaying
-  //            might be appropriate. It would require:
-  //                1)  Find the nearest known cache return address to the one
-  //                    being requested. Nearest being a heuristic. In practice
-  //                    this might be worth experimenting with.
-  //                2)  Apply the same displacement between the requested and
-  //                    found return address to the `ModuleMetaData::start_pc`
-  //                    associated with the found return address.
-  //                3)  Combine and translate with this block.
-  GRANARY_ASSERT(UnificationStatus::REJECT != response.status);
-
-  // Clear `CacheMetaData::start_pc` as we don't want it to look like this
-  // block has been encoded when it hasn't been.
-  cache_meta->start_pc = nullptr;
-
-  // Now combine the "fixed" meta-data with the found meta-data. This will,
-  // among other things, overwrite the `ModuleMetaData` of meta (which points
-  // into the code cache) with one that points to native code.
-  meta->JoinWith(response.meta);
+  auto block = new CachedBasicBlock(cfg, meta);
+  return block;
 }
 
 }  // namespace
@@ -347,17 +336,17 @@ static void JoinMetaData(ContextInterface *context, BlockMetaData *meta,
 InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
     BlockMetaData *meta) {
   AppPC non_transparent_pc(nullptr);
-  auto module_meta = MetaDataCast<ModuleMetaData *>(meta);
-  auto module = module_meta->source.module;
+  auto app_meta = MetaDataCast<AppMetaData *>(meta);
+  auto module = context->ModuleContaining(app_meta->start_pc);
 
+  // Aagh! Indirect jump to some already cached code. For the time being,
+  // give up and just go to the target and ignore the meta-data.
   if (ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
-    non_transparent_pc = module_meta->start_pc;
-    JoinMetaData(context, meta, non_transparent_pc);
-    module_meta = MetaDataCast<ModuleMetaData *>(meta);  // Compiler hint ;-)
-    module = nullptr;
+    non_transparent_pc = app_meta->start_pc;
+    return MaterializeToExistingBlock(context, cfg, meta, app_meta);
   }
 
-  auto dest_meta = context->AllocateBlockMetaData(module_meta->start_pc);
+  auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
   auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);
 
   // Default to having a materialization strategy, and make it so that no one

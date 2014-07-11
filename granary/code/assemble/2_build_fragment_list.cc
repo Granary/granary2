@@ -332,12 +332,9 @@ static CodeFragment *FragmentForBlock(FragmentListBuilder *frags,
 // Generates some edge code for a direct control-flow transfer between two
 // basic block.
 Fragment *MakeDirectEdgeFragment(FragmentListBuilder *frags,
-                                 CodeFragment *pred_frag,
                                  BlockMetaData *dest_block_meta) {
   auto edge_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
-  auto source_block_meta = pred_frag->attr.block_meta;
-  auto edge = frags->context->AllocateDirectEdge(source_block_meta,
-                                                 dest_block_meta);
+  auto edge = frags->context->AllocateDirectEdge(dest_block_meta);
   edge_frag->encoded_pc = edge->edge_code;
   edge_frag->block_meta = dest_block_meta;
   edge_frag->edge.kind = EDGE_KIND_DIRECT;
@@ -385,8 +382,7 @@ static Fragment *MakeIndirectEdgeFragment(FragmentListBuilder *frags,
   exit_frag->edge.kind = EDGE_KIND_INDIRECT;
   exit_frag->block_meta = dest_block_meta;
 
-  auto edge = frags->context->AllocateIndirectEdge(pred_frag->attr.block_meta,
-                                        dest_block_meta);
+  auto edge = frags->context->AllocateIndirectEdge(dest_block_meta);
 
   arch::GenerateIndirectEdgeCode(edge, cfi, in_edge_frag, out_edge_frag_miss,
                                  out_edge_frag_hit, exit_frag);
@@ -453,7 +449,7 @@ static Fragment *FragmentForTargetBlock(FragmentListBuilder *frags,
     // TODO(pag): If the number of predecessors of this block is >= 2 then it
     //            would be nice if they could share the same edge code via some
     //            intermediate fragment with the patchable jump.
-    return MakeDirectEdgeFragment(frags, pred_frag, direct_block->MetaData());
+    return MakeDirectEdgeFragment(frags, direct_block->MetaData());
   }
 
   // Indirect call/jump, or direct call/jump/conditional jump

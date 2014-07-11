@@ -41,6 +41,9 @@ class ContextInterface {
   // Needed for linking against the base vtable.
   virtual ~ContextInterface(void);
 
+  // Returns a pointer to the module containing some program counter.
+  virtual Module *ModuleContaining(AppPC pc) = 0;
+
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
 
@@ -63,12 +66,10 @@ class ContextInterface {
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  virtual DirectEdge *AllocateDirectEdge(const BlockMetaData *source_block_meta,
-                                         BlockMetaData *dest_block_meta) = 0;
+  virtual DirectEdge *AllocateDirectEdge(BlockMetaData *dest_block_meta) = 0;
 
   // Allocates an indirect edge data structure.
   virtual IndirectEdge *AllocateIndirectEdge(
-      const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) = 0;
 
   // Returns a pointer to the code cache that is used for allocating code for
@@ -77,9 +78,6 @@ class ContextInterface {
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
-
-  // Get a pointer to this context's shadow code cache index.
-  virtual LockedIndex *ShadowCodeCacheIndex(void) = 0;
 };
 
 // Manages environmental information that changes how Granary behaves. For
@@ -95,6 +93,9 @@ class Context : public ContextInterface {
   void InitTools(const char *tool_names);
 
   virtual ~Context(void);
+
+  // Returns a pointer to the module containing some program counter.
+  virtual Module *ModuleContaining(AppPC pc) override;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
@@ -119,12 +120,10 @@ class Context : public ContextInterface {
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
   virtual DirectEdge *AllocateDirectEdge(
-      const BlockMetaData *source_block_meta,
       BlockMetaData *dest_block_meta) override;
 
   // Allocates an indirect edge data structure.
   virtual IndirectEdge *AllocateIndirectEdge(
-      const BlockMetaData *source_block_meta,
       const BlockMetaData *dest_block_meta) override;
 
   // Returns a pointer to the code cache that is used for allocating code for
@@ -133,9 +132,6 @@ class Context : public ContextInterface {
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) override;
-
-  // Get a pointer to this context's shadow code cache index.
-  virtual LockedIndex *ShadowCodeCacheIndex(void) override;
 
  private:
   // Manages all modules allocated/understood by this environment.
@@ -174,9 +170,6 @@ class Context : public ContextInterface {
 
   // Code cache index for normal blocks.
   LockedIndex code_cache_index;
-
-  // Code cacge index for
-  LockedIndex shadow_code_cache_index;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

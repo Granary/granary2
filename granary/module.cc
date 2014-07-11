@@ -230,18 +230,12 @@ void Module::AddRangeNoConflict(ModuleAddressRange *range) {
 }
 
 // Default-initializes Granary's internal module meta-data.
-ModuleMetaData::ModuleMetaData(void)
-    : source(),
-      start_pc(nullptr) {}
+AppMetaData::AppMetaData(void)
+    : start_pc(nullptr) {}
 
-// Initialize this meta-data for a given module offset and program counter.
-void ModuleMetaData::Init(ModuleOffset source_, AppPC start_pc_) {
-  source = source_;
-  start_pc = start_pc_;
-}
 // Compare two translation meta-data objects for equality.
-bool ModuleMetaData::Equals(const ModuleMetaData *meta) const {
-  return source == meta->source && start_pc == meta->start_pc;
+bool AppMetaData::Equals(const AppMetaData *meta) const {
+  return start_pc == meta->start_pc;
 }
 
 // Initialize the module tracker.

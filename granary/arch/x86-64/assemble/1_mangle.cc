@@ -212,11 +212,10 @@ static void MangleIndirectReturn(DecodedBasicBlock *block,
 
 // Mangle an indirect function call.
 static void MangleIndirectCall(DecodedBasicBlock *block,
-                               ControlFlowInstruction *cfi) {
+                               ControlFlowInstruction *cfi,
+                               AnnotationInstruction *ret_address) {
   Instruction ni;
   Operand op;
-  auto ret_address = new AnnotationInstruction(
-      IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
 
   auto ret_address_reg = block->AllocateVirtualRegister();
   auto decoded_pc = cfi->instruction.decoded_pc;
@@ -232,12 +231,12 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   ni.effective_operand_width = ADDRESS_WIDTH_BITS;
   ni.AnalyzeStackUsage();
   cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
-  cfi->UnsafeInsertAfter(ret_address);
 }
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
 // target of any specialized indirect CFI instruction is stored in a register.
-void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
+void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
+                       AnnotationInstruction *ret_address) {
   if (cfi->IsFunctionReturn()) {
     auto target_block = cfi->TargetBlock();
     if (auto return_block = DynamicCast<ReturnBasicBlock *>(target_block)) {
@@ -250,7 +249,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
   } else if (cfi->IsFunctionCall()) {
     Instruction ni;
     auto &orig_target_op(cfi->instruction.ops[0]);
-    MangleIndirectCall(block, cfi);
+    MangleIndirectCall(block, cfi, ret_address);
     if (orig_target_op.IsMemory()) {
       auto new_target_reg = block->AllocateVirtualRegister();
       MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);

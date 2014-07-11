@@ -253,6 +253,7 @@ void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
 ControlFlowInstruction::ControlFlowInstruction(
     const arch::Instruction *instruction_, BasicBlock *target_)
       : NativeInstruction(instruction_),
+        return_address(nullptr),
         target(target_) {
   target->Acquire();
 }

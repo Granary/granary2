@@ -11,14 +11,12 @@
 
 namespace granary {
 
-DirectEdge::DirectEdge(const BlockMetaData *source_meta_,
-                       BlockMetaData *dest_meta_, CachePC edge_code_)
+DirectEdge::DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_)
     : entry_target(nullptr),
       exit_target(edge_code_),
       num_executions(0),
       num_execution_overflows(0),
       next(nullptr),
-      source_meta(source_meta_),
       dest_meta(ATOMIC_VAR_INIT(dest_meta_)),
       edge_code(edge_code_),
       patch_instruction(nullptr) {}
@@ -29,19 +27,17 @@ DirectEdge::~DirectEdge(void) {
   }
 }
 
-IndirectEdge::IndirectEdge(const BlockMetaData *source_meta_,
-                           const BlockMetaData *dest_meta_,
+IndirectEdge::IndirectEdge(const BlockMetaData *dest_meta_,
                            CachePC indirect_edge_entrypoint)
     : out_edge_pc(indirect_edge_entrypoint),
       out_edge_pc_lock(),
-      source_meta(source_meta_),
-      dest_meta(dest_meta_),
+      meta_template(dest_meta_),
       next(nullptr),
       begin_out_edge_template(nullptr),
       end_out_edge_template(nullptr) {}
 
 IndirectEdge::~IndirectEdge(void) {
-  delete dest_meta;
+  delete meta_template;
 }
 
 }  // namespace granary

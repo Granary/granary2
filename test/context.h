@@ -15,10 +15,8 @@ class MockContext : public granary::ContextInterface {
   MockContext(void) = default;
   virtual ~MockContext(void) = default;
 
-  // Annotates the instruction, or adds an annotated instruction into the
-  // instruction list. This returns the first
-  MOCK_METHOD1(AnnotateInstruction,
-               void(granary::Instruction *instr));
+  /// Returns a pointer to the module containing some program counter.
+  MOCK_METHOD1(ModuleContaining, granary::Module *(granary::AppPC));
 
   // Allocate and initialize some `BlockMetaData`.
   MOCK_METHOD1(AllocateBlockMetaData,
@@ -52,15 +50,13 @@ class MockContext : public granary::ContextInterface {
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  MOCK_METHOD2(AllocateDirectEdge,
-               granary::DirectEdge *(const granary::BlockMetaData *,
-                                     granary::BlockMetaData *));
+  MOCK_METHOD1(AllocateDirectEdge,
+               granary::DirectEdge *(granary::BlockMetaData *));
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  MOCK_METHOD2(AllocateIndirectEdge,
-               granary::IndirectEdge *(const granary::BlockMetaData *,
-                                       const granary::BlockMetaData *));
+  MOCK_METHOD1(AllocateIndirectEdge,
+               granary::IndirectEdge *(const granary::BlockMetaData *));
 
   // Instantiates an indirect edge. This creates an out-edge that targets
   // `cache_pc` if the indirect CFI being taken is trying to jump to `app_pc`.
@@ -75,9 +71,6 @@ class MockContext : public granary::ContextInterface {
 
   // Get a pointer to this context's code cache index.
   MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());
-
-  // Get a pointer to this context's shadow code cache index.
-  MOCK_METHOD0(ShadowCodeCacheIndex, granary::LockedIndex *());
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);

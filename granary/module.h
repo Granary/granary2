@@ -15,7 +15,7 @@ namespace granary {
 // Forward declarations.
 class ContextInterface;
 class Module;
-class ModuleMetaData;
+class AppMetaData;
 class ModuleManager;
 
 // Represents a location in a module. Note that not all segments within modules
@@ -130,7 +130,7 @@ class Module {
   GRANARY_INTERNAL_DEFINITION Module *next;
 
  private:
-  friend class ModuleMetaData;
+  friend class AppMetaData;
   friend class ModuleManager;
 
   Module(void) = delete;
@@ -178,29 +178,22 @@ class Module {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Module);
 };
 
-// Module-specific meta-data that Granary maintains about all basic blocks.
-class ModuleMetaData : public IndexableMetaData<ModuleMetaData> {
+// Application-specific meta-data that Granary maintains about all basic blocks.
+class AppMetaData : public IndexableMetaData<AppMetaData> {
  public:
   // Default-initializes Granary's internal module meta-data.
-  ModuleMetaData(void);
-
-  // Initialize this meta-data for a given module offset and program counter.
-  GRANARY_INTERNAL_DEFINITION
-  void Init(ModuleOffset source_, AppPC start_pc_);
+  AppMetaData(void);
 
   // Compare two translation meta-data objects for equality.
-  bool Equals(const ModuleMetaData *meta) const;
-
-  // The module from which this block originates.
-  GRANARY_CONST ModuleOffset source;
+  bool Equals(const AppMetaData *meta) const;
 
   // The native program counter where this block begins.
   GRANARY_CONST AppPC start_pc;
 };
 
 // Specify to Granary tools that the function to get the info about
-// `ModuleMetaData` already exists.
-GRANARY_SHARE_METADATA(ModuleMetaData)
+// `AppMetaData` already exists.
+GRANARY_SHARE_METADATA(AppMetaData)
 
 #ifdef GRANARY_INTERNAL
 // Manages a set of modules.

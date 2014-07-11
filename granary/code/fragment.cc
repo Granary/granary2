@@ -342,7 +342,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     }
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
     if (code->attr.block_meta && code->attr.is_block_head) {
-      auto meta = MetaDataCast<ModuleMetaData *>(code->attr.block_meta);
+      auto meta = MetaDataCast<AppMetaData *>(code->attr.block_meta);
       Log(level, "%p|", meta->start_pc);
     } else if (code->attr.is_compensation_code) {
       Log(level, "compensation code|");

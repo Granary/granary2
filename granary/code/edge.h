@@ -24,8 +24,7 @@ class ContextInterface;
 // Granary.
 class alignas(alignof(void *)) DirectEdge {
  public:
-  DirectEdge(const BlockMetaData *source_meta_, BlockMetaData *dest_meta_,
-             CachePC edge_code_);
+  DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_);
 
   ~DirectEdge(void);
 
@@ -49,9 +48,6 @@ class alignas(alignof(void *)) DirectEdge {
 
   // Next direct edge in a chain of all direct edges.
   DirectEdge *next;
-
-  // Meta-data associated with the predecessor block.
-  const BlockMetaData * const source_meta;
 
   // Meta-data associated with the block that must be translated. If this is
   // null then it means that this block has either been translated, or is in
@@ -106,8 +102,7 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 // Granary.
 class alignas(alignof(volatile void *)) IndirectEdge {
  public:
-  IndirectEdge(const BlockMetaData *source_meta_,
-               const BlockMetaData *dest_meta_,
+  IndirectEdge(const BlockMetaData *dest_meta_,
                CachePC indirect_edge_entrypoint);
   ~IndirectEdge(void);
 
@@ -130,9 +125,8 @@ class alignas(alignof(volatile void *)) IndirectEdge {
   CachePC out_edge_pc;
   FineGrainedLock out_edge_pc_lock;
 
-  // Meta-data template associated with this indirect edge.
-  const BlockMetaData * const source_meta;
-  const BlockMetaData * const dest_meta;
+  // Meta-data template associated with targets of this indirect CFI.
+  const BlockMetaData * const meta_template;
 
   // Next edge in a linked list of all indirect edges in some context.
   IndirectEdge *next;
