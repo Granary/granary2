@@ -1,26 +1,27 @@
 /*BEGIN_LEGAL 
-Intel Open Source License 
+Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
- 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -52,6 +53,7 @@ typedef enum {
   XED_CHIP_I486,
   XED_CHIP_PENTIUMREAL,
   XED_CHIP_PENTIUM,
+  XED_CHIP_QUARK,
   XED_CHIP_PENTIUMMMXREAL,
   XED_CHIP_PENTIUMMMX,
   XED_CHIP_ALLREAL,
@@ -60,8 +62,8 @@ typedef enum {
   XED_CHIP_PENTIUM3,
   XED_CHIP_PENTIUM4,
   XED_CHIP_P4PRESCOTT,
-  XED_CHIP_P4PRESCOTT642,
-  XED_CHIP_P4PRESCOTT2M,
+  XED_CHIP_P4PRESCOTT_NOLAHF,
+  XED_CHIP_P4PRESCOTT_VTX,
   XED_CHIP_CORE2,
   XED_CHIP_PENRYN,
   XED_CHIP_PENRYN_E,
@@ -71,10 +73,12 @@ typedef enum {
   XED_CHIP_SALTWELL,
   XED_CHIP_SILVERMONT,
   XED_CHIP_AMD,
+  XED_CHIP_GOLDMONT,
   XED_CHIP_SANDYBRIDGE,
   XED_CHIP_IVYBRIDGE,
   XED_CHIP_HASWELL,
   XED_CHIP_BROADWELL,
+  XED_CHIP_SKYLAKE,
   XED_CHIP_ALL,
   XED_CHIP_LAST
 } xed_chip_enum_t;

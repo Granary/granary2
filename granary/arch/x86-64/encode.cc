@@ -162,7 +162,9 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
   // Segment offset.
   if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
     xedo->u.mem.disp.displacement = op.addr.as_uint;
-    xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
+    if (op.addr.as_int >= 0) { // Unsigned, apply a 31-bit mask.
+      xedo->u.mem.disp.displacement &= 0x7FFFFFFFULL;
+    }
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.seg = op.segment;
 

@@ -1,26 +1,27 @@
 #BEGIN_LEGAL
-#Intel Open Source License 
+#Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 #
-#Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
-# 
 #Redistribution and use in source and binary forms, with or without
 #modification, are permitted provided that the following conditions are
 #met:
 #
-#Redistributions of source code must retain the above copyright notice,
-#this list of conditions and the following disclaimer.  Redistributions
-#in binary form must reproduce the above copyright notice, this list of
-#conditions and the following disclaimer in the documentation and/or
-#other materials provided with the distribution.  Neither the name of
-#the Intel Corporation nor the names of its contributors may be used to
-#endorse or promote products derived from this software without
-#specific prior written permission.
-# 
+#    * Redistributions of source code must retain the above copyright
+#      notice, this list of conditions and the following disclaimer.
+#
+#    * Redistributions in binary form must reproduce the above
+#      copyright notice, this list of conditions and the following
+#      disclaimer in the documentation and/or other materials provided
+#      with the distribution.
+#
+#    * Neither the name of Intel Corporation nor the names of its
+#      contributors may be used to endorse or promote products derived
+#      from this software without specific prior written permission.
+#
 #THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-#``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+#"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 #LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-#A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-#ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+#OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 #SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 #LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 #DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -137,18 +138,18 @@ BEXTR               BMI1            BMI1            BEXTR_VGPR32d_MEMd_VGPR32d  
 BEXTR               BMI1            BMI1            BEXTR_VGPR32d_VGPR32d_VGPR32d  BMI1                 INVALID
 BEXTR               BMI1            BMI1            BEXTR_VGPR64q_MEMq_VGPR64q     BMI1                 INVALID
 BEXTR               BMI1            BMI1            BEXTR_VGPR64q_VGPR64q_VGPR64q  BMI1                 INVALID
-BEXTR_XOP           TBM             TBM             BEXTR_XOP_GPRvqq_GPRvqq_IMMd   TBM                  SCALABLE
-BEXTR_XOP           TBM             TBM             BEXTR_XOP_GPRvqq_MEMqq_IMMd    TBM                  SCALABLE
-BLCFILL             TBM             TBM             BLCFILL_GPRyqq_GPRvqq          TBM                  SCALABLE
-BLCFILL             TBM             TBM             BLCFILL_GPRyqq_MEMqq           TBM                  INVALID
-BLCIC               TBM             TBM             BLCIC_GPRyqq_GPRvqq            TBM                  SCALABLE
-BLCIC               TBM             TBM             BLCIC_GPRyqq_MEMqq             TBM                  INVALID
-BLCI                TBM             TBM             BLCI_GPRyqq_GPRvqq             TBM                  SCALABLE
-BLCI                TBM             TBM             BLCI_GPRyqq_MEMqq              TBM                  INVALID
-BLCMSK              TBM             TBM             BLCMSK_GPRyqq_GPRvqq           TBM                  SCALABLE
-BLCMSK              TBM             TBM             BLCMSK_GPRyqq_MEMqq            TBM                  INVALID
-BLCS                TBM             TBM             BLCS_GPRyqq_GPRvqq             TBM                  SCALABLE
-BLCS                TBM             TBM             BLCS_GPRyqq_MEMqq              TBM                  INVALID
+BEXTR_XOP           TBM             TBM             BEXTR_XOP_GPRyy_GPRyy_IMMd     TBM                  SCALABLE
+BEXTR_XOP           TBM             TBM             BEXTR_XOP_GPRyy_MEMy_IMMd      TBM                  SCALABLE
+BLCFILL             TBM             TBM             BLCFILL_GPRyy_GPRvy            TBM                  SCALABLE
+BLCFILL             TBM             TBM             BLCFILL_GPRyy_MEMy             TBM                  SCALABLE
+BLCIC               TBM             TBM             BLCIC_GPRyy_GPRvy              TBM                  SCALABLE
+BLCIC               TBM             TBM             BLCIC_GPRyy_MEMy               TBM                  SCALABLE
+BLCI                TBM             TBM             BLCI_GPRyy_GPRvy               TBM                  SCALABLE
+BLCI                TBM             TBM             BLCI_GPRyy_MEMy                TBM                  SCALABLE
+BLCMSK              TBM             TBM             BLCMSK_GPRyy_GPRvy             TBM                  SCALABLE
+BLCMSK              TBM             TBM             BLCMSK_GPRyy_MEMy              TBM                  SCALABLE
+BLCS                TBM             TBM             BLCS_GPRyy_GPRvy               TBM                  SCALABLE
+BLCS                TBM             TBM             BLCS_GPRyy_MEMy                TBM                  SCALABLE
 BLENDPD             SSE4            SSE             BLENDPD_XMMdq_MEMdq_IMMb       SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
 BLENDPD             SSE4            SSE             BLENDPD_XMMdq_XMMdq_IMMb       SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
 BLENDPS             SSE4            SSE             BLENDPS_XMMdq_MEMdq_IMMb       SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
@@ -157,10 +158,10 @@ BLENDVPD            SSE4            SSE             BLENDVPD_XMMdq_MEMdq        
 BLENDVPD            SSE4            SSE             BLENDVPD_XMMdq_XMMdq           SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
 BLENDVPS            SSE4            SSE             BLENDVPS_XMMdq_MEMdq           SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
 BLENDVPS            SSE4            SSE             BLENDVPS_XMMdq_XMMdq           SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT
-BLSFILL             TBM             TBM             BLSFILL_GPRyqq_GPRvqq          TBM                  SCALABLE
-BLSFILL             TBM             TBM             BLSFILL_GPRyqq_MEMqq           TBM                  INVALID
-BLSIC               TBM             TBM             BLSIC_GPRyqq_GPRvqq            TBM                  SCALABLE
-BLSIC               TBM             TBM             BLSIC_GPRyqq_MEMqq             TBM                  INVALID
+BLSFILL             TBM             TBM             BLSFILL_GPRyy_GPRvy            TBM                  SCALABLE
+BLSFILL             TBM             TBM             BLSFILL_GPRyy_MEMy             TBM                  SCALABLE
+BLSIC               TBM             TBM             BLSIC_GPRyy_GPRvy              TBM                  SCALABLE
+BLSIC               TBM             TBM             BLSIC_GPRyy_MEMy               TBM                  SCALABLE
 BLSI                BMI1            BMI1            BLSI_VGPR32d_MEMd              BMI1                 INVALID
 BLSI                BMI1            BMI1            BLSI_VGPR32d_VGPR32d           BMI1                 INVALID
 BLSI                BMI1            BMI1            BLSI_VGPR64q_MEMq              BMI1                 INVALID
@@ -173,6 +174,25 @@ BLSR                BMI1            BMI1            BLSR_VGPR32d_MEMd           
 BLSR                BMI1            BMI1            BLSR_VGPR32d_VGPR32d           BMI1                 INVALID
 BLSR                BMI1            BMI1            BLSR_VGPR64q_MEMq              BMI1                 INVALID
 BLSR                BMI1            BMI1            BLSR_VGPR64q_VGPR64q           BMI1                 INVALID
+BNDCL               MPX             MPX             BNDCL_BND_AGEN                 MPX                  EXCEPTION_BR
+BNDCL               MPX             MPX             BNDCL_BND_GPR32                MPX                  EXCEPTION_BR
+BNDCL               MPX             MPX             BNDCL_BND_GPR64                MPX                  EXCEPTION_BR
+BNDCN               MPX             MPX             BNDCN_BND_AGEN                 MPX                  EXCEPTION_BR
+BNDCN               MPX             MPX             BNDCN_BND_GPR32                MPX                  EXCEPTION_BR
+BNDCN               MPX             MPX             BNDCN_BND_GPR64                MPX                  EXCEPTION_BR
+BNDCU               MPX             MPX             BNDCU_BND_AGEN                 MPX                  EXCEPTION_BR
+BNDCU               MPX             MPX             BNDCU_BND_GPR32                MPX                  EXCEPTION_BR
+BNDCU               MPX             MPX             BNDCU_BND_GPR64                MPX                  EXCEPTION_BR
+BNDLDX              MPX             MPX             BNDLDX_BND_MEMbnd32            MPX                  EXCEPTION_BR:SPECIAL_AGEN_REQUIRED:INDEX_REG_IS_POINTER:NO_RIP_REL
+BNDLDX              MPX             MPX             BNDLDX_BND_MEMbnd64            MPX                  EXCEPTION_BR:SPECIAL_AGEN_REQUIRED:INDEX_REG_IS_POINTER:NO_RIP_REL
+BNDMK               MPX             MPX             BNDMK_BND_AGEN                 MPX                  INVALID
+BNDMOV              MPX             MPX             BNDMOV_BND_BND                 MPX                  INVALID
+BNDMOV              MPX             MPX             BNDMOV_BND_MEMdq               MPX                  INVALID
+BNDMOV              MPX             MPX             BNDMOV_BND_MEMq                MPX                  INVALID
+BNDMOV              MPX             MPX             BNDMOV_MEMdq_BND               MPX                  INVALID
+BNDMOV              MPX             MPX             BNDMOV_MEMq_BND                MPX                  INVALID
+BNDSTX              MPX             MPX             BNDSTX_MEMbnd32_BND            MPX                  EXCEPTION_BR:SPECIAL_AGEN_REQUIRED:INDEX_REG_IS_POINTER:NO_RIP_REL
+BNDSTX              MPX             MPX             BNDSTX_MEMbnd64_BND            MPX                  EXCEPTION_BR:SPECIAL_AGEN_REQUIRED:INDEX_REG_IS_POINTER:NO_RIP_REL
 BOUND               BASE            INTERRUPT       BOUND_GPRv_MEMa16              I186                 EXCEPTION_BR:SCALABLE
 BOUND               BASE            INTERRUPT       BOUND_GPRv_MEMa32              I186                 EXCEPTION_BR:SCALABLE
 BSF                 BASE            BITBYTE         BSF_GPRv_GPRv                  I386                 SCALABLE
@@ -212,6 +232,7 @@ CDQE                LONGMODE        CONVERT         CDQE                        
 CLAC                SMAP            SMAP            CLAC                           SMAP                 INVALID
 CLC                 BASE            FLAGOP          CLC                            I86                  INVALID
 CLD                 BASE            FLAGOP          CLD                            I86                  NOTSX_COND
+CLFLUSHOPT          CLFLUSHOPT      CLFLUSHOPT      CLFLUSHOPT_MEMmprefetch        CLFLUSHOPT           PREFETCH
 CLFLUSH             BASE            MISC            CLFLUSH_MEMmprefetch           PENTIUM4             NOTSX
 CLGI                SVM             SYSTEM          CLGI                           SVM                  PROTECTED_MODE
 CLI                 BASE            FLAGOP          CLI                            I86                  NOTSX
@@ -291,14 +312,10 @@ COMISS              SSE             SSE             COMISS_XMMss_MEMss          
 COMISS              SSE             SSE             COMISS_XMMss_XMMss             SSE                  SIMD_SCALAR:UNALIGNED:MXCSR
 CPUID               BASE            MISC            CPUID                          I486REAL             NOTSX
 CQO                 LONGMODE        CONVERT         CQO                            LONGMODE             INVALID
-CRC32               SSE4            SSE             CRC32_GPR32d_GPR8b             SSE42                UNALIGNED:IGNORES_OSFXSR
-CRC32               SSE4            SSE             CRC32_GPR32d_GPRv              SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
-CRC32               SSE4            SSE             CRC32_GPR32d_MEMb              SSE42                UNALIGNED:IGNORES_OSFXSR
-CRC32               SSE4            SSE             CRC32_GPR32d_MEMv              SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
-CRC32               SSE4            SSE             CRC32_GPR64q_GPR64q            SSE42                UNALIGNED:IGNORES_OSFXSR
-CRC32               SSE4            SSE             CRC32_GPR64q_GPR8b             SSE42                UNALIGNED:IGNORES_OSFXSR
-CRC32               SSE4            SSE             CRC32_GPR64q_MEMb              SSE42                UNALIGNED:IGNORES_OSFXSR
-CRC32               SSE4            SSE             CRC32_GPR64q_MEMq              SSE42                UNALIGNED:IGNORES_OSFXSR
+CRC32               SSE4            SSE             CRC32_GPRyy_GPR8b              SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
+CRC32               SSE4            SSE             CRC32_GPRyy_GPRv               SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
+CRC32               SSE4            SSE             CRC32_GPRyy_MEMb               SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
+CRC32               SSE4            SSE             CRC32_GPRyy_MEMv               SSE42                UNALIGNED:IGNORES_OSFXSR:SCALABLE
 CVTDQ2PD            SSE2            CONVERT         CVTDQ2PD_XMMpd_MEMq            SSE2                 UNALIGNED:MXCSR
 CVTDQ2PD            SSE2            CONVERT         CVTDQ2PD_XMMpd_XMMq            SSE2                 UNALIGNED:MXCSR
 CVTDQ2PS            SSE2            CONVERT         CVTDQ2PS_XMMps_MEMdq           SSE2                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT:MXCSR
@@ -381,6 +398,8 @@ DPPD                SSE4            SSE             DPPD_XMMdq_XMMdq_IMMb       
 DPPS                SSE4            SSE             DPPS_XMMdq_MEMdq_IMMb          SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT:MXCSR
 DPPS                SSE4            SSE             DPPS_XMMdq_XMMdq_IMMb          SSE4                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT:MXCSR
 EMMS                MMX             MMX             EMMS                           PENTIUMMMX           X87_MMX_STATE_W:NOTSX
+ENCLS               SGX             SGX             ENCLS_EAX_RBX_RCX_RDX          SGX                  INVALID
+ENCLU               SGX             SGX             ENCLU_EAX_RBX_RCX_RDX          SGX                  INVALID
 ENTER               BASE            MISC            ENTER_IMMw_IMMb                I186                 ATT_OPERAND_ORDER_EXCEPTION:FIXED_BASE0:STACKPUSH0:SCALABLE
 EXTRACTPS           SSE4            SSE             EXTRACTPS_GPR32d_XMMdq_IMMb    SSE4                 UNALIGNED
 EXTRACTPS           SSE4            SSE             EXTRACTPS_MEMd_XMMps_IMMb      SSE4                 UNALIGNED
@@ -670,7 +689,7 @@ LIDT                BASE            SYSTEM          LIDT_MEMs                   
 LIDT                BASE            SYSTEM          LIDT_MEMs64                    I286REAL             RING0:NOTSX
 LLDT                BASE            SYSTEM          LLDT_GPR16                     I286PROTECTED        PROTECTED_MODE:RING0:NOTSX
 LLDT                BASE            SYSTEM          LLDT_MEMw                      I286PROTECTED        PROTECTED_MODE:RING0:NOTSX
-LLWPCB              XOP             XOP             LLWPCB_GPRvqq                  XOP                  SCALABLE
+LLWPCB              XOP             XOP             LLWPCB_GPRyy                   XOP                  SCALABLE
 LMSW                BASE            SYSTEM          LMSW_GPR16                     I286REAL             RING0:NOTSX
 LMSW                BASE            SYSTEM          LMSW_MEMw                      I286REAL             RING0:NOTSX
 LODSB               BASE            STRINGOP        LODSB                          I86                  ANY_REP_ABLE:FIXED_BASE0
@@ -685,10 +704,10 @@ LSL                 BASE            SYSTEM          LSL_GPRv_MEMw               
 LSS                 BASE            SEGOP           LSS_GPRv_MEMp2                 I386                 NOTSX:SCALABLE
 LTR                 BASE            SYSTEM          LTR_GPR16                      I286PROTECTED        PROTECTED_MODE:RING0:NOTSX
 LTR                 BASE            SYSTEM          LTR_MEMw                       I286PROTECTED        PROTECTED_MODE:RING0:NOTSX
-LWPINS              XOP             XOP             LWPINS_GPRyqq_GPRvd_IMMd       XOP                  SCALABLE
-LWPINS              XOP             XOP             LWPINS_GPRyqq_MEMd_IMMd        XOP                  INVALID
-LWPVAL              XOP             XOP             LWPVAL_GPRyqq_GPRvd_IMMd       XOP                  SCALABLE
-LWPVAL              XOP             XOP             LWPVAL_GPRyqq_MEMd_IMMd        XOP                  INVALID
+LWPINS              XOP             XOP             LWPINS_GPRyy_GPRvd_IMMd        XOP                  SCALABLE
+LWPINS              XOP             XOP             LWPINS_GPRyy_MEMd_IMMd         XOP                  SCALABLE
+LWPVAL              XOP             XOP             LWPVAL_GPRyy_GPRvd_IMMd        XOP                  SCALABLE
+LWPVAL              XOP             XOP             LWPVAL_GPRyy_MEMd_IMMd         XOP                  SCALABLE
 LZCNT               LZCNT           LZCNT           LZCNT_GPRv_GPRv                LZCNT                SCALABLE
 LZCNT               LZCNT           LZCNT           LZCNT_GPRv_MEMv                LZCNT                SCALABLE
 MASKMOVDQU          SSE2            DATAXFER        MASKMOVDQU_XMMdq_XMMdq         SSE2                 FIXED_BASE0:MASKOP:NOTSX
@@ -882,13 +901,13 @@ NOP                 BASE            WIDENOP         NOP_GPRv_GPRv_0F1C          
 NOP                 BASE            WIDENOP         NOP_GPRv_GPRv_0F1D             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_GPRv_GPRv_0F1E             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_GPRv_GPRv_0F1F             PPRO                 NOP:SCALABLE
+NOP                 BASE            WIDENOP         NOP_GPRv_MEM_0F1B              PPRO                 NOP:SCALABLE
+NOP                 BASE            WIDENOP         NOP_GPRv_MEMv_0F1A             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_0F18r4                PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_0F18r5                PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_0F18r6                PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_0F18r7                PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F19             PPRO                 NOP:SCALABLE
-NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F1A             PPRO                 NOP:SCALABLE
-NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F1B             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F1C             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F1D             PPRO                 NOP:SCALABLE
 NOP                 BASE            WIDENOP         NOP_MEMv_GPRv_0F1E             PPRO                 NOP:SCALABLE
@@ -1061,8 +1080,8 @@ PEXTRQ              SSE4            SSE             PEXTRQ_GPR64q_XMMdq_IMMb    
 PEXTRQ              SSE4            SSE             PEXTRQ_MEMq_XMMdq_IMMb         SSE4                 UNALIGNED
 PEXTRW              MMX             MMX             PEXTRW_GPR32_MMXq_IMMb         PENTIUMMMX           NOTSX
 PEXTRW              SSE2            SSE             PEXTRW_GPR32_XMMdq_IMMb        SSE2                 INVALID
-PEXTRW              SSE4            SSE             PEXTRW_SSE4_GPR32_XMMdq_IMMb   SSE4                 UNALIGNED
-PEXTRW              SSE4            SSE             PEXTRW_SSE4_MEMw_XMMdq_IMMb    SSE4                 UNALIGNED
+PEXTRW_SSE4         SSE4            SSE             PEXTRW_SSE4_GPR32_XMMdq_IMMb   SSE4                 UNALIGNED
+PEXTRW_SSE4         SSE4            SSE             PEXTRW_SSE4_MEMw_XMMdq_IMMb    SSE4                 UNALIGNED
 PEXT                BMI2            BMI2            PEXT_VGPR32d_VGPR32d_MEMd      BMI2                 INVALID
 PEXT                BMI2            BMI2            PEXT_VGPR32d_VGPR32d_VGPR32d   BMI2                 INVALID
 PEXT                BMI2            BMI2            PEXT_VGPR64q_VGPR64q_MEMq      BMI2                 INVALID
@@ -1586,6 +1605,20 @@ SETZ                BASE            BITBYTE         SETZ_MEMb                   
 SFENCE              SSE             MISC            SFENCE                         SSE                  IGNORES_OSFXSR
 SGDT                BASE            SYSTEM          SGDT_MEMs                      I286REAL             NOTSX:SCALABLE
 SGDT                BASE            SYSTEM          SGDT_MEMs64                    I286REAL             NOTSX
+SHA1MSG1            SHA             SHA             SHA1MSG1_XMMi32_MEMi32_SHA     SHA                  INVALID
+SHA1MSG1            SHA             SHA             SHA1MSG1_XMMi32_XMMi32_SHA     SHA                  INVALID
+SHA1MSG2            SHA             SHA             SHA1MSG2_XMMi32_MEMi32_SHA     SHA                  INVALID
+SHA1MSG2            SHA             SHA             SHA1MSG2_XMMi32_XMMi32_SHA     SHA                  INVALID
+SHA1NEXTE           SHA             SHA             SHA1NEXTE_XMMi32_MEMi32_SHA    SHA                  INVALID
+SHA1NEXTE           SHA             SHA             SHA1NEXTE_XMMi32_XMMi32_SHA    SHA                  INVALID
+SHA1RNDS4           SHA             SHA             SHA1RNDS4_XMMi32_MEMi32_IMM8_SHA SHA                  INVALID
+SHA1RNDS4           SHA             SHA             SHA1RNDS4_XMMi32_XMMi32_IMM8_SHA SHA                  INVALID
+SHA256MSG1          SHA             SHA             SHA256MSG1_XMMi32_MEMi32_SHA   SHA                  INVALID
+SHA256MSG1          SHA             SHA             SHA256MSG1_XMMi32_XMMi32_SHA   SHA                  INVALID
+SHA256MSG2          SHA             SHA             SHA256MSG2_XMMi32_MEMi32_SHA   SHA                  INVALID
+SHA256MSG2          SHA             SHA             SHA256MSG2_XMMi32_XMMi32_SHA   SHA                  INVALID
+SHA256RNDS2         SHA             SHA             SHA256RNDS2_XMMi32_MEMi32_SHA  SHA                  INVALID
+SHA256RNDS2         SHA             SHA             SHA256RNDS2_XMMi32_XMMi32_SHA  SHA                  INVALID
 SHLD                BASE            SHIFT           SHLD_GPRv_GPRv_CL              I386                 SCALABLE
 SHLD                BASE            SHIFT           SHLD_GPRv_GPRv_IMMb            I386                 SCALABLE
 SHLD                BASE            SHIFT           SHLD_MEMv_GPRv_CL              I386                 SCALABLE
@@ -1647,7 +1680,7 @@ SIDT                BASE            SYSTEM          SIDT_MEMs64                 
 SKINIT              SVM             SYSTEM          SKINIT_EAX                     SVM                  PROTECTED_MODE
 SLDT                BASE            SYSTEM          SLDT_GPRv                      I286PROTECTED        PROTECTED_MODE:NOTSX:SCALABLE
 SLDT                BASE            SYSTEM          SLDT_MEMw                      I286PROTECTED        PROTECTED_MODE:NOTSX
-SLWPCB              XOP             XOP             SLWPCB_GPRvqq                  XOP                  SCALABLE
+SLWPCB              XOP             XOP             SLWPCB_GPRyy                   XOP                  SCALABLE
 SMSW                BASE            SYSTEM          SMSW_GPRv                      I286REAL             SCALABLE
 SMSW                BASE            SYSTEM          SMSW_MEMw                      I286REAL             INVALID
 SQRTPD              SSE2            SSE             SQRTPD_XMMpd_MEMpd             SSE2                 SIMD_PACKED_ALIGNMENT:REQUIRES_ALIGNMENT:MXCSR
@@ -1703,8 +1736,8 @@ SYSENTER            BASE            SYSCALL         SYSENTER                    
 SYSEXIT             BASE            SYSRET          SYSEXIT                        PPRO                 PROTECTED_MODE:RING0:NOTSX
 SYSRET              LONGMODE        SYSRET          SYSRET                         LONGMODE             PROTECTED_MODE:RING0:NOTSX
 SYSRET_AMD          BASE            SYSRET          SYSRET_AMD                     AMD                  PROTECTED_MODE:RING0
-T1MSKC              TBM             TBM             T1MSKC_GPRyqq_GPRvqq           TBM                  SCALABLE
-T1MSKC              TBM             TBM             T1MSKC_GPRyqq_MEMqq            TBM                  INVALID
+T1MSKC              TBM             TBM             T1MSKC_GPRyy_GPRvy             TBM                  SCALABLE
+T1MSKC              TBM             TBM             T1MSKC_GPRyy_MEMy              TBM                  SCALABLE
 TEST                BASE            LOGICAL         TEST_AL_IMMb                   I86                  BYTEOP
 TEST                BASE            LOGICAL         TEST_GPR8_GPR8                 I86                  BYTEOP
 TEST                BASE            LOGICAL         TEST_GPR8_IMMb_F6r0            I86                  BYTEOP
@@ -1721,8 +1754,8 @@ TEST                BASE            LOGICAL         TEST_MEMv_IMMz_F7r1         
 TEST                BASE            LOGICAL         TEST_OrAX_IMMz                 I86                  SCALABLE
 TZCNT               BMI1            BMI1            TZCNT_GPRv_GPRv                BMI1                 SCALABLE
 TZCNT               BMI1            BMI1            TZCNT_GPRv_MEMv                BMI1                 SCALABLE
-TZMSK               TBM             TBM             TZMSK_GPRyqq_GPRvqq            TBM                  SCALABLE
-TZMSK               TBM             TBM             TZMSK_GPRyqq_MEMqq             TBM                  INVALID
+TZMSK               TBM             TBM             TZMSK_GPRyy_GPRvy              TBM                  SCALABLE
+TZMSK               TBM             TBM             TZMSK_GPRyy_MEMy               TBM                  SCALABLE
 UCOMISD             SSE2            SSE             UCOMISD_XMMsd_MEMsd            SSE2                 SIMD_SCALAR:UNALIGNED:MXCSR
 UCOMISD             SSE2            SSE             UCOMISD_XMMsd_XMMsd            SSE2                 SIMD_SCALAR:UNALIGNED:MXCSR
 UCOMISS             SSE             SSE             UCOMISS_XMMss_MEMss            SSE                  SIMD_SCALAR:UNALIGNED:MXCSR
@@ -2228,14 +2261,14 @@ VFRCZSD             XOP             XOP             VFRCZSD_XMMdq_MEMq          
 VFRCZSD             XOP             XOP             VFRCZSD_XMMdq_XMMq             XOP                  SIMD_SCALAR:MXCSR
 VFRCZSS             XOP             XOP             VFRCZSS_XMMdq_MEMd             XOP                  SIMD_SCALAR:MXCSR
 VFRCZSS             XOP             XOP             VFRCZSS_XMMdq_XMMd             XOP                  SIMD_SCALAR:MXCSR
-VGATHERDPD          AVX2GATHER      AVX2GATHER      VGATHERDPD_XMMdq_MEMsd_XMMdq   AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VGATHERDPD          AVX2GATHER      AVX2GATHER      VGATHERDPD_YMMqq_MEMsd_YMMqq   AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VGATHERDPS          AVX2GATHER      AVX2GATHER      VGATHERDPS_XMMdq_MEMss_XMMdq   AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VGATHERDPS          AVX2GATHER      AVX2GATHER      VGATHERDPS_YMMqq_MEMss_YMMqq   AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VGATHERQPD          AVX2GATHER      AVX2GATHER      VGATHERQPD_XMMdq_MEMsd_XMMdq   AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VGATHERQPD          AVX2GATHER      AVX2GATHER      VGATHERQPD_YMMqq_MEMsd_YMMqq   AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VGATHERQPS          AVX2GATHER      AVX2GATHER      VGATHERQPS_XMMdq_MEMss_XMMdq   AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VGATHERQPS          AVX2GATHER      AVX2GATHER      VGATHERQPS_YMMqq_MEMss_YMMqq   AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VGATHERDPD          AVX2GATHER      AVX2GATHER      VGATHERDPD_XMMf64_MEMdq_XMMi64_VL128 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VGATHERDPD          AVX2GATHER      AVX2GATHER      VGATHERDPD_YMMf64_MEMqq_YMMi64_VL256 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VGATHERDPS          AVX2GATHER      AVX2GATHER      VGATHERDPS_XMMf32_MEMdq_XMMi32_VL128 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VGATHERDPS          AVX2GATHER      AVX2GATHER      VGATHERDPS_YMMf32_MEMqq_YMMi32_VL256 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VGATHERQPD          AVX2GATHER      AVX2GATHER      VGATHERQPD_XMMf64_MEMdq_XMMi64_VL128 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VGATHERQPD          AVX2GATHER      AVX2GATHER      VGATHERQPD_YMMf64_MEMqq_YMMi64_VL256 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VGATHERQPS          AVX2GATHER      AVX2GATHER      VGATHERQPS_XMMf32_MEMdq_XMMi32_VL256 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VGATHERQPS          AVX2GATHER      AVX2GATHER      VGATHERQPS_XMMf32_MEMq_XMMi32_VL128 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
 VHADDPD             AVX             AVX             VHADDPD_XMMdq_XMMdq_MEMdq      AVX                  MXCSR
 VHADDPD             AVX             AVX             VHADDPD_XMMdq_XMMdq_XMMdq      AVX                  MXCSR
 VHADDPD             AVX             AVX             VHADDPD_YMMqq_YMMqq_MEMqq      AVX                  MXCSR
@@ -2662,14 +2695,14 @@ VPEXTRQ             AVX             AVX             VPEXTRQ_MEMq_XMMdq_IMMb     
 VPEXTRW             AVX             AVX             VPEXTRW_GPR32d_XMMdq_IMMb_15   AVX                  INVALID
 VPEXTRW             AVX             AVX             VPEXTRW_GPR32d_XMMdq_IMMb_C5   AVX                  INVALID
 VPEXTRW             AVX             AVX             VPEXTRW_MEMw_XMMdq_IMMb        AVX                  INVALID
-VPGATHERDD          AVX2GATHER      AVX2GATHER      VPGATHERDD_XMMdq_MEMd_XMMdq    AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VPGATHERDD          AVX2GATHER      AVX2GATHER      VPGATHERDD_YMMqq_MEMd_YMMqq    AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VPGATHERDQ          AVX2GATHER      AVX2GATHER      VPGATHERDQ_XMMdq_MEMq_XMMdq    AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VPGATHERDQ          AVX2GATHER      AVX2GATHER      VPGATHERDQ_YMMqq_MEMq_YMMqq    AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VPGATHERQD          AVX2GATHER      AVX2GATHER      VPGATHERQD_XMMdq_MEMd_XMMdq    AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VPGATHERQD          AVX2GATHER      AVX2GATHER      VPGATHERQD_YMMqq_MEMd_YMMqq    AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
-VPGATHERQQ          AVX2GATHER      AVX2GATHER      VPGATHERQQ_XMMdq_MEMq_XMMdq    AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
-VPGATHERQQ          AVX2GATHER      AVX2GATHER      VPGATHERQQ_YMMqq_MEMq_YMMqq    AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VPGATHERDD          AVX2GATHER      AVX2GATHER      VPGATHERDD_XMMu32_MEMdq_XMMi32_VL128 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VPGATHERDD          AVX2GATHER      AVX2GATHER      VPGATHERDD_YMMu32_MEMqq_YMMi32_VL256 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VPGATHERDQ          AVX2GATHER      AVX2GATHER      VPGATHERDQ_XMMu64_MEMdq_XMMi64_VL128 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VPGATHERDQ          AVX2GATHER      AVX2GATHER      VPGATHERDQ_YMMu64_MEMqq_YMMi64_VL256 AVX2GATHER           GATHER:DWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VPGATHERQD          AVX2GATHER      AVX2GATHER      VPGATHERQD_XMMu32_MEMdq_XMMi32_VL256 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VPGATHERQD          AVX2GATHER      AVX2GATHER      VPGATHERQD_XMMu32_MEMq_XMMi32_VL128 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_D:SPECIAL_AGEN_REQUIRED
+VPGATHERQQ          AVX2GATHER      AVX2GATHER      VPGATHERQQ_XMMu64_MEMdq_XMMi64_VL128 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
+VPGATHERQQ          AVX2GATHER      AVX2GATHER      VPGATHERQQ_YMMu64_MEMqq_YMMi64_VL256 AVX2GATHER           GATHER:QWORD_INDICES:ELEMENT_SIZE_Q:SPECIAL_AGEN_REQUIRED
 VPHADDBD            XOP             XOP             VPHADDBD_XMMdq_MEMdq           XOP                  INVALID
 VPHADDBD            XOP             XOP             VPHADDBD_XMMdq_XMMdq           XOP                  INVALID
 VPHADDBQ            XOP             XOP             VPHADDBQ_XMMdq_MEMdq           XOP                  INVALID
@@ -3265,10 +3298,16 @@ XOR                 BASE            LOGICAL         XOR_MEMv_IMMb               
 XOR                 BASE            LOGICAL         XOR_MEMv_IMMz                  I86                  LOCKABLE:HLE_ACQ_ABLE:HLE_REL_ABLE:SCALABLE
 XOR                 BASE            LOGICAL         XOR_OrAX_IMMz                  I86                  SCALABLE
 XRSTOR64            XSAVE           XSAVE           XRSTOR64_MEMmxsave             XSAVE                XMM_STATE_CW:REQUIRES_ALIGNMENT:X87_MMX_STATE_CW:NOTSX:SPECIAL_AGEN_REQUIRED
+XRSTORS64           XSAVES          XSAVE           XRSTORS64_MEMmxsave            XSAVES               XMM_STATE_W:REQUIRES_ALIGNMENT:X87_MMX_STATE_W:NOTSX:SPECIAL_AGEN_REQUIRED
+XRSTORS             XSAVES          XSAVE           XRSTORS_MEMmxsave              XSAVES               XMM_STATE_W:REQUIRES_ALIGNMENT:X87_MMX_STATE_W:NOTSX:SPECIAL_AGEN_REQUIRED
 XRSTOR              XSAVE           XSAVE           XRSTOR_MEMmxsave               XSAVE                XMM_STATE_CW:REQUIRES_ALIGNMENT:X87_MMX_STATE_CW:NOTSX:SPECIAL_AGEN_REQUIRED
 XSAVE64             XSAVE           XSAVE           XSAVE64_MEMmxsave              XSAVE                XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
+XSAVEC64            XSAVEC          XSAVE           XSAVEC64_MEMmxsave             XSAVEC               XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
+XSAVEC              XSAVEC          XSAVE           XSAVEC_MEMmxsave               XSAVEC               XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
 XSAVEOPT64          XSAVEOPT        XSAVEOPT        XSAVEOPT64_MEMmxsave           XSAVEOPT             XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX
 XSAVEOPT            XSAVEOPT        XSAVEOPT        XSAVEOPT_MEMmxsave             XSAVEOPT             XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX
+XSAVES64            XSAVES          XSAVE           XSAVES64_MEMmxsave             XSAVES               XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
+XSAVES              XSAVES          XSAVE           XSAVES_MEMmxsave               XSAVES               XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
 XSAVE               XSAVE           XSAVE           XSAVE_MEMmxsave                XSAVE                XMM_STATE_R:REQUIRES_ALIGNMENT:X87_MMX_STATE_R:NOTSX:SPECIAL_AGEN_REQUIRED
 XSETBV              XSAVE           XSAVE           XSETBV                         XSAVE                RING0:NOTSX
 XTEST               RTM             LOGICAL         XTEST                          RTM                  INVALID

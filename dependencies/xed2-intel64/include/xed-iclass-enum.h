@@ -1,26 +1,27 @@
 /*BEGIN_LEGAL 
-Intel Open Source License 
+Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
- 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -81,6 +82,13 @@ typedef enum {
   XED_ICLASS_BLSIC,
   XED_ICLASS_BLSMSK,
   XED_ICLASS_BLSR,
+  XED_ICLASS_BNDCL,
+  XED_ICLASS_BNDCN,
+  XED_ICLASS_BNDCU,
+  XED_ICLASS_BNDLDX,
+  XED_ICLASS_BNDMK,
+  XED_ICLASS_BNDMOV,
+  XED_ICLASS_BNDSTX,
   XED_ICLASS_BOUND,
   XED_ICLASS_BSF,
   XED_ICLASS_BSR,
@@ -99,6 +107,7 @@ typedef enum {
   XED_ICLASS_CLC,
   XED_ICLASS_CLD,
   XED_ICLASS_CLFLUSH,
+  XED_ICLASS_CLFLUSHOPT,
   XED_ICLASS_CLGI,
   XED_ICLASS_CLI,
   XED_ICLASS_CLTS,
@@ -171,6 +180,8 @@ typedef enum {
   XED_ICLASS_DPPD,
   XED_ICLASS_DPPS,
   XED_ICLASS_EMMS,
+  XED_ICLASS_ENCLS,
+  XED_ICLASS_ENCLU,
   XED_ICLASS_ENTER,
   XED_ICLASS_EXTRACTPS,
   XED_ICLASS_EXTRQ,
@@ -470,6 +481,7 @@ typedef enum {
   XED_ICLASS_PEXTRD,
   XED_ICLASS_PEXTRQ,
   XED_ICLASS_PEXTRW,
+  XED_ICLASS_PEXTRW_SSE4,
   XED_ICLASS_PF2ID,
   XED_ICLASS_PF2IW,
   XED_ICLASS_PFACC,
@@ -647,6 +659,13 @@ typedef enum {
   XED_ICLASS_SETZ,
   XED_ICLASS_SFENCE,
   XED_ICLASS_SGDT,
+  XED_ICLASS_SHA1MSG1,
+  XED_ICLASS_SHA1MSG2,
+  XED_ICLASS_SHA1NEXTE,
+  XED_ICLASS_SHA1RNDS4,
+  XED_ICLASS_SHA256MSG1,
+  XED_ICLASS_SHA256MSG2,
+  XED_ICLASS_SHA256RNDS2,
   XED_ICLASS_SHL,
   XED_ICLASS_SHLD,
   XED_ICLASS_SHLX,
@@ -1155,10 +1174,16 @@ typedef enum {
   XED_ICLASS_XORPS,
   XED_ICLASS_XRSTOR,
   XED_ICLASS_XRSTOR64,
+  XED_ICLASS_XRSTORS,
+  XED_ICLASS_XRSTORS64,
   XED_ICLASS_XSAVE,
   XED_ICLASS_XSAVE64,
+  XED_ICLASS_XSAVEC,
+  XED_ICLASS_XSAVEC64,
   XED_ICLASS_XSAVEOPT,
   XED_ICLASS_XSAVEOPT64,
+  XED_ICLASS_XSAVES,
+  XED_ICLASS_XSAVES64,
   XED_ICLASS_XSETBV,
   XED_ICLASS_XTEST,
   XED_ICLASS_LAST

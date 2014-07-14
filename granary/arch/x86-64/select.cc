@@ -50,7 +50,6 @@ static bool MatchOperand(const Operand *instr_op,
                          const xed_operand_t *xedi_op) {
   auto op_name = xed_operand_name(xedi_op);
   switch (op_name) {
-    case XED_OPERAND_IMM_BYTES:
     case XED_OPERAND_IMM0SIGNED:
     case XED_OPERAND_IMM0:
     case XED_OPERAND_IMM1_BYTES:

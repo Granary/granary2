@@ -1,26 +1,27 @@
 /*BEGIN_LEGAL 
-Intel Open Source License 
+Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
- 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -56,16 +57,17 @@ struct xed_decoder_vars_s;
 /// #xed_inst_t pointer which describes the operand templates and the
 /// operand order.  See @ref DEC for API documentation.
 typedef struct xed_decoded_inst_s  {
-    /// The operand storage fields discovered during decoding. This same array is used by encode.
+    /// Storage for information discovered during decoding. Also used by
+    /// encode.
     xed_operand_storage_t _operands;
 
 #if defined(XED_ENCODER)
     /// Used for encode operand ordering. Not set by decode.
     xed_uint8_t _operand_order[XED_ENCODE_ORDER_MAX_OPERANDS];
-#endif
-    xed_uint8_t _decoded_length;
     /// Length of the _operand_order[] array.
     xed_uint8_t _n_operand_order; 
+#endif
+    xed_uint8_t _decoded_length;
 
     /// when we decode an instruction, we set the _inst and get the
     /// properites of that instruction here. This also points to the
@@ -78,10 +80,9 @@ typedef struct xed_decoded_inst_s  {
         const xed_uint8_t* _dec;
     } _byte_array; 
 
-    // These are stack allocated by xed_encode() or xed_decode(). These are
-    // per-encode or per-decode transitory data.
+    // The ev field is stack allocated by xed_encode(). It is per-encode
+    // transitory data.
     union {
-
         /* user_data is available as a user data storage field after
          * decoding. It does not live across re-encodes or re-decodes. */
         xed_uint64_t user_data; 
@@ -89,15 +90,6 @@ typedef struct xed_decoded_inst_s  {
         struct xed_encoder_vars_s* ev;
 #endif
     } u;
-
-
-    union {
-        xed_int8_t  byte;
-        xed_int16_t word;
-        xed_int32_t dword;
-        xed_int64_t qword;
-    } disp_val;
-
     
 } xed_decoded_inst_t;
 

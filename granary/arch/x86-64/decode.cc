@@ -174,8 +174,6 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
     instr_op->addr.as_int = disp;
     if (XED_REG_INVALID == segment_reg) {
       segment_reg = XED_REG_DS;
-    } else {
-      instr_op->addr.as_uint &= 0x0FFFFFFULL;  // Truncate to 24 bits.
     }
 
   // Try to simplify the memory operand to a non-compound one.

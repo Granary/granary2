@@ -1,26 +1,27 @@
 /*BEGIN_LEGAL 
-Intel Open Source License 
+Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
- 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -52,7 +53,6 @@ typedef enum {
   XED_OPERAND_DF64,
   XED_OPERAND_DISP_WIDTH,
   XED_OPERAND_DISP,
-  XED_OPERAND_DISP_BYTES,
   XED_OPERAND_DUMMY,
   XED_OPERAND_EASZ,
   XED_OPERAND_ELEMENT_SIZE,
@@ -65,12 +65,12 @@ typedef enum {
   XED_OPERAND_HAS_SIB,
   XED_OPERAND_HAS_MODRM,
   XED_OPERAND_HINT,
+  XED_OPERAND_HSW,
   XED_OPERAND_ICLASS,
   XED_OPERAND_ILD_F2,
   XED_OPERAND_ILD_F3,
   XED_OPERAND_ILD_SEG,
   XED_OPERAND_IMM_WIDTH,
-  XED_OPERAND_IMM_BYTES,
   XED_OPERAND_IMM0SIGNED,
   XED_OPERAND_IMM0,
   XED_OPERAND_IMM1_BYTES,
@@ -93,6 +93,7 @@ typedef enum {
   XED_OPERAND_MODEP55C,
   XED_OPERAND_MODRM,
   XED_OPERAND_MODRM_BYTE,
+  XED_OPERAND_MPXMODE,
   XED_OPERAND_NEED_MEMDISP,
   XED_OPERAND_NEEDREX,
   XED_OPERAND_NELEM,

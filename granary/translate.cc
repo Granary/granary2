@@ -52,6 +52,8 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
     auto index = context->CodeCacheIndex();
     Compile(context, &cfg);
     IndexBlocks(index, &cfg);
+  } else {
+    GRANARY_USED(cache_meta->start_pc);
   }
   GRANARY_ASSERT(nullptr != cache_meta->start_pc);
   return cache_meta->start_pc;

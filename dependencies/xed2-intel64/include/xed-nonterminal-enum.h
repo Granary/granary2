@@ -1,26 +1,27 @@
 /*BEGIN_LEGAL 
-Intel Open Source License 
+Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Copyright (c) 2002-2013 Intel Corporation. All rights reserved.
- 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
 met:
 
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.  Redistributions
-in binary form must reproduce the above copyright notice, this list of
-conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.  Neither the name of
-the Intel Corporation nor the names of its contributors may be used to
-endorse or promote products derived from this software without
-specific prior written permission.
- 
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE INTEL OR
-ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
 LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -58,6 +59,10 @@ typedef enum {
   XED_NONTERMINAL_ASZ_NONTERM,
   XED_NONTERMINAL_AVX_INSTRUCTIONS,
   XED_NONTERMINAL_AVX_SPLITTER,
+  XED_NONTERMINAL_BND_B,
+  XED_NONTERMINAL_BND_B_CHECK,
+  XED_NONTERMINAL_BND_R,
+  XED_NONTERMINAL_BND_R_CHECK,
   XED_NONTERMINAL_BRANCH_HINT,
   XED_NONTERMINAL_BRDISP32,
   XED_NONTERMINAL_BRDISP8,
@@ -157,8 +162,6 @@ typedef enum {
   XED_NONTERMINAL_SIMMZ,
   XED_NONTERMINAL_SRBP,
   XED_NONTERMINAL_SRSP,
-  XED_NONTERMINAL_TMP_B,
-  XED_NONTERMINAL_TMP_R,
   XED_NONTERMINAL_UIMM16,
   XED_NONTERMINAL_UIMM32,
   XED_NONTERMINAL_UIMM8,
@@ -183,10 +186,7 @@ typedef enum {
   XED_NONTERMINAL_VL_NT,
   XED_NONTERMINAL_VMODRM_XMM,
   XED_NONTERMINAL_VMODRM_YMM,
-  XED_NONTERMINAL_VSIBINDEX,
   XED_NONTERMINAL_VSIB_BASE,
-  XED_NONTERMINAL_VSIB_INDEX_128,
-  XED_NONTERMINAL_VSIB_INDEX_256,
   XED_NONTERMINAL_VSIB_INDEX_XMM,
   XED_NONTERMINAL_VSIB_INDEX_YMM,
   XED_NONTERMINAL_VSIB_XMM,

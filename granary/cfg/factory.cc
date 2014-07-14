@@ -355,6 +355,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
   auto adapt_block = AdaptToBlock(cfg, meta, direct_block);
   adapt_block->is_comparable = false;
   cfg->AddBlock(adapt_block);
+  has_pending_request = true;
   return adapt_block;
 }
 

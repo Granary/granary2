@@ -190,6 +190,42 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
 
+// Custom BNDCN instruction builder for source immediate operands.
+template <typename A0>
+inline static void BNDCN_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
+  BuildInstruction(instr, XED_ICLASS_BNDCN, XED_IFORM_BNDCN_BND_AGEN,
+                   XED_CATEGORY_MPX);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
+  MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
+// Custom BNDCU instruction builder for source immediate operands.
+template <typename A0>
+inline static void BNDCU_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
+  BuildInstruction(instr, XED_ICLASS_BNDCU, XED_IFORM_BNDCU_BND_AGEN,
+                   XED_CATEGORY_MPX);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
+  MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
+// Custom BNDCL instruction builder for source immediate operands.
+template <typename A0>
+inline static void BNDCL_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
+  BuildInstruction(instr, XED_ICLASS_BNDCL, XED_IFORM_BNDCL_BND_AGEN,
+                   XED_CATEGORY_MPX);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
+  MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
+// Custom BNDMK instruction builder for source immediate operands.
+template <typename A0>
+inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
+  BuildInstruction(instr, XED_ICLASS_BNDMK, XED_IFORM_BNDMK_BND_AGEN,
+                   XED_CATEGORY_MPX);
+  RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
+  MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+}
+
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
                                     int width=-1) {

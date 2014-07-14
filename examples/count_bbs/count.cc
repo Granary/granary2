@@ -9,6 +9,13 @@ GRANARY_DEFINE_bool(count_execs, false,
     "meaningful for dynamic instrumentation. By default, `count_bbs` does not "
     "count the number of executions of each basic block.");
 
+// Records the static number of basic blocks. This could be an underestimation
+// of the total number of basic blocks in the instrumented binary, but an
+// overestimate of the total number of *distinct* basic blocks instrumented
+// (because of race conditions when two threads simultaneously instrument the
+// same basic block).
+std::atomic<uint64_t> NUM_BBS(ATOMIC_VAR_INIT(0));
+
 namespace {
 
 // Runtime block execution counter.
@@ -19,13 +26,6 @@ class BlockCounter : public MutableMetaData<BlockCounter> {
 
   uint64_t count;
 };
-
-// Records the static number of basic blocks. This could be an underestimation
-// of the total number of basic blocks in the instrumented binary, but an
-// overestimate of the total number of *distinct* basic blocks instrumented
-// (because of race conditions when two threads simultaneously instrument the
-// same basic block).
-static std::atomic<uint64_t> NUM_BBS(ATOMIC_VAR_INIT(0));
 
 // Simple tool for static and dynamic basic block counting.
 class BBCount : public Tool {

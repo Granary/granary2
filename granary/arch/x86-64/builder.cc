@@ -30,9 +30,6 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   //            atomic.
   instr->is_atomic = XED_ICLASS_XCHG == iclass ||
                      XED_CATEGORY_SEMAPHORE == category;
-  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == iclass)) {
-    instr->ops[1].is_effective_address = true;
-  }
 }
 
 // Add this register as an operand to the instruction `instr`.
@@ -88,7 +85,18 @@ void MemoryBuilder::Build(Instruction *instr) {
   }
   instr_op.rw = action;
   instr_op.is_explicit = true;
-  instr_op.is_effective_address = XED_ICLASS_LEA == instr->iclass;
+
+  switch (instr->iform) {
+    case XED_IFORM_BNDCN_BND_AGEN:
+    case XED_IFORM_BNDCL_BND_AGEN:
+    case XED_IFORM_BNDCU_BND_AGEN:
+    case XED_IFORM_BNDMK_BND_AGEN:
+    case XED_IFORM_LEA_GPRv_AGEN:
+      instr_op.is_effective_address = true;
+      break;
+    default: break;
+  }
+
   switch (instr->category) {
     case XED_CATEGORY_CALL:
     case XED_CATEGORY_COND_BR:

@@ -3,106 +3,146 @@ Documentation:
 Internal Intel: http://sde.intel.com/xed
 External World: http://software.intel.com/en-us/articles/pintool-downloads
 
-Send bugs to sde-dev@intel.com
+Send bugs to mark.charney@intel.com
 
 
-===========================================================================
-USING examples/xed-ex4.exe
-===========================================================================
+================================================================================
 
-Here is a 32b decode of a simple 2B instruction:
-% examples/xed-ex4 00 00
-<debugging stuff deleted>
-BASE0=EAX EASZ=2 EOSZ=2 MEM0 REG0=AL SEG0=DS
-		MEM0/RW/B/EXPLICIT/IMM_CONST/1
-1		REG0/R/INVALID/EXPLICIT/NT_LOOKUP_FN/GPR8_R
-2		LOCKABLE/R/INVALID/SUPPRESSED/IMM_CONST/1
-3		MOD/R/INVALID/SUPPRESSED/IMM
-4		REG/R/INVALID/SUPPRESSED/IMM
-5		RM/R/INVALID/SUPPRESSED/IMM
-add ds[eax] al
-XED syntax: ADD BASE0=EAX EASZ=2 EOSZ=2 MEM0 REG0=AL SEG0=DS
-ATT syntax: no-att-printer-yet
-INTEL syntax: add ds[eax] al
+If you are programming: 
 
-Here is a 64b decode of a simple 2B instruction:
-% examples/xed-ex4 -64 00 00
+decoder: look at examples/xed-ex1.cpp
+encoder: look at examples/xed-ex5-enc.c  (for the high-level encoder API)
 
-BASE0=RAX EASZ=3 EOSZ=2 MEM0 REG0=AL
-		MEM0/RW/B/EXPLICIT/IMM_CONST/1
-1		REG0/R/INVALID/EXPLICIT/NT_LOOKUP_FN/GPR8_R
-2		LOCKABLE/R/INVALID/SUPPRESSED/IMM_CONST/1
-3		MOD/R/INVALID/SUPPRESSED/IMM
-4		REG/R/INVALID/SUPPRESSED/IMM
-5		RM/R/INVALID/SUPPRESSED/IMM
-add [rax] al
-XED syntax: ADD BASE0=RAX EASZ=3 EOSZ=2 MEM0 REG0=AL
-ATT syntax: no-att-printer-yet
-INTEL syntax: add [rax] al
+================================================================================
 
-
-===========================================================================
-USING examples/xed.exe
-===========================================================================
+Examples of using hte command line tool:
 
 % obj/xed -h
-Usage: c:\mjcharne\xed\xed2\obj\xed.exe [options]
-  One of the following is required:
-  	-i input_file             (decode file)
-  	-ide input_file           (decode/encode file)
-  	-d hex-string             (decode one instruction)
-  	-e instruction            (encode, must be last)
-  	-de hex-string            (decode-then-encode)
+Copyright (C) 2003-2014, Intel Corporation. All rights reserved.
+XED version: [6.26.0-5-gb6a5c90 2014-04-17]
 
-  Optional arguments:
+Usage: obj/xed [options]
+One of the following is required:
+	-i input_file             (decode file)
+	-ir raw_input_file        (decode a raw unformatted binary file)
+	-ih hex_input_file        (decode a raw unformatted ASCII hex file)
+	-d hex-string             (decode one instruction, must be last)
+	-ide input_file           (decode/encode file)
+	-e instruction            (encode, must be last)
+	-ie file-to-assemble      (assemble the contents of the file)
+	-de hex-string            (decode-then-encode, must be last)
 
-  	-v verbosity  (0=quiet, 1=errors, 2=useful-info, 3=trace,
-                       6=very verbose)
-  	-xv xed-engine-verbosity  (0...99)
+Optional arguments:
 
-  	-n number-of-instructions-to-decode (default 10,000,
-                                             accepts K/M/G qualifiers)
-  	-I            (Intel SYSV syntax for disassembly)
-  	-A            (ATT SYSV syntax for disassembly)
-  	-16           (for LEGACY_16 mode)
-  	-32           (for LEGACY_32 mode, default)
-  	-64           (for LONG_64 mode w/64b addressing)
-  	-a32          (32b addressing, default, not in LONG_64 mode)
-  	-a16          (16b addressing, not in LONG_64 mode)
-  	-s32          (32b stack addressing, default, not in LONG_64 mode)
-  	-s16          (16b stack addressing, not in LONG_64 mode)
+	-v N          (0=quiet, 1=errors, 2=useful-info, 3=trace,
+	               5=very verbose)
+	-xv N         (XED engine verbosity, 0...99)
+
+	-chip-check CHIP   (count instructions that are not valid for CHIP)
+	-chip-check-list   (list the valid chips)
+
+	-s section    (target section for file disassembly,
+	               PECOFF and ELF formats only)
+
+	-n N          (number of instructions to decode. Default 100M,
+	               accepts K/M/G qualifiers)
+ 
+	-perftail N   (number of instructions to skip in performance 
+	               measurements. Default 0, accepts K/M/G qualifiers)
+ 
+	-b addr       (Base address offset, for DLLs/shared libraries.
+	               Use 0x for hex addresses)
+	-as addr      (Address to start disassembling.
+	               Use 0x for hex addresses)
+	-ae addr      (Address to end   disassembling.
+	               Use 0x for hex addresses)
+	-no-resync    (Disable symbol-based resynchronization algorithm
+	               for disassembly)
+	-ast          (Show the AVX/SSE transition classfication)
+
+	-I            (Intel syntax for disassembly)
+	-A            (ATT SYSV syntax for disassembly)
+	-xml          (XML formatting)
+	-nwm          (Format AVX512 without curly braces for writemasks, include k0)
+	-emit         (Output __emit statements for the Intel compiler)
+	-dot FN       (Emit a register dependence graph file in dot format.
+	               Best used with -as ADDR -ae ADDR to limit graph size.)
+
+	-r            (for REAL_16 mode, 16b addressing (20b addresses),
+	               16b default data size)
+	-16           (for LEGACY_16 mode, 16b addressing,
+	               16b default data size)
+	-32           (for LEGACY_32 mode, 32b addressing,
+	               32b default data size -- default)
+	-64           (for LONG_64 mode w/64b addressing
+	               Optional on windows/linux)
+	-mpx          (Turn on MPX mode for disassembly, default is off)
+	-s32          (32b stack addressing, default, not in LONG_64 mode)
+	-s16          (16b stack addressing, not in LONG_64 mode)
 
 
-Examples:
+================================================================================
 
-% examples/xed -i C:/mjcharne/hello.exe >! OUT
-% head OUT
-Mapped image
-IA32 format
-XDIS 1000: BASE 55               PUSH EASZ=2 EOSZ=2 REG0=EBP REG1=STACKPUSH
-XDIS 1001: BASE 8BEC             MOV EASZ=2 EOSZ=2 REG0=EBP REG1=ESP
-XDIS 1003: BASE 83EC10           SUB EASZ=2 EOSZ=2 IMM_WIDTH=8 REG0=ESP SIM0 SIMM=10
-XDIS 1006: BASE 68A0104000       PUSH EASZ=2 EOSZ=2 IMM_WIDTH=20 REG0=STACKPUSH SIM0 SIMM=a0104000
-XDIS 100b: BASE 68B8A14100       PUSH EASZ=2 EOSZ=2 IMM_WIDTH=20 REG0=STACKPUSH SIM0 SIMM=b8a14100
-XDIS 1010: BASE 6848084200       PUSH EASZ=2 EOSZ=2 IMM_WIDTH=20 REG0=STACKPUSH SIM0 SIMM=48084200
-XDIS 1015: BASE E836150000       CALL_NEAR BRDISP=36150000 BRDISP_WIDTH=20 EASZ=2 EOSZ=2 REG0=STACKPUSH REG1=EIP RELBR
-XDIS 101a: BASE 83C408           ADD EASZ=2 EOSZ=2 IMM_WIDTH=8 REG0=ESP SIM0 SIMM=8
+Examples of use:
+
+Disassemble a file 
+
+% obj/xed -i /bin/ls  > dis.txt
+% obj/xed -i foo.o    > dis.txt
 
 
-% examples/xed -I -i C:/mjcharne/hello.exe >! OUT
-% head OUT
-Mapped image
-XDIS 1000: BASE 55               push ebp
-XDIS 1001: BASE 8BEC             mov ebp esp
-XDIS 1003: BASE 83EC10           sub esp 10
-XDIS 1006: BASE 68A0104000       push 4010a0
-XDIS 100b: BASE 68B8A14100       push 41a1b8
-XDIS 1010: BASE 6848084200       push 420848
-XDIS 1015: BASE E836150000       call_near 1536
-XDIS 101a: BASE 83C408           add esp 8
+Disassemble an instruction:
+
+% obj/xed -64 -d 00 00
+0000
+ICLASS: ADD   CATEGORY: BINARY   EXTENSION: BASE  IFORM: ADD_MEMb_GPR8   ISA_SET: I86
+SHORT: add byte ptr [rax], al
 
 
+Encode an instruction (only some features available)
+
+% obj/xed -64 -e vaddps xmm1 xmm2 xmm3
+Request: VADDPS MODE:2, REG0:XMM1, REG1:XMM2, REG2:XMM3, SMODE:2
+OPERAND ORDER: REG0 REG1 REG2 
+Encodable! C5E858CB
+.byte 0xc5,0xe8,0x58,0xcb
 
 
+Decode and then re-encode an instruction:
+
+% obj/xed -64 -de C5E858CB
+C5E858CB
+ICLASS: VADDPS   CATEGORY: AVX   EXTENSION: AVX  IFORM: VADDPS_XMMdq_XMMdq_XMMdq   ISA_SET: AVX
+SHORT: vaddps xmm1, xmm2, xmm3
+Encodable! C5E858CB
+Identical re-encoding
 
 
+Find out detailed information about an instruction:
+
+
+% obj/xed-ex1 -64 C5E858CB
+Attempting to decode: c5 e8 58 cb 
+iclass VADDPS	category AVX	ISA-extension AVX	ISA-set AVX
+instruction-length 4
+operand-width 32
+effective-operand-width 32
+effective-address-width 64
+stack-address-width 64
+iform-enum-name VADDPS_XMMdq_XMMdq_XMMdq
+iform-enum-name-dispatch (zero based) 1
+iclass-max-iform-dispatch 10
+Operands
+#   TYPE               DETAILS        VIS  RW       OC2 BITS BYTES NELEM ELEMSZ   ELEMTYPE
+#   ====               =======        ===  ==       === ==== ===== ===== ======   ========
+0   REG0             REG0=XMM1   EXPLICIT   W        DQ  128    16     4     32     SINGLE
+1   REG1             REG1=XMM2   EXPLICIT   R        DQ  128    16     4     32     SINGLE
+2   REG2             REG2=XMM3   EXPLICIT   R        DQ  128    16     4     32     SINGLE
+Memory Operands
+  MemopBytes = 0
+ATTRIBUTES: MXCSR 
+EXCEPTION TYPE: AVX_TYPE_2
+Vector length: 128  
+
+
+================================================================================

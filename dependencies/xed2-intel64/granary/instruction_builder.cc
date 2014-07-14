@@ -169,6 +169,10 @@ static void GenerateInstructionBuilders(void) {
       auto icategory = xed_inst_category(instr);
       if (XED_ICLASS_INVALID != iclass &&
           XED_ICLASS_LEA != iclass &&  // Specially handled.
+          XED_IFORM_BNDCN_BND_AGEN != iform &&  // Specially handled.
+          XED_IFORM_BNDCU_BND_AGEN != iform &&  // Specially handled.
+          XED_IFORM_BNDCL_BND_AGEN != iform &&  // Specially handled.
+          XED_IFORM_BNDMK_BND_AGEN != iform &&  // Specially handled.
           XED_ICLASS_CALL_FAR != iclass &&  // Not handled.
           XED_ICLASS_JMP_FAR != iclass &&  // Not handled.
           !ignore_categories.count(icategory) &&
