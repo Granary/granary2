@@ -255,12 +255,14 @@ ModuleManager::~ModuleManager(void) {
 // Find a module given a program counter.
 GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
   for (auto num_attempts = 0; num_attempts < 2; ++num_attempts) {
-    ReadLocked locker(&modules_lock);
-    for (auto module : ModuleIterator(modules)) {
-      if (module->Contains(pc)) {
-        return module;
+    do {
+      ReadLocked locker(&modules_lock);
+      for (auto module : ModuleIterator(modules)) {
+        if (module->Contains(pc)) {
+          return module;
+        }
       }
-    }
+    } while (false);
     if (!num_attempts) RegisterAllBuiltIn();
   }
   return nullptr;

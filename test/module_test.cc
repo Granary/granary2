@@ -35,8 +35,8 @@ TEST_F(ModuleManagerTest, EmptyDoesNotFindLibC) {
   ASSERT_TRUE(nullptr == m1.FindByName("c"));
 }
 
-TEST_F(ModuleManagerTest, EmptyDoesNotHaveExit) {
-  ASSERT_TRUE(nullptr == m1.FindByAppPC(UnsafeCast<AppPC>(exit)));
+TEST_F(ModuleManagerTest, EmptyHasExitWithInternalRefresh) {
+  ASSERT_TRUE(nullptr != m1.FindByAppPC(UnsafeCast<AppPC>(exit)));
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsGranary) {

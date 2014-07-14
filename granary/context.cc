@@ -118,7 +118,6 @@ Context::Context(void)
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
-  module_manager.RegisterAllBuiltIn();
   module_manager.Register(block_code_cache_mod);
   module_manager.Register(edge_code_cache_mod);
 }
