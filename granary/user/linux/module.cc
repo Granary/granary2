@@ -2,9 +2,6 @@
 
 #define GRANARY_INTERNAL
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 
@@ -12,6 +9,13 @@
 #include "granary/client.h"
 #include "granary/module.h"
 
+extern "C" {
+
+extern int granary_open(const char *__file, int __oflag, ...);
+extern int granary_close(int __fd);
+extern long long granary_read(int __fd, void *__buf, size_t __nbytes);
+
+}  // extern C
 namespace granary {
 namespace {
 
@@ -20,7 +24,7 @@ namespace {
 class Lexer {
  public:
   explicit Lexer(void)
-      : fd(open("/proc/self/maps", O_RDONLY)),
+      : fd(granary_open("/proc/self/maps", 0 /* O_RDONLY */)),
         file_offset(0),
         token_offset(0),
         try_fill_buffer(true) {
@@ -29,7 +33,7 @@ class Lexer {
   }
 
   ~Lexer(void) {
-    close(fd);
+    granary_close(fd);
   }
 
   // Get the next token in the stream. Can be called recursively to build up
@@ -72,7 +76,7 @@ class Lexer {
     if (try_fill_buffer) {
       file_offset = 0;
       file_buffer[0] = '\0';
-      auto amount_read = read(fd, &(file_buffer[0]), BUFF_SIZE);
+      auto amount_read = granary_read(fd, &(file_buffer[0]), BUFF_SIZE);
       try_fill_buffer = 0 < amount_read;
       if (amount_read < BUFF_SIZE) {
         file_buffer[amount_read] = '\0';

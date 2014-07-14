@@ -4,6 +4,8 @@
 #define GRANARY_MODULE_H_
 
 #include "granary/arch/base.h"
+
+#include "granary/base/list.h"
 #include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
@@ -127,7 +129,7 @@ class Module {
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
-  GRANARY_INTERNAL_DEFINITION Module *next;
+  GRANARY_CONST Module * GRANARY_CONST next;
 
  private:
   friend class AppMetaData;
@@ -178,6 +180,8 @@ class Module {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Module);
 };
 
+typedef LinkedListIterator<const Module> ConstModuleIterator;
+
 // Application-specific meta-data that Granary maintains about all basic blocks.
 class AppMetaData : public IndexableMetaData<AppMetaData> {
  public:
@@ -220,11 +224,16 @@ class ModuleManager {
   // Register a module with the module tracker.
   void Register(Module *module);
 
-  // Find all built-in modules. In user space, this will go and find things like
-  // libc. In kernel space, this will identify already loaded modules.
+  // Find all built-in modules. In user space, this will go and find things
+  // like libc. In kernel space, this will identify already loaded modules.
   //
   // This function should only be invoked once per `ModuleManager` instance.
   void RegisterAllBuiltIn(void);
+
+  // Returns an iterator over all loaded modules.
+  inline ConstModuleIterator Modules(void) const {
+    return ConstModuleIterator(modules);
+  }
 
  private:
   ModuleManager(void) = delete;

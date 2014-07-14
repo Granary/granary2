@@ -2,7 +2,6 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/list.h"
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
@@ -255,11 +254,14 @@ ModuleManager::~ModuleManager(void) {
 
 // Find a module given a program counter.
 GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
-  ReadLocked locker(&modules_lock);
-  for (auto module : ModuleIterator(modules)) {
-    if (module->Contains(pc)) {
-      return module;
+  for (auto num_attempts = 0; num_attempts < 2; ++num_attempts) {
+    ReadLocked locker(&modules_lock);
+    for (auto module : ModuleIterator(modules)) {
+      if (module->Contains(pc)) {
+        return module;
+      }
     }
+    if (!num_attempts) RegisterAllBuiltIn();
   }
   return nullptr;
 }

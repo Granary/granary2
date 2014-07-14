@@ -42,7 +42,13 @@ class ContextInterface {
   virtual ~ContextInterface(void);
 
   // Returns a pointer to the module containing some program counter.
-  virtual Module *ModuleContaining(AppPC pc) = 0;
+  virtual const Module *FindModuleContainingPC(AppPC pc) = 0;
+
+  // Returns a pointer to the first module whose name matches `name`.
+  virtual const Module *FindModuleByName(const char *name) = 0;
+
+  // Returns an iterator to all currently loaded modules.
+  virtual ConstModuleIterator LoadedModules(void) const = 0;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
@@ -95,7 +101,13 @@ class Context : public ContextInterface {
   virtual ~Context(void);
 
   // Returns a pointer to the module containing some program counter.
-  virtual Module *ModuleContaining(AppPC pc) override;
+  virtual const Module *FindModuleContainingPC(AppPC pc) override;
+
+  // Returns a pointer to the first module whose name matches `name`.
+  virtual const Module *FindModuleByName(const char *name) override;
+
+  // Returns an iterator to all currently loaded modules.
+  virtual ConstModuleIterator LoadedModules(void) const override;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;

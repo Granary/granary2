@@ -158,8 +158,18 @@ Context::~Context(void) {
 }
 
 // Returns a pointer to the module containing some program counter.
-Module *Context::ModuleContaining(AppPC pc) {
+const Module *Context::FindModuleContainingPC(AppPC pc) {
   return module_manager.FindByAppPC(pc);
+}
+
+// Returns a pointer to the first module whose name matches `name`.
+const Module *Context::FindModuleByName(const char *name) {
+  return module_manager.FindByName(name);
+}
+
+// Returns an iterator to all currently loaded modules.
+ConstModuleIterator Context::LoadedModules(void) const {
+  return module_manager.Modules();
 }
 
 // Allocate and initialize some `BlockMetaData`. This will also set-up the

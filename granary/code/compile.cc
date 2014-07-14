@@ -124,6 +124,7 @@ static void RelativizeCFIs(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
+        if (cfi->IsNoOp()) continue;  // Elided.
         if (cfi->HasIndirectTarget()) continue;  // No target PC.
         if (IsA<NativeBasicBlock *>(cfi->TargetBlock())) continue;
 
@@ -132,9 +133,7 @@ static void RelativizeCFIs(FragmentList *frags) {
         GRANARY_ASSERT(nullptr != target_frag);
         auto target_pc = target_frag->encoded_pc;
         GRANARY_ASSERT(nullptr != target_pc);
-
-        // Set the target PC if this wasn't a fall-through that was elided.
-        if (!cfi->IsNoOp()) cfi->instruction.SetBranchTarget(target_pc);
+        cfi->instruction.SetBranchTarget(target_pc);
 
       } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
         auto target = branch->TargetInstruction();

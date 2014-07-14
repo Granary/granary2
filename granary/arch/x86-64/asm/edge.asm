@@ -67,7 +67,11 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     push    (%rsp)
     and     $-16, %rsp
 
+    GRANARY_IF_USER(PUSHA_XMM)
+
     call    granary_enter_direct_edge
+
+    GRANARY_IF_USER(POPA_XMM)
 
     // Restore the old stack alignment.
     mov     8(%rsp), %rsp
@@ -126,7 +130,11 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
     push    (%rsp)
     and     $-16, %rsp
 
+    GRANARY_IF_USER(PUSHA_XMM)
+
     call    granary_enter_indirect_edge
+
+    GRANARY_IF_USER(POPA_XMM)
 
     // Restore the old stack alignment.
     mov     8(%rsp), %rsp
