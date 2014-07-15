@@ -252,6 +252,7 @@ class LocalScheduler {
       if (!vr) continue;  // No VR stole this GPR.
 
       // Mark the storage for this node as not being backed.
+      auto old_vr_reg = vr->reg;
       vr->reg = VirtualRegister();
 
       // This GPR will be restored from a slot, but the GPR is available to
@@ -259,8 +260,9 @@ class LocalScheduler {
       // the slot, but we don't need to expect a def/use earlier in the
       // instruction stream.
       if (gpr_is_occupiable[n]) {
+        GRANARY_ASSERT(old_vr_reg == used_gpr);
         frag->instrs.InsertAfter(
-            instr, arch::SaveGPRToSlot(vr->reg, NthSpillSlot(vr->slot)));
+            instr, arch::SaveGPRToSlot(old_vr_reg, NthSpillSlot(vr->slot)));
         vr = nullptr;
         slot = -1;
         gpr_is_occupiable[n] = false;

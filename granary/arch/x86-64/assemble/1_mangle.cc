@@ -267,7 +267,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
       JMP_GPRv(&(cfi->instruction), new_target_reg);
     }
   } else {
-    GRANARY_ASSERT(false);
+    // System call/return, interrupt call/return.
   }
 
   // Note: The final mangling of indirect calls and indirect jumps happens in

@@ -46,6 +46,21 @@ static void InitEncoderInstruction(const Instruction *instr,
     xede->effective_operand_width = static_cast<uint32_t>(
         instr->effective_operand_width);
   }
+
+  // Limit the effective operand width for instructions using AGENs.
+  switch (instr->iform) {
+    case XED_IFORM_BNDCN_BND_AGEN:
+    case XED_IFORM_BNDCL_BND_AGEN:
+    case XED_IFORM_BNDCU_BND_AGEN:
+    case XED_IFORM_BNDMK_BND_AGEN:
+    case XED_IFORM_LEA_GPRv_AGEN:
+      xede->effective_operand_width = std::min(
+          static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+          xede->effective_operand_width);
+      break;
+    default: break;
+  }
+
   xede->effective_address_width = arch::ADDRESS_WIDTH_BITS;
   xede->noperands = instr->num_explicit_ops;
   xede->prefixes.i = 0;
@@ -237,13 +252,13 @@ static void LateMangleLEA(Instruction *instr) {
 static void EncodeOperands(const Instruction *instr,
                            xed_encoder_instruction_t *xede, CachePC pc
                            GRANARY_IF_DEBUG(, bool check_reachable)) {
-  auto op_width = 0;
+  auto op_width = 0U;
   auto op_index = 0;
 
   for (auto &op : instr->ops) {
     auto &xedo(xede->operands[op_index++]);
     xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
-    op_width = std::max(op_width, op.BitWidth());
+
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
         EncodeBrDisp(op, &xedo, pc + instr->encoded_length, instr->iclass
@@ -259,6 +274,11 @@ static void EncodeOperands(const Instruction *instr,
         break;
       case XED_ENCODER_OPERAND_TYPE_MEM:
         EncodeMem(op, &xedo);
+        if (op.is_effective_address) {
+          xedo.width = std::min(
+              static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+              xedo.width);
+        }
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
         // TODO(pag): Do reachability checks in `EncodePtr`, as is
@@ -269,11 +289,12 @@ static void EncodeOperands(const Instruction *instr,
       default:
         break;
     }
+    op_width = std::max(op_width, xedo.width);
   }
 
   // Make sure that we've got an effective operand width.
   if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
-    xede->effective_operand_width = static_cast<uint32_t>(op_width);
+    xede->effective_operand_width = op_width;
   }
 }
 

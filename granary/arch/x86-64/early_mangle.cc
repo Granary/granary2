@@ -52,7 +52,7 @@ namespace {
 // location into a virtual register, then an indirect call through the
 // virtual register.
 static void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
-  if (XED_ENCODER_OPERAND_TYPE_MEM == instr->ops[0].type) {
+  if (instr->ops[0].IsMemory()) {
     Instruction ni;
     auto target_loc = block->AllocateVirtualRegister();
     APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, target_loc, instr->ops[0]));
@@ -247,10 +247,9 @@ static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
 
 // Mangle a `PUSH_*` instruction.
 static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
-  if (XED_ENCODER_OPERAND_TYPE_MEM == instr->ops[0].type) {
+  if (instr->ops[0].IsMemory()) {
     ManglePushMemOp(block, instr);
-  } else if (XED_ENCODER_OPERAND_TYPE_IMM0 == instr->ops[0].type ||
-      XED_ENCODER_OPERAND_TYPE_SIMM0 == instr->ops[0].type) {
+  } else if (instr->ops[0].IsImmediate()) {
     ManglePushImmOp(block, instr);
   } else if (XED_IFORM_PUSH_FS == instr->iform ||
              XED_IFORM_PUSH_GS == instr->iform) {
@@ -325,7 +324,7 @@ static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
 // Mangle a `POP_*` instruction.
 static void ManglePop(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
-  if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+  if (op.IsMemory()) {
     ManglePopMemOp(block, instr);
   } else if (op.IsRegister() && op.reg.IsStackPointer()) {
     ManglePopStackPointer(block, instr);

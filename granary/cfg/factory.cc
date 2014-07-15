@@ -109,7 +109,14 @@ void BlockFactory::AddFallThroughInstruction(
       decoder->Mangle(block, &dinstr);
       block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
-      block->AppendInstruction(std::move(lir::Jump(this, pc)));
+      auto next_block = Materialize(pc).release();
+      if (cti->IsFunctionCall()) {
+        // If we're doing a function call, then always decode the next block,
+        // as this allows us to avoid pesky issues with `setjmp` and `longjmp`.
+        next_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
+        has_pending_request = true;
+      }
+      block->AppendInstruction(std::move(lir::Jump(next_block)));
     }
   }
 }
@@ -310,21 +317,13 @@ namespace {
 //
 // TODO(pag): This does not fit with the model of return specialization,
 //            especially in the context of something like `longjmp`.
-CachedBasicBlock *MaterializeToExistingBlock(ContextInterface *context,
-                                             LocalControlFlowGraph *cfg,
-                                             BlockMetaData *meta,
-                                             AppMetaData *module_meta) {
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  cache_meta->start_pc = UnsafeCast<CachePC>(module_meta->start_pc);
-
-  do {
-    auto index = context->CodeCacheIndex();
-    LockedIndexTransaction transaction(index);
-    transaction.Insert(meta);
-  } while (0);
-
-  auto block = new CachedBasicBlock(cfg, meta);
-  return block;
+CompensationBasicBlock *MaterializeToExistingBlock(LocalControlFlowGraph *cfg,
+                                                   BlockMetaData *meta,
+                                                   AppPC non_transparent_pc) {
+  auto adaot_block = AdaptToBlock(cfg, meta,
+                                  new NativeBasicBlock(non_transparent_pc));
+  cfg->AddBlock(adaot_block);
+  return adaot_block;
 }
 
 }  // namespace
@@ -343,7 +342,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
   // give up and just go to the target and ignore the meta-data.
   if (ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
     non_transparent_pc = app_meta->start_pc;
-    return MaterializeToExistingBlock(context, cfg, meta, app_meta);
+    return MaterializeToExistingBlock(cfg, meta, non_transparent_pc);
   }
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
@@ -351,11 +350,10 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
 
   // Default to having a materialization strategy, and make it so that no one
   // can materialize against this block.
-  direct_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
   auto adapt_block = AdaptToBlock(cfg, meta, direct_block);
   adapt_block->is_comparable = false;
   cfg->AddBlock(adapt_block);
-  has_pending_request = true;
+  RequestBlock(direct_block, REQUEST_CHECK_INDEX_AND_LCFG);
   return adapt_block;
 }
 

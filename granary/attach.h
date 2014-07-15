@@ -10,6 +10,6 @@ class ContextInterface;
 
 void Attach(ContextInterface *context);
 
-}  // namespace
+}  // namespace granary
 
 #endif  // GRANARY_ATTACH_H_

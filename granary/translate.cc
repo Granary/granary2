@@ -64,15 +64,16 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
 CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                   AppPC target_app_pc) {
   LocalControlFlowGraph cfg(context);
-  CacheMetaData *cache_meta(nullptr);
   auto meta = context->AllocateBlockMetaData(edge->meta_template,
                                              target_app_pc);
   meta = Instrument(context, &cfg, meta, INSTRUMENT_INDIRECT);
-  cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->start_pc) {
     auto index = context->CodeCacheIndex();
     Compile(context, &cfg, edge, target_app_pc);
     IndexBlocks(index, &cfg);
+  } else {
+    GRANARY_USED(cache_meta->start_pc);
   }
   GRANARY_ASSERT(nullptr != cache_meta->start_pc);
   return cache_meta->start_pc;
