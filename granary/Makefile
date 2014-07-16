@@ -5,14 +5,10 @@
 include ../Makefile.inc
 
 GRANARY_LINT_TARGET =
-GRANARY_TOOL_OBJ_TARGET =
 
 # Should Granary's main code be linted?
 ifeq (1,$(GRANARY_LINT_CODE))
 	GRANARY_LINT_TARGET = lint
-endif
-ifeq (user,$(GRANARY_WHERE))
-	GRANARY_TOOL_OBJ_TARGET = $(GRANARY_TOOL_OBJ)
 endif
 
 GRANARY_MERGED_BC_BC = $(GRANARY_BIN_DIR)/granary_merged_ll.bc
@@ -44,10 +40,6 @@ ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_
 
 # All object files to be compiled.
 GRANARY_OBJ_FILES = $(GRANARY_CC_OBJ_FILES) $(ARCH_CC_OBJ_FILES)
-
-GRANARY_TOOL_OBJ_DEPS =
-GRANARY_TOOL_OBJ_DEPS += $(GRANARY_ARCH_BIN_DIR)/asm/string.o
-GRANARY_TOOL_OBJ_DEPS += $(GRANARY_BIN_DIR)/granary/breakpoint.o
 
 # Run the C pre-processor on the *.asm files, then run those through the
 # ASM post-processor to do extra token pasting and macro expansion.
@@ -93,14 +85,9 @@ $(GRANARY_MERGED_OBJ) :: $(GRANARY_MERGED_BC_OBJ) $(ARCH_ASM_OBJ_FILES)
 		$(GRANARY_OTHER_AR_FILES) \
 		-o $(GRANARY_MERGED_OBJ)
 
-# Compile the file that (user space) tools link against 
-$(GRANARY_TOOL_OBJ) :: $(GRANARY_TOOL_OBJ_DEPS)
-	@echo "Linking together tool dependencies into $(GRANARY_TOOL_OBJ)"
-	@$(GRANARY_LD) -r $(GRANARY_TOOL_OBJ_DEPS) -o $(GRANARY_TOOL_OBJ)
-
 # Lint all Granary code.
 lint:
 	@echo "Linting Granary files."
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/granary -type f -name '*.h' -or -name '*.cc')
 
-all: $(GRANARY_LINT_TARGET) $(GRANARY_MERGED_OBJ) $(GRANARY_TOOL_OBJ_TARGET)
+all: $(GRANARY_LINT_TARGET) $(GRANARY_MERGED_OBJ)

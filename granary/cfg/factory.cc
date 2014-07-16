@@ -95,9 +95,9 @@ void BlockFactory::AddFallThroughInstruction(
     arch::InstructionDecoder *decoder, DecodedBasicBlock *block,
     Instruction *last_instr, AppPC pc) {
 
-  auto cti = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cti && (cti->IsFunctionCall() || cti->IsConditionalJump() ||
-              cti->IsSystemCall() || cti->IsInterruptCall())) {
+  auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
+  if (cfi && (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
+              cfi->IsSystemCall() || cfi->IsInterruptCall())) {
     // Unconditionally decode the next instruction. If it's a jump then we'll
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR
@@ -110,7 +110,7 @@ void BlockFactory::AddFallThroughInstruction(
       block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
     } else {
       auto next_block = Materialize(pc).release();
-      if (cti->IsFunctionCall()) {
+      if (cfi->IsFunctionCall()) {
         // If we're doing a function call, then always decode the next block,
         // as this allows us to avoid pesky issues with `setjmp` and `longjmp`.
         next_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
@@ -152,7 +152,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     auto decoded_pc = pc;
     arch::Instruction dinstr;
     auto before_instr = block->LastInstruction()->Previous();
-    if (!decoder.DecodeNext(&dinstr, &pc)) {
+    if (!decoder.DecodeNext(&dinstr, &pc) || dinstr.IsInterruptCall()) {
       block->AppendInstruction(std::move(lir::Jump(
           new NativeBasicBlock(decoded_pc))));
       return;
@@ -189,7 +189,7 @@ void BlockFactory::RelinkCFIs(void) {
       if (direct_block && direct_block->materialized_block) {
         auto materialized_block = direct_block->materialized_block;
         cfg->AddBlock(materialized_block);
-        succ.cti->ChangeTarget(materialized_block);
+        succ.cfi->ChangeTarget(materialized_block);
       }
     }
   }
@@ -344,6 +344,9 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
     non_transparent_pc = app_meta->start_pc;
     return MaterializeToExistingBlock(cfg, meta, non_transparent_pc);
   }
+
+  GRANARY_ASSERT(ModuleKind::GRANARY != module->Kind());
+  GRANARY_ASSERT(ModuleKind::GRANARY_CLIENT != module->Kind());
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
   auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);

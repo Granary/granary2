@@ -18,7 +18,7 @@ class OnlyFunctionDecoder : public Tool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsFunctionCall()) {
+        if (succ.cfi->IsFunctionCall()) {
           factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_NATIVE);
         }
       }

@@ -102,7 +102,9 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
 }
 
 struct FrameAdjust {
-  int32_t shift;
+  int32_t shift;  // By how much does this instruction shift the stack pointer?
+
+  // Computed offset below the stack pointer that this instruction accesses.
   int32_t compute;
 };
 

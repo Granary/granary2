@@ -173,7 +173,7 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
     NOP_90(&ainstr);
   } else if (src.is_compound) {
     if (XED_REG_RSP == src.mem.reg_base) {  // Read of an offset stack pointer.
-      GRANARY_ASSERT(XED_REG_INVALID == src.mem.reg_index);
+      //GRANARY_ASSERT(XED_REG_INVALID == src.mem.reg_index);
       src.mem.disp += adjusted_offset;
     }
   } else if (src.reg.IsStackPointer()) {  // Copy of the stack pointer.
@@ -286,7 +286,8 @@ void RemoveIndirectCallsAndJumps(Fragment *frag) {
 namespace {
 
 static void AllocateSlot(Operand &op) {
-  op = arch::SlotMemOp(arch::SLOT_VIRTUAL_REGISTER, op.reg.Number());
+  op = arch::SlotMemOp(arch::SLOT_VIRTUAL_REGISTER, op.reg.Number(),
+                       op.BitWidth());
 }
 
 // Replace any abstract spill slots in an instruction with concrete, segment-

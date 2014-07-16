@@ -194,14 +194,7 @@ ifeq (0,$(GRANARY_STANDALONE))
 endif
 
 # Mask some of the libc and libc++ symbols with Granary equivalents.
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memset=granary_memset"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcpy=granary_memcpy"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=memcmp=granary_memcmp"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__builtin_memcpy=granary_memcpy"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=__cxa_pure_virtual=granary_break_on_unreachable_code"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZSt25__throw_bad_function_callv=granary_break_on_unreachable_code"
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_ZdlPv=granary_break_on_unreachable_code" # delete
-GRANARY_LD_FLAGS_LATE += "-Wl,--defsym=_Znwm=granary_break_on_unreachable_code" # new
+GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symver.map"
 
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5
@@ -209,6 +202,5 @@ GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_F
 
 # Specific files that are used by user space, kernel space, and test cases.
 GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary_merged.o
-GRANARY_CLIENT_OBJ = $(GRANARY_BIN_DIR)/granary_client.o
 
 .SILENT :

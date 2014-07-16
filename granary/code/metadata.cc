@@ -72,20 +72,18 @@ UnificationStatus StackMetaData::CanUnifyWith(const StackMetaData *that) const {
   // this meta-data is using an undefined stack, and this block is using a
   // defined one. In this case, we hope for the best.
   if (!has_stack_hint) {
-
-    // Steal the other information as it's "free" data-flow info :-D
-    if (that->has_stack_hint) {
+    if (that->behaves_like_callstack) {
       has_stack_hint = true;
-      behaves_like_callstack = that->behaves_like_callstack;
+      behaves_like_callstack = true;
     }
-    return UnificationStatus::ACCEPT;
 
-  // Be conservative about all else.
-  } else if (behaves_like_callstack == that->behaves_like_callstack) {
-    return UnificationStatus::ACCEPT;
-  } else {
-    return UnificationStatus::REJECT;
+  // TODO(pag): This might be overly aggressive. In future we'll see if this
+  //            is really required.
+  } else if (that->behaves_like_callstack) {
+    behaves_like_callstack = true;
   }
+
+  return UnificationStatus::ACCEPT;
 }
 
 }  // namespace granary

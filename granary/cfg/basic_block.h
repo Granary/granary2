@@ -44,11 +44,11 @@ class BasicBlockSuccessor {
   BasicBlockSuccessor(void) = delete;
   BasicBlockSuccessor(const BasicBlockSuccessor &) = default;
 
-  // Control-transfer instruction leading to the target basic block.
+  // Control-flow instruction leading to the target basic block.
   //
-  // `const`-qualified so that `cti` isn't unlinked from an instruction list
+  // `const`-qualified so that `cfi` isn't unlinked from an instruction list
   // while the successors are being iterated.
-  const ControlFlowInstruction * const cti;
+  const ControlFlowInstruction * const cfi;
 
   // The basic block targeted by `cti`.
   BasicBlock * const block;
@@ -59,7 +59,7 @@ class BasicBlockSuccessor {
 
   inline BasicBlockSuccessor(ControlFlowInstruction *cti_,
                              BasicBlock *block_)
-      : cti(cti_),
+      : cfi(cti_),
         block(block_) {}
 
   GRANARY_DISALLOW_ASSIGN(BasicBlockSuccessor);

@@ -212,8 +212,11 @@ int Instruction::ComputedOffsetBelowStackPointer(void) const {
     if (0 <= ops[1].mem.disp) return 0;
     return ops[1].mem.disp;
   } else {
-    if (0 <= ops[1].mem.disp) return -128;
-    return ops[1].mem.disp - 128;
+    // TODO(pag): Assume that this is always going up on the stack rather than
+    //            down.
+    return 0;
+    //if (0 <= ops[1].mem.disp) return -128;
+    //return ops[1].mem.disp - 128;
   }
 }
 

@@ -1,0 +1,8 @@
+granary {
+    global:
+        memcpy; memset; memmove; memcmp;
+        strcpy; strlen; strcmp;
+        __cxa_pure_virtual;
+        _ZSt25__throw_bad_function_callv;
+        _ZdlPv; _Znwm;
+};

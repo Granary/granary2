@@ -7,6 +7,9 @@
 // accidentally include any system headers in the export.
 #if (defined(GRANARY_INTERNAL) || !defined(GRANARY_EXTERNAL)) && \
     !defined(GRANARY_ASSEMBLY)
+# include "granary/base/abi.h"
+# include "granary/base/cstring.h"
+
 # include <algorithm>
 # include <atomic>
 # include <cstdarg>
@@ -204,7 +207,7 @@
 
 
 // Mark a result / variable as being used.
-#define GRANARY_UNUSED(var) (void) var
+#define GRANARY_UNUSED(...) (void) __VA_ARGS__
 #define GRANARY_USED(var) \
   do { \
     GRANARY_INLINE_ASSEMBLY("" :: "m"(var)); \

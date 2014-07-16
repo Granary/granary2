@@ -15,7 +15,7 @@ class JumpFollower : public Tool {
         continue;
       }
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsConditionalJump()) {
+        if (succ.cfi->IsConditionalJump()) {
           // Expand the target of a conditional jump only if it's a back-edge.
           // The default branch prediction behavior on x86, absent any prior
           // knowledge, is to predict a conditional jump if it's a back-edge.
@@ -28,7 +28,7 @@ class JumpFollower : public Tool {
 
         // If we haven't already expanded a conditional jump, or there was no
         // conditional jump, then expand the direct jump.
-        } else if (succ.cti->IsJump() && !succ.cti->HasIndirectTarget()) {
+        } else if (succ.cfi->IsJump() && !succ.cfi->HasIndirectTarget()) {
           factory->RequestBlock(succ.block);
           break;
         }

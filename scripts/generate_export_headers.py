@@ -8,8 +8,10 @@ import re
 import sys
 
 EXPORT_HEADERS = [
+  "granary/base/abi.h",
   "granary/base/base.h",
   "granary/base/lock.h",
+  "granary/base/cstring.h",
   "granary/base/string.h",
   "granary/base/option.h",
   "granary/code/register.h",
@@ -140,9 +142,8 @@ def strip_combined_files(new_lines):
 def main(where, source_dir, export_dir, extra_flags):
   system_includes, lines = combine_output_files(source_dir)
   preprocess_combined_files(source_dir, lines, extra_flags)
-  new_lines = combine_system_headers(system_includes)
-  new_lines.extend(filter_macros(
-      "/tmp/granary_export2.h", "/tmp/granary_export3.h"))
+  new_lines = filter_macros("/tmp/granary_export2.h", "/tmp/granary_export3.h")
+  new_lines.extend(combine_system_headers(system_includes))
   strip_combined_files(new_lines)
   open(os.path.join(export_dir, "granary.h"), "w").write(
       "\n".join(new_lines))

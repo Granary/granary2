@@ -153,9 +153,13 @@ static void Encode(FragmentList *frags) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
         if (ninstr->IsNoOp()) continue;
+        GRANARY_IF_DEBUG( auto expected_length =
+            ninstr->instruction.EncodedLength(); )
         GRANARY_IF_DEBUG( auto encoded = ) encoder.Encode(
             &(ninstr->instruction), ninstr->instruction.EncodedPC());
         GRANARY_ASSERT(encoded);
+        GRANARY_ASSERT(expected_length == ninstr->instruction.EncodedLength());
+        GRANARY_ASSERT(!ninstr->IsInterruptCall());
       }
     }
   }

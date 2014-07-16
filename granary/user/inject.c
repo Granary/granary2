@@ -38,11 +38,9 @@ static void InitGranaryPath(const char *exec_name) {
       last_slash = curr;
     }
   }
-
   if (!last_slash) {
     exit(EXIT_FAILURE);
   }
-
   last_slash[1] = '\0';
 }
 
@@ -80,16 +78,15 @@ static int SetArgs(int argc, const char **argv) {
   return i + 1;
 }
 
+extern char **environ;
+
 // Run a command under Granary's control by setting up LD_PRELOAD.
 int main(int argc, const char **argv) {
   InitGranaryPath(argv[0]);
   setenv("GRANARY_PATH", GRANARY_PATH, 1);
   SetPreload();
   argv = &(argv[SetArgs(argc, argv)]);
-  return execvpe(
-      argv[0],
-      (char * const *) argv,
-      (char * const *) environ);
+  return execvpe(argv[0], (char * const *) argv, (char * const *) environ);
 }
 
 #endif  // GRANARY_STANDALONE

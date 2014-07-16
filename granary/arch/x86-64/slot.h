@@ -24,7 +24,8 @@ intptr_t &Slot(SlotCategory category, int sub_category=0);
 
 // Used to access some kind of private slot, e.g. virtual register spill slot
 // as a memory operand.
-arch::Operand SlotMemOp(SlotCategory category, int sub_category=0);
+arch::Operand SlotMemOp(SlotCategory category, int sub_category=0,
+                        int width=-1);
 
 }  // namespace arch
 }  // namespace granary

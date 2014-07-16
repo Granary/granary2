@@ -16,6 +16,8 @@
 #include "granary/instrument.h"
 #include "granary/translate.h"
 
+#include "granary/logging.h"
+
 namespace granary {
 namespace {
 
@@ -24,6 +26,13 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   LockedIndexTransaction transaction(index);
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+
+      auto meta = decoded_block->MetaData();
+      auto app_meta = MetaDataCast<AppMetaData *>(meta);
+      auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+
+      Log(LogOutput, "0x%p 0x%p\n", app_meta->start_pc, cache_meta->start_pc);
+
       transaction.Insert(decoded_block->MetaData());
     }
   }

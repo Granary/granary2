@@ -8,7 +8,6 @@ DECLARE_FUNC(granary_enter_direct_edge)
 DECLARE_FUNC(granary_enter_indirect_edge)
 
 #define DirectEdge_num_executions 16
-#define DirectEdge_num_execution_overflows 20
 
 // Context switch into granary. This allows the runtime to select a profiled
 // and an unprofiled version of the edge entrypoint code. The profiled
@@ -25,9 +24,9 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     // execution counter. This is a saturating counter, where one counter
     // counts up to 32 bits, and the other counts the number of overflows.
     push    %rax
-    mov     $1, %rax
-    xadd    %rax, DirectEdge_num_executions(%rdi)
-    jo      .Ledge_counter_overflowed
+    mov     $2, %rax
+    xaddq   %rax, DirectEdge_num_executions(%rdi)
+    jo      .Lback_to_code_cache  // Alreadt executed.
 
     test    %rax, %rax
     jnz     .Lback_to_code_cache  // Already executed
@@ -38,14 +37,6 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     // space and we were de-scheduled, thus making time for the overflow to
     // occur.
     jmp     .Ltranslate_block
-
-  .Ledge_counter_overflowed:
-    // An unlikely event, so no need to lock the cache line.
-    incl    DirectEdge_num_execution_overflows(%rdi)
-
-    // If we overflowed then we know that the edge has already been resolved,
-    // as it has already been executed at least 2^32 times.
-    jmp     .Lback_to_code_cache
 
   .Ltranslate_block:
     // Save all regs, except `RDI` and `RSI`.

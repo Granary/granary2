@@ -27,7 +27,7 @@ void granary_attach(void (**func_ptr)(void)) {
   } else {
     Log(LogOutput, "Attaching Granary.\n");
     auto func_pc = UnsafeCast<AppPC *>(func_ptr);
-    *func_pc = Translate(attach_context, *func_pc);
+    *func_pc = Translate(attach_context, *func_pc, TRANSLATE_STACK_VALID);
   }
 }
 }  // extern C

@@ -15,6 +15,7 @@
 #include "granary/cfg/operand.h"
 
 #include "granary/code/assemble/1_mangle.h"
+#include "granary/code/metadata.h"
 
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
@@ -126,6 +127,15 @@ class BlockMangler {
         IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
     cfi->UnsafeInsertAfter(ret_address);
     cfi->return_address = ret_address;
+
+    // Ensure that targets of function calls have valid stack meta-data.
+    auto target_generic = cfi->TargetBlock();
+    if (auto target = DynamicCast<InstrumentedBasicBlock *>(target_generic)) {
+      if (auto target_meta = target->UnsafeMetaData()) {
+        auto stack_meta = MetaDataCast<StackMetaData *>(target_meta);
+        stack_meta->MarkStackAsValid();
+      }
+    }
   }
 
   // Relativize a control-flow instruction.

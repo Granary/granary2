@@ -39,7 +39,7 @@ $(1)-all : $(addprefix $(GRANARY_CLIENT_DIR)/$(1)/,$($(1)-objs))
 	@$(GRANARY_CC) \
 		$(GRANARY_LD_FLAGS) \
 		$(GRANARY_LD_FLAGS_EARLY) \
-		$(GRANARY_CLIENT_DIR)/$(1)/lib$(1).o $(GRANARY_CLIENT_OBJ) \
+		$(GRANARY_CLIENT_DIR)/$(1)/lib$(1).o \
 		$(GRANARY_LD_FLAGS_LATE) \
 		-o $(GRANARY_BIN_DIR)/lib$(1).so
 

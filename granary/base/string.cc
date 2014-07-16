@@ -12,20 +12,14 @@ const char *NULTerminatedStringIterator::EOS = "";
 // Returns the length of a C string, i.e. the number of non-'\0' characters up
 // to but excluding the first '\0' character.
 uint64_t StringLength(const char *ch) {
-  uint64_t len(0);
-  if (ch) {
-    for (; *ch; ++ch) {
-      ++len;
-    }
-  }
-  return len;
+  return strlen(ch);
 }
 
 // Copy at most `buffer_len` characters from the C string `str` into `buffer`.
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`. Returns
-// the number of characters copied, exluding the trailing '\0'.
+// the number of characters copied, excluding the trailing '\0'.
 uint64_t CopyString(char * __restrict buffer, uint64_t buffer_len,
-                         const char * __restrict str) {
+                    const char * __restrict str) {
   if (buffer && str) {
     WriteBuffer buff(buffer, buffer_len);
     buff.Write(str);
@@ -36,18 +30,14 @@ uint64_t CopyString(char * __restrict buffer, uint64_t buffer_len,
   }
 }
 
+uint64_t CopyString(char * __restrict buffer, const char * __restrict str) {
+  strcpy(buffer, str);
+  return strlen(buffer);
+}
+
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2) {
-  if (str1 == str2) {
-    return true;
-  } else if (str1 && str2) {
-    for (; *str1 == *str2; ++str1, ++str2) {
-      if (!*str1) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return !strcmp(str1, str2);
 }
 
 namespace {
@@ -319,23 +309,3 @@ int DeFormat(const char * __restrict buffer,
   return num_args;
 }
 }  // namespace granary
-extern "C" {
-
-// Implements libc's `memmove` by either invoking `granary_memcpy`, which does
-// a byte-oriented copy in the forward direction, or falls back on doing a
-// byte-oriented copy in the backward direction.
-void *granary_memmove(void *dest, const void *src, unsigned long num_bytes) {
-  if (num_bytes) {
-    if (dest <= src) {
-      return memcpy(dest, src, num_bytes);
-    } else {
-      auto dest_bytes = reinterpret_cast<uint8_t *>(dest);
-      auto src_bytes = reinterpret_cast<const uint8_t *>(src);
-      for (; num_bytes--; ) {  // Copy backwards.
-        dest_bytes[num_bytes] = src_bytes[num_bytes];
-      }
-    }
-  }
-  return dest;
-}
-}  // extern C

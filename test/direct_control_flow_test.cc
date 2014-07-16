@@ -32,7 +32,7 @@ class FunctionTool : public Tool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (!succ.cti->IsFunctionCall()) {
+        if (!succ.cfi->IsFunctionCall()) {
           factory->RequestBlock(succ.block);
         }
       }
@@ -48,7 +48,7 @@ class CallTool : public Tool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsFunctionCall()) {
+        if (succ.cfi->IsFunctionCall()) {
           factory->RequestBlock(succ.block);
         }
       }
@@ -68,7 +68,7 @@ class CallUnrollerTool : public Tool {
                                        LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsFunctionCall()) {
+        if (succ.cfi->IsFunctionCall()) {
           if (num_to_unroll--) {
             factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_NOW);
           }
@@ -91,7 +91,7 @@ class JumpUnrollerTool : public Tool {
                                        LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsJump()) {
+        if (succ.cfi->IsJump()) {
           if (num_to_unroll--) {
             factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_NOW);
           }
@@ -109,7 +109,7 @@ class NativeCallTool : public Tool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (succ.cti->IsFunctionCall()) {
+        if (succ.cfi->IsFunctionCall()) {
           factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_NATIVE);
         }
       }

@@ -188,7 +188,10 @@ static void ParseMapsFile(ModuleManager *manager) {
     }
 
     module->AddRange(module_base, module_limit, module_offset, module_perms);
-    lexer.NextToken();  // new line.
+
+    do {
+      token = lexer.NextToken();  // Skip things like `(deleted)`.
+    } while('\0' != token[0] && '\n' != token[0]);
   };
 }
 }  // namespace

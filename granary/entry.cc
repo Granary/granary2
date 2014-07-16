@@ -26,12 +26,12 @@ static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
   std::atomic_thread_fence(std::memory_order_acquire);
   if (!FLAG_profile_direct_edges) {
     edge->entry_target = target_pc;
-  } else {
-    // Reset, just in case some threads were spinning on (and thus
-    // incrementing) these values in the edge entry code.
-    edge->num_executions = 1;
-    edge->num_execution_overflows = 0;
   }
+
+  // TODO(pag): Might not yield correct behavior w.r.t. edge profiling
+  //            increments in assembly routines on more relaxed memory
+  //            models.
+  edge->num_executions = 1;
   edge->exit_target = target_pc;
   std::atomic_thread_fence(std::memory_order_release);
 }

@@ -40,11 +40,11 @@ class alignas(alignof(void *)) DirectEdge {
   // changed to be the `cache_pc` of the target block.
   CachePC exit_target;
 
-  // The number of executions.
-  uint32_t num_executions;
-
-  // The number of times the execution counter overflowed.
-  uint32_t num_execution_overflows;
+  // The number of executions. The edge entrypoint assembly routine
+  // atomically increments this value by `2` each time, but when the edge is
+  // patched, the value is changed to `1`. Thus, once the edge is patched, the
+  // value is always odd, even if it overflows.
+  uint64_t num_executions;
 
   // Next direct edge in a chain of all direct edges.
   DirectEdge *next;
@@ -90,10 +90,6 @@ static_assert(8 == offsetof(DirectEdge, exit_target),
 static_assert(16 == offsetof(DirectEdge, num_executions),
     "Field `DirectEdge::num_executions` must be at offset `16`, as assembly "
     "routines depend on this.");
-
-static_assert(20 == offsetof(DirectEdge, num_execution_overflows),
-    "Field `DirectEdge::num_execution_overflows` must be at offset `24`, "
-    "as assembly routines depend on this.");
 
 static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
     "The `DirectEdge` structure should fit into an individual cache line.");

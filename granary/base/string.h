@@ -3,68 +3,6 @@
 #ifndef GRANARY_BASE_STRING_H_
 #define GRANARY_BASE_STRING_H_
 
-// Don't take over `memset` et al. when we're running test cases, as that will
-// interfere with the C++ standard library.
-#ifndef GRANARY_TEST
-
-// Try to prevent `libc++`s or `libstdc++`s cstring header files from being
-// included. This is a pretty ugly hack!
-#define _LIBCPP_CSTRING
-#define _GLIBCXX_CSTRING
-
-#ifdef __cplusplus
-extern "C" {
-#endif  // __cplusplus
-
-void *granary_memcpy(void * __restrict, const void * __restrict,
-                     unsigned long);
-void *granary_memset(void *, int, unsigned long);
-int granary_memcmp(const void * __restrict, const void * __restrict,
-                   unsigned long);
-void *granary_memmove(void *dest, const void *src, unsigned long num_bytes);
-
-#ifdef __cplusplus
-}  // extern C
-#endif  // __cplusplus
-
-#ifdef memcpy
-# undef memcpy
-#endif
-
-#ifdef memset
-# undef memset
-#endif
-
-#ifdef memcmp
-# undef memcmp
-#endif
-
-#ifdef memmove
-# undef memmove
-#endif
-
-#ifdef __cplusplus
-namespace std {
-inline namespace __1 {
-extern "C" {
-void *granary_memcpy(void * __restrict, const void * __restrict,
-                     unsigned long);
-void *granary_memset(void *, int, unsigned long);
-int granary_memcmp(const void * __restrict, const void * __restrict,
-                   unsigned long);
-void *granary_memmove(void *dest, const void *src, unsigned long num_bytes);
-}  // extern C
-}  // namespace __1
-}  // namespace std
-#endif
-
-#define memcpy granary_memcpy
-#define memset granary_memset
-#define memcmp granary_memcmp
-#define memmove granary_memmove
-
-#endif  // GRANARY_TEST
-
 #ifdef __cplusplus
 #include "granary/base/base.h"
 
@@ -195,10 +133,9 @@ unsigned long StringLength(const char *ch);
 
 // Copy at most `buffer_len` characters from the C string `str` into `buffer`.
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`.
-//
-// Note: This
 unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
                          const char * __restrict str);
+unsigned long CopyString(char * __restrict buffer, const char * __restrict str);
 
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);

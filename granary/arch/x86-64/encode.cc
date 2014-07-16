@@ -176,6 +176,7 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 
   // Segment offset.
   if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
+    GRANARY_ASSERT(op.addr.as_int == static_cast<int32_t>(op.addr.as_uint));
     xedo->u.mem.disp.displacement = op.addr.as_uint;
     if (op.addr.as_int >= 0) { // Unsigned, apply a 31-bit mask.
       xedo->u.mem.disp.displacement &= 0x7FFFFFFFULL;
@@ -194,25 +195,21 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
   } else {
     auto mem_addr = op.addr.as_uint;
     xedo->u.mem.disp.displacement = mem_addr;
-    xedo->u.mem.disp.displacement_width = arch::ADDRESS_WIDTH_BITS;
+    xedo->u.mem.disp.displacement_width = ADDRESS_WIDTH_BITS;
 
     auto high_32 = mem_addr >> 32;
     auto sign_bit_32 = 1UL & (mem_addr >> 31);
 
     if (0x0FFFFFFFFULL == high_32) {
-      if (sign_bit_32) {
-        xedo->u.mem.disp.displacement_width = 32;
-      }
+      if (sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
     } else if (!high_32) {
-      if (!sign_bit_32) {
-        xedo->u.mem.disp.displacement_width = 32;
-      }
+      if (!sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
     }
-    if (32 == xedo->u.mem.disp.displacement_width) {
-      xedo->u.mem.disp.displacement &= 0x0FFFFFFFFULL;  // 32 bit mask.
-
     // Convert into a RIP-relative displacement when it fits.
-    } else if (64 == xedo->u.mem.disp.displacement_width) {
+    //
+    // TODO(pag): Mask high order bits if 32 bits? For segment offsets, this
+    //            doesn't seem to matter.
+    if (ADDRESS_WIDTH_BITS == xedo->u.mem.disp.displacement_width) {
       auto diff = op.addr.as_int - next_addr;
       if (32 >= ImmediateWidthBits(diff)) {
         xedo->u.mem.disp.displacement = static_cast<uint32_t>(diff);

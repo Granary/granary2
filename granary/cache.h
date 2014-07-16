@@ -7,6 +7,8 @@
 # error "This code is internal to Granary."
 #endif
 
+#include "granary/arch/cpu.h"
+
 #include "granary/base/base.h"
 #include "granary/base/lock.h"
 #include "granary/base/new.h"
@@ -74,6 +76,7 @@ class CodeCacheTransaction {
 
   ~CodeCacheTransaction(void) {
     cache->EndTransaction(begin, end);
+    cpu::SynchronizePipeline();
   }
 
  private:

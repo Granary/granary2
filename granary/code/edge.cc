@@ -15,7 +15,6 @@ DirectEdge::DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_)
     : entry_target(nullptr),
       exit_target(edge_code_),
       num_executions(0),
-      num_execution_overflows(0),
       next(nullptr),
       dest_meta(ATOMIC_VAR_INIT(dest_meta_)),
       edge_code(edge_code_),

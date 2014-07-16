@@ -27,12 +27,6 @@ where_user: where_common
 	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
 	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.bc \
     	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
-    	
-	@echo "Loading user space $(GRANARY_CLIENT_OBJ)"
-	@$(GRANARY_LD) -r \
-    	$(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)/asm/string.o \
-    	$(GRANARY_BIN_DIR)/granary/breakpoint.o \
-    	-o $(GRANARY_CLIENT_OBJ)
 	
 # We handle the equivalent of `user_tool` in `granary/kernel/Took.mk`.
 where_kernel: where_common

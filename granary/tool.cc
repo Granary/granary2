@@ -110,6 +110,11 @@ void Tool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // instrumentation session.
 void Tool::InstrumentBlock(DecodedBasicBlock *) {}
 
+// Returns a pointer to the module containing an application `pc`.
+const Module *Tool::ModuleContainingPC(AppPC pc) {
+  return context->FindModuleContainingPC(pc);
+}
+
 // Begin inserting some inline assembly. This takes in an optional scope
 // specifier, which allows tools to use the same variables in two or more
 // different contexts/scopes of instrumentation and not have them clash. This

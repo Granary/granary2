@@ -70,14 +70,14 @@ static intptr_t SlotOffset(SlotCategory category, int sub_category) {
 
 // Used to access some kind of private slot, e.g. virtual register spill slot
 // as a memory operand.
-arch::Operand SlotMemOp(SlotCategory category, int sub_category) {
+arch::Operand SlotMemOp(SlotCategory category, int sub_category, int width) {
   arch::Operand op;
 
   op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.segment = GRANARY_IF_USER_ELSE(XED_REG_FS, XED_REG_GS);  // Linux-specific.
   op.is_compound = true;
   op.addr.as_int = SlotOffset(category, sub_category);
-  op.width = arch::GPR_WIDTH_BITS;
+  op.width = static_cast<int16_t>(0 >= width ? arch::GPR_WIDTH_BITS : width);
   return op;
 }
 
