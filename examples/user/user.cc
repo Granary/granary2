@@ -17,7 +17,8 @@ class UserSpaceInstrumenter : public Tool {
 
       // If this block targets `libdl` then detach.
       auto module = ModuleContainingPC(direct_block->StartAppPC());
-      if (StringsMatch("dl", module->Name())) {
+      if (StringsMatch("dl", module->Name()) ||
+          StringsMatch("ld", module->Name())) {
         factory->RequestBlock(direct_block, BlockRequestKind::REQUEST_NATIVE);
       }
     }

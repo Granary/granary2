@@ -22,6 +22,9 @@ extern int granary_mlock(const void *__addr, size_t __len);
 }  // extern C
 namespace granary {
 
+// Initialize the Granary heap.
+void InitHeap(void) {}
+
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocatePages(int num, MemoryIntent intent) {

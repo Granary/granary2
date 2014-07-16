@@ -11,6 +11,7 @@
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
+#include "granary/memory.h"
 
 GRANARY_DEFINE_string(clients, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
@@ -36,6 +37,7 @@ GRANARY_EARLY_GLOBAL static Container<Context> context;
 
 // Initialize Granary.
 void Init(const char *granary_path) {
+  InitHeap();  // Initialize the Granary heap.
 
   // Initialize the driver (e.g. XED, DynamoRIO). This usually performs from
   // architecture-specific checks to determine which architectural features
