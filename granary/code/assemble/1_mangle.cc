@@ -23,6 +23,11 @@
 namespace granary {
 namespace arch {
 
+// Returns true if an address needs to be relativized.
+//
+// Note: This has an architecture-specific implementation.
+extern bool AddressNeedsRelativizing(const void *ptr);
+
 // Relativize a direct control-flow instruction.
 //
 // Note: This has an architecture-specific implementation.
@@ -98,8 +103,11 @@ class BlockMangler {
   // Relativize a particular memory operation within a memory instruction.
   void RelativizeMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
     const void *mptr(nullptr);
-    if (mloc.MatchPointer(mptr) && AddressNeedsRelativizing(mptr)) {
-      arch::RelativizeMemOp(block, instr, mloc, mptr);
+    if (mloc.MatchPointer(mptr)) {
+      if (AddressNeedsRelativizing(mptr) ||
+          arch::AddressNeedsRelativizing(mptr)) {
+        arch::RelativizeMemOp(block, instr, mloc, mptr);
+      }
     }
   }
 

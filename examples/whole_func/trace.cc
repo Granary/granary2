@@ -12,7 +12,9 @@ class WholeFunctionDecoder : public Tool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        if (!succ.cfi->IsFunctionCall()) {
+        if (succ.cfi->IsSystemCall() || succ.cfi->IsInterruptCall()) {
+          break;  // System calls don't always return to the next instruction.
+        } else if (!succ.cfi->IsFunctionCall()) {
           factory->RequestBlock(succ.block);
         }
       }

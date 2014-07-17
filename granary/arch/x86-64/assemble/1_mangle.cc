@@ -3,6 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "granary/arch/util.h"
+
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 
@@ -285,16 +287,17 @@ void MangleDirectCFI(DecodedBasicBlock *, ControlFlowInstruction *cfi,
   }
 }
 
+// Returns true if an address needs to be relativized.
+bool AddressNeedsRelativizing(const void *ptr) {
+  return 32 < ImmediateWidthBits(reinterpret_cast<uintptr_t>(ptr));
+}
+
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
 void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                      const MemoryOperand &mloc, const void *mem_addr) {
   auto op = mloc.UnsafeExtract();
-  if (XED_ENCODER_OPERAND_TYPE_PTR != op->type) return;
-
-  // 32-bit absolute address (seg=DS), RIP-relative address that was converted
-  // into 32-bit absolute (seg=DS), or segment-offsetted address (seg=GS/FS).
-  if (XED_REG_INVALID != op->segment) return;
+  if (XED_REG_DS != op->segment && XED_REG_INVALID != op->segment) return;
 
   Instruction ni;
   auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);

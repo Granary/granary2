@@ -94,33 +94,18 @@ Instruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
 }
 
 // Add the fall-through instruction for a block.
-void BlockFactory::AddFallThroughInstruction(
-    arch::InstructionDecoder *decoder, DecodedBasicBlock *block,
-    Instruction *last_instr, AppPC pc) {
+void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
+                                             Instruction *last_instr,
+                                             AppPC pc) {
 
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
   if (!cfi) return;
+
   BasicBlock *fall_through(nullptr);
   if (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
       cfi->IsSystemCall() || cfi->IsInterruptCall()) {
-    // Unconditionally decode the next instruction. If it's a jump then we'll
-    // use the jump as the fall-through. If we can't decode it then we'll add
-    // a fall-through to native, and if it's neither then just add in a LIR
-    // instruction for the fall-through.
-    arch::Instruction dinstr;
-    if (!decoder->Decode(&dinstr, pc)) {
-      block->AppendInstruction(std::move(lir::Jump(new NativeBasicBlock(pc))));
-    } else if (dinstr.IsUnconditionalJump()) {
-      decoder->Mangle(block, &dinstr);
-      auto fall_through_instr = MakeInstruction(&dinstr);
-      auto fall_through_cfi = DynamicCast<ControlFlowInstruction *>(
-          fall_through_instr);
-      fall_through = fall_through_cfi->TargetBlock();
-      block->UnsafeAppendInstruction(fall_through_instr);
-    } else {
-      fall_through = Materialize(pc).release();
-      block->AppendInstruction(std::move(lir::Jump(fall_through)));
-    }
+    fall_through = Materialize(pc).release();
+    block->AppendInstruction(std::move(lir::Jump(fall_through)));
   } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
     fall_through = cfi->TargetBlock();
   }
@@ -177,7 +162,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     block->UnsafeAppendInstruction(instr);
     AnnotateInstruction(block, before_instr);
   } while (!IsA<ControlFlowInstruction *>(instr));
-  AddFallThroughInstruction(&decoder, block, instr, pc);
+  AddFallThroughInstruction(block, instr, pc);
 }
 
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.

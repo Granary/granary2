@@ -218,26 +218,8 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
+    instr_op->segment = XED_REG_DS;
     instr_op->width = mem_op_width; // Width of addressed memory.
-
-    // Try to convert a RIP-relative address into an absolute address. This
-    // assumes that the address is < 32 bits in size.
-    auto addr32 = static_cast<uint32_t>(instr_op->addr.as_uint);
-    if (XED_ICLASS_LEA != instr->iclass) {
-      if (instr_op->addr.as_uint == static_cast<uintptr_t>(addr32)) {
-        instr_op->segment = XED_REG_DS;
-        instr_op->addr.as_uint = 0;
-        instr_op->mem.disp = static_cast<int32_t>(addr32);
-      }
-
-    // Convert RIP-relative addresses loads in the native code into mov's of
-    // the absolute address.
-    } else {
-      instr->iclass = XED_ICLASS_MOV;
-      instr->iform = XED_IFORM_MOV_GPRv_IMMv;
-      instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-      instr_op->imm.as_uint = instr_op->addr.as_uint;
-    }
 
     if (!instr_op->width) {
       instr_op->width = instr->effective_operand_width;

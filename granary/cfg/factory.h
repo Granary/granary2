@@ -138,8 +138,7 @@ class BlockFactory {
 
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION
-  void AddFallThroughInstruction(arch::InstructionDecoder *decoder,
-                                 DecodedBasicBlock *block,
+  void AddFallThroughInstruction(DecodedBasicBlock *block,
                                  Instruction *last_instr, AppPC pc);
 
   // Decode an instruction list starting at `pc` and link the decoded

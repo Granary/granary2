@@ -72,6 +72,7 @@ void MemoryBuilder::Build(Instruction *instr) {
   instr_op.is_compound = false;
   switch (kind) {
     case BUILD_POINTER:
+      instr_op.segment = XED_REG_DS;
       instr_op.type = XED_ENCODER_OPERAND_TYPE_PTR;
       instr_op.addr.as_ptr = ptr;
       break;

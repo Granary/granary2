@@ -146,7 +146,7 @@ static void TruncateDisplacementToWidth(xed_enc_displacement_t *disp) {
 // Encode a memory operand.
 static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
   xedo->type = op.type;
-  xedo->u.mem.seg = op.segment;
+  xedo->u.mem.seg = XED_REG_DS != op.segment ? op.segment : XED_REG_INVALID;
   if (op.is_compound) {
     xedo->u.mem.base = op.mem.reg_base;
     if (op.mem.disp) {

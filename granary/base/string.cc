@@ -83,7 +83,7 @@ static void FormatGenericInt(WriteBuffer &buff, uint64_t data, uint64_t base) {
     FormatDigit(buff, digit);
     data -= digit * max_base;
   }
-  if (has_last_digit)  FormatDigit(buff, low_digit);
+  if (has_last_digit) FormatDigit(buff, low_digit);
 }
 
 // De-format a hexadecimal digit.
