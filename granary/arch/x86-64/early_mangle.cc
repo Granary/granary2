@@ -137,6 +137,10 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
     if (XED_IFORM_MOV_GPRv_GPRv_89 == instr->iform &&
         arch::GPR_WIDTH_BITS == instr->effective_operand_width) {
       MoveStackPointerToGPR(instr);
+      if (REDZONE_SIZE_BYTES) {
+        block->UnsafeAppendInstruction(
+            new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
+      }
     } else if (XED_ICLASS_LEA == instr->iclass) {
       return;  // Mangling would be redundant.
     } else {
@@ -477,6 +481,12 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       MangleIndirectCFI(block, instr);
       break;
     case XED_ICLASS_LEA:
+      if (REDZONE_SIZE_BYTES && instr->ReadsFromStackPointer()) {
+        // Copies the stack pointer into a register. After this point the
+        // copied stack pointer might be used to access memory in the redzone.
+        block->UnsafeAppendInstruction(
+            new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
+      }
       break;
     case XED_ICLASS_PUSH:
       ManglePush(block, instr);

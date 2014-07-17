@@ -14,7 +14,7 @@ GRANARY_EXE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME).out
 GRANARY_TEST_CXX_FLAGS =  -g3 -Wall -Wextra -pthread
 GRANARY_TEST_CXX_FLAGS += -isystem $(GRANARY_GMOCK_SRC_DIR)/include
 GRANARY_TEST_CXX_FLAGS += -isystem $(GRANARY_GTEST_SRC_DIR)/include
-GRANARY_TEST_CXX_FLAGS += $(GRANARY_COMMON_FLAGS:--coverage=)
+GRANARY_TEST_CXX_FLAGS += $(GRANARY_COMMON_FLAGS)
 GRANARY_TEST_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS)
 GRANARY_TEST_CXX_FLAGS += -Wno-missing-field-initializers
 
@@ -83,7 +83,7 @@ $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
                 $(GRANARY_MERGED_OBJ)
 	@echo "Compiling $@"
 	@mkdir -p $(@D)
-	$(GRANARY_CXX) --coverage $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
+	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
 
 
 # Build all test targets.

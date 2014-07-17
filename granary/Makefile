@@ -71,7 +71,7 @@ $(GRANARY_MERGED_BC_OBJ) :: $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES)
 	@echo "Linking intermediate bitcode files into $(GRANARY_MERGED_BC_OBJ)."
 	@$(GRANARY_LLVM_LINK) $(GRANARY_OBJ_FILES) $(GRANARY_OTHER_OBJ_FILES) \
 		-o $(GRANARY_MERGED_BC_BC)
-	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS:--coverage=) \
+	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) \
 		-c $(GRANARY_MERGED_BC_BC) \
 		-o $(GRANARY_MERGED_BC_OBJ)
 

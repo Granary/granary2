@@ -166,7 +166,8 @@ enum InstructionAnnotation {
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
   IA_UNDEFINED_STACK,
-  IA_UNKNOWN_STACK,
+  IA_UNKNOWN_STACK_ABOVE,
+  IA_UNKNOWN_STACK_BELOW,
   IA_VALID_STACK,
 
   // Represents the definition of some `SSANode`, used in later assembly stages

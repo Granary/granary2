@@ -191,7 +191,7 @@ static void ParseMapsFile(ModuleManager *manager) {
 
     do {
       token = lexer.NextToken();  // Skip things like `(deleted)`.
-    } while('\0' != token[0] && '\n' != token[0]);
+    } while ('\0' != token[0] && '\n' != token[0]);
   };
 }
 }  // namespace

@@ -339,7 +339,8 @@ class StackUsageInfo {
  public:
   StackUsageInfo(void)
       : is_valid(false),
-        is_checked(false) {}
+        is_checked(false),
+        disallow_forward_propagation(false) {}
 
   // Tells us whether or not the stack pointer in this block appears to
   // reference a valid thread (user or kernel space) stack.
@@ -347,6 +348,10 @@ class StackUsageInfo {
 
   // Tells us whether or not we have decided on the value of `is_valid`.
   bool is_checked;
+
+  // Should forward propagation of stack validity be disallowed into this
+  // block?
+  bool disallow_forward_propagation;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(StackUsageInfo);
 };

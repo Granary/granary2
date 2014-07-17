@@ -35,9 +35,8 @@ CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                   AppPC target_pc);
 
 // Instrument, compile, and index some basic blocks.
-template <typename R, typename... Args>
-static inline CachePC Translate(ContextInterface *context,
-                                R (*func_ptr)(Args...)) {
+template <typename T>
+static inline CachePC Translate(ContextInterface *context, T func_ptr) {
   return Translate(context, UnsafeCast<AppPC>(func_ptr), TRANSLATE_STACK_VALID);
 }
 

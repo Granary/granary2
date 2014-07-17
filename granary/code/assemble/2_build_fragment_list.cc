@@ -664,7 +664,7 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
           frag->stack.is_checked = true;
           frag->stack.is_valid = false;
         }
-      // This annotation is somewhat more suble than the above two. The idea
+      // This annotation is somewhat more subtle than the above two. The idea
       // is that when we do the stack analysis and fragment partitioning in
       // `3_partition_fragments.cc`, we want to be aggressive about stack
       // validity. So, for example, if we see something like:
@@ -678,10 +678,23 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
       //          POP [Y]
       // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
       // by the stack undefinedness of the `MOV RSP, [X]`.
-      } else if (IA_UNKNOWN_STACK == annot->annotation) {
+      } else if (IA_UNKNOWN_STACK_ABOVE == annot->annotation) {
         GRANARY_ASSERT(!frag->stack.is_checked || !frag->stack.is_valid);
         frag->stack.is_checked = true;
         frag->stack.is_valid = false;
+        return SplitFragment(frags, frag, block, next);
+
+      // Here we've got something like:
+      //          PUSH RBP
+      //          <IA_UNKNOWN_STACK_BELOW>
+      //          MOV RBP, RSP
+      //          MOV [RBP - 8], RDI   <--- accesses into redzone, below RSP
+      // So `early_mangle.cc` will have added an annotation before the copy of
+      // `RSP`.
+      //
+      // Note: This annotation is only generated if `REDZONE_SIZE_BYTES > 0`.
+      } else if (IA_UNKNOWN_STACK_BELOW == annot->annotation) {
+        frag->stack.disallow_forward_propagation = true;
         return SplitFragment(frags, frag, block, next);
 
       // Special case related to indirect call mangling. Indirect calls might

@@ -41,9 +41,12 @@ void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
 // Request that a `block` be materialized according to strategy `strategy`.
 // If multiple requests are made, then the most fine-grained strategy is
 // chosen.
+//
+// Note: We don't check that `block` is attached to the CFG's block list
+//       because in the worst case, it will result in an extra instrumentation
+//       loop, and it makes it easier to request blocks ahead of time.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
                                 BlockRequestKind strategy) {
-  GRANARY_ASSERT(block && block->list.IsAttached());
   has_pending_request = true;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
                                             strategy);
@@ -96,8 +99,10 @@ void BlockFactory::AddFallThroughInstruction(
     Instruction *last_instr, AppPC pc) {
 
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cfi && (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
-              cfi->IsSystemCall() || cfi->IsInterruptCall())) {
+  if (!cfi) return;
+  BasicBlock *fall_through(nullptr);
+  if (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
+      cfi->IsSystemCall() || cfi->IsInterruptCall()) {
     // Unconditionally decode the next instruction. If it's a jump then we'll
     // use the jump as the fall-through. If we can't decode it then we'll add
     // a fall-through to native, and if it's neither then just add in a LIR
@@ -107,17 +112,26 @@ void BlockFactory::AddFallThroughInstruction(
       block->AppendInstruction(std::move(lir::Jump(new NativeBasicBlock(pc))));
     } else if (dinstr.IsUnconditionalJump()) {
       decoder->Mangle(block, &dinstr);
-      block->UnsafeAppendInstruction(MakeInstruction(&dinstr));
+      auto fall_through_instr = MakeInstruction(&dinstr);
+      auto fall_through_cfi = DynamicCast<ControlFlowInstruction *>(
+          fall_through_instr);
+      fall_through = fall_through_cfi->TargetBlock();
+      block->UnsafeAppendInstruction(fall_through_instr);
     } else {
-      auto next_block = Materialize(pc).release();
-      if (cfi->IsFunctionCall()) {
-        // If we're doing a function call, then always decode the next block,
-        // as this allows us to avoid pesky issues with `setjmp` and `longjmp`.
-        next_block->materialize_strategy = REQUEST_CHECK_INDEX_AND_LCFG;
-        has_pending_request = true;
-      }
-      block->AppendInstruction(std::move(lir::Jump(next_block)));
+      fall_through = Materialize(pc).release();
+      block->AppendInstruction(std::move(lir::Jump(fall_through)));
     }
+  } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
+    fall_through = cfi->TargetBlock();
+  }
+
+  // If we're doing a function call or a direct jump, then always
+  // materialize the next block. In the case of function calls, this
+  // letsus avoid issues related to `setjmp` and `longjmp`. In both
+  // cases, this allows us to avoid unnecessary edge code when we know
+  // ahead of time that we will reach the desired code.
+  if (cfi->IsFunctionCall() || cfi->IsUnconditionalJump()) {
+    RequestBlock(fall_through, REQUEST_CHECK_INDEX_AND_LCFG);
   }
 }
 
@@ -138,7 +152,8 @@ static void AnnotateInstruction(DecodedBasicBlock *block,
     }
   }
   if (in_undefined_state) {
-    block->UnsafeAppendInstruction(new AnnotationInstruction(IA_UNKNOWN_STACK));
+    block->UnsafeAppendInstruction(
+        new AnnotationInstruction(IA_UNKNOWN_STACK_ABOVE));
   }
 }
 

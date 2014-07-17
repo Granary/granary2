@@ -160,10 +160,10 @@ static bool PropagateValidity(CodeFragment * const frag) {
       }
     }
   }
-  if (frag->stack.is_valid) {  // Forward-propagate.
+  if (frag->stack.is_valid && !frag->stack.disallow_forward_propagation) {
     for (auto succ : frag->successors) {
       if (auto code = DynamicCast<CodeFragment *>(succ)) {
-        if (!code->stack.is_checked) {
+        if (!code->stack.is_checked) {  // Forward-propagate.
           code->stack.is_checked = true;
           code->stack.is_valid = frag->stack.is_valid;
           updated = true;

@@ -96,7 +96,7 @@ ifeq (1,$(GRANARY_WITH_VALGRIND))
 endif
 ifeq (test,$(GRANARY_TARGET))
 	GRANARY_STANDALONE := 1
-	GRANARY_COMMON_FLAGS += -DGRANARY_TEST --coverage
+	GRANARY_COMMON_FLAGS += -DGRANARY_TEST
 	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_TEST
 endif
 ifeq (1,$(GRANARY_STANDALONE))
@@ -196,6 +196,7 @@ endif
 # Mask some of the libc and libc++ symbols with Granary equivalents.
 GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symver.map"
 
+# Code linting.
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint
 GRANARY_LINT_FLAGS = --verbose=5
 GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_FLAGS)
