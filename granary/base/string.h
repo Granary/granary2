@@ -58,7 +58,7 @@ class WriteBuffer {
       : buffer(buffer_),
         buffer_begin(buffer_),
         buffer_end(buffer_ + kLen),
-        buffer_end_logical(kLen > 0 ? (buffer_ + (kLen - 1)) : buffer_) {}
+        buffer_end_logical(kLen > 0 ? (buffer_end - 1) : buffer_end) {}
 
   // Initialize the buffer. The `len` specifies the total length of the buffer,
   // included a terminating `NUL` character. Therefore, the maximum possible
@@ -68,7 +68,11 @@ class WriteBuffer {
       : buffer(buffer_),
         buffer_begin(buffer_),
         buffer_end(buffer_ + len),
-        buffer_end_logical(len > 0 ? (buffer_ + (len - 1)) : buffer_) {}
+        buffer_end_logical(len > 0 ? (buffer_end - 1) : buffer_end) {}
+
+  inline ~WriteBuffer(void) {
+    Finalize();
+  }
 
   // Returns true if a character can be written to the buffer and also be
   // expected to be readable from the finalized buffer.
@@ -99,20 +103,18 @@ class WriteBuffer {
   // Returns the number of non-`NUL` characters written into the buffer.
   //
   // Note: Writing to the buffer always operates within the bounds of
-  //       [buffer_begin, buffer_end_logical), so we don't need to
+  //       [buffer_begin, buffer_end_logical), so we don't need to worry about
+  //       writing past the end of the buffer.
   inline unsigned long NumCharsWritten(void) const {
-    auto ret = static_cast<unsigned long>(buffer - buffer_begin);
-    return buffer_end == buffer && buffer_end > buffer_begin ? ret - 1 : ret;
+    return static_cast<unsigned long>(buffer - buffer_begin);
   }
 
-  // Finalize the buffer. This adds terminating `NUL` characters to the internal
-  // buffer.
+  // Finalize the buffer. This adds terminating `NUL` characters to the
+  // internal buffer.
   inline void Finalize(void) {
-    if (GRANARY_LIKELY(buffer_end_logical < buffer_end)) {
+    if (buffer_end_logical < buffer_end) {
       *buffer_end_logical = '\0';
-      if (buffer < buffer_end_logical) {
-        *buffer = '\0';
-      }
+      *buffer = '\0';
     }
   }
 

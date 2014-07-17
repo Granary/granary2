@@ -184,7 +184,9 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
 // Returns `true` if any changes were made to the LCFG.
 bool BlockFactory::MaterializeDirectBlocks(void) {
   auto materialized_a_block = false;
-  for (auto block : BasicBlockIterator(cfg->first_block)) {
+  const auto last_block_id = cfg->last_block->id;
+  for (auto block : cfg->Blocks()) {
+    if (block->id > last_block_id) break;  // Don't materialize too much.
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
     if (direct_block && MaterializeBlock(direct_block)) {
       materialized_a_block = true;
@@ -196,7 +198,7 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
 // Unlink old blocks from the control-flow graph by changing the targets of
 // CTIs going to now-materialized `DirectBasicBlock`s.
 void BlockFactory::RelinkCFIs(void) {
-  for (auto block : BasicBlockIterator(cfg->first_block)) {
+  for (auto block : cfg->Blocks()) {
     if (block == cfg->first_new_block) break;
 
     for (auto succ : block->Successors()) {
@@ -212,7 +214,7 @@ void BlockFactory::RelinkCFIs(void) {
 
 // Remove blocks that are now unnecessary.
 void BlockFactory::RemoveOldBlocks(void) {
-  BasicBlock *prev(cfg->first_block);
+  BasicBlock *prev(nullptr);
   for (auto block = cfg->first_block; block; ) {
     if (block == cfg->first_new_block) break;
     auto next_block = block->list.GetNext(block);
@@ -258,18 +260,21 @@ InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
     if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
       continue;
     }
+    auto block_meta = inst_block->meta;
+    if (!block_meta) continue;
+
     if (auto comp_block = DynamicCast<CompensationBasicBlock *>(block)) {
       // This block is the compensation block created when we try to translate
       // the target block of an indirect jump.
       if (!comp_block->is_comparable) continue;
     }
-    auto block_meta = inst_block->meta;
-    if (!block_meta || !exclude_meta->Equals(block_meta)) {
-      continue;  // Indexable meta-data doesn't match.
-    }
+
+    // Indexable meta-data doesn't match.
+    if (!exclude_meta->Equals(block_meta)) continue;
+
     switch (exclude_meta->CanUnifyWith(block_meta)) {
       case UnificationStatus::ACCEPT:
-        delete exclude->meta;  // No longer needed.
+        delete exclude_meta;  // No longer needed.
         exclude->meta = nullptr;
         return inst_block;  // Perfect match.
       case UnificationStatus::ADAPT:
@@ -335,10 +340,9 @@ namespace {
 CompensationBasicBlock *MaterializeToExistingBlock(LocalControlFlowGraph *cfg,
                                                    BlockMetaData *meta,
                                                    AppPC non_transparent_pc) {
-  auto adaot_block = AdaptToBlock(cfg, meta,
-                                  new NativeBasicBlock(non_transparent_pc));
-  cfg->AddBlock(adaot_block);
-  return adaot_block;
+  auto bb = AdaptToBlock(cfg, meta, new NativeBasicBlock(non_transparent_pc));
+  cfg->AddBlock(bb);
+  return bb;
 }
 
 }  // namespace

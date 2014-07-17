@@ -86,7 +86,7 @@ class LocalControlFlowGraph final {
 
   // Counter of how many virtual registers were allocated within this LCFG.
   GRANARY_INTERNAL_DEFINITION int num_virtual_regs;
-
+public:
   // Counter of how many basic blocks were added to this LCFG. This does not
   // necessarily track the exact number of blocks present at any one time.
   GRANARY_INTERNAL_DEFINITION int num_basic_blocks;

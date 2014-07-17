@@ -315,6 +315,10 @@ TEST(FormatTest, FormatHex) {
   EXPECT_TRUE(AllCharsAreExactly(x.before_buffer, '\0', 10));
   EXPECT_TRUE(StringsMatch(x.buffer, "abc999"));
   EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
+
+  char buff[17];
+  EXPECT_EQ(16, Format(buff, 17, "%lx", 0x1fffffffffffffffULL));
+  EXPECT_TRUE(StringsMatch(buff, "1fffffffffffffff"));
 }
 
 TEST(FormatTest, FormatPointer) {

@@ -482,8 +482,9 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
       break;
     case XED_ICLASS_LEA:
       if (REDZONE_SIZE_BYTES && instr->ReadsFromStackPointer()) {
-        // Copies the stack pointer into a register. After this point the
-        // copied stack pointer might be used to access memory in the redzone.
+        // The application copies the stack pointer into a register. After
+        // this point the copied stack pointer might be used to access
+        // memory in the redzone.
         block->UnsafeAppendInstruction(
             new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
       }

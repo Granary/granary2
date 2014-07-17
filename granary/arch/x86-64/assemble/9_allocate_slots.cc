@@ -295,7 +295,9 @@ static void AllocateSlot(Operand &op) {
 static void AllocateSlots(NativeInstruction *instr) {
   if (!instr) return;
   auto &ainstr(instr->instruction);
-  if (XED_ICLASS_MOV != ainstr.iclass) return;
+  if (XED_ICLASS_MOV != ainstr.iclass && XED_ICLASS_XCHG != ainstr.iclass) {
+    return;
+  }
 
   if (ainstr.ops[0].IsMemory()) {
     if (ainstr.ops[0].reg.IsVirtualSlot()) AllocateSlot(ainstr.ops[0]);

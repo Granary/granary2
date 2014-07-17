@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include <gmock/gmock.h>
+#include <cstdio>
 
 #define GRANARY_INTERNAL
 
@@ -77,6 +78,19 @@ static int sum_3_3_3_3(void) {
   return va_summer(3, 3, 3, 3);
 }
 
+// Hopefully this will go through the PLT and GOT.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-extra-args"
+__attribute__((noinline))
+static int do_fprintf(void) {
+  asm("":::"memory");
+  return fprintf(fopen("/dev/null", "w"),
+                 "%f%f%f%f%f-%f",
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);  // Extra args!!!
+}
+#pragma clang diagnostic pop
+
 TEST_F(VariadicArgsTest, TestDirectVariadic) {
   auto inst_va_sum = Translate(&context, va_sum);
   auto va_summer = UnsafeCast<int(*)(...)>(inst_va_sum);
@@ -115,4 +129,10 @@ TEST_F(VariadicArgsTest, TestIndirectVariadic) {
     auto expected_result = summer();
     EXPECT_EQ(expected_result, va_summer());
   }
+}
+
+TEST_F(VariadicArgsTest, TestPLTAndGOT) {
+  auto inst_do_fprintf = Translate(&context, do_fprintf);
+  auto inst_fprintf = UnsafeCast<int(*)(void)>(inst_do_fprintf);
+  EXPECT_EQ(49, inst_fprintf());
 }

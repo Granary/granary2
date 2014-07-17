@@ -52,6 +52,14 @@ inline static bool IsSignedNegative(uint64_t num) {
   return HIGH_BIT_SET == (HIGH_BIT_SET & num);
 }
 
+static void FormatDigit(WriteBuffer &buff, uint64_t digit) {
+  if (digit < 10) {
+    buff.Write(static_cast<char>(static_cast<CharLiteral>(digit) + '0'));
+  } else {
+    buff.Write(static_cast<char>(static_cast<CharLiteral>(digit - 10) + 'a'));
+  }
+}
+
 // Write an integer into a string.
 static void FormatGenericInt(WriteBuffer &buff, uint64_t data, uint64_t base) {
   if (!data) {
@@ -63,17 +71,19 @@ static void FormatGenericInt(WriteBuffer &buff, uint64_t data, uint64_t base) {
     data = static_cast<uint64_t>(-static_cast<int64_t>(data));
   }
 
+  // Peel off the last digit.
+  auto has_last_digit = data >= base;
+  auto low_digit = data % base;
+  if (has_last_digit) data = data / base;
+
   auto max_base = base;
   for (; data / max_base; max_base *= base) {}
   for (max_base /= base; max_base; max_base /= base) {
     auto digit = data / max_base;
-    if (digit < 10) {
-      buff.Write(static_cast<char>(static_cast<CharLiteral>(digit) + '0'));
-    } else {
-      buff.Write(static_cast<char>(static_cast<CharLiteral>(digit - 10) + 'a'));
-    }
+    FormatDigit(buff, digit);
     data -= digit * max_base;
   }
+  if (has_last_digit)  FormatDigit(buff, low_digit);
 }
 
 // De-format a hexadecimal digit.
@@ -213,7 +223,7 @@ uint64_t VarFormat(char * __restrict buffer, uint64_t len,
       state = STATE_CONTINUE;
     }
   }
-  buff.Finalize();
+
   return buff.NumCharsWritten();
 }
 
