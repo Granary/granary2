@@ -16,23 +16,6 @@ namespace granary {
 // Forward declarations.
 class DecodedBasicBlock;
 
-// Meta-data that tracks live architectural general-purpose registers.
-class LiveRegisterMetaData : public UnifiableMetaData<LiveRegisterMetaData> {
- public:
-  LiveRegisterMetaData(void);
-
-  // Tells us if we can unify our (uncommitted) meta-data with some existing
-  // meta-data.
-  UnificationStatus CanUnifyWith(const LiveRegisterMetaData *that) const;
-
-  // Update the register meta-data given a block. Returns true if the analysis
-  // resulted in any changes to the meta-data.
-  bool AnalyzeBlock(DecodedBasicBlock *block);
-
-  // Live architectural registers on entry to this basic block.
-  mutable LiveRegisterTracker live_regs;
-};
-
 // Meta-data that tracks whether or not the stack is "safe" and behaves like a
 // C-style call stack.
 class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {

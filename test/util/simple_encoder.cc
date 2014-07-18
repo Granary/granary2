@@ -30,7 +30,6 @@ SimpleEncoderTest::SimpleEncoderTest(void)
       locked_index(index) {
   meta_manager.Register<AppMetaData>();
   meta_manager.Register<CacheMetaData>();
-  meta_manager.Register<LiveRegisterMetaData>();
   meta_manager.Register<StackMetaData>();
   meta_manager.Register<IndexMetaData>();
   arch::Init();

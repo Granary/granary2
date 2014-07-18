@@ -86,7 +86,6 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<AppMetaData>();
   metadata_manager->Register<CacheMetaData>();
   metadata_manager->Register<IndexMetaData>();
-  metadata_manager->Register<LiveRegisterMetaData>();
   metadata_manager->Register<StackMetaData>();
 }
 

@@ -4,6 +4,7 @@
 #define GRANARY_CFG_FACTORY_H_
 
 #include "granary/base/base.h"
+#include "granary/base/list.h"
 #include "granary/base/pc.h"
 
 namespace granary {
@@ -121,17 +122,6 @@ class BlockFactory {
  private:
   BlockFactory(void) = delete;
 
-#if 0
-  // Convert an indirect call into a direct call that jumps to an intermediate
-  // block that does an indirect jump. This exists so that the lookup process
-  // for the indirect target is done after the stack size change, and so that
-  // it can also be instrumented.
-  GRANARY_INTERNAL_DEFINITION
-  Instruction *MakeIndirectCall(Instruction *prev_instr,
-                                Instruction *last_instr,
-                                arch::Instruction *instr);
-#endif
-
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
   Instruction *MakeInstruction(arch::Instruction *instr);
@@ -156,12 +146,6 @@ class BlockFactory {
   // Remove blocks that are now unnecessary.
   GRANARY_INTERNAL_DEFINITION void RemoveOldBlocks(void);
 
-  // Runs some simple analysis (for the purposes of internal meta-data) of the
-  // just-materialized basic blocks. This is often necessary because the results
-  // of these analyses might become incomplete at later stages due to
-  // interference by instrumentation tools.
-  GRANARY_INTERNAL_DEFINITION void AnalyzeNewBlocks(void);
-
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);
@@ -181,6 +165,8 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;
 
   GRANARY_INTERNAL_DEFINITION bool has_pending_request;
+
+  GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockFactory);
 };

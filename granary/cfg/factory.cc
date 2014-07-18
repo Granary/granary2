@@ -21,6 +21,10 @@
 
 namespace granary {
 
+enum {
+  MAX_NUM_MATERIALIZATION_REQUESTS = 1024
+};
+
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the LCFG
 // is needed so that blocks can be added.
@@ -28,7 +32,8 @@ BlockFactory::BlockFactory(ContextInterface *context_,
                            LocalControlFlowGraph *cfg_)
     : context(context_),
       cfg(cfg_),
-      has_pending_request(false) {}
+      has_pending_request(false),
+      last_block(nullptr) {}
 
 // Request that a block be materialized. This does nothing if the block is
 // not a `DirectBasicBlock`.
@@ -169,13 +174,13 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
 // Returns `true` if any changes were made to the LCFG.
 bool BlockFactory::MaterializeDirectBlocks(void) {
   auto materialized_a_block = false;
-  const auto last_block_id = cfg->last_block->id;
   for (auto block : cfg->Blocks()) {
-    if (block->id > last_block_id) break;  // Don't materialize too much.
+    if (block == cfg->first_new_block) break;
     auto direct_block = DynamicCast<DirectBasicBlock *>(block);
     if (direct_block && MaterializeBlock(direct_block)) {
       materialized_a_block = true;
     }
+    if (block == last_block) break;
   }
   return materialized_a_block;
 }
@@ -185,7 +190,6 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
 void BlockFactory::RelinkCFIs(void) {
   for (auto block : cfg->Blocks()) {
     if (block == cfg->first_new_block) break;
-
     for (auto succ : block->Successors()) {
       auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
       if (direct_block && direct_block->materialized_block) {
@@ -194,6 +198,7 @@ void BlockFactory::RelinkCFIs(void) {
         succ.cfi->ChangeTarget(materialized_block);
       }
     }
+    if (block == last_block) break;
   }
 }
 
@@ -212,23 +217,8 @@ void BlockFactory::RemoveOldBlocks(void) {
     } else {
       prev = block;
     }
+    if (block == last_block) break;
     block = next_block;
-  }
-}
-
-// Runs some simple analysis (for the purposes of internal meta-data) of the
-// just-materialized basic blocks. This is often necessary because the results
-// of these analyses might become incomplete at later stages due to
-// interference by instrumentation tools.
-void BlockFactory::AnalyzeNewBlocks(void) {
-  for (auto changed = true; changed; ) {
-    changed = false;
-    for (auto block : cfg->NewBlocks()) {
-      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-        auto meta = GetMetaData<LiveRegisterMetaData>(decoded_block);
-        changed = meta->AnalyzeBlock(decoded_block) || changed;
-      }
-    }
   }
 }
 
@@ -239,7 +229,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
     DirectBasicBlock *exclude) {
   InstrumentedBasicBlock *adapt_block(nullptr);
   auto exclude_meta = exclude->meta;
-  for (auto block : BasicBlockIterator(cfg->first_block)) {
+  for (auto block : cfg->Blocks()) {
     if (block == exclude) continue;
     auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
     if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
@@ -367,6 +357,11 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
 // Materialize a basic block if there is a pending request.
 bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   if (!CanMaterializeBlock(block)) return false;
+  if (MAX_NUM_MATERIALIZATION_REQUESTS < cfg->num_basic_blocks &&
+      REQUEST_NOW > block->materialize_strategy) {
+    block->materialize_strategy = REQUEST_DENIED;
+    return false;
+  }
   switch (block->materialize_strategy) {
     case REQUEST_CHECK_INDEX_AND_LCFG:
     case REQUEST_CHECK_INDEX_AND_LCFG_ONLY:
@@ -405,11 +400,11 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
   cfg->first_new_block = nullptr;
+  last_block = cfg->last_block;
   has_pending_request = false;
   if (MaterializeDirectBlocks()) {
     RelinkCFIs();
     RemoveOldBlocks();
-    AnalyzeNewBlocks();
   }
 }
 

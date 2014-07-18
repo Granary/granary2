@@ -53,19 +53,8 @@ namespace {
 // off with null sets of lvie regs on exit.
 static void InitLiveRegsOnExit(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
-      switch (exit_frag->kind) {
-        case FRAG_EXIT_NATIVE:
-        case FRAG_EXIT_FUTURE_BLOCK_DIRECT:
-        case FRAG_EXIT_FUTURE_BLOCK_INDIRECT:
-          frag->regs.live_on_entry.ReviveAll();
-          break;
-        case FRAG_EXIT_EXISTING_BLOCK:
-          auto meta = MetaDataCast<LiveRegisterMetaData *>(
-              exit_frag->block_meta);
-          frag->regs.live_on_entry = meta->live_regs;
-          break;
-      }
+    if (IsA<ExitFragment *>(frag)) {
+      frag->regs.live_on_entry.ReviveAll();
     }
   }
 }

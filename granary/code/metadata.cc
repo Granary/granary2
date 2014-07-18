@@ -11,54 +11,6 @@
 
 namespace granary {
 
-LiveRegisterMetaData::LiveRegisterMetaData(void) {
-  live_regs.ReviveAll();
-}
-
-// Tells us if we can unify our (uncommitted) meta-data with some existing
-// meta-data.
-UnificationStatus LiveRegisterMetaData::CanUnifyWith(
-    const LiveRegisterMetaData *that) const {
-
-  // Narrow down onto the "best" set of live registers on entry to this basic
-  // block. We start with a conservative estimate.
-  live_regs.Intersect(that->live_regs);
-
-  return UnificationStatus::ACCEPT;
-}
-
-// Update the register meta-data given a block.
-bool LiveRegisterMetaData::AnalyzeBlock(DecodedBasicBlock *block) {
-  LiveRegisterTracker regs;
-  for (auto instr : block->ReversedInstructions()) {
-    if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-      auto target_block = cfi->TargetBlock();
-
-      // Treat all regs as live when doing indirect or native jumps.
-      if (IsA<NativeBasicBlock *>(target_block) ||
-          IsA<IndirectBasicBlock *>(target_block) ||
-          IsA<ReturnBasicBlock *>(target_block)) {
-        regs.ReviveAll();
-        continue;
-      }
-
-      // Bring in register info from existing blocks.
-      if (auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
-        auto meta = GetMetaData<LiveRegisterMetaData>(inst_block);
-        if (cfi->IsConditionalJump()) {
-          regs.Union(meta->live_regs);
-        } else {
-          regs = meta->live_regs;
-        }
-      }
-    }
-    regs.Visit(DynamicCast<NativeInstruction *>(instr));
-  }
-  auto changed = !live_regs.Equals(regs);
-  live_regs = regs;
-  return changed;
-}
-
 // Tells us if we can unify our (uncommitted) meta-data with some existing
 // meta-data.
 UnificationStatus StackMetaData::CanUnifyWith(const StackMetaData *that) const {
