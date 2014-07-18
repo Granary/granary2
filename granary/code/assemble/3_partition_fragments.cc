@@ -190,6 +190,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
       }
     }
   }
+
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
@@ -223,6 +224,44 @@ static void GroupFragments(FragmentList *frags) {
   }
 }
 
+// Try to propagate stack validity to future blocks.
+static void PropagateValidityToExitFragments(CodeFragment *frag) {
+  if (frag->stack.disallow_forward_propagation) return;
+  for (auto succ : frag->successors) {
+    if (auto exit_succ = DynamicCast<ExitFragment *>(succ)) {
+      if (FRAG_EXIT_FUTURE_BLOCK_DIRECT != exit_succ->kind &&
+          FRAG_EXIT_FUTURE_BLOCK_INDIRECT != exit_succ->kind) {
+        continue;
+      }
+      auto stack_meta = MetaDataCast<StackMetaData *>(
+          exit_succ->block_meta);
+      if (stack_meta->has_stack_hint) continue;
+      if (frag->stack.is_valid) {
+        stack_meta->MarkStackAsValid();
+      } else {
+        stack_meta->MarkStackAsInvalid();
+      }
+    }
+  }
+}
+
+// Updates the block meta-data with the stack tracking info.
+static void UpdateMetaData(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (cfrag->attr.is_block_head) {
+        auto stack_meta = MetaDataCast<StackMetaData *>(cfrag->attr.block_meta);
+        if (cfrag->stack.is_valid) {
+          stack_meta->MarkStackAsValid();
+        } else {
+          stack_meta->MarkStackAsInvalid();
+        }
+      }
+      PropagateValidityToExitFragments(cfrag);
+    }
+  }
+}
+
 }  // namespace
 
 // Partition the fragments into groups, where two fragments belong to the same
@@ -234,6 +273,7 @@ void PartitionFragments(FragmentList *frags) {
   AnalyzeFragFromMetadata(first, &(first->stack));
   AnalyzeStackUsage(frags);
   GroupFragments(frags);
+  UpdateMetaData(frags);
 }
 
 }  // namespace granary

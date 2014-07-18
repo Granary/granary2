@@ -7,11 +7,11 @@
 
 namespace granary {
 
-void ForwardInstructionIterator::operator++(void) {
+void InstructionIterator::operator++(void) {
   instr = instr->Next();
 }
 
-void BackwardInstructionIterator::operator++(void) {
+void ReverseInstructionIterator::operator++(void) {
   instr = instr->Previous();
 }
 
@@ -49,11 +49,11 @@ void AppInstructionIterator::operator++(void) {
   instr = FindNextAppInstruction(instr->Next());
 }
 
-BackwardAppInstructionIterator::BackwardAppInstructionIterator(
+ReverseAppInstructionIterator::ReverseAppInstructionIterator(
     Instruction *instr_)
     : instr(FindPreviousAppInstruction(instr_)) {}
 
-void BackwardAppInstructionIterator::operator++(void) {
+void ReverseAppInstructionIterator::operator++(void) {
   instr = FindPreviousAppInstruction(instr->Previous());
 }
 
@@ -65,6 +65,17 @@ void BasicBlockIterator::operator++(void) {
 
 // Get a basic block out of the iterator.
 BasicBlock *BasicBlockIterator::operator*(void) const {
+  return cursor;
+}
+
+
+// Move the iterator to the previous basic block.
+void ReverseBasicBlockIterator::operator++(void) {
+  cursor = cursor->list.GetPrevious(cursor);
+}
+
+// Get a basic block out of the iterator.
+BasicBlock *ReverseBasicBlockIterator::operator*(void) const {
   return cursor;
 }
 

@@ -30,8 +30,12 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
   UnificationStatus CanUnifyWith(const StackMetaData *that) const;
 
   inline void MarkStackAsValid(void) {
-    has_stack_hint = true;
-    behaves_like_callstack = true;
+    // If we've already got a "bad" stack hint, then don't allow us to change
+    // it to a good one.
+    if (!has_stack_hint) {
+      has_stack_hint = true;
+      behaves_like_callstack = true;
+    }
   }
 
   inline void MarkStackAsInvalid(void) {
@@ -40,11 +44,11 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
   }
 
   // Can we depend on the stack hint being setup?
-  mutable bool has_stack_hint:1;
+  mutable bool has_stack_hint;
 
   // Is the stack pointer being used in a way that is consistent with a
   // C-style call stack?
-  mutable bool behaves_like_callstack:1;
+  mutable bool behaves_like_callstack;
 
 } __attribute__((packed));
 

@@ -228,19 +228,28 @@ void BlockFactory::RemoveOldBlocks(void) {
 InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
     DirectBasicBlock *exclude) {
   InstrumentedBasicBlock *adapt_block(nullptr);
-  auto exclude_meta = exclude->meta;
-  for (auto block : cfg->Blocks()) {
+  const auto exclude_meta = exclude->meta;
+  for (auto block : cfg->ReverseBlocks()) {
     if (block == exclude) continue;
+
+    // Allow us to materialize with a block that hasn't been added to the LCFG
+    // yet but is part of this materialization step.
+    if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+      block = direct_block->materialized_block;
+    }
+
+    // Only materialize with blocks that should have meta-data.
     auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block);
-    if (!inst_block || IsA<DirectBasicBlock *>(inst_block)) {
+    if (!inst_block) {
       continue;
     }
-    auto block_meta = inst_block->meta;
-    if (!block_meta) continue;
 
+    auto block_meta = inst_block->meta;
+    if (GRANARY_UNLIKELY(!block_meta)) continue;  // Unspecialized return block.
+
+    // This block is the compensation block created when we translated
+    // the target block of an indirect jump.
     if (auto comp_block = DynamicCast<CompensationBasicBlock *>(block)) {
-      // This block is the compensation block created when we try to translate
-      // the target block of an indirect jump.
       if (!comp_block->is_comparable) continue;
     }
 

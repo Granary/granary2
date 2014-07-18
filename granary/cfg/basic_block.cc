@@ -155,14 +155,14 @@ Instruction *DecodedBasicBlock::LastInstruction(void) const {
 }
 
 // Return an iterator for the instructions of the block.
-ForwardInstructionIterator DecodedBasicBlock::Instructions(void) const {
-  return ForwardInstructionIterator(first);
+InstructionIterator DecodedBasicBlock::Instructions(void) const {
+  return InstructionIterator(first);
 }
 
 // Return a reverse iterator for the instructions of the block.
-BackwardInstructionIterator
+ReverseInstructionIterator
 DecodedBasicBlock::ReversedInstructions(void) const {
-  return BackwardInstructionIterator(last);
+  return ReverseInstructionIterator(last);
 }
 
 // Return an iterator for the application instructions of a basic block.
@@ -171,9 +171,9 @@ AppInstructionIterator DecodedBasicBlock::AppInstructions(void) const {
 }
 
 // Return a reverse iterator for the application instructions of the block.
-BackwardAppInstructionIterator
+ReverseAppInstructionIterator
 DecodedBasicBlock::ReversedAppInstructions(void) const {
-  return BackwardAppInstructionIterator(last);
+  return ReverseAppInstructionIterator(last);
 }
 
 

@@ -13,23 +13,23 @@ class NativeInstruction;
 class BasicBlock;
 
 // Iterator that moves forward through a list of instructions.
-class ForwardInstructionIterator {
+class InstructionIterator {
  public:
-  inline ForwardInstructionIterator(void)
+  inline InstructionIterator(void)
       : instr(nullptr) {}
 
-  explicit inline ForwardInstructionIterator(Instruction *instr_)
+  explicit inline InstructionIterator(Instruction *instr_)
       : instr(instr_) {}
 
-  inline ForwardInstructionIterator begin(void) const {
+  inline InstructionIterator begin(void) const {
     return *this;
   }
 
-  inline ForwardInstructionIterator end(void) const {
-    return ForwardInstructionIterator();
+  inline InstructionIterator end(void) const {
+    return InstructionIterator();
   }
 
-  inline bool operator!=(const ForwardInstructionIterator &that) const {
+  inline bool operator!=(const InstructionIterator &that) const {
     return instr != that.instr;
   }
 
@@ -44,23 +44,23 @@ class ForwardInstructionIterator {
 };
 
 // Iterator that moves backward through a list of instructions.
-class BackwardInstructionIterator {
+class ReverseInstructionIterator {
  public:
-  inline BackwardInstructionIterator(void)
+  inline ReverseInstructionIterator(void)
       : instr(nullptr) {}
 
-  explicit inline BackwardInstructionIterator(Instruction *instr_)
+  explicit inline ReverseInstructionIterator(Instruction *instr_)
       : instr(instr_) {}
 
-  inline BackwardInstructionIterator begin(void) const {
+  inline ReverseInstructionIterator begin(void) const {
     return *this;
   }
 
-  inline BackwardInstructionIterator end(void) const {
-    return BackwardInstructionIterator();
+  inline ReverseInstructionIterator end(void) const {
+    return ReverseInstructionIterator();
   }
 
-  inline bool operator!=(const BackwardInstructionIterator &that) const {
+  inline bool operator!=(const ReverseInstructionIterator &that) const {
     return instr != that.instr;
   }
 
@@ -104,22 +104,22 @@ class AppInstructionIterator {
   NativeInstruction *instr;
 };
 
-class BackwardAppInstructionIterator {
+class ReverseAppInstructionIterator {
  public:
-  inline BackwardAppInstructionIterator(void)
+  inline ReverseAppInstructionIterator(void)
       : instr(nullptr) {}
 
-  explicit BackwardAppInstructionIterator(Instruction *instr_);
+  explicit ReverseAppInstructionIterator(Instruction *instr_);
 
-  inline BackwardAppInstructionIterator begin(void) const {
+  inline ReverseAppInstructionIterator begin(void) const {
     return *this;
   }
 
-  inline BackwardAppInstructionIterator end(void) const {
-    return BackwardAppInstructionIterator();
+  inline ReverseAppInstructionIterator end(void) const {
+    return ReverseAppInstructionIterator();
   }
 
-  inline bool operator!=(const BackwardAppInstructionIterator &that) const {
+  inline bool operator!=(const ReverseAppInstructionIterator &that) const {
     return instr != that.instr;
   }
 
@@ -159,7 +159,35 @@ class BasicBlockIterator {
   inline BasicBlockIterator(void)
       : cursor(nullptr) {}
 
-  // Pointer into a CFG's block list.
+  GRANARY_POINTER(BasicBlock) *cursor;
+};
+
+// An iterator for basic blocks that implements C++11 range-based for loops.
+class ReverseBasicBlockIterator {
+ public:
+  GRANARY_INTERNAL_DEFINITION
+  inline explicit ReverseBasicBlockIterator(BasicBlock *block_)
+      : cursor(block_) {}
+
+  inline ReverseBasicBlockIterator begin(void) const {
+    return *this;
+  }
+
+  inline ReverseBasicBlockIterator end(void) const {
+    return ReverseBasicBlockIterator();
+  }
+
+  inline bool operator!=(const ReverseBasicBlockIterator &that) const {
+    return cursor != that.cursor;
+  }
+
+  void operator++(void);
+  BasicBlock *operator*(void) const;
+
+ private:
+  inline ReverseBasicBlockIterator(void)
+      : cursor(nullptr) {}
+
   GRANARY_POINTER(BasicBlock) *cursor;
 };
 

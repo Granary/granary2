@@ -51,6 +51,13 @@ class LocalControlFlowGraph final {
   BasicBlockIterator Blocks(void) const;
 
   // Returns an iterable that can be used inside of a range-based for loop. For
+    // example:
+    //
+    //    for (auto block : cfg.Blocks())
+    //      ...
+  ReverseBasicBlockIterator ReverseBlocks(void) const;
+
+  // Returns an iterable that can be used inside of a range-based for loop. For
   // example:
   //
   //    for (auto block : cfg.NewBlocks())

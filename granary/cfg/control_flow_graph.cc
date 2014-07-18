@@ -55,6 +55,11 @@ BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
 }
 
 // Returns an object that can be used inside of a range-based for loop.
+ReverseBasicBlockIterator LocalControlFlowGraph::ReverseBlocks(void) const {
+  return ReverseBasicBlockIterator(last_block);
+}
+
+// Returns an object that can be used inside of a range-based for loop.
 BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
   return BasicBlockIterator(first_new_block);
 }

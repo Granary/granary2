@@ -155,7 +155,9 @@ BlockMetaData *MetaDataManager::Allocate(void) {
     Finalize();
     InitAllocator();
   }
-  auto meta = new (allocator->Allocate()) BlockMetaData(this);
+  auto meta_mem = allocator->Allocate();
+  memset(meta_mem, 0, size);
+  auto meta = new (meta_mem) BlockMetaData(this);
   VALGRIND_MALLOCLIKE_BLOCK(meta, size, 0, 0);
   return meta;
 }

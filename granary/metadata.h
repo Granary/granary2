@@ -330,6 +330,10 @@ class MetaDataManager {
   // Free some metadata.
   void Free(BlockMetaData *meta);
 
+  inline size_t Size(void) const {
+    return size;
+  }
+
  private:
   friend class BlockMetaData;
 

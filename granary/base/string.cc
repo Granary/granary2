@@ -44,14 +44,6 @@ namespace {
 
 typedef decltype('\0') CharLiteral;
 
-enum : uint64_t {
-  HIGH_BIT_SET = 1ULL << 63
-};
-
-inline static bool IsSignedNegative(uint64_t num) {
-  return HIGH_BIT_SET == (HIGH_BIT_SET & num);
-}
-
 static void FormatDigit(WriteBuffer &buff, uint64_t digit) {
   if (digit < 10) {
     buff.Write(static_cast<char>(static_cast<CharLiteral>(digit) + '0'));
@@ -65,10 +57,6 @@ static void FormatGenericInt(WriteBuffer &buff, uint64_t data, uint64_t base) {
   if (!data) {
     buff.Write('0');
     return;
-  }
-  if (IsSignedNegative(data)) {
-    buff.Write('-');
-    data = static_cast<uint64_t>(-static_cast<int64_t>(data));
   }
 
   // Peel off the last digit.

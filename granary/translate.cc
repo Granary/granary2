@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/option.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 
@@ -18,22 +20,50 @@
 
 #include "granary/logging.h"
 
+GRANARY_DEFINE_bool(debug_log_metadata, true,
+    "Log the meta-data that is committed to the code cache index. The default "
+    "is `yes`.");
+
 namespace granary {
 namespace {
+
+static void LogBytes(uint64_t *qwords, size_t num_bytes) {
+  for (auto i = 0UL; i < num_bytes; ++i) {
+    auto qword = qwords[i];
+    Log(LogOutput, "%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x ",
+        static_cast<unsigned>(qword >> 60) & 0xF,
+        static_cast<unsigned>(qword >> 56) & 0xF,
+        static_cast<unsigned>(qword >> 52) & 0xF,
+        static_cast<unsigned>(qword >> 48) & 0xF,
+        static_cast<unsigned>(qword >> 44) & 0xF,
+        static_cast<unsigned>(qword >> 40) & 0xF,
+        static_cast<unsigned>(qword >> 36) & 0xF,
+        static_cast<unsigned>(qword >> 32) & 0xF,
+
+        static_cast<unsigned>(qword >> 28) & 0xF,
+        static_cast<unsigned>(qword >> 24) & 0xF,
+        static_cast<unsigned>(qword >> 20) & 0xF,
+        static_cast<unsigned>(qword >> 16) & 0xF,
+        static_cast<unsigned>(qword >> 12) & 0xF,
+        static_cast<unsigned>(qword >> 8) & 0xF,
+        static_cast<unsigned>(qword >> 4) & 0xF,
+        static_cast<unsigned>(qword >> 0) & 0xF);
+  }
+}
 
 // Add the decoded blocks to the code cache index.
 static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   LockedIndexTransaction transaction(index);
+  if (FLAG_debug_log_metadata) Log(LogOutput, "\n");
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-
       auto meta = decoded_block->MetaData();
-      auto app_meta = MetaDataCast<AppMetaData *>(meta);
-      auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-
-      Log(LogOutput, "0x%p 0x%p\n", app_meta->start_pc, cache_meta->start_pc);
-
-      transaction.Insert(decoded_block->MetaData());
+      if (FLAG_debug_log_metadata) {
+        LogBytes(UnsafeCast<uint64_t *>(meta),
+                 meta->manager->Size() / sizeof(uint64_t));
+        Log(LogOutput, "\n");
+      }
+      transaction.Insert(meta);
     }
   }
 }

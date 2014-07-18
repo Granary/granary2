@@ -242,7 +242,8 @@ static void ConvertImmediateOperand(Instruction *instr,
                                     Operand *instr_op,
                                     const xed_decoded_inst_t *xedd,
                                     xed_operand_enum_t op_name) {
-  if (XED_OPERAND_IMM0SIGNED == op_name) {
+  if (XED_OPERAND_IMM0SIGNED == op_name ||
+      xed_operand_values_get_immediate_is_signed(xedd)) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
     instr_op->imm.as_int = static_cast<intptr_t>(
         xed_decoded_inst_get_signed_immediate(xedd));
