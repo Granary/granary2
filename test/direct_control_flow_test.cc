@@ -117,6 +117,48 @@ class NativeCallTool : public Tool {
   }
 };
 
+// Forces execution to go native on function calls.
+class WatchpointsLikeTool : public Tool {
+ public:
+  virtual ~WatchpointsLikeTool(void) = default;
+
+  void InstrumentMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
+    // Doesn't read from or write to memory.
+    if (mloc.IsEffectiveAddress()) return;
+
+    // Reads or writes from an absolute address, not through a register.
+    VirtualRegister watched_addr;
+    if (!mloc.MatchRegister(watched_addr)) return;
+
+    // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
+    if (!watched_addr.IsGeneralPurpose()) return;
+    if (watched_addr.IsVirtualStackPointer()) return;
+    if (watched_addr.IsSegmentOffset()) return;
+
+    RegisterOperand watched_addr_reg(watched_addr);
+
+    BeginInlineAssembly({&watched_addr_reg});
+    InlineBefore(instr, "BT r64 %0, i8 48;");
+    EndInlineAssembly();
+  }
+
+  // Instrument a basic block.
+  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+    MemoryOperand mloc1, mloc2;
+
+    for (auto instr : bb->ReversedAppInstructions()) {
+      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
+                                                     ReadOrWriteTo(mloc2));
+      if (2 == num_matched) {
+        InstrumentMemOp(instr, mloc1);
+        InstrumentMemOp(instr, mloc2);
+      } else if (1 == num_matched) {
+        InstrumentMemOp(instr, mloc1);
+      }
+    }
+  }
+};
+
 #define TOOL_HARNESS(tool_name) \
     class tool_name ## _DirectControlFlowTest : public Test { \
      public: \
@@ -142,6 +184,7 @@ TOOL_HARNESS(CallTool);
 TOOL_HARNESS(CallUnrollerTool);
 TOOL_HARNESS(JumpUnrollerTool);
 TOOL_HARNESS(NativeCallTool);
+TOOL_HARNESS(WatchpointsLikeTool);
 
 namespace {
 
@@ -178,6 +221,18 @@ static int factorial_iter(int n) {
   return res;
 }
 
+static int last_val_iterative(int n, int *nums) {
+  auto keep_going = false;
+  auto last = 0;
+  {
+  restart:
+    keep_going = --n == 0;
+    last = nums[n];  // Ideally we want the branch to inherit the flags.
+    if (keep_going) goto restart;
+  }
+  return last;
+}
+
 }  // namespace
 
 #define TEST_WITH_TOOLS(test_name, ...) \
@@ -186,7 +241,8 @@ static int factorial_iter(int n) {
     TEST_F(CallTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
     TEST_F(CallUnrollerTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
     TEST_F(JumpUnrollerTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
-    TEST_F(NativeCallTool_DirectControlFlowTest, test_name) __VA_ARGS__
+    TEST_F(NativeCallTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
+    TEST_F(WatchpointsLikeTool_DirectControlFlowTest, test_name) __VA_ARGS__
 
 TEST_WITH_TOOLS(RecursiveFibonacci, {
   auto inst = Translate(&context, fibonacci_rec);
@@ -217,5 +273,14 @@ TEST_WITH_TOOLS(IterativeFactorial, {
   auto factorial_iter_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
     EXPECT_EQ(factorial_iter(i), factorial_iter_inst(i));
+  }
+})
+
+TEST_WITH_TOOLS(LastValueIterative, {
+  auto inst = Translate(&context, last_val_iterative);
+  auto last_val_iterative_inst = UnsafeCast<int(*)(int, int *)>(inst);
+  int vals[] = {0, 1, 2, 3, 4, 5};
+  for (auto i = 0; i < 10; ++i) {
+    EXPECT_EQ(last_val_iterative(5, vals), last_val_iterative_inst(5, vals));
   }
 })

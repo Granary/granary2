@@ -22,17 +22,7 @@ bool OperandRef::ReplaceWith(const Operand &repl_op) {
   if (GRANARY_UNLIKELY(op->is_sticky || !op->is_explicit)) {
     return false;
   } else {
-    const auto rw = op->rw;
-    const auto width = op->width;
-    const auto is_ea = op->is_effective_address;
-    const auto segment = op->segment;
     *op = *(repl_op.op.AddressOf());
-    if (-1 != width) op->width = width;
-    op->rw = rw;
-    op->is_effective_address = is_ea;
-    op->is_explicit = true;
-    op->is_sticky = false;
-    if (XED_REG_INVALID != segment) op->segment = segment;
     return true;
   }
 }
@@ -190,7 +180,19 @@ Operand::Operand(const Operand &that) {
 
 Operand &Operand::operator=(const Operand &that) {
   if (&that != this) {
+    const auto old_rw = rw;
+    const auto old_width = width;
+    const auto old_is_ea = is_effective_address;
+    const auto old_segment = segment;
     memcpy(this, &that, sizeof that);
+    if (-1 != old_width) width = old_width;
+    rw = old_rw;
+    is_effective_address = old_is_ea;
+    is_explicit = true;
+    is_sticky = false;
+    if (XED_REG_INVALID != old_segment && XED_REG_DS != old_segment) {
+      segment = old_segment;
+    }
   }
   return *this;
 }

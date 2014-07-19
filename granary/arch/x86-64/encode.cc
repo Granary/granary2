@@ -312,6 +312,10 @@ static void EncodeSpecialCases(const Instruction *instr,
     case XED_IFORM_IMUL_MEMv:
       xede->noperands = 1;
       break;
+    case XED_IFORM_PUSHF:
+    case XED_IFORM_PUSHFQ:
+      xede->noperands = 0;
+      break;
     default:
       break;
   }

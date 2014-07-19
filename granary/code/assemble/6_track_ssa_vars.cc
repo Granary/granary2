@@ -530,7 +530,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
 // associated with virtual registers. This can happen in the case where some
 // instrumentation reads from a virtual register before writing to it. We
 // handle some architecture-specific special cases like `XOR A, A` on x86
-// when buildig up the `SSAInstruction`s and by using the
+// when building up the `SSAInstruction`s and by using the
 // `SSAOperandAction::CLEARED` action.
 static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
   for (auto reg : frag->ssa.entry_nodes.Keys()) {

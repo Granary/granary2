@@ -7,6 +7,8 @@
 #include "granary/arch/x86-64/builder.h"
 #include "granary/arch/x86-64/slot.h"
 
+#include "granary/breakpoint.h"
+
 extern "C" {
 
 // Get the base address of the current thread's TLS. We use this address to
@@ -53,6 +55,7 @@ static __thread __attribute__((tls_model("initial-exec"))) SlotSet SLOTS;
 intptr_t &Slot(SlotCategory category, int sub_category) {
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:
+      GRANARY_ASSERT(sub_category < MAX_NUM_SPILL_SLOTS);
       return SLOTS.spill_slots[sub_category];
     case SLOT_PRIVATE_STACK:
       return SLOTS.stack_slot;

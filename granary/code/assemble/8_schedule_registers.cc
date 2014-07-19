@@ -702,11 +702,19 @@ static void SchedulePartitionLocalRegUse(LocalScheduler *sched,
                                          NativeInstruction *instr,
                                          SSAInstruction *ssa_instr,
                                          SSASpillStorage *vr) {
-  if (auto use = OperandForVR(ssa_instr->uses, vr)) {
-    if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
-      sched->StealOrFillSpilledGPR(instr, vr);
+  for (auto &use : ssa_instr->uses) {
+    auto replace = false;
+    for (auto node : use.nodes) {
+      if (!node->reg.IsVirtual()) continue;
+      if (StorageOf(node) != vr) continue;
+      if (!vr->reg.IsNative()) {  // Need to allocate a register for `vr`.
+        sched->StealOrFillSpilledGPR(instr, vr);
+      }
+      replace = true;
     }
-    ReplaceOperand(*use);
+
+    // One or more registers might be used in a memory operand.
+    if (replace) ReplaceOperand(use);
   }
 }
 

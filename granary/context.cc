@@ -17,10 +17,10 @@
 #include "granary/context.h"
 #include "granary/index.h"
 
-GRANARY_DEFINE_positive_int(block_cache_slab_size, 64,
+GRANARY_DEFINE_positive_int(block_cache_slab_size, 512,
     "The number of pages allocated at once to store basic block code. Each "
     "context maintains its own block code allocator. The default value is "
-    "`64` pages per slab.");
+    "`512` pages per slab (2MB).");
 
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 16,
     "The number of pages allocated at once to store edge code. Each "

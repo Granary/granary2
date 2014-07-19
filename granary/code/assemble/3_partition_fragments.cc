@@ -214,6 +214,7 @@ static void GroupFragments(FragmentList *frags) {
       if (!cfrag->attr.can_add_to_partition) continue;
       for (auto succ : cfrag->successors) {
         if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ)) {
+          if (frag->partition == succ->partition) continue;
           if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;
           if (!succ_cfrag->attr.can_add_to_partition) continue;
           if (succ_cfrag->stack.is_valid != cfrag->stack.is_valid) continue;

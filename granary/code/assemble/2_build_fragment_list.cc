@@ -83,6 +83,14 @@ struct FragmentListBuilder {
   LocalControlFlowGraph *cfg;
   FragmentList *frags;
 
+  // Should we split the fragment at the next sequence point? This is a hint
+  // that something interesting (e.g. instrumentation instructions modifying
+  // flags being split away from non-flag modifying native instructions) has
+  // happened recently (some prior instruction), and that we want to ensure
+  // that defs/uses of virtual registers are not torn across partitions if
+  // things like stack definedness changes.
+  bool split_at_next_sequence_point;
+
   void Append(Fragment *frag) {
     frags->Append(frag);
   }
@@ -218,6 +226,16 @@ static CodeFragment *Append(FragmentListBuilder *frags, DecodedBasicBlock *block
   split: {
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
+
+    // Ensure that the two fragments are grouped together. This potentially
+    // breaks a number of interesting assumptions about two fragments being
+    // partitioned together only if the stack analysis agrees on the validity
+    // of the stacks. In practice, I don't think it matters much down the line
+    // as the presence of *any* fragment with an invalid stack forces the
+    // slot allocator to spill to TLS/CPU-private data.
+    frags->split_at_next_sequence_point = true;
+    frag->partition.Union(frag, succ);
+
     frag = succ;
   }
   append: {
@@ -702,6 +720,13 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
       // jumps.
       } else if (IA_RETURN_ADDRESS == annot->annotation) {
         frag = Append(frags, block, frag, instr);
+
+      // The start of a new logical instruction.
+      } else if (IA_SEQUENCE_POINT == annot->annotation) {
+        if (frags->split_at_next_sequence_point) {
+          frags->split_at_next_sequence_point = false;
+          return SplitFragment(frags, frag, block, next);
+        }
       }
 
       instr = next;
@@ -750,7 +775,7 @@ void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
       }
     }
   }
-  FragmentListBuilder builder{context, cfg, frags};
+  FragmentListBuilder builder{context, cfg, frags, false};
   FragmentForBlock(&builder, cfg->EntryBlock());
 }
 

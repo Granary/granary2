@@ -221,6 +221,10 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
 
 // Mangle `PUSH_IMMz` and `PUSH_IMMb` instructions.
 //
+// TODO(pag): This type of mangling should be moved to a "late" mangling phase
+//            that happens after the validity of fragment stacks has been
+//            identified, otherwise this penalizes fragments on valid stacks.
+//
 // Note: During decoding, we will have done the correct sign-extension.
 static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];

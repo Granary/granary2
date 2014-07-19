@@ -20,9 +20,9 @@
 
 #include "granary/logging.h"
 
-GRANARY_DEFINE_bool(debug_log_metadata, true,
+GRANARY_DEFINE_bool(debug_log_metadata, false,
     "Log the meta-data that is committed to the code cache index. The default "
-    "is `yes`.");
+    "is `no`.");
 
 namespace granary {
 namespace {

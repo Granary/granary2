@@ -180,7 +180,12 @@ enum InstructionAnnotation {
 
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
-  IA_UPDATE_ENCODED_ADDRESS
+  IA_UPDATE_ENCODED_ADDRESS,
+
+  // Represents a point between two logical instructions. This is used by
+  // the fragment list builder to ensure that instructions belonging to the
+  // same logical instruction are not placed into separate fragment partitions.
+  IA_SEQUENCE_POINT
 };
 
 // An annotation instruction is an environment-specific and implementation-

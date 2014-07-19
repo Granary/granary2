@@ -154,6 +154,9 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
+    block->UnsafeAppendInstruction(
+        new AnnotationInstruction(IA_SEQUENCE_POINT, pc));
+
     auto decoded_pc = pc;
     arch::Instruction dinstr;
     auto before_instr = block->LastInstruction()->Previous();
