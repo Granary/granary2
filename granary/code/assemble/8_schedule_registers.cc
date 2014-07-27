@@ -1284,7 +1284,7 @@ void ScheduleRegisters(FragmentList *frags) {
   ScheduleFragmentLocalRegs(frags);
   FreeSSAData(frags);
   FreeFlagZones(frags);
-  OptimizeSavesAndRestores(frags);
+  if (false) OptimizeSavesAndRestores(frags);  // TODO(pag): Re-enable me.
 }
 
 }  // namespace granary
