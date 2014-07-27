@@ -131,6 +131,11 @@ static granary::Instruction *NextInstruction(granary::Instruction *curr) {
 
 }  // namespace
 
+// Disable peephole optimization in a particular instruction.
+void DisablePeepholeOptimization(NativeInstruction *instr) {
+  instr->instruction.is_save_restore = false;
+}
+
 // Performs some minor peephole optimization on the scheduled registers.
 void PeepholeOptimize(Fragment *frag) {
   auto instr(frag->instrs.First());

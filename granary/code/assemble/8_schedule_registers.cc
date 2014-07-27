@@ -48,6 +48,9 @@ extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
 // Performs some minor peephole optimization on the scheduled registers.
 extern void PeepholeOptimize(Fragment *frag);
 
+// Disable peephole optimization in a particular instruction.
+extern void DisablePeepholeOptimization(NativeInstruction *instr);
+
 }  // namespace arch
 namespace {
 
@@ -566,7 +569,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
         GRANARY_ASSERT(vr_home.loc != agpr);
 
         frag->instrs.InsertAfter(instr,
-                                 arch::SwapGPRWithSlot(vr_home.loc, slot));
+                                 arch::SwapGPRWithSlot(agpr, slot));
         frag->instrs.InsertAfter(instr,
                                  arch::SwapGPRWithGPR(vr_home.loc, agpr));
 
@@ -576,6 +579,8 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
         vr_home.loc = agpr;  // Updates `Loc` by ref.
       }
       FindDefUse(ssa_instr, node_id, &is_defined, &is_used);
+
+      if (is_used || is_defined) arch::DisablePeepholeOptimization(ninstr);
     }
 
     if (!is_used && !is_defined) continue;
@@ -693,23 +698,24 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
   do {
     reg = VirtualRegister();
     for (auto frag : ReverseFragmentListIterator(last_frag)) {
-      if (frag->partition.Value() == partition) {
-        if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+      if (frag->partition.Value() != partition) continue;
 
-          // Go find the register to schedule if we don't have one yet.
-          if (!reg.IsValid()) {
-            last_frag = frag;
-            if (!GetUnscheduledVR(ssa_frag, &reg, &node_id)) continue;
+      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+      if (!ssa_frag) continue;
 
-            preferred_gpr = gpr_sched.GetPreferredGPR(&preferred_gprs);
-            slot_num = GetSpillSlot(ssa_frag, &(partition->num_slots));
-          }
+      // Go find the register to schedule if we don't have one yet.
+      if (!reg.IsValid()) {
+        last_frag = frag;
+        if (!GetUnscheduledVR(ssa_frag, &reg, &node_id)) continue;
 
-          sched.Construct(reg, node_id, slot_num, preferred_gpr);
-          SchedulePartitionLocalRegs(sched.AddressOf(), &gpr_sched, ssa_frag);
-        }
-        if (frag == first_frag) break;
+        preferred_gpr = gpr_sched.GetPreferredGPR(&preferred_gprs);
+        slot_num = GetSpillSlot(ssa_frag, &(partition->num_slots));
       }
+
+      sched.Construct(reg, node_id, slot_num, preferred_gpr);
+      SchedulePartitionLocalRegs(sched.AddressOf(), &gpr_sched, ssa_frag);
+
+      if (frag == first_frag) break;
     }
   } while (reg.IsValid());
 }
@@ -1294,7 +1300,7 @@ void ScheduleRegisters(FragmentList *frags) {
   ScheduleFragmentLocalRegs(frags);
   FreeSSAData(frags);
   FreeFlagZones(frags);
-  if (false) OptimizeSavesAndRestores(frags);  // TODO(pag): Re-enable me.
+  OptimizeSavesAndRestores(frags);
 }
 
 }  // namespace granary
