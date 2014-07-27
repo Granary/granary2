@@ -12,17 +12,6 @@
 #include "granary/metadata.h"
 #include "granary/util.h"
 
-// TODO(pag): Implement "smart" saving/restoring of flags. For example:
-//
-//                  <instrumentation I1, kills F1>
-//                  <native, doesn't r/w flags>
-//                  <instrumentation I2, kills F1>
-//                  <native, reads F1>
-//
-//            Then we could be clever about saving F1 before I1 and restoring
-//            F1 after I2 if and only if I1 and I2 are within the same fragment
-//            partition.
-
 namespace granary {
 namespace arch {
 

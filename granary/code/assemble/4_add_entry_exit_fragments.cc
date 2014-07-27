@@ -275,7 +275,7 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   } else if (IsA<PartitionEntryFragment *>(next)) {
     // This is a fall-through from a function call, e.g. indirect function call.
     // In the case of an indirect function call, we don't want to place a
-    // parition exit on its fall-through edge becuase the partition exiting
+    // partition exit on its fall-through edge because the partition exiting
     // happens at the target of the call.
     if (curr_code && curr_code->attr.branches_to_edge_code) {
       return false;

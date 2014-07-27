@@ -185,6 +185,11 @@ enum InstructionAnnotation {
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
   IA_SSA_NODE_UNDEF,
 
+  // A "removed" or junk `SSAInstruction`. We keep some useless
+  // `SSAInstruction`s around because pointers from outside `SSANode`s might
+  // point to nodes that the `SSAInstruction` owns.
+  IA_SSA_USELESS_INSTR,
+
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
   IA_SSA_FRAG_BEGIN_LOCAL,

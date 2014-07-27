@@ -63,6 +63,8 @@ static void FreeSSAData(FragmentList *frags) {
       } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
         if (IA_SSA_NODE_DEF == ainstr->annotation) {
           delete ainstr->Data<SSANode *>();
+        } else if (IA_SSA_USELESS_INSTR == ainstr->annotation) {
+          delete ainstr->Data<SSAInstruction *>();
         }
       }
     }
@@ -563,8 +565,10 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
         auto agpr = GetGPR(reg_sched, pgpr, used_regs);
         GRANARY_ASSERT(vr_home.loc != agpr);
 
-        ninstr->UnsafeInsertAfter(arch::SwapGPRWithSlot(vr_home.loc, slot));
-        ninstr->UnsafeInsertAfter(arch::SwapGPRWithGPR(vr_home.loc, agpr));
+        frag->instrs.InsertAfter(instr,
+                                 arch::SwapGPRWithSlot(vr_home.loc, slot));
+        frag->instrs.InsertAfter(instr,
+                                 arch::SwapGPRWithGPR(vr_home.loc, agpr));
 
         part_sched->Loc(vr_home.loc) = {vr_home.loc, RegLocationType::GPR};
         part_sched->Loc(agpr) = {slot, RegLocationType::SLOT};
@@ -585,10 +589,10 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
 
       auto agpr = GetGPR(reg_sched, pgpr, used_regs);
       if (RegLocationType::SLOT == vr_home.type) {
-        instr->UnsafeInsertAfter(arch::RestoreGPRFromSlot(agpr, slot));
+        frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(agpr, slot));
 
       } else {  // `RegLocationType::LIVE_SLOT`.
-        instr->UnsafeInsertAfter(arch::SwapGPRWithSlot(agpr, slot));
+        frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(agpr, slot));
       }
 
       part_sched->Loc(agpr) = {slot, RegLocationType::SLOT};
@@ -602,7 +606,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     if (is_defined) {
       GRANARY_ASSERT(RegLocationType::GPR == vr_home.type);
       GRANARY_ASSERT(!is_live_on_entry);
-      instr->UnsafeInsertBefore(arch::SaveGPRToSlot(vr_home.loc, slot));
+      frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(vr_home.loc, slot));
       part_sched->Loc(vr_home.loc) = {vr_home.loc, RegLocationType::GPR};
       vr_home.loc = slot;
       vr_home.type = RegLocationType::SLOT;
@@ -617,15 +621,17 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     if (pgpr.IsValid()) {
       GRANARY_ASSERT(vr_home.loc.IsNative());
       if (vr_home.loc != pgpr) {
-        first_instr->UnsafeInsertBefore(
-            arch::SwapGPRWithGPR(vr_home.loc, pgpr));
-        first_instr->UnsafeInsertBefore(arch::SwapGPRWithSlot(pgpr, slot));
+        frag->instrs.InsertBefore(first_instr,
+                                  arch::SwapGPRWithGPR(vr_home.loc, pgpr));
+        frag->instrs.InsertBefore(first_instr,
+                                  arch::SwapGPRWithSlot(pgpr, slot));
       }
 
     // Need to put the VR into its spill slot for transitions between fragments.
     } else if (RegLocationType::LIVE_SLOT != vr_home.type) {
       GRANARY_ASSERT(vr_home.loc.IsNative());
-      first_instr->UnsafeInsertBefore(arch::SwapGPRWithSlot(vr_home.loc, slot));
+      frag->instrs.InsertBefore(first_instr,
+                                arch::SwapGPRWithSlot(vr_home.loc, slot));
 
     } else {
       GRANARY_ASSERT(vr_home.loc == slot);
@@ -636,7 +642,8 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
   } else {
     GRANARY_ASSERT(is_live_on_exit);
     if (RegLocationType::GPR == vr_home.type) {
-      first_instr->UnsafeInsertBefore(arch::SaveGPRToSlot(vr_home.loc, slot));
+      frag->instrs.InsertBefore(first_instr,
+                                arch::SaveGPRToSlot(vr_home.loc, slot));
     } else {
       GRANARY_ASSERT(RegLocationType::LIVE_SLOT != vr_home.type);
       GRANARY_ASSERT(vr_home.loc == slot);
@@ -1015,11 +1022,10 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
   auto node = op.nodes[0];
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
-  if (NODE_SCHEDULED == node->id.Value()) return;
-  auto &vr_home(sched->Loc(vr));
-
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
   GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
+
+  auto &vr_home(sched->Loc(vr));
   GRANARY_ASSERT(RegLocationType::LIVE_SLOT != vr_home.type);
   if (RegLocationType::SLOT == vr_home.type) {
     VirtualRegister agpr;
@@ -1039,7 +1045,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
       slot = sched->AllocateSlot();
       GRANARY_ASSERT(sched->InverseLoc(agpr).loc == agpr);
 
-      instr->UnsafeInsertAfter(arch::RestoreGPRFromSlot(agpr, slot));
+      frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(agpr, slot));
     }
 
     sched->Loc(agpr) = {slot, RegLocationType::SLOT};
@@ -1060,10 +1066,10 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
   if (NODE_SCHEDULED == node->id.Value()) return;
-  auto &vr_home(sched->Loc(vr));
-
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
-  GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
+    GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
+
+  auto &vr_home(sched->Loc(vr));
   GRANARY_ASSERT(RegLocationType::GPR == vr_home.type);
 
   auto gpr_homed_by_vr = vr_home.loc;
@@ -1086,6 +1092,7 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
 
 static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
                          const UsedRegisterTracker &used_regs) {
+  auto frag = sched->frag;
   for (auto gpr : used_regs) {
     auto &gpr_home(sched->Loc(gpr));
     auto &inv_gpr_home(sched->InverseLoc(gpr));
@@ -1099,7 +1106,7 @@ static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
     // do slot sharing. Now we need to insert the initial save of the GPR
     // to its slot.
     } else if (RegLocationType::LIVE_SLOT == gpr_home.type) {
-      instr->UnsafeInsertAfter(arch::SaveGPRToSlot(gpr, gpr_home.loc));
+      frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(gpr, gpr_home.loc));
       gpr_home.loc = gpr;
       gpr_home.type = RegLocationType::GPR;
       inv_gpr_home = {gpr, RegLocationType::GPR};
@@ -1119,8 +1126,8 @@ static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
 
       GRANARY_ASSERT(agpr != gpr);
 
-      instr->UnsafeInsertAfter(arch::SwapGPRWithSlot(agpr, slot));  // 2nd.
-      instr->UnsafeInsertAfter(arch::SwapGPRWithGPR(agpr, gpr));  // 1st.
+      frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(agpr, slot)); // 2.
+      frag->instrs.InsertAfter(instr, arch::SwapGPRWithGPR(agpr, gpr));  // 1.
 
       vr_home = {agpr, RegLocationType::GPR};  // Loc(vr_occupying_gpr).
       gpr_home = {gpr, RegLocationType::GPR};  // Loc(gpr).
@@ -1153,8 +1160,9 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
     GRANARY_ASSERT(RegLocationType::LIVE_SLOT != vr_home.type);
   }
 
+  sched->frag->instrs.InsertAfter(
+      instr, new AnnotationInstruction(IA_SSA_USELESS_INSTR, ssa_instr));
   instr->UnsafeUnlink();
-  delete ssa_instr;
   return true;
 }
 
@@ -1211,7 +1219,8 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
     GRANARY_ASSERT(gpr_home.loc.IsVirtualSlot());
 
     // Case 6: Inject the original saves of the registers.
-    first_instr->UnsafeInsertBefore(arch::SaveGPRToSlot(gpr, gpr_home.loc));
+    frag->instrs.InsertBefore(first_instr,
+                              arch::SaveGPRToSlot(gpr, gpr_home.loc));
   }
 }
 
@@ -1264,8 +1273,8 @@ static void AddFragBeginAnnotations(FragmentList *frags) {
       auto local_annot = new AnnotationInstruction(IA_SSA_FRAG_BEGIN_LOCAL);
       auto global_annot = new AnnotationInstruction(IA_SSA_FRAG_BEGIN_GLOBAL);
       if (auto first = FirstSSAInstruction(ssa_frag)) {
-        first->UnsafeInsertBefore(global_annot);
-        first->UnsafeInsertBefore(local_annot);
+        frag->instrs.InsertBefore(first, global_annot);
+        frag->instrs.InsertBefore(first, local_annot);
       } else {
         ssa_frag->instrs.Prepend(local_annot);
         ssa_frag->instrs.Prepend(global_annot);
