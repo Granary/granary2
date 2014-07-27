@@ -32,8 +32,7 @@ IndirectEdge::IndirectEdge(const BlockMetaData *dest_meta_,
       out_edge_pc_lock(),
       meta_template(dest_meta_),
       next(nullptr),
-      begin_out_edge_template(nullptr),
-      end_out_edge_template(nullptr) {}
+      out_edge_template(nullptr) {}
 
 IndirectEdge::~IndirectEdge(void) {
   delete meta_template;

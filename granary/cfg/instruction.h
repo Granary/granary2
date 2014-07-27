@@ -40,6 +40,12 @@ class Instruction {
   Instruction *Next(void);
   Instruction *Previous(void);
 
+  // Used to get around issues with Eclipse's indexer.
+#ifdef GRANARY_ECLIPSE
+  uintptr_t MetaData(void);  // Fake, non-const.
+  template <typename T> T MetaData(void) const;
+  template <typename T> void SetMetaData(T);
+#else
   // Get the transient, tool-specific instruction meta-data as an arbitrary,
   // `uintptr_t`-sized type.
   template <
@@ -71,6 +77,7 @@ class Instruction {
 
   // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
   void SetMetaData(uintptr_t meta);
+#endif
 
   // Clear out the meta-data. This should be done by tools using instruction-
   // specific meta-data before they instrument instructions.
@@ -177,6 +184,11 @@ enum InstructionAnnotation {
   // An "undefinition" of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
   IA_SSA_NODE_UNDEF,
+
+  // Used when spilling/filling. This annotation marks a specific point where
+  // spilling/filling at the beginning of a fragment should be placed.
+  IA_SSA_FRAG_BEGIN_LOCAL,
+  IA_SSA_FRAG_BEGIN_GLOBAL,
 
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.

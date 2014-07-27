@@ -2,7 +2,6 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
@@ -26,15 +25,6 @@
 
 namespace granary {
 namespace arch {
-
-// Returns the architectural register that is potentially killed by the
-// instructions injected to save/restore flags.
-//
-// Note: This must return a register with width `arch::GPR_WIDTH_BYTES` if the
-//       returned register is valid.
-//
-// Note: This has an architecture-specific implementation.
-extern VirtualRegister FlagKillReg(void);
 
 // Inserts instructions that saves the flags within the fragment `frag`.
 //
@@ -94,15 +84,15 @@ static bool AnalyzeFragRegs(Fragment *frag) {
   auto seen_native_instr = false;
   frag->regs.live_on_exit = regs;
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
-    if (seen_native_instr && frag->branch_instr == instr) {
-      auto branch = frag->successors[FRAG_SUCC_BRANCH];
-      if (frag->branch_instr->IsConditionalJump()) {
-        regs.Union(branch->regs.live_on_entry);
-      } else {
-        regs = branch->regs.live_on_entry;
-      }
-    }
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (seen_native_instr && frag->branch_instr == instr) {
+        auto branch = frag->successors[FRAG_SUCC_BRANCH];
+        if (frag->branch_instr->IsConditionalJump()) {
+          regs.Union(LiveRegsOnEntry(branch));
+        } else {
+          regs = LiveRegsOnEntry(branch);
+        }
+      }
       seen_native_instr = true;
       regs.Visit(ninstr);
     }
@@ -124,81 +114,6 @@ static void AnalyzeFragRegs(FragmentList *frags) {
   }
 }
 
-#ifdef GRANARY_DEBUG
-// Try to verify the sanity of the input fragment graph based on the
-// prior step that injects partition and flag entry/exit fragments.
-static void VerifyFragment(Fragment *frag) {
-  if (IsA<CodeFragment *>(frag)) {
-    return;
-  }
-
-  auto succ = frag->successors[0];
-  GRANARY_ASSERT(nullptr == frag->successors[1]);
-  if (IsA<ExitFragment *>(frag)) {
-    GRANARY_ASSERT(nullptr == succ);
-    return;
-  }
-
-  GRANARY_ASSERT(nullptr != succ);
-  auto code_succ = DynamicCast<CodeFragment *>(succ);
-  if (IsA<PartitionEntryFragment *>(frag)) {
-    if (code_succ) {
-      GRANARY_ASSERT(code_succ->attr.is_app_code);
-    } else {
-      GRANARY_ASSERT(IsA<FlagEntryFragment *>(succ));
-    }
-  } else if (IsA<FlagEntryFragment *>(frag)) {
-    GRANARY_ASSERT(!IsA<FlagExitFragment *>(succ));
-
-  } else if (IsA<FlagExitFragment *>(frag)) {
-    if (!IsA<PartitionExitFragment *>(succ) && !IsA<ExitFragment *>(succ)) {
-      GRANARY_ASSERT(code_succ);
-      GRANARY_ASSERT(code_succ->attr.is_app_code);
-    }
-  }
-}
-#endif
-
-// Identify the "flag zones" by making sure every fragment is unioned into some
-// flag zone set.
-static void IdentifyFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    GRANARY_IF_DEBUG( VerifyFragment(frag); )
-    if (IsA<CodeFragment *>(frag) || IsA<FlagEntryFragment *>(frag)) {
-      for (auto succ : frag->successors) {
-        if (succ && frag->partition == succ->partition &&
-            !IsA<PartitionExitFragment *>(succ) &&
-            !IsA<ExitFragment *>(succ)) {
-          frag->flag_zone.Union(frag, succ);
-        }
-      }
-    }
-  }
-}
-
-// Allocate flag zone structures for each distinct flag zone.
-static void AllocateFlagZones(FragmentList * const frags,
-                              LocalControlFlowGraph *cfg) {
-  for (auto frag : FragmentListIterator(frags)) {
-    if (IsA<FlagEntryFragment *>(frag) || IsA<FlagExitFragment *>(frag)) {
-      auto &flag_zone(frag->flag_zone.Value());
-      if (!flag_zone) {
-        flag_zone = new FlagZone(
-            cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES),
-            arch::FlagKillReg());
-      }
-    }
-  }
-#ifdef GRANARY_DEBUG
-  for (auto frag : FragmentListIterator(frags)) {
-    // Quick and easy verification of the flag zones.
-    if (IsA<FlagEntryFragment *>(frag) || IsA<FlagExitFragment *>(frag)) {
-      GRANARY_ASSERT(nullptr != frag->flag_zone.Value());
-    }
-  }
-#endif  // GRANARY_DEBUG
-}
-
 // Tracks which registers are used anywhere in the flag zone.
 static void UpdateUsedRegsInFlagZone(FlagZone *zone, CodeFragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
@@ -211,16 +126,13 @@ static void UpdateUsedRegsInFlagZone(FlagZone *zone, CodeFragment *frag) {
 // the flag zone.
 static void UpdateFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    auto &flag_zone(frag->flag_zone.Value());
-    if (flag_zone) {
+    if (auto flag_zone = frag->flag_zone.Value()) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
         if (!code->attr.is_app_code) {
           UpdateUsedRegsInFlagZone(flag_zone, code);
-          flag_zone->killed_flags |= code->flags.all_written_flags;
         }
       } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {
         flag_zone->live_regs.Union(flag_exit->regs.live_on_entry);
-        flag_zone->live_flags |= flag_exit->flags.exit_live_flags;
       }
     }
   }
@@ -228,7 +140,7 @@ static void UpdateFlagZones(FragmentList *frags) {
 
 // Injects architecture-specific code that saves and restores the flags within
 // flag entry and exit fragments.
-static void SaveAndRestoreFlags(FragmentList *frags) {
+static void InjectSaveAndRestoreFlags(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto flag_entry = DynamicCast<FlagEntryFragment *>(frag)) {
       arch::InjectSaveFlags(flag_entry);
@@ -243,13 +155,11 @@ static void SaveAndRestoreFlags(FragmentList *frags) {
 // Insert flags saving code into `FRAG_TYPE_FLAG_ENTRY` fragments, and flag
 // restoring code into `FRAG_TYPE_FLAG_EXIT` code. We only insert code to save
 // and restore flags if it is necessary.
-void SaveAndRestoreFlags(LocalControlFlowGraph *cfg, FragmentList *frags) {
+void SaveAndRestoreFlags(FragmentList *frags) {
   InitLiveRegsOnExit(frags);
   AnalyzeFragRegs(frags);
-  IdentifyFlagZones(frags);
-  AllocateFlagZones(frags, cfg);
   UpdateFlagZones(frags);
-  SaveAndRestoreFlags(frags);
+  InjectSaveAndRestoreFlags(frags);
 }
 
 }  // namespace granary

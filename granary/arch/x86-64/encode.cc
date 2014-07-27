@@ -159,10 +159,19 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
     xedo->u.mem.index = op.mem.reg_index;
     xedo->u.mem.scale = op.mem.scale;
 
-    if (XED_REG_INVALID == xedo->u.mem.base &&
-        XED_REG_INVALID != xedo->u.mem.index) {
+    if (!xedo->u.mem.base && xedo->u.mem.index && 1 == xedo->u.mem.scale) {
+      xedo->u.mem.base = xedo->u.mem.index;
+      xedo->u.mem.index = XED_REG_INVALID;
+    }
+
+    if (!xedo->u.mem.index) {
+      if (!xedo->u.mem.disp.displacement) {
+        xedo->u.mem.disp.displacement_width = 0;
+      }
+    } else if (!xedo->u.mem.base) {
       xedo->u.mem.disp.displacement_width = 32;
     }
+
   } else {
     xedo->u.mem.base = static_cast<xed_reg_enum_t>(op.reg.EncodeToNative());
   }

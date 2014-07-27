@@ -68,12 +68,11 @@ extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
 // indirect jump.
 //
 // Note: This function has an architecture-specific implementation.
-void GenerateIndirectEdgeCode(IndirectEdge *edge,
-                              ControlFlowInstruction *cfi,
-                              CodeFragment *in_edge,
-                              CodeFragment *out_edge_miss,
-                              CodeFragment *out_edge_hit,
-                              ExitFragment *out_edge_exit);
+extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
+                                              IndirectEdge *edge,
+                                              ControlFlowInstruction *cfi,
+                                              CodeFragment *predecessor_frag,
+                                              BlockMetaData *dest_block_meta);
 
 }  // namespace arch
 namespace {
@@ -175,55 +174,31 @@ static CodeFragment *Append(FragmentListBuilder *frags, DecodedBasicBlock *block
     return frag;
   }
 
-  const auto modifies_flags = ninstr->WritesConditionCodes();
-  auto hints_at_split = false;
+  const auto reads_flags = ninstr->ReadsConditionCodes();
+  const auto writes_flags = ninstr->WritesConditionCodes();
+  const auto is_app_instr = ninstr->IsAppInstruction();
+  auto hints_at_split = arch::InstructionHintsAtFlagSplit(ninstr);
   auto makes_frag_into_app = InstrMakesFragmentIntoAppCode(ninstr);
+  auto makes_frag_into_inst = !is_app_instr && (reads_flags || writes_flags);
 
   if (frag->attr.is_app_code) {
-    // Non-application instruction being added to an application fragment, need
-    // to split.
-    if (modifies_flags && !makes_frag_into_app) {
-      goto split;
-    }
+    if (makes_frag_into_inst) goto split;
+
+  } else if (frag->attr.is_inst_code) {
+    if (makes_frag_into_app) goto split;
+
   } else {
-    if (makes_frag_into_app) {
-
-      // Adding an application instruction to a non-app fragment that already
-      // has (non-app) instructions that modify the flags.
-      if (frag->attr.modifies_flags) goto split;
-
     // Instruction modifies the flags, and some prior instruction in the
     // fragment has hinted that the fragment should be split instead of
     // allowing flag-modifying instructions to be appended.
-    } else if (frag->attr.has_flag_split_hint && modifies_flags) {
-
-      // Early conversion of an instrumentation fragment into an application
-      // fragment.
-      if (!frag->attr.modifies_flags) {
-        frag->attr.is_app_code = true;
-      }
-      goto split;
-
-    // Instruction doesn't modify the flags or make the fragment into app code,
-    // but might make us want to split this fragment (and ideally convert it
-    // into an app fragment) before an instrumentation instruction next modifies
-    // the flags.
-    } else {
-      hints_at_split = arch::InstructionHintsAtFlagSplit(ninstr);
-
-      // Early conversion into app code for app instructions that hint at
-      // flag splits.
-      const auto is_app_instr = ninstr->IsAppInstruction();
-      if (hints_at_split && is_app_instr) {
-        makes_frag_into_app = true;
-        hints_at_split = false;
-        if (frag->attr.modifies_flags) goto split;
-      }
+    if (frag->attr.has_flag_split_hint && writes_flags) {
+      if (frag->attr.is_inst_code || makes_frag_into_inst) goto split;
     }
   }
   goto append;
 
-  split: {
+ split:
+  if (frag->attr.has_native_instrs) {
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
 
@@ -237,11 +212,20 @@ static CodeFragment *Append(FragmentListBuilder *frags, DecodedBasicBlock *block
     frag->partition.Union(frag, succ);
 
     frag = succ;
-  }
-  append: {
+
+  }  // Fall-through.
+ append:
+  {
     frag->attr.has_native_instrs = true;
-    if (makes_frag_into_app) frag->attr.is_app_code = true;
-    if (modifies_flags) frag->attr.modifies_flags = true;
+    GRANARY_ASSERT(!(makes_frag_into_inst && makes_frag_into_app));
+    if (makes_frag_into_inst) {
+      frag->attr.is_app_code = false;
+      frag->attr.is_inst_code = true;
+    } else if (makes_frag_into_app) {
+      frag->attr.is_inst_code = false;
+      frag->attr.is_app_code = true;
+    }
+    if (writes_flags) frag->attr.modifies_flags = true;
     if (hints_at_split) frag->attr.has_flag_split_hint = true;
     frag->instrs.Append(instr);
   }
@@ -361,71 +345,18 @@ Fragment *MakeDirectEdgeFragment(FragmentListBuilder *frags,
   return edge_frag;
 }
 
-// Update the attribute info of an indirect edge fragment.
-static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
-                                   CodeFragment *pred_frag,
-                                   BlockMetaData *dest_block_meta) {
-  edge_frag->stack.is_valid = pred_frag->stack.is_valid;
-  edge_frag->stack.is_checked = pred_frag->stack.is_checked;
-  edge_frag->attr.block_meta = dest_block_meta;
 
-  // Prevent this fragment from being reaped by `RemoveUselessFrags` in
-  // `3_partition_fragments.cc`.
-  edge_frag->attr.has_native_instrs = true;
-
-  // Make sure that the edge code shares the same partition as the predecessor
-  // so that virtual registers can be spread across both.
-  edge_frag->attr.can_add_to_partition = true;
-  edge_frag->partition.Union(edge_frag, pred_frag);
-}
 
 // Make an edge fragment and an exit fragment for some future block.
 static Fragment *MakeIndirectEdgeFragment(FragmentListBuilder *frags,
                                           CodeFragment *pred_frag,
                                           BlockMetaData *dest_block_meta,
                                           ControlFlowInstruction *cfi) {
-  auto in_edge_frag = new CodeFragment;
-  in_edge_frag->attr.is_in_edge_code = true;
-  UpdateIndirectEdgeFrag(in_edge_frag, pred_frag, dest_block_meta);
 
-  auto out_edge_frag_miss = new CodeFragment;
-  out_edge_frag_miss->attr.is_in_edge_code = false;
-  UpdateIndirectEdgeFrag(out_edge_frag_miss, in_edge_frag, dest_block_meta);
-
-  auto out_edge_frag_hit = new CodeFragment;
-  out_edge_frag_hit->attr.is_in_edge_code = false;
-  UpdateIndirectEdgeFrag(out_edge_frag_hit, in_edge_frag, dest_block_meta);
-
-  auto exit_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
-  exit_frag->edge.kind = EDGE_KIND_INDIRECT;
-  exit_frag->block_meta = dest_block_meta;
 
   auto edge = frags->context->AllocateIndirectEdge(dest_block_meta);
-
-  arch::GenerateIndirectEdgeCode(edge, cfi, in_edge_frag, out_edge_frag_miss,
-                                 out_edge_frag_hit, exit_frag);
-
-  // Note: `branch_instr` of `in_edge_frag` is initialized by
-  //       `arch::GenerateIndirectEdgeCode`.
-  //
-  // Note: `branch_instr` of `out_edge_frag_hit` may or may not be initialized
-  //       by `arch::GenerateIndirectEdgeCode`, depending on what code is
-  //       generated.
-
-  in_edge_frag->successors[FRAG_SUCC_FALL_THROUGH] = out_edge_frag_miss;
-  in_edge_frag->successors[FRAG_SUCC_BRANCH] = out_edge_frag_hit;
-
-  out_edge_frag_hit->successors[FRAG_SUCC_FALL_THROUGH] = exit_frag;
-  out_edge_frag_hit->successors[FRAG_SUCC_BRANCH] = out_edge_frag_miss;
-
-  out_edge_frag_miss->successors[FRAG_SUCC_BRANCH] = out_edge_frag_hit;
-
-  frags->Append(in_edge_frag);
-  frags->Append(out_edge_frag_miss);
-  frags->Append(out_edge_frag_hit);
-  frags->Append(exit_frag);
-
-  return in_edge_frag;
+  return arch::GenerateIndirectEdgeCode(frags->frags, edge, cfi, pred_frag,
+                                        dest_block_meta);
 }
 
 static ExitFragment *MakeExitFragment(FragmentListBuilder *frags) {
@@ -640,13 +571,6 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       if (arch::ChangesInterruptDeliveryState(ninstr)) {
         return SplitFragmentAtInterruptChange(frags, frag, block, instr);
-      } else if (frag->attr.is_app_code) {
-        if (!ninstr->IsAppInstruction() && ninstr->WritesConditionCodes()) {
-          return SplitFragment(frags, frag, block, instr);
-        }
-      } else if (frag->attr.modifies_flags &&  // Must have at least 1 instr.
-                 InstrMakesFragmentIntoAppCode(ninstr)) {
-        return SplitFragment(frags, frag, block, instr);
       }
     }
 
@@ -674,7 +598,9 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
           frag->stack.is_checked = true;
           frag->stack.is_valid = true;
         }
+
       } else if (IA_UNDEFINED_STACK == annot->annotation) {
+        frags->split_at_next_sequence_point = true;
         if ((frag->stack.is_checked && frag->stack.is_valid) ||
             frag->attr.has_native_instrs) {
           return SplitFragmentAtStackChange(frags, frag, block, next, false);
@@ -687,6 +613,7 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
       // `3_partition_fragments.cc`, we want to be aggressive about stack
       // validity. So, for example, if we see something like:
       //          MOV RSP, [X]
+      //          <IA_UNKNOWN_STACK_ABOVE>
       //          MOV Y, [Z]
       //          POP [Y]
       // Then we'll split that into two fragments:

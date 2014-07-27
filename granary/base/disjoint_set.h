@@ -18,6 +18,10 @@ class DisjointSet {
       : parent(this),
         value() {}
 
+  inline explicit DisjointSet(T default_value_)
+      : parent(this),
+        value(default_value_) {}
+
   // Union together two containers.
   template <typename U>
   inline void Union(U *this_container, U *that_container) {
@@ -43,7 +47,11 @@ class DisjointSet {
   void Union(SelfT *that) {
     auto this_root = Find();
     auto that_root = that->Find();
-    if (this_root < that_root) {
+    if (this_root->value) {
+      that_root->parent = this_root;
+    } else if (that_root->value) {
+      this_root->parent = that_root;
+    } else if (this_root < that_root) {
       that_root->parent = this_root;
     } else if (this_root > that_root) {
       this_root->parent = that_root;
@@ -64,7 +72,7 @@ class DisjointSet {
   }
 
   // Returns true if two disjoint sets are the same.
-  bool operator==(SelfT &that) {
+  bool operator==(const SelfT &that) const {
     return Find() == that.Find();
   }
 

@@ -39,7 +39,7 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSADataPhiNode)
 GRANARY_DEFINE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
 
 SSANode::SSANode(SSAFragment *frag_, VirtualRegister reg_)
-    : storage(),
+    : id(NODE_UNSCHEDULED),
       frag(frag_),
       reg(reg_) {
   GRANARY_ASSERT(reg.IsGeneralPurpose());
@@ -59,7 +59,7 @@ void SSAControlPhiNode::AddOperand(SSANode *node) {
         return;
       }
     }
-    storage.Union(reinterpret_cast<SSANode *>(this), node);
+    id.Union(reinterpret_cast<SSANode *>(this), node);
     operands.Append(node);
   }
 }
@@ -100,7 +100,7 @@ static void UnsafeTrivializePhiNode(SSAControlPhiNode *phi,
                                     SSANode *phi_operand) {
   // Save the storage set, so that we can make sure everything continues to
   // link up after our conversion.
-  auto storage = phi->storage;
+  auto storage = phi->id;
 
   // Make sure that memory associated with the operands is cleaned up.
   phi->~SSAControlPhiNode();
@@ -113,13 +113,13 @@ static void UnsafeTrivializePhiNode(SSAControlPhiNode *phi,
     auto reg = new (phi) SSARegisterNode(phi->frag,
                                          FindDefiningInstruction(phi),
                                          phi->reg);
-    reg->storage = storage;
+    reg->id = storage;
 
   // Happens if we have a def that reaches to a cycle of uses, where within the
   // cycle there is no intermediate def.
   } else {
     auto alias = new (phi) SSAAliasNode(phi->frag, phi_operand);
-    alias->storage = storage;
+    alias->id = storage;
     TryRecursiveTrivialize(phi_operand);
   }
 }
@@ -152,9 +152,7 @@ SSAAliasNode::SSAAliasNode(SSAFragment *frag_, SSANode *incoming_node_)
 
 SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
-      dependent_node(incoming_node_) {
-  storage.Union(dependent_node->storage);
-}
+      dependent_node(incoming_node_) {}
 
 SSARegisterNode::SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
                                  VirtualRegister reg_)

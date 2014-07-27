@@ -233,6 +233,10 @@ class Instruction : public InstructionInterface {
     // native target is too far away from the code cache.
     bool is_sticky:1;
 
+    // Should this instruction appear to have no effect on the stack pointer,
+    // even if it actually does?
+    bool is_stack_blind:1;
+
     // Should we *not* encode this instruction? Sometimes it's useful to have
     // an instruction exist for its side-effect on the virtual register
     // schedule, but never actually be encoded.

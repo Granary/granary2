@@ -15,6 +15,7 @@
 #include "granary/base/list.h"
 #include "granary/base/new.h"
 #include "granary/base/tiny_map.h"
+#include "granary/base/tiny_set.h"
 
 #include "granary/cfg/instruction.h"
 
@@ -35,38 +36,6 @@ class FlagEntryFragment;
 class FlagExitFragment;
 class SSANode;
 class DirectEdge;
-
-class SpillInfo {
- public:
-  inline SpillInfo(void)
-      : num_slots(0),
-        used_slots(),
-        gprs_holding_vrs() {
-    gprs_holding_vrs.KillAll();
-  }
-
-  // Maximum number of slots allocated from this `SpillInfo` object.
-  int num_slots;
-
-  // Tracks which spill slots are allocated.
-  BitSet<arch::MAX_NUM_SPILL_SLOTS> used_slots;
-
-  // If a GPR is live in `entry_gprs_holding_vrs`, then on entry to the current
-  // fragment, the GPR contains the value of a VR.
-  RegisterTracker gprs_holding_vrs;
-
-  // Allocate a spill slot from this spill info. Takes an optional offset that
-  // can be used to slide the allocated slot by some amount. The offset
-  // parameter is used to offset partition-local slot allocations by the number
-  // of fragment local slot allocations.
-  int AllocateSpillSlot(int offset=0);
-
-  // Mark a spill slot as being used.
-  void MarkSlotAsUsed(int slot);
-
-  // Free a spill slot from active use.
-  void FreeSpillSlot(int slot);
-};
 
 // Tracks the size of the stack frame within the current fragment/partition.
 // We are guaranteed that the fragments within a partition form a DAG, so if
@@ -108,16 +77,6 @@ class PartitionInfo {
  public:
   explicit PartitionInfo(int id_);
 
-  // Clear out the number of usage count of registers in this partition.
-  void ClearGPRUseCounters(void);
-
-  // Count the number of uses of the arch GPRs in this fragment.
-  void CountGPRUses(Fragment *frag);
-
-  // Returns the most preferred arch GPR for use by partition-local register
-  // scheduling.
-  int PreferredGPRNum(void);
-
   GRANARY_DEFINE_NEW_ALLOCATOR(PartitionInfo, {
     SHARED = false,
     ALIGNMENT = 1
@@ -129,27 +88,14 @@ class PartitionInfo {
   // local and partition-local slots.
   int num_slots;
 
-  // Maximum number of spill slots used by fragments somewhere in this
-  // partition.
-  int num_local_slots;
-
-  // Counts the number of uses of each GPR within the partition.
-  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
-
-  // What is the number/index of the preferred GPR for the current VR being
-  // allocated. This is -1 if we haven't yet determined the next preferred GPR
-  // number.
-  int preferred_gpr_num;
-
-  // The VR being allocated and scheduled.
-  SSASpillStorage *vr_being_scheduled;
-
-  // Partition-local spill info.
-  SpillInfo spill;
-
   // For sanity checking: our stack analysis might yield undefined behavior of
   // a partition has more than one entry points.
   GRANARY_IF_DEBUG( int num_partition_entry_frags; )
+
+  // Used to verify that a virtual register is not defined in one fragment
+  // and used in another.
+  GRANARY_IF_DEBUG( TinySet<VirtualRegister,
+                            arch::NUM_GENERAL_PURPOSE_REGISTERS> used_vrs; )
 
   // Should we analyze the stack frames?
   bool analyze_stack_frame;
@@ -182,13 +128,21 @@ class RegisterUsageInfo {
 
   LiveRegisterTracker live_on_entry;
   LiveRegisterTracker live_on_exit;
-  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+
+};
+
+// Used to count the number of uses of each GPR within one or more fragments.
+class RegisterUsageCounter {
+ public:
+  RegisterUsageCounter(void);
 
   // Clear out the number of usage count of registers in this fragment.
   void ClearGPRUseCounters(void);
 
   // Count the number of uses of the arch GPRs in this fragment.
   void CountGPRUses(Fragment *frag);
+
+  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 };
 
 // Tracks flag usage within a code fragment.
@@ -265,7 +219,8 @@ class Fragment : public EncodedFragment {
   DisjointSet<FlagZone *> flag_zone;
 
   // Tracks flag use within this fragment.
-  FlagUsageInfo flags;
+  FlagUsageInfo app_flags;
+  FlagUsageInfo inst_flags;
 
   // Temporary, pass-specific data.
   TempData temp;
@@ -394,6 +349,7 @@ class alignas(alignof(void *)) CodeAttributes {
   // instructions are either injected from instrumentation, or they could be
   // some application instructions that don't read or write the flags.
   bool is_app_code:1;
+  bool is_inst_code:1;
 
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head:1;
@@ -411,12 +367,6 @@ class alignas(alignof(void *)) CodeAttributes {
   // rest of code, but will be emitted to a special cache.
   bool is_in_edge_code:1;
 
-  // The number of non-application (instrumentation) predecessors.
-  //
-  // Note: We don't care if this value overflows or goes out of sync, as it is
-  //       used as a heuristic in step `4_add_entry_exit_fragments`.
-  uint8_t num_inst_preds;
-
 } __attribute__((packed));
 
 typedef TinyMap<VirtualRegister, SSANode *,
@@ -426,20 +376,34 @@ typedef TinyMap<VirtualRegister, SSANode *,
 class SSAFragment : public Fragment {
  public:
   SSAFragment(void)
-      : all_regs_scheduled(false) {}
+      : ssa(),
+        spill() {}
 
   virtual ~SSAFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, SSAFragment)
 
-  struct {
+  struct SSAInfo {
+    inline SSAInfo(void)
+        : entry_nodes(),
+          exit_nodes() {}
+
     SSANodeMap entry_nodes;
     SSANodeMap exit_nodes;
   } ssa;
 
-  bool all_regs_scheduled;
+  struct SpillInfo {
+    inline SpillInfo(void)
+        : used_slots(),
+          num_slots(0) {}
 
-  SpillInfo spill;
+    // Tracks which spill slots are allocated.
+    BitSet<arch::MAX_NUM_SPILL_SLOTS> used_slots;
+
+    // Number of spill slots used. This includes partition-local spill slots
+    // and fragment-local spill slots.
+    int num_slots;
+  } spill;
 };
 
 // A fragment of native or instrumentation instructions.

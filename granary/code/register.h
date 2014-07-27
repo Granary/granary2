@@ -262,13 +262,66 @@ union alignas(alignof(void *)) VirtualRegister {
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
 
+// Forward declaration.
+class RegisterTracker;
+
+namespace detail {
+
+template <bool kIsLive>
+class RegisterTrackerIterator {
+ public:
+  typedef RegisterTrackerIterator<kIsLive> Iterator;
+
+  RegisterTrackerIterator(void)
+      : tracker(nullptr),
+        num(arch::NUM_GENERAL_PURPOSE_REGISTERS) {}
+
+  explicit RegisterTrackerIterator(const RegisterTracker *tracker_)
+      : tracker(tracker_),
+        num(0U) {
+    Advance();
+  }
+
+  bool operator!=(const Iterator &that) const {
+    return num != that.num;
+  }
+
+  VirtualRegister operator*(void) const {
+    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
+    return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES, num);
+  }
+
+  inline void operator++(void) {
+    ++num;
+    Advance();
+  }
+
+ private:
+  void Advance(void);
+
+  const RegisterTracker * const tracker;
+  uint16_t num;
+};
+
+}  // namespace detail
+
 // Base implementation of a register tracker.
 class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
  public:
+  typedef detail::RegisterTrackerIterator<true> Iterator;
+
   RegisterTracker(void) = default;
 
   inline RegisterTracker(const RegisterTracker &that) {
     Copy(that);
+  }
+
+  inline Iterator begin(void) const {
+    return Iterator(this);
+  }
+
+  inline Iterator end(void) const {
+    return Iterator();
   }
 
   // Kill all registers.
@@ -352,50 +405,15 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
 };
 
 namespace detail {
-
 template <bool kIsLive>
-class RegisterTrackerIterator {
- public:
-  typedef RegisterTrackerIterator<kIsLive> Iterator;
-
-  RegisterTrackerIterator(void)
-      : tracker(nullptr),
-        num(arch::NUM_GENERAL_PURPOSE_REGISTERS) {}
-
-  explicit RegisterTrackerIterator(const RegisterTracker *tracker_)
-      : tracker(tracker_),
-        num(0U) {
-    Advance();
-  }
-
-  bool operator!=(const Iterator &that) const {
-    return num != that.num;
-  }
-
-  VirtualRegister operator*(void) const {
-    GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES, num);
-  }
-
-  inline void operator++(void) {
-    ++num;
-    Advance();
-  }
-
- private:
-  void Advance(void) {
-    for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
-           kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
-  }
-
-  const RegisterTracker * const tracker;
-  uint16_t num;
-};
-
+void RegisterTrackerIterator<kIsLive>::Advance(void) {
+  for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
+         kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
+}
 }  // namespace detail
 
-// A class that tracks conservatively live, general-purpose registers within a
-// straight-line sequence of instructions.
+// A class that tracks used general-purpose registers within a straight-line
+// sequence of instructions.
 //
 // A register is used if the register appears anywhere in an instruction.
 //

@@ -47,10 +47,11 @@ class TinyMap {
   template <typename VecIteratorType>
   class IteratorImpl {
    public:
+    typedef IteratorImpl<VecIteratorType> IteratorImplType;
     inline IteratorImpl(void)
         : it() {}
 
-    inline IteratorImpl(const IteratorImpl<VecIteratorType> &that)
+    inline IteratorImpl(const IteratorImplType &that)
           : it(that.it) {}
 
     inline explicit IteratorImpl(VecIteratorType it_)
@@ -58,7 +59,7 @@ class TinyMap {
       Advance();
     }
 
-    inline bool operator!=(const IteratorImpl<VecIteratorType> &that) const {
+    inline bool operator!=(const IteratorImplType &that) const {
       return it != that.it;
     }
 

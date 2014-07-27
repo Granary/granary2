@@ -217,6 +217,8 @@ static void MangleIndirectCFI(NativeInstruction *instr) {
 void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
                             int adjusted_offset, int next_adjusted_offset) {
   auto &ainstr(instr->instruction);
+  if (ainstr.is_stack_blind) return;
+
   switch (ainstr.iclass) {
     case XED_ICLASS_PUSH:
       ManglePush(instr, next_adjusted_offset);
@@ -226,7 +228,9 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
     case XED_ICLASS_PUSHF:
     case XED_ICLASS_PUSHFQ:
-      ManglePushFlags(frag, instr, next_adjusted_offset);
+      if (!instr->instruction.is_sticky) {
+        ManglePushFlags(frag, instr, next_adjusted_offset);
+      }
       break;
     case XED_ICLASS_POPF:
     case XED_ICLASS_POPFQ:

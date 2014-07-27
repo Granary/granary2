@@ -20,14 +20,17 @@
 
 #include "granary/logging.h"
 
-GRANARY_DEFINE_bool(debug_log_metadata, false,
+GRANARY_DEFINE_bool(debug_log_metadata, true,
     "Log the meta-data that is committed to the code cache index. The default "
     "is `no`.");
+
+int num_metas = 1;
 
 namespace granary {
 namespace {
 
 static void LogBytes(uint64_t *qwords, size_t num_bytes) {
+  Log(LogOutput, "%d\t", num_metas++);
   for (auto i = 0UL; i < num_bytes; ++i) {
     auto qword = qwords[i];
     Log(LogOutput, "%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x ",

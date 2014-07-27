@@ -36,108 +36,45 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 
-// Allocate a spill slot from this spill info. Takes an optional offset that
-// can be used to slide the allocated slot by some amount. The offset
-// parameter is used to offset partition-local slot allocations by the number
-// of fragment local slot allocations.
-int SpillInfo::AllocateSpillSlot(int offset) {
-  for (auto i = offset; i < num_slots; ++i) {
-    if (!used_slots.Get(i)) {
-      used_slots.Set(i, true);
-      return i;
-    }
-  }
-  num_slots = std::max(num_slots, offset);
-  GRANARY_ASSERT(arch::MAX_NUM_SPILL_SLOTS > (1 + num_slots));
-  used_slots.Set(num_slots, true);
-  return num_slots++;
-}
-
-// Mark a spill slot as being used.
-void SpillInfo::MarkSlotAsUsed(int slot) {
-  GRANARY_ASSERT(slot >= 0);
-  GRANARY_ASSERT(arch::MAX_NUM_SPILL_SLOTS > (1 + slot));
-  used_slots.Set(slot, true);
-  num_slots = std::max(num_slots, slot + 1);
-}
-
-// Free a spill slot from active use.
-void SpillInfo::FreeSpillSlot(int slot) {
-  GRANARY_ASSERT(slot >= 0);
-  GRANARY_ASSERT(num_slots > slot);
-  GRANARY_ASSERT(used_slots.Get(slot));
-  used_slots.Set(slot, false);
-}
-
 PartitionInfo::PartitionInfo(int id_)
     : id(id_),
       num_slots(0),
-      num_local_slots(0),
-      num_uses_of_gpr{0},
-      preferred_gpr_num(-1),
-      vr_being_scheduled(nullptr),
-      spill(),
       GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
       analyze_stack_frame(true),
       min_frame_offset(0),
       entry_frag(nullptr) {}
 
-// Clear out the number of usage count of registers in this partition.
-void PartitionInfo::ClearGPRUseCounters(void) {
-  memset(&(num_uses_of_gpr[0]), 0, sizeof num_uses_of_gpr);
-  preferred_gpr_num = -1;
-}
-
-// Count the number of uses of the arch GPRs in this fragment.
-void PartitionInfo::CountGPRUses(Fragment *frag) {
-  frag->regs.CountGPRUses(frag);
-  for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-    num_uses_of_gpr[i] += frag->regs.num_uses_of_gpr[i];
-  }
-}
-
-// Returns the most preferred arch GPR for use by partition-local register
-// scheduling.
-int PartitionInfo::PreferredGPRNum(void) {
-  if (-1 == preferred_gpr_num) {
-    auto min = std::numeric_limits<int>::max();
-    for (auto i = arch::NUM_GENERAL_PURPOSE_REGISTERS - 1; i >= 0; --i) {
-      if (num_uses_of_gpr[i] < min) {
-        preferred_gpr_num = i;
-        min = num_uses_of_gpr[i];
-      }
-    }
-    GRANARY_ASSERT(-1 != preferred_gpr_num);
-  }
-  return preferred_gpr_num;
-}
-
 RegisterUsageInfo::RegisterUsageInfo(void)
     : live_on_entry(),
-      live_on_exit(),
-      num_uses_of_gpr{0} {}
+      live_on_exit() {}
+
+RegisterUsageCounter::RegisterUsageCounter(void) {
+  ClearGPRUseCounters();
+}
 
 // Clear out the number of usage count of registers in this fragment.
-void RegisterUsageInfo::ClearGPRUseCounters(void) {
+void RegisterUsageCounter::ClearGPRUseCounters(void) {
   memset(&(num_uses_of_gpr[0]), 0, sizeof num_uses_of_gpr);
 }
 
+namespace {
+static void CountGPRUse(RegisterUsageCounter *counter, VirtualRegister reg) {
+  if (reg.IsNative() && reg.IsGeneralPurpose()) {
+    counter->num_uses_of_gpr[reg.Number()] += 1;
+  }
+}
+}  // namespace
+
 // Count the number of uses of the arch GPRs in this fragment.
-void RegisterUsageInfo::CountGPRUses(Fragment *frag) {
-  frag->regs.ClearGPRUseCounters();
-  auto gpr_counter = [=] (VirtualRegister reg) {
-    if (reg.IsNative() && reg.IsGeneralPurpose()) {
-      num_uses_of_gpr[reg.Number()] += 1;
-    }
-  };
-  auto operand_counter = [&] (Operand *op) {
+void RegisterUsageCounter::CountGPRUses(Fragment *frag) {
+  auto operand_counter = [=] (Operand *op) {
     if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-      gpr_counter(reg_op->Register());
+      CountGPRUse(this, reg_op->Register());
     } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
       VirtualRegister r1, r2;
       if (mem_op->CountMatchedRegisters({&r1, &r2})) {
-        gpr_counter(r1);
-        gpr_counter(r2);
+        CountGPRUse(this, r1);
+        CountGPRUse(this, r2);
       }
     }
   };
@@ -156,17 +93,18 @@ CodeAttributes::CodeAttributes(void)
       modifies_flags(false),
       has_flag_split_hint(false),
       is_app_code(false),
+      is_inst_code(false),
       is_block_head(false),
       is_compensation_code(false),
-      is_in_edge_code(false),
-      num_inst_preds(0) {}
+      is_in_edge_code(false) {}
 
 Fragment::Fragment(void)
     : list(),
       instrs(),
-      partition(),
-      flag_zone(),
-      flags(),
+      partition(nullptr),
+      flag_zone(nullptr),
+      app_flags(),
+      inst_flags(),
       temp(),
       successors{nullptr, nullptr},
       branch_instr(nullptr),
@@ -341,6 +279,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
       case FRAG_EXIT_EXISTING_BLOCK: Log(level, "existing block"); break;
     }
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
+    if (code->attr.is_app_code) Log(level, "app|");
     if (code->attr.block_meta && code->attr.is_block_head) {
       auto meta = MetaDataCast<AppMetaData *>(code->attr.block_meta);
       Log(level, "%p|", meta->start_pc);

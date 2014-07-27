@@ -4,6 +4,9 @@
 
 using namespace granary;
 
+int NUM_BBS = 0;
+int MAX_BBS = 100000;
+
 // TODO(pag): Generic allocators (similar to with meta-data) but for allowing
 //            multiple tools to register descriptor info.
 // TODO(pag): Eventually handle user space syscalls to avoid EFAULTs.
@@ -101,6 +104,10 @@ class Watchpoints : public Tool {
 
   // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+    if (NUM_BBS > MAX_BBS) {
+      return;
+    }
+    ++NUM_BBS;
     MemoryOperand mloc1, mloc2;
     LiveRegisterTracker live_regs;
     live_regs.ReviveAll();

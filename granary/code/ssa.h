@@ -25,17 +25,20 @@ namespace arch {
 class Operand;
 }  // namespace arch
 
+#if 0
 // Location at which a SSA Node is stored.
 class SSASpillStorage {
  public:
   inline SSASpillStorage(void)
       : is_local(false),
         checked_is_local(false),
+        is_stolen(false),
         slot(-1),
         reg() {}
 
   bool is_local;
   bool checked_is_local;
+  bool is_stolen;
   int slot;
   VirtualRegister reg;
 
@@ -44,6 +47,14 @@ class SSASpillStorage {
     ALIGNMENT = 1
   })
 };
+#endif
+
+enum SSANodeScheduledStatus {
+  NODE_UNSCHEDULED,
+  NODE_SCHEDULED
+};
+
+typedef DisjointSet<SSANodeScheduledStatus> SSANodeId;
 
 // Generic SSA Node.
 class SSANode {
@@ -52,9 +63,10 @@ class SSANode {
 
   virtual ~SSANode(void);
 
-  DisjointSet<SSASpillStorage *> storage;
+  // Used to identify that two SSA nodes are actually the same.
+  SSANodeId id;
 
-  // SSAFragment in which this register is defined.
+  // Fragment in which this register is defined.
   SSAFragment * const frag;
 
   // The register associated with this node.
@@ -164,9 +176,6 @@ class SSARegisterNode : public SSANode {
   // Instruction that defines this register. We use this in combination with
   // `frag` when doing copy-propagation.
   Instruction *instr;
-
-  // Register defined by this node.
-  const VirtualRegister reg;
 
  private:
   SSARegisterNode(void) = delete;

@@ -61,11 +61,11 @@ FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
 
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
-  AddEntryAndExitFragments(&frags);
+  AddEntryAndExitFragments(cfg, &frags);
 
   // Add flags saving and restoring code around injected instrumentation
   // instructions.
-  SaveAndRestoreFlags(cfg, &frags);
+  SaveAndRestoreFlags(&frags);
 
   // Build an SSA-like representation for all definitions and uses of general-
   // purpose registers.

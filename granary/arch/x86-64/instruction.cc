@@ -105,6 +105,7 @@ bool Instruction::ShiftsStackPointer(void) const {
 // Note: This should only be used after early mangling, as it assumes an
 //       absence of `ENTER` and `LEAVE`.
 int Instruction::StackPointerShiftAmount(void) const {
+  if (is_stack_blind) return 0;
   int mult = -1;
   switch (iclass) {
     case XED_ICLASS_PUSHA:
@@ -205,6 +206,7 @@ int Instruction::StackPointerShiftAmount(void) const {
 //       returned, regardless of if Granary+ is instrumenting user space or
 //       kernel code.
 int Instruction::ComputedOffsetBelowStackPointer(void) const {
+  if (is_stack_blind) return 0;
   if (XED_ICLASS_LEA != iclass) return 0;
   if (!ops[1].is_compound) return 0;
   if (XED_REG_RSP != ops[1].mem.reg_base) return 0;
@@ -273,6 +275,8 @@ void Instruction::AnalyzeStackUsage(void) const {
   analyzed_stack_usage = true;
   reads_from_stack_pointer = false;
   writes_to_stack_pointer = false;
+  if (GRANARY_UNLIKELY(is_stack_blind)) return;
+
   auto self = const_cast<Instruction *>(this);
   for (auto &op : ops) {
     if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {

@@ -407,11 +407,13 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
     ConvertDecodedInstruction(instr, &xedd, pc);
 
     switch (instr->iclass) {
+      case XED_ICLASS_UD2:
+        return nullptr;
       case XED_ICLASS_XBEGIN:
       case XED_ICLASS_XEND:
       case XED_ICLASS_XABORT:
       case XED_ICLASS_XTEST:
-        // TODO(pag): Implement me!!
+        GRANARY_ASSERT(false);  // TODO(pag): Implement me!!
         return nullptr;
       default: break;
     }
@@ -419,7 +421,8 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
     auto next_pc = pc + instr->decoded_length;
 
     // Treat conditional jumps to the next instruction as NOPs.
-    if (XED_ICLASS_XBEGIN != instr->iclass && instr->IsConditionalJump() &&
+    if (XED_ICLASS_XBEGIN != instr->iclass &&
+        instr->IsConditionalJump() &&
         instr->BranchTargetPC() == next_pc) {
       pc = next_pc;
       continue;

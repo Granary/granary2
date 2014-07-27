@@ -9,11 +9,13 @@
 
 namespace granary {
 
+class LocalControlFlowGraph;
+
 // Adds designated entry and exit fragments around fragment partitions and
 // around groups of instrumentation code fragments. First we add entry/exits
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
-void AddEntryAndExitFragments(FragmentList *frags);
+void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags);
 
 }  // namespace granary
 

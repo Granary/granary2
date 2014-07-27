@@ -94,7 +94,8 @@ void AddInstructionOperands(SSAInstruction *instr, SSAOperandPack &operands) {
 namespace {
 
 // Add an `SSAOperand` to an operand pack.
-static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
+static void AddSSAOperand(SSAOperandPack &operands, Operand *op
+                          _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
   auto mem_op = DynamicCast<MemoryOperand *>(op);
   auto reg_op = DynamicCast<RegisterOperand *>(op);
 
@@ -105,8 +106,9 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
   // Ignore all non general-purpose registers, as they cannot be scheduled with
   // virtual registers.
   } else if (reg_op) {
-    if (!reg_op->Register().IsGeneralPurpose()) return;
-
+    auto reg = reg_op->Register();
+    if (!reg.IsGeneralPurpose()) return;
+    GRANARY_IF_DEBUG( if (reg.IsVirtual()) partition->used_vrs.Add(reg); )
   // Only use memory operands that contain general-purpose registers.
   } else if (mem_op) {
     if (mem_op->IsPointer()) return;
@@ -116,6 +118,9 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op) {
     if (mem_op->CountMatchedRegisters({&r1, &r2})) {
       if (r1.IsGeneralPurpose()) ++num_gprs;
       if (r2.IsGeneralPurpose()) ++num_gprs;
+
+      GRANARY_IF_DEBUG( if (r1.IsVirtual()) partition->used_vrs.Add(r1); )
+      GRANARY_IF_DEBUG( if (r2.IsVirtual()) partition->used_vrs.Add(r2); )
     }
     if (!num_gprs) return;  // E.g. referencing memory directly on the stack.
   }
@@ -168,11 +173,12 @@ static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
 static void CreateSSAInstructions(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
+      auto partition = frag->partition.Value();
       for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           SSAOperandPack operands;
           ninstr->ForEachOperand([&] (Operand *op) {
-            AddSSAOperand(operands, op);
+            AddSSAOperand(operands, op _GRANARY_IF_DEBUG(partition));
           });
           ConvertOperandActions(operands);  // Generic.
           arch::ConvertOperandActions(ninstr, operands);  // Arch-specific.
@@ -218,7 +224,6 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
     auto &node(frag->ssa.entry_nodes[reg]);
     if (SSAOperandAction::WRITE == op.action) {
 
-
       // Some later (in this fragment) instruction reads from this register,
       // and so it created an `SSAControlPhiNode` for that use so that it could
       // signal that a concrete definition of that use was missing. We now have
@@ -226,9 +231,9 @@ static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
       // node.
       if (node) {
         GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-        auto storage = node->storage;
+        auto storage = node->id;
         node = new (node) SSARegisterNode(frag, instr, reg);
-        node->storage = storage;
+        node->id = storage;
 
       // No use (in the current fragment) depends on this register, but when
       // we later to global value numbering, we might need to forward-propagate
@@ -272,13 +277,18 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
       // control-PHI with a data-PHI.
       if (node) {
         GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
+        auto storage = node->id;
         op.nodes.Append(new (node) SSADataPhiNode(frag, new_node));
+        node->id = storage;
+        node->id.Union(new_node->id);
 
       // No instructions (in the current fragment) that follow `instr` use the
       // register `reg`, but later when we do GVN, we might need to propagate
       // this definition to a successor.
       } else {
-        op.nodes.Append(new SSADataPhiNode(frag, new_node));
+        auto data_node = new SSADataPhiNode(frag, new_node);
+        data_node->id.Union(new_node->id);
+        op.nodes.Append(data_node);
       }
 
       GRANARY_ASSERT(1U == op.nodes.Size());
@@ -361,13 +371,13 @@ static bool BackPropagateEntryDefs(SSAFragment *frag, SSAFragment *succ) {
     // successor of `frag` that we've already visited.
     auto &exit_node(frag->ssa.exit_nodes[reg]);
     if (exit_node) {
-      exit_node->storage.Union(exit_node, succ_node);
+      exit_node->id.Union(exit_node, succ_node);
       continue;
     }
 
     // Defined in `frag`, or used in `frag` but not defined.
     if (auto node = FindDefForUse(frag, reg)) {
-      node->storage.Union(node, succ_node);
+      node->id.Union(node, succ_node);
       exit_node = node;
       continue;
     }
@@ -456,7 +466,7 @@ static void AddCompensationRegKills(CodeFragment *frag) {
   }
 }
 
-// If a *virtual* register R is live on exit in `pred` but not live on entry
+// If a virtual register R is live on exit in `pred` but not live on entry
 // in `succ` then add a compensating fragment between `pred` and `succ` that
 // contains R as as live on entry, and explicitly kills those variables using
 // special annotation instructions.
@@ -497,19 +507,8 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   }
 
   comp->attr.is_compensation_code = true;
-
-  // Union this compensating fragment into the partition, and make sure to keep
-  // the partition info around.
-  auto pred_partition_info = pred->partition.Value();
-  comp->partition.Union(reinterpret_cast<Fragment *>(comp),
-                        reinterpret_cast<Fragment *>(pred));
-  comp->partition.Value() = pred_partition_info;
-
-  // Union this compensating fragment into the flag zone.
-  auto pred_flag_zone = pred->flag_zone.Value();
-  comp->flag_zone.Union(reinterpret_cast<Fragment *>(comp),
-                        reinterpret_cast<Fragment *>(pred));
-  comp->flag_zone.Value() = pred_flag_zone;
+  comp->partition.Union(pred->partition);
+  comp->flag_zone.Union(pred->flag_zone);
 
   // Make sure we've got accurate regs info based on our predecessor/successor.
   comp->regs.live_on_entry = pred->regs.live_on_exit;
@@ -594,6 +593,31 @@ static void AddCompensatingFragments(FragmentList *frags) {
   }
 }
 
+#ifdef GRANARY_DEBUG
+// Verify that the sets of virtual registers used in each partition are
+// disjoint.
+static void VerifyVRUsage(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (!IsA<PartitionEntryFragment *>(frag)) continue;
+    auto frag_partition = frag->partition.Value();
+    for (auto other_frag : FragmentListIterator(frags)) {
+      if (frag == other_frag) continue;
+      if (!IsA<PartitionEntryFragment *>(other_frag)) continue;
+      auto other_frag_partition = other_frag->partition.Value();
+
+      // Verify that there is only one partition entry fragment per partition.
+      GRANARY_ASSERT(frag_partition != other_frag_partition);
+
+      const auto &other_regs(other_frag_partition->used_vrs);
+      for (auto reg : frag_partition->used_vrs) {
+        if (reg.IsValid()) {
+          GRANARY_ASSERT(!other_regs.Contains(reg));
+        }
+      }
+    }
+  }
+}
+#endif  // GRANARY_DEBUG
 }  // namespace
 
 // Build a graph for the SSA definitions associated with the fragments.
@@ -605,6 +629,7 @@ void TrackSSAVars(FragmentList * const frags) {
   ConnectControlPhiNodes(frags);
   SimplifyControlPhiNodes(frags);
   AddCompensatingFragments(frags);
+  GRANARY_IF_DEBUG( VerifyVRUsage(frags); )
 }
 
 }  // namespace granary

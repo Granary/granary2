@@ -96,7 +96,7 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 
 // Used to resolve indirect control-flow tranfers between the code cache and
 // Granary.
-class alignas(alignof(volatile void *)) IndirectEdge {
+class IndirectEdge {
  public:
   IndirectEdge(const BlockMetaData *dest_meta_,
                CachePC indirect_edge_entrypoint);
@@ -132,8 +132,7 @@ class alignas(alignof(volatile void *)) IndirectEdge {
   //
   // Note: These pointers are updated at JIT-compile time via an annotation
   //       instruction using `IA_UPDATE_ENCODED_ADDRESS`.
-  AppPC begin_out_edge_template;
-  AppPC end_out_edge_template;
+  AppPC out_edge_template;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,
@@ -144,7 +143,7 @@ class alignas(alignof(volatile void *)) IndirectEdge {
   IndirectEdge(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectEdge);
-} __attribute__((packed));
+};
 
 static_assert(0 == offsetof(IndirectEdge, out_edge_pc),
     "Field `IndirectEdge::in_edge_pc` must be at offset `0`, as assembly "

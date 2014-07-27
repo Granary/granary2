@@ -127,6 +127,14 @@ static void AnalyzeFragFromMetadata(Fragment *frag, StackUsageInfo *stack) {
     if (auto code = DynamicCast<CodeFragment *>(frag)) {
       block_meta = code->attr.block_meta;
     } else if (auto exit_ = DynamicCast<ExitFragment *>(frag)) {
+
+      // In kernel space, all exits are seen as going to a valid stack.
+      if (GRANARY_IF_KERNEL_ELSE(!arch::REDZONE_SIZE_BYTES, false)) {
+        stack->is_checked = true;
+        stack->is_valid = true;
+        return;
+      }
+
       if (FRAG_EXIT_EXISTING_BLOCK == exit_->kind ||
           FRAG_EXIT_FUTURE_BLOCK_DIRECT == exit_->kind ||
           FRAG_EXIT_FUTURE_BLOCK_INDIRECT == exit_->kind) {
@@ -147,10 +155,10 @@ static bool PropagateValidity(CodeFragment * const frag) {
   auto updated = false;
   if (!frag->stack.is_checked) {  // Back-propagate.
     for (auto succ : frag->successors) {
-      if (auto code = DynamicCast<CodeFragment *>(succ)) {
-        if (code->stack.is_valid) {  // Might lead to forward propagation.
-          frag->stack.is_checked = true;
-          frag->stack.is_valid = code->stack.is_valid;
+      if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
+        if (code_succ->stack.is_valid) {
+          frag->stack.is_checked = true;  // Might lead to forward propagation.
+          frag->stack.is_valid = code_succ->stack.is_valid;
           updated = true;
           break;
         }
@@ -194,7 +202,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (!cfrag->stack.is_checked) {
+      if (!cfrag->stack.is_checked || true) {  // TODO(pag): Remove `|| true`.
         cfrag->stack.is_checked = true;
         cfrag->stack.is_valid = false;
       }

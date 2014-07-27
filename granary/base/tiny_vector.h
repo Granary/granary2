@@ -124,6 +124,11 @@ class TinyVector {
     }
   }
 
+  // For getting around syntax highlighting issues in Eclipse.
+#ifdef GRANARY_ECLIPSE
+  template <typename U> T &operator[](U);
+  template <typename U> const T &operator[](U) const;
+#else
   template <typename I, typename EnableIf<IsInteger<I>::RESULT>::Type=0>
   inline T &operator[](I index) {
     return ElementAt(static_cast<uintptr_t>(index));
@@ -133,6 +138,7 @@ class TinyVector {
   inline const T &operator[](I index) const {
     return ElementAt(static_cast<uintptr_t>(index));
   }
+#endif  // GRANARY_ECLIPSE
 
   // Returns the current size of the tiny vector.
   unsigned long Size(void) const {
