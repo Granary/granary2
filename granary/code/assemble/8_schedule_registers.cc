@@ -1022,6 +1022,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
   auto node = op.nodes[0];
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
+  if (NODE_SCHEDULED == node->id.Value()) return;
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
   GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
 
@@ -1067,7 +1068,7 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
   if (NODE_SCHEDULED == node->id.Value()) return;
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
-    GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
+  GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
 
   auto &vr_home(sched->Loc(vr));
   GRANARY_ASSERT(RegLocationType::GPR == vr_home.type);

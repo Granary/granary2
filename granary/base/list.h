@@ -12,6 +12,10 @@
 
 namespace granary {
 
+// Forward declaration.
+template <typename T>
+class ListOfListHead;
+
 // Generic, type-safe, embeddable list implementation, similar to in the
 // Linux kernel.
 class ListHead {
@@ -84,6 +88,8 @@ class ListHead {
   void Unlink(void);
 
  private:
+  template <typename> friend class ListOfListHead;
+
   ListHead *GetFirst(void);
   ListHead *GetLast(void);
   uintptr_t GetListOffset(const void *object) const;
@@ -108,21 +114,29 @@ class ListOfListHead {
         last(nullptr) {}
 
   inline T *First(void) const {
+    GRANARY_ASSERT(!first || !first->list.prev);
     return first;
   }
 
   inline T *Last(void) const {
+    GRANARY_ASSERT(!last || !last->list.next);
     return last;
   }
 
   void Prepend(T *elm) {
-    if (first) first->list.template SetPrevious<T>(first, elm);
+    if (first) {
+      GRANARY_ASSERT(!first->list.prev);
+      first->list.template SetPrevious<T>(first, elm);
+    }
     first = elm;
     if (!last) last = elm;
   }
 
   void Append(T *elm) {
-    if (last) last->list.template SetNext<T>(last, elm);
+    if (last) {
+      GRANARY_ASSERT(!last->list.next);
+      last->list.template SetNext<T>(last, elm);
+    }
     last = elm;
     if (!first) first = elm;
   }
