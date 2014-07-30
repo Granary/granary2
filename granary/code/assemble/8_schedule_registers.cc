@@ -468,7 +468,7 @@ static void FindDefUse(const SSAInstruction *instr, SSANodeId node_id,
 // Replace a use of a virtual register
 static void ReplaceOperandReg(SSAOperand &op, VirtualRegister replacement_reg) {
   GRANARY_ASSERT(1 == op.nodes.Size());
-  auto node = op.nodes[0];
+  GRANARY_IF_DEBUG( auto node = op.nodes[0]; )
   GRANARY_ASSERT(node->reg.IsVirtual());
   GRANARY_ASSERT(replacement_reg.IsNative());
   Operand existing_op(op.operand);
@@ -1062,8 +1062,8 @@ struct FragmentScheduler {
 static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
                                      SSAOperand &op,
                                      NativeInstruction *instr,
-                                     const UsedRegisterTracker &used_regs
-                                     _GRANARY_IF_DEBUG(SSAFragment *frag)) {
+                                     const UsedRegisterTracker &used_regs,
+                                     SSAFragment *frag) {
   auto node = op.nodes[0];
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
@@ -1239,12 +1239,10 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
       HomeUsedRegs(&sched, ninstr, used_regs);
 
       for (auto &use_op : ssa_instr->uses) {
-        ScheduleFragmentLocalUse(&sched, use_op, ninstr, used_regs
-                                 _GRANARY_IF_DEBUG(frag));
+        ScheduleFragmentLocalUse(&sched, use_op, ninstr, used_regs, frag);
       }
       for (auto &def_op : ssa_instr->defs) {
-        ScheduleFragmentLocalUse(&sched, def_op, ninstr, used_regs
-                                 _GRANARY_IF_DEBUG(frag));
+        ScheduleFragmentLocalUse(&sched, def_op, ninstr, used_regs, frag);
       }
       for (auto &def_op : ssa_instr->defs) {
         ScheduleFragmentLocalDef(&sched, def_op _GRANARY_IF_DEBUG(frag));

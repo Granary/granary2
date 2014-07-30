@@ -173,7 +173,7 @@ static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
 static void CreateSSAInstructions(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
-      auto partition = frag->partition.Value();
+      GRANARY_IF_DEBUG( auto partition = frag->partition.Value(); )
       for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           SSAOperandPack operands;
