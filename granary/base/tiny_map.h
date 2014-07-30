@@ -51,8 +51,8 @@ class TinyMap {
     inline IteratorImpl(void)
         : it() {}
 
-    inline IteratorImpl(const IteratorImplType &that)
-          : it(that.it) {}
+    inline IteratorImpl(const IteratorImplType &that)  // NOLINT
+        : it(that.it) {}
 
     inline explicit IteratorImpl(VecIteratorType it_)
           : it(it_) {

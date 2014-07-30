@@ -930,7 +930,9 @@ struct FragmentScheduler {
                   arch::NUM_GENERAL_PURPOSE_REGISTERS>
           RegLocationMap;
 
-  FragmentScheduler(SSAFragment *frag_)
+  FragmentScheduler(void) = delete;
+
+  explicit FragmentScheduler(SSAFragment *frag_)
       : vr_locations(),
         invalid_location{VirtualRegister(), RegLocationType::GPR},
         frag(frag_),
