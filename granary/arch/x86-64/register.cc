@@ -1,10 +1,13 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/base.h"
 
 #include "granary/arch/x86-64/xed.h"
+
+#include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
 
@@ -178,6 +181,22 @@ bool VirtualRegister::IsInstructionPointer(void) const {
 // Is this the flags register?
 bool VirtualRegister::IsFlags(void) const {
   return XED_REG_FLAGS_FIRST <= reg_num && XED_REG_FLAGS_LAST >= reg_num;
+}
+
+// Update this register tracker by marking some registers as used (i.e.
+// restricted). This allows us to communicate some architecture-specific
+// encoding constraints to the register scheduler.
+void UsedRegisterTracker::Restrict(const NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(instr->instruction.uses_legacy_registers)) {
+    Revive(14);  // XED_REG_R15
+    Revive(13);
+    Revive(12);
+    Revive(11);
+    Revive(10);
+    Revive(9);
+    Revive(8);
+    Revive(7);  // XED_REG_R8
+  }
 }
 
 }  // namespace granary

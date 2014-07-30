@@ -240,6 +240,11 @@ class Instruction : public InstructionInterface {
     // schedule, but never actually be encoded.
     bool dont_encode:1;
 
+    // Does this instruction use legacy registers (e.g. `AH`)? If so, then this
+    // likely restricts the usage of REX prefixes, and therefore restricts the
+    // virtual register scheduler to only the original 8 GPRs.
+    bool uses_legacy_registers:1;
+
     // Number of explicit operands.
     uint8_t num_explicit_ops:4;
 

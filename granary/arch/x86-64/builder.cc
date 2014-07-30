@@ -47,6 +47,7 @@ void RegisterBuilder::Build(Instruction *instr) {
     auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
     if (XED_REG_AH <= arch_reg && arch_reg <= XED_REG_BH) {
       op.is_sticky = true;
+      instr->uses_legacy_registers = true;
     }
   }
 }

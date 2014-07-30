@@ -438,6 +438,13 @@ class UsedRegisterTracker : public RegisterTracker {
   // instruction as used.
   void Visit(NativeInstruction *instr);
 
+  // Update this register tracker by marking some registers as used (i.e.
+  // restricted). This allows us to communicate some architecture-specific
+  // encoding constraints to the register scheduler.
+  //
+  // Note: This function has an architecture-specific implementation.
+  void Restrict(const NativeInstruction *instr);
+
   inline void Join(const UsedRegisterTracker &that) {
     Union(that);
   }

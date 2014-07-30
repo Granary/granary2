@@ -91,6 +91,10 @@ static void ConvertRegisterOperand(Instruction *instr, Operand *instr_op,
   instr_op->reg.DecodeFromNative(reg);
   instr_op->width = static_cast<int16_t>(xed_get_register_width_bits64(reg));
 
+  if (XED_REG_AH <= reg && reg <= XED_REG_BH) {
+    instr->uses_legacy_registers = true;
+  }
+
   // Update the stack pointer tracking.
   if (GRANARY_UNLIKELY(instr_op->reg.IsStackPointer())) {
     if (instr_op->IsRead()) {

@@ -73,7 +73,7 @@ class Watchpoints : public Tool {
                  "  SAR r64 %0, i8 16;"
                  "  "  // %0 now contains unwatched address.
                  "LABEL %2:"_x86_64);
-#if 0
+
     // Nothing to do in this case, just mirror the structure above.
     if (watched_addr.IsVirtual()) {
 
@@ -94,7 +94,7 @@ class Watchpoints : public Tool {
                   "MOV r16 %0, r16 %1;"
                   "BSWAP r64 %0;"_x86_64);
     }
-#endif
+
     GRANARY_UNUSED(live_regs);
     EndInlineAssembly();
   }
