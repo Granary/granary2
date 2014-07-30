@@ -186,7 +186,8 @@ bool VirtualRegister::IsFlags(void) const {
 // Update this register tracker by marking some registers as used (i.e.
 // restricted). This allows us to communicate some architecture-specific
 // encoding constraints to the register scheduler.
-void UsedRegisterTracker::Restrict(const NativeInstruction *instr) {
+void UsedRegisterTracker::ReviveRestrictedRegisters(
+    const NativeInstruction *instr) {
   if (GRANARY_UNLIKELY(instr->instruction.uses_legacy_registers)) {
     Revive(14);  // XED_REG_R15
     Revive(13);

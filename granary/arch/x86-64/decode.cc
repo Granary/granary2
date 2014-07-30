@@ -414,7 +414,11 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
       case XED_ICLASS_XEND:
       case XED_ICLASS_XABORT:
       case XED_ICLASS_XTEST:
-        GRANARY_ASSERT(false);  // TODO(pag): Implement me!!
+        // TODO(pag): Implement me!!
+        //
+        // Note: We can't put an assertion here because if we're using the
+        //       `whole_func` or `follow_jumps` tool and they walk into some
+        //       CPU-specific lock-elision code, then we'll hit an issue.
         return nullptr;
       default: break;
     }

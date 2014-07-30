@@ -443,7 +443,7 @@ class UsedRegisterTracker : public RegisterTracker {
   // encoding constraints to the register scheduler.
   //
   // Note: This function has an architecture-specific implementation.
-  void Restrict(const NativeInstruction *instr);
+  void ReviveRestrictedRegisters(const NativeInstruction *instr);
 
   inline void Join(const UsedRegisterTracker &that) {
     Union(that);

@@ -94,8 +94,6 @@ class Watchpoints : public Tool {
                   "MOV r16 %0, r16 %1;"
                   "BSWAP r64 %0;"_x86_64);
     }
-
-    GRANARY_UNUSED(live_regs);
     EndInlineAssembly();
   }
 

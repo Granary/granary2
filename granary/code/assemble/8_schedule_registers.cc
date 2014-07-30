@@ -614,7 +614,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
       ssa_instr = GetMetaData<SSAInstruction *>(ninstr);
       if (!ssa_instr) continue;
       used_regs.Visit(ninstr);
-      used_regs.Restrict(ninstr);
+      used_regs.ReviveRestrictedRegisters(ninstr);
 
       // Need to re-home the register.
       if (vr_home.loc.IsNative() && used_regs.IsLive(vr_home.loc)) {
@@ -1233,7 +1233,7 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
       }
 
       used_regs.Visit(ninstr);
-      used_regs.Restrict(ninstr);
+      used_regs.ReviveRestrictedRegisters(ninstr);
       HomeUsedRegs(&sched, ninstr, used_regs);
 
       for (auto &use_op : ssa_instr->uses) {
