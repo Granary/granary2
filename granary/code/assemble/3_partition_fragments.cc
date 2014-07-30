@@ -27,7 +27,7 @@ static bool HasUsefulInstructions(CodeFragment *frag) {
       // Return addresses.
       if (annot->data) return true;
     } else {
-      // Elsewise `has_native_instrs` would be `true` for `frag`.
+      // Otherwise `has_native_instrs` would be `true` for `frag`.
       GRANARY_ASSERT(!IsA<NativeInstruction *>(instr));
     }
   }

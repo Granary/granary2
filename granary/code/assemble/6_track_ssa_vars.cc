@@ -517,6 +517,10 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Chain it into the control-flow.
   comp->successors[0] = succ;
   succ = comp;
+
+  auto label = new LabelInstruction;
+  SetMetaData(label, comp);
+  comp->instrs.Append(label);
   pred->RelinkBranchInstr(comp);
 
   frags->InsertAfter(pred, comp);  // Chain it into the fragment list.

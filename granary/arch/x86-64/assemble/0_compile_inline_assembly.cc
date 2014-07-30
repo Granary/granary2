@@ -307,7 +307,7 @@ class InlineAssemblyParser {
   // Finalize the instruction by adding it to the basic block's instruction
   // list.
   void FinalizeInstruction(void) {
-    std::unique_ptr<Instruction> new_instr;
+    Instruction *new_instr(nullptr);
     FixupOperands();
 
     // Don't allow instructions the read or modify the stack pointer as this
@@ -326,20 +326,20 @@ class InlineAssemblyParser {
 
     if (data.IsJump()) {
       GRANARY_ASSERT(nullptr != branch_target);
-      new_instr.reset(new BranchInstruction(&data, branch_target));
+      new_instr = new BranchInstruction(&data, branch_target);
     } else if (data.IsFunctionCall()) {
       auto bb = new NativeBasicBlock(
           data.HasIndirectTarget() ? nullptr : data.BranchTargetPC());
       cfg->AddBlock(bb);
-      new_instr.reset(new ControlFlowInstruction(&data, bb));
+      new_instr = new ControlFlowInstruction(&data, bb);
     } else if (data.IsFunctionReturn()) {
       auto bb = new ReturnBasicBlock(cfg, nullptr /* no meta-data */);
       cfg->AddBlock(bb);
-      new_instr.reset(new ControlFlowInstruction(&data, bb));
+      new_instr = new ControlFlowInstruction(&data, bb);
     } else {
-      new_instr.reset(new NativeInstruction(&data));
+      new_instr = new NativeInstruction(&data);
     }
-    instr->InsertBefore(std::move(new_instr));
+    instr->UnsafeInsertBefore(new_instr);
   }
 
   // Holds an in-progress instructions.

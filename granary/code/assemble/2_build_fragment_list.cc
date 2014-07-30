@@ -256,35 +256,34 @@ static CodeFragment *GetOrMakeLabelFragment(FragmentListBuilder *frags,
 // is associated with the label, then create one, add the association, and
 // add the instructions following the label into the new fragment.
 static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
-                                 DecodedBasicBlock *block, Instruction *instr) {
-  auto label_fragment = GetMetaData<CodeFragment *>(instr);
+                                 DecodedBasicBlock *block,
+                                 LabelInstruction *label) {
+  auto label_fragment = GetMetaData<CodeFragment *>(label);
   if (label_fragment) {  // Already processed this fragment.
     frag->successors[0] = label_fragment;
-  } else if (auto label = DynamicCast<LabelInstruction *>(instr)) {
-    auto block_meta = block->UnsafeMetaData();
-    auto next = label->Next();
-
-    // Create a new successor fragment.
-    if (frag->attr.has_native_instrs ||
-        label->data ||  // If non-zero then it's likely targeted by a branch.
-        (frag->attr.is_block_head && frag->attr.block_meta != block_meta)) {
-      auto succ = MakeEmptyLabelFragment(frags, block, label);
-      frag->successors[0] = succ;
-      frag = succ;
-
-    // Extend the current fragment in-place.
-    } else {
-      GRANARY_ASSERT(!frag->attr.block_meta ||
-                     (frag->attr.block_meta == block_meta));
-      frag->attr.block_meta = block_meta;
-      SetMetaData(label, frag);
-      frag->instrs.Append(label->UnsafeUnlink().release());
-    }
-    ExtendFragment(frags, frag, block, next);
-
-  } else {
-    GRANARY_ASSERT(false);
+    return;
   }
+
+  auto block_meta = block->UnsafeMetaData();
+  auto next = label->Next();
+
+  // Create a new successor fragment.
+  if (frag->attr.has_native_instrs ||
+      label->data ||  // If non-zero then it's likely targeted by a branch.
+      (frag->attr.is_block_head && frag->attr.block_meta != block_meta)) {
+    auto succ = MakeEmptyLabelFragment(frags, block, label);
+    frag->successors[0] = succ;
+    frag = succ;
+
+  // Extend the current fragment in-place.
+  } else {
+    GRANARY_ASSERT(!frag->attr.block_meta ||
+                   (frag->attr.block_meta == block_meta));
+    frag->attr.block_meta = block_meta;
+    SetMetaData(label, frag);
+    frag->instrs.Append(label->UnsafeUnlink().release());
+  }
+  ExtendFragment(frags, frag, block, next);
 }
 
 // Split a fragment into two at a local branch instruction. First get or
@@ -555,8 +554,12 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
   for (; instr != last_instr; ) {
 
     // Treat every label as beginning a new fragment.
-    if (IsA<LabelInstruction *>(instr)) {
-      return SplitFragmentAtLabel(frags, frag, block, instr);
+    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
+      if (!label->data) {
+        instr = label->Next();  // Skip untargeted labels.
+        continue;
+      }
+      return SplitFragmentAtLabel(frags, frag, block, label);
     }
 
     // Split instructions into fragments such that fragments contain either
