@@ -51,6 +51,14 @@ class FastBitSet {
     }
   }
 
+  inline void Union(const SelfType &that) {
+    storage[0] |= that.storage[0];
+  }
+
+  inline void Intersect(const SelfType &that) {
+    storage[0] &= that.storage[0];
+  }
+
  protected:
   StorageT storage[1];
 };
@@ -66,6 +74,21 @@ class BitSet : public PackedArray<bool, 1, kNumBits> {
   // Set all bits in the bitset to true or false.
   inline void SetAll(bool val) {
     memset(&(this->storage[0]), val ? 0xFF : 0, sizeof this->storage);
+  }
+
+  typedef PackedArray<bool, 1, kNumBits> ParentType;
+  typedef BitSet<kNumBits> SelfType;
+
+  inline void Union(const SelfType &that) {
+    for (auto i = 0; i < ParentType::NUM_BYTES; ++i) {
+      this->storage[i] |= that.storage[i];
+    }
+  }
+
+  inline void Intersect(const SelfType &that) {
+    for (auto i = 0; i < ParentType::NUM_BYTES; ++i) {
+      this->storage[i] &= that.storage[i];
+    }
   }
 };
 

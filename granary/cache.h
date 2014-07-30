@@ -96,10 +96,10 @@ class CodeCacheTransaction {
 // where the jump target is first loaded from memory.
 class NativeAddress {
  public:
-  inline NativeAddress(PC pc_, NativeAddress *&next_)
+  inline NativeAddress(PC pc_, NativeAddress **next_)
       : pc(pc_),
-        next(next_) {
-    next_ = this;
+        next(*next_) {
+    *next_ = this;
   }
 
   // Address that a far away jump or call will target.

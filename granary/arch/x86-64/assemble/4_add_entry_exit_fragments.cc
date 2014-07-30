@@ -14,20 +14,30 @@ namespace arch {
 // selection of that iclass.
 extern const FlagsSet IFORM_FLAGS[];
 
-enum {
+enum : unsigned {
   ALL_AFLAGS_WITH_DF = 3285U,
-  ALL_AFLAGS_WITHOUT_DF = 2261U
+  ALL_AFLAGS_WITHOUT_DF = 2261U,
+  ZF = (1U << 6U)
 };
 
 // Visits an instructions within the fragment and revives/kills architecture-
 // specific flags stored in the `FlagUsageInfo` object.
 void VisitInstructionFlags(const arch::Instruction &instr,
                            FlagUsageInfo *flags) {
-  auto &instr_flags(arch::IFORM_FLAGS[instr.iform]);
-  flags->all_written_flags |= instr_flags.written.flat & ALL_AFLAGS_WITH_DF;
-  flags->all_read_flags |= instr_flags.read.flat & ALL_AFLAGS_WITH_DF;
-  flags->entry_live_flags &= ~instr_flags.written.flat & ALL_AFLAGS_WITH_DF;
-  flags->entry_live_flags |= instr_flags.read.flat & ALL_AFLAGS_WITH_DF;
+  const auto &instr_flags(arch::IFORM_FLAGS[instr.iform]);
+  auto read_flags = instr_flags.read.flat;
+  auto written_flags = instr_flags.written.flat;
+
+  if (instr.has_prefix_rep || instr.has_prefix_repne) {
+    read_flags |= ZF;
+    written_flags |= ZF;
+  }
+
+  flags->all_written_flags |= written_flags & ALL_AFLAGS_WITH_DF;
+  flags->all_read_flags |= read_flags & ALL_AFLAGS_WITH_DF;
+
+  flags->entry_live_flags &= ~written_flags & ALL_AFLAGS_WITH_DF;
+  flags->entry_live_flags |= read_flags & ALL_AFLAGS_WITH_DF;
 }
 
 // Returns a bitmap representing all arithmetic flags being live.

@@ -232,7 +232,7 @@ static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
   instr->ForEachOperand([&] (Operand *op) {
     if (op->IsWrite()) {
       auto prefix = op->IsRead() ?
-                    (op->IsConditionalWrite() ? "r/cw " : "r/w ") :
+                    (op->IsConditionalWrite() ? "rcw " : "rw ") :
                     (op->IsConditionalWrite() ? "cw " : "");
       OperandString op_str;
       op->EncodeToString(&op_str);
@@ -304,9 +304,22 @@ static void LogLiveRegisters(LogLevel level, const Fragment *frag) {
     sep = ",";
     logged = true;
   }
-  if (logged && !IsA<ExitFragment *>(frag)) {
-    Log(level, "|");
+  if (logged && !IsA<ExitFragment *>(frag)) Log(level, "|");
+}
+
+static void LogLiveVRs(LogLevel level , const Fragment *frag) {
+  auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+  if (!ssa_frag) return;
+  auto logged = false;
+  auto sep = "";
+  for (auto vr : ssa_frag->ssa.entry_nodes.Keys()) {
+    if (vr.IsVirtual()) {
+      Log(level, "%s%%%d", sep, vr.Number());
+      sep = ",";
+      logged = true;
+    }
   }
+  if (logged) Log(level, "|");
 }
 
 // Log info about a fragment, including its decoded instructions.
@@ -316,6 +329,7 @@ static void LogFragment(LogLevel level, const Fragment *frag) {
       FragmentBackground(frag), FragmentBorder(frag));
   LogBlockHeader(level, frag);
   LogLiveRegisters(level, frag);
+  LogLiveVRs(level, frag);
   if (!IsA<ExitFragment *>(frag)) {
     LogInstructions(level, frag);
     Log(level, "}");

@@ -16,6 +16,10 @@ extern const Operand * const IMPLICIT_OPERANDS[];
 // Number of implicit operands for each iclass.
 extern const int NUM_IMPLICIT_OPERANDS[];
 
+// Table mapping each iclass to the set of read and written flags by *any*
+// selection of that iclass.
+GRANARY_IF_DEBUG( extern const FlagsSet IFORM_FLAGS[]; )
+
 Instruction::Instruction(void) {
   memset(this, 0, sizeof *this);
   iclass = XED_ICLASS_INVALID;
@@ -230,8 +234,10 @@ bool Instruction::ReadsFlags(void) const {
   if (num_implicit_ops) {
     const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
     return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
-           op.reg.IsFlags() && op.IsRead();
+           op.reg.IsFlags() && (op.IsRead() || op.IsConditionalWrite());
   } else {
+    GRANARY_ASSERT(!iform || 0 == IFORM_FLAGS[iform].read.flat);
+    GRANARY_ASSERT(!has_prefix_rep && !has_prefix_repne);
     return false;
   }
 }
@@ -255,7 +261,9 @@ namespace {
 static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
   if (XED_ENCODER_OPERAND_TYPE_REG == op.type) {
     if (op.reg.IsStackPointer()) {
-      if (op.IsRead()) instr->reads_from_stack_pointer = true;
+      if (op.IsRead() || op.IsConditionalWrite()) {
+        instr->reads_from_stack_pointer = true;
+      }
       if (op.IsWrite()) instr->writes_to_stack_pointer = true;
     }
   } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {

@@ -68,33 +68,66 @@ static void PropagateFragKinds(FragmentList *frags) {
 }
 
 struct LiveFlags {
+  LiveFlags(void)
+      : app_flags(0),
+        inst_flags(0) {}
+
+  LiveFlags(uint32_t a, uint32_t i)
+      : app_flags(a),
+        inst_flags(i) {}
+
   uint32_t app_flags;
   uint32_t inst_flags;
 };
 
 static LiveFlags LiveFlagsOnEntry(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
-    return {arch::AllArithmeticFlags(), arch::AllArithmeticFlags()};
+    return LiveFlags(arch::AllArithmeticFlags(), 0);
   } else if (frag) {
-    return {frag->app_flags.entry_live_flags,
-            frag->inst_flags.entry_live_flags};
+    return LiveFlags(frag->app_flags.entry_live_flags,
+                     frag->inst_flags.entry_live_flags);
   } else {
-    return {0, 0};
+    return LiveFlags();
   }
 }
 
 static LiveFlags LiveFlagsOnExit(Fragment *frag) {
   if (IsA<ExitFragment *>(frag)) {
-    return {arch::AllArithmeticFlags(), arch::AllArithmeticFlags()};
-  } else {
-    auto fall_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]);
-    auto branch_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
-    return {
-      fall_live.app_flags | branch_live.app_flags,
-      fall_live.inst_flags | branch_live.inst_flags
-    };
+    return LiveFlags(arch::AllArithmeticFlags(), 0);
+  } else if (frag->branch_instr) {
+    if (!frag->branch_instr->IsConditionalJump()) {
+      return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+    }
+  }
+
+  auto fall_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]);
+  auto branch_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+  return {
+    fall_live.app_flags | branch_live.app_flags,
+    fall_live.inst_flags | branch_live.inst_flags
+  };
+}
+
+#ifdef GRANARY_DEBUG
+static void VerifyFlagUse(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    auto cfrag = DynamicCast<CodeFragment *>(frag);
+    if (!cfrag) continue;
+    auto frag_is_app = cfrag->attr.is_app_code;
+    GRANARY_ASSERT(frag_is_app != cfrag->attr.is_inst_code);
+
+    for (auto instr : InstructionListIterator(frag->instrs)) {
+      auto ninstr = DynamicCast<NativeInstruction *>(instr);
+      if (!ninstr) continue;
+
+      auto uses_flags = ninstr->ReadsConditionCodes() ||
+                        ninstr->WritesConditionCodes();
+      auto instr_is_app = ninstr->IsAppInstruction();
+      GRANARY_ASSERT(!uses_flags || (frag_is_app == instr_is_app));
+    }
   }
 }
+#endif  // GRANARY_DEBUG
 
 static bool VisitFragmentFlags(CodeFragment *frag) {
   FlagUsageInfo *flags(nullptr);
@@ -111,8 +144,8 @@ static bool VisitFragmentFlags(CodeFragment *frag) {
     new_flags.exit_live_flags = exit_flags.inst_flags;
 
     // Propagate application flags through instrumentation fragments.
-    frag->app_flags.exit_live_flags = exit_flags.app_flags;
-    frag->app_flags.entry_live_flags = exit_flags.app_flags;
+    frag->app_flags.exit_live_flags |= exit_flags.app_flags;
+    frag->app_flags.entry_live_flags |= exit_flags.app_flags;
   }
 
   new_flags.entry_live_flags = new_flags.exit_live_flags;
@@ -128,7 +161,21 @@ static bool VisitFragmentFlags(CodeFragment *frag) {
   return ret;
 }
 
+static void InitFlagsUse(FragmentList *frags) {
+  auto all_flags = arch::AllArithmeticFlags();
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
+      auto &flags(exit_frag->app_flags);
+      flags.all_read_flags = all_flags;
+      flags.all_written_flags = all_flags;
+      flags.entry_live_flags = all_flags;
+      flags.exit_live_flags = all_flags;
+    }
+  }
+}
+
 static void AnalyzeFlagsUse(FragmentList *frags) {
+  InitFlagsUse(frags);
   for (auto changed = true; changed; ) {
     changed = false;
     for (auto frag : ReverseFragmentListIterator(frags)) {
@@ -414,6 +461,7 @@ static void LabelPartitionsAndTrackFlagRegs(FragmentList *frags) {
 // add entry/exits around the partitions for saving/restoring registers.
 void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags) {
   PropagateFragKinds(frags);
+  GRANARY_IF_DEBUG( VerifyFlagUse(frags); )
   AnalyzeFlagsUse(frags);
   LabelFlagZones(cfg, frags);
   UpdateFlagZones(frags);

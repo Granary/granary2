@@ -5,6 +5,8 @@
 
 #include "granary/arch/encode.h"
 
+#include "granary/base/option.h"
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 
@@ -17,6 +19,10 @@
 #include "granary/context.h"
 #include "granary/module.h"
 #include "granary/util.h"
+
+GRANARY_DEFINE_bool(debug_trace_exec, false,
+    "Trace the execution of the program. This records the register state on "
+    "entry to every basic block. The default is `no`.");
 
 namespace granary {
 namespace arch {
@@ -31,6 +37,12 @@ namespace arch {
 //       `IndirectEdge::out_edge_pc_lock`.
 extern void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
                                     AppPC app_pc);
+
+// Adds in some extra "tracing" instructions to the beginning of a basic block.
+//
+// Note: This function has an architecture-specific implementation.
+extern void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
+                           CachePC estimated_encode_pc);
 }  // namespace arch
 namespace {
 
@@ -165,8 +177,9 @@ static void Encode(FragmentList *frags) {
   }
 }
 
-// Assign `CacheMetaData::cache_pc` for each basic block.
-static void AssignBlockCacheLocations(FragmentList *frags) {
+// For each basic block, this finds the unique first fragment of the block.
+static void FindBlockEntrypointFragments(FragmentList *frags) {
+  // Find the unique block head.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
@@ -174,6 +187,9 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
       partition->entry_frag = frag;
     }
   }
+
+  // Find the head of the partition that contains the unique block head, if
+  // such a head exists.
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
@@ -182,6 +198,26 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
       }
     }
   }
+}
+
+// Adds in additional "tracing" instructions to the entrypoints of basic
+// blocks.
+static void AddBlockTracers(FragmentList *frags, CachePC estimated_encode_pc) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      if (!cfrag->attr.is_block_head) continue;
+
+      auto partition = cfrag->partition.Value();
+      auto block_meta = cfrag->attr.block_meta;
+      auto block_frag = partition->entry_frag;
+
+      arch::AddBlockTracer(block_frag, block_meta, estimated_encode_pc);
+    }
+  }
+}
+
+// Assign `CacheMetaData::cache_pc` for each basic block.
+static void AssignBlockCacheLocations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
@@ -217,9 +253,12 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 // Encodes the fragments into the specified code caches.
 static void Encode(FragmentList *frags, CodeCache *block_cache) {
   auto estimated_addr = block_cache->AllocateBlock(0);
+  FindBlockEntrypointFragments(frags);
+  if (FLAG_debug_trace_exec) {
+    AddBlockTracers(frags, estimated_addr);
+  }
   auto num_bytes = StageEncode(frags, estimated_addr);
   auto cache_code = block_cache->AllocateBlock(num_bytes);
-
   RelativizeCode(frags, cache_code);
   RelativizeCFIs(frags);
   if (auto cache_code_end = cache_code + num_bytes) {

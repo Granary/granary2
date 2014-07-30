@@ -120,6 +120,18 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
   frag->instrs.InsertBefore(instr, new NativeInstruction(&ni));
 }
 
+// Adjust a memory operand if it refers to the stack pointer.
+static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
+  if (mem_op->is_compound) {
+    if (XED_REG_RSP == mem_op->mem.reg_base) {
+      mem_op->mem.disp += adjusted_offset;
+    }
+  } else if (mem_op->reg.IsStackPointer()) {
+    *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
+                                  arch::GPR_WIDTH_BITS);
+  }
+}
+
 // Mangle a `MOV_GPRv_MEMv` or `MOV_MEMv_GPRv` instruction, where the `MEMv`
 // operand might be an abstract spill slot or might be a stack pointer
 // reference.
@@ -146,16 +158,27 @@ static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
   }
 
   if (mem_op) {
-    if (mem_op->is_compound) {
-      if (XED_REG_RSP == mem_op->mem.reg_base) {
-        mem_op->mem.disp += adjusted_offset;
-      }
-    } else if (mem_op->reg.IsStackPointer()) {
-      *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
-                                    arch::GPR_WIDTH_BITS);
-    }
+    AdjustMemOp(mem_op, adjusted_offset);
   }
 }
+
+// Mangle a `XCHG_MEMv_GPRv`, where the `MEMv` operand might be an abstract
+// spill slot or might be a stack pointer reference.
+static void MangleXchg(NativeInstruction *instr, int adjusted_offset) {
+  auto &ainstr(instr->instruction);
+  auto mem_op = &(ainstr.ops[0]);
+  if (!mem_op->IsMemory()) return;
+
+  if (IsSpillSlot(ainstr.ops[0])) {
+    const auto new_mem_op = arch::BaseDispMemOp(
+        mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
+    mem_op->mem = new_mem_op.mem;
+    mem_op->is_compound = new_mem_op.is_compound;
+  } else  {
+    AdjustMemOp(mem_op, adjusted_offset);
+  }
+}
+
 
 // Mangle a `LEA` instruction.
 static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
@@ -171,14 +194,8 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
     }
     GRANARY_ASSERT(!ainstr.is_sticky);
     NOP_90(&ainstr);
-  } else if (src.is_compound) {
-    if (XED_REG_RSP == src.mem.reg_base) {  // Read of an offset stack pointer.
-      //GRANARY_ASSERT(XED_REG_INVALID == src.mem.reg_index);
-      src.mem.disp += adjusted_offset;
-    }
-  } else if (src.reg.IsStackPointer()) {  // Copy of the stack pointer.
-    src = arch::BaseDispMemOp(
-        adjusted_offset, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS);
+  } else {
+    AdjustMemOp(&src, adjusted_offset);
   }
 }
 
@@ -241,6 +258,9 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
     case XED_ICLASS_MOV:
       MangleMov(instr, adjusted_offset);
+      break;
+    case XED_ICLASS_XCHG:
+      MangleXchg(instr, adjusted_offset);
       break;
     case XED_ICLASS_LEA:
       MangleLEA(instr, adjusted_offset);
@@ -317,6 +337,8 @@ static void AllocateSlots(NativeInstruction *instr) {
 void AllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
+      auto partition = frag->partition.Value();
+      if (partition->analyze_stack_frame) continue;
       for (auto instr : InstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           AllocateSlots(ninstr);

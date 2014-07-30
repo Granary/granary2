@@ -92,26 +92,29 @@ static void InitIformFlags(void) {
       if (flags->may_write) {
         iform_flags.read.flat |= flags->written.flat;
       }
-
+    }
+#if 0
     // The little hack above doesn't tend to work for instructions that use the
     // `_flag_complex` field of `xed_inst_t`, is it can lead to doing an actual
     // lookup of the decoded operands (of which none are provided!). We fall
     // back on hoping that we've managed to get some simple flags via the iclass
     // in a prior step.
-    } else if (auto num_ops = xed_inst_noperands(xedi)) {
+    if (auto num_ops = xed_inst_noperands(xedi)) {
       auto last_op = xed_inst_operand(xedi, num_ops - 1);
       auto last_op_type = xed_operand_type(last_op);
       auto nt_name = xed_operand_nonterminal_name(last_op);
+
+      // Make sure that conditional writes of the flags are treated as reads.
       if (XED_OPERAND_TYPE_NT_LOOKUP_FN == last_op_type &&
           XED_NONTERMINAL_RFLAGS == nt_name) {
         iform_flags = ICLASS_FLAGS[xed_inst_iclass(xedi)];
-        /*auto rw = xed_operand_rw(last_op);
+        auto rw = xed_operand_rw(last_op);
         if (XED_OPERAND_ACTION_CW == rw || XED_OPERAND_ACTION_RCW == rw) {
           iform_flags.read.flat |= iform_flags.written.flat;
-        }*/
+        }
       }
-
     }
+#endif
   }
 }
 

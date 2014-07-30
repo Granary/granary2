@@ -211,8 +211,6 @@ class Instruction : public InstructionInterface {
     bool has_prefix_rep:1;
     bool has_prefix_repne:1;
     bool has_prefix_lock:1;
-    bool has_prefix_br_hint_taken:1;
-    bool has_prefix_br_hint_not_taken:1;
 
     // Does/did this read or write to the stack pointer?
     mutable bool reads_from_stack_pointer:1;

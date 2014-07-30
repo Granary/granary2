@@ -369,8 +369,12 @@ class alignas(alignof(void *)) CodeAttributes {
 
 } __attribute__((packed));
 
+// Mapping of virtual registers to `SSANode`s.
 typedef TinyMap<VirtualRegister, SSANode *,
                 arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> SSANodeMap;
+
+// Set of spill slots.
+typedef BitSet<arch::MAX_NUM_SPILL_SLOTS> SpillSlotSet;
 
 // A fragment with associated SSA vars.
 class SSAFragment : public Fragment {
@@ -395,14 +399,19 @@ class SSAFragment : public Fragment {
   struct SpillInfo {
     inline SpillInfo(void)
         : used_slots(),
-          num_slots(0) {}
+          num_slots(0),
+          num_partition_slots(0) {}
 
     // Tracks which spill slots are allocated.
-    BitSet<arch::MAX_NUM_SPILL_SLOTS> used_slots;
+    SpillSlotSet used_slots;
 
     // Number of spill slots used. This includes partition-local spill slots
     // and fragment-local spill slots.
     int num_slots;
+
+    // Number of partition-local spill slots used *before* this fragment
+    // scheduled its fragment-local registers.
+    int num_partition_slots;
   } spill;
 };
 

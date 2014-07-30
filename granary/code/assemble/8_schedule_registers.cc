@@ -220,7 +220,7 @@ static VirtualRegister NthSpillSlot(int n) {
 //              swap r2 <-> slot  # Restore r2, but keep VR's value in slot.
 //              swap r1 <-> slot  # Save r1 to slot, and put VR's value into r1.
 //          ...
-//          restore slot --> r2 (assumed)
+//          restore slot --> r1 (assumed)
 //
 // Case 2.1:Scheduling a VR where the VR has not previously been spilled in
 //          this fragment. We will use r1 as the register that is scheduled to
@@ -368,6 +368,17 @@ struct GPRScheduler {
   GPRScheduler(void)
       : reg_counts() {}
 
+  // Recounts the number of times each arch GPR is used within a partition.
+  void RecountGPRUsage(const PartitionInfo *partition,
+                       Fragment *first, Fragment *last) {
+    reg_counts.ClearGPRUseCounters();
+    for (auto frag : FragmentListIterator(first)) {
+      if (partition != frag->partition.Value()) continue;
+      reg_counts.CountGPRUses(frag);
+      if (frag == last) break;
+    }
+  }
+
   // Try to get a preferred GPR for use by some VR. This will modify `*reg` and
   // return `true` if a preferred GPR is found. Also, if a preferred GPR is
   // found then the GPR will be marked as live in `min_gpr_num`, thus preventing
@@ -489,6 +500,48 @@ static void ReplaceUsesOfVR(SSAInstruction *instr, SSANodeId node_id,
       ReplaceOperandReg(op, replacement_reg);
     }
   }
+}
+
+// Gets a spill slot to be used by the partition-local register scheduler.
+static int GetSpillSlot(const SpillSlotSet &used_slots, int *num_slots) {
+  auto ret = *num_slots;
+  GRANARY_IF_DEBUG( auto found_slot = false; )
+  for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
+    if (!used_slots.Get(i)) {
+      ret = i;
+      GRANARY_IF_DEBUG( found_slot = true; )
+      break;
+    }
+  }
+  GRANARY_ASSERT(found_slot);
+  *num_slots = std::max(ret + 1, *num_slots);
+  return ret;
+}
+
+// Finds a spill slot that can hold the virtual register. We need to make sure
+// that this spill slot does not interfere with any other spill slots being
+// used within the current partition.
+static int FindSlotForVR(PartitionInfo * const partition,
+                         Fragment *first, Fragment *last,
+                         VirtualRegister vr, SSANodeId node_id) {
+  SpillSlotSet used_slots;
+
+  for (auto frag : FragmentListIterator(first)) {
+    if (partition != frag->partition.Value()) continue;
+
+    auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+    if (!ssa_frag) continue;
+
+    auto is_live_on_exit = IsLive(ssa_frag->ssa.exit_nodes, vr, node_id);
+    auto is_live_on_entry = IsLive(ssa_frag->ssa.entry_nodes, vr, node_id);
+
+    if (is_live_on_exit || is_live_on_entry) {
+      used_slots.Union(ssa_frag->spill.used_slots);
+    }
+
+    if (frag == last) break;
+  }
+  return GetSpillSlot(used_slots, &(partition->num_slots));
 }
 
 // Schedule all a partition-local register within a specific fragment of the
@@ -656,19 +709,6 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
   }
 }
 
-// Gets a spill slot to be used by the partition-local register scheduler.
-static int GetSpillSlot(SSAFragment *frag, int *num_slots) {
-  auto ret = *num_slots;
-  for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
-    if (!frag->spill.used_slots.Get(i)) {
-      ret = i;
-      break;
-    }
-  }
-  *num_slots = std::max(ret + 1, *num_slots);
-  return ret;
-}
-
 // Schedule all partition-local virtual registers within the fragments of a
 // given partition.
 static void SchedulePartitionLocalRegs(FragmentList *frags,
@@ -689,7 +729,6 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
     if (frag->partition.Value() == partition) {
       if (!last_frag) last_frag = frag;
       first_frag = frag;
-      gpr_sched.reg_counts.CountGPRUses(frag);
     }
   }
 
@@ -708,8 +747,11 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
         last_frag = frag;
         if (!GetUnscheduledVR(ssa_frag, &reg, &node_id)) continue;
 
+        gpr_sched.RecountGPRUsage(partition, first_frag, last_frag);
+
         preferred_gpr = gpr_sched.GetPreferredGPR(&preferred_gprs);
-        slot_num = GetSpillSlot(ssa_frag, &(partition->num_slots));
+        slot_num = FindSlotForVR(partition, first_frag, last_frag,
+                                 reg, node_id);
       }
 
       sched.Construct(reg, node_id, slot_num, preferred_gpr);
@@ -918,15 +960,9 @@ struct FragmentScheduler {
         break;
       }
     }
-    auto slot_id = frag->spill.num_slots + slot;
-    frag->spill.num_slots = std::max(frag->spill.num_slots, slot_id);
+    auto slot_id = frag->spill.num_partition_slots + slot;
+    frag->spill.num_slots = std::max(frag->spill.num_slots, slot_id + 1);
     return NthSpillSlot(slot_id);
-  }
-
-  // Frees a spill slot for use.
-  void FreeSlot(VirtualRegister reg) {
-    GRANARY_ASSERT(reg.IsVirtualSlot());
-    slot_is_available[reg.Number()] = true;
   }
 
   // Current location of a GPR (arch GPR or VR).
@@ -1250,6 +1286,7 @@ static void UpdateFragmentsWithSlotCounts(FragmentList *frags) {
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       auto partition = ssa_frag->partition.Value();
       ssa_frag->spill.num_slots = partition->num_slots;
+      ssa_frag->spill.num_partition_slots = partition->num_slots;
     }
   }
 }

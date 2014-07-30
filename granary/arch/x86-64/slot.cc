@@ -20,7 +20,6 @@ extern intptr_t granary_arch_get_segment_base(void);
 
 namespace granary {
 namespace arch {
-namespace {
 
 struct SlotSet {
   // Used for spilling general-purpose registers, so that a spilled GPR can be
@@ -35,7 +34,7 @@ struct SlotSet {
 # error "TODO(pag): Implement `EdgeSlot` and `EdgeSlotOffset` for kernel space."
 #else
 
-// Per-thread edge slots.
+// Per-thread spill slots.
 //
 // Note: This depends on a load-time TLS implementation, as is the case on
 //       systems like Linux.
@@ -44,10 +43,11 @@ struct SlotSet {
 //            doing this would be to have an upper bound on the number of
 //            concurrently live contexts, and then have this be an array of
 //            `EdgeSlotSet`, indexed by context id.
-static __thread __attribute__((tls_model("initial-exec"))) SlotSet SLOTS;
+extern "C" {
+__thread __attribute__((tls_model("initial-exec"))) SlotSet granary_slots;
+}  // extern C
 
 #endif  // User-space implementation of edge spill slots.
-}  // namespace
 
 // Access the value of some kind of private slot (by reference). This is an
 // instance of the requested slot, although many such instances might actually
@@ -56,9 +56,9 @@ intptr_t &Slot(SlotCategory category, int sub_category) {
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:
       GRANARY_ASSERT(sub_category < MAX_NUM_SPILL_SLOTS);
-      return SLOTS.spill_slots[sub_category];
+      return granary_slots.spill_slots[sub_category];
     case SLOT_PRIVATE_STACK:
-      return SLOTS.stack_slot;
+      return granary_slots.stack_slot;
   }
 }
 

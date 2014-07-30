@@ -246,8 +246,6 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 //                 |         |       |
 //          compare_target --' <-----'
 //                 |
-//              out_edge
-//                 |
 //            exit_to_block
 //
 CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
@@ -259,7 +257,6 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto in_edge = new CodeFragment;
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
-  auto out_edge = new CodeFragment;
   auto exit_to_block = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
@@ -269,9 +266,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   in_edge->successors[FRAG_SUCC_FALL_THROUGH] = go_to_granary;
   in_edge->successors[FRAG_SUCC_BRANCH] = compare_target;
   go_to_granary->successors[FRAG_SUCC_BRANCH] = compare_target;
-  compare_target->successors[FRAG_SUCC_FALL_THROUGH] = out_edge;
+  compare_target->successors[FRAG_SUCC_FALL_THROUGH] = exit_to_block;
   compare_target->successors[FRAG_SUCC_BRANCH] = go_to_granary;
-  out_edge->successors[FRAG_SUCC_FALL_THROUGH] = exit_to_block;
 
   exit_to_block->edge.kind = EDGE_KIND_INDIRECT;
   exit_to_block->block_meta = dest_block_meta;
@@ -280,13 +276,11 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   frags->Append(in_edge);
   frags->Append(go_to_granary);
   frags->Append(compare_target);
-  frags->Append(out_edge);
   frags->Append(exit_to_block);
 
   UpdateIndirectEdgeFrag(in_edge, predecessor_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(go_to_granary, predecessor_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(compare_target, predecessor_frag, dest_block_meta);
-  UpdateIndirectEdgeFrag(out_edge, predecessor_frag, dest_block_meta);
 
   in_edge->attr.is_in_edge_code = true;
 
@@ -360,22 +354,20 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
                       ni.dont_encode = true; );
   APP(compare_target, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
                                               cfi_target));
-  auto go_to_out_edge = new LabelInstruction;
+  auto go_to_exit_to_block = new LabelInstruction;
 
   // Note: We add the `JRCXZ` as the branch instruction, as opposed to the
   //       next `JMP_RELBRd` (which should be the `branch_instr`) because then
   //       later stages will see the `JRCXZ` as conditional, and propagate
   //       registers / flags correctly.
-  APP(compare_target, JRCXZ_RELBRb(&ni, go_to_out_edge));
+  APP(compare_target, JRCXZ_RELBRb(&ni, go_to_exit_to_block));
   compare_target->branch_instr = DynamicCast<NativeInstruction *>(
       compare_target->instrs.Last());
   APP(compare_target, JMP_RELBRd(&ni, back_to_granary); ni.is_sticky = true; );
-  compare_target->instrs.Append(go_to_out_edge);
+  compare_target->instrs.Append(go_to_exit_to_block);
 
-  // --------------------- out_edge --------------------------------
-
-  APP(out_edge, POP_GPRv_51(&ni, XED_REG_RDI); ni.is_stack_blind = true;);
-  APP(out_edge, POP_GPRv_51(&ni, XED_REG_RCX); ni.is_stack_blind = true;);
+  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDI); ni.is_stack_blind = true;);
+  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RCX); ni.is_stack_blind = true;);
 
   // --------------------- exit_to_block --------------------------------
 

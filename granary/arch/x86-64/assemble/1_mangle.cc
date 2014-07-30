@@ -104,7 +104,7 @@ static void RelativizeConditionalBranch(CacheMetaData *meta,
   cfi->UnsafeInsertAfter(label);
 
   // Overwrite the conditional branch with an indirect JMP.
-  auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+  auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
   JMP_MEMv(instr, &(addr_mloc->addr));
   instr->is_sticky = true;
 
@@ -132,7 +132,7 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
 
   JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
   if (target_is_far_away) {
-    auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+    auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
     JMP_MEMv(instr, &(addr_mloc->addr));
     instr->is_sticky = true;
 
@@ -162,13 +162,13 @@ void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
   auto iclass = instr->iclass;
   if (XED_ICLASS_CALL_NEAR == iclass) {
     if (target_is_far_away) {
-      auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+      auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
       CALL_NEAR_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
     }
   } else if (XED_ICLASS_JMP == iclass) {
     if (target_is_far_away) {
-      auto addr_mloc = new NativeAddress(target_pc, meta->native_addresses);
+      auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
       JMP_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
 

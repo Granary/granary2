@@ -20,17 +20,18 @@
 
 #include "granary/logging.h"
 
-GRANARY_DEFINE_bool(debug_log_metadata, true,
+GRANARY_DEFINE_bool(debug_log_metadata, false,
     "Log the meta-data that is committed to the code cache index. The default "
     "is `no`.");
 
-int num_metas = 1;
+std::atomic<uint64_t> num_metas(ATOMIC_VAR_INIT(1));
 
 namespace granary {
 namespace {
 
 static void LogBytes(uint64_t *qwords, size_t num_bytes) {
-  Log(LogOutput, "%d\t", num_metas++);
+  auto meta_id = num_metas.fetch_add(1);
+  Log(LogOutput, "%lu\t", meta_id);
   for (auto i = 0UL; i < num_bytes; ++i) {
     auto qword = qwords[i];
     Log(LogOutput, "%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x ",

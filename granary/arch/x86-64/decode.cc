@@ -362,9 +362,6 @@ static void ConvertDecodedPrefixes(Instruction *instr,
     instr->has_prefix_rep = xed_operand_values_has_rep_prefix(xedd);
     instr->has_prefix_repne = xed_operand_values_has_repne_prefix(xedd);
   }
-  instr->has_prefix_br_hint_taken = xed_operand_values_branch_taken_hint(xedd);
-  instr->has_prefix_br_hint_not_taken = \
-      xed_operand_values_branch_not_taken_hint(xedd);
 }
 
 // Convert a `xed_decoded_inst_t` into an `Instruction`.

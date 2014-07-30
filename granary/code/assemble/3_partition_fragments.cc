@@ -119,67 +119,97 @@ static void RemoveUselessFrags(FragmentList *frags) {
   } while (removed_list);
 }
 
-// Try to mark some fragment's stack as valid / invalid based on meta-data
-// associated with `frag`.
-static void AnalyzeFragFromMetadata(Fragment *frag, StackUsageInfo *stack) {
-  if (!stack->is_checked) {
-    BlockMetaData *block_meta(nullptr);
-    if (auto code = DynamicCast<CodeFragment *>(frag)) {
-      block_meta = code->attr.block_meta;
-    } else if (auto exit_ = DynamicCast<ExitFragment *>(frag)) {
+// Set the stack validity from some meta-data.
+static void InheritMetaDataStackValidity(StackUsageInfo *stack,
+                                         BlockMetaData *meta) {
+  auto stack_meta = MetaDataCast<StackMetaData *>(meta);
+  if (stack_meta->has_stack_hint && stack_meta->behaves_like_callstack) {
+    stack->is_checked = true;
+    stack->is_valid = true;
+  }
+}
+
+// Initializes the stack validity analysis.
+static void InitStackValidity(FragmentList *frags) {
+  for (auto frag : FragmentListIterator(frags)) {
+    auto cfrag = DynamicCast<CodeFragment *>(frag);
+    if (!cfrag) continue;
+
+    auto &stack(cfrag->stack);
+    if (stack.is_checked) continue;
+
+    for (auto succ : cfrag->successors) {
+      auto exit_succ = DynamicCast<ExitFragment *>(succ);
+      if (!exit_succ) continue;
 
       // In kernel space, all exits are seen as going to a valid stack.
       if (GRANARY_IF_KERNEL_ELSE(!arch::REDZONE_SIZE_BYTES, false)) {
-        stack->is_checked = true;
-        stack->is_valid = true;
-        return;
-      }
+        stack.is_checked = true;
+        stack.is_valid = true;
 
-      if (FRAG_EXIT_EXISTING_BLOCK == exit_->kind ||
-          FRAG_EXIT_FUTURE_BLOCK_DIRECT == exit_->kind ||
-          FRAG_EXIT_FUTURE_BLOCK_INDIRECT == exit_->kind) {
-        block_meta = exit_->block_meta;
-      }
-    }
-    if (auto stack_meta = MetaDataCast<StackMetaData *>(block_meta)) {
-      if (stack_meta->has_stack_hint) {
-        stack->is_checked = true;
-        stack->is_valid = stack_meta->behaves_like_callstack;
+      // Try to get the validity based on the successor block's stack
+      // validity as recorded in its meta-data.
+      } else if (FRAG_EXIT_EXISTING_BLOCK == exit_succ->kind ||
+                 FRAG_EXIT_FUTURE_BLOCK_DIRECT == exit_succ->kind ||
+                 FRAG_EXIT_FUTURE_BLOCK_INDIRECT == exit_succ->kind) {
+        InheritMetaDataStackValidity(&stack, exit_succ->block_meta);
       }
     }
   }
 }
 
-// Analyzes the stack validity of an individual fragment.
-static bool PropagateValidity(CodeFragment * const frag) {
-  auto updated = false;
-  if (!frag->stack.is_checked) {  // Back-propagate.
-    for (auto succ : frag->successors) {
+// Performs stack validity analysis by back-propagating information through
+// the fragment control-flow graph. Back-propagation focuses on propagating
+// validity, as opposed to either of in/validity. This is because we want to
+// maximize the number of valid blocks if we get things like stack push or
+// function call instructions.
+static bool BackPropagateValidity(FragmentList *frags) {
+  auto made_progess = false;
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    auto cfrag = DynamicCast<CodeFragment *>(frag);
+    if (!cfrag) continue;
+
+    auto &stack(cfrag->stack);
+    if (stack.is_checked) continue;
+
+    for (auto succ : cfrag->successors) {
       if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
         if (code_succ->stack.is_valid) {
-          frag->stack.is_checked = true;  // Might lead to forward propagation.
-          frag->stack.is_valid = code_succ->stack.is_valid;
-          updated = true;
+          stack.is_checked = true;  // Might lead to forward propagation.
+          stack.is_valid = code_succ->stack.is_valid;
+          made_progess = true;
           break;
         }
-      } else {
-        AnalyzeFragFromMetadata(succ, &(frag->stack));
-        updated = frag->stack.is_checked;
       }
     }
   }
-  if (frag->stack.is_valid && !frag->stack.disallow_forward_propagation) {
+  return made_progess;
+}
+
+// Forward propagation stack validity through the fragment control-flow graph.
+static bool ForwardPropagateValidity(FragmentList *frags) {
+  auto made_progess = false;
+  for (auto frag : FragmentListIterator(frags)) {
+    auto cfrag = DynamicCast<CodeFragment *>(frag);
+    if (!cfrag) continue;
+
+    auto &stack(cfrag->stack);
+    if (!stack.is_checked || !stack.is_valid ||
+        stack.disallow_forward_propagation) {
+      continue;
+    }
+
     for (auto succ : frag->successors) {
-      if (auto code = DynamicCast<CodeFragment *>(succ)) {
-        if (!code->stack.is_checked) {  // Forward-propagate.
-          code->stack.is_checked = true;
-          code->stack.is_valid = frag->stack.is_valid;
-          updated = true;
+      if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
+        if (!code_succ->stack.is_checked) {  // Forward-propagate.
+          code_succ->stack.is_checked = true;
+          code_succ->stack.is_valid = stack.is_valid;
+          made_progess = true;
         }
       }
     }
   }
-  return updated;
+  return made_progess;
 }
 
 // Analyze the stack usage of fragments to determine which fragments operate on
@@ -190,11 +220,23 @@ static bool PropagateValidity(CodeFragment * const frag) {
 // ahead of time as being valid/invalid based on information passed to it via
 // the early mangler and stack definedness annotation instructions.
 static void AnalyzeStackUsage(FragmentList * const frags) {
+  InitStackValidity(frags);
+  auto first_frag = DynamicCast<CodeFragment *>(frags->First());
   for (auto changed = true; changed; ) {
-    changed = false;
-    for (auto frag : FragmentListIterator(frags)) {
-      if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-        changed = PropagateValidity(cfrag) || changed;
+    changed = BackPropagateValidity(frags);
+
+    for (;;) {
+      changed = ForwardPropagateValidity(frags) || changed;
+
+      // If we haven't made progress, try to get the first fragment's validity
+      // from its meta-data.
+      if (!changed && first_frag && !first_frag->stack.is_checked) {
+        InheritMetaDataStackValidity(&(first_frag->stack),
+                                     first_frag->attr.block_meta);
+        first_frag = nullptr;
+        continue;
+      } else {
+        break;
       }
     }
   }
@@ -202,7 +244,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (!cfrag->stack.is_checked || true) {  // TODO(pag): Remove `|| true`.
+      if (!cfrag->stack.is_checked) {
         cfrag->stack.is_checked = true;
         cfrag->stack.is_valid = false;
       }
@@ -278,8 +320,6 @@ static void UpdateMetaData(FragmentList *frags) {
 // the same basic block, and if the stack pointer does not change between them.
 void PartitionFragments(FragmentList *frags) {
   RemoveUselessFrags(frags);
-  auto first = DynamicCast<CodeFragment *>(frags->First());
-  AnalyzeFragFromMetadata(first, &(first->stack));
   AnalyzeStackUsage(frags);
   GroupFragments(frags);
   UpdateMetaData(frags);
