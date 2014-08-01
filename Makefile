@@ -7,26 +7,45 @@ include Makefile.inc
 .PHONY: where_common where_user where_kernel
 .PHONY: target_debug target_release target_test
 
-# Compile all files. This passes in `GRANARY_SRC_DIR` through to all sub-
-# invocations of `make`.
-where_common:
+build_deps:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+
+build_bdt:
 	@echo "Entering $(GRANARY_SRC_DIR)/granary"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+
+build_os:
 	@echo "Entering $(GRANARY_WHERE_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+
+# Generate rules for each Granary client.
+define GENRULE_BUILD_CLIENT
+build_client_$(1):
+	@echo "Entering $(GRANARY_CLIENT_DIR)/$(1)"
+	$(MAKE) -C $(GRANARY_CLIENT_DIR)/$(1) \
+		$(MFLAGS) \
+		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
+		GRANARY_BIN_DIR=$(GRANARY_BIN_DIR) all
+endef
+
+$(foreach client,$(GRANARY_CLIENTS),$(eval $(call GENRULE_BUILD_CLIENT,$(client))))
+
+build_clients: $(addprefix build_client_,$(GRANARY_CLIENTS))
+
+# Compile and link all main components into `.o` files that can then be linked
+# together into a final executable.
+where_common: build_deps build_bdt build_os build_clients
+	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 
 # Make a final object that clients can link against for getting arch-specific
 # implementations of built-in compiler functions that are also sometimes
 # synthesized by optimizing compilers (e.g. memset).
 where_user: where_common
-	@echo "Building object $(GRANARY_BIN_DIR)/granary/breakpoint.o"
-	@$(GRANARY_CXX) -c $(GRANARY_BIN_DIR)/granary/breakpoint.bc \
-    	-o $(GRANARY_BIN_DIR)/granary/breakpoint.o
 	
 # We handle the equivalent of `user_tool` in `granary/kernel/Took.mk`.
 where_kernel: where_common
@@ -61,22 +80,6 @@ headers:
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
 		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_EXPORT_HEADERS_DIR) \
 		"$(GRANARY_HEADER_MACRO_DEFS)"
-		
-# Compile one or more specific clients. For example:
-# `make clients GRANARY_TOOLS=bbcount`.
-clients:
-	$(MAKE) -C $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE) -f Client.mk \
-		$(MFLAGS) \
-		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
-		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) all
-
-# Clean one or more specific clients. For example:
-# `make clean_clients GRANARY_CLIENTS=bbcount`.
-clean_clients:
-	$(MAKE) -C $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE) -f Client.mk \
-		$(MFLAGS) \
-		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
-		GRANARY_TOOL_DIR=$(GRANARY_TOOL_DIR) clean
 
 # Run all test cases.
 test: target_test

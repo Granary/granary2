@@ -62,9 +62,9 @@ class InstrumentTest : public Test {
 
   MockContext context;
 
-  ToolManager m1;
-  ToolManager m2;
-  ToolManager m3;
+  InstrumentationManager m1;
+  InstrumentationManager m2;
+  InstrumentationManager m3;
 
   MetaDataManager metadata_manager;
 
@@ -82,7 +82,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
         metadata_manager.Register(module_meta_desc);
       }));
 
-  Tool *tool_a_generic = m1.AllocateTools();
+  InstrumentationTool *tool_a_generic = m1.AllocateTools();
   ToolA *tool_a = UnsafeCast<ToolA *>(tool_a_generic);
   auto meta = metadata_manager.Allocate();
 
@@ -107,7 +107,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
 
   EXPECT_CALL(context, FreeTools(tool_a_generic))
       .Times(1)
-      .WillOnce(Invoke([&] (Tool *tools) {
+      .WillOnce(Invoke([&] (InstrumentationTool *tools) {
         m1.FreeTools(tools);
       }));
 

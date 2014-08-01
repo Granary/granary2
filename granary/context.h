@@ -30,8 +30,8 @@ class Instruction;
 class MetaDataDescription;
 class MetaDataManager;
 class ModuleManager;
-class Tool;
-class ToolManager;
+class InstrumentationTool;
+class InstrumentationManager;
 
 // Interface for environments in Granary.
 class ContextInterface {
@@ -65,10 +65,10 @@ class ContextInterface {
   virtual void RegisterMetaData(const MetaDataDescription *desc) = 0;
 
   // Allocate instances of the tools that will be used to instrument blocks.
-  virtual Tool *AllocateTools(void) = 0;
+  virtual InstrumentationTool *AllocateTools(void) = 0;
 
   // Free the allocated tools.
-  virtual void FreeTools(Tool *tools) = 0;
+  virtual void FreeTools(InstrumentationTool *tools) = 0;
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
@@ -124,10 +124,10 @@ class Context : public ContextInterface {
   virtual void RegisterMetaData(const MetaDataDescription *desc) override;
 
   // Allocate instances of the tools that will be used to instrument blocks.
-  virtual Tool *AllocateTools(void) override;
+  virtual InstrumentationTool *AllocateTools(void) override;
 
   // Free the allocated tools.
-  virtual void FreeTools(Tool *tools) override;
+  virtual void FreeTools(InstrumentationTool *tools) override;
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
@@ -154,7 +154,7 @@ class Context : public ContextInterface {
 
   // Manages all tools that instrument code that is taken over by this
   // environment.
-  ToolManager tool_manager;
+  InstrumentationManager tool_manager;
 
   // Manages all basic block code allocated/understood by this environment.
   Module *block_code_cache_mod;

@@ -4,6 +4,8 @@
 include ../../Makefile.inc
 
 XED_SRC_DIR = $(GRANARY_SRC_DIR)/dependencies/xed2-intel64
+XED_BIN_DIR = $(GRANARY_BIN_DIR)/dependencies/xed2-intel64
+
 XED_LIB_DIR = $(GRANARY_SRC_DIR)/dependencies/xed2-intel64/lib_$(GRANARY_WHERE)
 XED_GEN_DIR = $(GRANARY_SRC_DIR)/generated/xed2-intel64
 
@@ -28,7 +30,14 @@ endef
 
 $(foreach tool,$(XED_TOOLS),$(eval $(call GENRULE,$(tool))))
 
+# Unarchive libxed, then combine all of its object files into a single unified
+# object file.
+$(GRANARY_DRIVER_OBJ):
+	@mkdir -p $(dir $(GRANARY_DRIVER_OBJ))
+	@mkdir -p $(XED_BIN_DIR)
+	@cd $(XED_BIN_DIR) ; \
+		$(GRANARY_AR) x $(XED_LIB_DIR)/libxed.a ; \
+		$(GRANARY_LD) -r $(XED_BIN_DIR)/*.o -o $(GRANARY_DRIVER_OBJ)
+	
 # Compile 
-all: $(XED_TOOLS)
-	@mkdir -p $(GRANARY_BIN_DIR)
-	@cp $(XED_LIB_DIR)/libxed.a $(GRANARY_BIN_DIR)
+all: $(XED_TOOLS) $(GRANARY_DRIVER_OBJ)

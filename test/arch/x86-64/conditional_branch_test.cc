@@ -74,7 +74,7 @@ using namespace granary;
 using namespace testing;
 
 // Decodes all blocks in the function, but doesn't look in the cache for them.
-class AllFuncBlocks : public Tool {
+class AllFuncBlocks : public InstrumentationTool {
  public:
   virtual ~AllFuncBlocks(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,

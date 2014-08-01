@@ -19,13 +19,13 @@ using namespace granary;
 using namespace testing;
 
 // Decodes one block at a time.
-class JitTool : public Tool {
+class JitTool : public InstrumentationTool {
  public:
   virtual ~JitTool(void) = default;
 };
 
 // Decodes one function at a time.
-class FunctionTool : public Tool {
+class FunctionTool : public InstrumentationTool {
  public:
   virtual ~FunctionTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
@@ -41,7 +41,7 @@ class FunctionTool : public Tool {
 };
 
 // Decodes into direct calls.
-class CallTool : public Tool {
+class CallTool : public InstrumentationTool {
  public:
   virtual ~CallTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
@@ -57,7 +57,7 @@ class CallTool : public Tool {
 };
 
 // Force decodes the first block of up to `num_to_unroll` function calls.
-class CallUnrollerTool : public Tool {
+class CallUnrollerTool : public InstrumentationTool {
  public:
   int num_to_unroll;
 
@@ -80,7 +80,7 @@ class CallUnrollerTool : public Tool {
 
 // Force decodes the first block of up to `num_to_unroll` direct or conditional
 // jumps.
-class JumpUnrollerTool : public Tool {
+class JumpUnrollerTool : public InstrumentationTool {
  public:
   int num_to_unroll;
 
@@ -102,7 +102,7 @@ class JumpUnrollerTool : public Tool {
 };
 
 // Forces execution to go native on function calls.
-class NativeCallTool : public Tool {
+class NativeCallTool : public InstrumentationTool {
  public:
   virtual ~NativeCallTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
@@ -118,7 +118,7 @@ class NativeCallTool : public Tool {
 };
 
 // Forces execution to go native on function calls.
-class WatchpointsLikeTool : public Tool {
+class WatchpointsLikeTool : public InstrumentationTool {
  public:
   virtual ~WatchpointsLikeTool(void) = default;
 

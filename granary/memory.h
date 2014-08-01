@@ -25,11 +25,7 @@ enum class MemoryIntent {
   EXECUTABLE,
 
   // Memory that is used for typical readable/writable heap objects.
-  READ_WRITE,
-
-  // This is used for staging executable code before adding it to the code
-  // cache.
-  STAGING
+  READ_WRITE
 };
 
 // Initialize the Granary heap.

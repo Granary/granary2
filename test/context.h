@@ -48,11 +48,11 @@ class MockContext : public granary::ContextInterface {
 
   // Allocate instances of the tools that will be used to instrument blocks.
   MOCK_METHOD0(AllocateTools,
-               granary::Tool *());
+               granary::InstrumentationTool *());
 
   // Free the allocated tools.
   MOCK_METHOD1(FreeTools,
-               void (granary::Tool *tools));
+               void (granary::InstrumentationTool *tools));
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.

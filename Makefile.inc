@@ -12,7 +12,6 @@ GRANARY_OS ?= linux
 GRANARY_TARGET ?= debug# release, debug, test
 GRANARY_WHERE ?= user# user, kernel
 GRANARY_DRIVER ?= xed2-intel64
-GRANARY_STANDALONE ?= 0# 0, 1
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
 GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
@@ -31,14 +30,20 @@ GRANARY_DEFAULT_KERNEL_DIR = /lib/modules/$(GRANARY_KERNEL_VERSION)/build
 GRANARY_KERNEL_DIR ?= $(GRANARY_DEFAULT_KERNEL_DIR)
 
 GRANARY_SRC_DIR ?= $(shell pwd)
-GRANARY_CLIENT_DIR ?= $(GRANARY_SRC_DIR)/examples
+
+# Find all of Granary's clients.
+GRANARY_CLIENT_DIR ?= $(GRANARY_SRC_DIR)/clients
+GRANARY_CLIENTS ?= $(notdir $(shell find $(GRANARY_CLIENT_DIR) -mindepth 1 -maxdepth 1 -type d))
 
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
-GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_WHERE)
+GRANARY_BIN_DIR := $(GRANARY_BIN_DIR)/$(GRANARY_TARGET)_$(GRANARY_OS)_$(GRANARY_WHERE)
 
-GRANARY_WHERE_SRC_DIR = $(GRANARY_SRC_DIR)/granary/$(GRANARY_WHERE)
-GRANARY_WHERE_BIN_DIR = $(GRANARY_BIN_DIR)/granary/$(GRANARY_WHERE)
+GRANARY_WHERE_SRC_DIR = $(GRANARY_SRC_DIR)/os/$(GRANARY_OS)/$(GRANARY_WHERE)
+GRANARY_WHERE_BIN_DIR = $(GRANARY_BIN_DIR)/os/$(GRANARY_OS)/$(GRANARY_WHERE)
+
+GRANARY_OS_ARCH_SRC_DIR = $(GRANARY_SRC_DIR)/os/$(GRANARY_OS)/arch/$(GRANARY_ARCH)
+GRANARY_OS_ARCH_BIN_DIR = $(GRANARY_BIN_DIR)/os/$(GRANARY_OS)/arch/$(GRANARY_ARCH)
 
 GRANARY_ARCH_SRC_DIR ?=  $(GRANARY_SRC_DIR)/granary/arch/$(GRANARY_ARCH)
 GRANARY_ARCH_BIN_DIR := $(GRANARY_BIN_DIR)/granary/arch/$(GRANARY_ARCH)
@@ -75,7 +80,6 @@ GRANARY_DEBUG_FLAGS =
 
 ifdef GRANARY_CLIENT_NAME
 	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
-	GRANARY_STANDALONE = 0
 	GRANARY_LD_FLAGS_EARLY += -shared
 endif
 
@@ -95,13 +99,8 @@ ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_WITH_VALGRIND
 endif
 ifeq (test,$(GRANARY_TARGET))
-	GRANARY_STANDALONE := 1
 	GRANARY_COMMON_FLAGS += -DGRANARY_TEST
 	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_TEST
-endif
-ifeq (1,$(GRANARY_STANDALONE))
-	GRANARY_COMMON_FLAGS += -DGRANARY_STANDALONE
-	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_STANDALONE
 endif
 
 # Get the opposite of the where-directory.
@@ -188,10 +187,7 @@ GRANARY_CXX_FLAGS += $(GRANARY_COMMON_WARN_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_CC_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
-
-ifeq (0,$(GRANARY_STANDALONE))
-	GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
-endif
+GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 
 # Mask some of the libc and libc++ symbols with Granary equivalents.
 GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symver.map"
@@ -202,6 +198,54 @@ GRANARY_LINT_FLAGS = --verbose=5
 GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_FLAGS)
 
 # Specific files that are used by user space, kernel space, and test cases.
-GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary_merged.o
+GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary.o
+GRANARY_DRIVER_OBJ = $(GRANARY_BIN_DIR)/driver.o
+GRANARY_OS_OBJ = $(GRANARY_BIN_DIR)/os.o
+GRANARY_CLIENT_OBJS = $(addsuffix _client.o,$(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_CLIENTS)))
+
+# Objects that must be combined into the final Granary executable.
+GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DRIVER_OBJ)
+GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJS)
+
+# Common generic rules that can apply to all Granary code.
+
+# Run the C pre-processor on the *.asm files, then run those through the
+# ASM post-processor to do extra token pasting and macro expansion.
+$(GRANARY_BIN_DIR)/%.S: $(GRANARY_SRC_DIR)/%.asm
+	@echo "Processing assembly file $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -E -o $@ -x c -std=c99 $< 
+	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/post_process_asm.py $@
+
+# Compile an assembly source file into an object file.
+$(GRANARY_BIN_DIR)/%.o :: $(GRANARY_BIN_DIR)/%.S
+	@echo "Building ASM object $@"
+	$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -c $< -o $@
+
+# Compile C++ files to object files.
+$(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.cc
+	@echo "Building CXX object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+
+# Compile C files to object files.
+$(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.c
+	@echo "Building C object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+
+# Compile C++ files to LLVM bitcode.
+#
+# Note: This enables link-time optimization.
+$(GRANARY_BIN_DIR)/%.bc :: $(GRANARY_SRC_DIR)/%.cc
+	@echo "Building CXX object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
+
+# Compile a LLVM bitcode file to an object file.
+$(GRANARY_BIN_DIR)/%.o :: $(GRANARY_BIN_DIR)/%.bc
+	@echo "Building BC object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) -c $< -o $@
 
 .SILENT :

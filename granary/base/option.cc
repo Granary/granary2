@@ -218,11 +218,7 @@ static const char *BufferDocString(char *buff, const char *docstring) {
 // Works for --help option: print out each options along with their document.
 void PrintAllOptions(void) {
 #ifdef GRANARY_WHERE_user
-# ifdef GRANARY_STANDALONE
-  Log(LogOutput, "Usage for user space: granary.out <options>\n\n");
-# else
   Log(LogOutput, "Usage for user space: grr <options> -- <executable>\n\n");
-# endif  // GRANARY_STANDALONE
 #else
 # error "Option printing is not well-defined for kernel space."
 #endif

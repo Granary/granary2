@@ -19,24 +19,24 @@ class BlockFactory;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class Module;
-class Tool;
+class InstrumentationTool;
 class Operand;
 
 GRANARY_INTERNAL_DEFINITION class ContextInterface;
 GRANARY_INTERNAL_DEFINITION class InlineAssembly;
 
 GRANARY_INTERNAL_DEFINITION enum {
-  MAX_NUM_MANAGED_TOOLS = 32,
+  MAX_NUM_TOOLS = 32,
   MAX_TOOL_NAME_LEN = 32
 };
 
-// Describes the structure of tools.
-class Tool {
+// Describes the structure of tools that are used to instrument binary code.
+class InstrumentationTool {
  public:
-  Tool(void);
+  InstrumentationTool(void);
 
   // Closes any open inline assembly scopes.
-  virtual ~Tool(void);
+  virtual ~InstrumentationTool(void);
 
   // Used to instrument control-flow instructions and decide how basic blocks
   // should be materialized.
@@ -156,7 +156,7 @@ class Tool {
   void RegisterMetaData(const MetaDataDescription *desc);
 
   // Next tool used to instrument code.
-  GRANARY_POINTER(Tool) *next;
+  GRANARY_POINTER(InstrumentationTool) *next;
 
   // Context into which this tool has been instantiated.
   GRANARY_POINTER(ContextInterface) *context;
@@ -165,7 +165,7 @@ class Tool {
   GRANARY_CONST int curr_scope;
   GRANARY_POINTER(InlineAssemblyScope) *scopes[MAX_NUM_INLINE_ASM_SCOPES];
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(Tool);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationTool);
 };
 
 // Describes a generic tool.
@@ -204,14 +204,14 @@ ToolDescription ToolDescriptor<T>::kDescription = {
 };
 
 #ifdef GRANARY_INTERNAL
-typedef LinkedListIterator<Tool> ToolIterator;
+typedef LinkedListIterator<InstrumentationTool> ToolIterator;
 
 // Manages a set of tools.
-class ToolManager {
+class InstrumentationManager {
  public:
   // Initialize an empty tool manager.
-  explicit ToolManager(ContextInterface *context);
-  ~ToolManager(void);
+  explicit InstrumentationManager(ContextInterface *context);
+  ~InstrumentationManager(void);
 
   // Register a tool with this manager using the tool's name. This will look
   // up the tool in the global list of all registered Granary tools.
@@ -223,14 +223,14 @@ class ToolManager {
   // This ensures that tools are allocated and inserted into the list according
   // to the order of their dependencies, whilst also trying to preserve the
   // tool order specified at the command-line.
-  Tool *AllocateTools(void);
+  InstrumentationTool *AllocateTools(void);
 
   // Free all allocated tool objects. This expects a list of `Tool` objects, as
   // allocated by `ToolManager::AllocateTools`.
-  void FreeTools(Tool *tool);
+  void FreeTools(InstrumentationTool *tool);
 
  private:
-  ToolManager(void) = delete;
+  InstrumentationManager(void) = delete;
 
   // Register a tool with this manager using the tool's description.
   void Register(const ToolDescription *desc);
@@ -247,8 +247,8 @@ class ToolManager {
 
   // All tools registered with this manager.
   int num_registed;
-  bool is_registered[MAX_NUM_MANAGED_TOOLS];
-  const ToolDescription *descriptions[MAX_NUM_MANAGED_TOOLS];
+  bool is_registered[MAX_NUM_TOOLS];
+  const ToolDescription *descriptions[MAX_NUM_TOOLS];
 
   // TODO(pag): Have an ordered array of tool descriptions that represent the
   //            tools ordered according to how they are specified at the command
@@ -260,26 +260,29 @@ class ToolManager {
   // Context to which thios tool manager belongs.
   ContextInterface *context;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ToolManager);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationManager);
 };
+
 #endif  // GRANARY_INTERNAL
 
 // Register a tool with Granary given its description.
-void RegisterTool(ToolDescription *desc,
-                  const char *name,
-                  std::initializer_list<const char *> required_tools);
+void RegisterInstrumentationTool(
+    ToolDescription *desc, const char *name,
+    std::initializer_list<const char *> required_tools);
 
-// Register a tool with Granary.
+// Register a binary instrumenter with Granary.
 template <typename T>
-inline static void RegisterTool(const char *tool_name) {
-  RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, {});
+inline static void RegisterInstrumentationTool(const char *tool_name) {
+  RegisterInstrumentationTool(&(ToolDescriptor<T>::kDescription),
+                              tool_name, {});
 }
 
-// Register a tool with Granary.
+// Register a binary instrumenter with Granary.
 template <typename T>
-inline static void RegisterTool(const char *tool_name,
-                         std::initializer_list<const char *> required_tools) {
-  RegisterTool(&(ToolDescriptor<T>::kDescription), tool_name, required_tools);
+inline static void RegisterInstrumentationTool(
+    const char *tool_name, std::initializer_list<const char *> required_tools) {
+  RegisterInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
+                             required_tools);
 }
 
 }  // namespace granary

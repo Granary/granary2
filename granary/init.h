@@ -8,14 +8,16 @@ namespace granary {
 #ifdef GRANARY_INTERNAL
 
 // Initialize Granary.
-void Init(const char *granary_path);
+void Init(void);
 
 #define GRANARY_INIT(...) \
+  namespace { \
   __attribute__((used, constructor(998))) \
-  static void GRANARY_CAT(Init_, GRANARY_UNIQUE_SYMBOL)(void) { \
+  static void InitGranary(void) { \
     GRANARY_USING_NAMESPACE granary; \
     __VA_ARGS__ \
   } \
+  }
 
 #endif  // GRANARY_INTERNAL
 }  // namespace granary

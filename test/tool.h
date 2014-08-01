@@ -10,7 +10,7 @@
 #include "granary/tool.h"
 
 // Implements a mock Granary `Tool`.
-class MockTool : public granary::Tool {
+class MockTool : public granary::InstrumentationTool {
  public:
   MockTool(void) = default;
   virtual ~MockTool(void) = default;

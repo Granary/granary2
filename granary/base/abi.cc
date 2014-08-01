@@ -2,10 +2,22 @@
 #ifndef GRANARY_TEST
 extern "C" {
 
-void __cxa_pure_virtual(void) { __builtin_trap(); }
+// C++ exception handling.
+void __cxa_throw(void) { __builtin_trap(); }
+void __cxa_allocate_exception(void) { __builtin_trap(); }
+void __cxa_free_exception(void) { __builtin_trap(); }
+
+// std::__throw_bad_function_call.
 void _ZSt25__throw_bad_function_callv(void) { __builtin_trap(); }
-void _ZdlPv(void) { __builtin_trap(); }
-void _Znwm(void) { __builtin_trap(); }
+
+// C++ virtual functions.
+void __cxa_pure_virtual(void) { __builtin_trap(); }
+
+// C++ allocators.
+void _ZdlPv(void) { __builtin_trap(); }  // `operator new`.
+void _Znam(void) { __builtin_trap(); }  // `operator new[]`.
+void _Znwm(void) { __builtin_trap(); }  // `operator delete`.
+void _ZdaPv(void) { __builtin_trap(); } // `operator delete[]`.
 
 }  // extern C
 #endif  // GRANARY_TEST

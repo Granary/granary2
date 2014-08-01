@@ -352,7 +352,6 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
   }
 
   GRANARY_ASSERT(ModuleKind::GRANARY != module->Kind());
-  GRANARY_ASSERT(ModuleKind::GRANARY_CLIENT != module->Kind());
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
   auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);

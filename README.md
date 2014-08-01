@@ -54,13 +54,13 @@ If you want to compile Granary in standalone mode (where it will not take over
 some binary's execution via `LD_PRELOAD`), then do:
 
 ```basemake
-make clean ; make all GRANARY_STANDALONE=1
+make clean ; make all
 ```
 
 Then you can run:
 
 ```basemake
-./bin/debug_user/granary.out
+./bin/debug_linux_user/grr
 ```
 
 #### Kernel Space

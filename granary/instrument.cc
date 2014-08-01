@@ -33,7 +33,7 @@ static bool FinalizeControlFlow(BlockFactory *factory,
 
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic blocks.
-static void InstrumentControlFlow(Tool *tools,
+static void InstrumentControlFlow(InstrumentationTool *tools,
                                   BlockFactory *factory,
                                   LocalControlFlowGraph *cfg) {
   for (auto finalized = false; ; factory->MaterializeRequestedBlocks()) {
@@ -57,7 +57,7 @@ static void InstrumentControlFlow(Tool *tools,
 }
 
 // Apply LCFG-wide instrumentation for every tool.
-static void InstrumentBlocks(Tool *tools, LocalControlFlowGraph *cfg) {
+static void InstrumentBlocks(InstrumentationTool *tools, LocalControlFlowGraph *cfg) {
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentBlocks(cfg);
   }
@@ -67,7 +67,7 @@ static void InstrumentBlocks(Tool *tools, LocalControlFlowGraph *cfg) {
 //
 // Note: This applies tool-specific instrumentation for all tools to a single
 //       block before moving on to the next block in the LCFG.
-static void InstrumentBlock(Tool *tools, LocalControlFlowGraph *cfg) {
+static void InstrumentBlock(InstrumentationTool *tools, LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     for (auto tool : ToolIterator(tools)) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
