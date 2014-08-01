@@ -43,7 +43,7 @@ $(GRANARY_INJECTOR):
 $(GRANARY_LIBRARY):
 	@echo "Compiling library $(GRANARY_LIBRARY)"
 	@$(GRANARY_CC) $(GRANARY_COMMON_ARCH_FLAGS) \
-		$(GRANARY_LD_FLAGS) $(GRANARY_LD_FLAGS_EARLY) -shared \
+		$(GRANARY_LD_FLAGS) -nodefaultlibs $(GRANARY_LD_FLAGS_EARLY) -shared \
 		$(GRANARY_BIN_DIR)/*.o \
 		$(GRANARY_LD_FLAGS_LATE) "-Wl,-Bsymbolic" \
 		-o $(GRANARY_LIBRARY)

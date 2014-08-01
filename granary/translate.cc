@@ -2,8 +2,6 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/option.h"
-
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 
@@ -18,55 +16,20 @@
 #include "granary/instrument.h"
 #include "granary/translate.h"
 
-#include "granary/logging.h"
-
-GRANARY_DEFINE_bool(debug_log_metadata, false,
-    "Log the meta-data that is committed to the code cache index. The default "
-    "is `no`.");
-
-std::atomic<uint64_t> num_metas(ATOMIC_VAR_INIT(1));
-
 namespace granary {
 namespace {
 
-static void LogBytes(uint64_t *qwords, size_t num_bytes) {
-  auto meta_id = num_metas.fetch_add(1);
-  Log(LogOutput, "%lu\t", meta_id);
-  for (auto i = 0UL; i < num_bytes; ++i) {
-    auto qword = qwords[i];
-    Log(LogOutput, "%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x ",
-        static_cast<unsigned>(qword >> 60) & 0xF,
-        static_cast<unsigned>(qword >> 56) & 0xF,
-        static_cast<unsigned>(qword >> 52) & 0xF,
-        static_cast<unsigned>(qword >> 48) & 0xF,
-        static_cast<unsigned>(qword >> 44) & 0xF,
-        static_cast<unsigned>(qword >> 40) & 0xF,
-        static_cast<unsigned>(qword >> 36) & 0xF,
-        static_cast<unsigned>(qword >> 32) & 0xF,
-
-        static_cast<unsigned>(qword >> 28) & 0xF,
-        static_cast<unsigned>(qword >> 24) & 0xF,
-        static_cast<unsigned>(qword >> 20) & 0xF,
-        static_cast<unsigned>(qword >> 16) & 0xF,
-        static_cast<unsigned>(qword >> 12) & 0xF,
-        static_cast<unsigned>(qword >> 8) & 0xF,
-        static_cast<unsigned>(qword >> 4) & 0xF,
-        static_cast<unsigned>(qword >> 0) & 0xF);
-  }
-}
+// Records the number of context switches into Granary.
+std::atomic<uint64_t> num_context_switches(ATOMIC_VAR_INIT(0));
 
 // Add the decoded blocks to the code cache index.
 static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   LockedIndexTransaction transaction(index);
-  if (FLAG_debug_log_metadata) Log(LogOutput, "\n");
+  auto trace_group = num_context_switches.fetch_add(1);
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
       auto meta = decoded_block->MetaData();
-      if (FLAG_debug_log_metadata) {
-        LogBytes(UnsafeCast<uint64_t *>(meta),
-                 meta->manager->Size() / sizeof(uint64_t));
-        Log(LogOutput, "\n");
-      }
+      TraceMetaData(trace_group, meta);
       transaction.Insert(meta);
     }
   }

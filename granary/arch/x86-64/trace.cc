@@ -39,21 +39,21 @@ struct RegisterState {
 };
 
 enum {
-  GRANARY_TRACE_LOG_LENGTH = 1024
+  GRANARY_BLOCK_LOG_LENGTH = 1024
 };
 
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
-RegisterState granary_trace_log[GRANARY_TRACE_LOG_LENGTH];
+RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
-unsigned granary_trace_log_index = 0;
+unsigned granary_block_log_index = 0;
 
 // Record an entry in Granary's trace log.
 void granary_trace_block_regs(const RegisterState *regs) {
-  auto index = __sync_add_and_fetch(&granary_trace_log_index, 1U);
-  auto &log_regs(granary_trace_log[index % GRANARY_TRACE_LOG_LENGTH]);
+  auto index = __sync_add_and_fetch(&granary_block_log_index, 1U);
+  auto &log_regs(granary_block_log[index % GRANARY_BLOCK_LOG_LENGTH]);
   memcpy(&log_regs, regs, sizeof *regs);
 }
 

@@ -3,10 +3,15 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
 #include "granary/metadata.h"
+
+GRANARY_DEFINE_bool(debug_trace_metadata, false,
+    "Trace the meta-data that is committed to the code cache index. The default "
+    "is `no`.");
 
 namespace granary {
 namespace {
@@ -191,6 +196,37 @@ void MetaDataManager::InitAllocator(void) {
   auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
   auto max_num_allocs = remaining_size / size;
   allocator.Construct(max_num_allocs, offset, size, size);
+}
+
+extern "C" {
+
+// Represents a trace entry containing some meta-data.
+struct TracedMetaData {
+  uint64_t group;
+  const BlockMetaData *meta;
+};
+
+enum {
+  GRANARY_META_LOG_LENGTH = 1024
+};
+
+// The recorded entries in the trace. This is a global variable so that GDB
+// can see it.
+TracedMetaData granary_meta_log[GRANARY_META_LOG_LENGTH];
+
+// The index into Granary's trace log. Also a global variable so that GDB can
+// easily see it.
+unsigned granary_meta_log_index = 0;
+
+}  // extern C
+
+// Adds this meta-data to a trace log of recently translated meta-data blocks.
+void TraceMetaData(uint64_t group, const BlockMetaData *meta) {
+  if (GRANARY_LIKELY(!FLAG_debug_trace_metadata)) return;
+  auto i = __sync_fetch_and_add(&granary_meta_log_index, 1);
+  auto &entry(granary_meta_log[i % GRANARY_META_LOG_LENGTH]);
+  entry.group = group;
+  entry.meta = meta;
 }
 
 }  // namespace granary

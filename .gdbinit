@@ -92,9 +92,9 @@ end
 # An optional second parameter can be specified, which is the number of
 # instructions to disassemble from the traced block.
 define pt
-  set $__i = granary_trace_log_index + GRANARY_TRACE_LOG_LENGTH - $arg0
-  set $__i = ($__i) % GRANARY_TRACE_LOG_LENGTH
-  set $__r = &(granary_trace_log[$__i])
+  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
+  set $__i = ($__i) % GRANARY_BLOCK_LOG_LENGTH
+  set $__r = &(granary_block_log[$__i])
 
   # Figure out the block start pc, $__brip, and the first non-trace logger
   # instruction of the block, $__rip.

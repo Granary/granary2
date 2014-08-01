@@ -369,6 +369,9 @@ class MetaDataManager {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MetaDataManager);
 };
 
+// Adds this meta-data to a trace log of recently translated meta-data blocks.
+void TraceMetaData(uint64_t group, const BlockMetaData *meta);
+
 #endif  // GRANARY_INTERNAL
 
 }  // namespace granary
