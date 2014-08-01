@@ -171,7 +171,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
       \
       static void SetUpTestCase(void) { \
         arch::Init(); \
-        RegisterTool<tool_name>(#tool_name); \
+        RegisterInstrumentationTool<tool_name>(#tool_name); \
       } \
       \
      protected: \

@@ -30,4 +30,4 @@ void InitClients(void) {
   }
 }
 
-}  // granary
+}  // namespace granary

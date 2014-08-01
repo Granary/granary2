@@ -38,9 +38,9 @@ class ToolEnvironment : public ::testing::Environment {
   virtual ~ToolEnvironment(void) = default;
 
   void SetUp(void) {
-    RegisterTool<ToolA>("a");
-    RegisterTool<ToolB>("b", {"a"});
-    RegisterTool<ToolC>("c", {"b"});
+    RegisterInstrumentationTool<ToolA>("a");
+    RegisterInstrumentationTool<ToolB>("b", {"a"});
+    RegisterInstrumentationTool<ToolC>("c", {"b"});
   }
 };
 

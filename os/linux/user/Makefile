@@ -1,8 +1,8 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-.PHONY: all
+.PHONY: all lint
 
-include ../../../Makefile.inc  # os/Makefile.inc
+include ../../../Makefile.inc
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
@@ -20,7 +20,14 @@ $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
 	$(GRANARY_LD) -r $^ -o $(GRANARY_OS_OBJ)
 
-all: $(GRANARY_OS_OBJ)
+
+# Lint all Granary OS code, independent of the OS, and independent of user or
+# kernel space.
+lint:
+	@echo "Linting OS-specific Granary files."
+	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/os -type f -name '*.h' -or -name '*.cc')
+
+all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
 
 # Makes `grr`, the user-space injector if `libgranary.so`.
 $(GRANARY_INJECTOR):

@@ -36,9 +36,14 @@ $(foreach client,$(GRANARY_CLIENTS),$(eval $(call GENRULE_BUILD_CLIENT,$(client)
 
 build_clients: $(addprefix build_client_,$(GRANARY_CLIENTS))
 
+GRANARY_CLIENTS_TARGET = build_clients
+ifeq (test,$(GRANARY_TARGET))
+	GRANARY_CLIENTS_TARGET :=
+endif
+
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_deps build_bdt build_os build_clients
+where_common: build_deps build_bdt build_os $(GRANARY_CLIENTS_TARGET)
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 
@@ -82,7 +87,7 @@ headers:
 		"$(GRANARY_HEADER_MACRO_DEFS)"
 
 # Run all test cases.
-test: target_test
+test: all
 	@echo "Entering $(GRANARY_TEST_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_TEST_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) test

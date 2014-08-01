@@ -81,7 +81,6 @@ extern char **environ;
 // Run a command under Granary's control by setting up LD_PRELOAD.
 int main(int argc, const char *argv[]) {
   InitGranaryPath(argv[0]);
-  setenv("GRANARY_PATH", GRANARY_PATH, 1);
   SetPreload();
   argv = &(argv[SetArgs(argc, argv)]);
   return execvpe(argv[0], (char * const *) argv, (char * const *) environ);

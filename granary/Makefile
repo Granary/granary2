@@ -4,13 +4,6 @@
 
 include ../Makefile.inc
 
-GRANARY_LINT_TARGET =
-
-# Should Granary's main code be linted?
-ifeq (1,$(GRANARY_LINT_CODE))
-	GRANARY_LINT_TARGET = lint
-endif
-
 GRANARY_MERGED_BC_BC = $(GRANARY_BIN_DIR)/granary/merged_ll.bc
 GRANARY_MERGED_BC_OBJ = $(GRANARY_BIN_DIR)/granary/merged_ll.o
 

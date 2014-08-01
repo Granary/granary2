@@ -207,8 +207,15 @@ GRANARY_CLIENT_OBJS = $(addsuffix _client.o,$(addprefix $(GRANARY_BIN_DIR)/,$(GR
 GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DRIVER_OBJ)
 GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJS)
 
-# Common generic rules that can apply to all Granary code.
+GRANARY_LINT_TARGET =
 
+# Should Granary's main code be linted?
+ifeq (1,$(GRANARY_LINT_CODE))
+	GRANARY_LINT_TARGET = lint
+endif
+
+# Common generic rules that can apply to all Granary code.
+ifndef GRANARY_IN_TEST_DIR
 # Run the C pre-processor on the *.asm files, then run those through the
 # ASM post-processor to do extra token pasting and macro expansion.
 $(GRANARY_BIN_DIR)/%.S: $(GRANARY_SRC_DIR)/%.asm
@@ -247,5 +254,6 @@ $(GRANARY_BIN_DIR)/%.o :: $(GRANARY_BIN_DIR)/%.bc
 	@echo "Building BC object $@"
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) -c $< -o $@
+endif
 
 .SILENT :

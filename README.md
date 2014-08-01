@@ -32,7 +32,9 @@ will be used for kernel space instrumentation.
 If you are compiling Granary for user space, run:
 
 ```basemake
-make clean all
+make clean
+sudo make headers
+make all -j
 ```
 
 You can use Granary's "injector" (called `grr`) to inject Granary into a
@@ -47,20 +49,7 @@ Granary itself. For example, if you've already compiled Granary's clients (see
 below) then you could try the following:
 
 ```basemake
-./bin/debug_user/grr --clients=print_bbs --tools=print_bbs -- ls
-```
-
-If you want to compile Granary in standalone mode (where it will not take over
-some binary's execution via `LD_PRELOAD`), then do:
-
-```basemake
-make clean ; make all
-```
-
-Then you can run:
-
-```basemake
-./bin/debug_linux_user/grr
+./bin/debug_user/grr --tools=watchpoints -- ls
 ```
 
 #### Kernel Space
@@ -75,29 +64,4 @@ If you are compiling Granary against a custom kernel, run:
 
 ```basemake
 make clean all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
-```
-
-### Step 3: Compiling tools.
-
-First, you need to create `/usr/local/include/granary/granary.h`. This header
-file is Granary's client interface, and is derived from Granary's source code.
-This header file is created by running:
-
-```basemake
-sudo make headers
-```
-
-#### User Space
-
-```basemake
-make clean_clients clients GRANARY_CLIENTS="follow_jumps print_bbs"
-./bin/debug_user/grr --clients=follow_jumps,print_bbs --tools=follow_jumps,print_bbs -- ls
-```
-
-#### Kernel Space
-
-If you are compiling Granary clients (and their tools) against a custom kernel, run:
-
-```basemake
-make clean_clients clients GRANARY_CLIENTS="follow_jumps print_bbs" GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
 ```

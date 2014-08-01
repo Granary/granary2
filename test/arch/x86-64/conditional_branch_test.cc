@@ -97,7 +97,7 @@ class ConditionalBranchTest : public Test {
 
   static void SetUpTestCase(void) {
     arch::Init();
-    RegisterTool<AllFuncBlocks>("all_func_blocks");
+    RegisterInstrumentationTool<AllFuncBlocks>("all_func_blocks");
   }
 
  protected:

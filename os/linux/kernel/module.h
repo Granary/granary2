@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_KERNEL_LINUX_MODULE_H_
-#define GRANARY_KERNEL_LINUX_MODULE_H_
+#ifndef OS_LINUX_KERNEL_MODULE_H_
+#define OS_LINUX_KERNEL_MODULE_H_
 
 #ifdef __cplusplus
 namespace granary {
@@ -33,4 +33,4 @@ struct LinuxKernelModule {
 }  // namespace granary
 #endif  // __cplusplus
 
-#endif  // GRANARY_KERNEL_LINUX_MODULE_H_
+#endif  // OS_LINUX_KERNEL_MODULE_H_

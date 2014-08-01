@@ -2,6 +2,8 @@
 
 .PHONY: all
 
+GRANARY_IN_TEST_DIR := 1
+
 include ../Makefile.inc
 
 GRANARY_TEST_SRC_FILES = $(shell find $(GRANARY_TEST_SRC_DIR) -type f -name '*.cc')
@@ -65,9 +67,9 @@ $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o: $(GRANARY_GMOCK_SRCS)
         -o $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o
 
 $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.S
-	@echo "Building AS object $@"
+	@echo "Building ASM object $@"
 	@mkdir -p $(@D)
-	$(GRANARY_CXX) $(GRANARY_ASM_FLAGS) -c $< -o $@
+	$(GRANARY_CXX) -Qunused-arguments $(GRANARY_ASM_FLAGS) -c $< -o $@
 
 $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.cc
 	@echo "Building CXX object $@"
@@ -80,7 +82,7 @@ $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
                 $(GRANARY_GTEST_BIN_DIR)/gtest-all.o \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o \
-                $(GRANARY_MERGED_OBJ)
+                $(GRANARY_BIN_DIR)/*.o
 	@echo "Compiling $@"
 	@mkdir -p $(@D)
 	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
