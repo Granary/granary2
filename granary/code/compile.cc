@@ -17,7 +17,6 @@
 
 #include "granary/cache.h"
 #include "granary/context.h"
-#include "granary/module.h"
 #include "granary/util.h"
 
 GRANARY_DEFINE_bool(debug_trace_exec, false,

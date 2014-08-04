@@ -10,14 +10,15 @@
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
-#include "granary/metadata.h"
+#include "granary/app.h"
 
 namespace granary {
 
 // Forward declarations.
 class ContextInterface;
 class Module;
-class AppMetaData;
+
+namespace os {
 class ModuleManager;
 
 // Represents a location in a module. Note that not all segments within modules
@@ -181,23 +182,6 @@ class Module {
 
 typedef LinkedListIterator<const Module> ConstModuleIterator;
 
-// Application-specific meta-data that Granary maintains about all basic blocks.
-class AppMetaData : public IndexableMetaData<AppMetaData> {
- public:
-  // Default-initializes Granary's internal module meta-data.
-  AppMetaData(void);
-
-  // Compare two translation meta-data objects for equality.
-  bool Equals(const AppMetaData *meta) const;
-
-  // The native program counter where this block begins.
-  GRANARY_CONST AppPC start_pc;
-};
-
-// Specify to Granary tools that the function to get the info about
-// `AppMetaData` already exists.
-GRANARY_SHARE_METADATA(AppMetaData)
-
 #ifdef GRANARY_INTERNAL
 // Manages a set of modules.
 //
@@ -249,6 +233,7 @@ class ModuleManager {
 };
 #endif  // GRANARY_INTERNAL
 
+}  // namespace os
 }  // namespace granary
 
 #endif  // GRANARY_MODULE_H_

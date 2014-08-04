@@ -6,7 +6,8 @@
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
-#include "granary/module.h"
+
+#include "os/module.h"
 
 extern "C" {
 
@@ -16,6 +17,7 @@ extern long long granary_read(int __fd, void *__buf, size_t __nbytes);
 
 }  // extern C
 namespace granary {
+namespace os {
 namespace {
 
 // Tokenize a file. This splits the file byte spaces and treats new lines and
@@ -199,4 +201,5 @@ void ModuleManager::RegisterAllBuiltIn(void) {
   ParseMapsFile(this);
 }
 
+}  // namespace os
 }  // namespace granary

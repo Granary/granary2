@@ -8,27 +8,36 @@ import re
 import sys
 
 EXPORT_HEADERS = [
+  "arch/base.h",
+  "arch/cpu.h",
+
   "granary/base/abi.h",
   "granary/base/base.h",
   "granary/base/lock.h",
   "granary/base/cstring.h",
   "granary/base/string.h",
   "granary/base/option.h",
-  "granary/code/register.h",
+  
+  "granary/code/register.h",  # Ordering issues :-/
+
   "granary/cfg/control_flow_graph.h",
   "granary/cfg/basic_block.h",
   "granary/cfg/instruction.h",
   "granary/cfg/factory.h",
   "granary/cfg/lir.h",
   "granary/cfg/operand.h",
+  
   "granary/code/inline_assembly.h",
+
+  "granary/app.h",
   "granary/breakpoint.h",
   "granary/client.h",
   "granary/metadata.h",
-  "granary/module.h",
   "granary/tool.h",
   "granary/util.h",
+
   "os/logging.h",
+  "os/module.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")

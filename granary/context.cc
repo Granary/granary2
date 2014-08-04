@@ -90,8 +90,8 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
 }
 
 // Create a module for a Granary code cache.
-static Module *MakeCodeCacheMod(const char *name) {
-  return new Module(ModuleKind::GRANARY_CODE_CACHE, name);
+static os::Module *MakeCodeCacheMod(const char *name) {
+  return new os::Module(os::ModuleKind::GRANARY_CODE_CACHE, name);
 }
 
 }  // namespace
@@ -156,17 +156,17 @@ Context::~Context(void) {
 }
 
 // Returns a pointer to the module containing some program counter.
-const Module *Context::FindModuleContainingPC(AppPC pc) {
+const os::Module *Context::FindModuleContainingPC(AppPC pc) {
   return module_manager.FindByAppPC(pc);
 }
 
 // Returns a pointer to the first module whose name matches `name`.
-const Module *Context::FindModuleByName(const char *name) {
+const os::Module *Context::FindModuleByName(const char *name) {
   return module_manager.FindByName(name);
 }
 
 // Returns an iterator to all currently loaded modules.
-ConstModuleIterator Context::LoadedModules(void) const {
+os::ConstModuleIterator Context::LoadedModules(void) const {
   return module_manager.Modules();
 }
 

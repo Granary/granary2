@@ -5,10 +5,10 @@
 #include "granary/base/new.h"
 #include "granary/base/string.h"
 
+#include "granary/app.h"
 #include "granary/index.h"
 #include "granary/cache.h"
 #include "granary/metadata.h"
-#include "granary/module.h"
 
 #include "os/memory.h"
 
@@ -82,8 +82,8 @@ static MetaDataIndex AddrToIndex(uintptr_t addr) {
 
 // Returns the index into the code cache for a given piece of meta-data.
 static MetaDataIndex GetIndex(BlockMetaData *meta) {
-  const auto module_meta = MetaDataCast<AppMetaData *>(meta);
-  return AddrToIndex(reinterpret_cast<uintptr_t>(module_meta->start_pc));
+  const auto app_meta = MetaDataCast<AppMetaData *>(meta);
+  return AddrToIndex(reinterpret_cast<uintptr_t>(app_meta->start_pc));
 }
 
 // Match some meta-data that we are search for (`search`) against a linked

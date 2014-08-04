@@ -94,7 +94,7 @@ static void OptimizeSavesAndRestores(FragmentList *frags) {
 
 // Return the Nth architectural GPR.
 static VirtualRegister NthArchGPR(int n) {
-  return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES,
+  return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
 

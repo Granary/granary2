@@ -6,7 +6,8 @@ include ../../../Makefile.inc
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
-GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_WHERE_SRC_DIR),$(GRANARY_WHERE_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.o))
+GRANARY_CC_SRC_FILES += $(GRANARY_SRC_DIR)/os/*.cc
+GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.o))
 
 GRANARY_ASM_SRC_FILES = $(shell find $(GRANARY_OS_ARCH_SRC_DIR) -type f -name '*.asm')
 GRANARY_ASM_OBJ_FILES := $(subst $(GRANARY_OS_ARCH_SRC_DIR),$(GRANARY_OS_ARCH_BIN_DIR),$(GRANARY_ASM_SRC_FILES:.asm=.o))

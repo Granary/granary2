@@ -27,24 +27,22 @@ enum VirtualRegisterKind : uint8_t {
   // Architectural register that cannot be re-scheduled.
   VR_KIND_ARCH_FIXED,
 
-  // Architectural register that can potentially be re-scheduled.
-  VR_KIND_ARCH_VIRTUAL,
+  // Architectural general-purpose register.
+  VR_KIND_ARCH_GPR,
 
-  // General-purpose virtual register.
-  VR_KIND_VIRTUAL,
+  // Virtual general-purpose register.
+  VR_KIND_VIRTUAL_GPR,
 
   // Virtual register that represents the stack pointer, of some offset of the
   // stack pointer.
-  VR_KIND_VIRTUAL_STACK,
+  VR_KIND_VIRTUAL_STACK
 
-#ifdef GRANARY_INTERNAL
   // Index into the virtual register storage location. This is used at virtual
   // register allocation time, and allows us to manage the differences between
   // user space and kernel space at a lower level.
   //
   // Note: This can and should only be used as a memory operand!!
-  VR_KIND_VIRTUAL_SLOT
-#endif
+  _GRANARY_IF_INTERNAL( VR_KIND_VIRTUAL_SLOT )
 };
 
 // Defines the different types of virtual registers.
@@ -126,18 +124,18 @@ union alignas(alignof(void *)) VirtualRegister {
 
   // Is this an architectural register?
   inline bool IsNative(void) const {
-    return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_VIRTUAL == kind;
+    return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_GPR == kind;
   }
 
   // Is this a general purpose register?
   inline bool IsGeneralPurpose(void) const {
-    return VR_KIND_ARCH_VIRTUAL == kind || VR_KIND_VIRTUAL == kind ||
+    return VR_KIND_ARCH_GPR == kind || VR_KIND_VIRTUAL_GPR == kind ||
            VR_KIND_VIRTUAL_STACK == kind;
   }
 
   // Is this a virtual register?
   inline bool IsVirtual(void) const {
-    return VR_KIND_VIRTUAL == kind || VR_KIND_VIRTUAL_STACK == kind;
+    return VR_KIND_VIRTUAL_GPR == kind || VR_KIND_VIRTUAL_STACK == kind;
   }
 
   inline bool IsValid(void) const {
@@ -211,7 +209,7 @@ union alignas(alignof(void *)) VirtualRegister {
 
   GRANARY_INTERNAL_DEFINITION
   inline void ConvertToVirtualStackPointer(void) {
-    GRANARY_ASSERT(VR_KIND_VIRTUAL == kind);
+    GRANARY_ASSERT(VR_KIND_VIRTUAL_GPR == kind);
     kind = VR_KIND_VIRTUAL_STACK;
   }
 
@@ -288,7 +286,7 @@ class RegisterTrackerIterator {
 
   VirtualRegister operator*(void) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return VirtualRegister(VR_KIND_ARCH_VIRTUAL, arch::GPR_WIDTH_BYTES, num);
+    return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES, num);
   }
 
   inline void operator++(void) {

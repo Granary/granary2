@@ -49,7 +49,7 @@ void VirtualRegister::DecodeFromNative(int reg_) {
   // General-purpose registers are disambiguated in terms of their "widest"
   // enclosing register, and then specialized in terms of their width and which
   // bytes are actually named by the register.
-  kind = VR_KIND_ARCH_VIRTUAL;
+  kind = VR_KIND_ARCH_GPR;
   reg_num = widest_reg - XED_REG_RAX;
   if (XED_REG_RSP <= widest_reg) {
     reg_num -= 1;  // Directly map registers to indexes.
@@ -93,7 +93,7 @@ void VirtualRegister::DecodeFromNative(int reg_) {
 int VirtualRegister::EncodeToNative(void) const {
   if (VR_KIND_ARCH_FIXED == kind) {
     return static_cast<int>(reg_num);
-  } else if (VR_KIND_ARCH_VIRTUAL != kind) {
+  } else if (VR_KIND_ARCH_GPR != kind) {
     return XED_REG_INVALID;
   }
 

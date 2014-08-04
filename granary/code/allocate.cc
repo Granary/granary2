@@ -9,16 +9,15 @@
 
 #include "granary/code/allocate.h"
 
-#include "granary/module.h"
-
 #include "os/memory.h"
+#include "os/module.h"
 
 namespace granary {
 namespace internal {
 
 class CodeSlab {
  public:
-  CodeSlab(Module *code_module, int num_pages, int num_bytes, int offset_,
+  CodeSlab(os::Module *code_module, int num_pages, int num_bytes, int offset_,
            CodeSlab *next_);
 
   std::atomic<int> offset;
@@ -37,7 +36,7 @@ class CodeSlab {
 };
 
 // Initialize the metadata about a generic code slab.
-CodeSlab::CodeSlab(Module *module, int num_pages, int num_bytes,
+CodeSlab::CodeSlab(os::Module *module, int num_pages, int num_bytes,
                    int offset_, CodeSlab *next_)
     : offset(ATOMIC_VAR_INIT(offset_)),
       begin(nullptr),
@@ -57,7 +56,7 @@ CodeSlab::CodeSlab(Module *module, int num_pages, int num_bytes,
                       static_cast<uintptr_t>(num_pages * arch::PAGE_SIZE_BYTES);
       module->AddRange(
           begin_addr, end_addr, begin_addr,
-          MODULE_READABLE | MODULE_WRITABLE | MODULE_EXECUTABLE);
+          os::MODULE_READABLE | os::MODULE_WRITABLE | os::MODULE_EXECUTABLE);
     }
   }
 }
@@ -91,7 +90,7 @@ CodeAllocator::~CodeAllocator(void) {
 }
 
 // Allocates some executable code of size `size` with alignment `alignment`.
-CachePC CodeAllocator::Allocate(Module *module, int alignment, int size) {
+CachePC CodeAllocator::Allocate(os::Module *module, int alignment, int size) {
   int old_offset(0);
   int new_offset(0);
   CachePC addr(nullptr);
@@ -115,7 +114,7 @@ CachePC CodeAllocator::Allocate(Module *module, int alignment, int size) {
 }
 
 // Allocate a new slab of memory for executable code.
-void CodeAllocator::AllocateSlab(Module *module) {
+void CodeAllocator::AllocateSlab(os::Module *module) {
   FineGrainedLocked locker(&slab_lock);
   auto curr_slab = slab.load(std::memory_order_acquire);
   if (curr_slab->offset.load(std::memory_order_acquire) < num_bytes) {

@@ -6,9 +6,12 @@
 
 #include "granary/breakpoint.h"
 #include "granary/context.h"
-#include "granary/module.h"
+
+#include "os/module.h"
 
 namespace granary {
+namespace os {
+
 // Represents a range of code/data within a module.
 class ModuleAddressRange {
  public:
@@ -228,15 +231,6 @@ void Module::AddRangeNoConflict(ModuleAddressRange *range) {
   *next_ptr = range;  // Insert.
 }
 
-// Default-initializes Granary's internal module meta-data.
-AppMetaData::AppMetaData(void)
-    : start_pc(nullptr) {}
-
-// Compare two translation meta-data objects for equality.
-bool AppMetaData::Equals(const AppMetaData *meta) const {
-  return start_pc == meta->start_pc;
-}
-
 // Initialize the module tracker.
 ModuleManager::ModuleManager(ContextInterface *context_)
     : context(context_),
@@ -289,4 +283,5 @@ void ModuleManager::Register(Module *module) {
   modules = module;
 }
 
+}  // namespace os
 }  // namespace granary

@@ -14,9 +14,9 @@
 #include "granary/base/lock.h"
 
 namespace granary {
-
+namespace os {
 class Module;
-
+}  // namespace os
 namespace internal {
 class CodeSlab;
 }  // namespace internal
@@ -31,13 +31,13 @@ class CodeAllocator {
   ~CodeAllocator(void);
 
   // Allocates some executable code of size `size` with alignment `alignment`.
-  CachePC Allocate(Module *module, int alignment, int size);
+  CachePC Allocate(os::Module *module, int alignment, int size);
 
  private:
   CodeAllocator(void) = delete;
 
   // Allocate a new slab of memory for executable code.
-  void AllocateSlab(Module *module);
+  void AllocateSlab(os::Module *module);
 
   // Number of pages per allocated slab.
   const int num_pages;

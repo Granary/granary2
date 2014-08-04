@@ -106,7 +106,7 @@ void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 
 // Returns a pointer to the module containing an application `pc`.
-const Module *InstrumentationTool::ModuleContainingPC(AppPC pc) {
+const os::Module *InstrumentationTool::ModuleContainingPC(AppPC pc) {
   return context->FindModuleContainingPC(pc);
 }
 

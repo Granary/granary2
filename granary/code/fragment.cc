@@ -10,8 +10,8 @@
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
 
+#include "granary/app.h"
 #include "granary/breakpoint.h"
-#include "granary/module.h"
 #include "granary/util.h"
 
 #include "os/logging.h"

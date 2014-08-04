@@ -19,15 +19,17 @@
 #include "metadata.h"
 
 namespace granary {
+namespace os {
+class Module;
+}  // namespace os
 
 // Forward declaration.
 class CodeCacheTransaction;
-class Module;
 
 // Implementation of Granary's code caches.
 class CodeCache {
  public:
-  CodeCache(Module *module_, int slab_size);
+  CodeCache(os::Module *module_, int slab_size);
   ~CodeCache(void) = default;
 
   // Allocate a block of code from this code cache.
@@ -58,7 +60,7 @@ class CodeCache {
 
   // Module that represents the slabs of the allocator as ranges of mapped
   // executable memory.
-  Module * const module;
+  os::Module * const module;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
 };

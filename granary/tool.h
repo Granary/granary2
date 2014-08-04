@@ -13,12 +13,14 @@
 #include "granary/metadata.h"
 
 namespace granary {
+namespace os {
+class Module;
+}  // namespace os
 
 // Forward declarations.
 class BlockFactory;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
-class Module;
 class InstrumentationTool;
 class Operand;
 
@@ -73,7 +75,7 @@ class InstrumentationTool {
  protected:
 
   // Returns a pointer to the module containing an application `pc`.
-  const Module *ModuleContainingPC(AppPC pc);
+  const os::Module *ModuleContainingPC(AppPC pc);
 
   // Begin inserting some inline assembly. This takes in an optional scope
   // specifier, which allows tools to use the same variables in two or more

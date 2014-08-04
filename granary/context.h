@@ -14,8 +14,9 @@
 #include "granary/cache.h"
 #include "granary/index.h"
 #include "granary/metadata.h"
-#include "granary/module.h"
 #include "granary/tool.h"
+
+#include "os/module.h"
 
 namespace granary {
 
@@ -29,7 +30,6 @@ class IndirectEdge;
 class Instruction;
 class MetaDataDescription;
 class MetaDataManager;
-class ModuleManager;
 class InstrumentationTool;
 class InstrumentationManager;
 
@@ -42,13 +42,13 @@ class ContextInterface {
   virtual ~ContextInterface(void);
 
   // Returns a pointer to the module containing some program counter.
-  virtual const Module *FindModuleContainingPC(AppPC pc) = 0;
+  virtual const os::Module *FindModuleContainingPC(AppPC pc) = 0;
 
   // Returns a pointer to the first module whose name matches `name`.
-  virtual const Module *FindModuleByName(const char *name) = 0;
+  virtual const os::Module *FindModuleByName(const char *name) = 0;
 
   // Returns an iterator to all currently loaded modules.
-  virtual ConstModuleIterator LoadedModules(void) const = 0;
+  virtual os::ConstModuleIterator LoadedModules(void) const = 0;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
@@ -101,13 +101,13 @@ class Context : public ContextInterface {
   virtual ~Context(void);
 
   // Returns a pointer to the module containing some program counter.
-  virtual const Module *FindModuleContainingPC(AppPC pc) override;
+  virtual const os::Module *FindModuleContainingPC(AppPC pc) override;
 
   // Returns a pointer to the first module whose name matches `name`.
-  virtual const Module *FindModuleByName(const char *name) override;
+  virtual const os::Module *FindModuleByName(const char *name) override;
 
   // Returns an iterator to all currently loaded modules.
-  virtual ConstModuleIterator LoadedModules(void) const override;
+  virtual os::ConstModuleIterator LoadedModules(void) const override;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
@@ -147,7 +147,7 @@ class Context : public ContextInterface {
 
  private:
   // Manages all modules allocated/understood by this environment.
-  ModuleManager module_manager;
+  os::ModuleManager module_manager;
 
   // Manages all metadata allocated/understood by this environment.
   MetaDataManager metadata_manager;
@@ -157,11 +157,11 @@ class Context : public ContextInterface {
   InstrumentationManager tool_manager;
 
   // Manages all basic block code allocated/understood by this environment.
-  Module *block_code_cache_mod;
+  os::Module *block_code_cache_mod;
   CodeCache block_code_cache;
 
   // Manages all edge code allocated/understood by this environment.
-  Module *edge_code_cache_mod;
+  os::Module *edge_code_cache_mod;
   CodeCache edge_code_cache;
 
   // Pointer to the code that performs the flag saving and stack switching for

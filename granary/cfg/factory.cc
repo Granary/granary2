@@ -13,10 +13,10 @@
 #include "granary/code/metadata.h"
 #include "granary/code/register.h"
 
+#include "granary/app.h"
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/index.h"
-#include "granary/module.h"
 #include "granary/util.h"
 
 namespace granary {
@@ -346,12 +346,12 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
 
   // Aagh! Indirect jump to some already cached code. For the time being,
   // give up and just go to the target and ignore the meta-data.
-  if (ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
+  if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
     non_transparent_pc = app_meta->start_pc;
     return MaterializeToExistingBlock(cfg, meta, non_transparent_pc);
   }
 
-  GRANARY_ASSERT(ModuleKind::GRANARY != module->Kind());
+  GRANARY_ASSERT(os::ModuleKind::GRANARY != module->Kind());
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
   auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);

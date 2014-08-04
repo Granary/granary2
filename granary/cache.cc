@@ -8,7 +8,7 @@
 
 namespace granary {
 
-CodeCache::CodeCache(Module *module_, int slab_size)
+CodeCache::CodeCache(os::Module *module_, int slab_size)
     : lock(),
       allocator(slab_size),
       module(module_) {}

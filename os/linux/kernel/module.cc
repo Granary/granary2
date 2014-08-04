@@ -4,12 +4,11 @@
 
 #include "granary/base/list.h"
 
-#include "granary/module.h"
-
+#include "os/module.h"
 #include "os/linux/kernel/module.h"
 
 namespace granary {
-
+namespace os {
 extern "C" {
 extern LinuxKernelModule *GRANARY_KERNEL_MODULES;
 }  // extern C
@@ -52,4 +51,5 @@ void ModuleManager::RegisterAllBuiltIn(void) {
   }
 }
 
+}  // namespace os
 }  // namespace granary
