@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_X86_64_EARLY_MANGLE_H_
-#define GRANARY_ARCH_X86_64_EARLY_MANGLE_H_
+#ifndef ARCH_X86_64_EARLY_MANGLE_H_
+#define ARCH_X86_64_EARLY_MANGLE_H_
 
 namespace granary {
 
@@ -19,4 +19,4 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_ARCH_X86_64_EARLY_MANGLE_H_
+#endif  // ARCH_X86_64_EARLY_MANGLE_H_

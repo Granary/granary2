@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_DRIVER_H_
-#define GRANARY_ARCH_DRIVER_H_
+#ifndef ARCH_DRIVER_H_
+#define ARCH_DRIVER_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -24,4 +24,4 @@
 #include "arch/x86-64/instruction.h"
 #include "arch/x86-64/operand.h"
 
-#endif  // GRANARY_ARCH_DRIVER_H_
+#endif  // ARCH_DRIVER_H_

@@ -3,7 +3,7 @@
 #include "granary/base/base.h"
 
 namespace granary {
-namespace cpu {
+namespace arch {
 
 void Relax(void) {
   GRANARY_INLINE_ASSEMBLY("pause;" ::: "memory");
@@ -21,5 +21,5 @@ unsigned long CycleCount(void) {
   return (high_order << 32U) | low_order;
 }
 
-}  // namespace cpu
+}  // namespace arch
 }  // namespace granary

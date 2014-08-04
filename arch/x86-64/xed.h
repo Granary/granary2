@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_X86_64_XED_H_
-#define GRANARY_ARCH_X86_64_XED_H_
+#ifndef ARCH_X86_64_XED_H_
+#define ARCH_X86_64_XED_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -31,4 +31,4 @@ struct FlagsSet {
 
 #pragma clang diagnostic pop
 
-#endif  // GRANARY_ARCH_X86_64_XED_H_
+#endif  // ARCH_X86_64_XED_H_

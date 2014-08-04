@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_INSTRUCTION_H_
-#define GRANARY_ARCH_INSTRUCTION_H_
+#ifndef ARCH_INSTRUCTION_H_
+#define ARCH_INSTRUCTION_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -116,4 +116,4 @@ class InstructionInterface {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_ARCH_INSTRUCTION_H_
+#endif  // ARCH_INSTRUCTION_H_

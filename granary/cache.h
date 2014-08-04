@@ -78,7 +78,7 @@ class CodeCacheTransaction {
 
   ~CodeCacheTransaction(void) {
     cache->EndTransaction(begin, end);
-    cpu::SynchronizePipeline();
+    arch::SynchronizePipeline();
   }
 
  private:

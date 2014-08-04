@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_MEMORY_H_
-#define GRANARY_MEMORY_H_
+#ifndef OS_MEMORY_H_
+#define OS_MEMORY_H_
 
 namespace granary {
 namespace os {
@@ -45,4 +45,4 @@ void ProtectPages(void *addr, int num, MemoryProtection prot);
 }  // namespace os
 }  // namespace granary
 
-#endif  // GRANARY_MEMORY_H_
+#endif  // OS_MEMORY_H_

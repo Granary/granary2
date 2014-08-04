@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_LOGGING_H_
-#define GRANARY_LOGGING_H_
+#ifndef OS_LOGGING_H_
+#define OS_LOGGING_H_
 
 namespace granary {
 namespace os {
@@ -19,4 +19,4 @@ int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 }  // namespace os
 }  // namespace granary
 
-#endif  // GRANARY_LOGGING_H_
+#endif  // OS_LOGGING_H_

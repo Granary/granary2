@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_UTIL_H_
-#define GRANARY_ARCH_UTIL_H_
+#ifndef ARCH_UTIL_H_
+#define ARCH_UTIL_H_
 
 #include "granary/base/base.h"
 #include "granary/base/type_trait.h"
@@ -37,4 +37,4 @@ inline static int ImmediateWidthBits(T imm) {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_ARCH_UTIL_H_
+#endif  // ARCH_UTIL_H_

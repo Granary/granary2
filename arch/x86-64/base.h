@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_X86_64_BASE_H_
-#define GRANARY_ARCH_X86_64_BASE_H_
+#ifndef ARCH_X86_64_BASE_H_
+#define ARCH_X86_64_BASE_H_
 
 #define GRANARY_ARCH_CACHE_LINE_SIZE 64  // In bytes.
 #define GRANARY_ARCH_ADDRESS_WIDTH 64  // In bits.
@@ -65,4 +65,4 @@ enum {
 }  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_ARCH_X86_64_BASE_H_
+#endif  // ARCH_X86_64_BASE_H_

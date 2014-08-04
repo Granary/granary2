@@ -16,7 +16,7 @@ void FineGrainedLock::Acquire(void) {
 // Tries to acquire the lock, knowing that the lock is currently contended.
 void FineGrainedLock::ContendedAcquire(void) {
   do {
-    cpu::Relax();
+    arch::Relax();
   } while (is_locked.load(std::memory_order_relaxed) || !TryAcquire());
 }
 
@@ -39,7 +39,7 @@ void ReaderWriterLock::ReadAcquire(void) {
         old_value, old_value + 1, std::memory_order_release)) {
       return;
     }
-    cpu::Relax();
+    arch::Relax();
   }
 }
 
@@ -58,11 +58,11 @@ void ReaderWriterLock::WriteAcquire(void) {
         old_value, old_value | 0x80000000, std::memory_order_release)) {
       break;
     }
-    cpu::Relax();
+    arch::Relax();
   }
 
   while (lock.load(std::memory_order_acquire) & 0x7fffffff) {
-    cpu::Relax();
+    arch::Relax();
   }
 }
 

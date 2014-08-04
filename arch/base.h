@@ -1,8 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_BASE_H_
-#define GRANARY_ARCH_BASE_H_
+#ifndef ARCH_BASE_H_
+#define ARCH_BASE_H_
 
 #include "arch/x86-64/base.h"
 
-#endif  // GRANARY_ARCH_BASE_H_
+#endif  // ARCH_BASE_H_

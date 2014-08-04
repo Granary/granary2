@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_X86_64_BUILDER_H_
-#define GRANARY_ARCH_X86_64_BUILDER_H_
+#ifndef ARCH_X86_64_BUILDER_H_
+#define ARCH_X86_64_BUILDER_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -264,4 +264,4 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
 # include "generated/xed2-intel64/instruction_builder.cc"
 #endif
 
-#endif  // GRANARY_ARCH_X86_64_BUILDER_H_
+#endif  // ARCH_X86_64_BUILDER_H_

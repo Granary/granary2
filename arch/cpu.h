@@ -1,10 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_ARCH_CPU_H_
-#define GRANARY_ARCH_CPU_H_
+#ifndef ARCH_CPU_H_
+#define ARCH_CPU_H_
 
 namespace granary {
-namespace cpu {
+namespace arch {
 
 void Relax(void);
 
@@ -12,7 +12,7 @@ void SynchronizePipeline(void);
 
 unsigned long CycleCount(void);
 
-}  // namespace cpu
+}  // namespace arch
 }  // namespace granary
 
-#endif  // GRANARY_ARCH_CPU_H_
+#endif  // ARCH_CPU_H_

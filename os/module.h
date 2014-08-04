@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_MODULE_H_
-#define GRANARY_MODULE_H_
+#ifndef OS_MODULE_H_
+#define OS_MODULE_H_
 
 #include "arch/base.h"
 
@@ -236,4 +236,4 @@ class ModuleManager {
 }  // namespace os
 }  // namespace granary
 
-#endif  // GRANARY_MODULE_H_
+#endif  // OS_MODULE_H_

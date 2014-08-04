@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_OS_SLOT_H_
-#define GRANARY_OS_SLOT_H_
+#ifndef OS_SLOT_H_
+#define OS_SLOT_H_
 
 #ifndef GRANARY_INTERNAL
 # error "This code is internal to Granary."
@@ -32,7 +32,7 @@ struct SlotSet {
 // exist.
 intptr_t Slot(os::SlotCategory category, int sub_category=0);
 
-}  // namespace arch
+}  // namespace os
 }  // namespace granary
 
-#endif  // GRANARY_OS_SLOT_H_
+#endif  // OS_SLOT_H_
