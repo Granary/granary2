@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/arch/cpu.h"
+#include "arch/cpu.h"
 #include "granary/base/lock.h"
 
 namespace granary {

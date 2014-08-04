@@ -7,9 +7,10 @@
 
 #include "granary/index.h"
 #include "granary/cache.h"
-#include "granary/memory.h"
 #include "granary/metadata.h"
 #include "granary/module.h"
+
+#include "os/memory.h"
 
 namespace granary {
 namespace {
@@ -29,12 +30,12 @@ enum {
 };
 
 void *IndexArrayMem::operator new(std::size_t) {
-  return memset(AllocatePages(1), 0, arch::PAGE_SIZE_BYTES);
+  return memset(os::AllocatePages(1), 0, arch::PAGE_SIZE_BYTES);
 }
 
 void IndexArrayMem::operator delete(void *address) {
   memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
-  return FreePages(address, 1);
+  return os::FreePages(address, 1);
 }
 
 class MetaDataArray : public IndexArrayMem {

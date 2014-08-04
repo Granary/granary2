@@ -15,7 +15,9 @@
 #include <linux/gfp.h>
 #include <asm/uaccess.h>
 
-#include "granary/kernel/linux/module.h"
+DEFINE_PER_CPU(int, name);
+
+#include "os/linux/kernel/module.h"
 
 #ifndef CONFIG_MODULES
 # error "Module auto-loading must be supported (`CONFIG_MODULES`)."
@@ -26,14 +28,14 @@
 #endif
 
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Peter Goodman <peter.goodman@gmail.com>");
+MODULE_AUTHOR("Peter Goodman <pag@cs.toronto.edu>");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 
-// Initialize a new `KernelModule` from a `struct module`. A `KernelModule`
+// Initialize a new `LinuxKernelModule` from a `struct module`. A `LinuxKernelModule`
 // is a stripped down `struct module` that contains enough information for
 // Granary to create its own `Module` structure from.
-static struct KernelModule *init_kernel_module(struct KernelModule *kmod,
-                                               const struct module *mod) {
+static struct LinuxKernelModule *init_kernel_module(
+    struct LinuxKernelModule *kmod, const struct module *mod) {
   kmod->name = mod->name;
   kmod->kind = KERNEL_MODULE;
   kmod->seen_by_granary = 0;
@@ -53,7 +55,7 @@ static struct KernelModule *init_kernel_module(struct KernelModule *kmod,
 }
 
 // Treat the kernel as one large module.
-static struct KernelModule GRANARY_KERNEL = {
+static struct LinuxKernelModule GRANARY_KERNEL = {
   .name = "kernel",
   .kind = KERNEL,
   .seen_by_granary = 0,
@@ -65,7 +67,7 @@ static struct KernelModule GRANARY_KERNEL = {
 };
 
 // Global variable, shared with granary.
-struct KernelModule *GRANARY_KERNEL_MODULES = &GRANARY_KERNEL;
+struct LinuxKernelModule *GRANARY_KERNEL_MODULES = &GRANARY_KERNEL;
 
 // The kernel's internal module list. Guarded by `modules_lock`.
 static struct list_head *kernel_modules = NULL;
@@ -74,8 +76,8 @@ static struct list_head *kernel_modules = NULL;
 // uses this function to determine the current set of modules
 static void init_module_list(void) {
   struct module *mod = NULL;
-  struct KernelModule **next_ptr = &(GRANARY_KERNEL.next);
-  struct KernelModule *kmod = NULL;
+  struct LinuxKernelModule **next_ptr = &(GRANARY_KERNEL.next);
+  struct LinuxKernelModule *kmod = NULL;
   int num_modules = 0;
   int i = 0;
 
@@ -85,7 +87,7 @@ static void init_module_list(void) {
   }
 
   for (i = 0; i < num_modules; ++i) {
-    *next_ptr = kmalloc(sizeof(struct KernelModule), GFP_NOWAIT);
+    *next_ptr = kmalloc(sizeof(struct LinuxKernelModule), GFP_NOWAIT);
     next_ptr = &((*next_ptr)->next);
   }
 
@@ -104,80 +106,18 @@ static void init_module_list(void) {
   // the `module_mutex`.
   BUG_ON(0 > num_modules);
 }
-
-// Find some internal kernel symbols.
-static int find_symbols(void *data, const char *name,
-                        struct module *mod, unsigned long addr) {
-  if (THIS_MODULE == mod) {
-
-    // TODO(pag): Already removed _GLOBAL__I_ from things like DEFINE_OPTION
-    //            GRANARY_INIT. Find a *real* way for getting these names, e.g.
-    //            by parsing the ELF file.
-
-    // If we find a constructor for some global Granary data, then invoke it.
-    // This is pretty ugly. A minor hack is used to handle command-line
-    // options, which is to add `_GLOBAL__I_` into the constructor name of those
-    // options to ensure that this method catches those calls.
-    if (NULL != strstr(name, "_GLOBAL__I_")) {
-      ((void (*)(void)) addr)();
-    }
-
-  // We don't care (for now?) about other modules.
-  } else if (NULL != mod) {
-    return 0;
-
-  // Get a pointer the kernel's `struct list_head modules` so that we can later
-  // iterate over the list of all modules. Luckily `modules_lock` is exported.
-  } else if (NULL == kernel_modules && 0 == strncmp("modules", name, 8)) {
-    kernel_modules = (typeof(kernel_modules)) addr;
-    return 0;
-  }
-
-  return 0;
-}
-
-// granary::Log(granary::LogLevel, char const*, ...)
-int _ZN7granary3LogENS_8LogLevelEPKcz(int log_level, const char *format, ...) {
-  (void) log_level;
-  (void) format;
-  return 0;
-}
-
-// granary::InitOptions(char const*)
-extern void _ZN7granary11InitOptionsEPKc(const char *);
-
-// granary::Init(granary::InitKind, char const*)
-extern void _ZN7granary4InitENS_8InitKindEPKc(int, const char *);
-
 enum {
   COMMAND_BUFF_SIZE = 4095
 };
-
-// Has Granary been initialized?
-static int initialized = 0;
 
 // Buffer for storing commands issued from user space. For example, if one does
 //    `echo "init --tools=follow_jumps,print_bbs" > /dev/granary`
 // Then `command_buff` will contain `init --tools=follow_jumps,print_bbs`.
 static char command_buff[COMMAND_BUFF_SIZE + 1] = {'\0'};
 
-// Try to match a command in the command buffer.
-static int match_command(const char *command) {
-  return command_buff == strstr(command_buff, command);
-}
-
 // Process a Granary command. Commands are written to `/dev/granary_in`.
 static void process_command(void) {
 
-  // Initialize granary. This is used to set the initial options of Granary so
-  // that it can go and load in some tools.
-  if (!initialized && match_command("init")) {
-    initialized = 1;
-    printk("[granary] %s\n", command_buff);
-    _ZN7granary11InitOptionsEPKc(&(command_buff[4]));
-    init_module_list();
-    _ZN7granary4InitENS_8InitKindEPKc(0, "");
-  }
 }
 
 // A user space program wrote a command to Granary. We will assume that we can
@@ -194,7 +134,8 @@ static ssize_t read_command(struct file *file, const char __user *str,
 
   process_command();
 
-  (void) file; (void) offset;
+  (void) file;
+  (void) offset;
   return size;
 }
 

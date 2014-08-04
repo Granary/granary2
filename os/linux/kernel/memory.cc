@@ -1,14 +1,16 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/base.h"
 #include "granary/base/lock.h"
 
 #include "granary/breakpoint.h"
-#include "granary/memory.h"
+
+#include "os/memory.h"
 
 namespace granary {
+namespace os {
 
 // A single page-aligned data structure.
 struct alignas(arch::PAGE_SIZE_BYTES) PageFrame {
@@ -125,7 +127,7 @@ void *StaticHeap<kNumPages>::AllocatePages(int num) {
   } else {
     mem = AllocatePagesSlow(static_cast<uint32_t>(num));
   }
-  ProtectPages(mem, num, MemoryProtection::READ_WRITE);
+  os::ProtectPages(mem, num, os::MemoryProtection::READ_WRITE);
   return mem;
 }
 
@@ -163,7 +165,6 @@ void FreePages(void *addr, int num, MemoryIntent intent) {
     case MemoryIntent::EXECUTABLE:
       exec_memory.FreePages(addr, num);
       break;
-    case MemoryIntent::STAGING:
     case MemoryIntent::READ_WRITE:
       rw_memory.FreePages(addr, num);
       break;
@@ -175,4 +176,5 @@ void ProtectPages(void *, int, MemoryProtection) {
   // TODO(pag): Implement me.
 }
 
+}  // namespace os
 }  // namespace granary

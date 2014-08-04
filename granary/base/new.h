@@ -6,7 +6,7 @@
 
 #include <new>
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 #include "granary/base/base.h"
 
 namespace granary {

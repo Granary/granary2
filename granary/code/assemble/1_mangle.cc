@@ -3,8 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/arch/base.h"
-#include "granary/arch/driver.h"
+#include "arch/base.h"
+#include "arch/driver.h"
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"

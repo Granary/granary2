@@ -221,6 +221,8 @@ unsigned granary_meta_log_index = 0;
 }  // extern C
 
 // Adds this meta-data to a trace log of recently translated meta-data blocks.
+// This is useful for GDB-based debugging, because it lets us see the most
+// recently translated blocks (in terms of their meta-data).
 void TraceMetaData(uint64_t group, const BlockMetaData *meta) {
   if (GRANARY_LIKELY(!FLAG_debug_trace_metadata)) return;
   auto i = __sync_fetch_and_add(&granary_meta_log_index, 1);

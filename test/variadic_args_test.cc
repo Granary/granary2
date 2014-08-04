@@ -5,7 +5,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/arch/init.h"
+#include "arch/init.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"

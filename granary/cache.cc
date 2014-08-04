@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/cache.h"
 

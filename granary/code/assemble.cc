@@ -20,7 +20,6 @@
 #include "granary/code/assemble/9_allocate_slots.h"
 #include "granary/code/assemble/10_add_connecting_jumps.h"
 
-#include "granary/logging.h"
 #include "granary/util.h"
 
 GRANARY_DEFINE_bool(debug_log_fragments, false,
@@ -92,7 +91,7 @@ FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
   AddConnectingJumps(&frags);
 
   if (FLAG_debug_log_fragments) {
-    Log(LogDebug, &frags);
+    os::Log(os::LogDebug, &frags);
   }
 
   return frags;

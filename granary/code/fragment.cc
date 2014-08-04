@@ -11,9 +11,10 @@
 #include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
-#include "granary/logging.h"
 #include "granary/module.h"
 #include "granary/util.h"
+
+#include "os/logging.h"
 
 namespace granary {
 
@@ -154,6 +155,7 @@ FlagZone::FlagZone(VirtualRegister flag_save_reg_,
       used_regs(),
       live_regs() {}
 
+namespace os {
 namespace {
 // Log an individual edge between two fragments.
 static void LogFragmentEdge(LogLevel level, const Fragment *pred,
@@ -352,6 +354,7 @@ void Log(LogLevel level, FragmentList *frags) {
   Log(level, "}\n");
 }
 
+}  // namespace os
 namespace {
 
 // Free the instructions from a fragment.

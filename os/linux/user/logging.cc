@@ -4,9 +4,8 @@
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
-#include "granary/logging.h"
 
-#include <cstdarg>
+#include "os/logging.h"
 
 extern "C" {
 
@@ -14,6 +13,7 @@ extern long long granary_write(int __fd, const void *__buf, size_t __n);
 
 }
 namespace granary {
+namespace os {
 namespace {
 static int OUTPUT_FD[] = {
     1,  // LogOutput
@@ -201,4 +201,5 @@ int Log(LogLevel level, const char *format, ...) {
   return num_written;
 }
 
+}  // namespace os
 }  // namespace granary

@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "granary/arch/init.h"
+#include "arch/init.h"
 
 #include "granary/metadata.h"
 #include "granary/module.h"

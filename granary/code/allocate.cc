@@ -2,15 +2,16 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/new.h"
 #include "granary/base/string.h"
 
 #include "granary/code/allocate.h"
 
-#include "granary/memory.h"
 #include "granary/module.h"
+
+#include "os/memory.h"
 
 namespace granary {
 namespace internal {
@@ -43,7 +44,7 @@ CodeSlab::CodeSlab(Module *module, int num_pages, int num_bytes,
       next(next_) {
   if (GRANARY_LIKELY(0 < num_pages)) {
     begin = reinterpret_cast<CachePC>(
-        AllocatePages(num_pages, MemoryIntent::EXECUTABLE));
+        os::AllocatePages(num_pages, os::MemoryIntent::EXECUTABLE));
     memset(begin, arch::EXEC_MEMORY_POISON_BYTE,
            static_cast<unsigned long>(num_bytes));
     VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
@@ -84,7 +85,7 @@ CodeAllocator::~CodeAllocator(void) {
   auto slab_ = slab.exchange(nullptr);
   for (; slab_ && &internal::kSlabSentinel != slab_; slab_ = next_slab) {
     next_slab = slab_->next;
-    FreePages(slab_->begin, num_pages, MemoryIntent::EXECUTABLE);
+    os::FreePages(slab_->begin, num_pages, os::MemoryIntent::EXECUTABLE);
     delete slab_;
   }
 }

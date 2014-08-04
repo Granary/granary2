@@ -4,7 +4,7 @@
 #define GRANARY_CFG_CONTROL_FLOW_GRAPH_H_
 
 #ifdef GRANARY_INTERNAL
-# include "granary/arch/base.h"
+# include "arch/base.h"
 # include "granary/code/register.h"
 #endif
 

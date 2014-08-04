@@ -17,6 +17,11 @@ build_bdt:
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
+build_arch:
+	@echo "Entering $(GRANARY_ARCH_SRC_DIR)"
+	$(MAKE) -C $(GRANARY_ARCH_SRC_DIR) \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+
 build_os:
 	@echo "Entering $(GRANARY_WHERE_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
@@ -43,7 +48,7 @@ endif
 
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_deps build_bdt build_os $(GRANARY_CLIENTS_TARGET)
+where_common: build_arch build_deps build_bdt build_os $(GRANARY_CLIENTS_TARGET)
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 

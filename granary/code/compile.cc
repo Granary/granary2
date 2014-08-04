@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/arch/encode.h"
+#include "arch/encode.h"
 
 #include "granary/base/option.h"
 

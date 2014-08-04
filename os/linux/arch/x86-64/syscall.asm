@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/arch/x86-64/asm/include.asm.inc"
+#include "arch/x86-64/asm/include.asm.inc"
 
 START_FILE
 

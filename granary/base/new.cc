@@ -7,9 +7,8 @@
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
-#include "granary/memory.h"
 
-#include <cstdlib>
+#include "os/memory.h"
 
 namespace granary {
 namespace internal {
@@ -20,9 +19,6 @@ enum {
   DEALLOCATED_MEMORY_POISON = 0xBC,
   UNINITIALIZED_MEMORY_POISON = 0xCD,
 };
-
-
-#ifndef GRANARY_WITH_VALGRIND  // Use slab-style allocation.
 
 // Initialize a new slab list. Once initialized, slab lists are never changed.
 SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
@@ -55,7 +51,7 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
   const size_t slab_number(next_slab_number.fetch_add(1));
-  void *slab_memory(AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
+  void *slab_memory(os::AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
   memset(slab_memory, UNALLOCATED_MEMORY_POISON,
          SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
   VALGRIND_MAKE_MEM_UNDEFINED(
@@ -133,8 +129,8 @@ void SlabAllocator::Destroy(void) {
   const SlabList *next_slab(nullptr);
   for (; slab; slab = next_slab) {
     next_slab = slab->next;
-    FreePages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
-              SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
+    os::FreePages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
+                  SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
   }
 }
 
@@ -154,50 +150,6 @@ void *SlabAllocator::AllocateFromFreeList(void) {
   } while (!free_list.compare_exchange_strong(head, next));
   return head;
 }
-
-#else	 // Use `malloc` and `free` to play nice with Valgrind.
-
-// Initialize a new slab list. Once initialized, slab lists are never changed.
-SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
-                   size_t slab_number_)
-    : next(next_slab_),
-      min_allocation_number(min_allocation_number_),
-      number(slab_number_) {}
-
-// Initialize the slab allocator. The slab allocator starts off having the slab
-// list head point to a dummy slab, so that the allocator itself can avoid NULL
-// checks.
-SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
-                             size_t start_offset_,
-                             size_t aligned_size_,
-                             size_t unaligned_size_)
-    : num_allocations_per_slab(num_allocations_per_slab_),
-      start_offset(start_offset_),
-      aligned_size(aligned_size_),
-      unaligned_size(unaligned_size_),
-      slab_list_tail(nullptr, num_allocations_per_slab_, 0),
-      slab_list_head(ATOMIC_VAR_INIT(&slab_list_tail)),
-      free_list(ATOMIC_VAR_INIT(nullptr)),
-      next_slab_number(ATOMIC_VAR_INIT(1)),
-      next_allocation_number(ATOMIC_VAR_INIT(num_allocations_per_slab_)) {
-
-  GRANARY_UNUSED(unaligned_size);
-}
-
-// Allocate some memory from heap.
-void *SlabAllocator::Allocate(void) {
-  return malloc(aligned_size);
-}
-
-// Free some memory from heap.
-void SlabAllocator::Free(void *address) {
-  memset(address, internal::DEALLOCATED_MEMORY_POISON, aligned_size);
-  free(address);
-}
-
-void SlabAllocator::Destroy(void) {}
-
-#endif  // GRANARY_WITH_VALGRIND
 
 }  // namespace internal
 }  // namespace granary

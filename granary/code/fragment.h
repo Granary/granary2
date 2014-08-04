@@ -7,7 +7,7 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/bitset.h"
 #include "granary/base/cast.h"
@@ -20,6 +20,8 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
+
+#include "os/logging.h"
 
 namespace granary {
 
@@ -245,11 +247,11 @@ typedef ListHeadIterator<Fragment> FragmentListIterator;
 typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
 typedef LinkedListIterator<Fragment> EncodeOrderedFragmentIterator;
 
-// Forward declarations.
-enum LogLevel : int;
+namespace os {
 
 // Log a list of fragments as a DOT digraph.
 void Log(LogLevel level, FragmentList *frags);
+}  // namespace os
 
 // Free all fragments, their instructions, etc.
 void FreeFragments(FragmentList *frags);

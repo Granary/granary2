@@ -11,7 +11,8 @@
 
 #include "granary/base/option.h"
 #include "granary/init.h"
-#include "granary/logging.h"
+
+#include "os/logging.h"
 
 GRANARY_DEFINE_bool(show_gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
@@ -43,8 +44,8 @@ namespace {
 static void InitDebug(void) {
   if (FLAG_show_gdb_prompt && !FLAG_help) {
     char buff[2];
-    Log(LogOutput, "Process ID for attaching GDB: %d\n", granary_getpid());
-    Log(LogOutput, "Press enter to continue.\n");
+    os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", granary_getpid());
+    os::Log(os::LogOutput, "Press enter to continue.\n");
     granary_read(0, buff, 1);
   }
 }

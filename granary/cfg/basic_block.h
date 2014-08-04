@@ -3,7 +3,7 @@
 #ifndef GRANARY_CFG_BASIC_BLOCK_H_
 #define GRANARY_CFG_BASIC_BLOCK_H_
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/base.h"
 #include "granary/base/cast.h"

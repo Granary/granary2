@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "granary/arch/driver.h"
+#include "arch/driver.h"
 
 #include "granary/base/cast.h"
 

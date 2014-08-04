@@ -3,7 +3,7 @@
 #ifndef GRANARY_CODE_REGISTER_H_
 #define GRANARY_CODE_REGISTER_H_
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/base.h"
 #include "granary/base/bitset.h"
@@ -77,7 +77,7 @@ union alignas(alignof(void *)) VirtualRegister {
   // Convert an architectural register into a virtual register.
   //
   // Note: This has a architecture-specific implementation. See
-  //       `granary/arch/*/register.cc` for the implementation.
+  //       `arch/*/register.cc` for the implementation.
   void DecodeFromNative(int arch_reg_id);
 
   // Returns a new virtual register that was created from an architectural

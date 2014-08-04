@@ -1,8 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 #include "granary/base/base.h"
-#include "granary/memory.h"
+
+#include "os/memory.h"
 
 #define PROT_READ 0x1
 #define PROT_WRITE 0x2
@@ -21,6 +22,7 @@ extern int granary_mlock(const void *__addr, size_t __len);
 
 }  // extern C
 namespace granary {
+namespace os {
 
 // Initialize the Granary heap.
 void InitHeap(void) {}
@@ -64,4 +66,5 @@ void ProtectPages(void *addr, int num, MemoryProtection prot) {
       prot_bits);
 }
 
+}  // namespace os
 }  // namespace granary

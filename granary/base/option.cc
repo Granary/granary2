@@ -5,7 +5,8 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 #include "granary/breakpoint.h"
-#include "granary/logging.h"
+
+#include "os/logging.h"
 
 namespace granary {
 namespace {
@@ -217,20 +218,16 @@ static const char *BufferDocString(char *buff, const char *docstring) {
 
 // Works for --help option: print out each options along with their document.
 void PrintAllOptions(void) {
-#ifdef GRANARY_WHERE_user
-  Log(LogOutput, "Usage for user space: grr <options> -- <executable>\n\n");
-#else
-# error "Option printing is not well-defined for kernel space."
-#endif
+  os::Log(os::LogOutput, "Usage for user space: grr <options> -- <executable>\n\n");
   char line_buff[LINE_LENGTH];
   for (auto option : OptionIterator(OPTIONS)) {
-    Log(LogOutput, "--\033[1m%s\033[m", option->name);
+    os::Log(os::LogOutput, "--\033[1m%s\033[m", option->name);
     auto docstring = option->docstring;
     do {
       docstring = BufferDocString(line_buff, docstring);
-      Log(LogOutput, "\n        %s", line_buff);
+      os::Log(os::LogOutput, "\n        %s", line_buff);
     } while (*docstring);
-    Log(LogOutput, "\n");
+    os::Log(os::LogOutput, "\n");
   }
 }
 

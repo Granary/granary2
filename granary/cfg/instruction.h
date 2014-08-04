@@ -11,7 +11,7 @@
 #include "granary/base/type_trait.h"
 
 #ifdef GRANARY_INTERNAL
-# include "granary/arch/driver.h"
+# include "arch/driver.h"
 #endif
 
 #include "granary/cfg/operand.h"

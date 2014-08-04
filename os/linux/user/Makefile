@@ -20,7 +20,6 @@ $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
 	$(GRANARY_LD) -r $^ -o $(GRANARY_OS_OBJ)
 
-
 # Lint all Granary OS code, independent of the OS, and independent of user or
 # kernel space.
 lint:

@@ -24,11 +24,11 @@ EXPORT_HEADERS = [
   "granary/code/inline_assembly.h",
   "granary/breakpoint.h",
   "granary/client.h",
-  "granary/logging.h",
   "granary/metadata.h",
   "granary/module.h",
   "granary/tool.h",
   "granary/util.h",
+  "os/logging.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")

@@ -3,7 +3,7 @@
 #ifndef GRANARY_MODULE_H_
 #define GRANARY_MODULE_H_
 
-#include "granary/arch/base.h"
+#include "arch/base.h"
 
 #include "granary/base/list.h"
 #include "granary/base/lock.h"

@@ -7,7 +7,7 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/arch/cpu.h"
+#include "arch/cpu.h"
 
 #include "granary/base/base.h"
 #include "granary/base/lock.h"
