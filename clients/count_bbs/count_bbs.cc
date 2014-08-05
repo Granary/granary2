@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include <granary/granary.h>
+#include <granary.h>
 
 using namespace granary;
 

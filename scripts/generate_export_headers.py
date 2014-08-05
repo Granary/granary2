@@ -32,6 +32,7 @@ EXPORT_HEADERS = [
   "granary/app.h",
   "granary/breakpoint.h",
   "granary/client.h",
+  "granary/entry.h",
   "granary/metadata.h",
   "granary/tool.h",
   "granary/util.h",

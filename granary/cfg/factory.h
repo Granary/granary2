@@ -14,6 +14,7 @@ class ContextInterface;
 class LocalControlFlowGraph;
 class BasicBlock;
 class DirectBasicBlock;
+class InstrumentedBasicBlock;
 class BlockMetaData;
 class HashFunction;
 

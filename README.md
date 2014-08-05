@@ -33,7 +33,6 @@ If you are compiling Granary for user space, run:
 
 ```basemake
 make clean
-sudo make headers
 make all -j
 ```
 

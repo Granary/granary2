@@ -7,7 +7,6 @@
 #include "granary/base/container.h"
 #include "granary/base/option.h"
 
-#include "granary/attach.h"
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
@@ -45,7 +44,7 @@ void Init(void) {
     context.Construct();
     InitClients();
     context->InitTools(FLAG_tools);
-    Attach(context.AddressOf());
+    SetGlobalContext(context.AddressOf());
   } else {
     PrintAllOptions();
   }

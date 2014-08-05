@@ -16,10 +16,10 @@ namespace granary {
 
 // Forward declarations.
 class ContextInterface;
-class Module;
 
 namespace os {
 class ModuleManager;
+class Module;
 
 // Represents a location in a module. Note that not all segments within modules
 // are necessarily contiguous, but in most cases they are.

@@ -10,6 +10,7 @@
 
 #include "granary/code/inline_assembly.h"
 
+#include "granary/entry.h"
 #include "granary/metadata.h"
 
 namespace granary {
@@ -19,6 +20,7 @@ class Module;
 
 // Forward declarations.
 class BlockFactory;
+class CompensationBasicBlock;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class InstrumentationTool;
@@ -40,12 +42,17 @@ class InstrumentationTool {
   // Closes any open inline assembly scopes.
   virtual ~InstrumentationTool(void);
 
+  // Used to instrument code entrypoints.
+  virtual void InstrumentEntryPoint(BlockFactory *factory,
+                                    CompensationBasicBlock *entry_block,
+                                    EntryPointKind kind, int category);
+
   // Used to instrument control-flow instructions and decide how basic blocks
   // should be materialized.
   //
   // This method is repeatedly executed until no more materialization
   // requests are made.
-  virtual void InstrumentControlFlow(BlockFactory *materializer,
+  virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg);
 
   // Used to implement more complex forms of instrumentation where tools need

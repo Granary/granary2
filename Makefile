@@ -2,7 +2,7 @@
 
 include Makefile.inc
 
-.PHONY: all headers clean clean_generated test
+.PHONY: all clean clean_generated test
 .PHONY: clients clean_clients
 .PHONY: where_common where_user where_kernel
 .PHONY: target_debug target_release target_test
@@ -27,9 +27,16 @@ build_os:
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
+# Make a header file that external clients can use to define clients.
+$(GRANARY_HEADERS):
+	@mkdir -p $(GRANARY_HEADERS_DIR)
+	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
+		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
+		"$(GRANARY_HEADER_MACRO_DEFS)"
+
 # Generate rules for each Granary client.
 define GENRULE_BUILD_CLIENT
-build_client_$(1):
+build_client_$(1): $(GRANARY_HEADERS)
 	@echo "Entering $(GRANARY_CLIENT_DIR)/$(1)"
 	$(MAKE) -C $(GRANARY_CLIENT_DIR)/$(1) \
 		$(MFLAGS) \
@@ -83,13 +90,6 @@ clean:
 clean_generated:
 	@echo "Removing all previously auto-generated files."
 	@find $(GRANARY_GEN_SRC_DIR) -type f -execdir rm {} \;
-
-# Make a header file that external clients can use to define clients.
-headers:
-	@mkdir -p $(GRANARY_EXPORT_HEADERS_DIR)
-	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
-		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_EXPORT_HEADERS_DIR) \
-		"$(GRANARY_HEADER_MACRO_DEFS)"
 
 # Run all test cases.
 test: all

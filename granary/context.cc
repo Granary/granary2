@@ -123,6 +123,9 @@ Context::Context(void)
 
 // Initialize all tools from a comma-separated list of tools.
 void Context::InitTools(const char *tool_names) {
+  // Force register either the kernel- or user-space tools.
+  tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
+
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
       tool_names,
       [&] (const char *tool_name) {
@@ -249,6 +252,20 @@ CodeCache *Context::BlockCodeCache(void) {
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;
+}
+
+namespace {
+static std::atomic<ContextInterface *> context(ATOMIC_VAR_INIT(nullptr));
+}
+
+// Changes the active context.
+void SetGlobalContext(ContextInterface *context_) {
+  context.store(context_);
+}
+
+// Loads the active context.
+ContextInterface *GlobalContext(void) {
+  return context.load();
 }
 
 }  // namespace granary

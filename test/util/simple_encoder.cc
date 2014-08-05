@@ -21,9 +21,9 @@ using namespace granary;
 using namespace testing;
 
 SimpleEncoderTest::SimpleEncoderTest(void)
-    : module(ModuleKind::GRANARY, "granary"),
-      code_cache_mod(ModuleKind::GRANARY_CODE_CACHE, "[code cache]"),
-      edge_cache_mod(ModuleKind::GRANARY_CODE_CACHE, "[edge cache]"),
+    : module(os::ModuleKind::GRANARY, "granary"),
+      code_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE, "[code cache]"),
+      edge_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE, "[edge cache]"),
       code_cache(&code_cache_mod, 1),
       edge_cache(&edge_cache_mod, 1),
       index(new MockIndex),
@@ -34,7 +34,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<IndexMetaData>();
   arch::Init();
   module.SetContext(&context);
-  module.AddRange(0, ~0ULL, 0, MODULE_EXECUTABLE);
+  module.AddRange(0, ~0ULL, 0, os::MODULE_EXECUTABLE);
 
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, BlockCodeCache())
@@ -76,11 +76,10 @@ CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
   EXPECT_CALL(context, FreeTools(nullptr))
       .Times(1);
 
-  Instrument(&context, &cfg, meta);
+  BinaryInstrumenter inst(&context, &cfg, meta);
+  meta = inst.InstrumentDirect();
   Compile(&context, &cfg);
 
-  auto block = cfg.EntryBlock();
-  auto cache_meta = GetMetaData<CacheMetaData>(block);
-
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   return cache_meta->start_pc;
 }

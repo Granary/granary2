@@ -51,15 +51,14 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
   LocalControlFlowGraph cfg(context);
-  CacheMetaData *cache_meta(nullptr);
-  meta = Instrument(context, &cfg, meta, INSTRUMENT_DIRECT);
-  cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  BinaryInstrumenter inst(context, &cfg, meta);
+  meta = inst.InstrumentDirect();
+
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
     auto index = context->CodeCacheIndex();
     Compile(context, &cfg);
     IndexBlocks(index, &cfg);
-  } else {
-    GRANARY_USED(cache_meta->start_pc);
   }
   GRANARY_ASSERT(nullptr != cache_meta->start_pc);
   return cache_meta->start_pc;
@@ -69,17 +68,35 @@ CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
 // is targeted by an indirect control-transfer instruction.
 CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                   AppPC target_app_pc) {
-  LocalControlFlowGraph cfg(context);
   auto meta = context->AllocateBlockMetaData(edge->meta_template,
                                              target_app_pc);
-  meta = Instrument(context, &cfg, meta, INSTRUMENT_INDIRECT);
+
+  LocalControlFlowGraph cfg(context);
+  BinaryInstrumenter inst(context, &cfg, meta);
+  meta = inst.InstrumentIndirect();
+
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {
     auto index = context->CodeCacheIndex();
     Compile(context, &cfg, edge, target_app_pc);
     IndexBlocks(index, &cfg);
-  } else {
-    GRANARY_USED(cache_meta->start_pc);
+  }
+  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
+  return cache_meta->start_pc;
+}
+
+// Instrument, compile, and index some basic blocks that are the entrypoints
+// to some native code.
+CachePC TranslateEntryPoint(ContextInterface *context, BlockMetaData *meta,
+                            EntryPointKind kind, int category) {
+  LocalControlFlowGraph cfg(context);
+  BinaryInstrumenter inst(context, &cfg, meta);
+  meta = inst.InstrumentEntryPoint(kind, category);
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->start_pc) {
+    auto index = context->CodeCacheIndex();
+    Compile(context, &cfg);
+    IndexBlocks(index, &cfg);
   }
   GRANARY_ASSERT(nullptr != cache_meta->start_pc);
   return cache_meta->start_pc;

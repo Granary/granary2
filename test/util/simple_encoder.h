@@ -8,7 +8,8 @@
 #include "arch/init.h"
 
 #include "granary/metadata.h"
-#include "granary/module.h"
+
+#include "os/module.h"
 
 #include "test/context.h"
 #include "test/index.h"
@@ -35,9 +36,9 @@ class SimpleEncoderTest : public testing::Test {
   granary::CachePC InstrumentAndEncode(granary::AppPC pc);
 
   MockContext context;
-  granary::Module module;
-  granary::Module code_cache_mod;
-  granary::Module edge_cache_mod;
+  granary::os::Module module;
+  granary::os::Module code_cache_mod;
+  granary::os::Module edge_cache_mod;
   granary::CodeCache code_cache;
   granary::CodeCache edge_cache;
   granary::MetaDataManager meta_manager;

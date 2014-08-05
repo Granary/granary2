@@ -8,7 +8,7 @@
 #include "granary/base/cast.h"
 #include "granary/base/string.h"
 
-#include "granary/module.h"
+#include "os/module.h"
 
 #include "test/context.h"
 
@@ -21,14 +21,15 @@ class ModuleManagerTest : public Test {
       : context(),
         m1(&context),
         m2(&context),
-        mod(new Module(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING)) {
+        mod(new os::Module(os::ModuleKind::KERNEL_MODULE,
+                           GRANARY_NAME_STRING)) {
     m2.RegisterAllBuiltIn();
   }
 
   MockContext context;
-  ModuleManager m1;
-  ModuleManager m2;
-  Module *mod;
+  os::ModuleManager m1;
+  os::ModuleManager m2;
+  os::Module *mod;
 };
 
 TEST_F(ModuleManagerTest, EmptyDoesNotFindLibC) {
@@ -77,8 +78,8 @@ TEST_F(ModuleManagerTest, FindRegisteredModulePC) {
 class ModuleTest : public Test {
  protected:
   ModuleTest(void)
-      : mod(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {}
-  Module mod;
+      : mod(os::ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {}
+  os::Module mod;
 };
 
 TEST_F(ModuleTest, DoesNotContainNullptr) {
@@ -92,7 +93,7 @@ TEST_F(ModuleTest, ReturnsInvalidOffset) {
 }
 
 TEST_F(ModuleTest, HasInitializedKind) {
-  ASSERT_TRUE(ModuleKind::KERNEL_MODULE == mod.Kind());
+  ASSERT_TRUE(os::ModuleKind::KERNEL_MODULE == mod.Kind());
 }
 
 TEST_F(ModuleTest, HasInitializedName) {
@@ -102,7 +103,7 @@ TEST_F(ModuleTest, HasInitializedName) {
 class ModuleRangeTest : public Test {
  protected:
   ModuleRangeTest(void)
-      : mod(ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
+      : mod(os::ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
     mod.AddRange(100, 200, 0, 0);
   }
 
@@ -126,7 +127,7 @@ class ModuleRangeTest : public Test {
     }
   }
 
-  Module mod;
+  os::Module mod;
 };
 
 TEST_F(ModuleRangeTest, PCsInAndOutOfRange) {

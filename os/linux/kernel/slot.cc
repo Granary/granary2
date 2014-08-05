@@ -4,6 +4,8 @@
 
 #include "os/slot.h"
 
+#include "granary/breakpoint.h"
+
 extern "C" {
 
 // Per-CPU spill slots.

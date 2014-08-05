@@ -16,13 +16,14 @@ class MockContext : public granary::ContextInterface {
   virtual ~MockContext(void) = default;
 
   /// Returns a pointer to the module containing some program counter.
-  MOCK_METHOD1(FindModuleContainingPC, const granary::Module *(granary::AppPC));
+  MOCK_METHOD1(FindModuleContainingPC,
+               const granary::os::Module *(granary::AppPC));
 
   /// Returns a pointer to the module containing some program counter.
-  MOCK_METHOD1(FindModuleByName, const granary::Module *(const char *));
+  MOCK_METHOD1(FindModuleByName, const granary::os::Module *(const char *));
 
   // Returns an iterator to all currently loaded modules.
-  MOCK_CONST_METHOD0(LoadedModules, granary::ConstModuleIterator(void));
+  MOCK_CONST_METHOD0(LoadedModules, granary::os::ConstModuleIterator(void));
 
   // Allocate and initialize some `BlockMetaData`.
   MOCK_METHOD1(AllocateBlockMetaData,

@@ -7,38 +7,63 @@
 # error "This code is internal to Granary."
 #endif
 
+#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/factory.h"
+
+#include "granary/entry.h"
+
 namespace granary {
 
 // Forward declarations.
-class LocalControlFlowGraph;
 class BlockMetaData;
 class ContextInterface;
+class InstrumentationTool;
 
-// The kind of instrumentation request. That is, are we trying to instrument
-// a block that is untargeted / targeted by a direct control flow instruction,
-// or a block that is targeted by an indirect control-flow instruction?
-//
-// The major difference between direct/indirect is that with indirect, we need
-// to give clients/tools the option to jump to native code, which requires a
-// compensation basic block. Another issue is that of specialized returns, or
-// things like `longjmp`, where we want the target of the indirect jump might
-// be an address in the code cache. In these cases, we want to combine the
-// meta-datas together.
-enum InstrumentRequestKind {
-  INSTRUMENT_DIRECT,
-  INSTRUMENT_INDIRECT
-};
-
-// Instrument some initial code (described by `meta`) and fills the LCFG `cfg`
+// Instrument some initial code (described by `meta`) and fills a LCFG `cfg`
 // with the instrumented code. `meta` is taken as being "owned", i.e. no one
 // should be concurrently modifying `meta`!
 //
 // Note: `meta` might be deleted if some block with the same meta-data already
 //       exists in the code cache index. Therefore, one must use the returned
 //       meta-data hereafter.
-BlockMetaData *Instrument(ContextInterface *env, LocalControlFlowGraph *cfg,
-                          BlockMetaData *meta,
-                          InstrumentRequestKind kind=INSTRUMENT_DIRECT);
+class BinaryInstrumenter {
+ public:
+  BinaryInstrumenter(ContextInterface *context_, LocalControlFlowGraph *cfg_,
+                     BlockMetaData *meta_);
+  ~BinaryInstrumenter(void);
+
+  // Instrument some code as-if it is targeted by a direct CFI.
+  BlockMetaData *InstrumentDirect(void);
+
+  // Instrument some code as-if it is targeted by an indirect CFI.
+  BlockMetaData *InstrumentIndirect(void);
+
+  // Instrument some code as-if it is targeted by a native entrypoint. These
+  // are treated as being the initial points of instrumentation.
+  BlockMetaData *InstrumentEntryPoint(EntryPointKind kind, int category);
+
+ private:
+  // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
+  // allowed to materialize direct basic blocks into other forms of basic
+  // blocks.
+  void InstrumentControlFlow(void);
+
+  // Apply LCFG-wide instrumentation for every tool.
+  void InstrumentBlocks(void);
+
+  // Apply instrumentation to every block for every tool.
+  //
+  // Note: This applies tool-specific instrumentation for all tools to a single
+  //       block before moving on to the next block in the LCFG.
+  void InstrumentBlock(void);
+
+  ContextInterface *context;
+  InstrumentationTool *tools;
+  BlockMetaData *meta;
+
+  LocalControlFlowGraph *cfg;
+  BlockFactory factory;
+};
 
 }  // namespace granary
 

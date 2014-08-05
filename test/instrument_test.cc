@@ -6,7 +6,8 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/instrument.h"
 #include "granary/metadata.h"
-#include "granary/module.h"
+
+#include "os/module.h"
 
 #include "test/context.h"
 #include "test/index.h"
@@ -113,6 +114,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
 
   do {
     LocalControlFlowGraph cfg(&context);  // Meta-data will be cleaned up.
-    Instrument(&context, &cfg, meta);
+    BinaryInstrumenter inst(&context, &cfg, meta);
+    inst.InstrumentDirect();
   } while (0);
 }

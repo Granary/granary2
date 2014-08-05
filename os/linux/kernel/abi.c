@@ -3,7 +3,6 @@
 #ifndef GRANARY_KERNEL_LIBCXX_CC_
 #define GRANARY_KERNEL_LIBCXX_CC_
 
-
 // Called inside of `__cxx_global_var_init`.
 void __cxa_atexit(void) { }
 
@@ -20,6 +19,8 @@ void __cxa_guard_release (__guard *g) {
   *g = 0;
 }
 
-void __cxa_guard_abort (__guard *) { }
+void __cxa_guard_abort (__guard *g) {
+  (void) g;
+}
 
 #endif  // GRANARY_KERNEL_LIBCXX_CC_

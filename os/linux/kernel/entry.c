@@ -37,10 +37,11 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Peter Goodman <pag@cs.toronto.edu>");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 
+extern struct LinuxKernelModule *granary_kernel_modules;
+
 // Initialize the Granary kernel module.
 static int granary_enter(void) {
   printk("[granary] Entering Granary.\n");
-
   return 0;
 }
 

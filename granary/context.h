@@ -186,6 +186,12 @@ class Context : public ContextInterface {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };
 
+// Changes the active context.
+void SetGlobalContext(ContextInterface *context);
+
+// Loads the active context.
+ContextInterface *GlobalContext(void);
+
 }  // namespace granary
 
 #endif  // GRANARY_CONTEXT_H_

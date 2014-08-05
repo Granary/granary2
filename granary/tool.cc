@@ -83,6 +83,11 @@ InstrumentationTool::~InstrumentationTool(void) {
   }
 }
 
+// Used to instrument code entrypoints.
+void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
+                                               CompensationBasicBlock *,
+                                               EntryPointKind, int) {}
+
 // Used to instrument control-flow instructions and decide how basic blocks
 // should be materialized.
 //

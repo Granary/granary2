@@ -10,7 +10,7 @@
 namespace granary {
 namespace os {
 extern "C" {
-extern LinuxKernelModule *GRANARY_KERNEL_MODULES;
+LinuxKernelModule *granary_kernel_modules(nullptr);
 }  // extern C
 
 typedef LinkedListIterator<LinuxKernelModule> LinuxKernelModuleIterator;
@@ -40,7 +40,7 @@ static ModuleKind GetModuleKind(LinuxKernelModule *mod) {
 
 // Find and register all built-in modules.
 void ModuleManager::RegisterAllBuiltIn(void) {
-  for (auto mod : LinuxKernelModuleIterator(GRANARY_KERNEL_MODULES)) {
+  for (auto mod : LinuxKernelModuleIterator(granary_kernel_modules)) {
     if (!mod->seen_by_granary) {
       auto module = new Module(GetModuleKind(mod), mod->name);
       mod->seen_by_granary = 1;

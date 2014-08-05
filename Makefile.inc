@@ -14,8 +14,6 @@ GRANARY_WHERE ?= user# user, kernel
 GRANARY_DRIVER ?= xed2-intel64
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
-GRANARY_EXPORT_HEADERS_DIR ?= /usr/local/include/granary
-GRANARY_EXPORT_LIB_DIR ?= /usr/local/lib
 GRANARY_LINT_CODE ?= 1# 0, 1
 GRANARY_HEADER_MACRO_DEFS =
 
@@ -70,13 +68,15 @@ GRANARY_EXTRA_CC_FLAGS ?=
 GRANARY_LD_FLAGS =
 GRANARY_LD_FLAGS_EARLY =
 GRANARY_LD_FLAGS_LATE =
-GRANARY_CC_FLAGS = $(GRANARY_EXTRA_CC_FLAGS)
-GRANARY_CXX_FLAGS = $(GRANARY_EXTRA_CXX_FLAGS)
+GRANARY_CC_FLAGS = $(GRANARY_EXTRA_CC_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
+GRANARY_CXX_FLAGS = $(GRANARY_EXTRA_CXX_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
 GRANARY_ASM_FLAGS = -DGRANARY_ASSEMBLY
 GRANARY_COMMON_FLAGS =
 GRANARY_COMMON_ARCH_FLAGS =
 GRANARY_COMMON_WARN_FLAGS =
 GRANARY_DEBUG_FLAGS =
+GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_WHERE)
+GRANARY_HEADERS = $(GRANARY_HEADERS_DIR)/granary.h
 
 ifdef GRANARY_CLIENT_NAME
 	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
@@ -138,15 +138,13 @@ ifeq ("x86-64","$(GRANARY_ARCH)")
 endif
 ifeq (kernel,$(GRANARY_WHERE))
 	GRANARY_COMMON_ARCH_FLAGS += -nostdlib
+	GRANARY_LD_FLAGS_EARLY += -nodefaultlibs
+	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
 endif
 
 # Make sure certain language features are disabled.
 GRANARY_COMMON_CXX_FLAGS += -fno-asynchronous-unwind-tables
-GRANARY_COMMON_CXX_FLAGS += -fno-rtti -fno-exceptions 
-
-ifeq (kernel,$(GRANARY_WHERE))  # Make sure we follow the kernel ABI.
-	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
-endif
+GRANARY_COMMON_CXX_FLAGS += -fno-rtti -fno-exceptions
 
 # Make sure that we generate position-independent code, regardless of whether
 # or not we're in user space or kernel space.

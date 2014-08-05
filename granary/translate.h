@@ -10,6 +10,8 @@
 #include "granary/base/cast.h"
 #include "granary/base/pc.h"
 
+#include "granary/entry.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -39,6 +41,11 @@ template <typename T>
 static inline CachePC Translate(ContextInterface *context, T func_ptr) {
   return Translate(context, UnsafeCast<AppPC>(func_ptr), TRANSLATE_STACK_VALID);
 }
+
+// Instrument, compile, and index some basic blocks that are the entrypoints
+// to some native code.
+CachePC TranslateEntryPoint(ContextInterface *context, BlockMetaData *meta,
+                            EntryPointKind kind, int entry_category=-1);
 
 }  // namespace granary
 

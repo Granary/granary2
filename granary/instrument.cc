@@ -16,6 +16,67 @@
 #include "granary/tool.h"
 
 namespace granary {
+
+// Initialize a binary instrumenter.
+BinaryInstrumenter::BinaryInstrumenter(ContextInterface *context_,
+                                       LocalControlFlowGraph *cfg_,
+                                       BlockMetaData *meta_)
+    : context(context_),
+      tools(context->AllocateTools()),
+      meta(meta_),
+      cfg(cfg_),
+      factory(context, cfg) {}
+
+BinaryInstrumenter::~BinaryInstrumenter(void) {
+  context->FreeTools(tools);
+}
+
+// Instrument some code as-if it is targeted by a direct CFI.
+BlockMetaData *BinaryInstrumenter::InstrumentDirect(void) {
+  auto entry_block = factory.RequestIndexedBlock(&meta);
+  if (!entry_block) {  // Couldn't find or adapt to a existing block.
+    factory.MaterializeInitialBlock(meta);
+    entry_block = cfg->EntryBlock();
+  } else {
+    meta = entry_block->UnsafeMetaData();
+  }
+  if (IsA<DecodedBasicBlock *>(entry_block)) {  // Instrument decoded blocks.
+    InstrumentControlFlow();
+    InstrumentBlocks();
+    InstrumentBlock();
+  } else {  // We got a cached block.
+    delete entry_block;
+  }
+  return meta;
+}
+
+// Instrument some code as-if it is targeted by an indirect CFI.
+BlockMetaData *BinaryInstrumenter::InstrumentIndirect(void) {
+  factory.MaterializeInitialIndirectBlock(meta);
+  InstrumentControlFlow();
+  InstrumentBlocks();
+  InstrumentBlock();
+  return meta;
+}
+
+// Instrument some code as-if it is targeted by a native entrypoint. These
+// are treated as being the initial points of instrumentation.
+BlockMetaData *BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
+                                                        int category) {
+  factory.MaterializeInitialIndirectBlock(meta);
+  auto entry_block = DynamicCast<CompensationBasicBlock *>(cfg->EntryBlock());
+  for (auto tool : ToolIterator(tools)) {
+    tool->InstrumentEntryPoint(&factory, entry_block, kind, category);
+  }
+  if (factory.HasPendingMaterializationRequest()) {
+    factory.MaterializeRequestedBlocks();
+  }
+  InstrumentControlFlow();
+  InstrumentBlocks();
+  InstrumentBlock();
+  return meta;
+}
+
 namespace {
 
 // Try to finalize the control-flow bt converting any remaining
@@ -31,16 +92,17 @@ static bool FinalizeControlFlow(BlockFactory *factory,
   return factory->HasPendingMaterializationRequest();
 }
 
+}  // namespace
+
 // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
-// allowed to materialize direct basic blocks into other forms of basic blocks.
-static void InstrumentControlFlow(InstrumentationTool *tools,
-                                  BlockFactory *factory,
-                                  LocalControlFlowGraph *cfg) {
-  for (auto finalized = false; ; factory->MaterializeRequestedBlocks()) {
+// allowed to materialize direct basic blocks into other forms of basic
+// blocks.
+void BinaryInstrumenter::InstrumentControlFlow(void) {
+  for (auto finalized = false; ; factory.MaterializeRequestedBlocks()) {
     for (auto tool : ToolIterator(tools)) {
-      tool->InstrumentControlFlow(factory, cfg);
+      tool->InstrumentControlFlow(&factory, cfg);
     }
-    if (!factory->HasPendingMaterializationRequest()) {
+    if (!factory.HasPendingMaterializationRequest()) {
       if (finalized) {
         return;
 
@@ -48,7 +110,7 @@ static void InstrumentControlFlow(InstrumentationTool *tools,
       // submit requests to look into the code cache index.
       } else {
         finalized = true;
-        if (!FinalizeControlFlow(factory, cfg)) return;
+        if (!FinalizeControlFlow(&factory, cfg)) return;
       }
     } else {
       finalized = false;
@@ -57,7 +119,7 @@ static void InstrumentControlFlow(InstrumentationTool *tools,
 }
 
 // Apply LCFG-wide instrumentation for every tool.
-static void InstrumentBlocks(InstrumentationTool *tools, LocalControlFlowGraph *cfg) {
+void BinaryInstrumenter::InstrumentBlocks(void) {
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentBlocks(cfg);
   }
@@ -67,7 +129,7 @@ static void InstrumentBlocks(InstrumentationTool *tools, LocalControlFlowGraph *
 //
 // Note: This applies tool-specific instrumentation for all tools to a single
 //       block before moving on to the next block in the LCFG.
-static void InstrumentBlock(InstrumentationTool *tools, LocalControlFlowGraph *cfg) {
+void BinaryInstrumenter::InstrumentBlock(void) {
   for (auto block : cfg->Blocks()) {
     for (auto tool : ToolIterator(tools)) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
@@ -76,53 +138,6 @@ static void InstrumentBlock(InstrumentationTool *tools, LocalControlFlowGraph *c
       }
     }
   }
-}
-
-}  // namespace
-
-// Instrument one or more basic blocks (contained in the local control-
-// flow graph, or materialized during `InstrumentControlFlow`).
-//
-// Note: `meta` might be deleted if some block with the same meta-data already
-//       exists in the code cache index. Therefore, one must use the returned
-//       meta-data hereafter.
-BlockMetaData *Instrument(ContextInterface *context,
-                          LocalControlFlowGraph *cfg,
-                          BlockMetaData *meta,
-                          InstrumentRequestKind kind) {
-  BlockFactory factory(context, cfg);
-  InstrumentedBasicBlock *entry_block(nullptr);
-
-  if (INSTRUMENT_DIRECT == kind) {
-    entry_block = factory.RequestIndexedBlock(&meta);
-    if (!entry_block) {  // Couldn't find or adapt to a existing block.
-      factory.MaterializeInitialBlock(meta);
-      entry_block = cfg->EntryBlock();
-    } else {
-      meta = entry_block->UnsafeMetaData();
-    }
-  } else {
-    entry_block = factory.MaterializeInitialIndirectBlock(meta);
-  }
-
-  // If we have a decoded block, then instrument it.
-  if (IsA<DecodedBasicBlock *>(entry_block)) {
-    auto tools = context->AllocateTools();
-    InstrumentControlFlow(tools, &factory, cfg);
-    InstrumentBlocks(tools, cfg);
-    InstrumentBlock(tools, cfg);
-    context->FreeTools(tools);
-
-    // Verify that the indexable meta-data for the entry basic block has not
-    // changed during the instrumentation process.
-    //
-    // TODO(pag): Previously, hashes were also compared. This might be a
-    //            reasonable thing to do again.
-  } else {
-    delete entry_block;
-  }
-
-  return meta;
 }
 
 }  // namespace granary
