@@ -19,8 +19,7 @@ struct alignas(arch::PAGE_SIZE_BYTES) PageFrame {
 };
 
 extern "C" {
-__attribute__((weak))
-extern PageFrame *module_alloc(unsigned long);
+extern PageFrame *(*linux_module_alloc)(unsigned long);
 }
 
 template <int kNumPages>
@@ -170,7 +169,8 @@ static Container<DynamicHeap<NUM_EXEC_PAGES>> exec_memory;
 // Initialize the Granary heap.
 void InitHeap(void) {
   rw_memory.Construct();
-  exec_memory.Construct(module_alloc(NUM_EXEC_PAGES * arch::PAGE_SIZE_BYTES));
+  exec_memory.Construct(linux_module_alloc(
+      NUM_EXEC_PAGES * arch::PAGE_SIZE_BYTES));
 }
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`

@@ -39,7 +39,10 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
 $(GRANARY_SHIPPED_BIN):
 	@mkdir -p $(GRANARY_MOD_BIN_DIR)
 	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
-	@$(GRANARY_LD) -r $(GRANARY_BIN_DIR)/*.o -o $(GRANARY_SHIPPED_BIN)
+	@$(GRANARY_LD) \
+		-T $(GRANARY_WHERE_SRC_DIR)/constructor.lds \
+		-r $(GRANARY_BIN_DIR)/*.o \
+		-o $(GRANARY_SHIPPED_BIN)
 	# Make a `.cmd` file for the shipped object file.
 	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)
 

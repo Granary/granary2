@@ -11,6 +11,10 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+#include "os/linux/kernel/module/constructor.h"
+#include "os/linux/kernel/module/symbol.h"
+
+#if 0
 #include <asm/uaccess.h>
 
 #include <linux/fs.h>
@@ -23,8 +27,7 @@
 #include <linux/printk.h>
 #include <linux/rculist.h>
 #include <linux/slab.h>
-
-#include "os/linux/kernel/module.h"
+#endif
 
 #ifndef CONFIG_MODULES
 # error "Module auto-loading must be supported (`CONFIG_MODULES`)."
@@ -38,11 +41,11 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Peter Goodman <pag@cs.toronto.edu>");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 
-extern struct LinuxKernelModule *granary_kernel_modules;
-
 // Initialize the Granary kernel module.
 static int granary_enter(void) {
   printk("[granary] Entering Granary.\n");
+  ResolveSymbols();
+  RunConstructors();
   return 0;
 }
 
