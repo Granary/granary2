@@ -1,7 +1,7 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
 obj-m := granary.o
-granary-y := abi.o driver.o entry.o granary_bin.o
+granary-y := abi.o entry.o granary_bin.o
 
 # Extra C and assembler flags.
 cflags-y = -I$(GRANARY_SRC_DIR)

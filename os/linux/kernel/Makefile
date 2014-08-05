@@ -20,6 +20,7 @@ GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
 GRANARY_MOD_BIN_DIR = $(GRANARY_BIN_DIR)/module
 GRANARY_MODULE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME).ko
 GRANARY_SHIPPED_BIN = $(GRANARY_MOD_BIN_DIR)/granary_bin.o_shipped
+GRANARY_SHIPPED_CMD = $(GRANARY_MOD_BIN_DIR)/.granary_bin.o.cmd
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
@@ -39,6 +40,8 @@ $(GRANARY_SHIPPED_BIN):
 	@mkdir -p $(GRANARY_MOD_BIN_DIR)
 	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
 	@$(GRANARY_LD) -r $(GRANARY_BIN_DIR)/*.o -o $(GRANARY_SHIPPED_BIN)
+	# Make a `.cmd` file for the shipped object file.
+	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)
 
 # Create the `granary.ko` file. The steps are as follows:
 #	1) Merge all main granary `.o` files together into a "shipped" `.o` file,
