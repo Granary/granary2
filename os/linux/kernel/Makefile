@@ -45,14 +45,13 @@ $(GRANARY_SHIPPED_BIN):
 
 # Create the `granary.ko` file. The steps are as follows:
 #	1) Merge all main granary `.o` files together into a "shipped" `.o` file,
-#	   thus creating `bin/module/granary_bin.o_shipped`.
-#	2) Copy `Module.mk` into `bin/module/Makefile`.
-#	3) Copy the `.c` files from `os/linux/kernel` into `bin/module`, as those
-#	   will be built by kbuild.
-#	4) Invoke kbuild on `bin/module/Makefile`.
+#	   thus creating `bin/module/granary_bin.o_shipped`. We also create an
+#	   associated `.cmd` file for the shipped binary.
+#	2) Copy the `os/linux/kernel/module` subdirectory into the `bin/<triple>`
+#	   directory.
+#	3) Invoke kbuild on `bin/<triple>/module/Makefile`.
 $(GRANARY_MODULE): $(GRANARY_SHIPPED_BIN)
-	@cp $(GRANARY_WHERE_SRC_DIR)/Module.mk $(GRANARY_MOD_BIN_DIR)/Makefile
-	@cp $(GRANARY_WHERE_SRC_DIR)/*.c $(GRANARY_MOD_BIN_DIR)
+	@cp -ar $(GRANARY_WHERE_SRC_DIR)/module $(GRANARY_BIN_DIR)
 	$(MAKE) -C $(GRANARY_KERNEL_DIR) \
 		M=$(GRANARY_MOD_BIN_DIR) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
 		modules
