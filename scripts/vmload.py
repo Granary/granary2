@@ -99,6 +99,10 @@ def main(argv):
       '--target', type=str, default="debug",
       help="Compilation target (i.e. release or debug).")
 
+  parser.add_argument(
+      '--os', type=str, default="linux",
+      help="Operating system (currently only linux).")
+
   args = parser.parse_args(argv)
 
   if args.get_sections is not None:
@@ -112,7 +116,9 @@ def main(argv):
     rel_path = "../"
 
   local_granary_file = os.path.join(
-      sys.path[0], "%sbin/%s_kernel/granary.ko" % (rel_path, args.target))
+      sys.path[0], "%sbin/%s_%s_kernel/module/granary.ko" % (rel_path,
+                                                             args.target,
+                                                             args.os))
   local_symbols_file = os.path.join(sys.path[0], "%skernel.syms" % rel_path)
   local_granary_symbols_file = "/tmp/granary.syms"
 
