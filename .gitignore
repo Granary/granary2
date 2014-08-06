@@ -34,6 +34,7 @@ generated/*
 # Debugging files
 vmlinux
 qemu.img
+dependencies/linux/*
 
 # Intel XED2 files
 dependencies/xed2-intel64/examples/*
