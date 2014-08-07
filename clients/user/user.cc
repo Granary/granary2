@@ -15,7 +15,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
       auto direct_block = DynamicCast<DirectBasicBlock *>(block);
       if (!direct_block) continue;
 
-      // If this block targets `libdl` then detach.
+      // If this block targets `libdl` or `libld` then detach.
       auto module = ModuleContainingPC(direct_block->StartAppPC());
       if (StringsMatch("dl", module->Name()) ||
           StringsMatch("ld", module->Name())) {
@@ -25,7 +25,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   }
 };
 
-// Initialize the `whole_func` tool.
+// Initialize the `user` tool.
 GRANARY_CLIENT_INIT({
   RegisterInstrumentationTool<UserSpaceInstrumenter>("user");
 })

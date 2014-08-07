@@ -12,6 +12,12 @@ void SynchronizePipeline(void);
 
 unsigned long CycleCount(void);
 
+bool TryDisableInterrupts(void);
+void EnableInterrupts(void);
+
+bool TryDisablePageProtection(void);
+void EnablePageProtection(void);
+
 }  // namespace arch
 }  // namespace granary
 

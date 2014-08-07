@@ -124,6 +124,9 @@ class Module {
   GRANARY_INTERNAL_DEFINITION
   void RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
 
+  // Remove all ranges from this module.
+  GRANARY_INTERNAL_DEFINITION void RemoveRanges(void);
+
   GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
@@ -212,6 +215,12 @@ class ModuleManager {
   //
   // This function should only be invoked once per `ModuleManager` instance.
   void RegisterAllBuiltIn(void);
+
+  // Find all built-in modules. In user space, this will go and find things
+  // like libc. In kernel space, this will identify already loaded modules.
+  //
+  // This function should only be invoked once per `ModuleManager` instance.
+  void ReRegisterAllBuiltIn(void);
 
   // Returns an iterator over all loaded modules.
   inline ConstModuleIterator Modules(void) const {

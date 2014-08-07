@@ -201,5 +201,10 @@ void ModuleManager::RegisterAllBuiltIn(void) {
   ParseMapsFile(this);
 }
 
+// Find and register all built-in modules.
+void ModuleManager::ReRegisterAllBuiltIn(void) {
+  RegisterAllBuiltIn();
+}
+
 }  // namespace os
 }  // namespace granary

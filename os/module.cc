@@ -103,10 +103,7 @@ Module::Module(ModuleKind kind_, const char *name_)
 }
 
 Module::~Module(void) {
-  for (ModuleAddressRange *next_range(nullptr); ranges; ranges = next_range) {
-    next_range = ranges->next;
-    delete ranges;
-  }
+  RemoveRanges();
   context = nullptr;
 }
 
@@ -165,6 +162,14 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
 void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
   ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
   RemoveRangeConflicts(begin_addr, end_addr);
+}
+
+// Remove all ranges from this module.
+void Module::RemoveRanges(void) {
+  for (ModuleAddressRange *next_range(nullptr); ranges; ranges = next_range) {
+    next_range = ranges->next;
+    delete ranges;
+  }
 }
 
 // Adds a range into the range list. If there is a conflict when adding a range
@@ -257,7 +262,7 @@ GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
         }
       }
     } while (false);
-    if (!num_attempts) RegisterAllBuiltIn();
+    if (!num_attempts) ReRegisterAllBuiltIn();
   }
   return nullptr;
 }

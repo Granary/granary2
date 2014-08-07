@@ -17,7 +17,7 @@ struct LinuxKernelModule {
     KERNEL
   } kind;
 
-  int seen_by_granary;
+  void *module;
 
   unsigned long core_text_begin;
   unsigned long core_text_end;

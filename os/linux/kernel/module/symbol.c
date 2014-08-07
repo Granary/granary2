@@ -1,8 +1,17 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "os/linux/kernel/module/symbol.h"
+#ifndef MODULE
+# define MODULE
+#endif
 
+#include <linux/kernel.h>
+#include <linux/stddef.h>
 #include <linux/kallsyms.h>
+#include <linux/list.h>
+
+#include <asm/syscall.h>
+
+struct mutex;
 
 struct SymbolResolver {
   const char *name;
@@ -15,11 +24,13 @@ struct SymbolResolver {
 void *(*linux_module_alloc)(unsigned long) = NULL;
 sys_call_ptr_t *linux_sys_call_table = NULL;
 struct mutex *linux_module_mutex = NULL;
+struct list_head *linux_modules = NULL;
 
 static struct SymbolResolver symbols[] = {
   RESOLVE_SYM(module_alloc),
   RESOLVE_SYM(sys_call_table),
-  RESOLVE_SYM(module_mutex)
+  RESOLVE_SYM(module_mutex),
+  RESOLVE_SYM(modules)
 };
 
 // Resolves needed symbols.

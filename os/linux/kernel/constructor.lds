@@ -7,7 +7,8 @@ SECTIONS
   .init_array :
   {
     granary_begin_init_array = .;
-    KEEP (*(.init_array*))
+    KEEP (*(.init_array.*))
+    KEEP (*(.init_array))
     granary_end_init_array = .;
   }
 }

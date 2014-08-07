@@ -10,24 +10,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
-
-#include "os/linux/kernel/module/constructor.h"
-#include "os/linux/kernel/module/symbol.h"
-
-#if 0
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/gfp.h>
-#include <linux/kallsyms.h>
-#include <linux/miscdevice.h>
-
-#include <linux/percpu.h>
-#include <linux/percpu-defs.h>
 #include <linux/printk.h>
-#include <linux/rculist.h>
-#include <linux/slab.h>
-#endif
 
 #ifndef CONFIG_MODULES
 # error "Module auto-loading must be supported (`CONFIG_MODULES`)."
@@ -41,18 +24,21 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Peter Goodman <pag@cs.toronto.edu>");
 MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 
+extern void ResolveSymbols(void);
+extern void RunConstructors(void);
+extern void InitCommandListener(void);
+extern void InitModules(void);
+extern void CopyNativeSyscallTable(void);
+
 // Initialize the Granary kernel module.
 static int granary_enter(void) {
-  printk("[granary] Entering Granary.\n");
   ResolveSymbols();
   RunConstructors();
+  InitCommandListener();
+  InitModules();
+  CopyNativeSyscallTable();
+  printk("[granary] Loaded Granary.\n");
   return 0;
 }
 
-// Exit Granary.
-static void granary_exit(void) {
-  printk("[granary] Exiting Granary.\n");
-}
-
 module_init(granary_enter);
-module_exit(granary_exit);

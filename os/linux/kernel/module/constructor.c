@@ -9,13 +9,15 @@
 #include <linux/kallsyms.h>
 #include <linux/printk.h>
 
+typedef void (*FuncPtr)(void);
+
 // Defined by the linker script `os/linux/kernel/constructor.lds`.
-extern void (**granary_begin_init_array)(void);
-extern void (**granary_end_init_array)(void);
+extern FuncPtr granary_begin_init_array[];
+extern FuncPtr granary_end_init_array[];
 
 void RunConstructors(void) {
 #ifndef CONFIG_CONSTRUCTORS
-  void (**init_func)(void) = granary_begin_init_array;
+  FuncPtr *init_func = granary_begin_init_array;
   for (; init_func < granary_end_init_array; ++init_func) {
     (*init_func)();
   }
