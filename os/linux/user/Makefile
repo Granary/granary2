@@ -46,7 +46,7 @@ $(GRANARY_INJECTOR):
 # load-time issues due to R_386_RELATIVE (0x08) PLT relocation types.
 $(GRANARY_LIBRARY_OBJ):
 	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
-	$(GRANARY_LD) -T $(GRANARY_SRC_DIR)/inst_exports.lds \
+	$(GRANARY_LD) -T $(GRANARY_SRC_DIR)/inst_exports.lds -g \
 		-r $(filter-out $(GRANARY_LIBRARY_OBJ),$(wildcard $(GRANARY_BIN_DIR)/*.o)) \
 		-o $(GRANARY_LIBRARY_OBJ)
 

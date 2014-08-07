@@ -13,6 +13,8 @@
 #include "granary/context.h"
 #include "granary/tool.h"
 
+#include "os/module.h"
+
 namespace granary {
 
 // Iterator to loop over tool instances.
@@ -112,7 +114,7 @@ void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 
 // Returns a pointer to the module containing an application `pc`.
 const os::Module *InstrumentationTool::ModuleContainingPC(AppPC pc) {
-  return context->FindModuleContainingPC(pc);
+  return os::FindModuleContainingPC(pc);
 }
 
 // Begin inserting some inline assembly. This takes in an optional scope

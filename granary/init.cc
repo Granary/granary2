@@ -12,6 +12,7 @@
 #include "granary/init.h"
 
 #include "os/memory.h"
+#include "os/module.h"
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
@@ -34,6 +35,7 @@ GRANARY_EARLY_GLOBAL static Container<Context> context;
 // Initialize Granary.
 void Init(void) {
   os::InitHeap();  // Initialize the Granary heap.
+  os::InitModuleManager();  // Initialize the global module manager.
 
   // Initialize the driver (e.g. XED, DynamoRIO). This usually performs from
   // architecture-specific checks to determine which architectural features

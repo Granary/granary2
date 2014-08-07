@@ -8,7 +8,9 @@
 #include <linux/gfp.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/notifier.h>
 #include <linux/slab.h>
+#include <linux/string.h>
 
 #include "os/linux/kernel/module.h"
 
@@ -48,6 +50,38 @@ static struct LinuxKernelModule kernel_module = {
   .next = NULL
 };
 
+static struct LinuxKernelModule *FindModule(const char *name) {
+  struct LinuxKernelModule *curr = granary_kernel_modules;
+  for (; curr; curr = curr->next) {
+    if (curr->name == name) return curr;
+    if (0 == strcmp(curr->name, name)) return curr;
+  }
+  return NULL;
+}
+
+extern void NotifyModuleStateChange(struct LinuxKernelModule *mod);
+
+static int EventModuleStateChange(struct notifier_block *nb,
+                                   unsigned long mod_state,
+                                   void *vmod) {
+  struct module *mod = (struct module *) vmod;
+  struct LinuxKernelModule *kmod = FindModule(mod->name);
+  if (!kmod) {
+    kmod = AllocModule(mod);
+    *last_module_ptr = kmod;
+    last_module_ptr = &(kmod->next);
+  }
+  NotifyModuleStateChange(kmod);
+  return 0;
+}
+
+// Callback structure used by Linux for module state change events.
+static struct notifier_block module_notifier = {
+    .notifier_call = &EventModuleStateChange,
+    .next = NULL,
+    .priority = -1,
+};
+
 
 // The kernel's internal module list. Guarded by `modules_lock`.
 extern struct list_head *linux_modules;
@@ -67,4 +101,6 @@ void InitModules(void) {
     last_module_ptr = &(kmod->next);
   }
   mutex_unlock(linux_module_mutex);
+
+  register_module_notifier(&module_notifier);
 }

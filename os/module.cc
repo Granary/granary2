@@ -2,6 +2,7 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/container.h"
 #include "granary/base/string.h"
 
 #include "granary/breakpoint.h"
@@ -92,9 +93,9 @@ static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
 }  // namespace
 
 // Initialize a new module with no ranges.
-Module::Module(ModuleKind kind_, const char *name_)
+Module::Module(ModuleKind kind_, const char *name_, ContextInterface *context_)
     : next(nullptr),
-      context(nullptr),
+      context(context_),
       kind(kind_),
       ranges(nullptr),
       ranges_lock() {
@@ -104,7 +105,6 @@ Module::Module(ModuleKind kind_, const char *name_)
 
 Module::~Module(void) {
   RemoveRanges();
-  context = nullptr;
 }
 
 // Return a module offset object for a program counter (that is expected to
@@ -138,11 +138,6 @@ const char *Module::Name(void) const {
   return &(name[0]);
 }
 
-// Sets the current context of the module.
-void Module::SetContext(ContextInterface *context_) {
-  context = context_;
-}
-
 // Add a range to a module. This will potentially split a single range into two
 // ranges, extend an existing range, add a new range, or do nothing if the new
 // range is fully subsumed by another one.
@@ -151,7 +146,7 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
   if (begin_addr < end_addr) {
     auto range = new ModuleAddressRange(begin_addr, end_addr,
                                         begin_offset, perms);
-    ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
+    WriteLocked locker(&ranges_lock);
     AddRange(range);
   } else {
     AddRange(end_addr, begin_addr, begin_offset, perms);
@@ -160,7 +155,7 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
 
 // Remove a range from a module.
 void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
-  ConditionallyWriteLocked locker(&ranges_lock, nullptr != context);
+  WriteLocked locker(&ranges_lock);
   RemoveRangeConflicts(begin_addr, end_addr);
 }
 
@@ -237,9 +232,8 @@ void Module::AddRangeNoConflict(ModuleAddressRange *range) {
 }
 
 // Initialize the module tracker.
-ModuleManager::ModuleManager(ContextInterface *context_)
-    : context(context_),
-      modules(nullptr),
+ModuleManager::ModuleManager(void)
+    : modules(nullptr),
       modules_lock() {}
 
 ModuleManager::~ModuleManager(void) {
@@ -248,7 +242,6 @@ ModuleManager::~ModuleManager(void) {
     next_module = modules->next;
     delete modules;
   }
-  context = nullptr;
 }
 
 // Find a module given a program counter.
@@ -280,12 +273,35 @@ GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
 
 // Register a module with the module tracker.
 void ModuleManager::Register(Module *module) {
-  GRANARY_ASSERT(nullptr == module->context);
-  GRANARY_ASSERT(!FindByName(module->name));
-  module->SetContext(context);
+  if (auto existing_module = FindByName(module->name)) {
+    GRANARY_ASSERT(existing_module->context != module->context);
+    GRANARY_UNUSED(module);
+  }
   WriteLocked locker(&modules_lock);
   module->next = modules;
   modules = module;
+}
+
+Container<ModuleManager> global_module_manager;
+
+// Initializes the module manager.
+void InitModuleManager(void) {
+  global_module_manager.Construct();
+}
+
+// Returns a pointer to the module containing some program counter.
+const Module *FindModuleContainingPC(AppPC pc) {
+  return global_module_manager->FindByAppPC(pc);
+}
+
+// Returns a pointer to the first module whose name matches `name`.
+const Module *FindModuleByName(const char *name) {
+  return global_module_manager->FindByName(name);
+}
+
+// Returns an iterator to all currently loaded modules.
+ConstModuleIterator LoadedModules(void) {
+  return global_module_manager->Modules();
 }
 
 }  // namespace os

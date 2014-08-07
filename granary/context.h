@@ -16,8 +16,6 @@
 #include "granary/metadata.h"
 #include "granary/tool.h"
 
-#include "os/module.h"
-
 namespace granary {
 
 // Forward declarations.
@@ -40,15 +38,6 @@ class ContextInterface {
 
   // Needed for linking against the base vtable.
   virtual ~ContextInterface(void);
-
-  // Returns a pointer to the module containing some program counter.
-  virtual const os::Module *FindModuleContainingPC(AppPC pc) = 0;
-
-  // Returns a pointer to the first module whose name matches `name`.
-  virtual const os::Module *FindModuleByName(const char *name) = 0;
-
-  // Returns an iterator to all currently loaded modules.
-  virtual os::ConstModuleIterator LoadedModules(void) const = 0;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
@@ -100,15 +89,6 @@ class Context : public ContextInterface {
 
   virtual ~Context(void);
 
-  // Returns a pointer to the module containing some program counter.
-  virtual const os::Module *FindModuleContainingPC(AppPC pc) override;
-
-  // Returns a pointer to the first module whose name matches `name`.
-  virtual const os::Module *FindModuleByName(const char *name) override;
-
-  // Returns an iterator to all currently loaded modules.
-  virtual os::ConstModuleIterator LoadedModules(void) const override;
-
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
 
@@ -146,9 +126,6 @@ class Context : public ContextInterface {
   virtual LockedIndex *CodeCacheIndex(void) override;
 
  private:
-  // Manages all modules allocated/understood by this environment.
-  os::ModuleManager module_manager;
-
   // Manages all metadata allocated/understood by this environment.
   MetaDataManager metadata_manager;
 

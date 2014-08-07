@@ -2,6 +2,7 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/container.h"
 #include "granary/base/list.h"
 
 #include "os/module.h"
@@ -12,6 +13,8 @@ namespace os {
 extern "C" {
 LinuxKernelModule *granary_kernel_modules(nullptr);
 }  // extern C
+
+extern Container<ModuleManager> global_module_manager;
 
 typedef LinkedListIterator<LinuxKernelModule> LinuxKernelModuleIterator;
 
@@ -36,27 +39,34 @@ static ModuleKind GetModuleKind(LinuxKernelModule *mod) {
   }
 }
 
+// Update a module manager with a new module.
+static void UpdateModule(ModuleManager *manager, LinuxKernelModule *mod) {
+  auto module = reinterpret_cast<Module *>(mod->module);
+  if (!module) {
+    module = new Module(GetModuleKind(mod), mod->name);
+    mod->module = module;
+    manager->Register(module);
+  } else {
+    // TODO(pag): Address issue #16 as it relates to unloading of module
+    //            `.init` sections.
+    module->RemoveRanges();
+  }
+  if (mod->core_text_begin && mod->core_text_end) {
+    module->AddRange(mod->core_text_begin, mod->core_text_end,
+                     0, MODULE_EXECUTABLE | MODULE_READABLE);
+  }
+  if (mod->init_text_begin && mod->init_text_end) {
+    module->AddRange(mod->init_text_begin, mod->init_text_end,
+                     0, MODULE_EXECUTABLE | MODULE_READABLE);
+  }
+}
+
 }  // namespace
 
 // Find and register all built-in modules.
 void ModuleManager::RegisterAllBuiltIn(void) {
   for (auto mod : LinuxKernelModuleIterator(granary_kernel_modules)) {
-    auto module = reinterpret_cast<Module *>(mod->module);
-    if (!module) {
-      module = new Module(GetModuleKind(mod), mod->name);
-      mod->module = module;
-      Register(module);
-    } else {
-      // TODO(pag): Address issue #16 as it relates to unloading of module
-      //            `.init` sections.
-      module->RemoveRanges();
-    }
-    module->AddRange(mod->core_text_begin, mod->core_text_end,
-                     0, MODULE_EXECUTABLE | MODULE_READABLE);
-    if (mod->init_text_begin && mod->init_text_end) {
-      module->AddRange(mod->init_text_begin, mod->init_text_end,
-                       0, MODULE_EXECUTABLE | MODULE_READABLE);
-    }
+    UpdateModule(this, mod);
   }
 }
 
@@ -65,5 +75,10 @@ void ModuleManager::ReRegisterAllBuiltIn(void) {
   RegisterAllBuiltIn();
 }
 
+extern "C" {
+void NotifyModuleStateChange(LinuxKernelModule *mod) {
+  UpdateModule(global_module_manager.AddressOf(), mod);
+}
+}  // extern C
 }  // namespace os
 }  // namespace granary

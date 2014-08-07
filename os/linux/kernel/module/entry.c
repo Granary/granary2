@@ -27,7 +27,6 @@ MODULE_DESCRIPTION("Granary is a Linux kernel dynamic binary translator.");
 extern void ResolveSymbols(void);
 extern void RunConstructors(void);
 extern void InitCommandListener(void);
-extern void InitModules(void);
 extern void CopyNativeSyscallTable(void);
 
 // Initialize the Granary kernel module.
@@ -35,7 +34,6 @@ static int granary_enter(void) {
   ResolveSymbols();
   RunConstructors();
   InitCommandListener();
-  InitModules();
   CopyNativeSyscallTable();
   printk("[granary] Loaded Granary.\n");
   return 0;

@@ -90,7 +90,8 @@ class Module {
 
   // Initialize a new module with no ranges.
   GRANARY_INTERNAL_DEFINITION
-  Module(ModuleKind kind_, const char *name_);
+  Module(ModuleKind kind_, const char *name_,
+         ContextInterface *context_=nullptr);
 
   GRANARY_INTERNAL_DEFINITION ~Module(void);
 
@@ -108,10 +109,6 @@ class Module {
 
   // Returns the name of this module.
   const char *Name(void) const;
-
-  // Sets the current context of the module.
-  GRANARY_INTERNAL_DEFINITION
-  void SetContext(ContextInterface *context_);
 
   // Add a range to a module. This will potentially split a single range into two
   // ranges, extend an existing range, add a new range, or do nothing if the new
@@ -162,11 +159,8 @@ class Module {
 
   // Context to which this module belongs.
   //
-  // Note: We say that a module is shared if and only if `context` is non-
-  //       null. Therefore, if `context` is null, then some locks need not be
-  //       acquired because we don't consider the `Module` to be exposed to
-  //       other threads/cores.
-  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
+  // Note: We say that a module is shared if and only if `context` is null.
+  GRANARY_INTERNAL_DEFINITION ContextInterface * const context;
 
   // The kind of this module (e.g. granary, client, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
@@ -197,7 +191,7 @@ class ModuleManager {
   // Intiailize the module manager to know about its context. The context is
   // passed through to modules so that modules can notify the context when
   // code cache flushes must occur.
-  explicit ModuleManager(ContextInterface *context_);
+  ModuleManager(void);
 
   ~ModuleManager(void);
 
@@ -228,11 +222,6 @@ class ModuleManager {
   }
 
  private:
-  ModuleManager(void) = delete;
-
-  // Context to which this manager belongs.
-  ContextInterface *context;
-
   // Linked list of modules. Modules in the list are stored in no particular
   // order because they can have discontiguous segments.
   Module *modules;
@@ -240,6 +229,19 @@ class ModuleManager {
   // Lock on updating the modules list.
   ReaderWriterLock modules_lock;
 };
+
+// Initializes the module manager.
+void InitModuleManager(void);
+
+// Returns a pointer to the module containing some program counter.
+const Module *FindModuleContainingPC(AppPC pc);
+
+// Returns a pointer to the first module whose name matches `name`.
+const Module *FindModuleByName(const char *name);
+
+// Returns an iterator to all currently loaded modules.
+ConstModuleIterator LoadedModules(void);
+
 #endif  // GRANARY_INTERNAL
 
 }  // namespace os

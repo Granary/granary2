@@ -33,7 +33,6 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<StackMetaData>();
   meta_manager.Register<IndexMetaData>();
   arch::Init();
-  module.SetContext(&context);
   module.AddRange(0, ~0ULL, 0, os::MODULE_EXECUTABLE);
 
   // Called for the "lazy" meta-data on the function return.

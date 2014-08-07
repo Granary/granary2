@@ -4,7 +4,7 @@
 
 using namespace granary;
 
-// Tool that implements several user-space special cases for instrumenting
+// Tool that implements several kernel-space special cases for instrumenting
 // common binaries.
 class KernelSpaceInstrumenter : public InstrumentationTool {
  public:

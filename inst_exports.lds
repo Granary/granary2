@@ -2,11 +2,9 @@
 
 /* Defines the boundaries of Granary / client code that is exported to
  * instrumentation, i.e. is allowed to be seen by code that gets instrumented.
- *
- * Note: Code in this section is not instrumented. */
+ */
 SECTIONS
 {
-  . = ALIGN(16);
   .text :
   {
     KEEP (*(.text))

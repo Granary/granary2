@@ -4,6 +4,7 @@
 
 #include "arch/base.h"
 
+#include "granary/base/container.h"
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
@@ -16,6 +17,8 @@
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/index.h"
+
+#include "os/module.h"
 
 GRANARY_DEFINE_positive_int(block_cache_slab_size, 512,
     "The number of pages allocated at once to store basic block code. Each "
@@ -57,6 +60,9 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
 }  // namespace arch
+namespace os {
+extern Container<ModuleManager> global_module_manager;
+}  // namespace os
 namespace {
 
 static CachePC CreateDirectEntryCode(ContextInterface *context,
@@ -90,8 +96,9 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
 }
 
 // Create a module for a Granary code cache.
-static os::Module *MakeCodeCacheMod(const char *name) {
-  return new os::Module(os::ModuleKind::GRANARY_CODE_CACHE, name);
+static os::Module *MakeCodeCacheMod(ContextInterface *context,
+                                    const char *name) {
+  return new os::Module(os::ModuleKind::GRANARY_CODE_CACHE, name, context);
 }
 
 }  // namespace
@@ -99,12 +106,11 @@ static os::Module *MakeCodeCacheMod(const char *name) {
 ContextInterface::~ContextInterface(void) {}
 
 Context::Context(void)
-    : module_manager(this),
-      metadata_manager(),
+    : metadata_manager(),
       tool_manager(this),
-      block_code_cache_mod(MakeCodeCacheMod("[block cache]")),
+      block_code_cache_mod(MakeCodeCacheMod(this, "[block cache]")),
       block_code_cache(block_code_cache_mod, FLAG_block_cache_slab_size),
-      edge_code_cache_mod(MakeCodeCacheMod("[edge cache]")),
+      edge_code_cache_mod(MakeCodeCacheMod(this, "[edge cache]")),
       edge_code_cache(edge_code_cache_mod, FLAG_edge_cache_slab_size),
       direct_edge_entry_code(CreateDirectEntryCode(this, &edge_code_cache)),
       indirect_edge_entry_code(CreateIndirectEntryCode(this, &edge_code_cache)),
@@ -117,8 +123,8 @@ Context::Context(void)
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
-  module_manager.Register(block_code_cache_mod);
-  module_manager.Register(edge_code_cache_mod);
+  os::global_module_manager->Register(block_code_cache_mod);
+  os::global_module_manager->Register(edge_code_cache_mod);
 }
 
 // Initialize all tools from a comma-separated list of tools.
@@ -156,21 +162,6 @@ Context::~Context(void) {
   FreeEdgeList(patched_edge_list);
   FreeEdgeList(unpatched_edge_list);
   FreeEdgeList(indirect_edge_list);
-}
-
-// Returns a pointer to the module containing some program counter.
-const os::Module *Context::FindModuleContainingPC(AppPC pc) {
-  return module_manager.FindByAppPC(pc);
-}
-
-// Returns a pointer to the first module whose name matches `name`.
-const os::Module *Context::FindModuleByName(const char *name) {
-  return module_manager.FindByName(name);
-}
-
-// Returns an iterator to all currently loaded modules.
-os::ConstModuleIterator Context::LoadedModules(void) const {
-  return module_manager.Modules();
 }
 
 // Allocate and initialize some `BlockMetaData`. This will also set-up the

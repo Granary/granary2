@@ -19,6 +19,8 @@
 #include "granary/index.h"
 #include "granary/util.h"
 
+#include "os/module.h"
+
 namespace granary {
 extern "C" {
 
@@ -352,7 +354,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
     BlockMetaData *meta) {
   auto app_meta = MetaDataCast<AppMetaData *>(meta);
   auto target_pc = app_meta->start_pc;
-  auto module = context->FindModuleContainingPC(app_meta->start_pc);
+  auto module = os::FindModuleContainingPC(app_meta->start_pc);
 
   // Aagh! Indirect jump to some already cached code. For the time being,
   // give up and just go to the target and ignore the meta-data.
