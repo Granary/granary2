@@ -39,7 +39,7 @@ void EnableInterrupts(void) {
 bool TryDisablePageProtection(void) {
   unsigned long value;
   GRANARY_INLINE_ASSEMBLY("mov %%cr0, %0" : "=r" (value));
-  if(!(value & 0x00010000)) return false;
+  if (0UL == (value & 0x00010000UL)) return false;
   GRANARY_INLINE_ASSEMBLY("mov %0, %%cr0" : : "r" (value & ~0x00010000));
   return true;
 }
@@ -47,7 +47,7 @@ bool TryDisablePageProtection(void) {
 void EnablePageProtection(void) {
   unsigned long value;
   GRANARY_INLINE_ASSEMBLY("mov %%cr0, %0" : "=r" (value));
-  if((value & 0x00010000)) return;
+  if (0UL != (value & 0x00010000UL)) return;
   GRANARY_INLINE_ASSEMBLY("mov %0, %%cr0" : : "r" (value | 0x00010000));
 }
 

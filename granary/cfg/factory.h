@@ -118,7 +118,7 @@ class BlockFactory {
   // will not appear in any iterators until some instruction takes ownership
   // of it. This can be achieved by targeting this newly created basic block
   // with a CTI.
-  std::unique_ptr<DirectBasicBlock> Materialize(AppPC start_pc);
+  std::unique_ptr<BasicBlock> Materialize(AppPC start_pc);
 
  private:
   BlockFactory(void) = delete;

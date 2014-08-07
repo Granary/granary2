@@ -18,6 +18,7 @@ namespace granary {
 extern "C" {
 
 // Hook to attach granary to a function pointer.
+GRANARY_EXPORT_TO_INSTRUMENTATION
 void granary_attach(void (**func_ptr)(void)) {
   if (auto context = GlobalContext()) {
     os::Log(os::LogOutput, "Attaching Granary.\n");

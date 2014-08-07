@@ -20,6 +20,16 @@
 #include "granary/util.h"
 
 namespace granary {
+extern "C" {
+
+// Address range of Granary/client-specific code that has been explicitly
+// exported to instrumented code.
+//
+// Note: These symbols are defined by `inst_exports.lds`.
+extern AppPC granary_begin_inst_exports;
+extern AppPC granary_end_inst_exports;
+
+}  // extern C
 
 enum {
   MAX_NUM_MATERIALIZATION_REQUESTS = 1024
@@ -340,21 +350,23 @@ CompensationBasicBlock *MaterializeToExistingBlock(LocalControlFlowGraph *cfg,
 // basic block with a default non-`REQUEST_LATER` materialization strategy.
 InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
     BlockMetaData *meta) {
-  AppPC non_transparent_pc(nullptr);
   auto app_meta = MetaDataCast<AppMetaData *>(meta);
+  auto target_pc = app_meta->start_pc;
   auto module = context->FindModuleContainingPC(app_meta->start_pc);
 
   // Aagh! Indirect jump to some already cached code. For the time being,
   // give up and just go to the target and ignore the meta-data.
   if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
-    non_transparent_pc = app_meta->start_pc;
-    return MaterializeToExistingBlock(cfg, meta, non_transparent_pc);
+    return MaterializeToExistingBlock(cfg, meta, target_pc);
   }
 
-  GRANARY_ASSERT(os::ModuleKind::GRANARY != module->Kind());
+  if (os::ModuleKind::GRANARY == module->Kind()) {
+    GRANARY_ASSERT(granary_begin_inst_exports <= target_pc &&
+                   target_pc < granary_end_inst_exports);
+  }
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
-  auto direct_block = new DirectBasicBlock(cfg, dest_meta, non_transparent_pc);
+  auto direct_block = new DirectBasicBlock(cfg, dest_meta, target_pc);
 
   // Default to having a materialization strategy, and make it so that no one
   // can materialize against this block.
@@ -373,6 +385,15 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
     block->materialize_strategy = REQUEST_DENIED;
     return false;
   }
+
+  // Make sure that code exported to instrumented application code is never
+  // actually instrumented.
+  auto start_pc = block->StartAppPC();
+  if (granary_begin_inst_exports <= start_pc &&
+      start_pc < granary_end_inst_exports) {
+    block->materialize_strategy = REQUEST_NATIVE;
+  }
+
   switch (block->materialize_strategy) {
     case REQUEST_CHECK_INDEX_AND_LCFG:
     case REQUEST_CHECK_INDEX_AND_LCFG_ONLY:
@@ -395,7 +416,7 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
     }
     case REQUEST_NATIVE: {
       auto dest_pc = block->non_transparent_pc;
-      if (GRANARY_LIKELY(!dest_pc)) dest_pc = block->StartAppPC();
+      if (GRANARY_LIKELY(!dest_pc)) dest_pc = start_pc;
       auto native_block = new NativeBasicBlock(dest_pc);
       delete block->meta;
       block->materialized_block = native_block;
@@ -431,10 +452,15 @@ void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
 // will not appear in any iterators until some instruction takes ownership
 // of it. This can be achieved by targeting this newly created basic block
 // with a CTI.
-std::unique_ptr<DirectBasicBlock> BlockFactory::Materialize(
-    AppPC start_pc) {
-  return std::unique_ptr<DirectBasicBlock>(
-      new DirectBasicBlock(cfg, context->AllocateBlockMetaData(start_pc)));
+std::unique_ptr<BasicBlock> BlockFactory::Materialize(AppPC start_pc) {
+  BasicBlock *block(nullptr);
+  if (granary_begin_inst_exports <= start_pc &&
+      start_pc < granary_end_inst_exports) {
+    block = new NativeBasicBlock(start_pc);
+  } else {
+    block = new DirectBasicBlock(cfg, context->AllocateBlockMetaData(start_pc));
+  }
+  return std::unique_ptr<BasicBlock>(block);
 }
 
 }  // namespace granary

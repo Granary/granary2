@@ -126,28 +126,23 @@
 #define GRANARY_LIKELY(x) __builtin_expect((x),1)
 #define GRANARY_UNLIKELY(x) __builtin_expect((x),0)
 
-
 // Inline assembly.
 #define GRANARY_INLINE_ASSEMBLY(...) __asm__ __volatile__ ( __VA_ARGS__ )
-
 
 // Convert a sequence of symbols into a string literal.
 #define GRANARY_TO_STRING__(x) #x
 #define GRANARY_TO_STRING_(x) GRANARY_TO_STRING__(x)
 #define GRANARY_TO_STRING(x) GRANARY_TO_STRING_(x)
 
-
 // Concatenate two symbols into one.
 #define GRANARY_CAT__(x, y) x ## y
 #define GRANARY_CAT_(x, y) GRANARY_CAT__(x, y)
 #define GRANARY_CAT(x, y) GRANARY_CAT_(x, y)
 
-
 // Expand out into nothing.
 #define GRANARY_NOTHING__
 #define GRANARY_NOTHING_ GRANARY_NOTHING__
 #define GRANARY_NOTHING GRANARY_NOTHING_
-
 
 // Determine the number of arguments in a variadic macro argument pack.
 // From: http://efesx.com/2010/07/17/variadic-macro-to-count-number-of-\
@@ -156,15 +151,20 @@
 #define GRANARY_NUM_PARAMS(...) \
   GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,9,8,7,6,5,4,3,2,1,0)
 
-
 // Spits back out the arguments passed into the macro function.
 #define GRANARY_PARAMS(...) __VA_ARGS__
-
 
 // Try to make sure that a function is not optimized.
 #define GRANARY_DISABLE_OPTIMIZER __attribute__((used, noinline, \
                                                  visibility ("default")))
 
+// Export some function to instrumentation code. Only exported code can be
+// directly invoked by instrumented code.
+//
+// Note: While these functions can be invoked by instrumented code, their
+//       code *is not* instrumented.
+#define GRANARY_EXPORT_TO_INSTRUMENTATION \
+  __attribute__((section(".text.inst_exports")))
 
 // Determine how much should be added to a value `x` in order to align `x` to
 // an `align`-byte boundary.
