@@ -4,6 +4,10 @@
 
 using namespace granary;
 
+GRANARY_DEFINE_bool(attach_syscalls, true,
+                    "Should Granary attach to system calls? The default is "
+                    "`yes`.");
+
 // Tool that implements several kernel-space special cases for instrumenting
 // common binaries.
 class KernelSpaceInstrumenter : public InstrumentationTool {
@@ -12,7 +16,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
   virtual void InstrumentEntryPoint(BlockFactory *factory,
                                     CompensationBasicBlock *block,
                                     EntryPointKind kind, int) {
-    if (ENTRYPOINT_KERNEL_SYSCALL == kind) {
+    if (ENTRYPOINT_KERNEL_SYSCALL == kind && !FLAG_attach_syscalls) {
       for (auto succ : block->Successors()) {
         factory->RequestBlock(succ.block, REQUEST_NATIVE);
       }

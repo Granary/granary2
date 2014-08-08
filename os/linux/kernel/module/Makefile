@@ -2,7 +2,7 @@
 
 obj-m := granary.o
 granary-y := abi.o command.o constructor.o entry.o interrupt.o module.o
-granary-y += symbol.o syscall.o granary_bin.o
+granary-y += slot.o symbol.o syscall.o granary_bin.o
 
 # Extra C flags.
 cflags-y := -g3 -I$(GRANARY_SRC_DIR)

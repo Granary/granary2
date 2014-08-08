@@ -21,12 +21,12 @@ enum class MemoryProtection {
 // allocate these pages for executable code, so we will place it somewhere
 // special.
 enum class MemoryIntent {
+  // Memory that is used for typical readable/writable heap objects.
+  READ_WRITE,
+
   // This is used for all allocations that will eventually contain code that
   // can execute.
-  EXECUTABLE,
-
-  // Memory that is used for typical readable/writable heap objects.
-  READ_WRITE
+  EXECUTABLE
 };
 
 // Initialize the Granary heap.

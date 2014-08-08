@@ -25,12 +25,14 @@ void *(*linux_module_alloc)(unsigned long) = NULL;
 sys_call_ptr_t *linux_sys_call_table = NULL;
 struct mutex *linux_module_mutex = NULL;
 struct list_head *linux_modules = NULL;
+void __percpu *(*linux___alloc_reserved_percpu)(size_t, size_t) = NULL;
 
 static struct SymbolResolver symbols[] = {
   RESOLVE_SYM(module_alloc),
   RESOLVE_SYM(sys_call_table),
   RESOLVE_SYM(module_mutex),
-  RESOLVE_SYM(modules)
+  RESOLVE_SYM(modules),
+  RESOLVE_SYM(__alloc_reserved_percpu)
 };
 
 // Resolves needed symbols.

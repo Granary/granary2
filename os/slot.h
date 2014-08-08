@@ -19,12 +19,12 @@ enum SlotCategory {
 };
 
 struct SlotSet {
+  // Pointer to a thread- or CPU-private stack.
+  intptr_t stack_slot;
+
   // Used for spilling general-purpose registers, so that a spilled GPR can be
   // used to hold the value of a virtual register.
   intptr_t spill_slots[arch::MAX_NUM_SPILL_SLOTS];
-
-  // Pointer to a thread- or CPU-private stack.
-  intptr_t stack_slot;
 };
 
 // Access the value of some kind of private slot (by reference). This is an

@@ -34,7 +34,9 @@ static int MatchCommand(const char *command, const char *key) {
 extern void _ZN7granary4InitEv(void);
 extern void _ZN7granary11InitOptionsEPKc(const char *);
 extern void InitModules(void);
+extern void InitSlots(void);
 static void ProcessInit(const char *options) {
+  InitSlots();
   _ZN7granary11InitOptionsEPKc(options);  // `granary::InitOptions`.
   _ZN7granary4InitEv();  // `granary::Init`.
   InitModules();

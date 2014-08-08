@@ -61,6 +61,12 @@ static struct LinuxKernelModule *FindModule(const char *name) {
 
 extern void NotifyModuleStateChange(struct LinuxKernelModule *mod);
 
+// Notify Granary of a module state change. We put this into the special
+// `.text.inst_exports` section to allow this function to be invoked by
+// instrumented code.
+//
+// Note: This function won't actually be instrumented.
+__attribute__((section(".text.inst_exports")))
 static int EventModuleStateChange(struct notifier_block *nb,
                                    unsigned long mod_state,
                                    void *vmod) {
@@ -77,11 +83,10 @@ static int EventModuleStateChange(struct notifier_block *nb,
 
 // Callback structure used by Linux for module state change events.
 static struct notifier_block module_notifier = {
-    .notifier_call = &EventModuleStateChange,
-    .next = NULL,
-    .priority = -1,
+  .notifier_call = &EventModuleStateChange,
+  .next = NULL,
+  .priority = -1,
 };
-
 
 // The kernel's internal module list. Guarded by `modules_lock`.
 extern struct list_head *linux_modules;
