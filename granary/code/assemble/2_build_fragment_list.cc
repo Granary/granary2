@@ -58,12 +58,6 @@ namespace arch {
 // Note: This function has an architecture-specific implementation.
 bool InstructionHintsAtFlagSplit(const NativeInstruction *instr);
 
-// Returns true if this instruction can change the interrupt enabled state on
-// this CPU.
-//
-// Note: This function has an architecture-specific implementation.
-extern bool ChangesInterruptDeliveryState(const NativeInstruction *instr);
-
 // Generates some indirect edge code that is used to look up the target of an
 // indirect jump.
 //
@@ -431,7 +425,6 @@ static CodeFragment *AppendCFI(FragmentListBuilder *frags, CodeFragment *frag,
   // need to isolate `cfi` in its own fragment, and so `pred_frag` wouldn't
   // match anymore.
   auto targets_edge_code = false;
-  auto targets_direct_edge_code = false;
   auto can_add_to_partition = false;
   auto force_add_to_frag = !frag->attr.has_native_instrs;
 
@@ -440,7 +433,6 @@ static CodeFragment *AppendCFI(FragmentListBuilder *frags, CodeFragment *frag,
     can_add_to_partition = targets_edge_code;
   } else if (auto exit_target_frag = DynamicCast<ExitFragment *>(target_frag)) {
     targets_edge_code = EDGE_KIND_INVALID != exit_target_frag->edge.kind;
-    targets_direct_edge_code = EDGE_KIND_DIRECT == exit_target_frag->edge.kind;
   }
 
   // We need to add a new fragment for this CFI.
@@ -540,9 +532,10 @@ static void SplitFragmentAtInterruptChange(FragmentListBuilder *frags,
     frag->successors[0] = succ;
     frag = succ;
   }
+  frags->split_at_next_sequence_point = true;
   frag->attr.can_add_to_partition = false;
   frag = Append(frags, block, frag, instr);
-  SplitFragment(frags, frag, block, next);
+  ExtendFragment(frags, frag, block, next);
 }
 
 // Extend a fragment with the instructions from a particular basic block.
@@ -560,21 +553,6 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
         continue;
       }
       return SplitFragmentAtLabel(frags, frag, block, label);
-    }
-
-    // Split instructions into fragments such that fragments contain either
-    // all native instructions, or all instrumentation instructions, but not
-    // both. This splitting is used in a later stage to allow us to reason
-    // about saving/restoring flags state between two native instructions
-    // that are separated by instrumentation instructions.
-    //
-    // One exception to this rule is that if the current instruction doesn't
-    // affect the flags, regardless of if it's native/instrumented, it goes
-    // into whatever the previous section of code is (app or inst).
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (arch::ChangesInterruptDeliveryState(ninstr)) {
-        return SplitFragmentAtInterruptChange(frags, frag, block, instr);
-      }
     }
 
     // Found a local branch; add in the fall-through and/or the branch
@@ -657,6 +635,8 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
           frags->split_at_next_sequence_point = false;
           return SplitFragment(frags, frag, block, next);
         }
+      } else if (IA_CHANGES_INTERRUPT_STATE == annot->annotation) {
+        return SplitFragmentAtInterruptChange(frags, frag, block, next);
       }
 
       instr = next;

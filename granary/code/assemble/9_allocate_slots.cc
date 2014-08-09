@@ -4,11 +4,24 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/code/fragment.h"
+#include "granary/code/metadata.h"
 
 #include "granary/code/assemble/9_allocate_slots.h"
 
 namespace granary {
 namespace arch {
+
+// Returns a new instruction that will "allocate" the spill slots by disabling
+// interrupts.
+//
+// Note: This function has an architecture-specific implementation.
+extern NativeInstruction *AllocateDisableInterrupts(void);
+
+// Returns a new instruction that will "allocate" the spill slots by enabling
+// interrupts.
+//
+// Note: This function has an architecture-specific implementation.
+extern NativeInstruction *AllocateEnableInterrupts(void);
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -56,6 +69,15 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       GRANARY_ASSERT(code_frag->stack.is_checked);
       auto partition = code_frag->partition.Value();
+
+      if (auto meta = code_frag->attr.block_meta) {
+        const auto interrupt_meta = MetaDataCast<InterruptMetaData *>(meta);
+        GRANARY_ASSERT(!partition->interrupts_enabled ||
+                       (partition->interrupts_enabled ==
+                        interrupt_meta->interrupts_enabled));
+        partition->interrupts_enabled = interrupt_meta->interrupts_enabled;
+      }
+
       if (!code_frag->stack.is_valid) {
         partition->analyze_stack_frame = false;
 
@@ -205,24 +227,47 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
   }
 }
 
+// Allocate space when the stack is valid.
+static void AllocateStackSlotsStackValid(PartitionInfo *partition,
+                                         Fragment *frag) {
+  if (!partition->num_slots) return;
+
+  const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
+                        arch::REDZONE_SIZE_BYTES;
+
+  const auto frame_space = GRANARY_ALIGN_TO(
+      partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
+
+  if (IsA<PartitionEntryFragment *>(frag)) {
+    frag->instrs.Append(arch::AllocateStackSpace(frame_space));
+  } else if (IsA<PartitionExitFragment *>(frag)) {
+    frag->instrs.Append(arch::FreeStackSpace(
+        -(frame_space - frag->stack_frame.entry_offset)));
+  } else if (IsA<SSAFragment *>(frag)) {
+    AdjustStackInstructions(frag, frame_space);
+  }
+}
+
+static void AllocateSlotsStackInvalid(PartitionInfo *partition,
+                                      Fragment *frag) {
+  if (!partition->interrupts_enabled || !partition->num_slots) {
+    return;
+  }
+  if (IsA<PartitionEntryFragment *>(frag)) {
+    frag->instrs.Append(arch::AllocateDisableInterrupts());
+  } else if (IsA<PartitionExitFragment *>(frag)) {
+    frag->instrs.Append(arch::AllocateEnableInterrupts());
+  }
+}
+
 // Allocates space on the stack for virtual registers.
 static void AllocateStackSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     auto partition = frag->partition.Value();
-    if (!partition->analyze_stack_frame) continue;
-    const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
-                          arch::REDZONE_SIZE_BYTES;
-    if (vr_space == arch::REDZONE_SIZE_BYTES) continue;
-    const auto frame_space = GRANARY_ALIGN_TO(
-        partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
-
-    if (IsA<PartitionEntryFragment *>(frag)) {
-      frag->instrs.Append(arch::AllocateStackSpace(frame_space));
-    } else if (IsA<PartitionExitFragment *>(frag)) {
-      frag->instrs.Append(arch::FreeStackSpace(
-          -(frame_space - frag->stack_frame.entry_offset)));
-    } else if (IsA<SSAFragment *>(frag)) {
-      AdjustStackInstructions(frag, frame_space);
+    if (!partition->analyze_stack_frame)  {
+      AllocateSlotsStackInvalid(partition, frag);
+    } else {
+      AllocateStackSlotsStackValid(partition, frag);
     }
   }
 }

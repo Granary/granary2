@@ -20,7 +20,7 @@ GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
-	$(GRANARY_LD) -r $^ -o $(GRANARY_OS_OBJ)
+	@$(GRANARY_LD) -g -r $^ -o $(GRANARY_OS_OBJ)
 
 # Lint all Granary OS code, independent of the OS, and independent of user or
 # kernel space.
@@ -46,7 +46,8 @@ $(GRANARY_INJECTOR):
 # load-time issues due to R_386_RELATIVE (0x08) PLT relocation types.
 $(GRANARY_LIBRARY_OBJ):
 	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
-	$(GRANARY_LD) -T $(GRANARY_SRC_DIR)/inst_exports.lds -g \
+	@$(GRANARY_LD) -g \
+		-T $(GRANARY_SRC_DIR)/inst_exports.lds \
 		-r $(filter-out $(GRANARY_LIBRARY_OBJ),$(wildcard $(GRANARY_BIN_DIR)/*.o)) \
 		-o $(GRANARY_LIBRARY_OBJ)
 

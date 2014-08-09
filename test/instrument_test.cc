@@ -4,6 +4,7 @@
 
 #include "granary/base/cast.h"
 #include "granary/cfg/control_flow_graph.h"
+#include "granary/code/metadata.h"
 #include "granary/instrument.h"
 #include "granary/metadata.h"
 
@@ -58,6 +59,10 @@ class InstrumentTest : public Test {
     m1.Register("a");
     m2.Register("b");  // Registers `ToolA` and `ToolB`.
     m3.Register("c");  // Registers `ToolA`, `ToolB`, and `ToolC`.
+
+    metadata_manager.Register<AppMetaData>();
+    metadata_manager.Register<CacheMetaData>();
+    metadata_manager.Register<InterruptMetaData>();
   }
   virtual ~InstrumentTest(void) = default;
 

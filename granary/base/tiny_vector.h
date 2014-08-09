@@ -3,9 +3,12 @@
 #ifndef GRANARY_BASE_TINY_VECTOR_H_
 #define GRANARY_BASE_TINY_VECTOR_H_
 
+#include "granary/base/base.h"
 #include "granary/base/new.h"
 #include "granary/base/string.h"
 #include "granary/base/type_trait.h"
+
+#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -34,6 +37,7 @@ class TinyVector {
     }
 
     void operator++(void) {
+      GRANARY_ASSERT(nullptr != vec);
       ++i;
       if (i < kMinSize) {
         // We don't have more values, so we're done iterating.

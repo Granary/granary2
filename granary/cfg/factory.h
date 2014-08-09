@@ -125,12 +125,18 @@ class BlockFactory {
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
-  Instruction *MakeInstruction(arch::Instruction *instr);
+  NativeInstruction *MakeInstruction(arch::Instruction *instr);
 
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION
   void AddFallThroughInstruction(DecodedBasicBlock *block,
                                  Instruction *last_instr, AppPC pc);
+
+  // Add in a fall-through instruction to a block where the interrupt status
+  // is defined by `enable_interrupts`.
+  GRANARY_INTERNAL_DEFINITION
+  void AddFallThroughChangeInterrupt(DecodedBasicBlock *block, AppPC next_pc,
+                                     bool enable_interrupts);
 
   // Decode an instruction list starting at `pc` and link the decoded
   // instructions into the instruction list beginning with `instr`.

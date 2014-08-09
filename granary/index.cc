@@ -6,8 +6,9 @@
 #include "granary/base/string.h"
 
 #include "granary/app.h"
-#include "granary/index.h"
+#include "granary/breakpoint.h"
 #include "granary/cache.h"
+#include "granary/index.h"
 #include "granary/metadata.h"
 
 #include "os/memory.h"
@@ -95,6 +96,7 @@ static IndexFindResponse MatchMetaData(BlockMetaData *ls,
     nullptr
   };
   while (ls != META_ARRAY_END) {
+    GRANARY_ASSERT(nullptr != ls);
     if (search->Equals(ls)) {
       switch (search->CanUnifyWith(ls)) {
         case UnificationStatus::ACCEPT:
@@ -150,6 +152,9 @@ IndexFindResponse Index::Request(BlockMetaData *meta) {
 
 // Insert a block into the code cache index.
 void Index::Insert(BlockMetaData *meta) {
+  GRANARY_ASSERT(nullptr != MetaDataCast<AppMetaData *>(meta)->start_pc);
+  GRANARY_ASSERT(nullptr != MetaDataCast<CacheMetaData *>(meta)->start_pc);
+
   auto index_meta = MetaDataCast<IndexMetaData *>(meta);
   if (index_meta->next) return;
 

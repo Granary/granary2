@@ -9,8 +9,8 @@ cflags-y := -g3 -I$(GRANARY_SRC_DIR)
 ccflags-y := -g3 -I$(GRANARY_SRC_DIR)
 
 # Define some extra symbols that we need to blank out on XED's behalf.
-ldflags-y := --defsym=abort=granary_break_on_fault
-ldflags-y += --defsym=fprintf=granary_break_on_fault
+ldflags-y := --defsym=abort=granary_unreachable
+ldflags-y += --defsym=fprintf=granary_unreachable
 ldflags-y += --defsym=stderr=0
 
 # Export some Granary functions to be callable by instrumented kernel code.

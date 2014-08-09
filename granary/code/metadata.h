@@ -52,6 +52,22 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
 
 } __attribute__((packed));
 
+// Meta-data that tracks whether or not the code is interruptible.
+class InterruptMetaData : public IndexableMetaData<InterruptMetaData> {
+ public:
+  InterruptMetaData(void)
+      : interrupts_enabled(GRANARY_IF_KERNEL_ELSE(true, false)) {}
+
+  inline bool Equals(const InterruptMetaData *that) const {
+    return interrupts_enabled == that->interrupts_enabled;
+  }
+
+  // Whether or not interrupts are enabled. In user space, we treat interrupts
+  // as always disabled, so we never introduce interrupt disabling/enabling
+  // code.
+  GRANARY_CONST bool interrupts_enabled;
+};
+
 }  // namespace granary
 
 #endif  // GRANARY_CODE_METADATA_H_

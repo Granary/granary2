@@ -36,7 +36,6 @@ class SimpleEncoderTest : public testing::Test {
   granary::CachePC InstrumentAndEncode(granary::AppPC pc);
 
   MockContext context;
-  granary::os::Module module;
   granary::os::Module code_cache_mod;
   granary::os::Module edge_cache_mod;
   granary::CodeCache code_cache;

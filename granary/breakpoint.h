@@ -5,18 +5,15 @@
 
 extern "C" {
 
-__attribute__((noreturn))
-void granary_break_on_fault(void);
+__attribute__((noreturn, analyzer_noreturn))
+void granary_unreachable(void);
 
-__attribute__((noreturn))
-void granary_break_on_unreachable_code(void);
-
-static inline void granary_break_on_fault_if(bool cond) {
-  if (cond) {
-    granary_break_on_fault();
-    __builtin_unreachable();
+#define granary_break_on_fault_if(cond) \
+  if (cond) { \
+    granary_unreachable(); \
+    __builtin_unreachable(); \
   }
-}
+
 }  // extern C
 
 #endif  // GRANARY_BREAKPOINT_H_

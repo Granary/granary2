@@ -82,11 +82,10 @@ $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
                 $(GRANARY_GTEST_BIN_DIR)/gtest-all.o \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o \
-                $(GRANARY_BIN_DIR)/*.o
+                $(GRANARY_BIN_DIR)/libgranary.o
 	@echo "Compiling $@"
 	@mkdir -p $(@D)
 	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
-
 
 # Build all test targets.
 all: $(GRANARY_EXE)
@@ -94,4 +93,3 @@ all: $(GRANARY_EXE)
 # Run all test targets.
 test: all
 	$(GRANARY_EXE)
-	

@@ -13,15 +13,33 @@
 namespace granary {
 namespace arch {
 
+// Returns a new instruction that will "allocate" the spill slots by disabling
+// interrupts.
+NativeInstruction *AllocateDisableInterrupts(void) {
+  GRANARY_IF_USER(GRANARY_ASSERT(false));
+  arch::Instruction ni;
+  arch::CLI(&ni);
+  return new NativeInstruction(&ni);
+}
+
+// Returns a new instruction that will "allocate" the spill slots by enabling
+// interrupts.
+NativeInstruction *AllocateEnableInterrupts(void) {
+  GRANARY_IF_USER(GRANARY_ASSERT(false));
+  arch::Instruction ni;
+  arch::STI(&ni);
+  return new NativeInstruction(&ni);
+}
+
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
 NativeInstruction *AllocateStackSpace(int num_bytes) {
-  arch::Instruction instr;
+  arch::Instruction ni;
   arch::LEA_GPRv_AGEN(
-      &instr, XED_REG_RSP,
+      &ni, XED_REG_RSP,
       arch::BaseDispMemOp(num_bytes, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
-  instr.AnalyzeStackUsage();
-  return new NativeInstruction(&instr);
+  ni.AnalyzeStackUsage();
+  return new NativeInstruction(&ni);
 }
 
 // Returns a new instruction that will allocate some stack space allocated

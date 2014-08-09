@@ -44,6 +44,8 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
       next_slab_number(ATOMIC_VAR_INIT(1)),
       next_allocation_number(ATOMIC_VAR_INIT(num_allocations_per_slab_)) {
 
+  GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >=
+                 (aligned_size_ * num_allocations_per_slab_ + start_offset_));
   GRANARY_UNUSED(unaligned_size);
 }
 

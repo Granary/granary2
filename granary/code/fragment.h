@@ -99,6 +99,9 @@ class PartitionInfo {
   GRANARY_IF_DEBUG( TinySet<VirtualRegister,
                             arch::NUM_GENERAL_PURPOSE_REGISTERS> used_vrs; )
 
+  // Are interrupts enabled in this partition?
+  bool interrupts_enabled;
+
   // Should we analyze the stack frames?
   bool analyze_stack_frame;
   int min_frame_offset;

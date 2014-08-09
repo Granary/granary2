@@ -475,6 +475,8 @@ static void AddCompensationRegKills(CodeFragment *frag) {
 //       successor entry in `pred` more easily.
 static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
                                     Fragment *&succ) {
+  GRANARY_ASSERT(nullptr != succ);
+
   auto comp = new CodeFragment;
   for (auto &exit_node : pred->ssa.exit_nodes) {
     if (exit_node.key.IsVirtual()) {

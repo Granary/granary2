@@ -46,7 +46,7 @@ class FreeList {
 };
 
 enum {
-  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 2,
+  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 4,
   SLAB_ALLOCATOR_SLAB_SIZE_BYTES = arch::PAGE_SIZE_BYTES *
                                    SLAB_ALLOCATOR_SLAB_SIZE_PAGES
 };
@@ -145,7 +145,7 @@ class OperatorNewAllocator {
 
     // Figure out the number of allocations that can fit into a slab.
     MAX_ALLOCATABLE_SPACE = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES -
-                            ALGINED_SLAB_LIST_SIZE,
+                            ALGINED_SLAB_LIST_SIZE - ALIGNED_OBJECT_SIZE + 1,
     NUM_ALLOCS_PER_SLAB = MAX_ALLOCATABLE_SPACE / ALIGNED_OBJECT_SIZE,
 
     // Figure out how much space can actually be used.

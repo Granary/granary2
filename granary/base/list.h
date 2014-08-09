@@ -145,6 +145,8 @@ class ListOfListHead {
     if (before_elm == first) {
       Prepend(new_elm);
     } else {
+      GRANARY_ASSERT(nullptr != before_elm);
+      GRANARY_ASSERT(nullptr != first);
       before_elm->list.template SetPrevious<T>(before_elm, new_elm);
     }
   }
@@ -153,6 +155,8 @@ class ListOfListHead {
     if (after_elm == last) {
       Append(new_elm);
     } else {
+      GRANARY_ASSERT(nullptr != after_elm);
+      GRANARY_ASSERT(nullptr != last);
       after_elm->list.template SetNext<T>(after_elm, new_elm);
     }
   }

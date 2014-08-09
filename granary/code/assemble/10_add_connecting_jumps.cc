@@ -70,16 +70,11 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
 void AddConnectingJumps(FragmentList *frags) {
   auto first = frags->First();
   auto next_ptr = &(first->next);
-  Fragment *last_frag = nullptr;
   first->was_encode_ordered = true;
   OrderFragment(first, next_ptr);
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
     auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
     auto frag_next = frag->next;
-
-    if (!IsA<ExitFragment *>(frag)) {
-      last_frag = frag;
-    }
 
     // No fall-through.
     if (!fall_through) {

@@ -21,19 +21,21 @@ using namespace granary;
 using namespace testing;
 
 SimpleEncoderTest::SimpleEncoderTest(void)
-    : module(os::ModuleKind::GRANARY, "granary"),
-      code_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE, "[code cache]"),
-      edge_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE, "[edge cache]"),
+    : context(),
+      code_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE,
+                     "[code cache]", &context),
+      edge_cache_mod(os::ModuleKind::GRANARY_CODE_CACHE,
+                     "[edge cache]", &context),
       code_cache(&code_cache_mod, 1),
       edge_cache(&edge_cache_mod, 1),
       index(new MockIndex),
       locked_index(index) {
   meta_manager.Register<AppMetaData>();
   meta_manager.Register<CacheMetaData>();
-  meta_manager.Register<StackMetaData>();
   meta_manager.Register<IndexMetaData>();
+  meta_manager.Register<StackMetaData>();
+  meta_manager.Register<InterruptMetaData>();
   arch::Init();
-  module.AddRange(0, ~0ULL, 0, os::MODULE_EXECUTABLE);
 
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, BlockCodeCache())

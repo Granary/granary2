@@ -194,7 +194,7 @@ void MetaDataManager::Finalize(void) {
 void MetaDataManager::InitAllocator(void) {
   auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
   auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
-  auto max_num_allocs = remaining_size / size;
+  auto max_num_allocs = (remaining_size - size + 1) / size;
   allocator.Construct(max_num_allocs, offset, size, size);
 }
 

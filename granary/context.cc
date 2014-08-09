@@ -14,6 +14,7 @@
 #include "granary/code/edge.h"
 #include "granary/code/metadata.h"
 
+#include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/index.h"
@@ -93,6 +94,7 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<CacheMetaData>();
   metadata_manager->Register<IndexMetaData>();
   metadata_manager->Register<StackMetaData>();
+  metadata_manager->Register<InterruptMetaData>();
 }
 
 // Create a module for a Granary code cache.
@@ -204,6 +206,8 @@ void Context::FreeTools(InstrumentationTool *tools) {
 // Allocates a direct edge data structure, as well as the code needed to
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
+  GRANARY_ASSERT(dest_block_meta->manager == &metadata_manager);
+
   auto edge_code = edge_code_cache.AllocateBlock(
       arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   auto edge = new DirectEdge(dest_block_meta, edge_code);
@@ -227,6 +231,8 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
 // Allocates an indirect edge data structure.
 IndirectEdge *Context::AllocateIndirectEdge(
     const BlockMetaData *dest_block_meta) {
+  GRANARY_ASSERT(dest_block_meta->manager == &metadata_manager);
+
   auto edge = new IndirectEdge(dest_block_meta, indirect_edge_entry_code);
   FineGrainedLocked locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;

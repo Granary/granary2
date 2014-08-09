@@ -24,15 +24,11 @@ enum {
 
   // Upper bound on the size of edge-specific direct edge code. Ideally this
   // should be as small as possible.
-  DIRECT_EDGE_CODE_SIZE_BYTES = 48,
+  DIRECT_EDGE_CODE_SIZE_BYTES = GRANARY_IF_KERNEL_ELSE(40, 48),
 
   // Upper bound on the size of indirect edge code. Ideally this should be as
   // small as possible.
   INDIRECT_EDGE_CODE_SIZE_BYTES = 48,
-
-  // Number of extra bytes of padding that should be added to an indirect out-
-  // edge stub.
-  INDIRECT_OUT_EDGE_CODE_PADDING_BYTES = 16,
 
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,

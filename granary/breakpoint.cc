@@ -6,13 +6,8 @@
 
 extern "C" {
 
-GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_fault(void) {
+void granary_unreachable(void) {
   __builtin_trap();
 }
 
-GRANARY_DISABLE_OPTIMIZER
-void granary_break_on_unreachable_code(void) {
-  __builtin_trap();
-}
 }  // extern C

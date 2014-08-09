@@ -1,11 +1,12 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_LD ?= gold
 GRANARY_CC ?= clang
 GRANARY_CXX ?= clang++
+GRANARY_LD ?= gold
 GRANARY_LLVM_LINK ?= llvm-link-3.5
 GRANARY_AR ?= ar
 GRANARY_PYTHON ?= python2.7
+GRANARY_SCAN_BUILD ?= 0
 
 GRANARY_ARCH ?= x86-64
 GRANARY_OS ?= linux
@@ -16,6 +17,23 @@ GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
 GRANARY_LINT_CODE ?= 1# 0, 1
 GRANARY_HEADER_MACRO_DEFS =
+
+# Allow the clang static analyzer to interpose on the build.
+#
+# Note: To get this to work, I had to manually modify the file
+#		`/usr/share/clang/scan-build/ccc-analyzer` and set the default
+#		compilers to `clang` and `clang++` in all cases. Alternatively, the
+#		following should achieve the same results:
+#			export CCC_CC=clang
+#			export CCC_CXX=clang++
+ifeq (1,$(GRANARY_SCAN_BUILD))
+	GRANARY_OLD_CC := $(GRANARY_CC)
+	GRANARY_OLD_CXX := $(GRANARY_CXX)
+	GRANARY_SCAN_CMD := scan-build --use-cc=$(GRANARY_OLD_CC)
+	GRANARY_SCAN_CMD += --use-c++=$(GRANARY_OLD_CXX)
+	GRANARY_CC :=  $(GRANARY_SCAN_CMD) $(GRANARY_OLD_CC)
+	GRANARY_CXX := $(GRANARY_SCAN_CMD) $(GRANARY_OLD_CXX)
+endif
 
 # Force Granary into stand-alone mode in user space if we're making a test
 # build.
@@ -75,7 +93,7 @@ GRANARY_COMMON_FLAGS =
 GRANARY_COMMON_ARCH_FLAGS =
 GRANARY_COMMON_WARN_FLAGS =
 GRANARY_DEBUG_FLAGS =
-GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_WHERE)
+GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_WHERE)_$(GRANARY_TARGET)
 GRANARY_HEADERS = $(GRANARY_HEADERS_DIR)/granary.h
 
 ifdef GRANARY_CLIENT_NAME

@@ -179,6 +179,22 @@ class Instruction : public InstructionInterface {
   // arguments, starting from the first argument.
   size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
 
+  // Does this instruction enable interrupts?
+  inline bool EnablesInterrupts(void) const {
+    return XED_ICLASS_STI == iclass;
+  }
+
+  // Does this instruction disable interrupts?
+  bool DisablesInterrupts(void) const {
+    return XED_ICLASS_CLI == iclass;
+  }
+
+  // Can this instruction change the interrupt status to either of enabled or
+  // disabled?
+  bool CanEnableOrDisableInterrupts(void) const {
+    return XED_ICLASS_POPF == iclass;
+  }
+
   // Where was this instruction encoded/decoded.
   alignas(alignof(void *)) union {
     AppPC decoded_pc;

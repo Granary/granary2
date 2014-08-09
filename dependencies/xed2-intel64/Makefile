@@ -37,7 +37,7 @@ $(GRANARY_DRIVER_OBJ):
 	@mkdir -p $(XED_BIN_DIR)
 	@cd $(XED_BIN_DIR) ; \
 		$(GRANARY_AR) x $(XED_LIB_DIR)/libxed.a ; \
-		$(GRANARY_LD) -r $(XED_BIN_DIR)/*.o -o $(GRANARY_DRIVER_OBJ)
+		$(GRANARY_LD) -g -r $(XED_BIN_DIR)/*.o -o $(GRANARY_DRIVER_OBJ)
 	
 # Compile 
 all: $(XED_TOOLS) $(GRANARY_DRIVER_OBJ)

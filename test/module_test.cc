@@ -10,23 +10,19 @@
 
 #include "os/module.h"
 
-#include "test/context.h"
-
 using namespace granary;
 using namespace ::testing;
 
 class ModuleManagerTest : public Test {
  protected:
   ModuleManagerTest(void)
-      : context(),
-        m1(&context),
-        m2(&context),
+      : m1(),
+        m2(),
         mod(new os::Module(os::ModuleKind::KERNEL_MODULE,
                            GRANARY_NAME_STRING)) {
     m2.RegisterAllBuiltIn();
   }
 
-  MockContext context;
   os::ModuleManager m1;
   os::ModuleManager m2;
   os::Module *mod;

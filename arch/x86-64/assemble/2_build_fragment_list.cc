@@ -74,17 +74,5 @@ bool InstructionHintsAtFlagSplit(const NativeInstruction *instr) {
   return false;
 }
 
-// Returns true if this instruction can change the interrupt enabled state on
-// this CPU.
-bool ChangesInterruptDeliveryState(const NativeInstruction *instr) {
-  auto iclass = instr->instruction.iclass;
-
-  // Note: We ignore `POPF/Q` because it will mark the stack as valid, and
-  //       therefore virtual register allocation around a `POPF/Q` will use
-  //       stack allocation, and not use something like per-CPU or per-thread
-  //       data.
-  return XED_ICLASS_STI == iclass || XED_ICLASS_CLI == iclass;
-}
-
 }  // namespace arch
 }  // namespace granary

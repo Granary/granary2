@@ -202,7 +202,12 @@ enum InstructionAnnotation {
   // Represents a point between two logical instructions. This is used by
   // the fragment list builder to ensure that instructions belonging to the
   // same logical instruction are not placed into separate fragment partitions.
-  IA_SEQUENCE_POINT
+  IA_SEQUENCE_POINT,
+
+  // Represents a definite change in the interrupt delivery state. If this
+  // happens then we must break a fragment and isolate the instruction that
+  // is changing the interrupt state.
+  IA_CHANGES_INTERRUPT_STATE
 };
 
 // An annotation instruction is an environment-specific and implementation-

@@ -40,7 +40,8 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 PartitionInfo::PartitionInfo(int id_)
     : id(id_),
       num_slots(0),
-      GRANARY_IF_DEBUG( num_partition_entry_frags(0), )
+      GRANARY_IF_DEBUG_( num_partition_entry_frags(0) )
+      interrupts_enabled(false),
       analyze_stack_frame(true),
       min_frame_offset(0),
       entry_frag(nullptr) {}

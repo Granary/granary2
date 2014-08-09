@@ -37,8 +37,7 @@ end
 
 # Common Granary breakpoints.
 catch throw
-b granary_break_on_fault
-b granary_break_on_unreachable_code
+b granary_unreachable
 
 # Kernel breakpoints
 if !$in_user_space
