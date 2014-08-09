@@ -10,4 +10,6 @@ void granary_unreachable(void) {
   __builtin_trap();
 }
 
+void granary_curiosity(void) {}
+
 }  // extern C

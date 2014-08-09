@@ -16,19 +16,24 @@
 #include <linux/threads.h>
 
 extern uintptr_t * __percpu granary_slots;
-
 extern void __percpu *(*linux___alloc_reserved_percpu)(size_t, size_t);
 
 struct GranaryStack {
   char data[4096 * 4];
 };
 
-static unsigned long curr_stack;
-static struct GranaryStack *cpu_stacks;
+static unsigned long curr_stack = 0;
+static struct GranaryStack *cpu_stacks = NULL;
 
+// Assign the private stack pointer into the CPU-private slots.
+//
+// Note: We use `cpu_id + 1` instead of `cpu_id` because the stack grows down,
+//       not up. Therefore, we want the "entry" stack pointer to point to the
+//       end of `data` and not to the beginning.
 static void AssignPrivateStack(void *info) {
+  unsigned long cpu_id = __sync_fetch_and_add(&curr_stack, 1UL);
   uintptr_t *slots = get_cpu_ptr(granary_slots);
-  *slots = (uintptr_t) &(cpu_stacks[__sync_fetch_and_add(&curr_stack, 1UL)]);
+  *slots = (uintptr_t) &(cpu_stacks[cpu_id + 1]);
   put_cpu_ptr(granary_slots);
   (void) info;
 }
@@ -59,4 +64,5 @@ void InitSlots(void) {
   AllocateCPUSlots();
   AllocatePrivateStacks();
   on_each_cpu(AssignPrivateStack, NULL, 1 /* wait */);
+  BUG_ON(curr_stack != num_possible_cpus());
 }

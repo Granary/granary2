@@ -8,6 +8,8 @@ extern "C" {
 __attribute__((noreturn, analyzer_noreturn))
 void granary_unreachable(void);
 
+void granary_curiosity(void);
+
 #define granary_break_on_fault_if(cond) \
   if (cond) { \
     granary_unreachable(); \

@@ -226,6 +226,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
                                    dinstr.DisablesInterrupts();
     if (GRANARY_UNLIKELY(changes_interrupt_state)) {
       if (interrupt_meta->interrupts_enabled == enables_interrupts) {
+        granary_curiosity();
         continue;
       }
     }
