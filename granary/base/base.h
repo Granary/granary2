@@ -26,7 +26,7 @@
 #define GRANARY_GLOBAL __attribute__((init_priority(103)))
 
 // Useful for Valgrind-based debugging.
-#if 0 && defined(GRANARY_INTERNAL)
+#ifdef GRANARY_WITH_VALGRIND
 # include <valgrind/valgrind.h>
 # include <valgrind/memcheck.h>
 #else

@@ -41,8 +41,9 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
       slab_list_tail(nullptr, num_allocations_per_slab_, 0),
       slab_list_head(ATOMIC_VAR_INIT(&slab_list_tail)),
       free_list(ATOMIC_VAR_INIT(nullptr)),
-      next_slab_number(ATOMIC_VAR_INIT(1)),
-      next_allocation_number(ATOMIC_VAR_INIT(num_allocations_per_slab_)) {
+      slab_lock(),
+      next_slab_number(1),
+      next_allocation_number(num_allocations_per_slab_) {
 
   GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >=
                  (aligned_size_ * num_allocations_per_slab_ + start_offset_));
@@ -52,7 +53,6 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
 // Allocate a new slab of memory for this object. The backing memory of the
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
-  const size_t slab_number(next_slab_number.fetch_add(1));
   void *slab_memory(os::AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
   memset(slab_memory, UNALLOCATED_MEMORY_POISON,
          SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
@@ -61,46 +61,36 @@ const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
       (SLAB_ALLOCATOR_SLAB_SIZE_BYTES - start_offset));
   return new (slab_memory) SlabList(
       prev_slab,
-      slab_number * num_allocations_per_slab,
-      slab_number);
+      next_slab_number * num_allocations_per_slab,
+      next_slab_number);
 }
 
 // Get a pointer into the slab list. This potentially allocates a new slab.
 // The slab pointer returned might not be the exact slab for the particular
 // allocation.
 const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
-  for (const SlabList *slab(nullptr);;) {
-    slab = slab_list_head.load(std::memory_order_relaxed);
-    if (GRANARY_LIKELY(slab->number >= slab_number)) {
-      return slab;
-    }
-
-    // TODO(pag): In user space, this could behave poorly if the thread that is
-    //            assigned to allocate the next slab is interrupted during the
-    //            process of allocating the slab.
-    if ((slab->number + 1) == slab_number) {
-      slab = AllocateSlab(slab);
-      slab_list_head.store(slab, std::memory_order_seq_cst);
-      return slab;
-    }
+  auto slab = slab_list_head.load(std::memory_order_acquire);
+  if (GRANARY_UNLIKELY(!slab) || slab_number > slab->number) {
+    GRANARY_ASSERT(next_slab_number == slab_number);
+    slab = AllocateSlab(slab);
+    GRANARY_ASSERT(slab->number == slab_number);
+    next_slab_number += 1;
+    slab_list_head.store(slab, std::memory_order_release);
   }
-  GRANARY_ASSERT(false);
+  for (; slab->number > slab_number; slab = slab->next) {}
+  return slab;
 }
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
   void *address(AllocateFromFreeList());
   if (!address) {
-    const size_t allocation_number(next_allocation_number.fetch_add(1));
-    const size_t slab_number(allocation_number / num_allocations_per_slab);
-    const SlabList *slab(GetOrAllocateSlab(slab_number));
-
-    while (GRANARY_UNLIKELY(slab->number > slab_number)) {
-      slab = slab->next;
-    }
-
-    const size_t index((allocation_number - slab->min_allocation_number));
+    FineGrainedLocked locker(&slab_lock);
+    auto slab_number = next_allocation_number / num_allocations_per_slab;
+    auto slab = GetOrAllocateSlab(slab_number);
+    auto index = (next_allocation_number - slab->min_allocation_number);
     address = UnsafeCast<char *>(slab) + start_offset + (index * aligned_size);
+    next_allocation_number += 1;
   }
 
   VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);

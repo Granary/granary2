@@ -7,7 +7,9 @@
 #include <new>
 
 #include "arch/base.h"
+
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
 
 namespace granary {
 
@@ -98,8 +100,10 @@ class SlabAllocator {
       std::atomic<const SlabList *> slab_list_head;
 
   std::atomic<FreeList *> free_list;
-  std::atomic<size_t> next_slab_number;
-  std::atomic<size_t> next_allocation_number;
+
+  FineGrainedLock slab_lock;
+  size_t next_slab_number;
+  size_t next_allocation_number;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SlabAllocator);
 };
