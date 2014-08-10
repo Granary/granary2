@@ -532,7 +532,20 @@ static void SplitFragmentAtInterruptChange(FragmentListBuilder *frags,
     frag->successors[0] = succ;
     frag = succ;
   }
+
+  // Hack to hopefully ensure that if the interrupt status is changed, then
+  // the fragment / partition that changes the status operates on valid stack.
+  //
+  // TODO(pag): I should really double check that the case like the following
+  //            never occurs, as this would be bad:
+  //
+  //            partition entry:  arch::AllocateDisableInterrupts(...)
+  //            fragment:         app disables interrupts
+  //            partition exit:   arch::AllocateEnableInterrupts(...)
   frags->split_at_next_sequence_point = true;
+  frag->stack.is_checked = true;
+  frag->stack.is_valid = true;
+
   frag->attr.can_add_to_partition = false;
   frag = Append(frags, block, frag, instr);
   ExtendFragment(frags, frag, block, next);

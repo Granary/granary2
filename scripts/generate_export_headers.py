@@ -19,6 +19,7 @@ EXPORT_HEADERS = [
   "granary/base/option.h",
   
   "granary/code/register.h",  # Ordering issues :-/
+  "granary/metadata.h",  # Ordering issues :-/
 
   "granary/cfg/control_flow_graph.h",
   "granary/cfg/basic_block.h",
@@ -33,7 +34,6 @@ EXPORT_HEADERS = [
   "granary/breakpoint.h",
   "granary/client.h",
   "granary/entry.h",
-  "granary/metadata.h",
   "granary/tool.h",
   "granary/util.h",
 

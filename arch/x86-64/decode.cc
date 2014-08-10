@@ -308,8 +308,12 @@ static bool ConvertDecodedOperand(Instruction *instr,
                                   unsigned op_num) {
   auto xedi = xed_decoded_inst_inst(xedd);
   auto op = xed_inst_operand(xedi, op_num);
-  bool is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op) ||
-                     IsAmbiguousOperand(instr->iclass, instr->iform, op_num);
+  auto is_explicit = XED_OPVIS_EXPLICIT == xed_operand_operand_visibility(op);
+  auto is_sticky = false;
+  if (IsAmbiguousOperand(instr->iclass, instr->iform, op_num)) {
+    is_explicit = true;
+    is_sticky = true;
+  }
   if (!is_explicit) {
     return false;
   }
@@ -319,7 +323,7 @@ static bool ConvertDecodedOperand(Instruction *instr,
   auto instr_op = &(instr->ops[op_num]);
 
   instr_op->rw = xed_operand_rw(op);
-  instr_op->is_sticky = false;
+  instr_op->is_sticky = is_sticky;
   instr_op->is_explicit = true;
 
   if (IsRegisterOperand(op_name)) {
@@ -409,6 +413,7 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
 
     switch (instr->iclass) {
       case XED_ICLASS_UD2:
+      case XED_ICLASS_HLT:  // TODO(pag): Add support for me!
         return nullptr;
       case XED_ICLASS_XBEGIN:
       case XED_ICLASS_XEND:

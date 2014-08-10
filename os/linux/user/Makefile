@@ -47,7 +47,7 @@ $(GRANARY_INJECTOR):
 $(GRANARY_LIBRARY_OBJ):
 	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
 	@$(GRANARY_LD) -g \
-		-T $(GRANARY_SRC_DIR)/inst_exports.lds \
+		-T $(GRANARY_SRC_DIR)/linker.lds \
 		-r $(filter-out $(GRANARY_LIBRARY_OBJ),$(wildcard $(GRANARY_BIN_DIR)/*.o)) \
 		-o $(GRANARY_LIBRARY_OBJ)
 

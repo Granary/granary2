@@ -94,7 +94,6 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
   metadata_manager->Register<CacheMetaData>();
   metadata_manager->Register<IndexMetaData>();
   metadata_manager->Register<StackMetaData>();
-  metadata_manager->Register<InterruptMetaData>();
 }
 
 // Create a module for a Granary code cache.

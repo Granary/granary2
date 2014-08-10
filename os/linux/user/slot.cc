@@ -28,7 +28,7 @@ namespace os {
 // instance of the requested slot, although many such instances might actually
 // exist.
 intptr_t Slot(SlotCategory category, int sub_category) {
-  intptr_t *slot_ptr(nullptr);
+  void *slot_ptr(nullptr);
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:
       GRANARY_ASSERT(sub_category < arch::MAX_NUM_SPILL_SLOTS);
@@ -36,6 +36,9 @@ intptr_t Slot(SlotCategory category, int sub_category) {
       break;
     case SLOT_PRIVATE_STACK:
       slot_ptr = &(granary_slots.stack_slot);
+      break;
+    case SLOT_SAVED_FLAGS:
+      slot_ptr = &(granary_slots.flags);
       break;
   }
   auto slot_addr = reinterpret_cast<intptr_t>(slot_ptr);

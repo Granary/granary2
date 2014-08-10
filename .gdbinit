@@ -86,15 +86,8 @@ define pi
       from_tty=True, to_string=False) ;
 end
 
-# Print the $arg0th most recent entry in the trace log, where 0 is the
-# most recent log entry.
-#
-# An optional second parameter can be specified, which is the number of
-# instructions to disassemble from the traced block.
-define pt
-  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
-  set $__i = ($__i) % GRANARY_BLOCK_LOG_LENGTH
-  set $__r = &(granary_block_log[$__i])
+define pte-entry
+  set $__r = $arg0
 
   # Figure out the block start pc, $__brip, and the first non-trace logger
   # instruction of the block, $__rip.
@@ -170,4 +163,162 @@ define pt
   end
   
   dont-repeat
+end
+
+# Print the $arg0th most recent entry in the trace log, where 0 is the
+# most recent log entry.
+#
+# An optional second parameter can be specified, which is the number of
+# instructions to disassemble from the traced block.
+define pte
+  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
+  set $__i = ($__i) % GRANARY_BLOCK_LOG_LENGTH
+  set $__r = &(granary_block_log[$__i])
+
+  if 2 == $argc
+    pte-entry $__r $arg1
+  else
+    pte-entry $__r
+  end
+
+  dont-repeat
+end
+
+# Print some meta-data given a meta-data pointer.
+define print-meta
+  set $__m = $arg0
+  set $__offsets = &($__m->manager->offsets[0])
+  # TODO(pag): Figure out how to print the data with the right type for kernel
+  #            debugging.
+end
+
+# Print one of the meta-datas from the log.
+define ptm
+  set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
+  set $__i = ($__i) % GRANARY_META_LOG_LENGTH
+  set $__m = &(granary_meta_log[$__i])
+  print-meta $__m
+end
+
+# Print out a DOT digraph of a fragment list
+define print-frag 
+  set $__pf = $arg0
+  printf "f%p [label=<{", $__pf
+  #pfrag-ins $__pf->
+
+  printf ">];\n"
+end
+define print-frags
+  set $__f = $arg0->first
+  printf "digraph {\n"
+  while $__f
+    set $__nf = (granary::Fragment *) ($__f->list.next)
+    print-frag $__f
+    set $__f = $__nf
+  end
+  printf "}\n"
+end
+
+
+# Saved machine state.
+set $__reg_r15 = 0
+set $__reg_r14 = 0
+set $__reg_r13 = 0
+set $__reg_r12 = 0
+set $__reg_r11 = 0
+set $__reg_r10 = 0
+set $__reg_r9  = 0
+set $__reg_r8  = 0
+set $__reg_rdi = 0
+set $__reg_rsi = 0
+set $__reg_rbp = 0
+set $__reg_rbx = 0
+set $__reg_rdx = 0
+set $__reg_rcx = 0
+set $__reg_rax = 0
+set $__reg_rsp = 0
+set $__reg_eflags = 0
+set $__reg_rip = 0
+set $__regs_saved = 0
+
+
+# Save all of the registers to some global GDB variables.
+define save-regs
+  set $__regs_saved = 1
+  set $__reg_r15 = $r15
+  set $__reg_r14 = $r14
+  set $__reg_r13 = $r13
+  set $__reg_r12 = $r12
+  set $__reg_r11 = $r11
+  set $__reg_r10 = $r10
+  set $__reg_r9  = $r9 
+  set $__reg_r8  = $r8 
+  set $__reg_rdi = $rdi
+  set $__reg_rsi = $rsi
+  set $__reg_rbp = $rbp
+  set $__reg_rbx = $rbx
+  set $__reg_rdx = $rdx
+  set $__reg_rcx = $rcx
+  set $__reg_rax = $rax
+  set $__reg_rsp = $rsp
+  set $__reg_eflags = $eflags
+  set $__reg_rip = $rip
+  dont-repeat
+end
+
+
+# Restore all of the registers from some global GDB variables.
+define restore-regs
+  set $__regs_saved = 0
+  set $r15 = $__reg_r15
+  set $r14 = $__reg_r14
+  set $r13 = $__reg_r13
+  set $r12 = $__reg_r12
+  set $r11 = $__reg_r11
+  set $r10 = $__reg_r10
+  set $r9  = $__reg_r9 
+  set $r8  = $__reg_r8 
+  set $rdi = $__reg_rdi
+  set $rsi = $__reg_rsi
+  set $rbp = $__reg_rbp
+  set $rbx = $__reg_rbx
+  set $rdx = $__reg_rdx
+  set $rcx = $__reg_rcx
+  set $rax = $__reg_rax
+  set $rsp = $__reg_rsp
+  set $eflags = $__reg_eflags
+  set $rip = $__reg_rip
+  dont-repeat
+end
+
+# restore-regs-state <kernel regs pointer>
+#
+# Restore the machine state described by the Linux kernel `struct pt_regs`.
+define restore-regs-state
+  set $__regs = (struct pt_regs *) $arg0
+
+  # Save the current register state so that if we want to, we can
+  # restore it later on to continue execution.
+  if !$__regs_saved
+    save-regs
+  end
+
+  set $r15 = $__regs->r15
+  set $r14 = $__regs->r14
+  set $r13 = $__regs->r13
+  set $r12 = $__regs->r12
+  set $r11 = $__regs->r11
+  set $r10 = $__regs->r10
+  set $r9  = $__regs->r9
+  set $r8  = $__regs->r8
+  set $rdi = $__regs->di
+  set $rsi = $__regs->si
+  set $rbp = $__regs->bp
+  set $rbx = $__regs->bx
+  set $rdx = $__regs->dx
+  set $rcx = $__regs->cx
+  set $rax = $__regs->ax
+  set $rsp = $__regs->sp
+  set $eflags = $__regs->flags
+  set $rip = $__regs->ip
 end

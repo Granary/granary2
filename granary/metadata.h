@@ -13,9 +13,7 @@
 // Used to explicitly instantiate this so that it is available to shared
 // libraries.
 #ifdef GRANARY_EXTERNAL
-# define GRANARY_SHARE_METADATA(meta_class) \
-    template <> \
-    meta_class *MetaDataCast<meta_class *>(BlockMetaData *meta);
+# define GRANARY_SHARE_METADATA(meta_class)
 #else
 # define GRANARY_SHARE_METADATA(meta_class)
 #endif
@@ -109,20 +107,6 @@ struct IsMetaData {
   };
 };
 
-// Describes whether some pointer is a pointer to some meta-data.
-template <typename T>
-struct IsMetaDataPointer {
-  static_assert(
-      IsPointer<T>(),
-      "`MetaDataCast` can only cast to pointer types.");
-  typedef typename RemovePointer<T>::Type PointedT0;
-  typedef typename RemoveConst<PointedT0>::Type PointedT;
-
-  enum {
-    RESULT = IsMetaData<PointedT>::RESULT
-  };
-};
-
 template <typename T, bool kIsIndexable, bool kIsMutable, bool kIsUnifiable>
 struct MetaDataDescriptor;
 
@@ -145,9 +129,16 @@ class MetaDataDescription {
   bool (* const compare_equals)(const void *, const void *);
   UnificationStatus (* const can_unify)(const void *, const void *);
   void (* const join)(void *, const void *);
+};
 
-  template <typename T>
-  static constexpr MetaDataDescription *Get(void) {
+// Used to get meta-data descriptions, as well as a mechanism of ensuring that
+// specific granary-interal versions of meta-data are exported to clients.
+template <typename T>
+class GetMetaDataDescription {
+ public:
+  static_assert(IsMetaData<T>::RESULT, "Type `T` must be a meta-data type.");
+
+  static MetaDataDescription *Get(void) {
     return &(MetaDataDescriptor<
       T,
       IsIndexableMetaData<T>::RESULT,
@@ -155,6 +146,8 @@ class MetaDataDescription {
       IsUnifiableMetaData<T>::RESULT
     >::kDescription);
   }
+ private:
+  GetMetaDataDescription(void) = delete;
 };
 
 // Descriptor for some indexable meta-data.
@@ -284,25 +277,14 @@ class BlockMetaData {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
 
-// For code editing purposes only. Sometimes Eclipse has trouble with all the
-// `EnableIf` specializations, so this serves to satisfy its type checker.
-#ifdef GRANARY_ECLIPSE
-
-template <typename T>
-T MetaDataCast(BlockMetaData *);
-
-#else
-
 // Cast some generic meta-data into some specific meta-data.
-template <typename T, typename EnableIf<IsMetaDataPointer<T>::RESULT>::Type=0>
-inline T MetaDataCast(BlockMetaData *meta) {
+template <typename T>
+T MetaDataCast(BlockMetaData *meta) {
   typedef typename RemovePointer<T>::Type M;
   return GRANARY_LIKELY(nullptr != meta)
-      ? reinterpret_cast<T>(meta->Cast(MetaDataDescription::Get<M>()))
+      ? reinterpret_cast<T>(meta->Cast(GetMetaDataDescription<M>::Get()))
       : nullptr;
 }
-
-#endif  // GRANARY_ECLIPSE
 
 #ifdef GRANARY_INTERNAL
 // Manages all metadata within a particular environment.
@@ -317,7 +299,7 @@ class MetaDataManager {
   // the `Register` method that operates directly on a meta-data description.
   template <typename T>
   inline void Register(void) {
-    Register(const_cast<MetaDataDescription *>(MetaDataDescription::Get<T>()));
+    Register(const_cast<MetaDataDescription *>(GetMetaDataDescription<T>::Get()));
   }
 
   // Register some meta-data with Granary.

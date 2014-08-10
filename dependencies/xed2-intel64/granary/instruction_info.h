@@ -122,6 +122,17 @@ static void FindAmbiguousOperands(InstructionInfo &info) {
         is_ambiguous_arg[iform][i - 1] = true;
       }
     }
+
+    // Sweep through the operands and try to mark other implicit operands
+    // as ambiguous. This catches things like `XED_FORM_IN_AL_DX`.
+    if (!has_ambiguous_arg[iform]) continue;
+    for (auto i = num_ops; i-- > 1; ) {
+      auto prev_op = xed_inst_operand(instr, i);
+      if (!is_ambiguous_arg[iform][i - 1] &&
+          XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(prev_op)) {
+        is_ambiguous_arg[iform][i - 1] = true;
+      }
+    }
   }
 }
 

@@ -15,12 +15,16 @@ namespace os {
 
 enum SlotCategory {
   SLOT_VIRTUAL_REGISTER,
-  SLOT_PRIVATE_STACK
+  SLOT_PRIVATE_STACK,
+  SLOT_SAVED_FLAGS
 };
 
 struct SlotSet {
   // Pointer to a thread- or CPU-private stack.
   intptr_t stack_slot;
+
+  // Saved flags.
+  uint64_t flags;
 
   // Used for spilling general-purpose registers, so that a spilled GPR can be
   // used to hold the value of a virtual register.

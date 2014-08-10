@@ -41,7 +41,6 @@ PartitionInfo::PartitionInfo(int id_)
     : id(id_),
       num_slots(0),
       GRANARY_IF_DEBUG_( num_partition_entry_frags(0) )
-      interrupts_enabled(false),
       analyze_stack_frame(true),
       min_frame_offset(0),
       entry_frag(nullptr) {}
@@ -102,6 +101,10 @@ CodeAttributes::CodeAttributes(void)
 
 Fragment::Fragment(void)
     : list(),
+      next(nullptr),
+      was_encode_ordered(false),
+      encoded_size(0),
+      encoded_pc(nullptr),
       instrs(),
       partition(nullptr),
       flag_zone(nullptr),

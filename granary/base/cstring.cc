@@ -2,6 +2,8 @@
 
 #include "granary/base/base.h"
 
+#include "granary/breakpoint.h"
+
 // Used to prevent lowering to libc-provided variants.
 #define ACCESS_LVALUE(x) \
   reinterpret_cast<volatile decltype(x) &>(x)
@@ -31,6 +33,17 @@ static void copy_backward(void * __restrict dest, const void * __restrict src,
 }  // namespace
 extern "C" {
 
+// Define the boundaries of the primary `.bss` sections. There is a special
+// "unprotected" `.bss` section (e.g. that can be used as a load-time allocated
+// statically-sized heap) that does not fall into these bounds.
+//
+// The purpose of these are to detect corruption of Granary's global data
+// structures by the allocators.
+//
+// Note: These symbols are defined by `linker.lds`.
+GRANARY_IF_DEBUG( extern uintptr_t granary_begin_protected_bss; )
+GRANARY_IF_DEBUG( extern uintptr_t granary_end_protected_bss; )
+
 void *memmove(void *dest, const void *src, unsigned long num_bytes) {
   if (GRANARY_LIKELY(num_bytes && dest != src)) {
     if (dest < src) {
@@ -45,6 +58,18 @@ void *memmove(void *dest, const void *src, unsigned long num_bytes) {
 void *memcpy(void * __restrict dest, const void * __restrict src,
              unsigned long num_bytes) {
   return memmove(dest, src, num_bytes);
+}
+
+void *checked_memset(void *dest, int val_, unsigned long num_bytes) {
+#ifdef GRANARY_DEBUG
+  const auto begin_addr = reinterpret_cast<uintptr_t>(dest);
+  const auto end_addr = begin_addr + num_bytes;
+  GRANARY_ASSERT(begin_addr < granary_begin_protected_bss ||
+                 begin_addr >= granary_end_protected_bss);
+  GRANARY_ASSERT(end_addr < granary_begin_protected_bss ||
+                 end_addr >= granary_end_protected_bss);
+#endif
+  return memset(dest, val_, num_bytes);
 }
 
 void *memset(void *dest, int val_, unsigned long num_bytes) {

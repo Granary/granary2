@@ -24,6 +24,7 @@
 
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
 #define GRANARY_GLOBAL __attribute__((init_priority(103)))
+#define GRANARY_UNPROTECTED_GLOBAL __attribute__((section(".bss.granary_unprotected")))
 
 // Useful for Valgrind-based debugging.
 #ifdef GRANARY_WITH_VALGRIND

@@ -251,6 +251,7 @@ static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
   instr->iform = XED_IFORM_PUSH_GPRv_50;
   instr->ops[0].reg = vr_16.WidenedTo(stack_shift);
   instr->ops[0].width = instr->effective_operand_width;
+  instr->ops[0].is_sticky = false;
 }
 
 // Mangle a `PUSH_*` instruction.
@@ -318,6 +319,7 @@ static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
   // Pop into a GPR instead of into the segment.
   instr->ops[0].reg = vr;
   instr->ops[0].width = instr->effective_operand_width;
+  instr->ops[0].is_sticky = false;
   instr->iform = XED_IFORM_POP_GPRv_51;
   block->UnsafeAppendInstruction(new NativeInstruction(instr));
 
@@ -431,6 +433,9 @@ static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
   instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
   instr->ops[0].rw = XED_OPERAND_ACTION_W;
   instr->ops[0].width = instr->effective_operand_width;
+
+  // Note: Need to mark it as explicit so that it will correctly be replaced
+  //       when the register scheduler gets around to scheduling the reg.
   instr->ops[0].is_explicit = true;
   instr->ops[0].is_sticky = false;
   ++(instr->num_explicit_ops);
@@ -511,9 +516,18 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_PUSHF:
     case XED_ICLASS_PUSHFQ:
       ManglePushFlags(block, instr);
-    // Note: Don't need to do anything for `POPF` or `POPFQ` as we late mangle
-    //       it into a `PUSH [RSP + offset]; POPF`.
       break;
+
+    // Note: Don't need to do any early mangling for `POPF` or `POPFQ` as we
+    //       late mangle them into a `PUSH [RSP + offset]; POPF`.
+    case XED_ICLASS_POPF:
+    case XED_ICLASS_POPFQ:
+    case XED_ICLASS_CLI:
+    case XED_ICLASS_STI:
+      block->UnsafeAppendInstruction(
+          new AnnotationInstruction(IA_CHANGES_INTERRUPT_STATE));
+      break;
+
     default:
       MangleExplicitOps(block, instr);
       break;

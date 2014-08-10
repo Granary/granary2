@@ -19,6 +19,15 @@ inline static T *GetMetaData(InstrumentedBasicBlock *block) {
   return MetaDataCast<T *>(block->UnsafeMetaData());
 }
 
+// Get a basic block's meta-data.
+template <typename T>
+inline static T *GetMetaData(BasicBlock *block) {
+  if (auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
+    return GetMetaData<T>(inst_block);
+  }
+  return nullptr;
+}
+
 // Get an instrumented basic block's meta-data.
 template <typename T>
 inline static T *GetMetaDataStrict(InstrumentedBasicBlock *block) {

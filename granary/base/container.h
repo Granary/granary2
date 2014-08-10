@@ -19,7 +19,7 @@ class Container {
   // Destroy the contained object.
   void Destroy(void) {
     operator->()->~T();
-    memset(storage, 0xAB, sizeof(T));
+    memset(storage, 0x7A, sizeof(T));
   }
 
   // Construct the contained object.

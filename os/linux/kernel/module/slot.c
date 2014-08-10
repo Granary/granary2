@@ -47,8 +47,8 @@ static void AllocatePrivateStacks(void) {
 static void AllocateCPUSlots(void) {
   long slot_ptr;
 
-  // This needs to agree with sizeof(SlotSet) in `os/slot.h`.
-  granary_slots = linux___alloc_reserved_percpu(264, 16);
+  // This needs to be `8 * 64 >= sizeof(SlotSet)` from `os/slot.h`.
+  granary_slots = linux___alloc_reserved_percpu(8 * 64, 16);
 
   slot_ptr = (long) granary_slots;
   if (0 > slot_ptr) slot_ptr = -slot_ptr;
@@ -57,6 +57,7 @@ static void AllocateCPUSlots(void) {
   // value, as this is the limit of an offset from a segment register.
   //
   // TODO(pag): This is x86 specific.
+  BUG_ON(!slot_ptr);
   BUG_ON(slot_ptr >= INT_MAX);
 }
 

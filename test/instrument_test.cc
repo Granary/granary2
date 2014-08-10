@@ -5,6 +5,8 @@
 #include "granary/base/cast.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/code/metadata.h"
+
+#include "granary/app.h"
 #include "granary/instrument.h"
 #include "granary/metadata.h"
 
@@ -62,7 +64,6 @@ class InstrumentTest : public Test {
 
     metadata_manager.Register<AppMetaData>();
     metadata_manager.Register<CacheMetaData>();
-    metadata_manager.Register<InterruptMetaData>();
   }
   virtual ~InstrumentTest(void) = default;
 
@@ -80,7 +81,7 @@ class InstrumentTest : public Test {
 
 // Test running ToolA on invalid (nullptr) code.
 TEST_F(InstrumentTest, InstrumentNothing) {
-  auto module_meta_desc = MetaDataDescription::Get<AppMetaData>();
+  auto module_meta_desc = GetMetaDataDescription<AppMetaData>::Get();
 
   EXPECT_CALL(context, RegisterMetaData(module_meta_desc))
       .Times(1)

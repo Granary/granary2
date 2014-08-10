@@ -54,8 +54,8 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
   void *slab_memory(os::AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
-  memset(slab_memory, UNALLOCATED_MEMORY_POISON,
-         SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
+  checked_memset(slab_memory, UNALLOCATED_MEMORY_POISON,
+                 SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
   VALGRIND_MAKE_MEM_UNDEFINED(
       reinterpret_cast<char *>(slab_memory) + start_offset,
       (SLAB_ALLOCATOR_SLAB_SIZE_BYTES - start_offset));
@@ -94,7 +94,7 @@ void *SlabAllocator::Allocate(void) {
   }
 
   VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
-  memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
+  checked_memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
   VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
   return address;
 }
@@ -102,7 +102,7 @@ void *SlabAllocator::Allocate(void) {
 // Free some memory that was allocated from the slab allocator.
 void SlabAllocator::Free(void *address) {
   VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
-  memset(address, DEALLOCATED_MEMORY_POISON, aligned_size);
+  checked_memset(address, DEALLOCATED_MEMORY_POISON, aligned_size);
   VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
   FreeList *list(reinterpret_cast<FreeList *>(address));
   FreeList *next(nullptr);

@@ -99,9 +99,6 @@ class PartitionInfo {
   GRANARY_IF_DEBUG( TinySet<VirtualRegister,
                             arch::NUM_GENERAL_PURPOSE_REGISTERS> used_vrs; )
 
-  // Are interrupts enabled in this partition?
-  bool interrupts_enabled;
-
   // Should we analyze the stack frames?
   bool analyze_stack_frame;
   int min_frame_offset;
@@ -177,25 +174,10 @@ enum {
   FRAG_SUCC_BRANCH = 1
 };
 
-// Adds a total ordering to fragments in terms of an encoding order.
-class EncodedFragment {
- public:
-  inline EncodedFragment(void)
-      : next(nullptr),
-        was_encode_ordered(false),
-        encoded_size(0),
-        encoded_pc(nullptr) {}
-
-  Fragment *next;
-  bool was_encode_ordered;
-  int encoded_size;
-  CachePC encoded_pc;
-};
-
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
-class Fragment : public EncodedFragment {
+class Fragment {
  public:
   Fragment(void);
 
@@ -213,6 +195,14 @@ class Fragment : public EncodedFragment {
 
   // Connects together fragments into a `FragmentList`.
   ListHead list;
+
+  // Connects together fragments into an `EncodeOrderedFragmentList`.
+  Fragment *next;
+  bool was_encode_ordered;
+
+  // Where was this fragment encoded?
+  int encoded_size;
+  CachePC encoded_pc;
 
   // List of instructions in the fragment.
   InstructionList instrs;

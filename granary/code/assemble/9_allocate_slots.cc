@@ -3,6 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "granary/cfg/instruction.h"
+
 #include "granary/code/fragment.h"
 #include "granary/code/metadata.h"
 
@@ -15,13 +17,13 @@ namespace arch {
 // interrupts.
 //
 // Note: This function has an architecture-specific implementation.
-extern NativeInstruction *AllocateDisableInterrupts(void);
+extern void AllocateDisableInterrupts(InstructionList *);
 
 // Returns a new instruction that will "allocate" the spill slots by enabling
 // interrupts.
 //
 // Note: This function has an architecture-specific implementation.
-extern NativeInstruction *AllocateEnableInterrupts(void);
+extern void AllocateEnableInterrupts(InstructionList *);
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -69,15 +71,6 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       GRANARY_ASSERT(code_frag->stack.is_checked);
       auto partition = code_frag->partition.Value();
-
-      if (auto meta = code_frag->attr.block_meta) {
-        const auto interrupt_meta = MetaDataCast<InterruptMetaData *>(meta);
-        GRANARY_ASSERT(!partition->interrupts_enabled ||
-                       (partition->interrupts_enabled ==
-                        interrupt_meta->interrupts_enabled));
-        partition->interrupts_enabled = interrupt_meta->interrupts_enabled;
-      }
-
       if (!code_frag->stack.is_valid) {
         partition->analyze_stack_frame = false;
 
@@ -230,8 +223,6 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
 // Allocate space when the stack is valid.
 static void AllocateStackSlotsStackValid(PartitionInfo *partition,
                                          Fragment *frag) {
-  if (!partition->num_slots) return;
-
   const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
                         arch::REDZONE_SIZE_BYTES;
 
@@ -248,24 +239,64 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
   }
 }
 
-static void AllocateSlotsStackInvalid(PartitionInfo *partition,
-                                      Fragment *frag) {
-  if (!partition->interrupts_enabled || !partition->num_slots) {
-    return;
-  }
-  if (IsA<PartitionEntryFragment *>(frag)) {
-    frag->instrs.Append(arch::AllocateDisableInterrupts());
-  } else if (IsA<PartitionExitFragment *>(frag)) {
-    frag->instrs.Append(arch::AllocateEnableInterrupts());
+#ifdef GRANARY_DEBUG
+// Very that no instructions in this region use virtual registers.
+static void VerifyHasNotSlots(Fragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      ninstr->ForEachOperand([=] (Operand *op) {
+        if (!op->IsExplicit()) return;
+        if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+          VirtualRegister addr_reg;
+          if (mem_op->MatchRegister(addr_reg)) {
+            GRANARY_ASSERT(!addr_reg.IsVirtualSlot());
+          }
+        } else if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+          GRANARY_ASSERT(!reg_op->Register().IsVirtual());
+        }
+      });
+    }
   }
 }
+#endif  // GRANARY_DEBUG
+
+#ifdef GRANARY_WHERE_kernel
+#ifdef GRANARY_DEBUG
+// Verify that the no (obvious) instructions in this region can change the
+// interrupt state.
+static void VerifyInterruptsNotChanges(Fragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      auto &ainstr(ninstr->instruction);
+      GRANARY_ASSERT(!(ainstr.EnablesInterrupts() ||
+                       ainstr.DisablesInterrupts() ||
+                       ainstr.CanEnableOrDisableInterrupts()));
+    }
+  }
+}
+#endif  // GRANARY_DEBUG
+
+static void AllocateSlotsStackInvalid(Fragment *frag) {
+  if (IsA<PartitionEntryFragment *>(frag)) {
+    arch::AllocateDisableInterrupts(&(frag->instrs));
+  } else if (IsA<PartitionExitFragment *>(frag)) {
+    arch::AllocateEnableInterrupts(&(frag->instrs));
+  } else {
+    GRANARY_IF_DEBUG( VerifyInterruptsNotChanges(frag); )
+  }
+}
+#endif  // GRANARY_WHERE_kernel
 
 // Allocates space on the stack for virtual registers.
 static void AllocateStackSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     auto partition = frag->partition.Value();
+    if (!partition->num_slots) {
+      GRANARY_IF_DEBUG( VerifyHasNotSlots(frag); )
+      continue;
+    }
     if (!partition->analyze_stack_frame)  {
-      AllocateSlotsStackInvalid(partition, frag);
+      GRANARY_IF_KERNEL( AllocateSlotsStackInvalid(frag); )
     } else {
       AllocateStackSlotsStackValid(partition, frag);
     }

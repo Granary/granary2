@@ -10,7 +10,6 @@
 #include "granary/cfg/lir.h"
 #include "granary/cfg/factory.h"
 
-#include "granary/code/metadata.h"
 #include "granary/code/register.h"
 
 #include "granary/app.h"
@@ -27,23 +26,11 @@ extern "C" {
 // Address range of Granary/client-specific code that has been explicitly
 // exported to instrumented code.
 //
-// Note: These symbols are defined by `inst_exports.lds`.
+// Note: These symbols are defined by `linker.lds`.
 extern AppPC granary_begin_inst_exports;
 extern AppPC granary_end_inst_exports;
 
 }  // extern C
-namespace arch {
-
-// Add conditional jumps to `pc` to handle a possible change in the interrupt
-// status by `instr`.
-//
-// Note: This function has an architecture-specific implementation.
-extern void AddConditionalInterruptFallThroughs(ContextInterface *context,
-                                                LocalControlFlowGraph *cfg,
-                                                DecodedBasicBlock *block,
-                                                AppPC pc, Instruction *instr);
-
-}  // namespace arch
 enum {
   MAX_NUM_MATERIALIZATION_REQUESTS = 1024
 };
@@ -148,17 +135,6 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
   }
 }
 
-// Add in a fall-through instruction to a block where the interrupt status
-// is defined by `enable_interrupts`.
-void BlockFactory::AddFallThroughChangeInterrupt(DecodedBasicBlock *block,
-                                                 AppPC next_pc,
-                                                 bool enable_interrupts) {
-  auto meta = context->AllocateBlockMetaData(next_pc);
-  auto interrupt_meta = MetaDataCast<InterruptMetaData *>(meta);
-  interrupt_meta->interrupts_enabled = enable_interrupts;
-  block->AppendInstruction(lir::Jump(new DirectBasicBlock(cfg, meta)));
-}
-
 namespace {
 
 // Annotate the instruction list based on the just-added instruction. This adds
@@ -166,12 +142,7 @@ namespace {
 // the addition of an `IA_UNDEFINED_STACK` annotation. These two annotations
 // are used during code assembly to split up blocks into fragments.
 static void AnnotateInstruction(DecodedBasicBlock *block,
-                                Instruction *begin,
-                                bool changes_interrupt_state) {
-  if (changes_interrupt_state) {
-    begin->UnsafeInsertAfter(
-        new AnnotationInstruction(IA_CHANGES_INTERRUPT_STATE));
-  }
+                                Instruction *begin) {
   bool in_undefined_state = false;
   for (auto instr : InstructionListIterator(begin)) {
     if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
@@ -194,7 +165,6 @@ static void AnnotateInstruction(DecodedBasicBlock *block,
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto pc = block->StartAppPC();
-  auto interrupt_meta = MetaDataCast<InterruptMetaData *>(block->meta);
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
@@ -215,46 +185,12 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
       return;
     }
 
-    // Avoid adding this instruction if it attempts to (but doesn't) change
-    // the interrupt state.
-    //
-    // TODO(pag): This would make a good place to add in a runtime assertion
-    //            that the interrupt delivery state is correctly tracked by
-    //            the meta-data.
-    auto enables_interrupts = dinstr.EnablesInterrupts();
-    auto changes_interrupt_state = enables_interrupts ||
-                                   dinstr.DisablesInterrupts();
-    if (GRANARY_UNLIKELY(changes_interrupt_state)) {
-      if (interrupt_meta->interrupts_enabled == enables_interrupts) {
-        granary_curiosity();
-        continue;
-      }
-    }
-
-#ifdef GRANARY_WHERE_kernel
-    // If this instruction *might* enable or disable interrupts, then we need
-    // to introduce to branches: one to track the case where interrupts are
-    // enabled and another to track where they are disabled.
-    if (dinstr.CanEnableOrDisableInterrupts()) {
-      arch::AddConditionalInterruptFallThroughs(context, cfg, block,
-                                                pc, &dinstr);
-      return;
-    }
-#endif
-
     // Apply early mangling to the instruction, then add it in and annotate
     // it accordingly.
     decoder.Mangle(block, &dinstr);
     instr = MakeInstruction(&dinstr);
     block->UnsafeAppendInstruction(instr);
-    AnnotateInstruction(block, before_instr, changes_interrupt_state);
-
-    // Deal with interruptible code. We do this before mangling / annotating
-    // because we don't want
-    if (changes_interrupt_state) {
-      AddFallThroughChangeInterrupt(block, pc, enables_interrupts);
-      return;
-    }
+    AnnotateInstruction(block, before_instr);
 
   } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(block, instr, pc);

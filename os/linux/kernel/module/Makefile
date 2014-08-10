@@ -14,4 +14,4 @@ ldflags-y += --defsym=fprintf=granary_unreachable
 ldflags-y += --defsym=stderr=0
 
 # Export some Granary functions to be callable by instrumented kernel code.
-ldflags-y += -T $(GRANARY_SRC_DIR)/inst_exports.lds
+ldflags-y += -T $(GRANARY_SRC_DIR)/linker.lds

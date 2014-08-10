@@ -78,8 +78,9 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
                                                        XED_REG_RSP,
                                                        ADDRESS_WIDTH_BITS)));
   }
-  auto encode_addr = reinterpret_cast<uintptr_t>(estimated_encode_pc);
+
   auto target_addr = UnsafeCast<uintptr_t>(granary_trace_block);
+  auto encode_addr = reinterpret_cast<uintptr_t>(estimated_encode_pc);
   auto target_pc = reinterpret_cast<PC>(target_addr);
   auto diff = std::max(encode_addr, target_addr) -
               std::min(encode_addr, target_addr);

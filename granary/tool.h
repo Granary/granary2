@@ -76,7 +76,7 @@ class InstrumentationTool {
   // operates directly on a meta-data description.
   template <typename T>
   inline void RegisterMetaData(void) {
-    RegisterMetaData(MetaDataDescription::Get<T>());
+    RegisterMetaData(GetMetaDataDescription<T>::Get());
   }
 
  protected:

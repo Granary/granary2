@@ -198,6 +198,17 @@ void UsedRegisterTracker::ReviveRestrictedRegisters(
     Revive(8);
     Revive(7);  // XED_REG_R8
   }
+  const auto &ainstr(instr->instruction);
+  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
+    const auto &op(ainstr.ops[i]);
+    if (!op.is_sticky) continue;
+    if (op.IsRegister() || (op.IsMemory() && !op.is_compound)) {
+      Revive(op.reg);
+    }
+    // TODO(pag): Handle `else` case? This is to deal with ambiguous operands
+    //            that need to be fixed to specific registers, as in
+    //            `IN` and `OUT`.
+  }
 }
 
 }  // namespace granary

@@ -160,10 +160,10 @@ void DynamicHeap<kNumPages>::FreePages(void *addr, int num) {
 
 namespace {
 enum {
-  NUM_RW_PAGES = 1024,  // 4 MB.
+  NUM_RW_PAGES = 2048,  // 8 MB.
   NUM_EXEC_PAGES = 2048  // 8 MB.
 };
-static Container<StaticHeap<NUM_RW_PAGES>> rw_memory;
+static Container<StaticHeap<NUM_RW_PAGES>> rw_memory GRANARY_UNPROTECTED_GLOBAL;
 static Container<DynamicHeap<NUM_EXEC_PAGES>> exec_memory;
 }  // namespace
 

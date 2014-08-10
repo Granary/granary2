@@ -7,6 +7,7 @@
 extern "C" {
 #endif  // __cplusplus
 void *memcpy(void * __restrict, const void * __restrict, unsigned long);
+void *checked_memset(void *, int, unsigned long);
 void *memset(void *, int, unsigned long);
 int memcmp(const void * __restrict, const void * __restrict,
                   unsigned long);
