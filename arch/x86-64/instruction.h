@@ -192,7 +192,7 @@ class Instruction : public InstructionInterface {
   // Can this instruction change the interrupt status to either of enabled or
   // disabled?
   bool CanEnableOrDisableInterrupts(void) const {
-    return XED_ICLASS_POPF == iclass;
+    return XED_ICLASS_POPF == iclass || XED_ICLASS_WRMSR == iclass;
   }
 
   // Where was this instruction encoded/decoded.
