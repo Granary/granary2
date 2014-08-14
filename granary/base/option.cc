@@ -248,6 +248,7 @@ void RegisterOption(Option *option) {
 void ParseStringOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
+    *(option->has_value) = true;
     *reinterpret_cast<const char **>(option->value) = value;
   }
 }
@@ -258,9 +259,11 @@ void ParseBoolOption(Option *option) {
   if (value) {
     switch (*value) {
       case '1': case 'y': case 'Y': case 't': case 'T': case '\0':
+        *(option->has_value) = true;
         *reinterpret_cast<bool *>(option->value) = true;
         break;
       case '0': case 'n': case 'N': case 'f': case 'F':
+        *(option->has_value) = true;
         *reinterpret_cast<bool *>(option->value) = false;
         break;
       default:
@@ -277,6 +280,7 @@ void ParsePositiveIntOption(Option *option) {
     int int_value(0);
     DeFormat(value, "%u", reinterpret_cast<unsigned *>(&int_value));
     if (0 < int_value) {
+      *(option->has_value) = true;
       *reinterpret_cast<int *>(option->value) = int_value;
     }
   }

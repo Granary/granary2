@@ -15,6 +15,10 @@ EXPORT_HEADERS = [
   "granary/base/base.h",
   "granary/base/lock.h",
   "granary/base/cstring.h",
+  "granary/base/new.h",
+  "granary/base/tiny_vector.h",
+  "granary/base/tiny_map.h",
+  "granary/base/tiny_set.h",
   "granary/base/string.h",
   "granary/base/option.h",
   

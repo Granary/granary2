@@ -482,7 +482,7 @@ class LinkedListZipper {
         curr_cache(nullptr) {}
 
   explicit LinkedListZipper(T **list)
-      : curr_ptr(list),
+      : curr_ptr(list && *list ? list : nullptr),
         curr_cache(nullptr) {}
 
   inline Element operator*(void) const {

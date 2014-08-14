@@ -121,6 +121,10 @@ static CodeFragment *MakeEmptyLabelFragment(FragmentListBuilder *frags,
                                             DecodedBasicBlock *block,
                                             LabelInstruction *label) {
   auto frag = MakeFragment(frags);
+  auto tombstone = new LabelInstruction;
+  SetMetaData(tombstone, frag);
+  label->UnsafeInsertBefore(tombstone);
+
   frag->attr.block_meta = block->UnsafeMetaData();
   frag->instrs.Append(label->UnsafeUnlink().release());
   SetMetaData(label, frag);
@@ -284,8 +288,8 @@ static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
 // create the fragment associated with the branch target. Then create a
 // fragment for the fall-through of the branch, and include remaining
 // instructions from the block into that fragment.
-static void SplitFragmentAtBranch(FragmentListBuilder *frags, CodeFragment *frag,
-                                  DecodedBasicBlock *block,
+static void SplitFragmentAtBranch(FragmentListBuilder *frags,
+                                  CodeFragment *frag, DecodedBasicBlock *block,
                                   BranchInstruction *branch) {
   auto label = branch->TargetInstruction();
   auto next = branch->Next();
@@ -296,6 +300,7 @@ static void SplitFragmentAtBranch(FragmentListBuilder *frags, CodeFragment *frag
     auto succ = MakeEmptyLabelFragment(frags, block, new LabelInstruction);
     frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     ExtendFragment(frags, succ, block, next);
+
     frag->successors[FRAG_SUCC_BRANCH] = GetOrMakeLabelFragment(
         frags, block, label);
     GRANARY_ASSERT(nullptr == frag->branch_instr);
@@ -557,6 +562,7 @@ static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
                            DecodedBasicBlock *block, Instruction *instr) {
 
   const auto last_instr = block->LastInstruction();
+  GRANARY_ASSERT(instr != last_instr);
   for (; instr != last_instr; ) {
 
     // Treat every label as beginning a new fragment.

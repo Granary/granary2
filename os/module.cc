@@ -28,6 +28,10 @@ class ModuleAddressRange {
         end_offset(begin_offset + (end_addr - begin_addr)),
         perms(perms_) {}
 
+  ~ModuleAddressRange(void) {
+    next = nullptr;
+  }
+
   // Next range. Module ranges are arranged in a sorted linked list such that
   // for two adjacent ranges `r1` and `r2` in the list, the following
   // relationships hold:
@@ -46,7 +50,7 @@ class ModuleAddressRange {
   // Permissions (e.g. readable, writable, executable).
   unsigned perms;
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(ModuleAddressRange, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ModuleAddressRange, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -95,11 +99,12 @@ static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
 // Initialize a new module with no ranges.
 Module::Module(ModuleKind kind_, const char *name_, ContextInterface *context_)
     : next(nullptr),
+      where_data(nullptr),
       context(context_),
       kind(kind_),
       ranges(nullptr),
       ranges_lock() {
-  memset(&(name[0]), 0, MAX_NAME_LEN);
+  checked_memset(&(name[0]), 0, MAX_NAME_LEN);
   CopyString(&(name[0]), MAX_NAME_LEN, name_);
 }
 
@@ -161,7 +166,8 @@ void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
 
 // Remove all ranges from this module.
 void Module::RemoveRanges(void) {
-  for (ModuleAddressRange *next_range(nullptr); ranges; ranges = next_range) {
+  for (ModuleAddressRange *next_range(nullptr); nullptr != ranges;
+       ranges = next_range) {
     next_range = ranges->next;
     delete ranges;
   }

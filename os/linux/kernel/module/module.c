@@ -21,7 +21,7 @@ static struct LinuxKernelModule **last_module_ptr = NULL;
 // is a stripped down `struct module` that contains enough information for
 // Granary to create its own `Module` structure from.
 static struct LinuxKernelModule *AllocModule(const struct module *mod) {
-  struct LinuxKernelModule *kmod = kmalloc(sizeof(struct LinuxKernelModule),
+  struct LinuxKernelModule *kmod = kzalloc(sizeof(struct LinuxKernelModule),
                                            GFP_NOWAIT);
   kmod->name = mod->name;
   kmod->kind = mod == THIS_MODULE ? GRANARY_MODULE : KERNEL_MODULE;
@@ -34,6 +34,11 @@ static struct LinuxKernelModule *AllocModule(const struct module *mod) {
   if (MODULE_STATE_LIVE != mod->state && MODULE_STATE_GOING != mod->state) {
     kmod->init_text_begin = (uintptr_t) mod->module_init;
     kmod->init_text_begin = kmod->init_text_begin + mod->init_text_size;
+  }
+  if (mod->num_exentries) {
+    kmod->exception_tables.start = (struct ExceptionTableEntry *) mod->extable;
+    kmod->exception_tables.stop = kmod->exception_tables.start +
+                                  mod->num_exentries - 1;
   }
   return kmod;
 }
@@ -88,6 +93,15 @@ static struct notifier_block module_notifier = {
   .priority = -1,
 };
 
+// Initialize the kernel module. The kernel module is already mostly statically
+// initialized, so this just goes and gets the right exception table pointers.
+extern struct ExceptionTableEntry *linux___start___ex_table;
+extern struct ExceptionTableEntry *linux___stop___ex_table;
+static void InitKernelModule(void) {
+  kernel_module.exception_tables.start = linux___start___ex_table;
+  kernel_module.exception_tables.stop = linux___stop___ex_table - 1;
+}
+
 // The kernel's internal module list. Guarded by `modules_lock`.
 extern struct list_head *linux_modules;
 extern struct mutex *linux_module_mutex;
@@ -98,6 +112,8 @@ void InitModules(void) {
 
   granary_kernel_modules = &kernel_module;
   last_module_ptr = &(kernel_module.next);
+
+  InitKernelModule();
 
   mutex_lock(linux_module_mutex);
   list_for_each_entry(mod, linux_modules, list) {

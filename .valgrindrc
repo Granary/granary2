@@ -1,6 +1,6 @@
---memcheck:leak-check=full
---memcheck:track-origins=yes
---memcheck:show-reachable=yes
+--leak-check=full
+--track-origins=yes
+--show-reachable=yes
 --suppressions=dependencies/valgrind/valgrind.supp
 --trace-children=yes
 --smc-check=all

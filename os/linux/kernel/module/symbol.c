@@ -11,6 +11,8 @@
 
 #include <asm/syscall.h>
 
+#include "os/linux/kernel/module.h"
+
 struct mutex;
 
 struct SymbolResolver {
@@ -26,13 +28,17 @@ sys_call_ptr_t *linux_sys_call_table = NULL;
 struct mutex *linux_module_mutex = NULL;
 struct list_head *linux_modules = NULL;
 void __percpu *(*linux___alloc_reserved_percpu)(size_t, size_t) = NULL;
+struct ExceptionTableEntry *linux___start___ex_table = NULL;
+struct ExceptionTableEntry *linux___stop___ex_table = NULL;
 
 static struct SymbolResolver symbols[] = {
   RESOLVE_SYM(module_alloc),
   RESOLVE_SYM(sys_call_table),
   RESOLVE_SYM(module_mutex),
   RESOLVE_SYM(modules),
-  RESOLVE_SYM(__alloc_reserved_percpu)
+  RESOLVE_SYM(__alloc_reserved_percpu),
+  RESOLVE_SYM(__start___ex_table),
+  RESOLVE_SYM(__stop___ex_table)
 };
 
 // Resolves needed symbols.

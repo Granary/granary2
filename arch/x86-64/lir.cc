@@ -18,8 +18,8 @@ namespace granary {
 namespace lir {
 
 // Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
-                                          const granary::Operand &op) {
+std::unique_ptr<ControlFlowInstruction> IndirectJump(
+    BasicBlock *target_block, const granary::Operand &op) {
   arch::Instruction instr;
   if (auto mem = DynamicCast<granary::MemoryOperand *>(&op)) {
     const void *ptr(nullptr);
@@ -36,23 +36,23 @@ std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
   } else {
     GRANARY_ASSERT(false);
   }
-  return std::unique_ptr<Instruction>(
+  return std::unique_ptr<ControlFlowInstruction>(
       new ControlFlowInstruction(&instr, target_block));
 }
 
 // Call to an existing basic block.
-std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
+std::unique_ptr<ControlFlowInstruction> Call(BasicBlock *target_block) {
   arch::Instruction instr;
   CALL_NEAR_RELBRd(&instr, target_block->StartAppPC());
-  return std::unique_ptr<Instruction>(
+  return std::unique_ptr<ControlFlowInstruction>(
       new ControlFlowInstruction(&instr, target_block));
 }
 
 // Jump to an existing basic block.
-std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
+std::unique_ptr<ControlFlowInstruction> Jump(BasicBlock *target_block) {
   arch::Instruction instr;
   JMP_RELBRd(&instr, target_block->StartAppPC());
-  return std::unique_ptr<Instruction>(
+  return std::unique_ptr<ControlFlowInstruction>(
       new ControlFlowInstruction(&instr, target_block));
 }
 

@@ -10,6 +10,8 @@ void granary_unreachable(void) {
   __builtin_trap();
 }
 
-void granary_curiosity(void) {}
+void granary_curiosity(void) {
+  GRANARY_INLINE_ASSEMBLY("" ::: "memory");
+}
 
 }  // extern C

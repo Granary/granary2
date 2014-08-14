@@ -1,6 +1,8 @@
 Granary+
 ========
 
+Check out the Wiki!
+
 Setup
 -----
 

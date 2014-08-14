@@ -124,12 +124,20 @@ class Module {
   // Remove all ranges from this module.
   GRANARY_INTERNAL_DEFINITION void RemoveRanges(void);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(Module, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(Module, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
 
   GRANARY_CONST Module * GRANARY_CONST next;
+
+  // Pointer to an opaque, kernel/user-space specific data structure.
+  //
+  // In the case of the Linux kernel, this points to the exception table
+  // information of a module.
+  //
+  // TODO(pag): How to eventually garbage collect this kind of data?
+  GRANARY_INTERNAL_DEFINITION void *where_data;
 
  private:
   friend class AppMetaData;

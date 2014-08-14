@@ -46,7 +46,7 @@ CodeSlab::CodeSlab(os::Module *module, int num_pages, int num_bytes,
         os::AllocatePages(num_pages, os::MemoryIntent::EXECUTABLE));
     memset(begin, arch::EXEC_MEMORY_POISON_BYTE,
            static_cast<unsigned long>(num_bytes));
-    VALGRIND_MAKE_MEM_UNDEFINED(begin, num_bytes);
+    VALGRIND_MAKE_MEM_NOACCESS(begin, num_bytes);
 
     // Add the slab to the module that is meant to represent all code allocated
     // by this allocator.
@@ -109,7 +109,7 @@ CachePC CodeAllocator::Allocate(os::Module *module, int alignment, int size) {
       }
     }
   } while (!addr);
-  VALGRIND_MAKE_MEM_DEFINED(addr, size);
+  VALGRIND_MALLOCLIKE_BLOCK(addr, size, 0, 0);
   return addr;
 }
 

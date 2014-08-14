@@ -6,23 +6,24 @@ include Makefile.inc
 .PHONY: clients clean_clients
 .PHONY: where_common where_user where_kernel
 .PHONY: target_debug target_release target_test
+.PHONY: build_driver build_dbt build_arch build_os
 
 build_driver:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_dbt: build_common
+build_dbt: build_driver
 	@echo "Entering $(GRANARY_SRC_DIR)/granary"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_arch: build_common
+build_arch: build_driver
 	@echo "Entering $(GRANARY_ARCH_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_ARCH_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_os: build_common
+build_os: build_driver
 	@echo "Entering $(GRANARY_WHERE_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
@@ -34,11 +35,9 @@ $(GRANARY_HEADERS):
 		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
 		"$(GRANARY_HEADER_MACRO_DEFS)"
 
-# Common dependencies needed by most targets.
-build_common: build_driver
-
 # Generate rules for each Granary client.
 define GENRULE_BUILD_CLIENT
+.PHONY: build_client_$(1)
 build_client_$(1): $(GRANARY_HEADERS)
 	@echo "Entering $(GRANARY_CLIENT_DIR)/$(1)"
 	$(MAKE) -C $(GRANARY_CLIENT_DIR)/$(1) \
@@ -58,22 +57,14 @@ endif
 
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_arch build_dbt build_os $(GRANARY_CLIENTS_TARGET)
+where_common: build_driver build_arch build_dbt build_os $(GRANARY_CLIENTS_TARGET)
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 
-# Make a final object that clients can link against for getting arch-specific
-# implementations of built-in compiler functions that are also sometimes
-# synthesized by optimizing compilers (e.g. memset).
-where_user: where_common
-	
-# We handle the equivalent of `user_tool` in `granary/kernel/Took.mk`.
-where_kernel: where_common
-
 # Target-specific.
-target_debug: where_$(GRANARY_WHERE)
-target_release: where_$(GRANARY_WHERE)
-target_test: target_debug
+target_debug: where_common
+target_release: where_common
+target_test: where_common
 	@mkdir -p $(GRANARY_TEST_BIN_DIR)
 	@mkdir -p $(GRANARY_GTEST_BIN_DIR)
 	@echo "Entering $(GRANARY_TEST_SRC_DIR)"

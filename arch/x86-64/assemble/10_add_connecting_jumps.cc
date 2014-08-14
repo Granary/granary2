@@ -38,5 +38,18 @@ NativeInstruction *AddFallThroughJump(Fragment *frag,
   return instr;
 }
 
+// Returns true if the target of a jump must be encoded in a nearby location.
+bool IsNearRelativeJump(NativeInstruction *instr) {
+  switch (instr->instruction.iclass) {
+    case XED_ICLASS_JRCXZ:
+    case XED_ICLASS_LOOP:
+    case XED_ICLASS_LOOPE:
+    case XED_ICLASS_LOOPNE:
+      return true;
+    default:
+      return false;
+  }
+}
+
 }  // namespace arch
 }  // namespace granary

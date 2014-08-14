@@ -43,7 +43,9 @@ static ModuleKind GetModuleKind(LinuxKernelModule *mod) {
 static void UpdateModule(ModuleManager *manager, LinuxKernelModule *mod) {
   auto module = reinterpret_cast<Module *>(mod->module);
   if (!module) {
+    GRANARY_ASSERT(nullptr == FindModuleByName(mod->name));
     module = new Module(GetModuleKind(mod), mod->name);
+    module->where_data = &(mod->exception_tables);
     mod->module = module;
     manager->Register(module);
   } else {

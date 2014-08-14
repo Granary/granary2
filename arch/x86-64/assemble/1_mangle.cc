@@ -74,7 +74,7 @@ static CFIBuilder * const kConditionalCFIBuilders[] = {
 // mangling jumps to native code, then we don't want the (first) predicted
 // target of the indirect jump to be the next instruction, so we hint at the
 // processor to stop prefetching via the `UD2`.
-static void InsertUD2AfterCFI(ControlFlowInstruction *cfi) {
+static void InsertUD2AfterCFI(NativeInstruction *cfi) {
   Instruction ni;
   UD2(&ni);
   cfi->UnsafeInsertAfter(new NativeInstruction(&ni));
@@ -84,7 +84,7 @@ static void InsertUD2AfterCFI(ControlFlowInstruction *cfi) {
 // a `NativeAddress`, then add instructions around the new indirect jump to
 // jump around the indirect jump when the original condition is not satisfied.
 static void RelativizeConditionalBranch(CacheMetaData *meta,
-                                        ControlFlowInstruction *cfi,
+                                        NativeInstruction *cfi,
                                         Instruction *instr,
                                         PC target_pc) {
   auto iclass = kReversedConditionalCFIs[instr->iclass - XED_ICLASS_JB];
@@ -122,7 +122,7 @@ static bool IsLoopInstruction(xed_iclass_enum_t iclass) {
 //                    jmp   <try_loop>
 //        do_loop:    jmp   <foo>
 //        try_loop:   loop  <do_loop>
-static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
+static void RelativizeLoop(CacheMetaData *meta, NativeInstruction *cfi,
                            Instruction *instr,
                            PC target_pc, bool target_is_far_away) {
   Instruction jmp_try_loop;
@@ -156,7 +156,7 @@ static void RelativizeLoop(CacheMetaData *meta, ControlFlowInstruction *cfi,
 }  // namespace
 
 // Relativize a direct control-flow instruction.
-void RelativizeDirectCFI(CacheMetaData *meta, ControlFlowInstruction *cfi,
+void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
                          Instruction *instr, PC target_pc,
                          bool target_is_far_away) {
   auto iclass = instr->iclass;

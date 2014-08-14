@@ -163,7 +163,6 @@ BlockMetaData *MetaDataManager::Allocate(void) {
   auto meta_mem = allocator->Allocate();
   memset(meta_mem, 0, size);
   auto meta = new (meta_mem) BlockMetaData(this);
-  VALGRIND_MALLOCLIKE_BLOCK(meta, size, 0, 0);
   return meta;
 }
 
@@ -172,7 +171,6 @@ void MetaDataManager::Free(BlockMetaData *meta) {
   GRANARY_ASSERT(is_finalized);
   GRANARY_ASSERT(this == meta->manager);
   allocator->Free(meta);
-  VALGRIND_FREELIKE_BLOCK(meta, size);
 }
 
 

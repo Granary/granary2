@@ -18,6 +18,7 @@
 #include "granary/index.h"
 #include "granary/util.h"
 
+#include "os/annotate.h"
 #include "os/module.h"
 
 namespace granary {
@@ -188,10 +189,14 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     // Apply early mangling to the instruction, then add it in and annotate
     // it accordingly.
     decoder.Mangle(block, &dinstr);
-    instr = MakeInstruction(&dinstr);
-    block->UnsafeAppendInstruction(instr);
+    auto ninstr = MakeInstruction(&dinstr);
+    instr = ninstr;
+    block->UnsafeAppendInstruction(ninstr);
+    if (ninstr->IsAppInstruction()) {
+      os::AnnotateAppInstruction(this, block, ninstr, pc);
+      instr = block->LastInstruction()->Previous();
+    }
     AnnotateInstruction(block, before_instr);
-
   } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(block, instr, pc);
 }
@@ -231,6 +236,7 @@ void BlockFactory::RelinkCFIs(void) {
 // Remove blocks that are now unnecessary.
 void BlockFactory::RemoveOldBlocks(void) {
   BasicBlock *prev(nullptr);
+  ListOfListHead<BasicBlock> to_remove;
   for (auto block = cfg->first_block; block; ) {
     if (block == cfg->first_new_block) break;
     auto next_block = block->list.GetNext(block);
@@ -239,12 +245,16 @@ void BlockFactory::RemoveOldBlocks(void) {
       if (cfg->last_block == block) {
         cfg->last_block = prev;
       }
-      delete block;
+      to_remove.Append(block);
     } else {
       prev = block;
     }
     if (block == last_block) break;
     block = next_block;
+  }
+  while (auto block = to_remove.First()) {
+    to_remove.Remove(block);
+    delete block;
   }
 }
 

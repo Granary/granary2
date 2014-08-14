@@ -38,6 +38,7 @@
 # define VALGRIND_MEMPOOL_FREE(pool, addr)
 # define VALGRIND_MAKE_MEM_UNDEFINED(addr,size)
 # define VALGRIND_MAKE_MEM_DEFINED(addr,size)
+# define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
 #endif
 
 // For namespace-based `using` declarations without triggering the linter.

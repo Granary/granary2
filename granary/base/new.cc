@@ -56,9 +56,7 @@ const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
   void *slab_memory(os::AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
   checked_memset(slab_memory, UNALLOCATED_MEMORY_POISON,
                  SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
-  VALGRIND_MAKE_MEM_UNDEFINED(
-      reinterpret_cast<char *>(slab_memory) + start_offset,
-      (SLAB_ALLOCATOR_SLAB_SIZE_BYTES - start_offset));
+  VALGRIND_MAKE_MEM_NOACCESS(slab_memory, SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
   return new (slab_memory) SlabList(
       prev_slab,
       next_slab_number * num_allocations_per_slab,
@@ -81,6 +79,21 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
   return slab;
 }
 
+#ifdef GRANARY_DEBUG
+namespace {
+static bool MemoryNotInUse(void *mem, size_t num_bytes) {
+  auto bytes = reinterpret_cast<uint8_t *>(mem);
+  for (auto i = 0UL; i < num_bytes; ++i) {
+    if (bytes[i] != static_cast<uint8_t>(UNALLOCATED_MEMORY_POISON) &&
+        bytes[i] != static_cast<uint8_t>(DEALLOCATED_MEMORY_POISON)) {
+      return false;
+    }
+  }
+  return true;
+}
+}  // namespace
+#endif  // GRANARY_DEBUG
+
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
   void *address(AllocateFromFreeList());
@@ -88,30 +101,26 @@ void *SlabAllocator::Allocate(void) {
     FineGrainedLocked locker(&slab_lock);
     auto slab_number = next_allocation_number / num_allocations_per_slab;
     auto slab = GetOrAllocateSlab(slab_number);
-    auto index = (next_allocation_number - slab->min_allocation_number);
+    auto index = next_allocation_number - slab->min_allocation_number;
     address = UnsafeCast<char *>(slab) + start_offset + (index * aligned_size);
     next_allocation_number += 1;
   }
-
-  VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
+  GRANARY_ASSERT(MemoryNotInUse(address, aligned_size));
   checked_memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
-  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
+  VALGRIND_MALLOCLIKE_BLOCK(address, unaligned_size, 0, 1);
   return address;
 }
 
 // Free some memory that was allocated from the slab allocator.
 void SlabAllocator::Free(void *address) {
-  VALGRIND_MAKE_MEM_DEFINED(address, aligned_size);
+  VALGRIND_FREELIKE_BLOCK(address, unaligned_size);
   checked_memset(address, DEALLOCATED_MEMORY_POISON, aligned_size);
-  VALGRIND_MAKE_MEM_UNDEFINED(address, aligned_size);
+
   FreeList *list(reinterpret_cast<FreeList *>(address));
   FreeList *next(nullptr);
-
   do {
     next = free_list.load(std::memory_order_relaxed);
-    VALGRIND_MAKE_MEM_DEFINED(list, sizeof *list);
     list->next = next;
-    VALGRIND_MAKE_MEM_UNDEFINED(list, sizeof *list);
   } while (!free_list.compare_exchange_strong(next, list));
 }
 
@@ -136,10 +145,14 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     if (!head) {
       return nullptr;
     }
-    VALGRIND_MAKE_MEM_DEFINED(head, sizeof *head);
     next = head->next;
-    VALGRIND_MAKE_MEM_UNDEFINED(head, sizeof *head);
   } while (!free_list.compare_exchange_strong(head, next));
+#ifdef GRANARY_DEBUG
+  if (head) {
+    // Maintain the invariant that is checked by `MemoryNotInUse`.
+    memset(head, DEALLOCATED_MEMORY_POISON, sizeof (void *));
+  }
+#endif  // GRANARY_DEBUG
   return head;
 }
 

@@ -95,7 +95,8 @@ BlockMetaData *InstrumentedBasicBlock::UnsafeMetaData(void) {
 
 InstrumentedBasicBlock::InstrumentedBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_)
-    : cfg(cfg_),
+    : BasicBlock(),
+      cfg(cfg_),
       meta(meta_),
       native_pc(meta ? MetaDataCast<AppMetaData *>(meta)->start_pc
                      : nullptr) {}
@@ -211,6 +212,11 @@ void DecodedBasicBlock::FreeInstructionList(void) {
   last = nullptr;
 }
 
+CompensationBasicBlock::CompensationBasicBlock(LocalControlFlowGraph *cfg_,
+                                               BlockMetaData *meta_)
+    : DecodedBasicBlock(cfg_, meta_),
+      is_comparable(true) {}
+
 DirectBasicBlock::~DirectBasicBlock(void) {
   materialized_block = nullptr;
 }
@@ -272,6 +278,10 @@ CachePC ReturnBasicBlock::StartCachePC(void) const {
   GRANARY_ASSERT(false);
   return nullptr;
 }
+
+NativeBasicBlock::NativeBasicBlock(AppPC native_pc_)
+    : BasicBlock(),
+      native_pc(native_pc_) {}
 
 // Returns the starting PC of this basic block.
 AppPC NativeBasicBlock::StartAppPC(void) const {

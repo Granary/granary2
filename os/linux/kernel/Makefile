@@ -6,7 +6,8 @@ include ../../../Makefile.inc
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
-GRANARY_CC_SRC_FILES += $(GRANARY_SRC_DIR)/os/*.cc
+GRANARY_CC_SRC_FILES += $(wildcard $(GRANARY_SRC_DIR)/os/*.cc)
+GRANARY_CC_SRC_FILES += $(wildcard $(GRANARY_SRC_DIR)/os/$(GRANARY_OS)/arch/$(GRANARY_ARCH)/*.cc)
 GRANARY_CC_OBJ_FILES := $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(GRANARY_CC_SRC_FILES:.cc=.o))
 
 GRANARY_ASM_SRC_FILES = $(shell find $(GRANARY_OS_ARCH_SRC_DIR) -type f -name '*.asm')
@@ -41,7 +42,7 @@ $(GRANARY_SHIPPED_BIN):
 	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
 	@$(GRANARY_LD) \
 		-T $(GRANARY_WHERE_SRC_DIR)/constructor.lds \
-		-r $(GRANARY_BIN_DIR)/*.o \
+		-r $(wildcard $(GRANARY_BIN_DIR)/*.o) \
 		-o $(GRANARY_SHIPPED_BIN)
 	# Make a `.cmd` file for the shipped object file.
 	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)

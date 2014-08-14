@@ -1,0 +1,49 @@
+{
+   <MemoryPoisonAfterFree>
+   Memcheck:Addr1
+   fun:memset
+   fun:checked_memset
+   fun:_ZN7granary8internal13SlabAllocator4FreeEPv
+   ...
+}
+{
+   <ChainIntoFreeListAfterFree>
+   Memcheck:Addr8
+   fun:_ZN7granary8internal13SlabAllocator4FreeEPv
+   ...
+}
+{
+   <PoisonMemoryInAllocate>
+   Memcheck:Addr1
+   fun:memset
+   fun:checked_memset
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}
+{
+   <AllocateFreedSlab>
+   Memcheck:Addr8
+   fun:_ZN7granary8internal13SlabAllocator20AllocateFromFreeListEv
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}
+{
+   <InitializeSlabListMetaDataOnSlabPages>
+   Memcheck:Addr8
+   fun:_ZN7granary8internal8SlabListC1EPKS1_mm
+   fun:_ZN7granary8internal13SlabAllocator12AllocateSlabEPKNS0_8SlabListE
+   ...
+}
+{
+   <VerifySlabNumberAfterSlabAlloc>
+   Memcheck:Addr8
+   fun:_ZN7granary8internal13SlabAllocator17GetOrAllocateSlabEm
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}
+{
+   <GetIndexIntoSlabForAlloc>
+   Memcheck:Addr8
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}

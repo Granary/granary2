@@ -8,6 +8,17 @@ namespace granary {
 extern "C" {
 #endif  // __cplusplus
 
+// Mirror's the Linux kernel's exception table entry structure.
+struct ExceptionTableEntry {
+  int32_t fault_addr_rel32;
+  int32_t fixup_addr_rel32;
+};
+
+struct ExceptionTableBounds {
+  const struct ExceptionTableEntry *start;
+  const struct ExceptionTableEntry *stop;
+};
+
 struct LinuxKernelModule {
   const char *name;
 
@@ -26,6 +37,8 @@ struct LinuxKernelModule {
   unsigned long init_text_end;
 
   struct LinuxKernelModule *next;
+
+  struct ExceptionTableBounds exception_tables;
 };
 
 #ifdef __cplusplus

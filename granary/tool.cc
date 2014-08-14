@@ -68,6 +68,7 @@ InstrumentationTool::InstrumentationTool(void)
     : next(nullptr),
       context(context),
       curr_scope(-1) {
+  GRANARY_ASSERT(nullptr != context);
   for (auto &scope : scopes) {
     scope = nullptr;
   }
@@ -242,7 +243,6 @@ void InstrumentationManager::Register(const ToolDescription *desc) {
 // then into a linked list.
 InstrumentationTool *InstrumentationManager::AllocateTools(void) {
   if (GRANARY_UNLIKELY(!is_finalized)) {
-    is_finalized = true;
     InitAllocator();
   }
   InstrumentationTool *tools(nullptr);
@@ -257,7 +257,6 @@ InstrumentationTool *InstrumentationManager::AllocateTools(void) {
         tool->context = context;  // Initialize before constructing!
         desc->initialize(mem);
         GRANARY_ASSERT(context == tool->context);
-        VALGRIND_MALLOCLIKE_BLOCK(tool, desc->size, 0, 0);
 
         *next_tool = tool;
         next_tool = &(tool->next);
@@ -269,7 +268,8 @@ InstrumentationTool *InstrumentationManager::AllocateTools(void) {
 
 // Free a tool.
 void InstrumentationManager::FreeTools(InstrumentationTool *tool) {
-  for (auto next_tool = tool; tool; tool = next_tool) {
+  GRANARY_ASSERT(!!is_finalized == !!tool);
+  for (InstrumentationTool *next_tool(nullptr); tool; tool = next_tool) {
     next_tool = tool->next;
     tool->~InstrumentationTool();
     allocator->Free(tool);
@@ -284,6 +284,8 @@ void InstrumentationManager::InitAllocator(void) {
     auto remaining_size = arch::PAGE_SIZE_BYTES - offset;
     auto max_num_allocs = remaining_size / size;
     allocator.Construct(max_num_allocs, offset, size, size);
+
+    is_finalized = true;
   }
 }
 

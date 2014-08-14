@@ -107,6 +107,7 @@ endif
 GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR) -DGRANARY_NAME=$(GRANARY_NAME)
 GRANARY_COMMON_FLAGS += -DGRANARY_WHERE_$(GRANARY_WHERE)
 GRANARY_COMMON_FLAGS += -DGRANARY_TARGET_$(GRANARY_TARGET)
+GRANARY_COMMON_FLAGS += -DGRANARY_OS_$(GRANARY_OS)
 GRANARY_HEADER_MACRO_DEFS += -DGRANARY_WHERE_$(GRANARY_WHERE)
 
 # Use GNU C99 and standard C++11.
@@ -187,8 +188,9 @@ endif
 # Enable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wall -Wextra -Werror -pedantic -pedantic-errors
 GRANARY_COMMON_WARN_FLAGS += -Wcast-qual -Wshadow -Wpointer-arith
-GRANARY_COMMON_WARN_FLAGS += -Wconversion -Wuninitialized -Winit-self 
-GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings -Wfloat-equal
+GRANARY_COMMON_WARN_FLAGS += -Wconversion -Winit-self -Wfloat-equal
+GRANARY_COMMON_WARN_FLAGS += -Wuninitialized -Wsometimes-uninitialized
+GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
 GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast

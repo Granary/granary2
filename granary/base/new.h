@@ -2,7 +2,6 @@
 
 #ifndef GRANARY_BASE_NEW_H_
 #define GRANARY_BASE_NEW_H_
-#ifdef GRANARY_INTERNAL
 
 #include <new>
 
@@ -14,12 +13,12 @@
 namespace granary {
 
 // Redefines operators `new` and `delete` as deleted.
-# define GRANARY_DISABLE_NEW_ALLOCATOR(class_name) \
+#define GRANARY_DISABLE_NEW_ALLOCATOR(class_name) \
   inline static void *operator new(std::size_t) { return nullptr; } \
   inline static void operator delete(void *) {}
 
 // Defines a global new allocator for a specific class.
-# define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
+#define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
   friend class OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
@@ -28,16 +27,20 @@ namespace granary {
     return address; \
   } \
   static void *operator new(std::size_t) { \
-    void *address(OperatorNewAllocator<class_name>::Allocate()); \
-    VALGRIND_MALLOCLIKE_BLOCK(address, sizeof(class_name), 0, 0); \
-    return address; \
+    return OperatorNewAllocator<class_name>::Allocate(); \
   } \
   static void operator delete(void *address) { \
     OperatorNewAllocator<class_name>::Free(address); \
-    VALGRIND_FREELIKE_BLOCK(address, sizeof(class_name)); \
   } \
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
+
+#ifdef GRANARY_INTERNAL
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR \
+    GRANARY_DEFINE_NEW_ALLOCATOR
+#else
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(class_name, ...)
+#endif
 
 namespace internal {
 
@@ -185,8 +188,4 @@ internal::SlabAllocator OperatorNewAllocator<T>::allocator(
 
 }  // namespace granary
 
-#else
-# define GRANARY_DISABLE_NEW_ALLOCATOR(class_name)
-# define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...)
-#endif  // GRANARY_INTERNAL
 #endif  // GRANARY_BASE_NEW_H_

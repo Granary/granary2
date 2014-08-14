@@ -136,6 +136,7 @@ class BasicBlock : protected UnownedCountedObject {
   GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
  protected:
+  template <typename> friend class ListOfListHead;
   friend class BasicBlockIterator;
   friend class ReverseBasicBlockIterator;
   friend class ControlFlowInstruction;
@@ -207,7 +208,7 @@ class CachedBasicBlock final : public InstrumentedBasicBlock {
   using InstrumentedBasicBlock::InstrumentedBasicBlock;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(CachedBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CachedBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -234,7 +235,7 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   VirtualRegister AllocateVirtualRegister(int num_bytes=arch::GPR_WIDTH_BYTES);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(DecodedBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DecodedBasicBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -299,14 +300,12 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
 class CompensationBasicBlock : public DecodedBasicBlock {
  public:
   GRANARY_INTERNAL_DEFINITION
-  inline CompensationBasicBlock(LocalControlFlowGraph *cfg_,
-                                BlockMetaData *meta_)
-      : DecodedBasicBlock(cfg_, meta_),
-        is_comparable(true) {}
+  CompensationBasicBlock(LocalControlFlowGraph *cfg_,
+                                BlockMetaData *meta_);
 
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CompensationBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(CompensationBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CompensationBasicBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -330,7 +329,7 @@ class DirectBasicBlock final : public InstrumentedBasicBlock {
       AppPC non_transparent_pc_=nullptr);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(DirectBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DirectBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -378,7 +377,7 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
   virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(IndirectBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(IndirectBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -415,7 +414,7 @@ class ReturnBasicBlock final : public InstrumentedBasicBlock {
   virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(ReturnBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ReturnBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -439,8 +438,7 @@ class NativeBasicBlock final : public BasicBlock {
   virtual ~NativeBasicBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  inline explicit NativeBasicBlock(AppPC native_pc_)
-      : native_pc(native_pc_) {}
+  explicit NativeBasicBlock(AppPC native_pc_);
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override;
@@ -450,7 +448,7 @@ class NativeBasicBlock final : public BasicBlock {
   virtual CachePC StartCachePC(void) const override;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
-  GRANARY_DEFINE_NEW_ALLOCATOR(NativeBasicBlock, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeBasicBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })

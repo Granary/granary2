@@ -245,7 +245,7 @@ class AnnotationInstruction : public Instruction {
   GRANARY_INTERNAL_DEFINITION GRANARY_CONST uintptr_t GRANARY_CONST data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -277,7 +277,7 @@ class LabelInstruction final : public AnnotationInstruction {
   GRANARY_INTERNAL_DEFINITION LabelInstruction(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(AnnotationInstruction, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -360,7 +360,7 @@ class NativeInstruction : public Instruction {
   }
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(NativeInstruction, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -402,7 +402,7 @@ class BranchInstruction final : public NativeInstruction {
   void SetTargetInstruction(LabelInstruction *label);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(BranchInstruction, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(BranchInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -436,7 +436,7 @@ class ControlFlowInstruction final : public NativeInstruction {
   BasicBlock *TargetBlock(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
-  GRANARY_DEFINE_NEW_ALLOCATOR(ControlFlowInstruction, {
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ControlFlowInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })

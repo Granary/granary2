@@ -32,7 +32,7 @@ extern bool AddressNeedsRelativizing(const void *ptr);
 //
 // Note: This has an architecture-specific implementation.
 extern void RelativizeDirectCFI(CacheMetaData *meta,
-                                ControlFlowInstruction *cfi,
+                                NativeInstruction *cfi,
                                 arch::Instruction *instr, PC target_pc,
                                 bool target_is_far_away);
 
@@ -200,6 +200,13 @@ class BlockMangler {
     if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
       MangleCFI(cfi);
     } else {
+      if ((instr->IsFunctionCall() || instr->IsJump()) &&
+          !instr->HasIndirectTarget()) {
+        auto target_pc = instr->instruction.BranchTargetPC();
+        RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), instr,
+                            &(instr->instruction), target_pc,
+                            AddressNeedsRelativizing(target_pc));
+      }
       RelativizeMemOp(instr);
     }
   }

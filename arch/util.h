@@ -9,6 +9,10 @@
 namespace granary {
 namespace arch {
 
+#ifdef GRANARY_ECLIPSE
+template <typename T> int ImmediateWidthBits(T);
+#else
+
 // Returns the bit width of an immediate integer. This assumes sign-extension
 // is available for `imm`. That is, if `imm` appears to be a signed negative
 // number, or an large unsigned positive number that looks like it could be
@@ -33,6 +37,8 @@ inline static int ImmediateWidthBits(T imm) {
   // Make sure to sign-extend first.
   return ImmediateWidthBits(static_cast<uint64_t>(static_cast<int64_t>(imm)));
 }
+
+#endif
 
 }  // namespace arch
 }  // namespace granary
