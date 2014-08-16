@@ -214,8 +214,8 @@ static CodeFragment *Append(FragmentListBuilder *frags,
     // as the presence of *any* fragment with an invalid stack forces the
     // slot allocator to spill to TLS/CPU-private data.
     frags->split_at_next_sequence_point = true;
+    GRANARY_ASSERT(frag->attr.block_meta == succ->attr.block_meta);
     frag->partition.Union(frag, succ);
-
     frag = succ;
 
   }  // Fall-through.
@@ -263,8 +263,9 @@ static CodeFragment *GetOrMakeLabelFragment(FragmentListBuilder *frags,
 static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
                                  BlockMetaData *block_meta,
                                  LabelInstruction *label) {
+  // Already processed this fragment.
   if (auto label_fragment = GetMetaData<CodeFragment *>(label)) {
-    frag->successors[0] = label_fragment;  // Already processed this fragment.
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = label_fragment;
     return;
   }
 
@@ -273,16 +274,14 @@ static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
   // Create a new successor fragment.
   if (frag->attr.has_native_instrs ||
       label->data ||  // If non-zero then it's likely targeted by a branch.
-      (frag->attr.is_block_head && frag->attr.block_meta != block_meta)) {
+      frag->attr.block_meta != block_meta) {
     auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-    frag->successors[0] = succ;
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
     frag = succ;
 
   // Extend the current fragment in-place.
   } else {
-    GRANARY_ASSERT(!frag->attr.block_meta ||
-                   (frag->attr.block_meta == block_meta));
-    frag->attr.block_meta = block_meta;
+    GRANARY_ASSERT(frag->attr.block_meta == block_meta);
     SetMetaData(label, frag);
     frag->instrs.Append(label->UnsafeUnlink().release());
   }

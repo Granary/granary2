@@ -149,6 +149,21 @@ static int Order(int bit_width) {
   return 0;
 }
 
+// Searches backward through the instruction list to find an
+// `IA_CHANGES_INTERRUPT_STATE` that we expect to be related to a `WRMSR`
+// instruction.
+static AnnotationInstruction *FindInterruptChange(Instruction *instr) {
+  for (; instr; instr = instr->Previous()) {
+    if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (IA_CHANGES_INTERRUPT_STATE == annot->annotation) {
+        return annot;
+      }
+    }
+  }
+  GRANARY_ASSERT(false);
+  return nullptr;
+}
+
 }  // namespace
 
 // Annotate an application instruction.
@@ -225,6 +240,11 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 
   // "Safe" write to a model-specific register.
   } else if (XED_ICLASS_WRMSR == instr->instruction.iclass) {
+    // Force a fragment split, while making it seem like there isn't a a change
+    // in interrupt status.
+    auto annot = FindInterruptChange(instr->Previous());
+    annot->annotation = IA_UNKNOWN_STACK_BELOW;
+
     granary_curiosity();
     handler = granary_uaccess_wrmsr;
     remove_instr = true;

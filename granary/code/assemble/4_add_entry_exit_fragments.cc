@@ -287,35 +287,34 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 
 // Returns true if the transition between `curr` and `next` represents a
 // partition entry point.
+//
+// Note: We only need to consider that curr/next are one of:
+//            1)  CodeFragment
+//            2)  ExitFragment
+//            3)  PartitionEntryFragment
 static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
   if (IsA<PartitionEntryFragment *>(curr)) return false;
   if (IsA<PartitionEntryFragment *>(next)) return false;
-
-  auto next_code = DynamicCast<CodeFragment *>(next);
-
-  if (curr->partition == next->partition) {
-    // Interesting special case: things like self-loops back to a block head
-    // are considered partition entry/exit points because we want to make sure
-    // that later stack frame size analysis determines a fixed stack frame size
-    // for every partition.
-    if (next_code && next_code->attr.is_block_head) {
-      return next_code->attr.can_add_to_partition;
-    }
-    return false;
-  }
   if (IsA<ExitFragment *>(next)) return false;
+  GRANARY_ASSERT(!IsA<ExitFragment *>(curr));
 
-  // Un/conditional direct call/jump targeting direct edge code, an existing
-  // block, or some native code. In this case, we don't want to introduce
-  // intermediate (i.e. redundant) jumps to get to edge code when the branch
-  // that's already there will suffice.
-  if (next_code && next_code->branch_instr &&
-      next_code->attr.branches_to_code &&
-      !next_code->attr.can_add_to_partition) {
-    return false;
+  auto curr_code = DynamicCast<CodeFragment *>(curr);
+  auto next_code = DynamicCast<CodeFragment *>(next);
+  GRANARY_ASSERT(curr_code && next_code);
+
+  if (curr_code->partition != next_code->partition) return true;
+  if (!next_code->attr.is_in_edge_code) {
+    GRANARY_ASSERT(curr_code->attr.block_meta == next_code->attr.block_meta);
   }
 
-  return true;
+  // Interesting special case: things like self-loops back to a block head
+  // are considered partition entry/exit points because we want to make sure
+  // that later stack frame size analysis determines a fixed stack frame size
+  // for every partition.
+  if (next_code && next_code->attr.is_block_head) {
+    return next_code->attr.can_add_to_partition;
+  }
+  return false;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
@@ -323,6 +322,7 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
+  if (IsA<PartitionEntryFragment *>(curr)) return false;
 
   const auto curr_code = DynamicCast<CodeFragment *>(curr);
 

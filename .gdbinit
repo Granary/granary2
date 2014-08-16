@@ -583,7 +583,8 @@ define print-frag
     printf "app=%d, ", $__cf->attr.is_app_code
     printf "add?=%d, ", $__cf->attr.can_add_to_partition
     printf "stack=%d, ", $__cf->stack.is_valid
-    printf "prop=%d", !$__cf->stack.disallow_forward_propagation
+    printf "prop=%d, ", !$__cf->stack.disallow_forward_propagation
+    printf "meta=%p", $__cf->attr.block_meta
     if $__p
       printf ", part=%d", $__p->id
     end

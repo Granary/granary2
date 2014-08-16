@@ -265,7 +265,13 @@ static void GroupFragments(FragmentList *frags) {
       for (auto succ : cfrag->successors) {
         if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ)) {
           if (frag->partition == succ->partition) continue;
+
+          // Note: There is one case where the above condition is true, but this
+          //       is false: indirect edge code, that has a meta-data template.
+          //       In this case, the above condition is forced to be true by
+          //       the code that generates the indirect edge code fragments.
           if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;
+
           if (!succ_cfrag->attr.can_add_to_partition) continue;
           if (succ_cfrag->stack.is_valid != cfrag->stack.is_valid) continue;
           cfrag->partition.Union(cfrag, succ_cfrag);
