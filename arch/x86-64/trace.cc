@@ -89,9 +89,13 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
   if (diff > 4187593113UL) {  // > ~3.9GB away; don't risk it for a rel32.
     auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
     auto addr = new NativeAddress(target_pc, &(cache_meta->native_addresses));
-    PREP(CALL_NEAR_MEMv(&ni, addr));
+    PREP(CALL_NEAR_MEMv(&ni, addr);
+         ni.is_stack_blind = true;
+         ni.analyzed_stack_usage = false; );
   } else {
-    PREP(CALL_NEAR_RELBRd(&ni, target_pc));
+    PREP(CALL_NEAR_RELBRd(&ni, target_pc);
+         ni.is_stack_blind = true;
+         ni.analyzed_stack_usage = false; );
   }
   if (REDZONE_SIZE_BYTES) {
     PREP(LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(-REDZONE_SIZE_BYTES,

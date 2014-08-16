@@ -171,7 +171,6 @@ void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
       auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
       JMP_MEMv(instr, &(addr_mloc->addr));
       instr->is_sticky = true;
-
       InsertUD2AfterCFI(cfi);
     }
 
@@ -296,18 +295,27 @@ bool AddressNeedsRelativizing(const void *ptr) {
 // value from `mem_addr`
 void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                      const MemoryOperand &mloc, const void *mem_addr) {
+  auto &ainstr(ninstr->instruction);
   auto op = mloc.UnsafeExtract();
   if (XED_REG_DS != op->segment && XED_REG_INVALID != op->segment) return;
 
-  Instruction ni;
-  auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);
-  MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
-  ni.effective_operand_width = ADDRESS_WIDTH_BITS;
-  ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
+  // Convert `RIP`-relative `LEA`s into `MOV`s.
+  if (XED_ICLASS_LEA == ainstr.iclass) {
+    MOV_GPRv_IMMv(&ainstr, ainstr.ops[0].reg,
+                  reinterpret_cast<uintptr_t>(mem_addr));
 
-  GRANARY_ASSERT(!op->is_sticky && op->is_explicit && !op->is_compound);
-  op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->reg = addr_reg;
+  // Load the address into a VR for later scheduling.
+  } else {
+    Instruction ni;
+    auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);
+    MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+    ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
+
+    GRANARY_ASSERT(!op->is_sticky && op->is_explicit && !op->is_compound);
+    op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+    op->reg = addr_reg;
+  }
 }
 
 }  // namespace arch

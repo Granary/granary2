@@ -63,7 +63,7 @@ class alignas(alignof(void *)) DirectEdge {
   const CachePC edge_code;
 
   // Instruction that is patched by this direct edge.
-  CachePC patch_instruction;
+  CachePC patch_instruction_pc;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DirectEdge, {
     SHARED = true,

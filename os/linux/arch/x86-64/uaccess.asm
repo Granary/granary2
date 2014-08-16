@@ -39,15 +39,47 @@ START_FILE
     2:                                          @N@\
     .section .fixup,"ax"                        @N@\
     3:                                          @N@\
-        mov     rcx, 1                          @N@\
+        mov     ecx, 1                          @N@\
         ret                                     @N@\
     .section __ex_table,"a"                     @N@\
     .balign 8                                   @N@\
     .long 1b - .,3b - . + offs                  @N@\
     .text                                       @N@\
-        mov     rcx, 0                          @N@\
+        mov     ecx, 0                          @N@\
         ret                                     @N@\
     END_FUNC(granary_uaccess_write_ ## size)
+
+#define MAKE_SEG_WRITE_FUNC(seg) \
+    DEFINE_FUNC(granary_uaccess_write_seg_ ## seg)  @N@\
+    1:  mov   seg, ecx                              @N@\
+    2:                                              @N@\
+    .section .fixup,"ax"                            @N@\
+    3:                                              @N@\
+        mov     ecx, 1                              @N@\
+        ret                                         @N@\
+    .section __ex_table,"a"                         @N@\
+    .balign 8                                       @N@\
+    .long 1b - .,3b - .                             @N@\
+    .text                                           @N@\
+        mov     ecx, 0                              @N@\
+        ret                                         @N@\
+    END_FUNC(granary_uaccess_write_seg_ ## size)
+
+#define MAKE_MSR_FUNC(insn) \
+    DEFINE_FUNC(granary_uaccess_ ## insn)   @N@\
+    1:  insn                                @N@\
+    2:                                      @N@\
+    .section .fixup,"ax"                    @N@\
+    3:                                      @N@\
+        mov     ecx, 1                      @N@\
+        ret                                 @N@\
+    .section __ex_table,"a"                 @N@\
+    .balign 8                               @N@\
+    .long 1b - .,3b - .                     @N@\
+    .text                                   @N@\
+        mov     ecx, 0                      @N@\
+        ret                                 @N@\
+    END_FUNC(granary_uaccess_ ## insn)
 
 MAKE_READ_FUNC(8, byte, movzx, ecx, 0)
 MAKE_READ_FUNC(16, word, movzx, ecx, 0)
@@ -68,6 +100,16 @@ MAKE_WRITE_FUNC(error_8, byte, 0x7ffffff0)
 MAKE_WRITE_FUNC(error_16, word, 0x7ffffff0)
 MAKE_WRITE_FUNC(error_32, dword, 0x7ffffff0)
 MAKE_WRITE_FUNC(error_64, qword, 0x7ffffff0)
+
+MAKE_SEG_WRITE_FUNC(fs)
+MAKE_SEG_WRITE_FUNC(gs)
+MAKE_SEG_WRITE_FUNC(cs)
+MAKE_SEG_WRITE_FUNC(ds)
+MAKE_SEG_WRITE_FUNC(es)
+MAKE_SEG_WRITE_FUNC(ss)
+
+MAKE_MSR_FUNC(rdmsr)
+MAKE_MSR_FUNC(wrmsr)
 
 #endif  // GRANARY_WHERE_kernel
 

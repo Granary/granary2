@@ -63,9 +63,11 @@ void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
 //       loop, and it makes it easier to request blocks ahead of time.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
                                 BlockRequestKind strategy) {
-  has_pending_request = true;
-  block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
-                                            strategy);
+  if (REQUEST_LATER != strategy) {
+    has_pending_request = true;
+    block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
+                                              strategy);
+  }
 }
 
 namespace {

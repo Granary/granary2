@@ -123,6 +123,8 @@ class WatchpointsLikeTool : public InstrumentationTool {
   virtual ~WatchpointsLikeTool(void) = default;
 
   void InstrumentMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
+    //FLAG_debug_log_fragments = true;
+
     // Doesn't read from or write to memory.
     if (mloc.IsEffectiveAddress()) return;
 

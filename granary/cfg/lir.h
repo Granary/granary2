@@ -6,9 +6,10 @@
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
+#include "granary/cfg/factory.h"
+
 namespace granary {
 
-class BlockFactory;
 class BasicBlock;
 class Instruction;
 class AnnotationInstruction;
@@ -26,15 +27,17 @@ std::unique_ptr<ControlFlowInstruction> Jump(BasicBlock *target_block);
 
 // Materialize a direct basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<ControlFlowInstruction> Jump(BlockFactory *factory,
-                                             AppPC target_pc);
+std::unique_ptr<ControlFlowInstruction> Jump(
+    BlockFactory *factory, AppPC target_pc,
+    BlockRequestKind request=REQUEST_LATER);
 
 // Materialize a direct basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<ControlFlowInstruction> Call(BlockFactory *factory,
-                                             AppPC target_pc);
+std::unique_ptr<ControlFlowInstruction> Call(
+    BlockFactory *factory, AppPC target_pc,
+    BlockRequestKind request=REQUEST_LATER);
 
-std::unique_ptr<ControlFlowInstruction> Jump(
+std::unique_ptr<BranchInstruction> Jump(
     const LabelInstruction *target_instr);
 
 }  // namespace lir

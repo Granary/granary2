@@ -241,6 +241,7 @@ class InlineAssemblyParser {
       branch_target = GetLabel(ParseVar());
       op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
       op->rw = XED_OPERAND_ACTION_R;
+      op->branch_target.as_app_pc = nullptr;
     } else if ('m' == op_type || 'i' == op_type || 'r' == op_type) {
       auto width = ParseWidth();
       ConsumeWhiteSpace();

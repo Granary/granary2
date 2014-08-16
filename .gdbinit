@@ -7,6 +7,9 @@ set print static-members on
 set disassembly-flavor intel
 set language c++
 
+# Make sure that the `re` module is available for use for executing Python code.
+python import re ;
+
 # set-user-detect
 #
 # Uses Python support to set the variable `$in_user_space`
@@ -15,7 +18,8 @@ set language c++
 define set-user-detect
   python None ; \
     gdb.execute( \
-      "set $in_user_space = %d" % int(None is not gdb.current_progspace().filename), \
+      "set $in_user_space = %d" % \
+        int(None is not gdb.current_progspace().filename), \
       from_tty=True, to_string=True)
 end
 
@@ -35,12 +39,13 @@ if !$in_user_space
   source /tmp/granary.syms
 end
 
-# Common Granary breakpoints.
+# Generic breakpoints.
 catch throw
 b granary_unreachable
 b granary_curiosity
+b __stack_chk_fail
 
-# Kernel breakpoints
+# Kernel space breakpoints
 if !$in_user_space
   b panic
   b show_fault_oops
@@ -55,27 +60,44 @@ if !$in_user_space
   b show_stack
   b show_trace
   b show_trace_log_lvl
+
+# User space breakpoints.
 else
   b __assert_fail
 end
 
-b __stack_chk_fail
 
-# Alias for `attach` to deal with mistyping the command.
+# attacj
+#
+# Attach to process with PID `$arg0`.
+#
+# Note: This is an intentional misspelling of `attach`, as it is easy to
+#       accidentally type a `j` instead of an `h`.
 define attacj
   attach $arg0
 end
+
+
+# a
+#
+# Attach to process with PID `$arg0`.
 define a
   attach $arg0
 end
 
-# Sort of like `reset` from the terminal.
+
+# reset
+#
+# Short form for `shell clear`.
 define reset
   shell clear
 end
 
-# Print $arg1 instructions starting at address $arg0.
-define pi
+
+# print-instructions
+#
+# Print `$arg1` instructions starting at address `$arg0`.
+define print-instructions
   set $__rip = $arg0
   set $__ni = $arg1
   python None ; \
@@ -86,7 +108,33 @@ define pi
       from_tty=True, to_string=False) ;
 end
 
-define pte-entry
+
+# print-exec-entry-flag
+#
+# Prints `$arg2` (a string representation of a flag) if bit `$arg1` is set in
+# `$arg0` (a copy of the flags register state).
+define print-exec-entry-flag
+  set $__flags = $arg0
+  set $__bit = $arg1
+  set $__str = $arg2
+  if $__flags & (1 << $__bit)
+    printf " %s", $__str
+  end
+end
+
+
+# print-exec-entry-impl
+#
+# Prints the `$arg0`th most recent execution trace entry, where `0` is the most
+# recent entry.
+#
+# If a second parameter is specified, then `$arg1` instructions starting from
+# the start of the block will be printed.
+#
+# Note: The printed instructions will exclude the call to the execution tracer
+#       itself; however, the `RIP` reported by the entry will be faithful to
+#       the true beginning of the block in the code cache.
+define print-exec-entry-impl
   set $__r = $arg0
 
   # Figure out the block start pc, $__brip, and the first non-trace logger
@@ -122,101 +170,475 @@ define pte-entry
   printf "   flags ="
 
   # Print the flags state.
-  if $__r->rflags & (1 << 0)
-    printf " CF"
-  end
-  if $__r->rflags & (1 << 2)
-    printf " PF"
-  end
-  if $__r->rflags & (1 << 4)
-    printf " AF"
-  end
-  if $__r->rflags & (1 << 6)
-    printf " ZF"
-  end
-  if $__r->rflags & (1 << 7)
-    printf " SF"
-  end
-  if $__r->rflags & (1 << 8)
-    printf " TF"
-  end
-  if $__r->rflags & (1 << 9)
-    printf " IF"
-  end
-  if $__r->rflags & (1 << 10)
-    printf " DF"
-  end
-  if $__r->rflags & (1 << 11)
-    printf " OF"
-  end
-  if $__r->rflags & (1 << 13)
-    printf " NT"
-  end
-  if $__r->rflags & (1 << 16)
-    printf " RF"
-  end
+  print-exec-entry-flag $__r->rflags 0 "CF"
+  print-exec-entry-flag $__r->rflags 2 "PF"
+  print-exec-entry-flag $__r->rflags 4 "AF"
+  print-exec-entry-flag $__r->rflags 6 "ZF"
+  print-exec-entry-flag $__r->rflags 7 "SF"
+  print-exec-entry-flag $__r->rflags 8 "TF"
+  print-exec-entry-flag $__r->rflags 9 "IF"
+  print-exec-entry-flag $__r->rflags 10 "DF"
+  print-exec-entry-flag $__r->rflags 11 "OF"
+  print-exec-entry-flag $__r->rflags 13 "NT"
+  print-exec-entry-flag $__r->rflags 16 "RF"
   printf "\n"
 
   if $argc == 2
     printf "\nFirst %d instructions:\n", $arg1
-    pi $__rip $arg1
+    print-instructions $__rip $arg1
   end
   
   dont-repeat
 end
 
-# Print the $arg0th most recent entry in the trace log, where 0 is the
-# most recent log entry.
+
+# print-exec-entry
 #
-# An optional second parameter can be specified, which is the number of
-# instructions to disassemble from the traced block.
-define pte
+# Prints the `$arg0`th most recent execution trace entry, where `0` is the most
+# recent entry.
+#
+# If a second parameter is specified, then `$arg1` instructions starting from
+# the start of the block will be printed.
+#
+# Note: The printed instructions will exclude the call to the execution tracer
+#       itself; however, the `RIP` reported by the entry will be faithful to
+#       the true beginning of the block in the code cache.
+#
+# Note: The program must be run with `--debug_trace_exec=yes`.
+define print-exec-entry
   set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
   set $__i = ($__i) % GRANARY_BLOCK_LOG_LENGTH
   set $__r = &(granary_block_log[$__i])
 
   if 2 == $argc
-    pte-entry $__r $arg1
+    print-exec-entry-impl $__r $arg1
   else
-    pte-entry $__r
+    print-exec-entry-impl $__r
   end
 
   dont-repeat
 end
 
-# Print some meta-data given a meta-data pointer.
-define print-meta
+
+# print-block-meta
+#
+# Interpret `$arg0` as a pointer to a `BlockMetaData` structure, and dump its
+# contents in a readable form.
+define print-block-meta
+  set language c++
   set $__m = $arg0
   set $__offsets = &($__m->manager->offsets[0])
-  # TODO(pag): Figure out how to print the data with the right type for kernel
-  #            debugging.
+  set $__descs = &($__m->manager->descriptions[0])
+  set $__i = 0
+  while $__descs[$__i]
+    set $__offset = $__offsets[$__i]
+    set $__desc = $__descs[$__i]
+    set $__bytes = ((char *) $__m) + $__offset
+    python None ; \
+      dstr = gdb.execute("p $__desc\n", from_tty=True, to_string=True) ; \
+      m = re.search(r"granary::MetaDataDescriptor<([^,]+),", dstr) ; \
+      cls = m.group(1) ; \
+      ms = gdb.execute("p *((%s *)$__bytes)" % cls, \
+        from_tty=True, to_string=True) ; \
+      ms = re.sub(r"^\$[0-9]+ = \{.*, <No data fields>},", "{", ms) ; \
+      gdb.write("   %s = %s" % (cls, ms)) ;
+    set $__i = $__i + 1
+  end
+  dont-repeat
 end
 
-# Print one of the meta-datas from the log.
-define ptm
+
+# print-meta-entry
+#
+# Prints the `$arg0`th most recently translated basic block's meta-data from
+# the meta-data trace, where `0` is the most recent entry.
+#
+# Note: The program must be run with `--debug_trace_meta=yes`.
+define print-meta-entry
   set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
   set $__i = ($__i) % GRANARY_META_LOG_LENGTH
   set $__m = &(granary_meta_log[$__i])
-  print-meta $__m
+  printf "Meta-data %p in group %lu:\n", $__m->meta, $__m->group
+  print-block-meta $__m->meta
+  dont-repeat
 end
 
-# Print out a DOT digraph of a fragment list
-define print-frag 
-  set $__pf = $arg0
-  printf "f%p [label=<{", $__pf
-  #pfrag-ins $__pf->
 
-  printf ">];\n"
+# print-xed-reg
+#
+# Prints out a XED register, given the value of the register in `$arg0`.
+define print-xed-reg
+  set $__r = (xed_reg_enum_t) $arg0
+  python None ; \
+    m = gdb.execute("p $__r", from_tty=True, to_string=True) ; \
+    m = re.sub(r"^\$.*= XED_REG_", "", m) ; \
+    gdb.write(m.strip("\n")) ;
 end
+
+
+# print-xed-iform
+#
+# Prints out an instruction's IFORM, where `$arg0` is interpreted as a
+# `xed_iform_enum_t`.
+define print-xed-iform
+  set $__iform = (xed_iform_enum_t) $arg0
+  python None ; \
+    m = gdb.execute("p $__iform", from_tty=True, to_string=True) ; \
+    m = re.sub(r"^\$.*= XED_IFORM_", "", m) ; \
+    gdb.write(m.strip("\n")) ;
+end
+
+
+# print-virt-reg
+#
+# Interprets `$arg0` as a `VirtualRegister` and prints it.
+define print-virt-reg
+  set language c++
+  set $__vr = (granary::VirtualRegister) $arg0
+  if VR_KIND_ARCH_FIXED == $__vr.kind
+    print-xed-reg $__vr.reg_num
+  end
+  if VR_KIND_ARCH_GPR == $__vr.kind
+    set $__r = $__vr.reg_num + XED_REG_RAX
+    if XED_REG_RSP <= $__r
+      set $__r = $__r + 1
+    end
+    if 0x3 == $__vr.byte_mask
+      set $__r = $__r - (XED_REG_RAX - XED_REG_AX)
+    end
+    if 0xF == $__vr.byte_mask
+      set $__r = $__r - (XED_REG_RAX - XED_REG_EAX)
+    end
+    if 0x1 == $__vr.byte_mask
+      set $__r = $__r + (XED_REG_AL - XED_REG_RAX)
+    end
+    if 0x2 == $__vr.byte_mask
+      set $__r = $__r + (XED_REG_AH - XED_REG_RAX)
+    end
+    print-xed-reg $__r
+  end
+  if VR_KIND_VIRTUAL_GPR == $__vr.kind || VR_KIND_VIRTUAL_STACK == $__vr.kind
+    printf "%%%u", $__vr.reg_num
+  end
+  if VR_KIND_VIRTUAL_SLOT == $__vr.kind
+    printf "SLOT:%u", $__vr.reg_num
+  end
+end
+
+
+# print-arch-operand
+#
+# Prints the `arch::Operand` structure pointed to by `$arg0`.
+define print-arch-operand
+  set language c++
+  set $__o = (granary::arch::Operand *) $arg0
+  if XED_ENCODER_OPERAND_TYPE_BRDISP == $__o->type
+    printf "0x%lx", $__o->addr.as_uint
+  end
+
+  # Memory operand
+  if XED_ENCODER_OPERAND_TYPE_MEM == $__o->type
+    printf "["
+
+    # Segment displacement. Usually `XED_REG_DS`.
+    if XED_REG_INVALID != $__o->segment && XED_REG_DS != $__o->segment
+      print-xed-reg $__o->segment
+      printf ":"
+    end
+
+    # Compound base + index * scale + displacement memory operand.
+    if $__o->is_compound
+      set $__pplus = 0
+      if XED_REG_INVALID != $__o->mem.reg_base
+        print-xed-reg $__o->mem.reg_base
+        set $__pplus = 1
+      end
+      if XED_REG_INVALID != $__o->mem.reg_index
+        if $__pplus
+          printf " + "
+        end
+        print-xed-reg $__o->mem.reg_index
+        printf " * %u", $__o->mem.scale
+        set $__pplus = 1
+      end
+      if 0 != $__o->mem.disp
+        if $__pplus
+          printf " + "
+        end
+        printf "%d", $__o->mem.disp 
+      end
+
+    # Dereference of a register memory operand
+    else
+      print-virt-reg $__o->reg
+    end
+    printf "]"
+  end
+
+  # Print out a virtual register.
+  if XED_ENCODER_OPERAND_TYPE_REG == $__o->type || \
+     XED_ENCODER_OPERAND_TYPE_SEG0 == $__o->type || \
+     XED_ENCODER_OPERAND_TYPE_SEG1 == $__o->type
+    print-virt-reg $__o->reg
+  end
+
+  # Print out an immediate operand
+  if XED_ENCODER_OPERAND_TYPE_IMM0 == $__o->type || \
+     XED_ENCODER_OPERAND_TYPE_IMM1 == $__o->type || \
+     XED_ENCODER_OPERAND_TYPE_SIMM0 == $__o->type
+    if 0 > $__o->imm.as_int
+      printf "-0x%lx", -$__o->imm.as_int
+    else
+      printf "0x%lx", $__o->imm.as_int
+    end
+  end
+
+  # Print out some kind of pointer.
+  if XED_ENCODER_OPERAND_TYPE_PTR == $__o->type
+    printf "["
+    if XED_REG_INVALID != $__o->segment && XED_REG_DS != $__o->segment
+      print-xed-reg $__o->segment
+      printf ":"
+    end
+    if $__o->is_annot_encoded_pc
+      printf "return address"
+    else
+      if 0 > $__o->addr.as_int
+        printf "-0x%lx", -$__o->addr.as_int
+      else
+        printf "0x%lx", $__o->addr.as_int
+      end
+    end
+    printf "]"
+  end
+
+  dont-repeat
+end
+
+
+# print-arch-instr-inline
+#
+# Interprets `$arg0` as being a pointer to an `arch::Instruction` structure, and
+# prints the structure.
+#
+# Note: This function does not print a trialing new line character.
+define print-arch-instr-inline
+  set language c++
+  set $__in = (granary::arch::Instruction *) $arg0
+  print-xed-iform $__in->iform
+  printf " "
+  set $__op_num = 0
+  while $__op_num < $__in->num_explicit_ops
+    if 0 < $__op_num
+      printf ", "
+    end
+    print-arch-operand &($__in->ops[$__op_num])
+    set $__op_num = $__op_num + 1
+  end
+end
+
+
+# print-arch-instr
+#
+# Interprets `$arg0` as being a pointer to an `arch::Instruction` structure, and
+# prints the structure.
+define print-arch-instr
+  print-arch-instr-inline $arg0
+  printf "\n"
+  dont-repeat
+end
+
+
+# get-native-instr
+#
+# Treat `$arg0` as a pointer to an `Instruction`, and set `$__ni` to be a
+# pointer to a `NativeInstruction` (or a subclass thereof) if `$arg0` is an
+# instance of the right type.
+define get-native-instr
+  set language c++
+  set $__i = (granary::Instruction *) $arg0
+  set $__vi = ((char *) $__i->_vptr$Instruction) - 16
+  if &_ZTVN7granary17NativeInstructionE == $__vi || \
+     &_ZTVN7granary17BranchInstructionE == $__vi || \
+     &_ZTVN7granary22ControlFlowInstructionE == $__vi
+    set $__ni = (granary::NativeInstruction *) $__i
+  else
+    set $__ni = (granary::NativeInstruction *) 0
+  end
+end
+
+
+# print-instr
+#
+# Treats `$arg0` as a pointer to an `Instruction` (not an `arch::Instruction`)
+# and prints the instruction as an x86-like instruction if the instruction is
+# an instance of `NativeInstruction`, otherwise nothing is printed.
+define print-instr
+  set language c++
+  set $__i = (granary::Instruction *) $arg0
+  get-native-instr $__i
+  if $__ni
+    print-arch-instr &($__ni->instruction)
+  end
+  dont-repeat
+end
+
+
+# get-next-instr
+#
+# Treat `$arg0` as a pointer to an `Instruction`, and set `$__i` to be a pointer
+# to the next instruction.
+define get-next-instr
+  set language c++
+  set $__i = (granary::Instruction *) $arg0
+  set $__nil = $__i->list.next
+  if $__nil
+    set $__i = (granary::Instruction *) (((char *) $__nil) - 8)
+  else
+    set $__i = (granary::Instruction *) 0
+  end
+end
+
+
+# get-next-frag
+#
+# Intepret `$arg0` as a pointer to a `Fragment`, and return a pointer to the
+# next fragment by setting `$__f`.
+define get-next-frag
+  set language c++
+  set $__f = (granary::Fragment *) $arg0
+  if $__f->list.next
+    set $__f = (granary::Fragment *) (((char *) $__f->list.next) - 8)
+  else
+    set $__f = (granary::Fragment *) 0
+  end
+end
+
+
+# get-frag-partition
+#
+# Sets `$__p` to be a pointer to the `PartitionInfo` of a fragment `$arg0`.
+define get-frag-partition
+  set $__ps = &($arg0->partition)
+  while $__ps->parent != $__ps
+    set $__ps = $__ps->parent
+  end
+  set $__p = (granary::PartitionInfo *) $__ps->value
+end
+
+
+# print-frag-fillcolor
+#
+# Interpret `$arg0` as a pointer to some fragment's `PartitionInfo`, and use it
+# to print the background color of the fragment.
+define print-frag-fillcolor
+  set language c++
+  set $__p = (granary::PartitionInfo *) $arg0
+  if $__p
+    printf "%s", granary::os::fragment_partition_color[$__p->id % 11]
+  else
+    printf "white"
+  end
+end
+
+
+# print-frag-instrs
+#
+# Treat `$arg0` as a pointer to a `Fragment`, and use it to print out the
+# instructions of a fragment.
+define print-frag-instrs
+  set language c++
+  set $__f = (granary::Fragment *) $arg0
+  set $__i = $__f->instrs.first
+  while $__i
+    get-native-instr $__i
+    if $__ni
+      print-arch-instr-inline &($__ni->instruction)
+      printf "<BR/>"
+    end
+    get-next-instr $__i
+  end
+end
+
+
+# print-frag
+#
+# Treat `$arg0` as a pointer to a `Fragment` structure and do a simple printing
+# of the fragment in an in-line fashion.
+#
+# Note: The printing format of the fragment is as a DOT digraph node.
+define print-frag
+  set language c++
+  set $__f = (granary::Fragment *) $arg0
+  get-frag-partition $__f
+
+  printf "f%p [fillcolor=", $__f
+  print-frag-fillcolor $__p
+
+  printf " label=<{"
+  
+  if &_ZTVN7granary12CodeFragmentE == (((char *) $__f->_vptr$Fragment) - 16)
+    set $__cf = (granary::CodeFragment *) $__f
+    printf "head=%d, ", $__cf->attr.is_block_head
+    printf "app=%d, ", $__cf->attr.is_app_code
+    printf "add?=%d, ", $__cf->attr.can_add_to_partition
+    printf "stack=%d, ", $__cf->stack.is_valid
+    printf "prop=%d", !$__cf->stack.disallow_forward_propagation
+    if $__p
+      printf ", part=%d", $__p->id
+    end
+    printf "|"
+  end
+  print-frag-instrs $__f
+  printf "}>];\n"
+end
+
+
+# print-frags
+#
+# Treat `$arg0` as a pointer to a `FragmentList`, and print the fragment list
+# as a DOT digraph for later viewing from something like GraphViz / Xdot.py.
+#
+# Note: This will save the output to `/tmp/graph.dot`.
+#
+# Note: This operation will generally be VERY slow. You might need to babysit
+#       it as GDB sometimes will prompt the user to continue after a lot of
+#       output has been printed.
 define print-frags
-  set $__f = $arg0->first
+  set logging file /tmp/graph.dot
+  set logging on
+  printf ""
+  set logging off
+  set logging on
+  set logging redirect on
+
+  set language c++
+  set $__fs = (granary::FragmentList *) $arg0
+  set $__f = $__fs->first
   printf "digraph {\n"
+  printf "node [fontname=Courier shape=record nojustify=false "
+  printf    "labeljust=l style=filled];\n"
+  printf "f0 [label=enter];"
+  printf "f0 -> f%p;\n", $__f
   while $__f
-    set $__nf = (granary::Fragment *) ($__f->list.next)
+    if $__f->successors[0]
+      printf "f%p -> f%p;\n", $__f, $__f->successors[0]
+    end
+    if $__f->successors[1]
+      printf "f%p -> f%p;\n", $__f, $__f->successors[1]
+    end
+    
     print-frag $__f
-    set $__f = $__nf
+    get-next-frag $__f
   end
   printf "}\n"
+
+  set logging redirect off
+  set logging off
+
+  printf "Opening /tmp/graph.dot with xdot...\n"
+  shell xdot /tmp/graph.dot &
+  dont-repeat
 end
 
 
@@ -319,6 +741,6 @@ define restore-regs-state
   set $rcx = $__regs->cx
   set $rax = $__regs->ax
   set $rsp = $__regs->sp
-  set $eflags = $__regs->flags
+  set $eflags = $__regs->rflags
   set $rip = $__regs->ip
 end

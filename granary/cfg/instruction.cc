@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
@@ -129,7 +130,9 @@ LabelInstruction::LabelInstruction(void)
     : AnnotationInstruction(IA_LABEL) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
-    : instruction(*instruction_) {}
+    : instruction(*instruction_) {
+  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
+}
 
 NativeInstruction::~NativeInstruction(void) {}
 
@@ -232,6 +235,7 @@ BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
                                      LabelInstruction *target_)
     : NativeInstruction(instruction_),
       target(target_) {
+  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
 
   // Mark this label as being targeted by some instruction.
   *target->DataPtr<uint64_t>() += 1;
@@ -255,6 +259,7 @@ ControlFlowInstruction::ControlFlowInstruction(
       : NativeInstruction(instruction_),
         return_address(nullptr),
         target(target_) {
+  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
   target->Acquire();
 }
 

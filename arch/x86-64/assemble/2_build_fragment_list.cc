@@ -65,6 +65,8 @@ bool InstructionHintsAtFlagSplit(const NativeInstruction *instr) {
       return true;
     }
   }
+
+  // TODO(pag): These can be pre-computed.
   auto implicit_ops = arch::IMPLICIT_OPERANDS[ainstr.iclass];
   for (auto i = 0; i < arch::NUM_IMPLICIT_OPERANDS[ainstr.iclass]; ++i) {
     if (HintFragment(implicit_ops[i])) {

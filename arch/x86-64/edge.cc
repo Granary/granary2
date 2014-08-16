@@ -51,7 +51,7 @@ namespace {
 static const auto kEnterDirect = granary_arch_enter_direct_edge;
 static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 
-static void Shorten_MOV_GPRv_IMMz(arch::Instruction *ni) {
+static void Shorten_MOV_GPRv_IMMv(arch::Instruction *ni) {
   if (32 >= ni->ops[1].width) {
     ni->ops[0].width = 32;
     ni->ops[0].reg.Widen(4);
@@ -80,8 +80,8 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RSI));
-  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RSI, reinterpret_cast<uintptr_t>(context));
-      Shorten_MOV_GPRv_IMMz(&ni););
+  ENC(MOV_GPRv_IMMv(&ni, XED_REG_RSI, reinterpret_cast<uintptr_t>(context));
+      Shorten_MOV_GPRv_IMMv(&ni););
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
@@ -129,8 +129,8 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // Steal `RDI` (arg1 on Itanium C++ ABI) to hold the address of the
   // `DirectEdge` data structure.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RDI));
-  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(edge));
-      Shorten_MOV_GPRv_IMMz(&ni););
+  ENC(MOV_GPRv_IMMv(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(edge));
+      Shorten_MOV_GPRv_IMMv(&ni););
 
   // Call into the direct edge entry code, which might disable interrupts, and
   // will transfer control to a private stack.
@@ -184,8 +184,8 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // `granary::EnterGranary`. `RDI` already holds the address of the
   // `IndirectEdge`, and `RCX` holds the native address of the target block.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RSI));
-  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RSI, reinterpret_cast<uintptr_t>(context));
-      Shorten_MOV_GPRv_IMMz(&ni););
+  ENC(MOV_GPRv_IMMv(&ni, XED_REG_RSI, reinterpret_cast<uintptr_t>(context));
+      Shorten_MOV_GPRv_IMMv(&ni););
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
@@ -294,21 +294,29 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // Copy the target, just in case it's stored in `RCX` or `RDI`.
   auto cfi_target = target_op.reg;
-  if (VirtualRegister::FromNative(XED_REG_RCX) == cfi_target) {
-    auto target_block = DynamicCast<InstrumentedBasicBlock *>(cfi->TargetBlock());
-    auto cfg = target_block->cfg;
-    cfi_target = cfg->AllocateVirtualRegister(arch::ADDRESS_WIDTH_BYTES);
-    APP(in_edge, MOV_GPRv_GPRv_89(&ni, cfi_target, XED_REG_RCX); );
+  auto restore_rdx = false;
+  if (VirtualRegister::FromNative(XED_REG_RCX) == cfi_target ||
+      VirtualRegister::FromNative(XED_REG_RDI) == cfi_target) {
+    APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RDX);
+                 ni.is_stack_blind = true;
+                 ni.analyzed_stack_usage = false; );
+    APP(in_edge, MOV_GPRv_GPRv_89(&ni, XED_REG_RDX, cfi_target); );
+    cfi_target = VirtualRegister::FromNative(XED_REG_RDX);
+    restore_rdx = true;
   }
 
   // Spill `RCX` and `RDI` on the stack. If the stack isn't valid in this
   // partition, then the stack pointer should have already been shifted.
-  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RCX); ni.is_stack_blind = true;);
-  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RDI); ni.is_stack_blind = true;);
+  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RCX);
+               ni.is_stack_blind = true;
+               ni.analyzed_stack_usage = false; );
+  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RDI);
+               ni.is_stack_blind = true;
+               ni.analyzed_stack_usage = false; );
 
   // Store the pointer to the `IndirectEdge` data structure in `RDI`
   // (arg1 of the Itanium C++ ABI).
-  APP(in_edge, MOV_GPRv_IMMz(&ni, XED_REG_RDI,
+  APP(in_edge, MOV_GPRv_IMMv(&ni, XED_REG_RDI,
                                   reinterpret_cast<uint64_t>(edge)));
   APP(in_edge, JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),
                                            XED_REG_RDI,
@@ -325,7 +333,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   // For the fall-through; want to make sure no weird register allocation
   // stuff gets in the way.
   auto miss_addr = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
-                                               &(edge->out_edge_pc));
+                                             &(edge->out_edge_pc));
   in_edge->instrs.Append(miss_addr);
 
   // --------------------- go_to_granary --------------------------------
@@ -350,7 +358,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   //    1)  Moving the target of the control-flow instruction into `RCX`
   //        (first instruction).
   //    2)  Jumping directly to the targeted basic block (last instruction).
-  APP(compare_target, MOV_GPRv_IMMz(&ni, XED_REG_RCX, 0UL);
+  APP(compare_target, MOV_GPRv_IMMv(&ni, XED_REG_RCX, 0UL);
                       ni.dont_encode = true; );
   APP(compare_target, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
                                               cfi_target));
@@ -364,11 +372,21 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   compare_target->branch_instr = DynamicCast<NativeInstruction *>(
       compare_target->instrs.Last());
   APP(compare_target, JMP_RELBRd(&ni, back_to_granary); ni.is_sticky = true; );
+
+  // LABEL: `go_to_exit_to_block`.
   compare_target->instrs.Append(go_to_exit_to_block);
 
-  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDI); ni.is_stack_blind = true;);
-  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RCX); ni.is_stack_blind = true;);
-
+  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDI);
+                      ni.is_stack_blind = true;
+                      ni.analyzed_stack_usage = false; );
+  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RCX);
+                      ni.is_stack_blind = true;
+                      ni.analyzed_stack_usage = false; );
+  if (restore_rdx) {
+    APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDX);
+                        ni.is_stack_blind = true;
+                        ni.analyzed_stack_usage = false; );
+  }
   // --------------------- exit_to_block --------------------------------
 
   APP(exit_to_block, UD2(&ni));
@@ -421,8 +439,8 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 
       // Negate the pointer, so that when it's added to its non-negated self,
       // they cancel out and trigger the `JRCXZ`.
-      MOV_GPRv_IMMz(&mov, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
-      Shorten_MOV_GPRv_IMMz(&mov);
+      MOV_GPRv_IMMv(&mov, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
+      Shorten_MOV_GPRv_IMMv(&mov);
       frag->instrs.Append(new NativeInstruction(&mov));
 
       GRANARY_IF_DEBUG( added_lea = true; )

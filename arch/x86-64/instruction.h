@@ -275,6 +275,8 @@ class Instruction : public InstructionInterface {
   // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
   Operand ops[MAX_NUM_EXPLICIT_OPS];
+
+  GRANARY_IF_DEBUG( void *note; )
 };
 
 }  // namespace arch

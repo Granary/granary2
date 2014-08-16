@@ -95,6 +95,7 @@ class BlockMangler {
 
   // Returns true if an address needs relativizing.
   bool AddressNeedsRelativizing(PC relative_pc) const {
+    if (!relative_pc) return false;  // Don't have a target for it.
     auto signed_diff = relative_pc - cache_pc;
     auto diff = 0 > signed_diff ? -signed_diff : signed_diff;
     return MAX_BRANCH_OFFSET < diff;
@@ -103,7 +104,7 @@ class BlockMangler {
   // Relativize a particular memory operation within a memory instruction.
   void RelativizeMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
     const void *mptr(nullptr);
-    if (mloc.MatchPointer(mptr)) {
+    if (mloc.IsExplicit() && mloc.MatchPointer(mptr)) {
       if (AddressNeedsRelativizing(mptr) ||
           arch::AddressNeedsRelativizing(mptr)) {
         arch::RelativizeMemOp(block, instr, mloc, mptr);
@@ -160,9 +161,9 @@ class BlockMangler {
       // instructions must always be relativized.
       if (!cfi->HasIndirectTarget()) {
         auto target_pc = target_block->StartAppPC();
-        RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), cfi,
-                            &(cfi->instruction), target_pc,
-                            AddressNeedsRelativizing(target_pc));
+        arch::RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), cfi,
+                                  &(cfi->instruction), target_pc,
+                                  AddressNeedsRelativizing(target_pc));
       } else {
         arch::MangleIndirectCFI(block, cfi, cfi->return_address);
       }
@@ -203,9 +204,9 @@ class BlockMangler {
       if ((instr->IsFunctionCall() || instr->IsJump()) &&
           !instr->HasIndirectTarget()) {
         auto target_pc = instr->instruction.BranchTargetPC();
-        RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), instr,
-                            &(instr->instruction), target_pc,
-                            AddressNeedsRelativizing(target_pc));
+        arch::RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), instr,
+                                  &(instr->instruction), target_pc,
+                                  AddressNeedsRelativizing(target_pc));
       }
       RelativizeMemOp(instr);
     }

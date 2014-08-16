@@ -49,8 +49,10 @@ enum BlockRequestKind : uint8_t {
   // Materialize to the native target.
   REQUEST_NATIVE,
 
-  // Materialization request cannot be satisfied. This happens when we try to
-  // materialize a block accross a module boundary.
+  // Materialization request cannot be satisfied. In practice, this is useful
+  // for when you want to prevent some other tool from requesting the block
+  // during this instrumentation session (e.g. to guarantee certain code
+  // layout).
   REQUEST_DENIED
 
 #ifdef GRANARY_INTERNAL

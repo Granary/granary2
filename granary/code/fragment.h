@@ -315,13 +315,26 @@ class alignas(alignof(void *)) CodeAttributes {
   // originates from.
   BlockMetaData *block_meta;
 
-  // Does this partition and/or fragment branch to edge code?
-  bool branches_to_edge_code:1;
+  // Does this fragment branch to direct edge code, native code, or an
+  // existing basic block?
+  bool branches_to_code:1;
+
+  // Does this fragment use an indirect branch?
+  bool branch_is_indirect:1;
+
+  // Is the branch instruction a function call or a jump (direct or indirect)?
+  bool branch_is_function_call:1;
+  bool branch_is_jump:1;
 
   // Can this fragment be added into another partition? We use this to prevent
-  // fragments that only contain things like IRET, RET, etc. from being unioned
+  // fragments that only contain things like IRET, RET, etc. from being added
   // into an existing partition. This would be bad because we lose control at
   // things like IRET and unspecialized RETs.
+  //
+  // If we have F1 -> F2, and !F2.attr.can_add_to_partition, then don't place
+  // F1 and F2 into the same partition (in the forward direction). If there is
+  // an edge such that F2 -> .. -> F1, then F1 and F2 might be added to the
+  // same partition. Therefore, this is a local constraint only.
   bool can_add_to_partition:1;
 
   // Does this fragment have any native instructions in it, or is it just full

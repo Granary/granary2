@@ -26,10 +26,12 @@ void AllocateDisableInterrupts(InstructionList *instrs) {
   arch::Instruction ni;
   APP(PUSHFQ(&ni);
       ni.is_stack_blind = true;
+      ni.analyzed_stack_usage = false;
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
   APP(CLI(&ni));
   APP(POP_MEMv(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0, GPR_WIDTH_BITS));
-      ni.is_stack_blind = true; );
+      ni.is_stack_blind = true;
+      ni.analyzed_stack_usage = false; );
 }
 
 // Returns a new instruction that will "allocate" the spill slots by enabling
@@ -39,6 +41,7 @@ void AllocateEnableInterrupts(InstructionList *instrs) {
   arch::Instruction ni;
   APP(PUSHFQ(&ni);
       ni.is_stack_blind = true;
+      ni.analyzed_stack_usage = false;
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Test to see if we should re-enable interrupts.
@@ -58,6 +61,7 @@ void AllocateEnableInterrupts(InstructionList *instrs) {
   instrs->Append(restore_flags);
   APP(POPFQ(&ni);
       ni.is_stack_blind = true;
+      ni.analyzed_stack_usage = false;
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 }
 

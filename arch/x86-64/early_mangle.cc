@@ -160,7 +160,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   auto offset = block->AllocateVirtualRegister();
   offset.ConvertToSegmentOffset();
 
-  MOV_GPRv_IMMz(&ni, offset.WidenedTo(4 /* bytes */),
+  MOV_GPRv_IMMv(&ni, offset.WidenedTo(4 /* bytes */),
                 static_cast<uint32_t>(op.addr.as_uint));
   ni.effective_operand_width = 32;
   ni.ops[1].width = 32;
@@ -176,6 +176,7 @@ static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   auto unmangled_uses_sp = instr->ReadsFromStackPointer() ||
                            instr->WritesToStackPointer();
+  GRANARY_ASSERT(XED_ICLASS_LEA != instr->iclass);
 
   for (auto &op : instr->ops) {
     if (op.is_explicit) {
@@ -230,7 +231,7 @@ static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
   auto vr = block->AllocateVirtualRegister(op.ByteWidth());
   Instruction ni;
-  APP(MOV_GPRv_IMMz(&ni, vr, op));
+  APP(MOV_GPRv_IMMv(&ni, vr, op));
   instr->iform = XED_IFORM_PUSH_GPRv_50;
   instr->ops[0].reg = vr;
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;

@@ -258,7 +258,8 @@ void ParseBoolOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
     switch (*value) {
-      case '1': case 'y': case 'Y': case 't': case 'T': case '\0':
+      case '1': case 'y': case 'Y': case 't': case 'T':
+      case '\0':  // Treat the presence of the option as truth.
         *(option->has_value) = true;
         *reinterpret_cast<bool *>(option->value) = true;
         break;

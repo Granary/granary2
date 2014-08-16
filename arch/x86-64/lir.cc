@@ -20,40 +20,41 @@ namespace lir {
 // Indirect jump to an existing basic block.
 std::unique_ptr<ControlFlowInstruction> IndirectJump(
     BasicBlock *target_block, const granary::Operand &op) {
-  arch::Instruction instr;
+
+  arch::Instruction ni;
   if (auto mem = DynamicCast<granary::MemoryOperand *>(&op)) {
     const void *ptr(nullptr);
     VirtualRegister reg;
     if (mem->MatchPointer(ptr)) {
-      JMP_MEMv(&instr, ptr);
+      JMP_MEMv(&ni, ptr);
     } else if (mem->MatchRegister(reg)) {
-      JMP_MEMv(&instr, reg);
+      JMP_MEMv(&ni, reg);
     } else {
       GRANARY_ASSERT(false);
     }
   } else if (auto reg = DynamicCast<granary::RegisterOperand *>(&op)) {
-    JMP_GPRv(&instr, reg->Register());
+    JMP_GPRv(&ni, reg->Register());
   } else {
     GRANARY_ASSERT(false);
   }
   return std::unique_ptr<ControlFlowInstruction>(
-      new ControlFlowInstruction(&instr, target_block));
+      new ControlFlowInstruction(&ni, target_block));
 }
 
 // Call to an existing basic block.
 std::unique_ptr<ControlFlowInstruction> Call(BasicBlock *target_block) {
-  arch::Instruction instr;
-  CALL_NEAR_RELBRd(&instr, target_block->StartAppPC());
+  arch::Instruction ni;
+  CALL_NEAR_RELBRd(&ni, target_block->StartAppPC());
   return std::unique_ptr<ControlFlowInstruction>(
-      new ControlFlowInstruction(&instr, target_block));
+      new ControlFlowInstruction(&ni, target_block));
 }
 
 // Jump to an existing basic block.
 std::unique_ptr<ControlFlowInstruction> Jump(BasicBlock *target_block) {
-  arch::Instruction instr;
-  JMP_RELBRd(&instr, target_block->StartAppPC());
+  arch::Instruction ni;
+  JMP_RELBRd(&ni, target_block->StartAppPC());
   return std::unique_ptr<ControlFlowInstruction>(
-      new ControlFlowInstruction(&instr, target_block));
+      new ControlFlowInstruction(&ni, target_block));
 }
 
 }  // namespace lir

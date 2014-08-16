@@ -105,6 +105,7 @@ const xed_inst_t *SelectInstruction(const Instruction *instr) {
       return xedi;
     }
   }
+  GRANARY_ASSERT(false);
   return nullptr;
 }
 

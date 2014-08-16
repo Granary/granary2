@@ -292,6 +292,7 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
   if (IsA<PartitionEntryFragment *>(next)) return false;
 
   auto next_code = DynamicCast<CodeFragment *>(next);
+
   if (curr->partition == next->partition) {
     // Interesting special case: things like self-loops back to a block head
     // are considered partition entry/exit points because we want to make sure
@@ -303,7 +304,17 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
     return false;
   }
   if (IsA<ExitFragment *>(next)) return false;
-  if (next_code && !next_code->attr.can_add_to_partition) return false;
+
+  // Un/conditional direct call/jump targeting direct edge code, an existing
+  // block, or some native code. In this case, we don't want to introduce
+  // intermediate (i.e. redundant) jumps to get to edge code when the branch
+  // that's already there will suffice.
+  if (next_code && next_code->branch_instr &&
+      next_code->attr.branches_to_code &&
+      !next_code->attr.can_add_to_partition) {
+    return false;
+  }
+
   return true;
 }
 
@@ -313,27 +324,40 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
 
-  auto curr_code = DynamicCast<CodeFragment *>(curr);
-  if (curr_code && !curr_code->attr.can_add_to_partition) return false;
+  const auto curr_code = DynamicCast<CodeFragment *>(curr);
+
+  // Un/conditional direct call/jump targeting direct edge code, an existing
+  // block, or some native code. In this case, we don't want to introduce
+  // intermediate (i.e. redundant) jumps to get to edge code when the branch
+  // that's already there will suffice.
+  if (curr_code && curr_code->branch_instr &&
+      curr_code->attr.branches_to_code &&
+      !curr_code->attr.can_add_to_partition &&
+      next == curr_code->successors[FRAG_SUCC_BRANCH]) {
+    return false;
+  }
 
   if (auto next_exit = DynamicCast<ExitFragment *>(next)) {
     return EDGE_KIND_DIRECT != next_exit->edge.kind;
 
+  // This is a fall-through from a function call, e.g. indirect function call.
+  // In the case of an indirect function call, we don't want to place a
+  // partition exit on its fall-through edge because the partition exiting
+  // happens at the target of the call.
+  } else if (curr_code && curr_code->attr.branches_to_code &&
+             curr_code->attr.branch_is_function_call &&
+             curr->successors[FRAG_SUCC_FALL_THROUGH] == next) {
+    return false;
+
+  // Catch this case where the current partition and the next partition are
+  // the same, but where we've got a self-loop (e.g. back to the block head),
+  // and so we're jumping to a partition entrypoint for the same partition.
   } else if (IsA<PartitionEntryFragment *>(next)) {
-    // This is a fall-through from a function call, e.g. indirect function call.
-    // In the case of an indirect function call, we don't want to place a
-    // partition exit on its fall-through edge because the partition exiting
-    // happens at the target of the call.
-    if (curr_code && curr_code->attr.branches_to_edge_code) {
-      return false;
-    }
     return true;
   }
   if (curr->partition == next->partition) return false;
-  if (IsA<CodeFragment *>(next)) {
-    return !(curr_code && curr_code->attr.branches_to_edge_code);
-  }
-  return false;
+
+  return true;
 }
 
 // Reset the pass-specific "back link" pointer that is used to re-use entry and

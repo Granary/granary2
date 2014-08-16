@@ -68,52 +68,29 @@ namespace {
 static void InitStackFrameAnalysis(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     arch::RemoveIndirectCallsAndJumps(frag);
+    if (IsA<PartitionEntryFragment *>(frag)) {
+      auto partition = frag->partition.Value();
+      GRANARY_ASSERT(nullptr != partition);
+      partition->analyze_stack_frame = true;
+    }
+  }
+  for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      GRANARY_ASSERT(code_frag->stack.is_checked);
-      auto partition = code_frag->partition.Value();
       if (!code_frag->stack.is_valid) {
-        partition->analyze_stack_frame = false;
-
-      // Make sure that this fragment is actually within a partition
-      // entry/exit. This condition is acceptable because either this code
-      // fragment will be followed by:
-      //      1)  Another code fragment within the same partition.
-      //      2)  A flag exit/entry fragment within the same partition.
-      //      3)  A partition exit fragment, within the same partition.
-      //
-      // If this fragment is a singleton with no enclosing partition entry/
-      // exit fragments, then the next fragment (if any) will be part of a
-      // different partition.
-      //
-      // We care about this case because some special things like direct calls
-      // and unspecialized returns fit into these cases.
-      } else {
-        auto has_succ = false;
-        for (auto succ : frag->successors) {
-          if (succ) {
-            if (succ->partition != frag->partition &&
-                !code_frag->attr.branches_to_edge_code) {
-              partition->analyze_stack_frame = false;
-            }
-            has_succ = true;
-          }
-        }
-        if (!has_succ) {
+        if (auto partition = frag->partition.Value()) {
           partition->analyze_stack_frame = false;
         }
       }
     }
-  }
 #ifdef GRANARY_DEBUG
-  // Simple verification step.
-  for (auto frag : FragmentListIterator(frags)) {
+    // Simple verification step.
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
       ++partition->num_partition_entry_frags;
       GRANARY_ASSERT(1 == partition->num_partition_entry_frags);
     }
+#endif  // GRANARY_DEBUG
   }
-#endif
 }
 
 struct FrameAdjust {

@@ -15,10 +15,12 @@ namespace arch {
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, xed_category_enum_t category) {
+  GRANARY_IF_DEBUG( auto note = instr->note; )
   memset(instr, 0, sizeof *instr);
   instr->iclass = iclass;
   instr->iform = iform;
   instr->category = category;
+  GRANARY_IF_DEBUG( instr->note = note ? note : __builtin_return_address(0); )
 
   // These are only really atomic if there's a memory op.
   //

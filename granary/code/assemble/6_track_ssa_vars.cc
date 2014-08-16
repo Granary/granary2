@@ -498,8 +498,8 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
-    if (code_pred->attr.branches_to_edge_code &&
-        succ != pred->successors[FRAG_SUCC_BRANCH]) {
+    if (code_pred->attr.branch_is_function_call &&
+        succ == pred->successors[FRAG_SUCC_FALL_THROUGH]) {
       delete comp;  // E.g. fall-through after an indirect CALL.
       return;
     }
@@ -548,6 +548,11 @@ static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
 // we need to share the register with the target fragment, assuming that the
 // target fragment is some edge code.
 static void ShareIndirectCFIReg(CodeFragment *source) {
+  if (!source->attr.branch_is_function_call &&
+      !source->attr.branch_is_jump) {
+    return;
+  }
+
   RegisterOperand target_reg;
   if (source->branch_instr->MatchOperands(ReadOnlyFrom(target_reg))) {
     auto pc_reg = target_reg.Register();
@@ -574,9 +579,11 @@ static void AddCompensatingFragments(FragmentList *frags) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       if (code_frag->attr.is_compensation_code) {
         continue;
+
+      // If we have a call through a register or a jump through a register,
+      // then make sure that register is live on exit.
       } else if (code_frag->branch_instr &&
-                 code_frag->attr.branches_to_edge_code &&
-                 code_frag->branch_instr->HasIndirectTarget()) {
+                 code_frag->attr.branch_is_indirect) {
         ShareIndirectCFIReg(code_frag);
       }
     }

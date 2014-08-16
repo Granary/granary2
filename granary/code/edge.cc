@@ -18,7 +18,7 @@ DirectEdge::DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_)
       next(nullptr),
       dest_meta(ATOMIC_VAR_INIT(dest_meta_)),
       edge_code(edge_code_),
-      patch_instruction(nullptr) {}
+      patch_instruction_pc(nullptr) {}
 
 DirectEdge::~DirectEdge(void) {
   if (auto meta = dest_meta.exchange(nullptr, std::memory_order_relaxed)) {

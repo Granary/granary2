@@ -42,27 +42,33 @@ static Fragment **VisitOrderedFragment(Fragment *succ, Fragment **next_ptr) {
 // Add the fragments to a total ordering.
 static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
   // Special case: want (specialized) indirect branch targets to be ordered
-  // before the fall-through (if any). Also, we want nearby branch targets
-  // to be placed next in the encode ordering.
+  // before the fall-through (if any). This affects the determination on
+  // whether or not a fall-through branch needs to be added.
   auto swap_successors = false;
+  auto visit_branch_first = false;
   if (auto cfi = DynamicCast<ControlFlowInstruction *>(frag->branch_instr)) {
     auto target_block = cfi->TargetBlock();
     swap_successors = IsA<IndirectBasicBlock *>(target_block) ||
-                      IsA<ReturnBasicBlock *>(target_block) ||
-                      arch::IsNearRelativeJump(cfi);
+                      IsA<ReturnBasicBlock *>(target_block);
+    visit_branch_first = swap_successors || arch::IsNearRelativeJump(cfi);
   } else if (auto br = DynamicCast<BranchInstruction *>(frag->branch_instr)) {
-    swap_successors = arch::IsNearRelativeJump(br);
+    visit_branch_first = arch::IsNearRelativeJump(br);
   }
 
-  if (swap_successors) {
-    std::swap(frag->successors[FRAG_SUCC_BRANCH],
-              frag->successors[FRAG_SUCC_FALL_THROUGH]);
+  if (visit_branch_first) {
+    next_ptr = VisitOrderedFragment(frag->successors[FRAG_SUCC_BRANCH],
+                                    next_ptr);
   }
 
   // Default: depth-first order, where fall-through naturally comes up as a
   // straight-line preference.
   for (auto succ : frag->successors) {
     next_ptr = VisitOrderedFragment(succ, next_ptr);
+  }
+
+  if (swap_successors) {
+    std::swap(frag->successors[FRAG_SUCC_BRANCH],
+              frag->successors[FRAG_SUCC_FALL_THROUGH]);
   }
 
   return next_ptr;

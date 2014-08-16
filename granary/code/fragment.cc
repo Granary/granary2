@@ -16,6 +16,19 @@
 
 #include "os/logging.h"
 
+#ifdef GRANARY_DEBUG
+# include "granary/base/option.h"
+GRANARY_DEFINE_bool(debug_log_instr_note, false,
+                    "Should the note field, if present, be logged along with "
+                    "the instructions? In some situations, this can help to "
+                    "pinpoint what function was responsible for introducing an "
+                    "instruction. The default value is `no`.\n"
+                    "\n"
+                    "An instruction note is the return address of the function "
+                    "that likely created the instruction. This can be helpful "
+                    "when trying to discover the source of an instruction.");
+#endif  // GRANARY_DEBUG
+
 namespace granary {
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
@@ -41,7 +54,7 @@ PartitionInfo::PartitionInfo(int id_)
     : id(id_),
       num_slots(0),
       GRANARY_IF_DEBUG_( num_partition_entry_frags(0) )
-      analyze_stack_frame(true),
+      analyze_stack_frame(false),
       min_frame_offset(0),
       entry_frag(nullptr) {}
 
@@ -88,7 +101,10 @@ void RegisterUsageCounter::CountGPRUses(Fragment *frag) {
 
 CodeAttributes::CodeAttributes(void)
     : block_meta(nullptr),
-      branches_to_edge_code(false),
+      branches_to_code(false),
+      branch_is_indirect(false),
+      branch_is_function_call(false),
+      branch_is_jump(false),
       can_add_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
@@ -160,6 +176,22 @@ FlagZone::FlagZone(VirtualRegister flag_save_reg_,
       live_regs() {}
 
 namespace os {
+
+// Publicly visible for GDBs sake.
+static const char *fragment_partition_color[] = {
+  "aliceblue",
+  "aquamarine",
+  "aquamarine3",
+  "bisque2",
+  "brown1",
+  "burlywood1",
+  "cadetblue1",
+  "chartreuse1",
+  "chocolate1",
+  "darkolivegreen3",
+  "darkorchid2"
+};
+
 namespace {
 // Log an individual edge between two fragments.
 static void LogFragmentEdge(LogLevel level, const Fragment *pred,
@@ -177,22 +209,9 @@ static void LogFragmentEdges(LogLevel level, Fragment *frag) {
   }
 }
 
-static const char *partition_color[] = {
-  "aliceblue",
-  "aquamarine",
-  "aquamarine3",
-  "bisque2",
-  "brown1",
-  "burlywood1",
-  "cadetblue1",
-  "chartreuse1",
-  "chocolate1",
-  "darkolivegreen3",
-  "darkorchid2"
-};
-
 enum {
-  NUM_COLORS = sizeof partition_color / sizeof partition_color[0]
+  NUM_COLORS = sizeof fragment_partition_color /
+               sizeof fragment_partition_color[0]
 };
 
 static const char *FragmentBorder(const Fragment *frag) {
@@ -212,7 +231,7 @@ static const char *FragmentBorder(const Fragment *frag) {
 static const char *FragmentBackground(const Fragment *frag) {
   if (auto partition_info = frag->partition.Value()) {
     if (auto stack_id = static_cast<size_t>(partition_info->id)) {
-      return partition_color[stack_id % NUM_COLORS];
+      return fragment_partition_color[stack_id % NUM_COLORS];
     }
   }
   return "white";
@@ -262,6 +281,11 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
+#ifdef GRANARY_DEBUG
+      if (FLAG_debug_log_instr_note && ainstr.note) {
+        Log(level, "note: %p <BR ALIGN=\"LEFT\"/>", ainstr.note);\
+      }
+#endif
     }
   }
 }
@@ -285,7 +309,20 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
       case FRAG_EXIT_EXISTING_BLOCK: Log(level, "existing block"); break;
     }
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
-    if (code->attr.is_app_code) Log(level, "app|");
+    auto partition = code->partition.Value();
+    Log(level, code->attr.is_app_code ? "app " : "inst ");
+    if (partition) Log(level, "p%u ", partition->id);
+    if (code->attr.is_in_edge_code) Log(level, "edge ");
+    if (code->attr.has_flag_split_hint) Log(level, "fsplit ");
+    if (code->attr.modifies_flags) Log(level, "mflags ");
+    if (!code->attr.can_add_to_partition) Log(level, "!add2p ");
+    if (code->attr.branches_to_code) Log(level, "-&gt;code ");
+    if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
+    if (code->branch_instr) {
+      Log(level, "binstr=%s ", code->branch_instr->OpCodeName());
+    }
+    Log(level, "|");
+
     if (code->attr.block_meta && code->attr.is_block_head) {
       auto meta = MetaDataCast<AppMetaData *>(code->attr.block_meta);
       Log(level, "%p|", meta->start_pc);

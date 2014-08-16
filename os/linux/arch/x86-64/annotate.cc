@@ -59,6 +59,16 @@ extern void granary_uaccess_write_error_16(void);
 extern void granary_uaccess_write_error_32(void);
 extern void granary_uaccess_write_error_64(void);
 
+extern void granary_uaccess_write_seg_fs(void);
+extern void granary_uaccess_write_seg_gs(void);
+extern void granary_uaccess_write_seg_cs(void);
+extern void granary_uaccess_write_seg_ds(void);
+extern void granary_uaccess_write_seg_es(void);
+extern void granary_uaccess_write_seg_ss(void);
+
+extern void granary_uaccess_rdmsr(void);
+extern void granary_uaccess_wrmsr(void);
+
 }  // extern C
 namespace granary {
 namespace os {
@@ -75,6 +85,13 @@ ExceptionFuncPtr exception_funcs[2][2][4] = {
     granary_uaccess_read_error_32, granary_uaccess_read_error_64},
    {granary_uaccess_write_error_8, granary_uaccess_write_error_16,
     granary_uaccess_write_error_32, granary_uaccess_write_error_64}},
+};
+
+// Same order as in `xed_reg_enum_t`.
+ExceptionFuncPtr segment_funcs[6] = {
+  granary_uaccess_write_seg_cs, granary_uaccess_write_seg_ds,
+  granary_uaccess_write_seg_es, granary_uaccess_write_seg_ss,
+  granary_uaccess_write_seg_fs, granary_uaccess_write_seg_gs
 };
 
 // Returns the faulting PC of an exception table entry.
@@ -160,26 +177,22 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 
   auto recovers_from_error = RecoveryEntryIsError(recovery_entry);
   auto recovery_pc = FindRecoveryAddress(recovery_entry, recovers_from_error);
-
-
   auto is_write = false;
   auto mem_size = -1;
+  auto remove_instr = false;
+  auto load_rcx_with_mloc = true;
 
   MemoryOperand dest, src;
+  ExceptionFuncPtr handler(nullptr);
   arch::Instruction ni;
   arch::Operand mloc;
-
-  // TODO!!!! Not all exception table entries seem to be "right"... Figure
-  //          this out! They might not be sorted :-(
 
   if (2 == instr->CountMatchedOperands(WriteTo(dest), ReadFrom(src))) {
     // TODO(pag): How do we figure out which memory location is the one that
     //            is (semantically) allowed to fault?
     //
     //            See Issue #19.
-    NOP_90(&(instr->instruction));
-    instr->InsertAfter(lir::Jump(new NativeBasicBlock(fault_pc)));
-    return;
+
 
   // Writes to user space memory.
   } else if (instr->MatchOperands(WriteTo(dest))) {
@@ -192,9 +205,45 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
     mem_size = dest.BitWidth();
     memcpy(&mloc, src.Extract(), sizeof mloc);
 
+  // Writes to a segment register.
+  } else if (XED_IFORM_MOV_SEG_GPR16 == instr->instruction.iform) {
+    auto seg_reg = instr->instruction.ops[0].reg.Number();
+    GRANARY_ASSERT(XED_REG_CS <= seg_reg && seg_reg <= XED_REG_GS);
+    auto source_reg = instr->instruction.ops[1].reg.
+        WidenedTo(arch::GPR_WIDTH_BYTES).EncodeToNative();
+    handler = segment_funcs[seg_reg - XED_REG_CS];
+    mloc = arch::BaseDispMemOp(0, static_cast<xed_reg_enum_t>(source_reg),
+                               arch::GPR_WIDTH_BITS);
+    mloc.is_effective_address = true;
+    remove_instr = true;
+
+  // "Safe" read of a model-specific register.
+  } else if (XED_ICLASS_RDMSR == instr->instruction.iclass) {
+    handler = granary_uaccess_rdmsr;
+    remove_instr = true;
+    load_rcx_with_mloc = false;
+
+  // "Safe" write to a model-specific register.
+  } else if (XED_ICLASS_WRMSR == instr->instruction.iclass) {
+    granary_curiosity();
+    handler = granary_uaccess_wrmsr;
+    remove_instr = true;
+    load_rcx_with_mloc = false;
+
   } else {
-    // TODO(pag): This is weird.
+    granary_curiosity();  // TODO(pag): This is weird.
     return;
+  }
+
+  if (!handler) {
+    if (-1 == mem_size) {
+      NOP_90(&(instr->instruction));
+      instr->InsertAfter(lir::Jump(new NativeBasicBlock(fault_pc)));
+      return;
+    }
+    GRANARY_ASSERT(XED_IFORM_MOV_SEG_MEMw != instr->instruction.iform);
+    GRANARY_ASSERT(-1 != mem_size);
+    handler = exception_funcs[recovers_from_error][is_write][Order(mem_size)];
   }
 
   // Double check that the stack pointer isn't operated on. This is mostly
@@ -211,24 +260,29 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   // Just assume that the stack is valid, it's easier that way.
   instr->UnsafeInsertBefore(new AnnotationInstruction(IA_VALID_STACK));
   BEFORE(MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX));
-  BEFORE(LEA_GPRv_AGEN(&ni, XED_REG_RCX, mloc));
-  BEFORE(CALL_NEAR_RELBRd(&ni, exception_funcs[recovers_from_error]
-                                              [is_write]
-                                              [Order(mem_size)]);
-         ni.is_stack_blind = true; );
+  if (load_rcx_with_mloc) BEFORE(LEA_GPRv_AGEN(&ni, XED_REG_RCX, mloc));
+  BEFORE(CALL_NEAR_RELBRd(&ni, handler);
+         ni.is_stack_blind = true;
+         ni.analyzed_stack_usage = false; );
   auto label_no_fault = new LabelInstruction;
   JRCXZ_RELBRb(&ni, label_no_fault);
   instr->UnsafeInsertBefore(new BranchInstruction(&ni, label_no_fault));
 
   BEFORE(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
-  instr->InsertBefore(lir::Jump(factory, recovery_pc));
+  instr->InsertBefore(lir::Jump(factory, recovery_pc, REQUEST_DENIED));
 
   instr->UnsafeInsertBefore(label_no_fault);
-
-  // <instr goes here>
+  // `instr` is here.
   instr->instruction.is_sticky = true;
   AFTER(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
-  next_instr->InsertBefore(lir::Jump(factory, next_pc));
+  next_instr->InsertBefore(lir::Jump(factory, next_pc, REQUEST_CHECK_LCFG));
+
+  // If the `handler` itself emulates the instruction, then we don't want to
+  // encode the instruction. However, we don't want to clobber it into a `NOP`
+  // either because then if it has some register dependencies, then those will
+  // be hidden from the VR system. Therefore, we leave these instructions in
+  // but mark them as non-encodable.
+  if (remove_instr) instr->instruction.dont_encode = true;
 }
 
 }  // namespace os
