@@ -118,7 +118,12 @@ define print-exec-entry-flag
   set $__bit = $arg1
   set $__str = $arg2
   if $__flags & (1 << $__bit)
-    printf " %s", $__str
+    # For compatibility with kernel debugging, we need to invoke python to print
+    # `$__str`, otherwise GDB will report that we need `malloc` to complete the
+    # operation.
+    python None ; \
+      fl = str(gdb.parse_and_eval("$__str")).upper() ; \
+      gdb.write(" %s" % fl[-3:-1]) ;
   end
 end
 
@@ -226,7 +231,7 @@ end
 # contents in a readable form.
 define print-block-meta
   set language c++
-  set $__m = $arg0
+  set $__m = (granary::BlockMetaData *) $arg0
   set $__offsets = &($__m->manager->offsets[0])
   set $__descs = &($__m->manager->descriptions[0])
   set $__i = 0
@@ -742,6 +747,6 @@ define restore-regs-state
   set $rcx = $__regs->cx
   set $rax = $__regs->ax
   set $rsp = $__regs->sp
-  set $eflags = $__regs->rflags
+  set $eflags = $__regs->flags
   set $rip = $__regs->ip
 end

@@ -45,7 +45,10 @@ static void UpdateModule(ModuleManager *manager, LinuxKernelModule *mod) {
   if (!module) {
     GRANARY_ASSERT(nullptr == FindModuleByName(mod->name));
     module = new Module(GetModuleKind(mod), mod->name);
-    module->where_data = &(mod->exception_tables);
+    if (mod->exception_tables.start && mod->exception_tables.stop &&
+        mod->exception_tables.start <= mod->exception_tables.stop) {
+      module->where_data = &(mod->exception_tables);
+    }
     mod->module = module;
     manager->Register(module);
   } else {

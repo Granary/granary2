@@ -426,6 +426,7 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
         //       `whole_func` or `follow_jumps` tool and they walk into some
         //       CPU-specific lock-elision code, then we'll hit an issue.
         return nullptr;
+
       default: break;
     }
 

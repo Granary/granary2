@@ -242,10 +242,14 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   } else if (XED_ICLASS_WRMSR == instr->instruction.iclass) {
     // Force a fragment split, while making it seem like there isn't a a change
     // in interrupt status.
+    //
+    // TODO(pag): This is a pretty ugly solution to the problem of the fragment
+    //            containing the below call to change the MSR being put in
+    //            a different partition than the fragment containing the
+    //            `JRCXZ`.
     auto annot = FindInterruptChange(instr->Previous());
     annot->annotation = IA_UNKNOWN_STACK_BELOW;
 
-    granary_curiosity();
     handler = granary_uaccess_wrmsr;
     remove_instr = true;
     load_rcx_with_mloc = false;
@@ -292,9 +296,11 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   instr->InsertBefore(lir::Jump(factory, recovery_pc, REQUEST_DENIED));
 
   instr->UnsafeInsertBefore(label_no_fault);
-  // `instr` is here.
+  BEFORE(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
+  // `instr` is here. Need to restore `RCX` before `instr` just in case
+  // `RCX` is used by `instr`.
   instr->instruction.is_sticky = true;
-  AFTER(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
+
   next_instr->InsertBefore(lir::Jump(factory, next_pc, REQUEST_CHECK_LCFG));
 
   // If the `handler` itself emulates the instruction, then we don't want to

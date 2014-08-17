@@ -302,7 +302,10 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
   auto next_code = DynamicCast<CodeFragment *>(next);
   GRANARY_ASSERT(curr_code && next_code);
 
-  if (curr_code->partition != next_code->partition) return true;
+  if (curr_code->partition != next_code->partition) {
+    return next_code->attr.can_add_to_partition;
+  }
+
   if (!next_code->attr.is_in_edge_code) {
     GRANARY_ASSERT(curr_code->attr.block_meta == next_code->attr.block_meta);
   }
@@ -314,11 +317,18 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
   if (next_code && next_code->attr.is_block_head) {
     return next_code->attr.can_add_to_partition;
   }
+
   return false;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
 // partition exit point.
+//
+// Note: We only need to consider that curr/next are one of:
+//            1)  CodeFragment
+//            2)  ExitFragment
+//            3)  PartitionEntryFragment
+//            4)  PartitionExitFragment
 static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
@@ -332,8 +342,7 @@ static bool IsPartitionExit(Fragment *curr, Fragment *next) {
   // that's already there will suffice.
   if (curr_code && curr_code->branch_instr &&
       curr_code->attr.branches_to_code &&
-      !curr_code->attr.can_add_to_partition &&
-      next == curr_code->successors[FRAG_SUCC_BRANCH]) {
+      !curr_code->attr.can_add_to_partition) {
     return false;
   }
 

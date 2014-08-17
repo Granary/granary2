@@ -132,6 +132,7 @@ static void RelativizeLoop(CacheMetaData *meta, NativeInstruction *cfi,
 
   JMP_RELBRz<PC>(&jmp_try_loop, nullptr);
   if (target_is_far_away) {
+    GRANARY_ASSERT(nullptr != meta);
     auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
     JMP_MEMv(instr, &(addr_mloc->addr));
     instr->is_sticky = true;
