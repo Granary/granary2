@@ -69,6 +69,8 @@ extern void granary_uaccess_write_seg_ss(void);
 extern void granary_uaccess_rdmsr(void);
 extern void granary_uaccess_wrmsr(void);
 
+extern void granary_uaccess_fwait(void);
+
 }  // extern C
 namespace granary {
 namespace os {
@@ -251,6 +253,12 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
     annot->annotation = IA_UNKNOWN_STACK_BELOW;
 
     handler = granary_uaccess_wrmsr;
+    remove_instr = true;
+    load_rcx_with_mloc = false;
+
+  // Raise any pending floating-point exceptions.
+  } else if (XED_ICLASS_FWAIT == instr->instruction.iclass) {
+    handler = granary_uaccess_fwait;
     remove_instr = true;
     load_rcx_with_mloc = false;
 

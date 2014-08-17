@@ -65,7 +65,7 @@ START_FILE
         ret                                         @N@\
     END_FUNC(granary_uaccess_write_seg_ ## size)
 
-#define MAKE_MSR_FUNC(insn) \
+#define MAKE_NSTR_FUNC(insn) \
     DEFINE_FUNC(granary_uaccess_ ## insn)   @N@\
     1:  insn                                @N@\
     2:                                      @N@\
@@ -108,8 +108,9 @@ MAKE_SEG_WRITE_FUNC(ds)
 MAKE_SEG_WRITE_FUNC(es)
 MAKE_SEG_WRITE_FUNC(ss)
 
-MAKE_MSR_FUNC(rdmsr)
-MAKE_MSR_FUNC(wrmsr)
+MAKE_NSTR_FUNC(rdmsr)
+MAKE_NSTR_FUNC(wrmsr)
+MAKE_NSTR_FUNC(fwait)
 
 #endif  // GRANARY_WHERE_kernel
 

@@ -192,7 +192,11 @@ class Instruction : public InstructionInterface {
   // Can this instruction change the interrupt status to either of enabled or
   // disabled?
   bool CanEnableOrDisableInterrupts(void) const {
-    return XED_ICLASS_POPF == iclass || XED_ICLASS_WRMSR == iclass;
+    // `FWAIT` doesn't actually enable/disable interrupts, but it can cause
+    // pending FP exceptions to be raised, so it is nicer if we don't
+    // accidentally disable interrupts around the `FWAIT`.
+    return XED_ICLASS_POPF == iclass || XED_ICLASS_WRMSR == iclass ||
+           XED_ICLASS_FWAIT == iclass;
   }
 
   // Where was this instruction encoded/decoded.
