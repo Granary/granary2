@@ -42,6 +42,9 @@ class InstrumentationTool {
   // Closes any open inline assembly scopes.
   virtual ~InstrumentationTool(void);
 
+  // Initialize this tool.
+  virtual void Init(void);
+
   // Used to instrument code entrypoints.
   virtual void InstrumentEntryPoint(BlockFactory *factory,
                                     CompensationBasicBlock *entry_block,

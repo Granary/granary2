@@ -56,7 +56,7 @@ $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 	@echo "Compiling library $(GRANARY_LIBRARY)"
 	@$(GRANARY_CC) $(GRANARY_COMMON_ARCH_FLAGS) \
 		$(GRANARY_LD_FLAGS) \
-		-nodefaultlibs $(GRANARY_LD_FLAGS_EARLY) -shared \
+		-nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
 		$(GRANARY_LIBRARY_OBJ) \
 		$(GRANARY_LD_FLAGS_LATE) "-Wl,-Bsymbolic" \
 		-o $(GRANARY_LIBRARY)

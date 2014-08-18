@@ -11,6 +11,8 @@
 
 #include "granary/cache.h"
 
+namespace granary {
+namespace arch {
 extern "C" {
 
 // The entrypoint to the trace log. This is an assemble routine that records
@@ -48,11 +50,11 @@ RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
-unsigned granary_block_log_index = 0;
+alignas(CACHE_LINE_SIZE_BYTES) unsigned granary_block_log_index = 0;
 
 // Record an entry in Granary's trace log.
 void granary_trace_block_regs(const RegisterState *regs) {
-  auto index = __sync_add_and_fetch(&granary_block_log_index, 1U);
+  auto index = __sync_fetch_and_add(&granary_block_log_index, 1U);
   auto &log_regs(granary_block_log[index % GRANARY_BLOCK_LOG_LENGTH]);
   memcpy(&log_regs, regs, sizeof *regs);
 }
@@ -64,9 +66,6 @@ void granary_trace_block_regs(const RegisterState *regs) {
     __VA_ARGS__ ; \
     frag->instrs.Prepend(new NativeInstruction(&ni)); \
   } while (0)
-
-namespace granary {
-namespace arch {
 
 // Adds in some extra "tracing" instructions to the beginning of a basic block.
 void AddBlockTracer(Fragment *frag, BlockMetaData *meta,

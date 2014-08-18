@@ -29,4 +29,21 @@ SECTIONS
     *(.bss.*)
     granary_end_protected_bss = .;
   }
+  
+  . = ALIGN(8);
+  .granary_init_array :
+  {
+    /* Defines boundaries for arrays of constructor functions. */
+    granary_begin_init_array = .;
+    KEEP (*(.init_array.*))
+    KEEP (*(.init_array))
+    granary_end_init_array = .;
+  }
+
+  /DISCARD/ :
+  {
+    *(.fini_array.*)
+    *(.fini_array)
+    *(.dtors)
+  }
 }

@@ -50,11 +50,17 @@ extern void MangleDirectCFI(DecodedBasicBlock *block,
                             ControlFlowInstruction *cfi, AppPC target_pc);
 
 // Relativize a instruction with a memory operand, where the operand loads some
-// value from `mem_addr`
+// value from `mem_addr`.
 //
 // Note: This has an architecture-specific implementation.
 extern void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                             const MemoryOperand &op, const void *mem_addr);
+
+// Mangle a "specialized" return so that is converted into an indirect jump.
+//
+// Note: This has an architecture-specific implementation.
+extern void MangleIndirectReturn(DecodedBasicBlock *block,
+                                 ControlFlowInstruction *cfi);
 
 }  // namespace arch
 namespace {
@@ -126,11 +132,6 @@ class BlockMangler {
     }
   }
 
-  // Mangle a return, where the target of the return is specialized.
-  void MangleSpecializedReturn(ControlFlowInstruction *cfi) {
-    GRANARY_UNUSED(cfi);
-  }
-
   void MangleFunctionCall(ControlFlowInstruction *cfi) {
     auto ret_address = new AnnotationInstruction(
         IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
@@ -179,7 +180,7 @@ class BlockMangler {
     // a different program counter.
     } else if (auto return_bb = DynamicCast<ReturnBasicBlock *>(target_block)) {
       if (return_bb->UnsafeMetaData()) {
-        MangleSpecializedReturn(cfi);
+        arch::MangleIndirectReturn(block, cfi);
       }
 
     // Some CFIs (e.g. very short conditional jumps) might need to be mangled

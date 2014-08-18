@@ -9,7 +9,7 @@
 #include "granary/breakpoint.h"
 #include "granary/metadata.h"
 
-GRANARY_DEFINE_bool(debug_trace_metadata, false,
+GRANARY_DEFINE_bool(debug_trace_meta, false,
     "Trace the meta-data that is committed to the code cache index. The default "
     "is `no`.");
 
@@ -214,7 +214,7 @@ TracedMetaData granary_meta_log[GRANARY_META_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
-unsigned granary_meta_log_index = 0;
+alignas(arch::CACHE_LINE_SIZE_BYTES) unsigned granary_meta_log_index = 0;
 
 }  // extern C
 
@@ -222,11 +222,12 @@ unsigned granary_meta_log_index = 0;
 // This is useful for GDB-based debugging, because it lets us see the most
 // recently translated blocks (in terms of their meta-data).
 void TraceMetaData(uint64_t group, const BlockMetaData *meta) {
-  if (GRANARY_LIKELY(!FLAG_debug_trace_metadata)) return;
-  auto i = __sync_fetch_and_add(&granary_meta_log_index, 1);
-  auto &entry(granary_meta_log[i % GRANARY_META_LOG_LENGTH]);
-  entry.group = group;
-  entry.meta = meta;
+  if (GRANARY_UNLIKELY(FLAG_debug_trace_meta)) {
+    auto i = __sync_fetch_and_add(&granary_meta_log_index, 1);
+    auto &entry(granary_meta_log[i % GRANARY_META_LOG_LENGTH]);
+    entry.group = group;
+    entry.meta = meta;
+  }
 }
 
 }  // namespace granary

@@ -103,6 +103,18 @@ DEFINE_FUNC(granary_getpid)
     ret
 END_FUNC(granary_getpid)
 
+// `exit_group` system call.
+.section .text.inst_exports
+.global granary_exit_group
+.type granary_exit_group, @function
+granary_exit_group:
+    .cfi_startproc
+    mov     eax,0xE7
+    xor     rdi, rdi
+    syscall
+    ud2 /* Should not be reached */
+    .cfi_endproc
+
 #endif
 
 END_FILE

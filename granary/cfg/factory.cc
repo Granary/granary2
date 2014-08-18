@@ -28,8 +28,14 @@ extern "C" {
 // exported to instrumented code.
 //
 // Note: These symbols are defined by `linker.lds`.
-extern AppPC granary_begin_inst_exports;
-extern AppPC granary_end_inst_exports;
+extern uint8_t granary_begin_inst_exports;
+extern uint8_t granary_end_inst_exports;
+
+// User space-specific functions. If we find that `_fini` is being invoked,
+// then we'll redirect execution to `granary_exit_group`, which exit all
+// threads in the process.
+GRANARY_IF_USER( extern uint8_t _fini; )
+GRANARY_IF_USER( extern uint8_t granary_exit_group; )
 
 }  // extern C
 enum {
@@ -386,8 +392,16 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
   }
 
   if (os::ModuleKind::GRANARY == module->Kind()) {
-    GRANARY_ASSERT(granary_begin_inst_exports <= target_pc &&
-                   target_pc < granary_end_inst_exports);
+#ifdef GRANARY_WHERE_user
+    // If we try to go to `_fini`, then redirect execution to
+    // `granary_exit_group`.
+    if (&_fini == target_pc) {
+      target_pc = &granary_exit_group;
+      app_meta->start_pc = &granary_exit_group;
+    }
+#endif
+    GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
+                   target_pc < &granary_end_inst_exports);
   }
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
@@ -414,8 +428,8 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   // Make sure that code exported to instrumented application code is never
   // actually instrumented.
   auto start_pc = block->StartAppPC();
-  if (granary_begin_inst_exports <= start_pc &&
-      start_pc < granary_end_inst_exports) {
+  if (&granary_begin_inst_exports <= start_pc &&
+      start_pc < &granary_end_inst_exports) {
     block->materialize_strategy = REQUEST_NATIVE;
   }
 
@@ -479,8 +493,8 @@ void BlockFactory::MaterializeInitialBlock(BlockMetaData *meta) {
 // with a CTI.
 std::unique_ptr<BasicBlock> BlockFactory::Materialize(AppPC start_pc) {
   BasicBlock *block(nullptr);
-  if (granary_begin_inst_exports <= start_pc &&
-      start_pc < granary_end_inst_exports) {
+  if (&granary_begin_inst_exports <= start_pc &&
+      start_pc < &granary_end_inst_exports) {
     block = new NativeBasicBlock(start_pc);
   } else {
     block = new DirectBasicBlock(cfg, context->AllocateBlockMetaData(start_pc));

@@ -140,9 +140,13 @@ void Context::InitTools(const char *tool_names) {
       });
 
   // Do a dummy allocation and free of all tools. Tools register meta-data
-  // through their constructors and so this will get all tool+option-specific
-  // meta-data registered.
-  tool_manager.FreeTools(tool_manager.AllocateTools());
+  // through their `Init` functions and so this will get all tool+option-
+  // specific meta-data registered.
+  auto tools = tool_manager.AllocateTools();
+  for (auto tool : ToolIterator(tools)) {
+    tool->Init();
+  }
+  tool_manager.FreeTools(tools);
 }
 
 namespace {

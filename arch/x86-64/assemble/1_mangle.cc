@@ -191,14 +191,15 @@ void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
 }
 
 // Mangle a specialized indirect return into an indirect jump.
-static void MangleIndirectReturn(DecodedBasicBlock *block,
-                                 ControlFlowInstruction *cfi) {
+void MangleIndirectReturn(DecodedBasicBlock *block,
+                          ControlFlowInstruction *cfi) {
   auto target = block->AllocateVirtualRegister();
   Instruction ni;
 
   auto shift = cfi->instruction.StackPointerShiftAmount();
   if (ADDRESS_WIDTH_BYTES == shift) {
     POP_GPRv_51(&ni, target);
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
   } else {
     MOV_GPRv_MEMv(&ni, target, BaseDispMemOp(0, XED_REG_RSP,
                                              ADDRESS_WIDTH_BITS));

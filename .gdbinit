@@ -212,7 +212,7 @@ end
 # Note: The program must be run with `--debug_trace_exec=yes`.
 define print-exec-entry
   set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
-  set $__i = ($__i) % GRANARY_BLOCK_LOG_LENGTH
+  set $__i = ($__i - 1) % GRANARY_BLOCK_LOG_LENGTH
   set $__r = &(granary_block_log[$__i])
 
   if 2 == $argc
@@ -232,8 +232,9 @@ end
 define print-block-meta
   set language c++
   set $__m = (granary::BlockMetaData *) $arg0
-  set $__offsets = &($__m->manager->offsets[0])
-  set $__descs = &($__m->manager->descriptions[0])
+  set $__man = *((granary::MetaDataManager **) $arg0)
+  set $__offsets = &($__man->offsets[0])
+  set $__descs = &($__man->descriptions[0])
   set $__i = 0
   while $__descs[$__i]
     set $__offset = $__offsets[$__i]
@@ -261,10 +262,11 @@ end
 # Note: The program must be run with `--debug_trace_meta=yes`.
 define print-meta-entry
   set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
-  set $__i = ($__i) % GRANARY_META_LOG_LENGTH
-  set $__m = &(granary_meta_log[$__i])
-  printf "Meta-data %p in group %lu:\n", $__m->meta, $__m->group
-  print-block-meta $__m->meta
+  set $__i = ($__i - 1) % GRANARY_META_LOG_LENGTH
+  set $__m = (granary::BlockMetaData *) granary_meta_log[$__i].meta
+  set $__g = (unsigned long) granary_meta_log[$__i].group
+  printf "Meta-data %p in group %lu:\n", $__m, $__g
+  print-block-meta $__m
   dont-repeat
 end
 

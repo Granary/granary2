@@ -14,6 +14,7 @@ class Client;
 class Client {
  public:
   Client(void);
+
   virtual ~Client(void);
 
   virtual void Init(void) = 0;

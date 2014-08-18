@@ -19,8 +19,11 @@ extern uintptr_t * __percpu granary_slots;
 extern void __percpu *(*linux___alloc_reserved_percpu)(size_t, size_t);
 
 struct GranaryStack {
-  char data[4096 * 4];
+  char data[4096 * 8];
 };
+
+extern void *granary_stack_begin;
+extern void *granary_stack_end;
 
 static unsigned long curr_stack = 0;
 static struct GranaryStack *cpu_stacks = NULL;
@@ -39,9 +42,13 @@ static void AssignPrivateStack(void *info) {
 }
 
 static void AllocatePrivateStacks(void) {
-  cpu_stacks = alloc_pages_exact(
-      num_possible_cpus() * sizeof(struct GranaryStack),
-      GFP_KERNEL);
+  int num_cpus = num_possible_cpus();
+  cpu_stacks = alloc_pages_exact(num_cpus * sizeof(struct GranaryStack),
+                                 GFP_KERNEL);
+
+  granary_stack_begin = cpu_stacks;
+  granary_stack_end = &(cpu_stacks[num_cpus]);
+
 }
 
 static void AllocateCPUSlots(void) {

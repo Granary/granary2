@@ -18,6 +18,11 @@ GRANARY_DEFINE_bool(profile_direct_edges, false,
 // TODO(pag): Add an option that says put edge code in for all blocks, even if
 //            not needed.
 
+#ifdef GRANARY_WHERE_kernel
+void *granary_stack_begin = nullptr;
+void *granary_stack_end = nullptr;
+#endif  // GRANARY_WHERE_kernel
+
 namespace granary {
 namespace {
 
@@ -36,6 +41,14 @@ static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
   std::atomic_thread_fence(std::memory_order_release);
 }
 
+#ifdef GRANARY_WHERE_kernel
+// Check that we're executing from a Granary-specific stack.
+static bool OnGranaryStack(void) {
+  auto sp = __builtin_frame_address(0);
+  return granary_stack_begin <= sp && sp < granary_stack_end;
+}
+#endif  // GRANARY_WHERE_kernel
+
 }  // namespace
 
 // Forward declarations.
@@ -45,6 +58,8 @@ void EnterGranary(IndirectEdge *edge, ContextInterface *context,
 
 // Enter into Granary to begin the translation process for a direct edge.
 void EnterGranary(DirectEdge *edge, ContextInterface *context) {
+  GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
+
   auto meta = edge->dest_meta.exchange(nullptr, std::memory_order_seq_cst);
   if (GRANARY_UNLIKELY(!meta)) {
     // Some other thread beat us to trying to follow through on this edge. This

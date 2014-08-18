@@ -260,9 +260,6 @@ ReturnBasicBlock::~ReturnBasicBlock(void) {
 BlockMetaData *ReturnBasicBlock::MetaData(void) {
   if (GRANARY_UNLIKELY(!meta)) {
     std::swap(lazy_meta, meta);
-
-    // TODO(pag): Function return specialization is not yet implemented.
-    GRANARY_ASSERT(false);
   }
   return meta;
 }

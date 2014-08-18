@@ -27,7 +27,7 @@ IndexInterface::~IndexInterface(void) {}
 namespace internal {
 
 enum {
-  DEALLOCATED_MEMORY_POISON = 0xBC
+  DEALLOCATED_MEMORY_POISON = 0xFA
 };
 
 void *IndexArrayMem::operator new(std::size_t) {

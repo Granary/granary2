@@ -16,7 +16,7 @@ namespace internal {
 // Constants that define how we will initialize various chunks of memory.
 enum {
   UNALLOCATED_MEMORY_POISON = 0xAB,
-  DEALLOCATED_MEMORY_POISON = 0xBC,
+  DEALLOCATED_MEMORY_POISON = 0xFB,
   UNINITIALIZED_MEMORY_POISON = 0xCD,
 };
 

@@ -10,7 +10,11 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/option.h"
+#include "granary/base/pc.h"
+
+#include "granary/context.h"
 #include "granary/init.h"
+#include "granary/translate.h"
 
 #include "os/logging.h"
 
@@ -44,7 +48,8 @@ namespace {
 static void InitDebug(void) {
   if (FLAG_show_gdb_prompt && !FLAG_help) {
     char buff[2];
-    os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", granary_getpid());
+    os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n",
+            granary_getpid());
     os::Log(os::LogOutput, "Press enter to continue.\n");
     granary_read(0, buff, 1);
   }
@@ -71,14 +76,42 @@ static const char *GetEnv(const char *var_name) {
   return nullptr;
 }
 
+static void Attach(AppPC *start_pc_ptr) {
+  if (auto context = GlobalContext()) {
+    os::Log(os::LogOutput, "Attaching Granary.\n");
+    auto meta = context->AllocateBlockMetaData(*start_pc_ptr);
+    *start_pc_ptr = TranslateEntryPoint(context, meta, ENTRYPOINT_USER_LOAD);
+  }
+}
+
 }  // namespace
 }  // namespace granary
 
-GRANARY_INIT({
-  granary::InitOptions(GetEnv("GRANARY_OPTIONS"));
-  granary::InitDebug();
-  granary::Init();
-})
+extern "C" {
+
+typedef void (*FuncPtr)(void);
+
+// Defined by the linker script `linker.lds`.
+extern FuncPtr granary_begin_init_array[];
+extern FuncPtr granary_end_init_array[];
+
+static void RunConstructors(void) {
+  FuncPtr *init_func = granary_begin_init_array;
+  for (; init_func < granary_end_init_array; ++init_func) {
+    (*init_func)();
+  }
+}
+
+// Initialize and attach Granary.
+void granary_init(granary::AppPC *attach_pc_ptr) {
+  GRANARY_USING_NAMESPACE granary;
+  RunConstructors();
+  InitOptions(GetEnv("GRANARY_OPTIONS"));
+  InitDebug();
+  Init();
+  Attach(attach_pc_ptr);
+}
+}  // extern "C"
 
 #endif  // GRANARY_TEST
 #pragma clang diagnostic pop

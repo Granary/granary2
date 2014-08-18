@@ -19,5 +19,7 @@ void _Znam(void) { __builtin_trap(); }  // `operator new[]`.
 void _Znwm(void) { __builtin_trap(); }  // `operator delete`.
 void _ZdaPv(void) { __builtin_trap(); } // `operator delete[]`.
 
+void *__dso_handle = nullptr;
+
 }  // extern C
 #endif  // GRANARY_TEST

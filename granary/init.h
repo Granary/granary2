@@ -5,21 +5,8 @@
 
 namespace granary {
 
-#ifdef GRANARY_INTERNAL
+GRANARY_INTERNAL_DEFINITION void Init(void);
 
-// Initialize Granary.
-void Init(void);
-
-#define GRANARY_INIT(...) \
-  namespace { \
-  __attribute__((used, constructor(998))) \
-  static void InitGranary(void) { \
-    GRANARY_USING_NAMESPACE granary; \
-    __VA_ARGS__ \
-  } \
-  }
-
-#endif  // GRANARY_INTERNAL
 }  // namespace granary
 
 #endif  // GRANARY_INIT_H_
