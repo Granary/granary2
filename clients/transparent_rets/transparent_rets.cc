@@ -31,7 +31,7 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
                       "PUSH r64 %1;"_x86_64);
     EndInlineAssembly();
 
-    // Conver the (in)direct call into a jump.
+    // Convert the (in)direct call into a jump.
     if (cfi->HasIndirectTarget()) {
       RegisterOperand target_reg;
       GRANARY_IF_DEBUG( auto matched = ) cfi->MatchOperands(
@@ -71,6 +71,12 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
 
         // Specialize the return. Behind the scenes, this will convert the
         // return into an indirect jump.
+        //
+        // Note: `ReturnBasicBlock`s can have meta-data, but usually don't.
+        //       Their meta-data is created lazily when first requested with
+        //       `MetaData`. One can check if a `ReturnBasicBlock` has meta-data
+        //       and optionally operate on it if non-NULL by invoking the
+        //       `UnsafeMetaData` method instead.
         } else if (succ.cfi->IsFunctionReturn()) {
           DynamicCast<ReturnBasicBlock *>(succ.block)->MetaData();
         }
