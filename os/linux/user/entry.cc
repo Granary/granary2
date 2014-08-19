@@ -26,8 +26,8 @@ GRANARY_DECLARE_bool(help);
 
 extern "C" {
 extern char ** __attribute__((weak)) environ;
-extern int granary_getpid(void);
-extern long long granary_read(int __fd, void *__buf, size_t __nbytes);
+extern int getpid(void);
+extern long long read(int __fd, void *__buf, size_t __nbytes);
 }
 
 namespace granary {
@@ -48,10 +48,9 @@ namespace {
 static void InitDebug(void) {
   if (FLAG_show_gdb_prompt && !FLAG_help) {
     char buff[2];
-    os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n",
-            granary_getpid());
+    os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
     os::Log(os::LogOutput, "Press enter to continue.\n");
-    granary_read(0, buff, 1);
+    read(0, buff, 1);
   }
 }
 

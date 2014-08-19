@@ -14,11 +14,11 @@
 
 extern "C" {
 
-extern void *granary_mmap(void *__addr, size_t __len, int __prot,
-                           int __flags, int __fd, long __offset);
-extern int granary_munmap(void *__addr, size_t __len);
-extern int granary_mprotect(void *__addr, size_t __len, int __prot);
-extern int granary_mlock(const void *__addr, size_t __len);
+extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
+                  int __fd, long __offset);
+extern int munmap(void *__addr, size_t __len);
+extern int mprotect(void *__addr, size_t __len, int __prot);
+extern int mlock(const void *__addr, size_t __len);
 
 }  // extern C
 namespace granary {
@@ -35,17 +35,17 @@ void *AllocatePages(int num, MemoryIntent intent) {
     prot |= PROT_EXEC;
   }
   auto num_bytes = static_cast<size_t>(arch::PAGE_SIZE_BYTES * num);
-  auto ret = granary_mmap(nullptr, num_bytes, prot, MAP_PRIVATE | MAP_ANONYMOUS,
+  auto ret = mmap(nullptr, num_bytes, prot, MAP_PRIVATE | MAP_ANONYMOUS,
                           -1, 0);
   if (MemoryIntent::EXECUTABLE == intent) {
-    granary_mlock(ret, num_bytes);
+    mlock(ret, num_bytes);
   }
   return ret;
 }
 
 // Frees `num` pages back to the OS.
 void FreePages(void *addr, int num, MemoryIntent) {
-  granary_munmap(addr, static_cast<size_t>(arch::PAGE_SIZE_BYTES * num));
+  munmap(addr, static_cast<size_t>(arch::PAGE_SIZE_BYTES * num));
 }
 
 // Changes the memory protection of some pages.
@@ -60,7 +60,7 @@ void ProtectPages(void *addr, int num, MemoryProtection prot) {
   } else {
     prot_bits = 0; //  MEMORY_INACCESSIBLE
   }
-  granary_mprotect(
+  mprotect(
       addr,
       static_cast<size_t>(arch::PAGE_SIZE_BYTES * num),
       prot_bits);

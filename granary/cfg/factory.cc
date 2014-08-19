@@ -32,10 +32,10 @@ extern uint8_t granary_begin_inst_exports;
 extern uint8_t granary_end_inst_exports;
 
 // User space-specific functions. If we find that `_fini` is being invoked,
-// then we'll redirect execution to `granary_exit_group`, which exit all
+// then we'll redirect execution to `exit_group`, which exit all
 // threads in the process.
 GRANARY_IF_USER( extern uint8_t _fini; )
-GRANARY_IF_USER( extern uint8_t granary_exit_group; )
+GRANARY_IF_USER( extern uint8_t exit_group; )
 
 }  // extern C
 enum {
@@ -393,11 +393,10 @@ InstrumentedBasicBlock *BlockFactory::MaterializeInitialIndirectBlock(
 
   if (os::ModuleKind::GRANARY == module->Kind()) {
 #ifdef GRANARY_WHERE_user
-    // If we try to go to `_fini`, then redirect execution to
-    // `granary_exit_group`.
+    // If we try to go to `_fini`, then redirect execution to `exit_group`.
     if (&_fini == target_pc) {
-      target_pc = &granary_exit_group;
-      app_meta->start_pc = &granary_exit_group;
+      target_pc = &exit_group;
+      app_meta->start_pc = &exit_group;
     }
 #endif
     GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&

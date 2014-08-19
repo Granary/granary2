@@ -8,7 +8,21 @@ START_FILE
 
 #ifdef GRANARY_WHERE_user
 
-DEFINE_FUNC(granary_mmap)
+// A curious person might wonder: Why did I not prefix each of these functions
+// with `granary_`, and instead went with the symbol versioning approach (by
+// using `symver.map`). The answer is that
+//
+//      1)  I can achieve roughly the same effect with symbol versioning.
+//      2)  I hope that applying static analysis tools to Granary's source code
+//          will explicitly recognize the names of these `libc` system calls
+//          and do specific checks based on their usage.
+//
+// A drawback of this approach is that the prefix approach with `granary_`
+// makes it explicit that Granary has its own versions of each of these `libc`
+// functions. Without this explicit prefix, a new developer of Granary might
+// get confused into thinking that *any* `libc` function can be used.
+
+DEFINE_FUNC(mmap)
     mov    r10,rcx
     mov    eax,0x9
     syscall
@@ -18,9 +32,9 @@ DEFINE_FUNC(granary_mmap)
 .Lgranary_mmap_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_mmap)
+END_FUNC(mmap)
 
-DEFINE_FUNC(granary_munmap)
+DEFINE_FUNC(munmap)
     mov    eax,0xb
     syscall
     cmp    rax,0xfffffffffffff001
@@ -29,9 +43,9 @@ DEFINE_FUNC(granary_munmap)
 .Lgranary_munmap_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_munmap)
+END_FUNC(munmap)
 
-DEFINE_FUNC(granary_mprotect)
+DEFINE_FUNC(mprotect)
     mov    eax,0xa
     syscall
     cmp    rax,0xfffffffffffff001
@@ -40,9 +54,9 @@ DEFINE_FUNC(granary_mprotect)
 .Lgranary_mprotect_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_mprotect)
+END_FUNC(mprotect)
 
-DEFINE_FUNC(granary_mlock)
+DEFINE_FUNC(mlock)
     mov    eax,0x95
     syscall
     cmp    rax,0xfffffffffffff001
@@ -51,9 +65,9 @@ DEFINE_FUNC(granary_mlock)
 .Lgranary_mlock_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_mlock)
+END_FUNC(mlock)
 
-DEFINE_FUNC(granary_open)
+DEFINE_FUNC(open)
     mov    eax,0x2
     syscall
     cmp    rax,0xfffffffffffff001
@@ -62,9 +76,9 @@ DEFINE_FUNC(granary_open)
 .Lgranary_open_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_open)
+END_FUNC(open)
 
-DEFINE_FUNC(granary_close)
+DEFINE_FUNC(close)
     mov    eax,0x3
     syscall
     cmp    rax,0xfffffffffffff001
@@ -73,9 +87,9 @@ DEFINE_FUNC(granary_close)
 .Lgranary_close_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_close)
+END_FUNC(close)
 
-DEFINE_FUNC(granary_read)
+DEFINE_FUNC(read)
     mov    eax,0x0
     syscall
     cmp    rax,0xfffffffffffff001
@@ -84,9 +98,9 @@ DEFINE_FUNC(granary_read)
 .Lgranary_read_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_read)
+END_FUNC(read)
 
-DEFINE_FUNC(granary_write)
+DEFINE_FUNC(write)
     mov    eax,0x1
     syscall
     cmp    rax,0xfffffffffffff001
@@ -95,19 +109,19 @@ DEFINE_FUNC(granary_write)
 .Lgranary_write_error:
     or     rax,0xffffffffffffffff
     ret
-END_FUNC(granary_write)
+END_FUNC(write)
 
-DEFINE_FUNC(granary_getpid)
+DEFINE_FUNC(getpid)
     mov    eax,0x27
     syscall
     ret
-END_FUNC(granary_getpid)
+END_FUNC(getpid)
 
 // `exit_group` system call.
 .section .text.inst_exports
-.global granary_exit_group
-.type granary_exit_group, @function
-granary_exit_group:
+.global exit_group
+.type exit_group, @function
+exit_group:
     .cfi_startproc
     mov     eax,0xE7
     xor     rdi, rdi

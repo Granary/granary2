@@ -10,7 +10,7 @@ START_FILE
 #ifndef GRANARY_TARGET_test
 
 DECLARE_FUNC(granary_init)
-DECLARE_FUNC(granary_exit_group)
+DECLARE_FUNC(exit_group)
 
 .section .init
 .global _init
@@ -27,7 +27,7 @@ _init:
 .type _fini, @function
 _fini:
     .cfi_startproc
-    jmp granary_exit_group
+    jmp exit_group
     ud2
     .cfi_endproc
 

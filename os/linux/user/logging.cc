@@ -9,7 +9,7 @@
 
 extern "C" {
 
-extern long long granary_write(int __fd, const void *__buf, size_t __n);
+extern long long write(int __fd, const void *__buf, size_t __n);
 
 }
 namespace granary {
@@ -98,7 +98,7 @@ int Log(LogLevel level, const char *format, ...) {
 
     // Output the so-far buffered string.
     if (write_ch > write_ch_begin) {
-      num_written += static_cast<int>(granary_write(
+      num_written += static_cast<int>(write(
           OUTPUT_FD[static_cast<unsigned>(level)],
           write_ch_begin,
           static_cast<unsigned long>(write_ch - write_ch_begin)));
@@ -133,7 +133,7 @@ int Log(LogLevel level, const char *format, ...) {
       case 's':  // String.
         sub_string = va_arg(args, const char *);
         if (sub_string) {
-          num_written += static_cast<int>(granary_write(
+          num_written += static_cast<int>(write(
               OUTPUT_FD[static_cast<unsigned>(level)],
               sub_string,
               StringLength(sub_string)));
@@ -192,7 +192,7 @@ int Log(LogLevel level, const char *format, ...) {
 
   // Output the so-far buffered string.
   if (write_ch > write_ch_begin) {
-    num_written += static_cast<int>(granary_write(
+    num_written += static_cast<int>(write(
         OUTPUT_FD[static_cast<unsigned>(level)],
         write_ch_begin,
         static_cast<unsigned long>(write_ch - write_ch_begin)));
