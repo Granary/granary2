@@ -4,7 +4,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "arch/init.h"
+#include "test/util/simple_init.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
@@ -96,7 +96,7 @@ class ConditionalBranchTest : public Test {
   }
 
   static void SetUpTestCase(void) {
-    arch::Init();
+    SimpleInitGranary();
     RegisterInstrumentationTool<AllFuncBlocks>("all_func_blocks");
   }
 

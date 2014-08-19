@@ -5,6 +5,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "test/util/simple_init.h"
 #include "test/util/simple_encoder.h"
 
 #include "granary/cfg/control_flow_graph.h"
@@ -34,7 +35,8 @@ SimpleEncoderTest::SimpleEncoderTest(void)
   meta_manager.Register<CacheMetaData>();
   meta_manager.Register<IndexMetaData>();
   meta_manager.Register<StackMetaData>();
-  arch::Init();
+
+  SimpleInitGranary();
 
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, BlockCodeCache())

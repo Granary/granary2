@@ -7,6 +7,7 @@ START_FILE
     .intel_syntax noprefix
 
 #ifdef GRANARY_WHERE_user
+#ifndef GRANARY_TARGET_test
 
 DECLARE_FUNC(granary_init)
 DECLARE_FUNC(granary_exit_group)
@@ -30,6 +31,7 @@ _fini:
     ud2
     .cfi_endproc
 
+#endif  // GRANARY_TARGET_test
 #endif  // GRANARY_WHERE_user
 
 END_FILE

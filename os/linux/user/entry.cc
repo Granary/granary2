@@ -89,23 +89,10 @@ static void Attach(AppPC *start_pc_ptr) {
 
 extern "C" {
 
-typedef void (*FuncPtr)(void);
-
-// Defined by the linker script `linker.lds`.
-extern FuncPtr granary_begin_init_array[];
-extern FuncPtr granary_end_init_array[];
-
-static void RunConstructors(void) {
-  FuncPtr *init_func = granary_begin_init_array;
-  for (; init_func < granary_end_init_array; ++init_func) {
-    (*init_func)();
-  }
-}
-
 // Initialize and attach Granary.
 void granary_init(granary::AppPC *attach_pc_ptr) {
   GRANARY_USING_NAMESPACE granary;
-  RunConstructors();
+  PreInit();
   InitOptions(GetEnv("GRANARY_OPTIONS"));
   InitDebug();
   Init();

@@ -6,6 +6,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include "test/util/simple_init.h"
+
 #include "arch/driver.h"
 
 #include "granary/base/cast.h"
@@ -17,7 +19,7 @@ extern "C" {
 
 TEST(EncodeTest, EncodeCommonInstructions) {
   using namespace granary;
-  arch::Init();
+  SimpleInitGranary();
 
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);

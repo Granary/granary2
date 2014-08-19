@@ -290,11 +290,16 @@ void ModuleManager::Register(Module *module) {
   module->next = modules;
   modules = module;
 }
+namespace {
+static bool done_init = false;
+}  // namespace
 
 Container<ModuleManager> global_module_manager;
 
 // Initializes the module manager.
 void InitModuleManager(void) {
+  if (done_init) return;
+  done_init = true;
   global_module_manager.Construct();
 }
 

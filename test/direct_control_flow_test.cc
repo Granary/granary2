@@ -4,7 +4,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "arch/init.h"
+#include "test/util/simple_init.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
@@ -172,7 +172,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
       virtual ~tool_name ## _DirectControlFlowTest(void) = default; \
       \
       static void SetUpTestCase(void) { \
-        arch::Init(); \
+        SimpleInitGranary(); \
         RegisterInstrumentationTool<tool_name>(#tool_name); \
       } \
       \

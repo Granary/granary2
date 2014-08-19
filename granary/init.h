@@ -5,6 +5,10 @@
 
 namespace granary {
 
+// Runs the constructors from the initialization array.
+GRANARY_INTERNAL_DEFINITION void PreInit(void);
+
+// Initializes Granary.
 GRANARY_INTERNAL_DEFINITION void Init(void);
 
 }  // namespace granary

@@ -21,6 +21,15 @@ GRANARY_DEFINE_string(tools, "",
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
 
+extern "C" {
+
+typedef void (*InitFuncPtr)(void);
+
+// Defined by the linker script `linker.lds`.
+extern InitFuncPtr granary_begin_init_array[];
+extern InitFuncPtr granary_end_init_array[];
+
+}  // extern "C"
 namespace granary {
 namespace {
 
@@ -30,7 +39,23 @@ namespace {
 GRANARY_EARLY_GLOBAL static Container<Context> context;
 #pragma clang diagnostic pop
 
+// Have we already pre-initialized Granary? This is mostly only relevant for
+// the test cases, where a given test fixture might initialize Granary, and
+// so the initialization will happen for each of that fixture's tests.
+static bool done_preinit = false;
+
 }  // namespace
+
+// Runs the constructors from the initialization array.
+void PreInit(void) {
+  if (done_preinit) return;
+  done_preinit = true;
+
+  InitFuncPtr *init_func = granary_begin_init_array;
+  for (; init_func < granary_end_init_array; ++init_func) {
+    (*init_func)();
+  }
+}
 
 // Initialize Granary.
 void Init(void) {
