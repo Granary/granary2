@@ -4,13 +4,23 @@
 
 using namespace granary;
 
-// In kernel space, we make this
 GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "Enable transparent return addresses? The default is `"
     GRANARY_IF_USER_ELSE("yes", "no") "`.");
 
-// Tool that implements several user-space special cases for instrumenting
-// common binaries.
+// Implements transparent return addresses. This means that the return
+// addresses from instrumented function calls will point to native code and
+// not into Granary's code cache.
+//
+// Transparent returns impose a performance overhead because it expands every
+// function call/return into many instructions, instead of just a single
+// instruction (in practice).
+//
+// The benefit of transparent return addresses is that it improves:
+//    1)  The debugging experience, as program backtraces will appear natural.
+//    2)  Likely improves the correctness of instrumentation, lest any programs
+//        (e.g. `ld` and `dl`) make decisions based on their return addresses.
+//    2)  Opens up the door to return target specialization.
 class TransparentRetsInstrumenter : public InstrumentationTool {
  public:
   virtual ~TransparentRetsInstrumenter(void) = default;
@@ -85,9 +95,7 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
   }
 };
 
-// Initialize the `transparent_rets` tool. This tool implements transparent
-// return addresses. This means that the return addresses from instrumented
-// function calls will point to native code/
+// Initialize the `transparent_rets` tool.
 GRANARY_CLIENT_INIT({
   if (FLAG_transparent_returns) {
     RegisterInstrumentationTool<TransparentRetsInstrumenter>(
