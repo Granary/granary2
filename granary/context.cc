@@ -131,7 +131,7 @@ Context::Context(void)
 // Initialize all tools from a comma-separated list of tools.
 void Context::InitTools(const char *tool_names) {
   // Force register either the kernel- or user-space tools.
-  tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
+  tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "transparent_rets"));
 
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
       tool_names,

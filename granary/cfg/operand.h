@@ -266,6 +266,18 @@ class ImmediateOperand : public Operand {
   inline ImmediateOperand(void)
       : Operand() {}
 
+  // Initialize a immediate operand from a signed integer, where the value has
+  // a width of `width_bytes`.
+  //
+  // Note: This has a driver-specific implementation.
+  ImmediateOperand(intptr_t imm, int width_bytes);
+
+  // Initialize a immediate operand from a unsigned integer, where the value
+  // has a width of `width_bytes`.
+  //
+  // Note: This has a driver-specific implementation.
+  ImmediateOperand(uintptr_t imm, int width_bytes);
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
 };
 

@@ -163,11 +163,40 @@ size_t MemoryOperand::CountMatchedRegisters(
 }
 
 // Initialize a new register operand from a virtual register.
-RegisterOperand::RegisterOperand(const VirtualRegister reg) {
+RegisterOperand::RegisterOperand(const VirtualRegister reg)
+    : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
   op->width = static_cast<int16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Initialize a immediate operand from a signed integer, where the value has
+// a width of `width_bytes`.
+//
+// Note: This has a driver-specific implementation.
+ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
+    : Operand() {
+  op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
+  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->imm.as_int = imm;
+  op->rw = XED_OPERAND_ACTION_R;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Initialize a immediate operand from a unsigned integer, where the value
+// has a width of `width_bytes`.
+//
+// Note: This has a driver-specific implementation.
+ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
+    : Operand() {
+  op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
+  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->imm.as_uint = imm;
+  op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
 }

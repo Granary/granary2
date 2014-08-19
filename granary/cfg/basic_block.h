@@ -49,18 +49,18 @@ class BasicBlockSuccessor {
   //
   // `const`-qualified so that `cfi` isn't unlinked from an instruction list
   // while the successors are being iterated.
-  const ControlFlowInstruction * const cfi;
+  ControlFlowInstruction * const cfi;
 
-  // The basic block targeted by `cti`.
+  // The basic block targeted by `cfi`.
   BasicBlock * const block;
 
  private:
   friend class LocalControlFlowGraph;
   friend class SuccessorBlockIterator;
 
-  inline BasicBlockSuccessor(ControlFlowInstruction *cti_,
+  inline BasicBlockSuccessor(ControlFlowInstruction *cfi_,
                              BasicBlock *block_)
-      : cfi(cti_),
+      : cfi(cfi_),
         block(block_) {}
 
   GRANARY_DISALLOW_ASSIGN(BasicBlockSuccessor);

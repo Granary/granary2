@@ -99,11 +99,8 @@ class Instruction {
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
-  GRANARY_IF_DEBUG(virtual)
-  Instruction *InsertBefore(std::unique_ptr<Instruction>);
-
-  GRANARY_IF_DEBUG(virtual)
-  Instruction *InsertAfter(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
   // Unlink an instruction from an instruction list.
   static std::unique_ptr<Instruction> Unlink(Instruction *);
@@ -116,7 +113,7 @@ class Instruction {
   std::unique_ptr<Instruction> UnsafeUnlink(void);
 
   // Used to put instructions into lists.
-  GRANARY_INTERNAL_DEFINITION ListHead list;
+  GRANARY_INTERNAL_DEFINITION mutable ListHead list;
 
  protected:
   // Transient, tool-specific meta-data stored in this instruction. The lifetime
@@ -232,8 +229,8 @@ class AnnotationInstruction : public Instruction {
       : annotation(annotation_),
         data(UnsafeCast<uintptr_t>(data_)) {}
 
-  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
-  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
+  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>) override;
+  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>) override;
 
   // Returns true if this instruction is a label.
   bool IsLabel(void) const;
@@ -241,8 +238,11 @@ class AnnotationInstruction : public Instruction {
   // Returns true if this instruction is targeted by any branches.
   bool IsBranchTarget(void) const;
 
-  GRANARY_INTERNAL_DEFINITION GRANARY_CONST InstructionAnnotation annotation;
-  GRANARY_INTERNAL_DEFINITION GRANARY_CONST uintptr_t GRANARY_CONST data;
+  GRANARY_INTERNAL_DEFINITION GRANARY_CONST
+  InstructionAnnotation annotation;
+
+  GRANARY_INTERNAL_DEFINITION GRANARY_CONST
+  uintptr_t data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {

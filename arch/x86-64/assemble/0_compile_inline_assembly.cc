@@ -314,9 +314,12 @@ class InlineAssemblyParser {
     // Don't allow instructions the read or modify the stack pointer as this
     // will break invariants set up by early mangling about stack pointer
     // definedness.
+    //
+    // TODO(pag): I should consider re-enabling this, or at least doing some
+    //            small checking
     data.AnalyzeStackUsage();
-    GRANARY_ASSERT(!data.ReadsFromStackPointer() &&
-                   !data.WritesToStackPointer());
+    //GRANARY_ASSERT(!data.ReadsFromStackPointer() &&
+    //               !data.WritesToStackPointer());
 
     // Ensure that instrumentation instructions do not alter the direction
     // flag! This is because we have no reliable way of saving and restoring
