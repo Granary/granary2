@@ -12,15 +12,37 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
 // addresses from instrumented function calls will point to native code and
 // not into Granary's code cache.
 //
-// Transparent returns impose a performance overhead because it expands every
+// Transparent returns impose a performance overhead because they expand every
 // function call/return into many instructions, instead of just a single
 // instruction (in practice).
 //
-// The benefit of transparent return addresses is that it improves:
-//    1)  The debugging experience, as program backtraces will appear natural.
-//    2)  Likely improves the correctness of instrumentation, lest any programs
-//        (e.g. `ld` and `dl`) make decisions based on their return addresses.
-//    2)  Opens up the door to return target specialization.
+// The benefits of transparent return addresses are:
+//    1)  Improved debugging experience, as program backtraces will appear
+//        natural.
+//    2)  Improves the correctness of instrumentation. Some programs won't work
+//        without transparent return addresses because they will inspect and
+//        decisions based on return addresses. For example, without transparent
+//        return addresses, `_dl_debug_initialize` of `dl` will sometimes
+//        segfault when `_dl_open` is called by `do_dlopen`. This appears to
+//        be because it uses the return address to resolve a namespace, but
+//        fails to do so, and then dies. This simple issue rules out most
+//        standard UNIX utilities.
+//    3)  Opens up the door to return target specialization. This can be useful
+//        for things like tracking lock nesting depth using block meta-data.
+//    4)  Improves the attach/detach story, because it makes it so that a detach
+//        is really a full detach, and doesn't require that the instrumented
+//        code be given time to quiesce to some kind of native state.
+//
+// TODO(pag): Its not clear if the best implementation of this is as a tool, as
+//            an internal feature, or as some combination thereof. For example,
+//            in some cases, we might want transparent return addresses on all
+//            but a few calls that actually do go native, but for which we want
+//            execution to return to instrumented code.
+//
+//            It's not clear how to nicely handle this case, except to just
+//            have a purpose-built tool that re-implements selective transparent
+//            return addresses, and requires that use user manually specifies
+//            `--transparent_returns=no` at the command-line.
 class TransparentRetsInstrumenter : public InstrumentationTool {
  public:
   virtual ~TransparentRetsInstrumenter(void) = default;
@@ -66,7 +88,7 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
 
   // Instrument the control-flow instructions, specifically: function call
   // instructions.
-  virtual void InstrumentControlFlow(BlockFactory *,
+  virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
@@ -77,6 +99,7 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
         if (succ.cfi->IsFunctionCall()) {
           AddTransparentRetAddr(succ.cfi);
           RemoveTailInstructions(decoded_block, succ.cfi);
+          factory->RequestBlock(succ.block);  // Walk into the call.
           break;  // Won't have any more successors.
 
         // Specialize the return. Behind the scenes, this will convert the
@@ -99,6 +122,6 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
 GRANARY_CLIENT_INIT({
   if (FLAG_transparent_returns) {
     RegisterInstrumentationTool<TransparentRetsInstrumenter>(
-        "transparent_rets");
+        "transparent_returns");
   }
 })

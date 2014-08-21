@@ -226,6 +226,8 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
 //            that happens after the validity of fragment stacks has been
 //            identified, otherwise this penalizes fragments on valid stacks.
 //
+//            One suitable place would be `ManglePush` in `9_allocate_slots.cc`.
+//
 // Note: During decoding, we will have done the correct sign-extension.
 static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
   auto op = instr->ops[0];

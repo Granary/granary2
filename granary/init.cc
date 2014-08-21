@@ -67,14 +67,10 @@ void Init(void) {
   // are enabled.
   arch::Init();
 
-  if (!FLAG_help) {
-    context.Construct();
-    InitClients();
-    context->InitTools(FLAG_tools);
-    SetGlobalContext(context.AddressOf());
-  } else {
-    PrintAllOptions();
-  }
+  context.Construct();
+  InitClients();
+  context->InitTools(FLAG_tools);
+  SetGlobalContext(context.AddressOf());
 }
 
 }  // namespace granary

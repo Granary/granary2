@@ -93,7 +93,7 @@ static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
   if (op.IsRegister()) {
     auto mem_width = instr->instruction.effective_operand_width;
     GRANARY_ASSERT(0 < mem_width);
-    arch::MOV_MEMv_GPRv(
+    MOV_MEMv_GPRv(
         &(instr->instruction),
         arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width),
         op.reg);

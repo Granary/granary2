@@ -4,6 +4,7 @@
 
 #include "arch/base.h"
 
+#include "granary/base/cstring.h"
 #include "granary/base/pc.h"
 
 #include "granary/cfg/basic_block.h"
@@ -16,32 +17,11 @@ namespace granary {
 
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
-  // Start by marking every block as owned; we're destroying them anyway so
-  // this sets up a simple invariant regarding the interaction between freeing
-  // instructions and basic blocks.
-  for (auto block : BasicBlockIterator(first_block)) {
-    block->Acquire();
+  for (BasicBlock *block(first_block), *next(nullptr); block; block = next) {
+    next = block->list.GetNext(block);
+    delete block;
   }
-
-  // Free up all of the instruction lists.
-  for (auto block : BasicBlockIterator(first_block)) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    if (decoded_block) {
-      decoded_block->FreeInstructionList();
-    }
-  }
-
-  // Free up all the basic blocks.
-  for (BasicBlock *curr(first_block), *next(nullptr); curr; curr = next) {
-    next = curr->list.GetNext(curr);
-    delete curr;
-  }
-
-  context = nullptr;
-  entry_block = nullptr;
-  first_block = nullptr;
-  last_block = nullptr;
-  first_new_block = nullptr;
+  memset(this, 0, sizeof *this);
 }
 
 // Return the entry basic block of this control-flow graph.
@@ -73,18 +53,15 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   }
   block->id = num_basic_blocks++;
 
-  if (!first_block) {
+  if (GRANARY_UNLIKELY(!first_block)) {
+    GRANARY_ASSERT(IsA<DecodedBasicBlock *>(block) ||
+                   IsA<CachedBasicBlock *>(block));
     first_block = block;
-
     // We assume that the first added block is one of a `DecodedBasicBlock`
     // (and by extension a `CompensationBasicBlock`) or a `CachedBasicBlock`.
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
       entry_block = decoded_block;
     }
-
-    // The control-flow graph has sole ownership over the entry basic block.
-    // All other basic blocks are owned by control-transfer instructions.
-    block->MarkAsPermanent();
   } else {
     last_block->list.SetNext(last_block, block);
   }

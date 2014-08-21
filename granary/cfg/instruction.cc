@@ -260,22 +260,11 @@ ControlFlowInstruction::ControlFlowInstruction(
         return_address(nullptr),
         target(target_) {
   GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
-  target->Acquire();
 }
 
 // Destroy a control-flow transfer instruction.
 ControlFlowInstruction::~ControlFlowInstruction(void) {
-  target->Release();
-  auto old_target = target;
   target = nullptr;
-
-  // In some cases, instructions need to clean up after basic blocks. E.g.
-  // a CTI is unlinked, never re-linked, and therefore goes out of scope, thus
-  // deleting the instruction. If that CTI is the only link to a basic block,
-  // then the associated block must also be destroyed.
-  if (!old_target->list.IsAttached() && old_target->CanDestroy()) {
-    delete old_target;
-  }
 }
 
 // Special case that breaks some of our abstractions: sometimes we convert
@@ -303,12 +292,7 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
-  GRANARY_ASSERT(new_target->list.IsAttached());
-  GRANARY_ASSERT(-1 != new_target->Id());
-  auto old_target = target;
-  new_target->Acquire();
   target = new_target;
-  old_target->Release();
 }
 
 }  // namespace granary

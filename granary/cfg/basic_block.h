@@ -9,7 +9,6 @@
 #include "granary/base/cast.h"
 #include "granary/base/list.h"
 #include "granary/base/new.h"
-#include "granary/base/refcount.h"
 #include "granary/base/pc.h"
 #include "granary/base/type_trait.h"
 
@@ -102,7 +101,7 @@ class SuccessorBlockIterator {
 }  // namespace detail
 
 // Abstract basic block of instructions.
-class BasicBlock : protected UnownedCountedObject {
+class BasicBlock {
  public:
   virtual ~BasicBlock(void) = default;
 
@@ -126,9 +125,6 @@ class BasicBlock : protected UnownedCountedObject {
   // cache.
   virtual CachePC StartCachePC(void) const = 0;
 
-  // Returns the number of predecessors of this basic block within the LCFG.
-  int NumLocalPredecessors(void) const;
-
   // Retunrs a unique ID for this basic block within the LCFG. This can be
   // useful for client tools to implement data flow passes.
   int Id(void) const;
@@ -151,6 +147,12 @@ class BasicBlock : protected UnownedCountedObject {
   // Unique ID for this block within its local control-flow graph. Defaults to
   // `-1` if the block does not belong to an LCFG.
   GRANARY_INTERNAL_DEFINITION int id;
+
+  // The generation number for where this block can be materialized.
+  GRANARY_INTERNAL_DEFINITION int generation;
+
+  // Is this block reachable from the entry node of the LCFG?
+  GRANARY_INTERNAL_DEFINITION bool is_reachable;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
@@ -277,9 +279,6 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   friend class LocalControlFlowGraph;
 
   DecodedBasicBlock(void) = delete;
-
-  GRANARY_INTERNAL_DEFINITION
-  void FreeInstructionList(void);
 
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.

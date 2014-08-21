@@ -27,18 +27,20 @@
 #define GRANARY_UNPROTECTED_GLOBAL __attribute__((section(".bss.granary_unprotected")))
 
 // Useful for Valgrind-based debugging.
-#ifdef GRANARY_WITH_VALGRIND
-# include <valgrind/valgrind.h>
-# include <valgrind/memcheck.h>
-#else
-# define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
-# define VALGRIND_FREELIKE_BLOCK(addr, rzB)
-# define VALGRIND_CREATE_MEMPOOL(addr, rzB, is_zeroed)
-# define VALGRIND_MEMPOOL_ALLOC(pool, addr, size)
-# define VALGRIND_MEMPOOL_FREE(pool, addr)
-# define VALGRIND_MAKE_MEM_UNDEFINED(addr,size)
-# define VALGRIND_MAKE_MEM_DEFINED(addr,size)
-# define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
+#if !defined(GRANARY_EXTERNAL)
+# ifdef GRANARY_WITH_VALGRIND
+#   include <valgrind/valgrind.h>
+#   include <valgrind/memcheck.h>
+# else
+#   define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
+#   define VALGRIND_FREELIKE_BLOCK(addr, rzB)
+#   define VALGRIND_CREATE_MEMPOOL(addr, rzB, is_zeroed)
+#   define VALGRIND_MEMPOOL_ALLOC(pool, addr, size)
+#   define VALGRIND_MEMPOOL_FREE(pool, addr)
+#   define VALGRIND_MAKE_MEM_UNDEFINED(addr,size)
+#   define VALGRIND_MAKE_MEM_DEFINED(addr,size)
+#   define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
+# endif
 #endif
 
 // For namespace-based `using` declarations without triggering the linter.

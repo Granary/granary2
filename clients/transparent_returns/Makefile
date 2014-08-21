@@ -4,7 +4,7 @@
 
 include ../../Makefile.inc
 
-CLIENT_NAME := transparent_rets
+CLIENT_NAME := transparent_returns
 CLIENT_SRC_DIR := $(GRANARY_SRC_DIR)/clients/$(CLIENT_NAME)
 CLIENT_OBJ := $(GRANARY_BIN_DIR)/$(CLIENT_NAME)_client.o
 

@@ -4,3 +4,4 @@
 --suppressions=dependencies/valgrind/valgrind.supp
 --trace-children=yes
 --smc-check=all
+--read-var-info=yes

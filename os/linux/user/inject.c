@@ -83,5 +83,6 @@ int main(int argc, const char *argv[]) {
   InitGranaryPath(argv[0]);
   SetPreload();
   argv = &(argv[SetArgs(argc, argv)]);
+  if (!argv[0] || !argv[0][0]) return 0;
   return execvpe(argv[0], (char * const *) argv, (char * const *) environ);
 }

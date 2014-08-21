@@ -16,8 +16,8 @@ namespace internal {
 // Constants that define how we will initialize various chunks of memory.
 enum {
   UNALLOCATED_MEMORY_POISON = 0xAB,
-  DEALLOCATED_MEMORY_POISON = 0xFB,
-  UNINITIALIZED_MEMORY_POISON = 0xCD,
+  DEALLOCATED_MEMORY_POISON = 0xCD,
+  UNINITIALIZED_MEMORY_POISON = 0xEF,
 };
 
 // Initialize a new slab list. Once initialized, slab lists are never changed.

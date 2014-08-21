@@ -24,7 +24,7 @@ START_FILE
 
 DEFINE_FUNC(mmap)
     mov    r10,rcx
-    mov    eax,0x9
+    mov    eax, 9  // `__NR_mmap`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_mmap_error
@@ -35,7 +35,7 @@ DEFINE_FUNC(mmap)
 END_FUNC(mmap)
 
 DEFINE_FUNC(munmap)
-    mov    eax,0xb
+    mov    eax, 11  // `__NR_munmap`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_munmap_error
@@ -46,7 +46,7 @@ DEFINE_FUNC(munmap)
 END_FUNC(munmap)
 
 DEFINE_FUNC(mprotect)
-    mov    eax,0xa
+    mov    eax, 10  // `__NR_mprotect`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_mprotect_error
@@ -57,7 +57,7 @@ DEFINE_FUNC(mprotect)
 END_FUNC(mprotect)
 
 DEFINE_FUNC(mlock)
-    mov    eax,0x95
+    mov    eax, 149  // `__NR_mlock`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_mlock_error
@@ -68,7 +68,7 @@ DEFINE_FUNC(mlock)
 END_FUNC(mlock)
 
 DEFINE_FUNC(open)
-    mov    eax,0x2
+    mov    eax, 2  // `__NR_open`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_open_error
@@ -79,7 +79,7 @@ DEFINE_FUNC(open)
 END_FUNC(open)
 
 DEFINE_FUNC(close)
-    mov    eax,0x3
+    mov    eax, 3  // `__NR_close`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_close_error
@@ -90,7 +90,7 @@ DEFINE_FUNC(close)
 END_FUNC(close)
 
 DEFINE_FUNC(read)
-    mov    eax,0x0
+    mov    eax, 0  // `__NR_read`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_read_error
@@ -101,7 +101,7 @@ DEFINE_FUNC(read)
 END_FUNC(read)
 
 DEFINE_FUNC(write)
-    mov    eax,0x1
+    mov    eax,1  // `__NR_write`.
     syscall
     cmp    rax,0xfffffffffffff001
     jae    .Lgranary_write_error
@@ -112,10 +112,16 @@ DEFINE_FUNC(write)
 END_FUNC(write)
 
 DEFINE_FUNC(getpid)
-    mov    eax,0x27
+    mov    eax, 39  // `__NR_getpid`.
     syscall
     ret
 END_FUNC(getpid)
+
+DEFINE_FUNC(rt_sigaction)
+    mov     eax, 13  // `__NR_rt_sigaction`.
+    syscall
+    ret
+END_FUNC(rt_sigaction)
 
 // `exit_group` system call.
 .section .text.inst_exports
@@ -123,12 +129,12 @@ END_FUNC(getpid)
 .type exit_group, @function
 exit_group:
     .cfi_startproc
-    mov     eax,0xE7
+    mov     eax, 231  // `__NR_exit_group`.
     xor     rdi, rdi
     syscall
     ud2 /* Should not be reached */
     .cfi_endproc
 
-#endif
+#endif  // GRANARY_WHERE_user
 
 END_FILE

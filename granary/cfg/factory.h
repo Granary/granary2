@@ -101,7 +101,7 @@ class BlockFactory {
   // targets), we generate a dummy compensation fragment that jumps to a direct
   // basic block with a default non-`REQUEST_LATER` materialization strategy.
   GRANARY_INTERNAL_DEFINITION
-  InstrumentedBasicBlock *MaterializeInitialIndirectBlock(BlockMetaData *meta);
+  InstrumentedBasicBlock *MaterializeIndirectEntryBlock(BlockMetaData *meta);
 
   // Satisfy all materialization requests.
   GRANARY_INTERNAL_DEFINITION void MaterializeRequestedBlocks(void);
@@ -112,15 +112,19 @@ class BlockFactory {
     return has_pending_request;
   }
 
-  GRANARY_INTERNAL_DEFINITION
   // Materialize the initial basic block.
-  void MaterializeInitialBlock(BlockMetaData *meta);
+  GRANARY_INTERNAL_DEFINITION
+  DecodedBasicBlock *MaterializeDirectEntryBlock(BlockMetaData *meta);
+
+  // Try to request the initial entry block from the code cache index.
+  GRANARY_INTERNAL_DEFINITION
+  InstrumentedBasicBlock *RequestDirectEntryBlock(BlockMetaData **meta);
 
   // Create a new direct basic block. This block is left as un-owned and
   // will not appear in any iterators until some instruction takes ownership
   // of it. This can be achieved by targeting this newly created basic block
   // with a CTI.
-  std::unique_ptr<BasicBlock> Materialize(AppPC start_pc);
+  DirectBasicBlock *Materialize(AppPC start_pc);
 
  private:
   BlockFactory(void) = delete;
@@ -169,7 +173,7 @@ class BlockFactory {
 
   GRANARY_INTERNAL_DEFINITION bool has_pending_request;
 
-  GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
+  GRANARY_INTERNAL_DEFINITION int generation;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockFactory);
 };

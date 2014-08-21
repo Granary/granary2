@@ -261,6 +261,7 @@ end
 #
 # Note: The program must be run with `--debug_trace_meta=yes`.
 define print-meta-entry
+  set language c++
   set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
   set $__i = ($__i - 1) % GRANARY_META_LOG_LENGTH
   set $__m = (granary::BlockMetaData *) granary_meta_log[$__i].meta

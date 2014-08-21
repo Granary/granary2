@@ -14,7 +14,7 @@ namespace lir {
 // basic block.
 std::unique_ptr<ControlFlowInstruction>
 Jump(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
-  auto block = factory->Materialize(target_pc).release();
+  auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return Jump(block);
 }
@@ -23,7 +23,7 @@ Jump(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
 // basic block.
 std::unique_ptr<ControlFlowInstruction>
 Call(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
-  auto block = factory->Materialize(target_pc).release();
+  auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return Call(block);
 }

@@ -64,20 +64,16 @@ void SuccessorBlockIterator::operator++(void) {
 }  // namespace detail
 
 BasicBlock::BasicBlock(void)
-    : UnownedCountedObject(),
-      list(),
-      id(-1) {}
+    : list(),
+      id(-1),
+      generation(-1),
+      is_reachable(false) {}
 
 detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
 }
 
-// Returns the number of predecessors of this basic block within the LCFG.
-int BasicBlock::NumLocalPredecessors(void) const {
-  return this->NumReferences();
-}
-
-// Retunrs a unique ID for this basic block within the LCFG. This can be
+// Returns a unique ID for this basic block within the LCFG. This can be
 // useful for client tools to implement data flow passes.
 int BasicBlock::Id(void) const {
   return id;
@@ -113,9 +109,13 @@ CachePC InstrumentedBasicBlock::StartCachePC(void) const {
 }
 
 DecodedBasicBlock::~DecodedBasicBlock(void) {
-  if (!list.IsAttached()) {
-    FreeInstructionList();
+  for (Instruction *instr(first), *next_instr(nullptr); instr;) {
+    next_instr = instr->Next();
+    delete instr;
+    instr = next_instr;
   }
+  first = nullptr;
+  last = nullptr;
 }
 
 // Initialize a decoded basic block.
@@ -196,20 +196,6 @@ void DecodedBasicBlock::UnsafePrependInstruction(Instruction *instr) {
 // Add a new instruction to the end of the instruction list.
 void DecodedBasicBlock::UnsafeAppendInstruction(Instruction *instr) {
   AppendInstruction(std::move(std::unique_ptr<Instruction>(instr)));
-}
-
-// Free all of the instructions in the basic block. This is invoked by
-// `LocalControlFlowGraph::~LocalControlFlowGraph`, as the freeing of
-// instructions interacts with the ownership model of basic blocks inside
-// of basic block lists.
-void DecodedBasicBlock::FreeInstructionList(void) {
-  for (Instruction *instr(first), *next_instr(nullptr); instr;) {
-    next_instr = instr->Next();
-    delete instr;
-    instr = next_instr;
-  }
-  first = nullptr;
-  last = nullptr;
 }
 
 CompensationBasicBlock::CompensationBasicBlock(LocalControlFlowGraph *cfg_,

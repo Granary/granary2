@@ -130,19 +130,21 @@ Context::Context(void)
 
 // Initialize all tools from a comma-separated list of tools.
 void Context::InitTools(const char *tool_names) {
+
   // Force register some tools that should get priority over all others.
-  tool_manager.Register("transparent_rets");
+  tool_manager.Register("transparent_returns");
   GRANARY_IF_KERNEL( tool_manager.Register("kernel"); )
 
+  // Register tools specified at the command-line.
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
       tool_names,
       [&] (const char *tool_name) {
         tool_manager.Register(tool_name);
       });
 
-  // Do a dummy allocation and free of all tools. Tools register meta-data
-  // through their `Init` functions and so this will get all tool+option-
-  // specific meta-data registered.
+  // Initialize all tools. Tool initialization is typically where tools will
+  // register their specific their block meta-data, therefore it is important
+  // to initialize all tools before finalizing the meta-data manager.
   auto tools = tool_manager.AllocateTools();
   for (auto tool : ToolIterator(tools)) {
     tool->Init();

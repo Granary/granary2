@@ -33,26 +33,24 @@ BinaryInstrumenter::~BinaryInstrumenter(void) {
 
 // Instrument some code as-if it is targeted by a direct CFI.
 BlockMetaData *BinaryInstrumenter::InstrumentDirect(void) {
-  auto entry_block = factory.RequestIndexedBlock(&meta);
+  auto entry_block = factory.RequestDirectEntryBlock(&meta);
   if (!entry_block) {  // Couldn't find or adapt to a existing block.
-    factory.MaterializeInitialBlock(meta);
-    entry_block = cfg->EntryBlock();
-  } else {
-    meta = entry_block->UnsafeMetaData();
+    entry_block = factory.MaterializeDirectEntryBlock(meta);
   }
+
+  meta = nullptr;  // Invalid after this point!!
+
   if (IsA<DecodedBasicBlock *>(entry_block)) {  // Instrument decoded blocks.
     InstrumentControlFlow();
     InstrumentBlocks();
     InstrumentBlock();
-  } else {  // We got a cached block.
-    delete entry_block;
   }
-  return meta;
+  return entry_block->UnsafeMetaData();
 }
 
 // Instrument some code as-if it is targeted by an indirect CFI.
 BlockMetaData *BinaryInstrumenter::InstrumentIndirect(void) {
-  factory.MaterializeInitialIndirectBlock(meta);
+  factory.MaterializeIndirectEntryBlock(meta);
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
@@ -63,7 +61,7 @@ BlockMetaData *BinaryInstrumenter::InstrumentIndirect(void) {
 // are treated as being the initial points of instrumentation.
 BlockMetaData *BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
                                                         int category) {
-  factory.MaterializeInitialIndirectBlock(meta);
+  factory.MaterializeIndirectEntryBlock(meta);
   auto entry_block = DynamicCast<CompensationBasicBlock *>(cfg->EntryBlock());
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentEntryPoint(&factory, entry_block, kind, category);

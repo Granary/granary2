@@ -47,3 +47,10 @@
    fun:_ZN7granary8internal13SlabAllocator8AllocateEv
    ...
 }
+{
+   <CheckForMemoryCorruptionBeforeAlloc>
+   Memcheck:Addr1
+   fun:_ZN7granary8internal12_GLOBAL__N_1L14MemoryNotInUseEPvm
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}

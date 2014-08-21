@@ -6,6 +6,7 @@ granary {
         mmap; munmap; mprotect; mlock;
         open; read; write; close;
         getpid;
+        rt_sigaction;
         exit_group;
         
         __cxa_throw;
