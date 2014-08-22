@@ -125,10 +125,13 @@ static void FindAmbiguousOperands(InstructionInfo &info) {
 
     // Sweep through the operands and try to mark other implicit operands
     // as ambiguous. This catches things like `XED_FORM_IN_AL_DX`.
+    //
+    // TODO(pag): It doesn't catch `XED_FORM_IN_AL_DX` anymore :-/
     if (!has_ambiguous_arg[iform]) continue;
     for (auto i = num_ops; i-- > 1; ) {
-      auto prev_op = xed_inst_operand(instr, i);
-      if (!is_ambiguous_arg[iform][i - 1] &&
+      auto prev_op = xed_inst_operand(instr, i - 1);
+      if (is_ambiguous_arg[iform][i] &&
+          !is_ambiguous_arg[iform][i - 1] &&
           XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(prev_op)) {
         is_ambiguous_arg[iform][i - 1] = true;
       }
@@ -193,12 +196,21 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
 
   // Out.
   instr_table[XED_ICLASS_OUT].has_ambigiuous_ops = true;
-  for (int iform = XED_IFORM_OUT_DX_AL;
-         iform <= XED_IFORM_OUT_IMMb_OeAX;
-         iform++) {
-      has_ambiguous_arg[iform] = true;
-      is_ambiguous_arg[iform][1] = true;
-    }
+  for (int iform = XED_IFORM_OUT_DX_AL; iform <= XED_IFORM_OUT_IMMb_OeAX;
+       iform++) {
+    has_ambiguous_arg[iform] = true;
+    is_ambiguous_arg[iform][0] = true;
+    is_ambiguous_arg[iform][1] = true;
+  }
+
+  // In.
+  instr_table[XED_ICLASS_IN].has_ambigiuous_ops = true;
+  for (int iform = XED_IFORM_IN_AL_DX; iform <= XED_IFORM_IN_OeAX_IMMb;
+       iform++) {
+    has_ambiguous_arg[iform] = true;
+    is_ambiguous_arg[iform][0] = true;
+    is_ambiguous_arg[iform][1] = true;
+  }
 }
 
 #endif  // DEPENDENCIES_XED2_INTEL64_GRANARY_INSTRUCTION_INFO_H_

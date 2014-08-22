@@ -85,8 +85,10 @@ TEST_EARLY_MANGLE(PopMem_GPR_GPR,
     regs->ARG1 = reinterpret_cast<uint64_t>(&((&DEADBEEF)[-1]));
     regs->ARG2 = 8; )
 
+#ifndef GRANARY_WITH_VALGRIND
 TEST_EARLY_MANGLE(PushPopGS)
 TEST_EARLY_MANGLE(PushwPopwGS)
+#endif  // GRANARY_WITH_VALGRIND
 
 TEST_EARLY_MANGLE(SwapStacks_MOV)
 TEST_EARLY_MANGLE(SwapStacks_XCHG_SELF)
@@ -97,9 +99,11 @@ TEST_EARLY_MANGLE(AccesTLSBase_Indirect)
 TEST_EARLY_MANGLE(AccesTLSBase_Indirect32)
 TEST_EARLY_MANGLE(AccesTLSBase_Indirect64)
 
+#ifndef GRANARY_WITH_VALGRIND
 TEST_EARLY_MANGLE(XLAT,
     regs->RBX = reinterpret_cast<uint64_t>(&DEADBEEF);
     regs->RAX = 1; )
+#endif  // GRANARY_WITH_VALGRIND
 
 TEST_EARLY_MANGLE(ENTER_0,
     regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEF); )

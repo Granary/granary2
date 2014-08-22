@@ -279,13 +279,13 @@ GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
 
 // Register a module with the module tracker.
 void ModuleManager::Register(Module *module) {
-#ifndef GRANARY_TEST
+#ifndef GRANARY_TARGET_test
   if (auto existing_module = FindByName(module->name)) {
     if (existing_module != module) {
       GRANARY_ASSERT(existing_module->context != module->context);
     }
   }
-#endif  // GRANARY_TEST
+#endif  // GRANARY_TARGET_test
   WriteLocked locker(&modules_lock);
   module->next = modules;
   modules = module;

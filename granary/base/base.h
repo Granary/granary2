@@ -27,10 +27,11 @@
 #define GRANARY_UNPROTECTED_GLOBAL __attribute__((section(".bss.granary_unprotected")))
 
 // Useful for Valgrind-based debugging.
-#if !defined(GRANARY_EXTERNAL)
+#if !defined(GRANARY_EXTERNAL) && !defined(GRANARY_ASSEMBLY)
 # ifdef GRANARY_WITH_VALGRIND
 #   include <valgrind/valgrind.h>
 #   include <valgrind/memcheck.h>
+#   define GRANARY_IF_VALGRIND(...) __VA_ARGS__
 # else
 #   define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
 #   define VALGRIND_FREELIKE_BLOCK(addr, rzB)
@@ -40,6 +41,8 @@
 #   define VALGRIND_MAKE_MEM_UNDEFINED(addr,size)
 #   define VALGRIND_MAKE_MEM_DEFINED(addr,size)
 #   define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
+#   define VALGRIND_CHECK_MEM_IS_DEFINED(addr,size)
+#   define GRANARY_IF_VALGRIND(...)
 # endif
 #endif
 

@@ -21,6 +21,14 @@
    ...
 }
 {
+   <AllocateFreedSlabMemset>
+   Memcheck:Addr1
+   fun:memset
+   fun:_ZN7granary8internal13SlabAllocator20AllocateFromFreeListEv
+   fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}
+{
    <AllocateFreedSlab>
    Memcheck:Addr8
    fun:_ZN7granary8internal13SlabAllocator20AllocateFromFreeListEv
@@ -52,5 +60,26 @@
    Memcheck:Addr1
    fun:_ZN7granary8internal12_GLOBAL__N_1L14MemoryNotInUseEPvm
    fun:_ZN7granary8internal13SlabAllocator8AllocateEv
+   ...
+}
+{
+   <SuppressIssuesInXED>
+   Memcheck:Cond
+   fun:xed_*
+   ...
+}
+{
+   <SuppressIssuesInIsolatedFunctionInTestCases>
+   Memcheck:Value8
+   obj:/home/pag/Code/Granary+/bin/test_linux_user/granary.out
+   fun:_Z19RunIsolatedFunction*
+   ...
+}
+{
+   <SuppressLeaksInGtest>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_Znwm
    ...
 }

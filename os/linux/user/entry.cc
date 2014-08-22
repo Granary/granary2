@@ -5,7 +5,7 @@
 
 // Only include GRANARY_INIT function if we're not building the `test` target.
 // target.
-#ifndef GRANARY_TEST
+#ifndef GRANARY_TARGET_test
 
 #define GRANARY_INTERNAL
 
@@ -136,11 +136,12 @@ void granary_init(granary::AppPC *attach_pc_ptr) {
     exit_group(0);
     GRANARY_ASSERT(false);  // Not reached.
   }
-  InitDebug();
+
+  GRANARY_IF_VALGRIND(if (false)) InitDebug();
   Init();
   Attach(attach_pc_ptr);
 }
 }  // extern "C"
 
-#endif  // GRANARY_TEST
+#endif  // GRANARY_TARGET_test
 #pragma clang diagnostic pop

@@ -56,6 +56,7 @@ uintptr_t ListHead::GetObject(const void *object,
   if (!other_list) {
     return 0;
   }
+  VALGRIND_CHECK_MEM_IS_DEFINED(other_list, sizeof(ListHead));
   auto other_list_address = reinterpret_cast<uintptr_t>(other_list);
   return other_list_address - GetListOffset(object);
 }
@@ -68,16 +69,20 @@ ListHead *ListHead::GetList(const void *this_object,
     return nullptr;
   }
   auto that_object_address = reinterpret_cast<uintptr_t>(that_object);
-  return reinterpret_cast<ListHead *>(
+  auto ls = reinterpret_cast<ListHead *>(
       that_object_address + GetListOffset(this_object));
+  VALGRIND_CHECK_MEM_IS_DEFINED(ls, sizeof(ListHead));
+  return ls;
 }
 
 // Chain together two list heads.
 void ListHead::Chain(ListHead *first, ListHead *second) {
   if (first) {
+    VALGRIND_CHECK_MEM_IS_DEFINED(first, sizeof(ListHead));
     first->next = second;
   }
   if (second) {
+    VALGRIND_CHECK_MEM_IS_DEFINED(second, sizeof(ListHead));
     second->prev = first;
   }
 }

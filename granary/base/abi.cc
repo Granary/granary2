@@ -1,5 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-#ifndef GRANARY_TEST
+#ifndef GRANARY_TARGET_test
 extern "C" {
 
 // C++ exception handling.
@@ -22,4 +22,4 @@ void _ZdaPv(void) { __builtin_trap(); } // `operator delete[]`.
 void *__dso_handle = nullptr;
 
 }  // extern C
-#endif  // GRANARY_TEST
+#endif  // GRANARY_TARGET_test

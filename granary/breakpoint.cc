@@ -7,6 +7,7 @@
 extern "C" {
 
 void granary_unreachable(void) {
+  GRANARY_IF_VALGRIND(VALGRIND_PRINTF_BACKTRACE("Assertion failed:\n"));
   __builtin_trap();
 }
 
