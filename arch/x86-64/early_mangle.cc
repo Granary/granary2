@@ -21,7 +21,7 @@ namespace arch {
   do { \
     __VA_ARGS__; \
     ni.AnalyzeStackUsage(); \
-    block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
+    block->AppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
 // Append a "created" native instruction to the block.
@@ -31,7 +31,7 @@ namespace arch {
     ni.decoded_pc = instr->decoded_pc; \
     ni.effective_operand_width = instr->effective_operand_width; \
     ni.AnalyzeStackUsage(); \
-    block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
+    block->AppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
 // Append a "created" native instruction to the block, but mangle it first.
@@ -43,7 +43,7 @@ namespace arch {
     ni.decoded_pc = instr->decoded_pc; \
     ni.effective_operand_width = instr->effective_operand_width; \
     MangleDecodedInstruction(block, &ni, true); \
-    block->UnsafeAppendInstruction(new NativeInstruction(&ni)); \
+    block->AppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
 namespace {
@@ -138,7 +138,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
         arch::GPR_WIDTH_BITS == instr->effective_operand_width) {
       MoveStackPointerToGPR(instr);
       if (REDZONE_SIZE_BYTES) {
-        block->UnsafeAppendInstruction(
+        block->AppendInstruction(
             new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
       }
     } else if (XED_ICLASS_LEA == instr->iclass) {
@@ -324,7 +324,7 @@ static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
   instr->ops[0].width = instr->effective_operand_width;
   instr->ops[0].is_sticky = false;
   instr->iform = XED_IFORM_POP_GPRv_51;
-  block->UnsafeAppendInstruction(new NativeInstruction(instr));
+  block->AppendInstruction(new NativeInstruction(instr));
 
   // Replace `instr` with a `MOV` into the segment reg with the value that was
   // popped off the top of the stack.
@@ -421,7 +421,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
-  block->UnsafeAppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
+  block->AppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
   instr->effective_operand_width = arch::GPR_WIDTH_BITS;
@@ -464,7 +464,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
   if (!rec && instr->WritesToStackPointer()) {
     if (instr->ShiftsStackPointer()) {
       if (XED_ICLASS_ADD != instr->iclass && XED_ICLASS_SUB != instr->iclass) {
-        block->UnsafeAppendInstruction(
+        block->AppendInstruction(
             new AnnotationInstruction(IA_VALID_STACK));
       }
     } else {
@@ -474,7 +474,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         case XED_ICLASS_RET_FAR:
         case XED_ICLASS_CALL_FAR:
         case XED_ICLASS_IRET:
-          block->UnsafeAppendInstruction(
+          block->AppendInstruction(
              new AnnotationInstruction(IA_VALID_STACK));
           break;
 
@@ -482,7 +482,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         // so that the end result is:
         //      `<unknown stack>; MOV RSP, RBP; <valid stack>; POP RBP`
         default:
-          block->UnsafeAppendInstruction(
+          block->AppendInstruction(
               new AnnotationInstruction(IA_UNDEFINED_STACK));
       }
     }
@@ -497,7 +497,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         // The application copies the stack pointer into a register. After
         // this point the copied stack pointer might be used to access
         // memory in the redzone.
-        block->UnsafeAppendInstruction(
+        block->AppendInstruction(
             new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
       }
       break;
@@ -528,7 +528,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_CLI:
     case XED_ICLASS_STI:
     case XED_ICLASS_WRMSR:
-      block->UnsafeAppendInstruction(
+      block->AppendInstruction(
           new AnnotationInstruction(IA_CHANGES_INTERRUPT_STATE));
       break;
 

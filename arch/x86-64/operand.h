@@ -132,7 +132,8 @@ class alignas(16) Operand : public OperandInterface {
     } __attribute__((packed)) mem;
 
     // Annotation instruction representing the location of a return address.
-    AnnotationInstruction *ret_address;
+    AnnotationInstruction *annot_instr;
+    LabelInstruction *label_instr;
 
   } __attribute__((packed));
 

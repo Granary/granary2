@@ -1,10 +1,14 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
+
+#include "granary/cfg/instruction.h"
 #include "granary/cfg/operand.h"
+
 #include "arch/x86-64/instruction.h"
 #include "granary/breakpoint.h"
 
@@ -199,6 +203,27 @@ ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
+}
+
+// Initialize a label operand from a non-null pointer to a label.
+//
+// Note: This has a driver-specific implementation.
+LabelOperand::LabelOperand(LabelInstruction *label)
+    : Operand() {
+  op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
+  op->width = -1;
+  op->label_instr = label;
+  op->is_annot_encoded_pc = true;
+  op->rw = XED_OPERAND_ACTION_R;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Target of a label operand.
+//
+// Note: This has a driver-specific implementation.
+LabelInstruction *LabelOperand::Target(void) const {
+  return op->label_instr;
 }
 
 namespace arch {

@@ -23,7 +23,7 @@ struct sigaction {
 };
 
 extern int rt_sigaction(int signum, const struct sigaction *act,
-                        struct sigaction *oldact);
+                        struct sigaction *oldact, size_t sigsetsize);
 
 #define sa_sigaction __sigaction_handler.sa_sigaction
 

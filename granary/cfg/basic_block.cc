@@ -126,7 +126,7 @@ DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
                                       reinterpret_cast<void *>(&first))),
       last(new AnnotationInstruction(IA_END_BASIC_BLOCK,
                                      reinterpret_cast<void *>(&last))) {
-  first->InsertAfter(std::unique_ptr<Instruction>(last));
+  first->InsertAfter(last);
 }
 
 InstrumentedBasicBlock::~InstrumentedBasicBlock(void) {
@@ -180,22 +180,22 @@ DecodedBasicBlock::ReversedAppInstructions(void) const {
 
 // Add a new instruction to the beginning of the instruction list.
 void DecodedBasicBlock::PrependInstruction(std::unique_ptr<Instruction> instr) {
-  FirstInstruction()->InsertAfter(std::move(instr));
+  FirstInstruction()->InsertAfter(instr.release());
 }
 
 // Add a new instruction to the end of the instruction list.
 void DecodedBasicBlock::AppendInstruction(std::unique_ptr<Instruction> instr) {
-  LastInstruction()->InsertBefore(std::move(instr));
+  LastInstruction()->InsertBefore(instr.release());
 }
 
 // Add a new instruction to the beginning of the instruction list.
-void DecodedBasicBlock::UnsafePrependInstruction(Instruction *instr) {
-  PrependInstruction(std::move(std::unique_ptr<Instruction>(instr)));
+void DecodedBasicBlock::PrependInstruction(Instruction *instr) {
+  FirstInstruction()->InsertAfter(instr);
 }
 
 // Add a new instruction to the end of the instruction list.
-void DecodedBasicBlock::UnsafeAppendInstruction(Instruction *instr) {
-  AppendInstruction(std::move(std::unique_ptr<Instruction>(instr)));
+void DecodedBasicBlock::AppendInstruction(Instruction *instr) {
+  LastInstruction()->InsertBefore(instr);
 }
 
 CompensationBasicBlock::CompensationBasicBlock(LocalControlFlowGraph *cfg_,

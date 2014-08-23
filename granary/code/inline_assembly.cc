@@ -17,6 +17,8 @@ InlineAssemblyVariable::InlineAssemblyVariable(Operand *op) {
     mem.Construct(*mem_op);
   } else if (auto imm_op = DynamicCast<ImmediateOperand *>(op)) {
     imm.Construct(*imm_op);
+  } else if (auto label_op = DynamicCast<LabelOperand *>(op)) {
+    label = label_op->Target();
   } else {
     GRANARY_ASSERT(false);  // E.g. Passing in a `nullptr`.
   }

@@ -39,9 +39,6 @@ union InlineAssemblyVariable {
   Container<RegisterOperand> reg;
   Container<MemoryOperand> mem;
   Container<ImmediateOperand> imm;
-
-  // This variable is actually a label. Labels can be referenced before they
-  // are placed in the instruction stream, i.e. before they are defined.
   LabelInstruction *label;
 };
 

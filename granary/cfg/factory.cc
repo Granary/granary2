@@ -167,7 +167,7 @@ static void AnnotateInstruction(DecodedBasicBlock *block,
     }
   }
   if (in_undefined_state) {
-    block->UnsafeAppendInstruction(
+    block->AppendInstruction(
         new AnnotationInstruction(IA_UNKNOWN_STACK_ABOVE));
   }
 }
@@ -181,7 +181,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
-    block->UnsafeAppendInstruction(
+    block->AppendInstruction(
         new AnnotationInstruction(IA_SEQUENCE_POINT, pc));
 
     auto decoded_pc = pc;
@@ -203,7 +203,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     decoder.Mangle(block, &dinstr);
     auto ninstr = MakeInstruction(&dinstr);
     instr = ninstr;
-    block->UnsafeAppendInstruction(ninstr);
+    block->AppendInstruction(ninstr);
     if (ninstr->IsAppInstruction()) {
       os::AnnotateAppInstruction(this, block, ninstr, pc);
       instr = block->LastInstruction()->Previous();
@@ -474,7 +474,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
       block->meta = nullptr;  // Steal.
       block->materialized_block = decoded_block;
+      cfg->AddBlock(decoded_block);
       DecodeInstructionList(decoded_block);
+      for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
       break;
     }
     case REQUEST_NATIVE: {
@@ -508,9 +510,10 @@ DecodedBasicBlock *BlockFactory::MaterializeDirectEntryBlock(
     BlockMetaData *meta) {
   GRANARY_ASSERT(nullptr != meta);
   auto decoded_block = new DecodedBasicBlock(cfg, meta);
-  DecodeInstructionList(decoded_block);
-  decoded_block->generation = generation;
   cfg->AddBlock(decoded_block);
+  DecodeInstructionList(decoded_block);
+  for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
+  decoded_block->generation = generation;
   return decoded_block;
 }
 

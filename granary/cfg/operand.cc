@@ -13,12 +13,14 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
     (Operand, 2),
       (MemoryOperand, 2 * 3),
       (RegisterOperand, 2 * 5),
-      (ImmediateOperand, 2 * 7))
+      (ImmediateOperand, 2 * 7),
+      (LabelOperand, 2 * 11))
 
 GRANARY_DEFINE_BASE_CLASS(Operand)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, MemoryOperand)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, RegisterOperand)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Operand, LabelOperand)
 
 namespace {
 static arch::Operand * const TOMBSTONE = \
@@ -84,6 +86,10 @@ Operand::~Operand(void) {}
 void Operand::UnsafeReplace(arch::Operand *op_) {
   op.Construct<const arch::Operand &>(*op_);
   op_ptr = op_;
+}
+void Operand::UnsafeReplace(const arch::Operand *op_) {
+  op.Construct(*op_);
+  op_ptr = TOMBSTONE;
 }
 
 // Returns a pointer to the internal, arch-specific memory operand that is

@@ -118,6 +118,7 @@ DEFINE_FUNC(getpid)
 END_FUNC(getpid)
 
 DEFINE_FUNC(rt_sigaction)
+    mov     r10, rcx  // arg4.
     mov     eax, 13  // `__NR_rt_sigaction`.
     syscall
     ret

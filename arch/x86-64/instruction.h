@@ -76,7 +76,7 @@ class Instruction : public InstructionInterface {
 
   // Set a branch target to be an annotation instruction.
   inline void SetBranchTarget(AnnotationInstruction *instr) {
-    ops[0].ret_address = instr;
+    ops[0].annot_instr = instr;
     ops[0].is_annot_encoded_pc = true;
   }
 

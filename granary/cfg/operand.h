@@ -19,6 +19,8 @@ class Operand;
 class MemoryOperand;
 class RegisterOperand;
 class ImmediateOperand;
+class LabelOperand;
+class LabelInstruction;
 
 namespace arch {
 class Operand;
@@ -141,6 +143,7 @@ class Operand {
   // as it assumes the caller is maintaining the invariant that the current
   // operand is being replaced with one that has the correct type.
   GRANARY_INTERNAL_DEFINITION void UnsafeReplace(arch::Operand *op_);
+  GRANARY_INTERNAL_DEFINITION void UnsafeReplace(const arch::Operand *op_);
 
   // Returns a pointer to the internal, arch-specific memory operand that is
   // *internal* to this `Operand`.
@@ -279,6 +282,27 @@ class ImmediateOperand : public Operand {
   ImmediateOperand(uintptr_t imm, int width_bytes);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
+};
+
+// Represents a label that can be used as the target of a branch.
+class LabelOperand : public Operand {
+ public:
+  using Operand::Operand;
+
+  // Initialize a label operand from a non-null pointer to a label.
+  //
+  // Note: This has a driver-specific implementation.
+  explicit LabelOperand(LabelInstruction *label);
+
+  // Target of a label operand.
+  //
+  // Note: This has a driver-specific implementation.
+  LabelInstruction *Target(void) const;
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, LabelOperand)
+
+ private:
+  LabelOperand(void) = delete;
 };
 
 // High-level operand actions. Underneath these high-level actions we can

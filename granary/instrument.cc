@@ -130,8 +130,7 @@ void BinaryInstrumenter::InstrumentBlocks(void) {
 void BinaryInstrumenter::InstrumentBlock(void) {
   for (auto block : cfg->Blocks()) {
     for (auto tool : ToolIterator(tools)) {
-      auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-      if (decoded_block) {
+      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
         tool->InstrumentBlock(decoded_block);
       }
     }

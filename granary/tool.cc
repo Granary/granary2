@@ -172,8 +172,7 @@ Instruction *InstrumentationTool::InlineBefore(
   GRANARY_ASSERT(nullptr != scope);
   for (auto line : lines) {
     if (line) {
-      instr = instr->InsertBefore(
-          std::unique_ptr<Instruction>(MakeInlineAssembly(scope, line)));
+      instr = instr->InsertBefore(MakeInlineAssembly(scope, line));
     }
   }
   return instr;
@@ -186,8 +185,7 @@ Instruction *InstrumentationTool::InlineAfter(
   auto scope = scopes[curr_scope];
   for (auto line : lines) {
     if (line) {
-      instr = instr->InsertAfter(
-          std::unique_ptr<Instruction>(MakeInlineAssembly(scope, line)));
+      instr = instr->InsertAfter(MakeInlineAssembly(scope, line));
     }
   }
   return instr;

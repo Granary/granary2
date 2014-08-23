@@ -116,7 +116,7 @@ void BranchTargetBuilder::Build(Instruction *instr) {
   auto &op(instr->ops[instr->num_explicit_ops++]);
   if (BRANCH_TARGET_LABEL == kind) {
     op.is_annot_encoded_pc = true;
-    op.ret_address = label;
+    op.annot_instr = label;
   } else {
     op.branch_target.as_pc = pc;
   }

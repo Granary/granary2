@@ -87,18 +87,8 @@ class Instruction {
 
   // Inserts an instruction before/after the current instruction. Returns an
   // (unowned) pointer to the inserted instruction.
-  GRANARY_INTERNAL_DEFINITION
-  inline Instruction *UnsafeInsertBefore(Instruction *instr) {
-    return this->Instruction::InsertBefore(std::unique_ptr<Instruction>(instr));
-  }
-
-  GRANARY_INTERNAL_DEFINITION
-  inline Instruction *UnsafeInsertAfter(Instruction *instr) {
-    return this->Instruction::InsertAfter(std::unique_ptr<Instruction>(instr));
-  }
-
-  // Inserts an instruction before/after the current instruction. Returns an
-  // (unowned) pointer to the inserted instruction.
+  virtual Instruction *InsertBefore(Instruction *);
+  virtual Instruction *InsertAfter(Instruction *);
   virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
@@ -229,8 +219,8 @@ class AnnotationInstruction : public Instruction {
       : annotation(annotation_),
         data(UnsafeCast<uintptr_t>(data_)) {}
 
-  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>) override;
-  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>) override;
+  virtual Instruction *InsertBefore(Instruction *) override;
+  virtual Instruction *InsertAfter(Instruction *) override;
 
   // Returns true if this instruction is a label.
   bool IsLabel(void) const;
@@ -274,10 +264,10 @@ class AnnotationInstruction : public Instruction {
 // line when doing register allocation and assembling.
 class LabelInstruction final : public AnnotationInstruction {
  public:
-  GRANARY_INTERNAL_DEFINITION LabelInstruction(void);
+  LabelInstruction(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
+  GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })

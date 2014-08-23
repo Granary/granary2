@@ -76,7 +76,7 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
   intptr_t target = 0;
   auto next_addr = reinterpret_cast<intptr_t>(next_pc);
   if (op.is_annot_encoded_pc) {
-    target = static_cast<intptr_t>(op.ret_address->data);
+    target = static_cast<intptr_t>(op.annot_instr->data);
   } else {
     target = op.branch_target.as_int;
   }
@@ -195,7 +195,7 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 
   // RIP-relative address.
   } else  if (op.is_annot_encoded_pc) {
-    auto addr = static_cast<intptr_t>(op.ret_address->data);
+    auto addr = static_cast<intptr_t>(op.annot_instr->data);
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;

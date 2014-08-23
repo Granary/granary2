@@ -133,7 +133,7 @@ void Context::InitTools(const char *tool_names) {
 
   // Force register some tools that should get priority over all others.
   tool_manager.Register("transparent_returns");
-  GRANARY_IF_KERNEL( tool_manager.Register("kernel"); )
+  tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
 
   // Register tools specified at the command-line.
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(

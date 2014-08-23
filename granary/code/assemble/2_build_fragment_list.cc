@@ -123,8 +123,9 @@ static CodeFragment *MakeEmptyLabelFragment(
   auto frag = MakeFragment(frags);
   if (tombstone_before) {
     auto tombstone = new LabelInstruction;
+    tombstone->data = 1;  // Fake the refcount.
     SetMetaData(tombstone, frag);
-    tombstone_before->UnsafeInsertBefore(tombstone);
+    tombstone_before->InsertBefore(tombstone);
   }
   frag->attr.block_meta = block_meta;
   frag->instrs.Append(label->UnsafeUnlink().release());
@@ -270,21 +271,9 @@ static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
   }
 
   auto next = label->Next();
-
-  // Create a new successor fragment.
-  if (frag->attr.has_native_instrs ||
-      label->data ||  // If non-zero then it's likely targeted by a branch.
-      frag->attr.block_meta != block_meta) {
-    auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-    frag = succ;
-
-  // Extend the current fragment in-place.
-  } else {
-    GRANARY_ASSERT(frag->attr.block_meta == block_meta);
-    SetMetaData(label, frag);
-    frag->instrs.Append(label->UnsafeUnlink().release());
-  }
+  auto succ = MakeEmptyLabelFragment(frags, block_meta, label, label);
+  frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
+  frag = succ;
   ExtendFragment(frags, frag, block_meta, next);
 }
 

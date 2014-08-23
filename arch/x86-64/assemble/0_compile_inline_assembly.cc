@@ -343,7 +343,7 @@ class InlineAssemblyParser {
     } else {
       new_instr = new NativeInstruction(&data);
     }
-    instr->UnsafeInsertBefore(new_instr);
+    instr->InsertBefore(new_instr);
   }
 
   // Holds an in-progress instructions.

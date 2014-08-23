@@ -82,7 +82,8 @@ static void InitDebug(void) {
     memset(&new_sigaction, 0, sizeof new_sigaction);
     new_sigaction.sa_sigaction = &AwaitAttach;
     new_sigaction.sa_flags = 4;  // `SA_SIGINFO`.
-    rt_sigaction(11 /* SIGSEGV */, &new_sigaction, &old_sigaction);
+    rt_sigaction(11 /* SIGSEGV */, &new_sigaction, &old_sigaction,
+                 8 /* _NSIG / 8 */);
   }
 }
 

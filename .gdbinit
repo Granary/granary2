@@ -37,6 +37,10 @@ if !$in_user_space
 
   # File with loaded Granary symbols, made by `scripts/vmload.py`.
   source /tmp/granary.syms
+
+# User setup.
+else
+  set record stop-at-limit off
 end
 
 # Generic breakpoints.

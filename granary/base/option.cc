@@ -161,8 +161,10 @@ static void ProcessPendingOptions(void) {
 }  // namespace
 
 // Initialize the options from an environment variable.
-void InitOptions(const char *env) {
-  if (env) TerminateOptionString(CopyStringIntoOptions(0, env));
+void InitOptions(const char *raw_options) {
+  if (raw_options) {
+    TerminateOptionString(CopyStringIntoOptions(0, raw_options));
+  }
   ProcessOptionString();
   OPTIONS_INITIALIZED = true;
   ProcessPendingOptions();

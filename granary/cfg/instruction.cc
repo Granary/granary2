@@ -42,16 +42,22 @@ void Instruction::SetMetaData(uintptr_t meta) {
   transient_meta = meta;
 }
 
-Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> that) {
-  Instruction *instr(that.release());
+Instruction *Instruction::InsertBefore(Instruction *instr) {
   list.SetPrevious(this, instr);
   return instr;
 }
 
-Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> that) {
-  Instruction *instr(that.release());
+Instruction *Instruction::InsertAfter(Instruction *instr) {
   list.SetNext(this, instr);
   return instr;
+}
+
+Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> instr) {
+  return InsertBefore(instr.release());
+}
+
+Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> instr) {
+  return InsertAfter(instr.release());
 }
 
 // Unlink an instruction from an instruction list.
@@ -82,17 +88,16 @@ std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
 // instruction actually changes the block's first instruction. This avoids the
 // issue of maintaining a designated first instruction, whilst also avoiding the
 // issue of multiple `InsertBefore`s putting instructions in the wrong order.
-Instruction *AnnotationInstruction::InsertBefore(
-    std::unique_ptr<Instruction> that) {
+Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
   if (GRANARY_UNLIKELY(IA_BEGIN_BASIC_BLOCK == annotation)) {
     auto new_first = new AnnotationInstruction(annotation, data);
     auto block_first_ptr = UnsafeCast<Instruction **>(data);
-    this->Instruction::UnsafeInsertBefore(new_first);
+    this->Instruction::InsertBefore(new_first);
     *block_first_ptr = new_first;
     annotation = IA_NOOP;
     data = 0;
   }
-  return this->Instruction::InsertBefore(std::move(that));
+  return this->Instruction::InsertBefore(instr);
 }
 
 // Make it so that inserting an instruction after the designated last
@@ -103,17 +108,16 @@ Instruction *AnnotationInstruction::InsertBefore(
 // instruction actually changes the block's last instruction. This avoids the
 // issue of maintaining a designated last instruction, whilst also avoiding the
 // issue of multiple `InsertAfter`s putting instructions in the wrong order.
-Instruction *AnnotationInstruction::InsertAfter(
-    std::unique_ptr<Instruction> that) {
+Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
   if (GRANARY_UNLIKELY(IA_END_BASIC_BLOCK == annotation)) {
     auto new_last = new AnnotationInstruction(annotation, data);
     auto block_last_ptr = UnsafeCast<Instruction **>(data);
-    this->Instruction::UnsafeInsertAfter(new_last);
+    this->Instruction::InsertAfter(new_last);
     *block_last_ptr = new_last;
     annotation = IA_NOOP;
     data = 0;
   }
-  return this->Instruction::InsertAfter(std::move(that));
+  return this->Instruction::InsertAfter(instr);
 }
 
 // Returns true if this instruction is a label.

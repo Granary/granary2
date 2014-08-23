@@ -135,7 +135,7 @@ class BlockMangler {
   void MangleFunctionCall(ControlFlowInstruction *cfi) {
     auto ret_address = new AnnotationInstruction(
         IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
-    cfi->UnsafeInsertAfter(ret_address);
+    cfi->InsertAfter(ret_address);
     cfi->return_address = ret_address;
 
     // Ensure that targets of function calls have valid stack meta-data.

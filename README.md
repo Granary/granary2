@@ -10,7 +10,7 @@ Setup
 
 1. Get LLVM and clang:
   ```basemake
-  sudo apt-get install llvm libc++-src libc++1 clang-3.5 binutils
+  sudo apt-get install llvm libc++-dev libc++1 clang-3.5 binutils
   ```
 
   *Note:* If `clang-3.5` is not available on your distribution, then try getting

@@ -290,7 +290,7 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   GRANARY_ASSERT(!next_instr->Next());
 
   // Just assume that the stack is valid, it's easier that way.
-  instr->UnsafeInsertBefore(new AnnotationInstruction(IA_VALID_STACK));
+  instr->InsertBefore(new AnnotationInstruction(IA_VALID_STACK));
   BEFORE(MOV_GPRv_GPRv_89(&ni, saved_rcx, XED_REG_RCX));
   if (load_rcx_with_mloc) BEFORE(LEA_GPRv_AGEN(&ni, XED_REG_RCX, mloc));
   BEFORE(CALL_NEAR_RELBRd(&ni, handler);
@@ -298,12 +298,12 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
          ni.analyzed_stack_usage = false; );
   auto label_no_fault = new LabelInstruction;
   JRCXZ_RELBRb(&ni, label_no_fault);
-  instr->UnsafeInsertBefore(new BranchInstruction(&ni, label_no_fault));
+  instr->InsertBefore(new BranchInstruction(&ni, label_no_fault));
 
   BEFORE(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
   instr->InsertBefore(lir::Jump(factory, recovery_pc, REQUEST_DENIED));
 
-  instr->UnsafeInsertBefore(label_no_fault);
+  instr->InsertBefore(label_no_fault);
   BEFORE(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, saved_rcx));
   // `instr` is here. Need to restore `RCX` before `instr` just in case
   // `RCX` is used by `instr`.

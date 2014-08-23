@@ -77,7 +77,7 @@ static CFIBuilder * const kConditionalCFIBuilders[] = {
 static void InsertUD2AfterCFI(NativeInstruction *cfi) {
   Instruction ni;
   UD2(&ni);
-  cfi->UnsafeInsertAfter(new NativeInstruction(&ni));
+  cfi->InsertAfter(new NativeInstruction(&ni));
 }
 
 // Relativize a conditional branch by turning it into an indirect jump through
@@ -100,8 +100,8 @@ static void RelativizeConditionalBranch(CacheMetaData *meta,
   instr->category = XED_CATEGORY_UNCOND_BR;
 
   // Have a negated conditional branch jump around the old conditional branch.
-  cfi->UnsafeInsertBefore(neg_br);
-  cfi->UnsafeInsertAfter(label);
+  cfi->InsertBefore(neg_br);
+  cfi->InsertAfter(label);
 
   // Overwrite the conditional branch with an indirect JMP.
   auto addr_mloc = new NativeAddress(target_pc, &(meta->native_addresses));
@@ -147,11 +147,11 @@ static void RelativizeLoop(CacheMetaData *meta, NativeInstruction *cfi,
 
   loop_do_loop.SetBranchTarget(do_loop);
 
-  cfi->UnsafeInsertBefore(new BranchInstruction(&jmp_try_loop, try_loop));
-  cfi->UnsafeInsertBefore(do_loop);
+  cfi->InsertBefore(new BranchInstruction(&jmp_try_loop, try_loop));
+  cfi->InsertBefore(do_loop);
 
-  cfi->UnsafeInsertAfter(new BranchInstruction(&loop_do_loop, do_loop));
-  cfi->UnsafeInsertAfter(try_loop);
+  cfi->InsertAfter(new BranchInstruction(&loop_do_loop, do_loop));
+  cfi->InsertAfter(try_loop);
 }
 
 }  // namespace
@@ -203,11 +203,11 @@ void MangleIndirectReturn(DecodedBasicBlock *block,
   } else {
     MOV_GPRv_MEMv(&ni, target, BaseDispMemOp(0, XED_REG_RSP,
                                              ADDRESS_WIDTH_BITS));
-    cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+    cfi->InsertBefore(new NativeInstruction(&ni));
     LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(shift, XED_REG_RSP,
                                                   ADDRESS_WIDTH_BITS));
   }
-  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+  cfi->InsertBefore(new NativeInstruction(&ni));
 
   // Convert the `RET_NEAR` into an indirect jump.
   JMP_GPRv(&(cfi->instruction), target);
@@ -225,15 +225,15 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.is_effective_address = true;
   op.is_annot_encoded_pc = true;
-  op.ret_address = ret_address;
+  op.annot_instr = ret_address;
   op.width = ADDRESS_WIDTH_BITS;
   LEA_GPRv_AGEN(&ni, ret_address_reg, op);
-  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+  cfi->InsertBefore(new NativeInstruction(&ni));
   PUSH_GPRv_50(&ni, ret_address_reg);
   ni.decoded_pc = decoded_pc;  // Mark as application.
   ni.effective_operand_width = ADDRESS_WIDTH_BITS;
   ni.AnalyzeStackUsage();
-  cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+  cfi->InsertBefore(new NativeInstruction(&ni));
 }
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
@@ -256,7 +256,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
     if (orig_target_op.IsMemory()) {
       auto new_target_reg = block->AllocateVirtualRegister();
       MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
-      cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+      cfi->InsertBefore(new NativeInstruction(&ni));
       CALL_NEAR_GPRv(&(cfi->instruction), new_target_reg);
     }
 
@@ -266,7 +266,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
     if (orig_target_op.IsMemory()) {
       auto new_target_reg = block->AllocateVirtualRegister();
       MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
-      cfi->UnsafeInsertBefore(new NativeInstruction(&ni));
+      cfi->InsertBefore(new NativeInstruction(&ni));
       JMP_GPRv(&(cfi->instruction), new_target_reg);
     }
   } else {
@@ -312,7 +312,7 @@ void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
     auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);
     MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
     ni.effective_operand_width = ADDRESS_WIDTH_BITS;
-    ninstr->UnsafeInsertBefore(new NativeInstruction(&ni));
+    ninstr->InsertBefore(new NativeInstruction(&ni));
 
     GRANARY_ASSERT(!op->is_sticky && op->is_explicit && !op->is_compound);
     op->type = XED_ENCODER_OPERAND_TYPE_MEM;
