@@ -31,9 +31,15 @@ build_os: build_driver
 # Make a header file that external clients can use to define clients.
 $(GRANARY_HEADERS):
 	@mkdir -p $(GRANARY_HEADERS_DIR)
+	# Make the combined C++ header file (granary.h) used by clients.
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
 		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
 		"$(GRANARY_HEADER_MACRO_DEFS)"
+	
+	# Copy some arch-specific headers to clients so they can use assembly
+	# routines.
+	@cp $(GRANARY_ARCH_SRC_DIR)/asm/include.asm.inc \
+		$(GRANARY_HEADERS_DIR)/include.asm.inc
 
 # Generate rules for each Granary client.
 define GENRULE_BUILD_CLIENT

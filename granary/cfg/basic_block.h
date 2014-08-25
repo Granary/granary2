@@ -32,6 +32,7 @@ class ControlFlowInstruction;
 class BlockFactory;
 class BasicBlockIterator;
 class ReverseBasicBlockIterator;
+GRANARY_INTERNAL_DEFINITION class Fragment;
 
 namespace detail {
 
@@ -153,6 +154,11 @@ class BasicBlock {
 
   // Is this block reachable from the entry node of the LCFG?
   GRANARY_INTERNAL_DEFINITION bool is_reachable;
+
+ GRANARY_PROTECTED:
+
+  // The fragment associated with the entrypoint of this block.
+  GRANARY_INTERNAL_DEFINITION Fragment *fragment;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
 };
@@ -391,9 +397,7 @@ class ReturnBasicBlock final : public InstrumentedBasicBlock {
 
   // Returns true if this return basic block has meta-data. If it has meta-data
   // then the way that the branch is resolved is slightly more complicated.
-  GRANARY_INTERNAL_DEFINITION inline bool UsesMetaData(void) const {
-    return nullptr != meta;
-  }
+  bool UsesMetaData(void) const;
 
   // Return this basic block's meta-data. Accessing a return basic block's meta-
   // data will "create" it for the block.

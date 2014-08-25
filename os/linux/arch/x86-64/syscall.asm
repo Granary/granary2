@@ -118,23 +118,23 @@ DEFINE_FUNC(getpid)
 END_FUNC(getpid)
 
 DEFINE_FUNC(rt_sigaction)
-    mov     r10, rcx  // arg4.
     mov     eax, 13  // `__NR_rt_sigaction`.
+    mov     r10, rcx  // arg4.
     syscall
     ret
 END_FUNC(rt_sigaction)
 
-// `exit_group` system call.
-.section .text.inst_exports
-.global exit_group
-.type exit_group, @function
-exit_group:
-    .cfi_startproc
+DEFINE_INST_FUNC(exit_group)
     mov     eax, 231  // `__NR_exit_group`.
     xor     rdi, rdi
     syscall
-    ud2 /* Should not be reached */
-    .cfi_endproc
+END_FUNC(exit_group)
+
+DEFINE_INST_FUNC(rt_sigreturn)
+    mov     eax, 15  // `__NR_rt_sigreturn`.
+    mov     r10, rcx  // arg4.
+    syscall
+END_FUNC(rt_sigreturn)
 
 #endif  // GRANARY_WHERE_user
 

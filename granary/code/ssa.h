@@ -25,30 +25,6 @@ namespace arch {
 class Operand;
 }  // namespace arch
 
-#if 0
-// Location at which a SSA Node is stored.
-class SSASpillStorage {
- public:
-  inline SSASpillStorage(void)
-      : is_local(false),
-        checked_is_local(false),
-        is_stolen(false),
-        slot(-1),
-        reg() {}
-
-  bool is_local;
-  bool checked_is_local;
-  bool is_stolen;
-  int slot;
-  VirtualRegister reg;
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(SSASpillStorage, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-};
-#endif
-
 enum SSANodeScheduledStatus {
   NODE_UNSCHEDULED,
   NODE_SCHEDULED

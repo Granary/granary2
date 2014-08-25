@@ -3,6 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "granary/base/new.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
@@ -52,11 +54,6 @@ namespace arch {
 //          targeted by local branch instructions, and so we eagerly split
 //          fragments at label instructions based on this assumption.
 
-// Does this instruction hint that the fragment should be split before the next
-// modification of the flags?
-//
-// Note: This function has an architecture-specific implementation.
-bool InstructionHintsAtFlagSplit(const NativeInstruction *instr);
 
 // Generates some indirect edge code that is used to look up the target of an
 // indirect jump.
@@ -71,662 +68,494 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
 }  // namespace arch
 namespace {
 
-struct FragmentListBuilder {
-  ContextInterface *context;
-  LocalControlFlowGraph *cfg;
-  FragmentList *frags;
+// Worklist item for building a fragment.
+struct FragmentInProgress {
+  FragmentInProgress *next;
+  CodeFragment *frag;
+  Instruction *instr;
 
-  // Should we split the fragment at the next sequence point? This is a hint
-  // that something interesting (e.g. instrumentation instructions modifying
-  // flags being split away from non-flag modifying native instructions) has
-  // happened recently (some prior instruction), and that we want to ensure
-  // that defs/uses of virtual registers are not torn across partitions if
-  // things like stack definedness changes.
-  bool split_at_next_sequence_point;
-
-  void Append(Fragment *frag) {
-    frags->Append(frag);
-  }
+  GRANARY_DEFINE_NEW_ALLOCATOR(FragmentInProgress, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
 };
 
-// Make a new code fragment.
-static CodeFragment *MakeFragment(FragmentListBuilder *frags) {
-  auto frag = new CodeFragment;
-  frags->Append(frag);
-  return frag;
-}
+// Builder that manages the building and connecting process for fragments.
+struct FragmentBuilder {
+  FragmentInProgress *next;
+  FragmentList *frags;
+  LocalControlFlowGraph *cfg;
+  ContextInterface *context;
+};
 
-// Make a fragment for a native basic block.
-static ExitFragment *MakeNativeFragment(FragmentListBuilder *frags,
-                                        NativeBasicBlock *block) {
-  auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
-  frags->Append(frag);
-  frag->encoded_pc = UnsafeCast<CachePC>(block->StartAppPC());
-  return frag;
-}
+// Enqueue a new fragment to be created to the work list. This fragment
+// represents the tail of a basic block.
+static void AddBlockTailToWorkList(
+    FragmentBuilder *builder, CodeFragment *predecessor,
+    LabelInstruction *label, Instruction *first_instr, StackUsageInfo stack,
+    FragmentSuccessorSelector succ=FRAG_SUCC_FALL_THROUGH) {
+  Fragment *tail_frag(nullptr);
 
-// Make a block head fragment for a cached basic block. This means importing
-// its register schedule as hard constraints.
-static ExitFragment *MakeCachedFragment(FragmentListBuilder *frags,
-                                        CachedBasicBlock *block) {
-  auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
-  frags->Append(frag);
-  frag->block_meta = block->UnsafeMetaData();
-  frag->encoded_pc = block->StartCachePC();
-  return frag;
-}
+  // Already added to work list.
+  if (label && label->fragment) {
+    tail_frag = label->fragment;
 
-// Create a new fragment starting at a label.
-static CodeFragment *MakeEmptyLabelFragment(
-    FragmentListBuilder *frags, BlockMetaData *block_meta,
-    LabelInstruction *label, Instruction *tombstone_before=nullptr) {
-  auto frag = MakeFragment(frags);
-  if (tombstone_before) {
-    auto tombstone = new LabelInstruction;
-    tombstone->data = 1;  // Fake the refcount.
-    SetMetaData(tombstone, frag);
-    tombstone_before->InsertBefore(tombstone);
-  }
-  frag->attr.block_meta = block_meta;
-  frag->instrs.Append(label->UnsafeUnlink().release());
-  SetMetaData(label, frag);
-  return frag;
-}
-
-// Returns true if this instruction would convert the current fragmnet into
-// application code.
-static bool InstrMakesFragmentIntoAppCode(NativeInstruction *instr) {
-  if (!instr->IsAppInstruction()) return false;
-
-  // Minor optimization: we want to arrange for potential flag save/restores to
-  // span from a fragment all the way into edge code, instead of potentially
-  // have some before the indirect CTI and some after.
-  if (instr->IsFunctionCall() || instr->IsUnconditionalJump()) {
-    if (instr->HasIndirectTarget()) {
-      return false;
-    }
-
-  // Only do the optimization for specialized function returns; unspecialized
-  // returns use an identity translation and therefore do not use edge code.
-  } else if (instr->IsFunctionReturn()) {
-    auto target_block = DynamicCast<ControlFlowInstruction *>(instr)
-        ->TargetBlock();
-    auto ret_block = DynamicCast<ReturnBasicBlock *>(target_block);
-    if (ret_block->UnsafeMetaData()) {
-      return false;
-    }
-  }
-
-  return instr->instruction.WritesToStackPointer() ||
-         instr->ReadsConditionCodes() ||
-         instr->WritesConditionCodes();
-}
-
-// Append an instruction to a fragment. This also does minor flag usage analysis
-// of the instruction to figure out if the fragment should be treated as an
-// application fragment or an instrumentation code fragment.
-static CodeFragment *Append(FragmentListBuilder *frags,
-                            BlockMetaData *block_meta,
-                            CodeFragment *frag, Instruction *instr) {
-  instr->UnsafeUnlink().release();
-  auto ninstr = DynamicCast<NativeInstruction *>(instr);
-  if (!ninstr) {
-    frag->instrs.Append(instr);
-    return frag;
-  }
-
-  if (XED_ICLASS_CALL_NEAR == ninstr->instruction.iclass &&
-      ninstr->instruction.is_stack_blind) {
-    asm("nop;");
-  }
-
-  const auto reads_flags = ninstr->ReadsConditionCodes();
-  const auto writes_flags = ninstr->WritesConditionCodes();
-  const auto is_app_instr = ninstr->IsAppInstruction();
-  auto hints_at_split = arch::InstructionHintsAtFlagSplit(ninstr);
-  auto makes_frag_into_app = InstrMakesFragmentIntoAppCode(ninstr);
-  auto makes_frag_into_inst = !is_app_instr && (reads_flags || writes_flags);
-
-  if (frag->attr.is_app_code) {
-    if (makes_frag_into_inst) goto split;
-
-  } else if (frag->attr.is_inst_code) {
-    if (makes_frag_into_app) goto split;
-
+  // Not already processed / part of the work list.
   } else {
-    // Instruction modifies the flags, and some prior instruction in the
-    // fragment has hinted that the fragment should be split instead of
-    // allowing flag-modifying instructions to be appended.
-    if (frag->attr.has_flag_split_hint && writes_flags) {
-      if (frag->attr.is_inst_code || makes_frag_into_inst) goto split;
-    }
+    auto frag = new CodeFragment;
+    frag->attr.block_meta = predecessor->attr.block_meta;
+    frag->stack = stack;
+
+    auto elm = new FragmentInProgress;
+    elm->frag = frag;
+    elm->instr = first_instr;
+    elm->next = builder->next;
+
+    builder->next = elm;  // To head of work list.
+    builder->frags->InsertAfter(predecessor, frag);  // Depth-first order.
+
+    if (label) label->fragment = frag;  // Cache for branches / fall-throughs.
+
+    tail_frag = frag;
   }
-  goto append;
-
- split:
-  if (frag->attr.has_native_instrs) {
-    auto succ = MakeEmptyLabelFragment(frags, block_meta, new LabelInstruction);
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-
-    // Ensure that the two fragments are grouped together. This potentially
-    // breaks a number of interesting assumptions about two fragments being
-    // partitioned together only if the stack analysis agrees on the validity
-    // of the stacks. In practice, I don't think it matters much down the line
-    // as the presence of *any* fragment with an invalid stack forces the
-    // slot allocator to spill to TLS/CPU-private data.
-    frags->split_at_next_sequence_point = true;
-    GRANARY_ASSERT(frag->attr.block_meta == succ->attr.block_meta);
-    frag->partition.Union(frag, succ);
-    frag = succ;
-
-  }  // Fall-through.
- append:
-  {
-    frag->attr.has_native_instrs = true;
-    GRANARY_ASSERT(!(makes_frag_into_inst && makes_frag_into_app));
-    if (makes_frag_into_inst) {
-      frag->attr.is_app_code = false;
-      frag->attr.is_inst_code = true;
-    } else if (makes_frag_into_app) {
-      frag->attr.is_inst_code = false;
-      frag->attr.is_app_code = true;
-    }
-    if (writes_flags) frag->attr.modifies_flags = true;
-    if (hints_at_split) frag->attr.has_flag_split_hint = true;
-    frag->instrs.Append(instr);
-  }
-  return frag;
+  // Add it to the fragment control-flow graph.
+  GRANARY_ASSERT(!predecessor->successors[succ]);
+  predecessor->successors[succ] = tail_frag;
 }
 
-// Extend a fragment with the instructions from a particular basic block.
-// This might end up generating many more fragments.
-static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
-                           BlockMetaData *block_meta, Instruction *instr);
+// Process an annotation instruction. Returns `true` if iteration should
+// continue, and `false` otherwise.
+static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
+                              AnnotationInstruction *instr) {
+  auto next_instr = instr->Next();
+  switch (instr->annotation) {
+    case IA_END_BASIC_BLOCK: granary_curiosity(); return false;
 
-// Get or make the fragment starting at a label.
-static CodeFragment *GetOrMakeLabelFragment(FragmentListBuilder *frags,
-                                            BlockMetaData *block_meta,
-                                            LabelInstruction *label) {
-  CodeFragment *frag = GetMetaData<CodeFragment *>(label);
-  if (!frag) {
-    auto next = label->Next();
-    frag = MakeEmptyLabelFragment(frags, block_meta, label, label);
-    ExtendFragment(frags, frag, block_meta, next);
+    // An upcoming instruction makes this stack valid.
+    case IA_VALID_STACK:
+      if (STACK_INVALID == frag->stack.status) {
+        AddBlockTailToWorkList(
+            builder, frag, nullptr, next_instr,
+            StackUsageInfo(STACK_VALID, STACK_STATUS_INHERIT_UNI));
+        return false;
+      } else {
+        frag->stack.status = STACK_VALID;
+        return true;
+      }
+
+    // The stack pointer is changed by an indeterminate amount, e.g. replaced
+    // by the value stored in a register, or displaced by the value stored in
+    // a register.
+    case IA_INVALID_STACK:
+      if (STACK_VALID == frag->stack.status || frag->attr.has_native_instrs) {
+        frag->attr.can_add_succ_to_partition = false;
+        AddBlockTailToWorkList(
+            builder, frag, nullptr, next_instr,
+            StackUsageInfo(STACK_INVALID, STACK_STATUS_DONT_INHERIT));
+        return false;
+      } else {
+        frag->stack.status = STACK_INVALID;
+        return true;
+      }
+
+    // This annotation is added by the block factory. It enables us to be a bit
+    // more aggressive with fragment splitting, where if we have some code that
+    // operates on an invalid stack, then we will assume it is localized, and
+    // that execution will return to a valid stack soon. Therefore, we want to
+    // arrange for the fragment following the current fragment (whose stack
+    // should be invalid) to potentially have the opportunity to be marked as
+    // valid. For example:
+    //          <IA_INVALID_STACK> -----------.
+    //          MOV RSP, [X]  <-- caused by --+
+    //          <IA_UNKNOWN_STACK_ABOVE> -----'
+    //          MOV Y, [Z]
+    //          POP [Y]
+    // Then we'll split that into two fragments:
+    //      1:  MOV RSP, [X]
+    //          ------------
+    //      2:  MOV Y, [Z]
+    //          POP [Y]
+    // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
+    // by the stack undefinedness of the `MOV RSP, [X]`.
+    case IA_UNKNOWN_STACK_ABOVE:
+      if (STACK_VALID == frag->stack.status) return true;  // Skip.
+      frag->attr.can_add_succ_to_partition = false;
+      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
+                             StackUsageInfo());
+      return false;
+
+    // Here we've got something like:
+    //          <IA_VALID_STACK> -------.
+    //          PUSH RBP <--- cause by -'
+    //          <IA_UNKNOWN_STACK_BELOW> ------.
+    //          MOV RBP, RSP   <-- caused by --'
+    //          MOV [RBP - 8], RDI   <-- accesses redzone (below RSP).
+    //
+    // Note: This annotation is only generated if `REDZONE_SIZE_BYTES > 0`,
+    //       i.e. for user space instrumentation.
+    case IA_UNKNOWN_STACK_BELOW:
+      GRANARY_ASSERT(0 != arch::REDZONE_SIZE_BYTES);
+      AddBlockTailToWorkList(
+          builder, frag, nullptr, next_instr,
+          StackUsageInfo(STACK_UNKNOWN, STACK_STATUS_INHERIT_SUCC));
+      return false;
+
+    // Function return address. Used when mangling indirect function calls.
+    case IA_RETURN_ADDRESS:
+      GRANARY_ASSERT(!frag->attr.has_native_instrs);
+      frag->attr.is_return_target = true;
+      frag->instrs.Append(instr->UnsafeUnlink().release());
+      return true;
+
+    // An annotation where, when encoded, will update a pointer to contain the
+    // address at which this annotation is encoded.
+    case IA_UPDATE_ENCODED_ADDRESS:
+      frag->instrs.Append(instr->UnsafeUnlink().release());
+      return true;
+
+    // The upcoming instruction can potentially enabled/disable interrupts.
+    //
+    // Note: We'll assume that for such instructions, the stack is guaranteed
+    //       to be valid.
+    case IA_CHANGES_INTERRUPT_STATE:
+      frag->attr.can_add_succ_to_partition = false;
+      AddBlockTailToWorkList(
+          builder, frag, nullptr, next_instr,
+          StackUsageInfo(STACK_VALID, STACK_STATUS_INHERIT_UNI));
+      return false;
+
+    // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not
+    // also a `LabelInstruction`.
+    case IA_LABEL: GRANARY_ASSERT(false); return true;
+
+    default: return true;
   }
-  return frag;
 }
 
-// Split a fragment into two at a label instruction `instr`. If the label
-// is already associated with a `Fragment` instance then set that fragment
-// as the fall-through of our current fragment. If new `Fragment` instance
-// is associated with the label, then create one, add the association, and
-// add the instructions following the label into the new fragment.
-static void SplitFragmentAtLabel(FragmentListBuilder *frags, CodeFragment *frag,
-                                 BlockMetaData *block_meta,
-                                 LabelInstruction *label) {
-  // Already processed this fragment.
-  if (auto label_fragment = GetMetaData<CodeFragment *>(label)) {
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = label_fragment;
+// Process a branch instruction.
+static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
+                          BranchInstruction *instr) {
+  auto target_label = instr->TargetLabel();
+
+  // Direct unconditional jump; turn it into a fall-through.
+  if (instr->IsJump() && !instr->IsConditionalJump() &&
+      !instr->HasIndirectTarget()) {
+    AddBlockTailToWorkList(builder, frag, target_label, target_label->Next(),
+                           StackUsageInfo());
     return;
   }
 
-  auto next = label->Next();
-  auto succ = MakeEmptyLabelFragment(frags, block_meta, label, label);
-  frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-  frag = succ;
-  ExtendFragment(frags, frag, block_meta, next);
-}
-
-// Split a fragment into two at a local branch instruction. First get or
-// create the fragment associated with the branch target. Then create a
-// fragment for the fall-through of the branch, and include remaining
-// instructions from the block into that fragment.
-static void SplitFragmentAtBranch(FragmentListBuilder *frags,
-                                  CodeFragment *frag,
-                                  BlockMetaData *block_meta,
-                                  BranchInstruction *branch) {
-  auto label = branch->TargetInstruction();
-  auto next = branch->Next();
-
-  // Conditional jump, therefore we have to create two successor fragments.
-  if (branch->IsConditionalJump()) {
-    frag = Append(frags, block_meta, frag, branch);
-
-    GRANARY_ASSERT(nullptr == frag->branch_instr);
-    frag->branch_instr = branch;
-
-    // Note: We defer connection of branches to their target labels until
-    //       after we've built the fragment list.
-
-    auto succ = MakeEmptyLabelFragment(frags, block_meta, new LabelInstruction);
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-    ExtendFragment(frags, succ, block_meta, next);
-
-  // Unconditional jump, and the current instruction is either a block head or
-  // has instructions in it, so we can't convert this fragment into the target
-  // fragment.
-  } else if (frag->attr.has_native_instrs ||
-             GetMetaData<CodeFragment *>(label)) {
-    auto succ = GetOrMakeLabelFragment(frags, block_meta, label);
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-
-    // TODO(pag): Is this valid????????
-    // frag->partition.Union(frag, succ);
-
-  // This fragment has no "useful" instructions in it, it's not a block head,
-  // and we've got an unconditional jump. Convert the current fragment into the
-  // target fragment.
-  } else {
-    SetMetaData<CodeFragment *>(label, frag);
-    frag->attr.block_meta = block_meta;
-    frag = Append(frags, block_meta, frag, label);
-    ExtendFragment(frags, frag, block_meta, next);
-  }
-}
-
-// Get the list of fragments associated with a basic block.
-static CodeFragment *FragmentForBlock(FragmentListBuilder *frags,
-                                      DecodedBasicBlock *block);
-
-// Generates some edge code for a direct control-flow transfer between two
-// basic block.
-Fragment *MakeDirectEdgeFragment(FragmentListBuilder *frags,
-                                 BlockMetaData *dest_block_meta) {
-  auto edge_frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
-  auto edge = frags->context->AllocateDirectEdge(dest_block_meta);
-  edge_frag->encoded_pc = edge->edge_code;
-  edge_frag->block_meta = dest_block_meta;
-  edge_frag->edge.kind = EDGE_KIND_DIRECT;
-  edge_frag->edge.direct = edge;
-  frags->Append(edge_frag);
-  return edge_frag;
-}
-
-
-
-// Make an edge fragment and an exit fragment for some future block.
-static Fragment *MakeIndirectEdgeFragment(FragmentListBuilder *frags,
-                                          CodeFragment *pred_frag,
-                                          BlockMetaData *dest_block_meta,
-                                          ControlFlowInstruction *cfi) {
-
-
-  auto edge = frags->context->AllocateIndirectEdge(dest_block_meta);
-  return arch::GenerateIndirectEdgeCode(frags->frags, edge, cfi, pred_frag,
-                                        dest_block_meta);
-}
-
-static ExitFragment *MakeExitFragment(FragmentListBuilder *frags) {
-  auto exit_frag = new ExitFragment(FRAG_EXIT_NATIVE);
-  frags->Append(exit_frag);
-  return exit_frag;
-}
-
-// Return the fragment for a block that is targeted by a control-flow
-// instruction.
-static Fragment *FragmentForTargetBlock(FragmentListBuilder *frags,
-                                        CodeFragment *pred_frag,
-                                        BasicBlock *target_block,
-                                        ControlFlowInstruction *cfi) {
-  // Function/interrupt/system return. In these cases, we can't be sure (at
-  // instrumentation time) that execution returns to the code cache.
-  //
-  // OR:
-  //
-  // Direct call/jump to native; interrupt call, system call. All regs
-  // must be homed on exit of this block lets things really screw up.
-  if (auto native_block = DynamicCast<NativeBasicBlock *>(target_block)) {
-    return MakeNativeFragment(frags, native_block);
-  }
-
-  // Direct call/jump/conditional jump to a decoded block.
-  if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(target_block)) {
-    return FragmentForBlock(frags, decoded_block);
-  }
-
-  // Direct call/jump/conditional jump to a cached block.
-  if (auto cached_block = DynamicCast<CachedBasicBlock *>(target_block)) {
-    return MakeCachedFragment(frags, cached_block);
-  }
-
-  // Direct jump / conditional jump to an unresolved block, need to add in
-  // some edge code.
-  if (auto direct_block = DynamicCast<DirectBasicBlock *>(target_block)) {
-    // TODO(pag): If the number of predecessors of this block is >= 2 then it
-    //            would be nice if they could share the same edge code via some
-    //            intermediate fragment with the patchable jump.
-    return MakeDirectEdgeFragment(frags, direct_block->MetaData());
-  }
-
-  // Indirect call/jump, or direct call/jump/conditional jump
-  // to a future block.
-  if (IsA<ReturnBasicBlock *>(target_block) ||
-      IsA<IndirectBasicBlock *>(target_block)) {
-    auto inst_block = DynamicCast<InstrumentedBasicBlock *>(target_block);
-    if (auto block_meta = inst_block->UnsafeMetaData()) {
-      return MakeIndirectEdgeFragment(frags, pred_frag, block_meta, cfi);
-    } else {
-      return MakeExitFragment(frags);
+  // Makes the fragment into an application fragment; if the current fragment
+  // is an instrumentation fragment then we need to split the fragment for
+  // the branch.
+  if (instr->IsAppInstruction() &&
+      (instr->IsConditionalJump() ||
+       instr->instruction.WritesToStackPointer())) {
+    if (CODE_TYPE_INST == frag->type) {
+      auto frag_with_branch = new CodeFragment;
+      frag_with_branch->attr.block_meta = frag->attr.block_meta;
+      frag->successors[FRAG_SUCC_FALL_THROUGH] = frag_with_branch;
+      builder->frags->InsertAfter(frag, frag_with_branch);
+      frag = frag_with_branch;
     }
+    frag->type = CODE_TYPE_APP;
   }
 
-  GRANARY_ASSERT(false);
-  return nullptr;
+  frag->branch_instr = instr;
+  frag->attr.branch_is_function_call = instr->IsFunctionCall();
+  frag->attr.branch_is_indirect = instr->HasIndirectTarget();
+  frag->attr.branch_is_jump = instr->IsJump();
+  frag->attr.has_native_instrs = true;  // The branch.
+
+  // Add the branch target.
+  AddBlockTailToWorkList(builder, frag, target_label, target_label->Next(),
+                         StackUsageInfo(), FRAG_SUCC_BRANCH);
+
+  // Handle the fall-through.
+  if (instr->IsFunctionCall() || instr->IsConditionalJump()) {
+    auto next_instr = instr->Next();
+    auto fall_through_label = DynamicCast<LabelInstruction *>(next_instr);
+    if (fall_through_label) {
+      fall_through_label->data += 1; // Hold a refcount.
+      next_instr = fall_through_label->Next();
+    }
+    AddBlockTailToWorkList(builder, frag, fall_through_label,
+                           next_instr, StackUsageInfo());
+  }
+  // Append the branch to the fragment.
+  frag->instrs.Append(instr->UnsafeUnlink().release());
 }
 
-// Append a CFI to a fragment, and potentially make a new fragment for the CFI.
-static CodeFragment *AppendCFI(FragmentListBuilder *frags, CodeFragment *frag,
-                               BlockMetaData *block_meta,
-                               Fragment *target_frag,
-                               ControlFlowInstruction *cfi) {
-  auto branch_is_function_call = cfi->IsFunctionCall();
-  const auto makes_stack_valid = branch_is_function_call ||
-                                 cfi->IsFunctionReturn() ||
-                                 cfi->IsInterruptReturn();
-  auto targets_code = false;
-  auto can_add_to_partition = false;
-  auto target_is_indirect = cfi->HasIndirectTarget();
-  auto force_add_to_frag = !frag->attr.has_native_instrs;
+// Process a control-flow instruction.
+static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
+                       ControlFlowInstruction *instr) {
 
-  if (target_is_indirect) {
-    can_add_to_partition = IsA<CodeFragment *>(target_frag);
+  auto target_block = instr->TargetBlock();
+  auto target_frag = target_block->fragment;
 
-    // E.g. an unspecialized return instruction would be indirect, but treated
-    //      as targeting code (and therefore would target a `ExitFragment`).
-    targets_code = !can_add_to_partition;
-
-  } else if (IsA<ExitFragment *>(target_frag)) {
-    targets_code = true;
-  }
-
-  // We need to add a new fragment for this CFI.
-  auto frag_with_cfi = frag;
-  if (!can_add_to_partition && !force_add_to_frag) {
-    auto label = new LabelInstruction;
-    auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-    frag_with_cfi = succ;
-  }
-
-  frag_with_cfi = Append(frags, block_meta, frag_with_cfi, cfi);
-
-  // This CFI is something like a function call / return, i.e. it makes the
-  // stack pointer appear to point to a C-style call stack.
-  if (makes_stack_valid) {
-    frag_with_cfi->stack.is_valid = true;
-    frag_with_cfi->stack.is_checked = true;
-  }
-
-  frag_with_cfi->attr.can_add_to_partition = can_add_to_partition;
-  frag_with_cfi->attr.branches_to_code = targets_code;
-  frag_with_cfi->attr.branch_is_indirect = target_is_indirect;
-  frag_with_cfi->attr.branch_is_function_call = branch_is_function_call;
-  frag_with_cfi->attr.branch_is_jump = cfi->IsJump();
-
-  return frag_with_cfi;
-}
-
-// Split a fragment at a non-local control-flow instruction.
-static void SplitFragmentAtCFI(FragmentListBuilder *frags, CodeFragment *frag,
-                               BlockMetaData *block_meta,
-                               ControlFlowInstruction *cfi) {
-  auto next = cfi->Next();
-  auto target_block = cfi->TargetBlock();
-  auto target_frag = FragmentForTargetBlock(frags, frag, target_block, cfi);
-
-  // Direct jump to another block (that's not a direct jump to edge code, native
-  // code, or cache code). For thse other jumps, we want to keep those branch
-  // instructions alive so that everything links together correctly.
-  if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget() &&
-      IsA<CodeFragment *>(target_frag)) {
+  // Direct unconditional jump; turn it into a fall-through.
+  //
+  // Note: Using `arch::Instruction::HasIndirectTarget` because this might have
+  //       been a jump to far-away native code, which might have been mangled
+  //       into an indirect jump.
+  if (instr->IsJump() && !instr->IsConditionalJump() &&
+      !instr->instruction.HasIndirectTarget()) {
+    GRANARY_ASSERT(nullptr != target_frag);
+    frag->attr.can_add_succ_to_partition = false;
     frag->successors[FRAG_SUCC_FALL_THROUGH] = target_frag;
-    return;  // No fall-through.
+    return;
   }
 
-  // One of:
-  //    1) Direct jump to edge code.
-  //    2) Conditional jump (potentially to edge code).
-  //    3) Function/interrupt/system call/return.
-  frag = AppendCFI(frags, frag, block_meta, target_frag, cfi);
-  GRANARY_ASSERT(nullptr == frag->branch_instr);
+  // An example of where this condition might not be triggered is:
+  //          CALL ...    <-- forces a new fragment on fall-through.
+  //          ---------
+  //          Jcc ...     <-- Don't add a predecessor fragment here.
+  // Here, we just take over the existing fragment.
+  CodeFragment *pred_frag(nullptr);
+  if (CODE_TYPE_INST == frag->type || frag->attr.has_native_instrs) {
+    auto frag_with_cfi = new CodeFragment;
+    frag_with_cfi->attr.block_meta = frag->attr.block_meta;
+
+    frag->successors[FRAG_SUCC_FALL_THROUGH] = frag_with_cfi;
+    frag->attr.can_add_succ_to_partition = false;
+
+    builder->frags->InsertAfter(frag, frag_with_cfi);
+
+    pred_frag = frag;
+    frag = frag_with_cfi;
+  }
+
+  frag->type = CODE_TYPE_APP;  // Force it to application code.
+  frag->branch_instr = instr;
+  frag->attr.has_native_instrs = true;
+  frag->attr.branch_is_function_call = instr->IsFunctionCall();
+  frag->attr.branch_is_indirect = instr->HasIndirectTarget();
+  frag->attr.branch_is_jump = instr->IsJump();
+  frag->attr.can_add_succ_to_partition = false;
+
+  // Update stack validity.
+  if (instr->IsFunctionCall() || instr->IsFunctionReturn() ||
+      instr->IsInterruptReturn()
+      GRANARY_IF_KERNEL( || instr->IsInterruptCall() )) {
+    frag->stack.status = STACK_VALID;
+  }
+
+  // Specialized return, indirect call/jump.
+  if (!target_frag) {
+    GRANARY_ASSERT(frag->attr.branch_is_indirect);
+    GRANARY_ASSERT(IsA<ReturnBasicBlock *>(target_block) ||
+                   IsA<IndirectBasicBlock *>(target_block));
+    auto inst_target = DynamicCast<InstrumentedBasicBlock *>(target_block);
+    auto target_meta = inst_target->UnsafeMetaData();
+    auto edge = builder->context->AllocateIndirectEdge(target_meta);
+
+    target_frag = arch::GenerateIndirectEdgeCode(builder->frags, edge, instr,
+                                                 frag, target_meta);
+    target_block->fragment = target_frag;
+
+    // Force the predecessor to be in the same partition, because the
+    // predecessor likely defines the virtual register that contains the
+    // target of this CFI.
+    if (pred_frag) frag->partition.Union(frag, pred_frag);
+
+    // We force the in-edge code to be in the same partition. At the same time,
+    // we have `attr.can_add_succ_to_partition == false`, so that we don't add
+    // fall-throughs into the same partition.
+    frag->partition.Union(reinterpret_cast<Fragment *>(frag), target_frag);
+
+  // Something going to native/cached/direct edge code.
+  } else if (IsA<ExitFragment *>(target_frag)) {
+    frag->attr.branches_to_code = true;
+
+  // Going to a decoded basic block.
+  } else {
+    GRANARY_ASSERT(IsA<CodeFragment *>(target_frag));
+    GRANARY_ASSERT(IsA<DecodedBasicBlock *>(target_block));
+    frag->attr.can_add_succ_to_partition = false;
+  }
+
   frag->successors[FRAG_SUCC_BRANCH] = target_frag;
-  frag->branch_instr = cfi;
 
-  if (cfi->IsFunctionReturn() || cfi->IsInterruptReturn() ||
-      cfi->IsSystemReturn() || cfi->IsUnconditionalJump()) {
-    return;  // No fall-through.
+  // Add in a fall-through successor.
+  if (instr->IsFunctionCall() || instr->IsConditionalJump() ||
+      instr->IsSystemCall() || instr->IsInterruptCall()) {
+    AddBlockTailToWorkList(builder, frag, nullptr, instr->Next(), frag->stack);
   }
 
-  auto label = new LabelInstruction;
-  auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-  frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
-  succ->attr.can_add_to_partition = false;
-
-  // TODO(pag): I actually don't remember why this assignment was here, so
-  //            hopefully this assertion will fail and give me some insight
-  //            as to what my past self was thinking.
-  GRANARY_ASSERT(succ->attr.block_meta == frag->attr.block_meta);
-  succ->attr.block_meta = frag->attr.block_meta;
-
-  ExtendFragment(frags, succ, block_meta, next);
+  // Add in the CFI.
+  frag->instrs.Append(instr->UnsafeUnlink().release());
 }
 
-// Split a fragment at a place where the validness of the stack pointer changes
-// from defined to undefined, or undefined to defined.
-static void SplitFragmentAtStackChange(FragmentListBuilder *frags,
-                                       CodeFragment *frag,
-                                       BlockMetaData *block_meta,
-                                       Instruction *instr,
-                                       bool stack_is_valid) {
-  auto label = new LabelInstruction;
-  auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-  frag->successors[0] = succ;
-  succ->stack.is_checked = true;
-  succ->stack.is_valid = stack_is_valid;
-  ExtendFragment(frags, succ, block_meta, instr);
-}
+// Process a native instruction. Returns `true` if the instruction is added
+// to the fragment, and false if the instruction splits the fragment.
+static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
+                               NativeInstruction *instr) {
+  auto is_app = instr->IsAppInstruction();
+  auto reads_flags = instr->ReadsConditionCodes();
+  auto writes_flags = instr->WritesConditionCodes();
+  auto writes_stack_ptr = instr->instruction.WritesToStackPointer();
 
-// Split a fragment at a point where the instructions in the block change
-// from instrumentation-added -> app, or app -> instrumentation added.
-static void SplitFragment(FragmentListBuilder *frags, CodeFragment *frag,
-                          BlockMetaData *block_meta, Instruction *next) {
-  auto label = new LabelInstruction;
-  auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-  frag->successors[0] = succ;
-  ExtendFragment(frags, succ, block_meta, next);
-}
+  if (CODE_TYPE_UNKNOWN == frag->type) {
+    frag->type = is_app ? CODE_TYPE_APP : CODE_TYPE_INST;
 
-// Split a fragment at an instruction that changes the interrupt state.
-static void SplitFragmentAtInterruptChange(FragmentListBuilder *frags,
-                                           CodeFragment *frag,
-                                           BlockMetaData *block_meta,
-                                           Instruction *instr) {
-  auto next = instr->Next();
-  if (frag->attr.has_native_instrs) {
-    auto label = new LabelInstruction;
-    auto succ = MakeEmptyLabelFragment(frags, block_meta, label);
-    frag->successors[0] = succ;
-    frag = succ;
+  // Instrumentation instructions in an application fragment are allowed to
+  // read but not write the flags.
+  } else if (CODE_TYPE_APP == frag->type && !is_app && writes_flags) {
+    AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
+    return false;
+
+  // Application instructions in an instrumentation fragment are not allowed
+  // to read or write the flags, or to change the stack pointer.
+  } else if (CODE_TYPE_INST == frag->type && is_app &&
+             (reads_flags || writes_flags || writes_stack_ptr)) {
+    AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
+    return false;
   }
 
-  // Hack to hopefully ensure that if the interrupt status is changed, then
-  // the fragment / partition that changes the status operates on valid stack.
-  //
-  // Note: When allocating slots, we double check that no instructions within
-  //       this fragment's partition actually change the interrupt state.
-  frags->split_at_next_sequence_point = true;
-  frag->stack.is_checked = true;
-  frag->stack.is_valid = true;
-  frag->attr.can_add_to_partition = false;
-
-  frag = Append(frags, block_meta, frag, instr);
-  ExtendFragment(frags, frag, block_meta, next);
+  // We're appending the instruction.
+  if (writes_flags) frag->attr.modifies_flags = true;
+  frag->attr.has_native_instrs = true;
+  frag->instrs.Append(instr->UnsafeUnlink().release());
+  return true;
 }
 
-// Extend a fragment with the instructions from a particular basic block.
-// This might end up generating many more fragments.
-static void ExtendFragment(FragmentListBuilder *frags, CodeFragment *frag,
-                           BlockMetaData *block_meta, Instruction *instr) {
+// Process a fragment that just came from the head of the work list. This
+// involves iteration through the instruction list beginning at `instr` and
+// deciding which instructions to put into `frag`, and when to stop building
+// `frag` and enqueue new items to the work list.
+static void ProcessFragment(FragmentBuilder *builder, CodeFragment *frag,
+                            Instruction *instr) {
+  Instruction *next_instr(nullptr);
+  for (; instr; instr = next_instr) {
+    GRANARY_ASSERT(!frag->successors[FRAG_SUCC_FALL_THROUGH]);
+    next_instr = instr->Next();
 
-  for (; instr; ) {
+    // Blocks are split up by labels, but only if labels are targeted by
+    // branches. The `data` field of the label counts the number of incoming
+    // branches.
+    if (auto label_instr = DynamicCast<LabelInstruction *>(instr)) {
+      if (!label_instr->data) continue;  // Skip it.
+      AddBlockTailToWorkList(builder, frag, label_instr, next_instr,
+                             StackUsageInfo());
+      return;
 
-    // Treat every label as beginning a new fragment.
-    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
-      if (!label->data) {
-        instr = label->Next();  // Skip untargeted labels.
-        continue;
-      }
-      return SplitFragmentAtLabel(frags, frag, block_meta, label);
-    }
+    // Annotation instructions either introduce fragment splits, modify fragment
+    // attributes, or are ignored.
+    } else if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (!ProcessAnnotation(builder, frag, annot_instr)) return;
 
     // Found a local branch; add in the fall-through and/or the branch
     // target.
-    if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-      return SplitFragmentAtBranch(frags, frag, block_meta, branch);
+    } else if (auto branch_instr = DynamicCast<BranchInstruction *>(instr)) {
+      ProcessBranch(builder, frag, branch_instr);
+      return;
 
-    // Found a non-local branch to a basic block.
-    } else if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-      return SplitFragmentAtCFI(frags, frag, block_meta, cfi);
+    // Found a control-flow instruction.
+    } else if (auto flow_instr = DynamicCast<ControlFlowInstruction *>(instr)) {
+      ProcessCFI(builder, frag, flow_instr);
+      return;
 
-    // Ignore annotation instructions, but use them to guide the fragment
-    // splitting w.r.t stack definedness. The stack definedness annotations
-    // come from early mangling of instructions. It's important that they
-    // come from there as they will be inserted before any virtual registers
-    // created for use by a particular stack pointer changing instruction.
-    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      auto next = instr->Next();
+    } else if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!ProcessNativeInstr(builder, frag, native_instr)) return;
 
-      // We're done this block, which is curious because it suggests that
-      // there is no fall-through operation.
-      if (IA_END_BASIC_BLOCK == annot->annotation) {
-        granary_curiosity();
-        break;
-
-      } else if (IA_VALID_STACK == annot->annotation) {
-        if (frag->stack.is_checked && !frag->stack.is_valid &&
-            frag->attr.has_native_instrs) {
-          return SplitFragmentAtStackChange(frags, frag, block_meta,
-                                            next, true);
-        } else {
-          frag->stack.is_checked = true;
-          frag->stack.is_valid = true;
-          frag->stack.disallow_forward_propagation = false;
-        }
-
-      } else if (IA_UNDEFINED_STACK == annot->annotation) {
-        frags->split_at_next_sequence_point = true;
-        if ((frag->stack.is_checked && frag->stack.is_valid) ||
-            frag->attr.has_native_instrs) {
-          return SplitFragmentAtStackChange(frags, frag, block_meta,
-                                            next, false);
-        } else {
-          frag->stack.is_checked = true;
-          frag->stack.is_valid = false;
-        }
-
-      // This annotation is somewhat more subtle than the above two. The idea
-      // is that when we do the stack analysis and fragment partitioning in
-      // `3_partition_fragments.cc`, we want to be aggressive about stack
-      // validity. So, for example, if we see something like:
-      //          MOV RSP, [X]
-      //          <IA_UNKNOWN_STACK_ABOVE>
-      //          MOV Y, [Z]
-      //          POP [Y]
-      // Then we'll split that into two fragments:
-      //          MOV RSP, [X]
-      //          ------------
-      //          MOV Y, [Z]
-      //          POP [Y]
-      // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
-      // by the stack undefinedness of the `MOV RSP, [X]`.
-      } else if (IA_UNKNOWN_STACK_ABOVE == annot->annotation) {
-        GRANARY_ASSERT(!frag->stack.is_checked || !frag->stack.is_valid);
-        frag->stack.is_checked = true;
-        frag->stack.is_valid = false;
-        return SplitFragment(frags, frag, block_meta, next);
-
-      // Here we've got something like:
-      //          PUSH RBP
-      //          <IA_UNKNOWN_STACK_BELOW>
-      //          MOV RBP, RSP
-      //          MOV [RBP - 8], RDI   <--- accesses into redzone, below RSP
-      // So `early_mangle.cc` will have added an annotation before the copy of
-      // `RSP`.
-      //
-      // Note: This annotation is only generated if `REDZONE_SIZE_BYTES > 0`.
-      } else if (IA_UNKNOWN_STACK_BELOW == annot->annotation) {
-        frag->stack.disallow_forward_propagation = true;
-        return SplitFragment(frags, frag, block_meta, next);
-
-      // Special case related to indirect call mangling. Indirect calls might
-      // be mangled into pushes of a return address, followed by indirect
-      // jumps.
-      } else if (IA_RETURN_ADDRESS == annot->annotation) {
-        frag = Append(frags, block_meta, frag, instr);
-
-      // The start of a new logical instruction.
-      } else if (IA_SEQUENCE_POINT == annot->annotation) {
-        if (frags->split_at_next_sequence_point) {
-          frags->split_at_next_sequence_point = false;
-          return SplitFragment(frags, frag, block_meta, next);
-        }
-
-      // The upcoming instruction can potentially enabled/disable interrupts.
-      //
-      // Note: We'll assume that for such instructions, the stack is guaranteed
-      //       to be valid.
-      } else if (IA_CHANGES_INTERRUPT_STATE == annot->annotation) {
-        return SplitFragmentAtInterruptChange(frags, frag, block_meta, next);
-      }
-
-      instr = next;
-
-    // Extend block with this instruction and move to the next instruction.
     } else {
-      auto next = instr->Next();
-      frag = Append(frags, block_meta, frag, instr);
-      instr = next;
+      granary_curiosity();
     }
   }
 }
 
-// Get the list of fragments associated with a basic block.
-static CodeFragment *FragmentForBlock(FragmentListBuilder *frags,
+// Adds a decoded basic block to the fragment work list as an empty
+// `CodeFragment`.
+static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
                                       DecodedBasicBlock *block) {
-  auto first_instr = block->FirstInstruction();
-  CodeFragment *frag = GetMetaData<CodeFragment *>(first_instr);
-  if (!frag) {
-    auto label = new LabelInstruction;
-    frag = new CodeFragment;
-    frag->attr.block_meta = block->UnsafeMetaData();
-    frag->attr.is_block_head = true;
-    frag->instrs.Append(label);
-    SetMetaData(label, frag);
-    SetMetaData(first_instr, frag);
-    frags->Append(frag);
+  auto frag = new CodeFragment;
+  frag->attr.block_meta = block->MetaData();
+  frag->attr.is_block_head = true;
 
-    // Start from the second instruction because the first instruction is a
-    // annotation for beginning the basic block.
-    ExtendFragment(frags, frag, block->UnsafeMetaData(), first_instr->Next());
-  }
-  return frag;
+  auto elm = new FragmentInProgress;
+  elm->frag = frag;
+  elm->instr = block->FirstInstruction()->Next();
+  elm->next = builder->next;
+
+  builder->next = elm;  // To head of work list.
+  block->fragment = frag;
+  builder->frags->Prepend(frag);  // To head of fragment list.
 }
 
-static void ConnectBranchesToFragments(FragmentListBuilder *frags) {
-  for (auto frag : FragmentListIterator(frags->frags)) {
-    if (auto branch = DynamicCast<BranchInstruction *>(frag->branch_instr)) {
-      GRANARY_ASSERT(!frag->successors[FRAG_SUCC_BRANCH]);
-      auto cfrag = DynamicCast<CodeFragment *>(frag);
-      GRANARY_ASSERT(nullptr != cfrag);
-      auto target = branch->TargetInstruction();
-      auto target_frag = GetMetaData<Fragment *>(target);
-      if (!target_frag) {
-        target_frag = GetOrMakeLabelFragment(frags, cfrag->attr.block_meta,
-                                             target);
-      }
-      GRANARY_ASSERT(nullptr != target_frag);
-      frag->successors[FRAG_SUCC_BRANCH] = target_frag;
+// Adds a direct edge to the end of the fragment list as an `ExitFragment`.
+static void AddDirectBlockToFragList(FragmentBuilder *builder,
+                                     DirectBasicBlock *block) {
+  auto meta = block->MetaData();
+  auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
+  auto edge = builder->context->AllocateDirectEdge(meta);
+
+  frag->encoded_pc = edge->edge_code;
+  frag->block_meta = meta;
+  frag->edge.kind = EDGE_KIND_DIRECT;
+  frag->edge.direct = edge;
+
+  GRANARY_ASSERT(nullptr != frag->encoded_pc);
+
+  block->fragment = frag;
+  builder->frags->Append(frag);  // To tail of fragment list.
+}
+
+// Adds a cached basic block to the end of the fragment list as an
+// `ExitFragment`.
+static void AddCachedBlockToFragList(FragmentBuilder *builder,
+                                     CachedBasicBlock *block) {
+  auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
+  frag->encoded_pc = block->StartCachePC();
+  frag->encoded_size = 0;
+  frag->block_meta = block->MetaData();
+
+  GRANARY_ASSERT(nullptr != frag->encoded_pc);
+
+  block->fragment = frag;
+  builder->frags->Append(frag);  // To tail of fragment list.
+}
+
+// Adds a native basic block to the end of the fragment list as an
+// `ExitFragment`.
+static void AddNativeBlockToFragList(FragmentBuilder *builder,
+                                     BasicBlock *block,
+                                     AppPC start_pc) {
+  auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
+  frag->encoded_pc = UnsafeCast<CachePC>(start_pc);
+  frag->encoded_size = 0;
+  frag->block_meta = nullptr;
+
+  block->fragment = frag;
+  builder->frags->Append(frag);  // To tail of fragment list.
+}
+
+// Adds a block to the builder's work list.
+//
+// Note: Blocks are added in reverse order so that the first block ends up
+//       being the first one processed by the builder.
+//
+// Note: This arranges for all `ExitFragment`s to be located at the end of
+//       the fragment list.
+static void InitBlockFragment(FragmentBuilder *builder, BasicBlock *block) {
+  if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+    AddDirectBlockToFragList(builder, direct_block);
+  } else if (auto cached_block = DynamicCast<CachedBasicBlock *>(block)) {
+    AddCachedBlockToFragList(builder, cached_block);
+  } else if (auto native_block = DynamicCast<NativeBasicBlock *>(block)) {
+    AddNativeBlockToFragList(builder, native_block, native_block->StartAppPC());
+  } else if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+    AddDecodedBlockToWorkList(builder, decoded_block);
+  } else if (auto return_block = DynamicCast<ReturnBasicBlock *>(block)) {
+    if (!return_block->UsesMetaData()) {
+      AddNativeBlockToFragList(builder, return_block, nullptr);
     }
+  }
+}
+
+// Initialize the work list for each basic block.
+static void InitializeFragAndWorklist(FragmentBuilder *builder) {
+  for (auto block : builder->cfg->ReverseBlocks()) {
+    InitBlockFragment(builder, block);
   }
 }
 
@@ -735,17 +564,20 @@ static void ConnectBranchesToFragments(FragmentListBuilder *frags) {
 // Build a fragment list out of a set of basic blocks.
 void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
                        FragmentList *frags) {
-  for (auto block : cfg->Blocks()) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-    if (decoded_block) {
-      for (auto instr : decoded_block->Instructions()) {
-        instr->ClearMetaData();
-      }
-    }
+  FragmentBuilder builder = {
+    nullptr,
+    frags,
+    cfg,
+    context
+  };
+  InitializeFragAndWorklist(&builder);
+  while (auto item = builder.next) {
+    builder.next = item->next;
+    auto frag = item->frag;
+    auto instr = item->instr;
+    delete item;
+    ProcessFragment(&builder, frag, instr);
   }
-  FragmentListBuilder builder{context, cfg, frags, false};
-  FragmentForBlock(&builder, cfg->EntryBlock());
-  ConnectBranchesToFragments(&builder);
 }
 
 }  // namespace granary

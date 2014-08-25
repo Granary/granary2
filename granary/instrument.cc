@@ -20,7 +20,7 @@ namespace granary {
 // Initialize a binary instrumenter.
 BinaryInstrumenter::BinaryInstrumenter(ContextInterface *context_,
                                        LocalControlFlowGraph *cfg_,
-                                       BlockMetaData *meta_)
+                                       BlockMetaData **meta_)
     : context(context_),
       tools(context->AllocateTools()),
       meta(meta_),
@@ -32,36 +32,36 @@ BinaryInstrumenter::~BinaryInstrumenter(void) {
 }
 
 // Instrument some code as-if it is targeted by a direct CFI.
-BlockMetaData *BinaryInstrumenter::InstrumentDirect(void) {
-  auto entry_block = factory.RequestDirectEntryBlock(&meta);
+void BinaryInstrumenter::InstrumentDirect(void) {
+  auto entry_block = factory.RequestDirectEntryBlock(meta);
   if (!entry_block) {  // Couldn't find or adapt to a existing block.
-    entry_block = factory.MaterializeDirectEntryBlock(meta);
+    entry_block = factory.MaterializeDirectEntryBlock(*meta);
   }
 
-  meta = nullptr;  // Invalid after this point!!
+  *meta = nullptr;  // Potentially undefined after this point.
 
   if (IsA<DecodedBasicBlock *>(entry_block)) {  // Instrument decoded blocks.
     InstrumentControlFlow();
     InstrumentBlocks();
     InstrumentBlock();
   }
-  return entry_block->UnsafeMetaData();
+
+  *meta = entry_block->UnsafeMetaData();
 }
 
 // Instrument some code as-if it is targeted by an indirect CFI.
-BlockMetaData *BinaryInstrumenter::InstrumentIndirect(void) {
-  factory.MaterializeIndirectEntryBlock(meta);
+void BinaryInstrumenter::InstrumentIndirect(void) {
+  factory.MaterializeIndirectEntryBlock(*meta);
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
-  return meta;
 }
 
 // Instrument some code as-if it is targeted by a native entrypoint. These
 // are treated as being the initial points of instrumentation.
-BlockMetaData *BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
-                                                        int category) {
-  factory.MaterializeIndirectEntryBlock(meta);
+void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
+                                              int category) {
+  factory.MaterializeIndirectEntryBlock(*meta);
   auto entry_block = DynamicCast<CompensationBasicBlock *>(cfg->EntryBlock());
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentEntryPoint(&factory, entry_block, kind, category);
@@ -72,7 +72,6 @@ BlockMetaData *BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
-  return meta;
 }
 
 namespace {

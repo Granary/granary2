@@ -23,6 +23,7 @@ class BasicBlock;
 class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
+GRANARY_INTERNAL_DEFINITION class Fragment;
 
 // Represents an abstract instruction.
 class Instruction {
@@ -159,7 +160,7 @@ enum InstructionAnnotation {
   IA_RETURN_ADDRESS,
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
-  IA_UNDEFINED_STACK,
+  IA_INVALID_STACK,
   IA_UNKNOWN_STACK_ABOVE,
   IA_UNKNOWN_STACK_BELOW,
   IA_VALID_STACK,
@@ -186,10 +187,9 @@ enum InstructionAnnotation {
   // the encoded address.
   IA_UPDATE_ENCODED_ADDRESS,
 
-  // Represents a point between two logical instructions. This is used by
-  // the fragment list builder to ensure that instructions belonging to the
-  // same logical instruction are not placed into separate fragment partitions.
-  IA_SEQUENCE_POINT,
+  // Represents a point between two logical instructions. This exists to
+  // document the logical boundaries between native instructions.
+  IA_BEGIN_LOGICAL_INSTRUCTION,
 
   // Represents a definite change in the interrupt delivery state. If this
   // happens then we must break a fragment and isolate the instruction that
@@ -227,6 +227,9 @@ class AnnotationInstruction : public Instruction {
 
   // Returns true if this instruction is targeted by any branches.
   bool IsBranchTarget(void) const;
+
+  // Returns true if this represents the beginning of a new logical instruction.
+  bool IsInstructionBoundary(void) const;
 
   GRANARY_INTERNAL_DEFINITION GRANARY_CONST
   InstructionAnnotation annotation;
@@ -267,10 +270,12 @@ class LabelInstruction final : public AnnotationInstruction {
   LabelInstruction(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-  GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
+  GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(LabelInstruction, {
     SHARED = true,
     ALIGNMENT = 1
   })
+
+  GRANARY_INTERNAL_DEFINITION Fragment *fragment;
 };
 
 // An instruction containing an driver-specific decoded instruction.
@@ -325,8 +330,18 @@ class NativeInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION bool IsVirtualRegSaveRestore(void) const;
 
-  // Get the opcode name.
+  // Get the opcode name. The opcode name of an instruction is a semantic
+  // name that conveys the meaning of the instruction, but not necessarily
+  // any particular encoding of the instruction. For example, many different
+  // instructions that achieve the same semantic goal can have the same opcode
+  // name because they operate on different kinds or numbers of operands.
   const char *OpCodeName(void) const;
+
+  // Get the instruction selection name. The instruction selection name is as
+  // close to an unambiguous name for the instruction as we can get. It should
+  // make it obvious which encoding will be used for this instruction, which
+  // type of operands this instructions takes, etc.
+  const char *ISelName(void) const;
 
   // Try to match and bind one or more operands from this instruction.
   //
@@ -382,10 +397,10 @@ class BranchInstruction final : public NativeInstruction {
 
   GRANARY_INTERNAL_DEFINITION
   BranchInstruction(const arch::Instruction *instruction_,
-                    LabelInstruction *target_);
+                    AnnotationInstruction *target_);
 
   // Return the targeted instruction of this branch.
-  LabelInstruction *TargetInstruction(void) const;
+  LabelInstruction *TargetLabel(void) const;
 
   // Modify this branch to target a different label.
   GRANARY_INTERNAL_DEFINITION

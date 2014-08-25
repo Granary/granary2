@@ -78,8 +78,8 @@ CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
   EXPECT_CALL(context, FreeTools(nullptr))
       .Times(1);
 
-  BinaryInstrumenter inst(&context, &cfg, meta);
-  meta = inst.InstrumentDirect();
+  BinaryInstrumenter inst(&context, &cfg, &meta);
+  inst.InstrumentDirect();
   Compile(&context, &cfg);
 
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);

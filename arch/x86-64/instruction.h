@@ -71,13 +71,15 @@ class Instruction : public InstructionInterface {
   // Set the PC-relative branch target.
   inline void SetBranchTarget(PC pc) {
     ops[0].branch_target.as_pc = pc;
-    ops[0].is_annot_encoded_pc = false;
+    ops[0].is_annotation_instr = false;
+    ops[0].type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   }
 
   // Set a branch target to be an annotation instruction.
   inline void SetBranchTarget(AnnotationInstruction *instr) {
-    ops[0].annot_instr = instr;
-    ops[0].is_annot_encoded_pc = true;
+    ops[0].annotation_instr = instr;
+    ops[0].is_annotation_instr = true;
+    ops[0].type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   }
 
   inline bool IsFunctionCall(void) const {
@@ -166,6 +168,9 @@ class Instruction : public InstructionInterface {
 
   // Get the opcode name.
   const char *OpCodeName(void) const;
+
+  // Get the instruction selected name.
+  const char *ISelName(void) const;
 
   // Is this a specially inserted virtual register save or restore instruction?
   inline bool IsVirtualRegSaveRestore(void) const {
@@ -280,7 +285,9 @@ class Instruction : public InstructionInterface {
   // `xed_inst_t` is maintained.
   Operand ops[MAX_NUM_EXPLICIT_OPS];
 
-  GRANARY_IF_DEBUG( void *note; )
+  // Useful for debugging the creation location of an instruction and the
+  // alteration location of an instruction.
+  GRANARY_IF_DEBUG( void *note_create, *note_alter; )
 };
 
 }  // namespace arch

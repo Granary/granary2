@@ -67,7 +67,8 @@ BasicBlock::BasicBlock(void)
     : list(),
       id(-1),
       generation(-1),
-      is_reachable(false) {}
+      is_reachable(false),
+      fragment(nullptr) {}
 
 detail::SuccessorBlockIterator BasicBlock::Successors(void) const {
   return detail::SuccessorBlockIterator();
@@ -241,10 +242,16 @@ ReturnBasicBlock::~ReturnBasicBlock(void) {
   lazy_meta = nullptr;
 }
 
+// Returns true if this return basic block has meta-data. If it has meta-data
+// then the way that the branch is resolved is slightly more complicated.
+bool ReturnBasicBlock::UsesMetaData(void) const {
+  return nullptr != meta;
+}
+
 // Return this basic block's meta-data. Accessing a return basic block's meta-
 // data will "create" it for the block.
 BlockMetaData *ReturnBasicBlock::MetaData(void) {
-  if (GRANARY_UNLIKELY(!meta)) {
+  if (GRANARY_UNLIKELY(!UsesMetaData())) {
     std::swap(lazy_meta, meta);
   }
   return meta;

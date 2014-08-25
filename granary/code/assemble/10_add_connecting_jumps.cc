@@ -98,6 +98,10 @@ void AddConnectingJumps(FragmentList *frags) {
     // Has a fall-through that's not the next fragment.
     } else if (fall_through != frag_next) {
       arch::AddFallThroughJump(frag, fall_through);
+
+    // Has a fall-through that's an exit fragment.
+    } else if (IsA<ExitFragment *>(fall_through) && fall_through->encoded_pc) {
+      arch::AddFallThroughJump(frag, fall_through);
     }
   }
 }

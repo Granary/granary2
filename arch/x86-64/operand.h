@@ -37,7 +37,7 @@ class alignas(16) Operand : public OperandInterface {
         is_explicit(false),
         is_compound(false),
         is_effective_address(false),
-        is_annot_encoded_pc(false) {
+        is_annotation_instr(false) {
     imm.as_uint = 0;
   }
 
@@ -131,9 +131,9 @@ class alignas(16) Operand : public OperandInterface {
       uint8_t scale;
     } __attribute__((packed)) mem;
 
-    // Annotation instruction representing the location of a return address.
-    AnnotationInstruction *annot_instr;
-    LabelInstruction *label_instr;
+    // Annotation instruction representing the location of a return address or
+    // the target of a jump.
+    AnnotationInstruction *annotation_instr;
 
   } __attribute__((packed));
 
@@ -156,7 +156,7 @@ class alignas(16) Operand : public OperandInterface {
     // Does this pointer memory operand refer to an annotation instruction's
     // encoded program counter? This is used when mangling indirect calls,
     // because we need to manually PUSH the return address onto the stack.
-    bool is_annot_encoded_pc:1;
+    bool is_annotation_instr:1;
   } __attribute__((packed));
 
 #pragma clang diagnostic pop

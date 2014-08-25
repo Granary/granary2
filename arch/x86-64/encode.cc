@@ -75,8 +75,8 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
                          GRANARY_IF_DEBUG(, bool check_reachable)) {
   intptr_t target = 0;
   auto next_addr = reinterpret_cast<intptr_t>(next_pc);
-  if (op.is_annot_encoded_pc) {
-    target = static_cast<intptr_t>(op.annot_instr->data);
+  if (op.is_annotation_instr) {
+    target = static_cast<intptr_t>(op.annotation_instr->data);
   } else {
     target = op.branch_target.as_int;
   }
@@ -145,6 +145,7 @@ static void TruncateDisplacementToWidth(xed_enc_displacement_t *disp) {
 
 // Encode a memory operand.
 static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
+  GRANARY_ASSERT(!op.is_annotation_instr);
   xedo->type = op.type;
   xedo->u.mem.seg = XED_REG_DS != op.segment ? op.segment : XED_REG_INVALID;
   if (op.is_compound) {
@@ -185,6 +186,7 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 
   // Segment offset.
   if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
+    GRANARY_ASSERT(!op.is_annotation_instr);
     GRANARY_ASSERT(op.addr.as_int == static_cast<int32_t>(op.addr.as_uint));
     xedo->u.mem.disp.displacement = op.addr.as_uint;
     if (op.addr.as_int >= 0) { // Unsigned, apply a 31-bit mask.
@@ -194,8 +196,8 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     xedo->u.mem.seg = op.segment;
 
   // RIP-relative address.
-  } else  if (op.is_annot_encoded_pc) {
-    auto addr = static_cast<intptr_t>(op.annot_instr->data);
+  } else if (op.is_annotation_instr) {
+    auto addr = static_cast<intptr_t>(op.annotation_instr->data);
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;
@@ -209,11 +211,13 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     auto high_32 = mem_addr >> 32;
     auto sign_bit_32 = 1UL & (mem_addr >> 31);
 
+    // Make sure we can sign-extend it.
     if (0x0FFFFFFFFULL == high_32) {
       if (sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
     } else if (!high_32) {
       if (!sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
     }
+
     // Convert into a RIP-relative displacement when it fits.
     //
     // TODO(pag): Mask high order bits if 32 bits? For segment offsets, this
@@ -339,7 +343,7 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   // Special case: some instructions exist only for their side-effects on the
   // virtual register system, or as stand-in instructions (e.g. for out-edge
   // templates).
-  if (GRANARY_UNLIKELY(instr->dont_encode)) {
+  if (GRANARY_UNLIKELY(instr->dont_encode || instr->IsNoOp())) {
     instr->encoded_pc = pc;
     instr->encoded_length = 0;
     return pc;

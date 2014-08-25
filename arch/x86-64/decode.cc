@@ -390,7 +390,7 @@ static void ConvertDecodedInstruction(Instruction *instr,
       xed_decoded_inst_get_operand_width(xedd));
   ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
   instr->AnalyzeStackUsage();
-  GRANARY_IF_DEBUG( instr->note = __builtin_return_address(0); )
+  GRANARY_IF_DEBUG( instr->note_create = __builtin_return_address(0); )
 }
 }  // namespace
 

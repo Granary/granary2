@@ -160,6 +160,7 @@ static void RelativizeLoop(CacheMetaData *meta, NativeInstruction *cfi,
 void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
                          Instruction *instr, PC target_pc,
                          bool target_is_far_away) {
+  GRANARY_ASSERT(!cfi->HasIndirectTarget());
   auto iclass = instr->iclass;
   if (XED_ICLASS_CALL_NEAR == iclass) {
     if (target_is_far_away) {
@@ -224,8 +225,8 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   auto decoded_pc = cfi->instruction.decoded_pc;
   op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.is_effective_address = true;
-  op.is_annot_encoded_pc = true;
-  op.annot_instr = ret_address;
+  op.is_annotation_instr = true;
+  op.annotation_instr = ret_address;
   op.width = ADDRESS_WIDTH_BITS;
   LEA_GPRv_AGEN(&ni, ret_address_reg, op);
   cfi->InsertBefore(new NativeInstruction(&ni));
@@ -243,9 +244,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
   if (cfi->IsFunctionReturn()) {
     auto target_block = cfi->TargetBlock();
     if (auto return_block = DynamicCast<ReturnBasicBlock *>(target_block)) {
-      if (return_block->UnsafeMetaData()) {
-        MangleIndirectReturn(block, cfi);
-      }
+      if (return_block->UsesMetaData()) MangleIndirectReturn(block, cfi);
     }
     return;
 
@@ -259,6 +258,10 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
       cfi->InsertBefore(new NativeInstruction(&ni));
       CALL_NEAR_GPRv(&(cfi->instruction), new_target_reg);
     }
+
+    cfi->instruction.is_stack_blind = true;
+    cfi->instruction.analyzed_stack_usage = false;
+    cfi->instruction.dont_encode = true;
 
   } else if (cfi->IsUnconditionalJump()) {
     Instruction ni;

@@ -504,8 +504,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
       return;
     }
     comp->attr.block_meta = code_pred->attr.block_meta;
-    comp->stack.is_checked = true;
-    comp->stack.is_valid = code_pred->stack.is_valid;
+    comp->stack.status = code_pred->stack.status;
   }
 
   comp->attr.is_compensation_code = true;
@@ -519,11 +518,6 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Chain it into the control-flow.
   comp->successors[0] = succ;
   succ = comp;
-
-  auto label = new LabelInstruction;
-  SetMetaData(label, comp);
-  comp->instrs.Append(label);
-  pred->RelinkBranchInstr(comp);
 
   frags->InsertAfter(pred, comp);  // Chain it into the fragment list.
 

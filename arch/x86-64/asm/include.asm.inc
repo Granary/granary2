@@ -11,6 +11,15 @@
     .extern SYMBOL(x)
 
 #define DEFINE_FUNC(x) \
+    .text @N@\
+    .align 16 @N@\
+    .globl SYMBOL(x) @N@\
+    .type SYMBOL(x), @function @N@\
+    x: @N@\
+    .cfi_startproc
+
+#define DEFINE_INST_FUNC(x) \
+    .section .text.inst_exports @N@\
     .align 16 @N@\
     .globl SYMBOL(x) @N@\
     .type SYMBOL(x), @function @N@\
@@ -68,7 +77,6 @@
 #define POP_XMM_REG(off, reg, rest) \
     rest \
     POP_LAST_XMM_REG(off, reg)
-
 
 // Used for counting the space needed to store all registers.
 #define PLUS_8_8 16

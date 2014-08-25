@@ -21,13 +21,13 @@
 #define BEFORE(...) \
   do { \
     __VA_ARGS__; \
-    instr->UnsafeInsertBefore(new NativeInstruction(&ni)); \
+    instr->InsertBefore(new NativeInstruction(&ni)); \
   } while (0)
 
 #define AFTER(...) \
   do { \
     __VA_ARGS__; \
-    next_instr->UnsafeInsertBefore(new NativeInstruction(&ni)); \
+    next_instr->InsertBefore(new NativeInstruction(&ni)); \
   } while (0)
 
 extern "C" {
@@ -175,7 +175,7 @@ static AnnotationInstruction *FindInterruptChange(Instruction *instr) {
 // the fixup code as an actual basic block, thus making the exceptional control
 // flow explicit.
 void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
-                            NativeInstruction *instr, AppPC next_pc) {
+                            NativeInstruction *instr, AppPC) {
   if (IsA<ControlFlowInstruction *>(instr)) return;
 
   auto fault_pc = instr->DecodedPC();
@@ -284,10 +284,18 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
                  !instr->instruction.WritesToStackPointer());
 
   auto saved_rcx = block->AllocateVirtualRegister();
-  auto next_instr = instr->Next();
 
-  // Make sure the next instruction is the `IA_END_BASIC_BLOCK` instruction.
-  GRANARY_ASSERT(!next_instr->Next());
+  // High-level structure of the annotations:
+  //                  <valid stack>
+  //                  MOV saved_rcx, RCX
+  //                  LEA RCX, [reg containing user address]
+  //                  CALL granary_uaccess_*  // Return RCX=0 if no fault.
+  //                  JRCXZ no_fault
+  //        fault:    MOV RCX, saved_rcx
+  //                  JMP recovery_pc
+  //        no_fault: MOV RCX, saved_rcx
+  //                  <instr>
+  //                  ...
 
   // Just assume that the stack is valid, it's easier that way.
   instr->InsertBefore(new AnnotationInstruction(IA_VALID_STACK));
@@ -309,7 +317,7 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   // `RCX` is used by `instr`.
   instr->instruction.is_sticky = true;
 
-  next_instr->InsertBefore(lir::Jump(factory, next_pc, REQUEST_CHECK_LCFG));
+  //instr->InsertAfter(lir::Jump(factory, next_pc, REQUEST_CHECK_LCFG));
 
   // If the `handler` itself emulates the instruction, then we don't want to
   // encode the instruction. However, we don't want to clobber it into a `NOP`

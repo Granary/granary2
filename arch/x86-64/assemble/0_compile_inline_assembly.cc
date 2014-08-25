@@ -111,10 +111,10 @@ class InlineAssemblyParser {
   }
 
   // Get a label.
-  LabelInstruction *GetLabel(unsigned var_num)  {
-    if (!scope->var_is_initialized.Get(var_num)) {
-      scope->var_is_initialized.Set(var_num, true);
-      scope->vars[var_num].label = new LabelInstruction();
+  AnnotationInstruction *GetLabel(unsigned var_num)  {
+    if (!scope->var_is_initialized[var_num]) {
+      scope->var_is_initialized[var_num] = true;
+      scope->vars[var_num].label = new LabelInstruction;
     }
     return scope->vars[var_num].label;
   }
@@ -159,7 +159,7 @@ class InlineAssemblyParser {
 
   void ParseInPlaceOp(void) {
     auto var_num = ParseVar();
-    GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
+    GRANARY_ASSERT(scope->var_is_initialized[var_num]);
     auto &untyped_op(scope->vars[var_num].mem);  // Operand containers overlap.
     memcpy(op, untyped_op->Extract(), sizeof *op);
   }
@@ -171,7 +171,7 @@ class InlineAssemblyParser {
     ConsumeWhiteSpace();
     if (Peek('%')) {
       auto var_num = ParseVar();
-      GRANARY_ASSERT(scope->var_is_initialized.Get(var_num));
+      GRANARY_ASSERT(scope->var_is_initialized[var_num]);
       auto &reg_op(scope->vars[var_num].reg);
       op->reg = reg_op->Register();
     } else {
@@ -187,11 +187,11 @@ class InlineAssemblyParser {
   void ParseRegOp(void) {
     auto var_num = ParseVar();
     auto &reg_op(scope->vars[var_num].reg);
-    if (!scope->var_is_initialized.Get(var_num)) {
+    if (!scope->var_is_initialized[var_num]) {
       op->type = XED_ENCODER_OPERAND_TYPE_REG;
       op->reg = block->AllocateVirtualRegister();
       reg_op->UnsafeReplace(op);
-      scope->var_is_initialized.Set(var_num, true);
+      scope->var_is_initialized[var_num] = true;
     } else {
       memcpy(op, reg_op->Extract(), sizeof *op);
     }
@@ -242,6 +242,8 @@ class InlineAssemblyParser {
       op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
       op->rw = XED_OPERAND_ACTION_R;
       op->branch_target.as_app_pc = nullptr;
+      op->is_annotation_instr = true;
+      op->annotation_instr = branch_target;
     } else if ('m' == op_type || 'i' == op_type || 'r' == op_type) {
       auto width = ParseWidth();
       ConsumeWhiteSpace();
@@ -311,15 +313,12 @@ class InlineAssemblyParser {
     Instruction *new_instr(nullptr);
     FixupOperands();
 
-    // Don't allow instructions the read or modify the stack pointer as this
-    // will break invariants set up by early mangling about stack pointer
-    // definedness.
-    //
-    // TODO(pag): I should consider re-enabling this, or at least doing some
-    //            small checking
+    // TODO(pag): For the time being, I allow instrumentation instructions to
+    //            read/write from the stack pointer; however, this is valid
+    //            if and only if these instructions do not operate within a
+    //            loop. If they do get put inside a loop then step 9 in
+    //            `9_allocate_slots.cc` likely will not terminate.
     data.AnalyzeStackUsage();
-    //GRANARY_ASSERT(!data.ReadsFromStackPointer() &&
-    //               !data.WritesToStackPointer());
 
     // Ensure that instrumentation instructions do not alter the direction
     // flag! This is because we have no reliable way of saving and restoring
@@ -373,7 +372,7 @@ class InlineAssemblyParser {
 
   // Label that is the target of this instruction, in the event that this
   // instruction is a branch.
-  LabelInstruction *branch_target;
+  AnnotationInstruction *branch_target;
 };
 }  // namespace
 

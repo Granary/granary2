@@ -13,6 +13,7 @@
 namespace granary {
 
 // Forward declarations.
+class AnnotationInstruction;
 class DecodedBasicBlock;
 class NativeInstruction;
 class Operand;
@@ -257,6 +258,8 @@ class RegisterOperand : public Operand {
   bool IsVirtual(void) const;
 
   // Extract the register.
+  //
+  // Note: This has a driver-specific implementation.
   VirtualRegister Register(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, RegisterOperand)
@@ -281,6 +284,16 @@ class ImmediateOperand : public Operand {
   // Note: This has a driver-specific implementation.
   ImmediateOperand(uintptr_t imm, int width_bytes);
 
+  // Extract the value as an unsigned integer.
+  //
+  // Note: This has a driver-specific implementation.
+  uint64_t UInt(void);
+
+  // Extract the value as a signed integer.
+  //
+  // Note: This has a driver-specific implementation.
+  int64_t Int(void);
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
 };
 
@@ -297,7 +310,7 @@ class LabelOperand : public Operand {
   // Target of a label operand.
   //
   // Note: This has a driver-specific implementation.
-  LabelInstruction *Target(void) const;
+  AnnotationInstruction *Target(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, LabelOperand)
 

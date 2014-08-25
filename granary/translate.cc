@@ -9,6 +9,7 @@
 #include "granary/code/edge.h"
 #include "granary/code/metadata.h"
 
+#include "granary/app.h"
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
@@ -51,8 +52,8 @@ CachePC Translate(ContextInterface *context, AppPC pc,
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
   LocalControlFlowGraph cfg(context);
-  BinaryInstrumenter inst(context, &cfg, meta);
-  meta = inst.InstrumentDirect();
+  BinaryInstrumenter inst(context, &cfg, &meta);
+  inst.InstrumentDirect();
 
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
@@ -72,8 +73,8 @@ CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                                              target_app_pc);
 
   LocalControlFlowGraph cfg(context);
-  BinaryInstrumenter inst(context, &cfg, meta);
-  meta = inst.InstrumentIndirect();
+  BinaryInstrumenter inst(context, &cfg, &meta);
+  inst.InstrumentIndirect();
 
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {
@@ -90,8 +91,9 @@ CachePC Translate(ContextInterface *context, IndirectEdge *edge,
 CachePC TranslateEntryPoint(ContextInterface *context, BlockMetaData *meta,
                             EntryPointKind kind, int category) {
   LocalControlFlowGraph cfg(context);
-  BinaryInstrumenter inst(context, &cfg, meta);
-  meta = inst.InstrumentEntryPoint(kind, category);
+  BinaryInstrumenter inst(context, &cfg, &meta);
+  inst.InstrumentEntryPoint(kind, category);
+
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {
     auto index = context->CodeCacheIndex();

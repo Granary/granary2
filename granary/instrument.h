@@ -29,18 +29,18 @@ class InstrumentationTool;
 class BinaryInstrumenter {
  public:
   BinaryInstrumenter(ContextInterface *context_, LocalControlFlowGraph *cfg_,
-                     BlockMetaData *meta_);
+                     BlockMetaData **meta_);
   ~BinaryInstrumenter(void);
 
   // Instrument some code as-if it is targeted by a direct CFI.
-  BlockMetaData *InstrumentDirect(void);
+  void InstrumentDirect(void);
 
   // Instrument some code as-if it is targeted by an indirect CFI.
-  BlockMetaData *InstrumentIndirect(void);
+  void InstrumentIndirect(void);
 
   // Instrument some code as-if it is targeted by a native entrypoint. These
   // are treated as being the initial points of instrumentation.
-  BlockMetaData *InstrumentEntryPoint(EntryPointKind kind, int category);
+  void InstrumentEntryPoint(EntryPointKind kind, int category);
 
  private:
   // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
@@ -59,7 +59,7 @@ class BinaryInstrumenter {
 
   ContextInterface *context;
   InstrumentationTool *tools;
-  BlockMetaData *meta;
+  BlockMetaData **meta;
 
   LocalControlFlowGraph *cfg;
   BlockFactory factory;

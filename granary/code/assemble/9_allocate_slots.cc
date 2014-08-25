@@ -76,7 +76,7 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
   }
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (!code_frag->stack.is_valid) {
+      if (STACK_VALID != code_frag->stack.status) {
         if (auto partition = frag->partition.Value()) {
           partition->analyze_stack_frame = false;
         }

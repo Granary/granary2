@@ -133,6 +133,10 @@ class BlockMangler {
   }
 
   void MangleFunctionCall(ControlFlowInstruction *cfi) {
+
+    // Always add in an `IA_RETURN_ADDRESS` annotation. In a later stage,
+    // we ensure that this annotation is placed in the correct location, even
+    // if instructions are inserted between it and the function.
     auto ret_address = new AnnotationInstruction(
         IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
     cfi->InsertAfter(ret_address);
@@ -165,8 +169,10 @@ class BlockMangler {
         arch::RelativizeDirectCFI(GetMetaData<CacheMetaData>(block), cfi,
                                   &(cfi->instruction), target_pc,
                                   AddressNeedsRelativizing(target_pc));
+
+      // E.g. system calls, interrupt calls.
       } else {
-        arch::MangleIndirectCFI(block, cfi, cfi->return_address);
+        //arch::MangleIndirectCFI(block, cfi, cfi->return_address);
       }
     // Indirect CFIs might read their target from a PC-relative address.
     } else if (IsA<IndirectBasicBlock *>(target_block)) {

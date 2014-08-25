@@ -103,8 +103,6 @@ bool MemoryOperand::IsCompound(void) const {
 }
 
 // Is this an effective address (instead of being an actual memory access).
-//
-// Note: This has a driver-specific implementation.
 bool MemoryOperand::IsEffectiveAddress(void) const {
   return op->is_effective_address;  // Applies to PTR and MEM types.
 }
@@ -149,8 +147,6 @@ static void MatchNextRegister(xed_reg_enum_t reg,
 
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.
-//
-// Note: This has a driver-specific implementation.
 size_t MemoryOperand::CountMatchedRegisters(
     std::initializer_list<VirtualRegister *> regs) const {
   size_t num_matched(0);
@@ -179,8 +175,6 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg)
 
 // Initialize a immediate operand from a signed integer, where the value has
 // a width of `width_bytes`.
-//
-// Note: This has a driver-specific implementation.
 ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
@@ -193,8 +187,6 @@ ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
 
 // Initialize a immediate operand from a unsigned integer, where the value
 // has a width of `width_bytes`.
-//
-// Note: This has a driver-specific implementation.
 ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
@@ -205,15 +197,23 @@ ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
   op_ptr = TOMBSTONE;
 }
 
+// Extract the value as an unsigned integer.
+uint64_t ImmediateOperand::UInt(void) {
+  return op->imm.as_uint;
+}
+
+// Extract the value as a signed integer.
+int64_t ImmediateOperand::Int(void) {
+  return op->imm.as_int;
+}
+
 // Initialize a label operand from a non-null pointer to a label.
-//
-// Note: This has a driver-specific implementation.
 LabelOperand::LabelOperand(LabelInstruction *label)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   op->width = -1;
-  op->label_instr = label;
-  op->is_annot_encoded_pc = true;
+  op->annotation_instr = label;
+  op->is_annotation_instr = true;
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
@@ -222,8 +222,8 @@ LabelOperand::LabelOperand(LabelInstruction *label)
 // Target of a label operand.
 //
 // Note: This has a driver-specific implementation.
-LabelInstruction *LabelOperand::Target(void) const {
-  return op->label_instr;
+AnnotationInstruction *LabelOperand::Target(void) const {
+  return op->annotation_instr;
 }
 
 namespace arch {
@@ -266,9 +266,9 @@ static void EncodeMemOpToString(const Operand *op, OperandString *str) {
   if (op->mem.disp) {
     if (op->mem.disp > 0) {
       GRANARY_ASSERT(op->mem.reg_base || op->mem.reg_index);
-      str->UpdateFormat(" + %d", op->mem.disp);
+      str->UpdateFormat(" + 0x%x", op->mem.disp);
     } else {
-      str->UpdateFormat(" - %d", -op->mem.disp);
+      str->UpdateFormat(" - 0x%x", -op->mem.disp);
     }
   }
   str->UpdateFormat("]");
@@ -287,7 +287,11 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_BRDISP:
-      str->Format("0x%lx", addr.as_uint);
+      if (is_annotation_instr) {
+        str->Format("LABEL %lx", reinterpret_cast<uintptr_t>(annotation_instr));
+      } else {
+        str->Format("0x%lx", addr.as_uint);
+      }
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
@@ -331,7 +335,7 @@ void Operand::EncodeToString(OperandString *str) const {
       if (XED_REG_INVALID != segment) {
         str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
       }
-      if (is_annot_encoded_pc) {
+      if (is_annotation_instr) {
         str->UpdateFormat("[return address]");
       } else {
         if (addr.as_int >= 0) {

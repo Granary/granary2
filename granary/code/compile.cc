@@ -61,18 +61,19 @@ static void StageEncodeLabels(Fragment *frag, CachePC estimated_encode_pc) {
 // Stage encode an individual fragment. Returns the number of bytes needed to
 // encode all native instructions in this fragment.
 static int StageEncodeNativeInstructions(Fragment *frag,
-                                         CachePC estimated_encode_pc) {
+                                         const CachePC estimated_encode_pc) {
   auto encode_pc = estimated_encode_pc;
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::STAGED);
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (ninstr->instruction.IsNoOp()) continue;
       GRANARY_IF_DEBUG( bool encoded = ) encoder.EncodeNext(
           &(ninstr->instruction), &encode_pc);
       GRANARY_ASSERT(encoded);
     }
   }
-  return static_cast<int>(encode_pc - estimated_encode_pc);
+  auto size = static_cast<int>(encode_pc - estimated_encode_pc);
+  GRANARY_ASSERT(0 <= size);
+  return size;
 }
 
 // Performs stage encoding of a fragment list. This determines the size of each
@@ -100,10 +101,9 @@ int StageEncode(FragmentList *frags, CachePC estimated_encode_pc) {
 static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (!ninstr->instruction.IsNoOp()) {
-        ninstr->instruction.SetEncodedPC(curr_pc);
-        curr_pc += ninstr->instruction.EncodedLength();
-      }
+      ninstr->instruction.SetEncodedPC(curr_pc);
+      curr_pc += ninstr->instruction.EncodedLength();
+
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       // Make labels and return addresses aware of their encoded addresses.
       if (IA_LABEL == annot->annotation ||
@@ -122,35 +122,65 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
 // Assign program counters to every fragment and instruction.
 static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    if (frag->encoded_pc) continue;
-
-    frag->encoded_pc = cache_code;
-    cache_code += frag->encoded_size;
+    if (!frag->encoded_pc) {
+      frag->encoded_pc = cache_code;
+      cache_code += frag->encoded_size;
+    }
     RelativizeInstructions(frag, frag->encoded_pc);
   }
 }
 
+// Relativize a control-flow instruction.
+static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
+  if (cfi->IsNoOp()) return;  // Elided.
+
+  // Note: We use the `arch::Instruction::HasIndirectTarget` instead of
+  //       `ControlFlowInstruction::HasIndirectTarget` because the latter
+  //       sometimes "lies" in order to hide us from the details of mangling
+  //       far-away targets.
+  if (cfi->instruction.HasIndirectTarget()) return;
+
+  GRANARY_ASSERT(frag->branch_instr == cfi);
+  auto target_frag = frag->successors[FRAG_SUCC_BRANCH];
+  GRANARY_ASSERT(nullptr != target_frag);
+  auto target_pc = target_frag->encoded_pc;
+  GRANARY_ASSERT(nullptr != target_pc);
+  cfi->instruction.SetBranchTarget(target_pc);
+}
+
+// Relativize a branch instruction.
+//
+// TODO(pag): This is a bit ugly. `2_build_fragment_list.cc` leaves labels
+//            behind (in their respective basic block instruction lists), so
+//            that all fragments are correctly connected. However, some
+//            branch instructions are introduced at a later point in time,
+//            e.g. `10_add_connecting_jumps.cc`, to make sure there are
+//            fall-throughs for everything.
+//
+//            Perhaps one solution would be to move the labels into the
+//            correct fragments at some point.
+static void RelativizeBranch(Fragment *frag, BranchInstruction *branch) {
+  if (frag->branch_instr == branch) {
+    branch->instruction.SetBranchTarget(
+        frag->successors[FRAG_SUCC_BRANCH]->encoded_pc);
+
+  } else {
+    auto target = branch->TargetLabel();
+    auto target_pc = target->Data<CachePC>();
+    GRANARY_ASSERT(nullptr != target_pc);
+    GRANARY_ASSERT(4096UL < target->data);  // Doesn't look like a refcount.
+    branch->instruction.SetBranchTarget(target_pc);
+  }
+}
+
 // Relativize all control-flow instructions.
-static void RelativizeCFIs(FragmentList *frags) {
+static void RelativizeControlFlow(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-        if (cfi->IsNoOp()) continue;  // Elided.
-        if (cfi->HasIndirectTarget()) continue;  // No target PC.
-        if (IsA<NativeBasicBlock *>(cfi->TargetBlock())) continue;
-
-        GRANARY_ASSERT(frag->branch_instr == cfi);
-        auto target_frag = frag->successors[FRAG_SUCC_BRANCH];
-        GRANARY_ASSERT(nullptr != target_frag);
-        auto target_pc = target_frag->encoded_pc;
-        GRANARY_ASSERT(nullptr != target_pc);
-        cfi->instruction.SetBranchTarget(target_pc);
-
+        RelativizeCFI(frag, cfi);
       } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-        auto target = branch->TargetInstruction();
-        auto target_pc = target->Data<CachePC>();
-        GRANARY_ASSERT(nullptr != target_pc);
-        branch->instruction.SetBranchTarget(target_pc);
+        RelativizeBranch(frag, branch);
       }
     }
   }
@@ -163,7 +193,6 @@ static void Encode(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        if (ninstr->IsNoOp()) continue;
         GRANARY_IF_DEBUG( auto expected_length =
             ninstr->instruction.EncodedLength(); )
         GRANARY_IF_DEBUG( auto encoded = ) encoder.Encode(
@@ -171,29 +200,6 @@ static void Encode(FragmentList *frags) {
         GRANARY_ASSERT(encoded);
         GRANARY_ASSERT(expected_length == ninstr->instruction.EncodedLength());
         GRANARY_ASSERT(!ninstr->IsInterruptCall());
-      }
-    }
-  }
-}
-
-// For each basic block, this finds the unique first fragment of the block.
-static void FindBlockEntrypointFragments(FragmentList *frags) {
-  // Find the unique block head.
-  for (auto frag : FragmentListIterator(frags)) {
-    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (!cfrag->attr.is_block_head) continue;
-      auto partition = cfrag->partition.Value();
-      partition->entry_frag = frag;
-    }
-  }
-
-  // Find the head of the partition that contains the unique block head, if
-  // such a head exists.
-  for (auto frag : FragmentListIterator(frags)) {
-    if (IsA<PartitionEntryFragment *>(frag)) {
-      auto partition = frag->partition.Value();
-      if (partition->entry_frag) {
-        partition->entry_frag = frag;
       }
     }
   }
@@ -254,15 +260,15 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 // Encodes the fragments into the specified code caches.
 static void Encode(FragmentList *frags, CodeCache *block_cache) {
   auto estimated_addr = block_cache->AllocateBlock(0);
-  FindBlockEntrypointFragments(frags);
-  if (FLAG_debug_trace_exec) {
+  if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) {
     AddBlockTracers(frags, estimated_addr);
   }
-  auto num_bytes = StageEncode(frags, estimated_addr);
-  auto cache_code = block_cache->AllocateBlock(num_bytes);
-  RelativizeCode(frags, cache_code);
-  RelativizeCFIs(frags);
-  if (auto cache_code_end = cache_code + num_bytes) {
+  if (auto num_bytes = StageEncode(frags, estimated_addr)) {
+    auto cache_code = block_cache->AllocateBlock(num_bytes);
+    auto cache_code_end = cache_code + num_bytes;
+    RelativizeCode(frags, cache_code);
+    RelativizeControlFlow(frags);
+
     CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
     Encode(frags);
   }

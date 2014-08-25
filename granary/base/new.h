@@ -3,8 +3,6 @@
 #ifndef GRANARY_BASE_NEW_H_
 #define GRANARY_BASE_NEW_H_
 
-#include <new>
-
 #include "arch/base.h"
 
 #include "granary/base/base.h"

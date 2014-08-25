@@ -15,12 +15,17 @@ namespace arch {
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, xed_category_enum_t category) {
-  GRANARY_IF_DEBUG( auto note = instr->note; )
+  GRANARY_IF_DEBUG( auto note = instr->note_create; )
   memset(instr, 0, sizeof *instr);
   instr->iclass = iclass;
   instr->iform = iform;
   instr->category = category;
-  GRANARY_IF_DEBUG( instr->note = note ? note : __builtin_return_address(0); )
+
+#ifdef GRANARY_DEBUG
+  instr->note_create = note;
+  auto mod = __builtin_return_address(1);
+  (instr->note_create ? instr->note_alter : instr->note_create) = mod;
+#endif
 
   // These are only really atomic if there's a memory op.
   //
@@ -115,14 +120,15 @@ void MemoryBuilder::Build(Instruction *instr) {
 void BranchTargetBuilder::Build(Instruction *instr) {
   auto &op(instr->ops[instr->num_explicit_ops++]);
   if (BRANCH_TARGET_LABEL == kind) {
-    op.is_annot_encoded_pc = true;
-    op.annot_instr = label;
+    op.is_annotation_instr = true;
+    op.annotation_instr = label;
+    op.width = 32;
   } else {
     op.branch_target.as_pc = pc;
+    op.width = arch::ADDRESS_WIDTH_BITS;
   }
   op.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
   op.rw = XED_OPERAND_ACTION_R;
-  op.width = arch::ADDRESS_WIDTH_BITS;
   op.is_explicit = true;
 }
 

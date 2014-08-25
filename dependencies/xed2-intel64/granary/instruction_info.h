@@ -211,6 +211,30 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
     is_ambiguous_arg[iform][0] = true;
     is_ambiguous_arg[iform][1] = true;
   }
+
+  // FDIVP, FDIVRP
+  instr_table[XED_ICLASS_FDIVP].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FDIVP_X87_ST0] = true;
+  is_ambiguous_arg[XED_IFORM_FDIVP_X87_ST0][1] = true;
+
+  instr_table[XED_ICLASS_FDIVRP].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FDIVRP_X87_ST0] = true;
+  is_ambiguous_arg[XED_IFORM_FDIVRP_X87_ST0][1] = true;
+
+  // FMULP
+  instr_table[XED_ICLASS_FMULP].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FMULP_X87_ST0] = true;
+  is_ambiguous_arg[XED_IFORM_FMULP_X87_ST0][1] = true;
+
+  // FISTP, FISTTP
+  instr_table[XED_ICLASS_FISTP].has_ambigiuous_ops = true;
+  instr_table[XED_ICLASS_FISTTP].has_ambigiuous_ops = true;
+  for (int iform = XED_IFORM_FISTP_MEMm64int_ST0;
+       iform <= XED_IFORM_FISTTP_MEMmem32int_ST0; ++iform) {
+    has_ambiguous_arg[iform] = true;
+    is_ambiguous_arg[iform][1] = true;
+  }
+
 }
 
 #endif  // DEPENDENCIES_XED2_INTEL64_GRANARY_INSTRUCTION_INFO_H_

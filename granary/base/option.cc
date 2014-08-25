@@ -281,10 +281,25 @@ void ParsePositiveIntOption(Option *option) {
   auto value = FindValueForName(option->name);
   if (value) {
     int int_value(0);
-    DeFormat(value, "%u", reinterpret_cast<unsigned *>(&int_value));
-    if (0 < int_value) {
+    if (DeFormat(value, "%u", reinterpret_cast<unsigned *>(&int_value))) {
+      if (0 < int_value) {
+        *(option->has_value) = true;
+        *reinterpret_cast<int *>(option->value) = int_value;
+      }
+    }
+  }
+}
+
+// Parse an option as a bitmask.
+void ParseBitMaskOption(Option *option) {
+  auto value = FindValueForName(option->name);
+  if (value) {
+    uint64_t uint_value(0);
+    if (DeFormat(value, "%lx", &uint_value) ||
+        DeFormat(value, "0x%lx", &uint_value) ||
+        DeFormat(value, "0X%lx", &uint_value)) {
       *(option->has_value) = true;
-      *reinterpret_cast<int *>(option->value) = int_value;
+      *reinterpret_cast<uint64_t *>(option->value) = uint_value;
     }
   }
 }

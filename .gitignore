@@ -7,21 +7,23 @@
 *.ko
 *.ll
 *.bc
+a.out
 bin
 
 # Debugging and dependencies
 *.trace
 *.d
+core
 
-# Eclipse Junk
+# Eclipse-specific.
 .cproject
 .project
 .settings
 
-# Mac OS stuff
+# Mac OS-specific.
 *.DS_Store
 
-# swp and tmp files
+# swap and tmp files
 *.*~
 *.swp
 *.log

@@ -272,7 +272,7 @@ static void MangleArith(NativeInstruction *instr) {
 
 // Mangle an indirect call into a NOP, as it will fall-through to edge code.
 static void MangleIndirectCFI(NativeInstruction *instr) {
-  arch::NOP_90(&(instr->instruction));
+  instr->instruction.dont_encode = true;
 }
 
 }  // namespace

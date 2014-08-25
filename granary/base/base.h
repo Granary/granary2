@@ -19,6 +19,7 @@
 # include <initializer_list>
 # include <limits>
 # include <memory>
+# include <new>
 # include <type_traits>
 #endif
 
@@ -175,7 +176,7 @@
 // Note: While these functions can be invoked by instrumented code, their
 //       code *is not* instrumented.
 #define GRANARY_EXPORT_TO_INSTRUMENTATION \
-  __attribute__((section(".text.inst_exports")))
+  __attribute__((noinline, used, section(".text.inst_exports")))
 
 // Determine how much should be added to a value `x` in order to align `x` to
 // an `align`-byte boundary.

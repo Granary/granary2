@@ -40,8 +40,25 @@ extern void exit_group(int) __attribute__((noreturn));
 namespace granary {
 namespace {
 
-// A copy of the original sigaction for `SIGSEGV`.
-static struct sigaction old_sigaction;
+#define SA_SIGINFO  0x4
+#define SA_RESTORER 0x04000000
+
+// Illegal instruction (ANSI). In Granary, these would come up because of
+// failed assertions.
+#define SIGILL      4
+
+// Segmentation violation (ANSI). This is really just a page fault or a
+// general protection fault.
+#define SIGSEGV     11
+
+// Biggest signal number + 1 (including real-time signals).
+#define _NSIG       65
+
+// A copy of the original sigaction for some signals that Granary tries to
+// take over.
+//
+// TODO(pag): Implement proper signal takeover.
+static struct sigaction old_sigaction[_NSIG];
 
 // Initialize Granary for debugging by GDB. For example, if one is doing:
 //
@@ -62,9 +79,22 @@ static void AwaitAttach(int num, void *info, void *context) {
   read(0, buff, 1);
 
   // Invoke the old handler (if any) before returning.
-  if (old_sigaction.sa_sigaction) {
-    (old_sigaction.sa_sigaction)(num, info, context);
+  if (old_sigaction[num].sa_sigaction) {
+    (old_sigaction[num].sa_sigaction)(num, info, context);
   }
+}
+
+// Used to attach a signal handler to an arbitrary signal, such that when the
+// signal is triggered, a message is printed to the screen that allows
+// Granary to be attached to the process.
+static void AwaitAttachOnSignal(int signum) {
+  struct sigaction new_sigaction;
+  memset(&(old_sigaction[signum]), 0, sizeof new_sigaction);
+  memset(&new_sigaction, 0, sizeof new_sigaction);
+  new_sigaction.sa_sigaction = &AwaitAttach;
+  new_sigaction.sa_flags = SA_SIGINFO | SA_RESTORER;
+  new_sigaction.sa_restorer = &rt_sigreturn;
+  rt_sigaction(signum, &new_sigaction, &(old_sigaction[signum]), _NSIG / 8);
 }
 
 // Initialize Granary for debugging. This is geared toward GDB-based debugging,
@@ -77,14 +107,11 @@ static void InitDebug(void) {
   if (FLAG_debug_gdb_prompt) {
     AwaitAttach(0, nullptr, nullptr);
   } else {
-    struct sigaction new_sigaction;
-    memset(&old_sigaction, 0, sizeof new_sigaction);
-    memset(&new_sigaction, 0, sizeof new_sigaction);
-    new_sigaction.sa_sigaction = &AwaitAttach;
-    new_sigaction.sa_flags = 4;  // `SA_SIGINFO`.
-    rt_sigaction(11 /* SIGSEGV */, &new_sigaction, &old_sigaction,
-                 8 /* _NSIG / 8 */);
+    AwaitAttachOnSignal(SIGSEGV);
   }
+
+  // E.g. assertion failure that invokes `__builtin_trap`.
+  AwaitAttachOnSignal(SIGILL);
 }
 
 // Searches for a specific environment variable.

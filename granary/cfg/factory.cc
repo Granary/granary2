@@ -154,21 +154,27 @@ namespace {
 // in the `IA_UNKNOWN_STACK` annotation when the decoded instruction resulted in
 // the addition of an `IA_UNDEFINED_STACK` annotation. These two annotations
 // are used during code assembly to split up blocks into fragments.
-static void AnnotateInstruction(DecodedBasicBlock *block,
-                                Instruction *begin) {
-  bool in_undefined_state = false;
+static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
+                                Instruction *begin, AppPC next_pc) {
+  auto in_undefined_state = false;
+  auto changes_interrupt_state = false;
   for (auto instr : InstructionListIterator(begin)) {
     if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (IA_UNDEFINED_STACK == annot->annotation) {
+      if (IA_INVALID_STACK == annot->annotation) {
         in_undefined_state = true;
       } else if (IA_VALID_STACK == annot->annotation) {
         in_undefined_state = false;
+      } else if (IA_CHANGES_INTERRUPT_STATE == annot->annotation) {
+        changes_interrupt_state = true;
       }
     }
   }
   if (in_undefined_state) {
     block->AppendInstruction(
         new AnnotationInstruction(IA_UNKNOWN_STACK_ABOVE));
+  }
+  if (changes_interrupt_state) {
+    block->AppendInstruction(lir::Jump(factory, next_pc));
   }
 }
 
@@ -181,8 +187,9 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
+    // Exist mostly to document instruction boundaries to client code.
     block->AppendInstruction(
-        new AnnotationInstruction(IA_SEQUENCE_POINT, pc));
+        new AnnotationInstruction(IA_BEGIN_LOGICAL_INSTRUCTION, pc));
 
     auto decoded_pc = pc;
     auto before_instr = block->LastInstruction()->Previous();
@@ -206,11 +213,11 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     block->AppendInstruction(ninstr);
     if (ninstr->IsAppInstruction()) {
       os::AnnotateAppInstruction(this, block, ninstr, pc);
-      instr = block->LastInstruction()->Previous();
     }
-    AnnotateInstruction(block, before_instr);
+    AnnotateInstruction(this, block, before_instr, pc);
+    instr = block->LastInstruction()->Previous();
   } while (!IsA<ControlFlowInstruction *>(instr));
-  AddFallThroughInstruction(block, instr, pc);
+  AddFallThroughInstruction(block , instr, pc);
 }
 
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.

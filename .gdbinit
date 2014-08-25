@@ -412,7 +412,7 @@ define print-arch-operand
       print-xed-reg $__o->segment
       printf ":"
     end
-    if $__o->is_annot_encoded_pc
+    if $__o->is_annotation_instr
       printf "return address"
     else
       if 0 > $__o->addr.as_int
@@ -592,10 +592,9 @@ define print-frag
   if &_ZTVN7granary12CodeFragmentE == (((char *) $__f->_vptr$Fragment) - 16)
     set $__cf = (granary::CodeFragment *) $__f
     printf "head=%d, ", $__cf->attr.is_block_head
-    printf "app=%d, ", $__cf->attr.is_app_code
-    printf "add?=%d, ", $__cf->attr.can_add_to_partition
-    printf "stack=%d, ", $__cf->stack.is_valid
-    printf "prop=%d, ", !$__cf->stack.disallow_forward_propagation
+    printf "app=%d, ", granary::CODE_TYPE_APP == $__cf->type ? 1 : 0
+    printf "addsucc2p=%d, ", $__cf->attr.can_add_succ_to_partition
+    printf "stack=%d, ", granary::STACK_VALID == $__cf->stack.status ? 1 : 0
     printf "meta=%p", $__cf->attr.block_meta
     if $__p
       printf ", part=%d", $__p->id
@@ -652,6 +651,54 @@ define print-frags
   printf "Opening /tmp/graph.dot with xdot...\n"
   shell xdot /tmp/graph.dot &
   dont-repeat
+end
+
+
+# get-next-block
+#
+# Treat `$arg0` as a pointer to a `BasicBlock`, and update the variable `$__b`
+# to point to the next basic block in the list to which `$arg0` belongs.
+define get-next-block
+  set language c++
+  set $__bl = (granary::ListHead *) (((unsigned long) $arg0) + 8)
+  set $__nb = $__bl->next
+  if $__nb
+    set $__b = (granary::BasicBlock *) (((unsigned long) $__nb) - 8)
+  else
+    set $__b = (granary::BasicBlock *) 0
+  end
+end
+
+
+# print-block
+#
+# Treat `$arg0` as a pointer to a `BasicBlock`, and print the block as a cluster
+# of DOT digraph nodes. A cluster is used because some blocks contain internal
+# control-flow, which is then printed as individual blocks.
+define print-block
+  
+  dont-repeat
+end
+
+
+# print-cfg
+#
+# Treat `$arg0` as a pointer to a `LocalControlFlowGraph`, and print a DOT
+# digraph of the LCFG to `/tmp/graph.dot`, then display it using `XDot`.
+define print-cfg
+  set language c++
+  set $__c = (granary::LocalControlFlowGraph *) $arg0
+  set $__b = $__c->first_block
+
+  printf "digraph {\n"
+
+  while $__b
+    print-block $__b
+    get-next-block $__b
+  end
+  dont-repeat
+
+  printf "}\n"
 end
 
 

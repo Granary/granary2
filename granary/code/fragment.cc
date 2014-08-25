@@ -105,13 +105,11 @@ CodeAttributes::CodeAttributes(void)
       branch_is_indirect(false),
       branch_is_function_call(false),
       branch_is_jump(false),
-      can_add_to_partition(true),
+      can_add_succ_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
-      has_flag_split_hint(false),
-      is_app_code(false),
-      is_inst_code(false),
       is_block_head(false),
+      is_return_target(false),
       is_compensation_code(false),
       is_in_edge_code(false) {}
 
@@ -131,35 +129,20 @@ Fragment::Fragment(void)
       branch_instr(nullptr),
       stack_frame() { }
 
-namespace {
-
-// Returns the label that identifies the current fragment.
-static LabelInstruction *GetFragEntryLabel(Fragment *frag) {
-  for (auto instr : InstructionListIterator(frag->instrs)) {
-    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
-      if (GetMetaData<Fragment *>(label) == frag) {
-        return label;
-      }
-    }
-  }
-  GRANARY_ASSERT(false);
-  return nullptr;
-}
-
-}  // namespace
-
-// Relink a branch instruction in this fragment to point to a label in
-// `new_succ`.
-void Fragment::RelinkBranchInstr(Fragment *new_succ) {
-  if (!branch_instr) return;
-  if (new_succ != successors[FRAG_SUCC_BRANCH]) return;
-  auto branch = DynamicCast<BranchInstruction *>(branch_instr);
-  if (!branch) return;
-  branch->SetTargetInstruction(GetFragEntryLabel(new_succ));
-}
+SSAFragment::SSAFragment(void)
+    : Fragment(),
+      ssa(),
+      spill() {}
 
 SSAFragment::~SSAFragment(void) {}
+
+CodeFragment::CodeFragment(void)
+    : SSAFragment(),
+      attr(),
+      type(CODE_TYPE_UNKNOWN),
+      stack() {}
 CodeFragment::~CodeFragment(void) {}
+
 PartitionEntryFragment::~PartitionEntryFragment(void) {}
 PartitionExitFragment::~PartitionExitFragment(void) {}
 FlagEntryFragment::~FlagEntryFragment(void) {}
@@ -214,17 +197,6 @@ enum {
                sizeof fragment_partition_color[0]
 };
 
-static const char *FragmentBorder(const Fragment *frag) {
-  if (auto code = DynamicCast<CodeFragment *>(frag)) {
-    if (!code->stack.is_checked) {
-      return "red";
-    } else if (!code->stack.is_valid) {
-      return "white";
-    }
-  }
-  return "black";
-}
-
 // Color the fragment according to the partition to which it belongs. This is
 // meant to be a visual cue, not a perfect association with the fragment's
 // partition id.
@@ -277,15 +249,18 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
       if (!ninstr->IsAppInstruction()) {
         Log(level, "&nbsp;  ");
       }
-      Log(level, "%s", ninstr->OpCodeName());
+      Log(level, "%s", ninstr->ISelName());
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
 #ifdef GRANARY_DEBUG
-      if (FLAG_debug_log_instr_note && ainstr.note) {
-        Log(level, "note: %p <BR ALIGN=\"LEFT\"/>", ainstr.note);\
+      if (FLAG_debug_log_instr_note && ainstr.note_create) {
+        Log(level, "note: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_create);\
       }
 #endif
+    } else if (IsA<LabelInstruction *>(instr)) {
+      Log(level, "LABEL %lx:<BR ALIGN=\"LEFT\"/>",
+          reinterpret_cast<uintptr_t>(instr));
     }
   }
 }
@@ -304,30 +279,34 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   } else if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
     switch (exit_frag->kind) {
       case FRAG_EXIT_NATIVE: Log(level, "native"); break;
-      case FRAG_EXIT_FUTURE_BLOCK_DIRECT: Log(level, "direct edge"); break;
+      case FRAG_EXIT_FUTURE_BLOCK_DIRECT:
+        Log(level, "direct edge -&gt; app %p",
+            MetaDataCast<AppMetaData *>(exit_frag->block_meta)->start_pc);
+        break;
       case FRAG_EXIT_FUTURE_BLOCK_INDIRECT: Log(level, "indirect edge"); break;
       case FRAG_EXIT_EXISTING_BLOCK: Log(level, "existing block"); break;
     }
+
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
     auto partition = code->partition.Value();
-    Log(level, code->attr.is_app_code ? "app " : "inst ");
+    Log(level, CODE_TYPE_APP == code->type ? "app " : "inst ");
     if (partition) Log(level, "p%u ", partition->id);
-    if (code->attr.is_in_edge_code) Log(level, "edge ");
-    if (code->attr.has_flag_split_hint) Log(level, "fsplit ");
+    if (code->attr.is_in_edge_code) Log(level, "inedge ");
     if (code->attr.modifies_flags) Log(level, "mflags ");
-    if (!code->attr.can_add_to_partition) Log(level, "!add2p ");
+    if (!code->attr.can_add_succ_to_partition) Log(level, "!addsucc2p ");
     if (code->attr.branches_to_code) Log(level, "-&gt;code ");
     if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
+    if (STACK_INVALID == code->stack.status) Log(level, "badstack ");
+    if (code->encoded_size) Log(level, "size=%d ", code->encoded_size);
     if (code->branch_instr) {
       Log(level, "binstr=%s ", code->branch_instr->OpCodeName());
     }
-    Log(level, "|");
 
     if (code->attr.block_meta && code->attr.is_block_head) {
       auto meta = MetaDataCast<AppMetaData *>(code->attr.block_meta);
-      Log(level, "%p|", meta->start_pc);
+      Log(level, "|%p", meta->start_pc);
     } else if (code->attr.is_compensation_code) {
-      Log(level, "compensation code|");
+      Log(level, "|compensation code");
     }
   }
 }
@@ -335,19 +314,16 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 static void LogLiveRegisters(LogLevel level, const Fragment *frag) {
   auto sep = "";
   auto logged = false;
-  if (IsA<ExitFragment *>(frag) &&
-      frag->regs.live_on_entry.begin() != frag->regs.live_on_exit.end()) {
-    Log(level, "|");
-  }
   for (auto reg : frag->regs.live_on_entry) {
     RegisterOperand op(reg);
     OperandString op_str;
+    if (!logged) Log(level, "|");
     op.EncodeToString(&op_str);
     Log(level, "%s%s", sep, op_str.Buffer());
     sep = ",";
     logged = true;
   }
-  if (logged && !IsA<ExitFragment *>(frag)) Log(level, "|");
+
 }
 
 static void LogLiveVRs(LogLevel level , const Fragment *frag) {
@@ -357,23 +333,23 @@ static void LogLiveVRs(LogLevel level , const Fragment *frag) {
   auto sep = "";
   for (auto vr : ssa_frag->ssa.entry_nodes.Keys()) {
     if (vr.IsVirtual()) {
+      if (!logged) Log(level, "|");
       Log(level, "%s%%%d", sep, vr.Number());
       sep = ",";
       logged = true;
     }
   }
-  if (logged) Log(level, "|");
 }
 
 // Log info about a fragment, including its decoded instructions.
 static void LogFragment(LogLevel level, const Fragment *frag) {
-  Log(level, "f%p [fillcolor=%s color=%s label=<{",
-      reinterpret_cast<const void *>(frag),
-      FragmentBackground(frag), FragmentBorder(frag));
+  Log(level, "f%p [fillcolor=%s label=<{", reinterpret_cast<const void *>(frag),
+      FragmentBackground(frag));
   LogBlockHeader(level, frag);
   LogLiveRegisters(level, frag);
   LogLiveVRs(level, frag);
-  if (!IsA<ExitFragment *>(frag)) {
+  if (frag->instrs.First()) {
+    Log(level, "|");
     LogInstructions(level, frag);
     Log(level, "}");
   }

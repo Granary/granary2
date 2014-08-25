@@ -17,7 +17,7 @@ namespace granary {
 
 enum {
   MAX_NUM_INLINE_ASM_SCOPES = 4,
-  MAX_NUM_INLINE_VARS = 8
+  MAX_NUM_INLINE_VARS = 16
 };
 
 #ifdef GRANARY_INTERNAL
@@ -39,7 +39,7 @@ union InlineAssemblyVariable {
   Container<RegisterOperand> reg;
   Container<MemoryOperand> mem;
   Container<ImmediateOperand> imm;
-  LabelInstruction *label;
+  AnnotationInstruction *label;
 };
 
 static_assert(0 == offsetof(InlineAssemblyVariable, reg),
@@ -51,6 +51,8 @@ static_assert(0 == offsetof(InlineAssemblyVariable, mem),
 static_assert(0 == offsetof(InlineAssemblyVariable, imm),
     "Invalid structure packing of `union InlineAssemblyVariable`.");
 
+static_assert(0 == offsetof(InlineAssemblyVariable, label),
+    "Invalid structure packing of `union InlineAssemblyVariable`.");
 
 // Represents a scope of inline assembly. Within this scope, several virtual
 // registers are live.
@@ -69,7 +71,7 @@ class InlineAssemblyScope : public UnownedCountedObject {
 
   // Variables used/referenced/created within the scope.
   InlineAssemblyVariable vars[MAX_NUM_INLINE_VARS];
-  BitSet<MAX_NUM_INLINE_VARS> var_is_initialized;
+  bool var_is_initialized[MAX_NUM_INLINE_VARS];
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssemblyScope);

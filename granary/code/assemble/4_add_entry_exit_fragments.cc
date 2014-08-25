@@ -43,30 +43,36 @@ namespace {
 static void PropagateFragKinds(FragmentList *frags) {
   for (auto frag : ReverseFragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (code_frag->attr.is_app_code) continue;
-      if (code_frag->attr.is_inst_code) continue;
+      if (CODE_TYPE_UNKNOWN != code_frag->type) continue;
 
       // Try to copy it from any successor.
       auto has_code_succ = false;
       for (auto succ : frag->successors) {
         if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
-          code_frag->attr.is_app_code = code_succ->attr.is_app_code;
-          code_frag->attr.is_inst_code = code_succ->attr.is_inst_code;
+          code_frag->type = code_succ->type;
           has_code_succ = true;
         }
       }
 
-      if (!code_frag->attr.is_app_code && !code_frag->attr.is_inst_code) {
+      if (CODE_TYPE_UNKNOWN == code_frag->type) {
+        // Motivation: The previous fragment (if any) might be an
+        //             instrumentation fragment, so make this an instrumentation
+        //             fragment.
         if (has_code_succ) {
-          code_frag->attr.is_inst_code = true;
+          code_frag->type = CODE_TYPE_INST;
+
+        // Motivation: The only other option is that the next fragment is an
+        //             `ExitFragment`, so make this fragment into an
+        //             application fragment.
         } else {
-          code_frag->attr.is_app_code = true;
+          code_frag->type = CODE_TYPE_APP;
         }
       }
     }
   }
 }
 
+// Used to track live instrumentation and application flags within a fragment.
 struct LiveFlags {
   LiveFlags(void)
       : app_flags(0),
@@ -108,36 +114,31 @@ static LiveFlags LiveFlagsOnExit(Fragment *frag) {
   };
 }
 
-#ifdef GRANARY_DEBUG
-static void VerifyFlagUse(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    auto cfrag = DynamicCast<CodeFragment *>(frag);
-    if (!cfrag) continue;
-    auto frag_is_app = cfrag->attr.is_app_code;
-    GRANARY_ASSERT(frag_is_app != cfrag->attr.is_inst_code);
-
-    for (auto instr : InstructionListIterator(frag->instrs)) {
-      auto ninstr = DynamicCast<NativeInstruction *>(instr);
-      if (!ninstr) continue;
-
-      auto uses_flags = ninstr->ReadsConditionCodes() ||
-                        ninstr->WritesConditionCodes();
-      auto instr_is_app = ninstr->IsAppInstruction();
-      GRANARY_ASSERT(!uses_flags || (frag_is_app == instr_is_app));
+static void InitFlagsUse(FragmentList *frags) {
+  auto all_flags = arch::AllArithmeticFlags();
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
+      auto &flags(exit_frag->app_flags);
+      flags.all_read_flags = all_flags;
+      flags.all_written_flags = all_flags;
+      flags.entry_live_flags = all_flags;
+      flags.exit_live_flags = all_flags;
     }
   }
 }
-#endif  // GRANARY_DEBUG
 
-static bool VisitFragmentFlags(CodeFragment *frag) {
+// Returns `true` if any updates were made to what flags are live on entry/exit,
+// and what flags are read/written anywhere within the fragment.
+static bool TryUpdateFlagsUse(CodeFragment *frag) {
   FlagUsageInfo *flags(nullptr);
   FlagUsageInfo new_flags;
   auto exit_flags = LiveFlagsOnExit(frag);
 
-  if (frag->attr.is_app_code) {
+  if (CODE_TYPE_APP == frag->type) {
     flags = &(frag->app_flags);
     new_flags = *flags;
     new_flags.exit_live_flags = exit_flags.app_flags;
+
   } else {
     flags = &(frag->inst_flags);
     new_flags = *flags;
@@ -161,26 +162,27 @@ static bool VisitFragmentFlags(CodeFragment *frag) {
   return ret;
 }
 
-static void InitFlagsUse(FragmentList *frags) {
-  auto all_flags = arch::AllArithmeticFlags();
-  for (auto frag : ReverseFragmentListIterator(frags)) {
-    if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
-      auto &flags(exit_frag->app_flags);
-      flags.all_read_flags = all_flags;
-      flags.all_written_flags = all_flags;
-      flags.entry_live_flags = all_flags;
-      flags.exit_live_flags = all_flags;
-    }
-  }
-}
-
+// Analyze the flags use of the fragments within the fragment control-flow
+// graph. This performs a backward data-flow pass.
+//
+// The key things that are collected are:
+//      1)  Live app flags on entry/exit to a fragment. These are collected for
+//          both app and inst fragments, so that we can know what flags need
+//          to be saved/restored within a instrumentation code flag region.
+//      2)  Live inst flags on entry/exit to an instrumented fragment. This
+//          isn't strictly needed, but we compute it because we use the same
+//          method to compute inst and app live flags.
+//      3)  Flags that are read and/or written *anywhere* within a fragment,
+//          regardless of if they are live on entry/exit. This is so that we
+//          know all flags that are potentially modified by instructions so
+//          that we can know exactly which app flags inst fragments clobber.
 static void AnalyzeFlagsUse(FragmentList *frags) {
   InitFlagsUse(frags);
   for (auto changed = true; changed; ) {
     changed = false;
     for (auto frag : ReverseFragmentListIterator(frags)) {
       if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-        changed = VisitFragmentFlags(code_frag) || changed;
+        changed = TryUpdateFlagsUse(code_frag) || changed;
       }
     }
   }
@@ -197,7 +199,7 @@ static void UnionFlagZones(FragmentList *frags) {
       if (!code_succ) continue;
       if (frag->partition != succ->partition) continue;
       if (frag->flag_zone == succ->flag_zone) continue;
-      if (code_frag->attr.is_app_code != code_succ->attr.is_app_code) continue;
+      if (code_frag->type != code_succ->type) continue;
 
       code_frag->flag_zone.Union(code_frag, code_succ);
     }
@@ -209,7 +211,8 @@ static void LabelFlagZones(LocalControlFlowGraph *cfg, FragmentList *frags) {
   UnionFlagZones(frags);
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (code_frag->attr.is_app_code) continue;
+      if (CODE_TYPE_APP == code_frag->type) continue;
+
       auto &flag_zone(frag->flag_zone.Value());
       if (!flag_zone) {
         flag_zone = new FlagZone(
@@ -228,7 +231,7 @@ static void UpdateFlagZones(FragmentList *frags) {
     auto &flag_zone(frag->flag_zone.Value());
     if (flag_zone) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        if (!code->attr.is_app_code) {
+        if (CODE_TYPE_APP != code->type) {
           flag_zone->killed_flags |= code->inst_flags.all_written_flags;
           flag_zone->live_flags |= code->app_flags.exit_live_flags;
         }
@@ -292,33 +295,23 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 //            1)  CodeFragment
 //            2)  ExitFragment
 //            3)  PartitionEntryFragment
-static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
+static bool IsPartitionEntry(Fragment * const curr, Fragment * const next) {
   if (IsA<PartitionEntryFragment *>(curr)) return false;
   if (IsA<PartitionEntryFragment *>(next)) return false;
   if (IsA<ExitFragment *>(next)) return false;
   GRANARY_ASSERT(!IsA<ExitFragment *>(curr));
 
-  auto curr_code = DynamicCast<CodeFragment *>(curr);
-  auto next_code = DynamicCast<CodeFragment *>(next);
+  const auto next_code = DynamicCast<CodeFragment *>(next);
+  GRANARY_IF_DEBUG( const auto curr_code = DynamicCast<CodeFragment *>(curr); )
   GRANARY_ASSERT(curr_code && next_code);
 
-  if (curr_code->partition != next_code->partition) {
-    return next_code->attr.can_add_to_partition;
+  if (IsA<ControlFlowInstruction *>(next->branch_instr)) {
+    return false;
+  } else if (curr->partition == next->partition) {
+    return next_code->attr.is_block_head;
   }
 
-  if (!next_code->attr.is_in_edge_code) {
-    GRANARY_ASSERT(curr_code->attr.block_meta == next_code->attr.block_meta);
-  }
-
-  // Interesting special case: things like self-loops back to a block head
-  // are considered partition entry/exit points because we want to make sure
-  // that later stack frame size analysis determines a fixed stack frame size
-  // for every partition.
-  if (next_code && next_code->attr.is_block_head) {
-    return next_code->attr.can_add_to_partition;
-  }
-
-  return false;
+  return true;
 }
 
 // Returns true if the transition between `curr` and `next` represents a
@@ -329,42 +322,18 @@ static bool IsPartitionEntry(Fragment *curr, Fragment *next) {
 //            2)  ExitFragment
 //            3)  PartitionEntryFragment
 //            4)  PartitionExitFragment
-static bool IsPartitionExit(Fragment *curr, Fragment *next) {
+static bool IsPartitionExit(Fragment * const curr, Fragment * const next) {
   if (IsA<PartitionExitFragment *>(curr)) return false;
   if (IsA<PartitionExitFragment *>(next)) return false;
   if (IsA<PartitionEntryFragment *>(curr)) return false;
 
-  const auto curr_code = DynamicCast<CodeFragment *>(curr);
+  const auto next_code = DynamicCast<CodeFragment *>(next);
 
-  // Un/conditional direct call/jump targeting direct edge code, an existing
-  // block, or some native code. In this case, we don't want to introduce
-  // intermediate (i.e. redundant) jumps to get to edge code when the branch
-  // that's already there will suffice.
-  if (curr_code && curr_code->branch_instr &&
-      curr_code->attr.branches_to_code &&
-      !curr_code->attr.can_add_to_partition) {
+  if (IsA<ControlFlowInstruction *>(curr->branch_instr)) {
     return false;
+  } else if (curr->partition == next->partition) {
+    return next_code && next_code->attr.is_block_head;
   }
-
-  if (auto next_exit = DynamicCast<ExitFragment *>(next)) {
-    return EDGE_KIND_DIRECT != next_exit->edge.kind;
-
-  // This is a fall-through from a function call, e.g. indirect function call.
-  // In the case of an indirect function call, we don't want to place a
-  // partition exit on its fall-through edge because the partition exiting
-  // happens at the target of the call.
-  } else if (curr_code && curr_code->attr.branches_to_code &&
-             curr_code->attr.branch_is_function_call &&
-             curr->successors[FRAG_SUCC_FALL_THROUGH] == next) {
-    return false;
-
-  // Catch this case where the current partition and the next partition are
-  // the same, but where we've got a self-loop (e.g. back to the block head),
-  // and so we're jumping to a partition entrypoint for the same partition.
-  } else if (IsA<PartitionEntryFragment *>(next)) {
-    return true;
-  }
-  if (curr->partition == next->partition) return false;
 
   return true;
 }
@@ -397,7 +366,6 @@ static void AddExitFragment(FragmentList *frags,
       *succ_ptr = exit_frag;
       back_link = exit_frag;
     }
-    curr->RelinkBranchInstr(back_link);
   }
 }
 
@@ -435,7 +403,6 @@ static void AddEntryFragment(FragmentList *frags,
       *succ_ptr = entry_frag;
       back_link = entry_frag;
     }
-    curr->RelinkBranchInstr(back_link);
   }
 }
 
@@ -494,7 +461,6 @@ static void LabelPartitionsAndTrackFlagRegs(FragmentList *frags) {
 // add entry/exits around the partitions for saving/restoring registers.
 void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags) {
   PropagateFragKinds(frags);
-  GRANARY_IF_DEBUG( VerifyFlagUse(frags); )
   AnalyzeFlagsUse(frags);
   LabelFlagZones(cfg, frags);
   UpdateFlagZones(frags);
@@ -505,9 +471,7 @@ void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags) {
   // added to a partition.
   ResetTempData(frags);
   auto first_frag = frags->First();
-  auto first_cfrag = DynamicCast<CodeFragment *>(first_frag);
-  if (!first_cfrag ||
-      (first_cfrag && first_cfrag->attr.can_add_to_partition)) {
+  if (!IsA<ControlFlowInstruction *>(first_frag->branch_instr)) {
     auto first_entry = MakeFragment<PartitionEntryFragment>(first_frag,
                                                             first_frag);
     frags->Prepend(first_entry);

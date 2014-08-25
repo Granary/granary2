@@ -29,10 +29,10 @@ InlineAssemblyScope::InlineAssemblyScope(
     std::initializer_list<Operand *> inputs)
     : vars() {
   memset(&vars, 0, sizeof vars);
-  var_is_initialized.SetAll(false);
+  memset(&(var_is_initialized[0]), 0, sizeof var_is_initialized);
   for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {
     new (&(vars[i])) InlineAssemblyVariable(inputs.begin()[i]);
-    var_is_initialized.Set(i, true);
+    var_is_initialized[i] = true;
   }
 }
 

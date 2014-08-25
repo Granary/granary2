@@ -69,7 +69,7 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   // not continue to reference the branch.
   auto branch = DynamicCast<BranchInstruction *>(instr);
   if (branch) {
-    *(branch->TargetInstruction()->DataPtr<void *>()) = nullptr;
+    *(branch->TargetLabel()->DataPtr<void *>()) = nullptr;
   }
 
   return std::unique_ptr<Instruction>(instr);
@@ -130,12 +130,18 @@ bool AnnotationInstruction::IsBranchTarget(void) const {
   return IA_LABEL == annotation && 0 != data;
 }
 
+// Returns true if this represents the beginning of a new logical instruction.
+bool AnnotationInstruction::IsInstructionBoundary(void) const {
+  return IA_BEGIN_LOGICAL_INSTRUCTION == annotation;
+}
+
 LabelInstruction::LabelInstruction(void)
-    : AnnotationInstruction(IA_LABEL) {}
+    : AnnotationInstruction(IA_LABEL),
+      fragment(nullptr) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_) {
-  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
+  GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
 NativeInstruction::~NativeInstruction(void) {}
@@ -222,6 +228,11 @@ const char *NativeInstruction::OpCodeName(void) const {
   return instruction.OpCodeName();
 }
 
+// Get the instruction selection name.
+const char *NativeInstruction::ISelName(void) const {
+  return instruction.ISelName();
+}
+
 // Invoke a function on every operand.
 void NativeInstruction::ForEachOperandImpl(
     const std::function<void(Operand *)> &func) {
@@ -236,17 +247,18 @@ size_t NativeInstruction::CountMatchedOperandsImpl(
 }
 
 BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
-                                     LabelInstruction *target_)
+                                     AnnotationInstruction *target_)
     : NativeInstruction(instruction_),
-      target(target_) {
-  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
+      target(DynamicCast<LabelInstruction *>(target_)) {
+  GRANARY_ASSERT(nullptr != target);
+  GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 
   // Mark this label as being targeted by some instruction.
   *target->DataPtr<uint64_t>() += 1;
 }
 
 // Return the targeted instruction of this branch.
-LabelInstruction *BranchInstruction::TargetInstruction(void) const {
+LabelInstruction *BranchInstruction::TargetLabel(void) const {
   return target;
 }
 
@@ -263,7 +275,7 @@ ControlFlowInstruction::ControlFlowInstruction(
       : NativeInstruction(instruction_),
         return_address(nullptr),
         target(target_) {
-  GRANARY_IF_DEBUG( instruction.note = __builtin_return_address(0); )
+  GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
 // Destroy a control-flow transfer instruction.

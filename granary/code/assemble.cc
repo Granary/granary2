@@ -19,6 +19,7 @@
 #include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_allocate_slots.h"
 #include "granary/code/assemble/10_add_connecting_jumps.h"
+#include "granary/code/assemble/11_fixup_return_addresses.h"
 
 #include "granary/util.h"
 
@@ -89,6 +90,10 @@ FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
   // Add final connecting jumps (where needed) between predecessor and
   // successor fragments.
   AddConnectingJumps(&frags);
+
+  // Move all `IA_RETURN_ADDRESS` annotations to the beginning of their
+  // partitions.
+  FixupReturnAddresses(&frags);
 
   if (FLAG_debug_log_fragments) {
     os::Log(os::LogDebug, &frags);

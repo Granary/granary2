@@ -229,11 +229,11 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 
   // Don't surround this code in flag save fragments as we don't modify the
   // flags.
-  edge_frag->attr.is_app_code = true;
+  edge_frag->type = CODE_TYPE_APP;
 
   // Make sure that the edge code shares the same partition as the predecessor
   // so that virtual registers can be spread across both.
-  edge_frag->attr.can_add_to_partition = true;
+  edge_frag->attr.can_add_succ_to_partition = true;
   edge_frag->partition.Union(edge_frag, pred_frag);
 }
 
@@ -457,7 +457,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
     // Modify the target of the `JRCXZ`.
     } else if (jrcxz_target == ni.DecodedPC()) {
       GRANARY_ASSERT(nullptr != jrcxz);
-      frag->instrs.Append(jrcxz->TargetInstruction());
+      frag->instrs.Append(jrcxz->TargetLabel());
       GRANARY_IF_DEBUG( found_jrcxz_target = true; )
     }
     APP(frag);

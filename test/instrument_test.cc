@@ -120,7 +120,7 @@ TEST_F(InstrumentTest, InstrumentNothing) {
 
   do {
     LocalControlFlowGraph cfg(&context);  // Meta-data will be cleaned up.
-    BinaryInstrumenter inst(&context, &cfg, meta);
+    BinaryInstrumenter inst(&context, &cfg, &meta);
     inst.InstrumentDirect();
   } while (0);
 }

@@ -25,6 +25,8 @@ struct sigaction {
 extern int rt_sigaction(int signum, const struct sigaction *act,
                         struct sigaction *oldact, size_t sigsetsize);
 
+extern void rt_sigreturn(void);
+
 #define sa_sigaction __sigaction_handler.sa_sigaction
 
 }  // extern C

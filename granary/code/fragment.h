@@ -169,7 +169,7 @@ class FlagUsageInfo {
 };
 
 // Targets in/out of this fragment.
-enum {
+enum FragmentSuccessorSelector {
   FRAG_SUCC_FALL_THROUGH = 0,
   FRAG_SUCC_BRANCH = 1
 };
@@ -180,10 +180,6 @@ enum {
 class Fragment {
  public:
   Fragment(void);
-
-  // Relink a branch instruction in this fragment to point to a label in
-  // `new_succ`.
-  void RelinkBranchInstr(Fragment *new_succ);
 
   virtual ~Fragment(void) = default;
 
@@ -284,26 +280,59 @@ class FlagZone {
   FlagZone(void) = delete;
 };
 
+enum StackStatus {
+  STACK_UNKNOWN,
+  STACK_VALID,
+  STACK_INVALID
+};
+
+enum StackStatusInheritanceConstraint {
+  STACK_STATUS_DONT_INHERIT = 0,  // Don't inherit.
+
+  // Only inherit the status from successor fragments.
+  STACK_STATUS_INHERIT_SUCC = (1 << 0),
+
+  // Only inherit the status from predecessor fragments.
+  STACK_STATUS_INHERIT_PRED = (1 << 1),
+
+  // Inherit from either the successors or predecessors.
+  STACK_STATUS_INHERIT_UNI  = (1 << 0) | (1 << 1)
+};
+
 // Tracks stack usage info.
-class StackUsageInfo {
- public:
-  StackUsageInfo(void)
-      : is_valid(false),
-        is_checked(false),
-        disallow_forward_propagation(false) {}
+struct StackUsageInfo {
+  inline StackUsageInfo(void)
+      : status(STACK_UNKNOWN),
+        inherit_constraint(STACK_STATUS_INHERIT_UNI) {}
+
+  inline StackUsageInfo(StackStatus status_,
+                        StackStatusInheritanceConstraint inherit_constraint_)
+      : status(status_),
+        inherit_constraint(inherit_constraint_) {}
 
   // Tells us whether or not the stack pointer in this block appears to
   // reference a valid thread (user or kernel space) stack.
-  bool is_valid;
-
-  // Tells us whether or not we have decided on the value of `is_valid`.
-  bool is_checked;
+  StackStatus status;
 
   // Should forward propagation of stack validity be disallowed into this
   // block?
-  bool disallow_forward_propagation;
+  StackStatusInheritanceConstraint inherit_constraint;
+};
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(StackUsageInfo);
+enum CodeType {
+  // The code type of this fragment hasn't (yet) been decided.
+  CODE_TYPE_UNKNOWN,
+
+  // Fragment containing application instructions and/or instrumentation
+  // instructions that don't modify the flags state.
+  CODE_TYPE_APP,
+
+  // Fragment containing instrumentation instructions, and/or application
+  // instructions that don't read/write the flags state.
+  //
+  // Note: The extra condition of app instructions not *reading* the flags
+  //       state is super important!
+  CODE_TYPE_INST
 };
 
 // Attributes about a block of code.
@@ -331,11 +360,11 @@ class alignas(alignof(void *)) CodeAttributes {
   // into an existing partition. This would be bad because we lose control at
   // things like IRET and unspecialized RETs.
   //
-  // If we have F1 -> F2, and !F2.attr.can_add_to_partition, then don't place
-  // F1 and F2 into the same partition (in the forward direction). If there is
-  // an edge such that F2 -> .. -> F1, then F1 and F2 might be added to the
-  // same partition. Therefore, this is a local constraint only.
-  bool can_add_to_partition:1;
+  // If we have F1 -> F2, and !F1.attr.can_add_succ_to_partition, then don't
+  // place F1 and F2 into the same partition (in the forward direction). If
+  // there is an edge such that F2 -> .. -> F1, then F1 and F2 might be added
+  // to the same partition. Therefore, this is a local constraint only.
+  bool can_add_succ_to_partition:1;
 
   // Does this fragment have any native instructions in it, or is it just full
   // or annotations, labels, and other things? We use this to try to avoid
@@ -345,22 +374,12 @@ class alignas(alignof(void *)) CodeAttributes {
   // Does this fragment have any instructions that write to the flags?
   bool modifies_flags:1;
 
-  // Is there a hint set that we should split this fragment before a non-
-  // native instruction changes the flags? This is designed as a minor
-  // optimization for x86-like architectures, where flags are accessed through
-  // a specific register (`AH` in x86 via `LAHF` and `SAHF`), and where the
-  // flag save/restore code behaves in a sub-optimal way if instrumentation code
-  // uses the register `AL/AH/AX/EAX/RAX`.
-  bool has_flag_split_hint:1;
-
-  // Is this a fragment of application instructions? If this is false, then all
-  // instructions are either injected from instrumentation, or they could be
-  // some application instructions that don't read or write the flags.
-  bool is_app_code:1;
-  bool is_inst_code:1;
-
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head:1;
+
+  // Does this fragment represent the target of a return from a function call
+  // or interrupt call?
+  bool is_return_target:1;
 
   // Is this a "compensating" fragment. This is used during register allocation
   // when we have a case like: P -> S1, P -> S2, and the register R is live from
@@ -387,10 +406,7 @@ typedef BitSet<arch::MAX_NUM_SPILL_SLOTS> SpillSlotSet;
 // A fragment with associated SSA vars.
 class SSAFragment : public Fragment {
  public:
-  SSAFragment(void)
-      : ssa(),
-        spill() {}
-
+  SSAFragment(void);
   virtual ~SSAFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, SSAFragment)
@@ -426,15 +442,13 @@ class SSAFragment : public Fragment {
 // A fragment of native or instrumentation instructions.
 class CodeFragment : public SSAFragment {
  public:
-  inline CodeFragment(void)
-      : SSAFragment(),
-        attr(),
-        stack() {}
-
+  CodeFragment(void);
   virtual ~CodeFragment(void);
 
   // Attributes relates to the code in this fragment.
   CodeAttributes attr;
+
+  CodeType type;
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
