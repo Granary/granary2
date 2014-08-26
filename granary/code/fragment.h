@@ -305,10 +305,18 @@ struct StackUsageInfo {
       : status(STACK_UNKNOWN),
         inherit_constraint(STACK_STATUS_INHERIT_UNI) {}
 
-  inline StackUsageInfo(StackStatus status_,
-                        StackStatusInheritanceConstraint inherit_constraint_)
+  inline explicit StackUsageInfo(StackStatus status_)
       : status(status_),
-        inherit_constraint(inherit_constraint_) {}
+        inherit_constraint(STACK_STATUS_DONT_INHERIT) {
+    GRANARY_ASSERT(STACK_UNKNOWN != status_);
+  }
+
+  inline explicit StackUsageInfo(
+      StackStatusInheritanceConstraint inherit_constraint_)
+      : status(STACK_UNKNOWN),
+        inherit_constraint(inherit_constraint_) {
+    GRANARY_ASSERT(STACK_STATUS_DONT_INHERIT != inherit_constraint_);
+  }
 
   // Tells us whether or not the stack pointer in this block appears to
   // reference a valid thread (user or kernel space) stack.

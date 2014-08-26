@@ -20,6 +20,15 @@ namespace granary {
 namespace os {
 namespace {
 
+enum {
+  BUFF_SIZE = 8192
+};
+
+// Global buffer and lock for reading `/proc/self/maps`. This isn't stack
+// allocated as we don't want to unnecessarily risk blowing the stack.
+static char file_buffer[BUFF_SIZE];
+FineGrainedLock file_buffer_lock;
+
 // Tokenize a file. This splits the file byte spaces and treats new lines and
 // non-whitespace sequences of characters as tokens.
 class Lexer {
@@ -68,9 +77,6 @@ class Lexer {
   }
 
  private:
-  enum {
-    BUFF_SIZE = 4096
-  };
 
   // Fill the file buffer of the lexer.
   bool FillBuffer(void) {
@@ -94,7 +100,6 @@ class Lexer {
   }
 
   // Buffers for holding data read from the file and in-progress token data.
-  char file_buffer[BUFF_SIZE];
   char token_buffer[Module::MAX_NAME_LEN];
 
   int fd;  // File descriptor of file being tokenized.
@@ -198,6 +203,7 @@ static void ParseMapsFile(ModuleManager *manager) {
 // Find all built-in modules. In user space, this will go and find things like
 // libc. In kernel space, this will identify already loaded modules.
 void ModuleManager::RegisterAllBuiltIn(void) {
+  FineGrainedLocked locker(&file_buffer_lock);
   ParseMapsFile(this);
 }
 

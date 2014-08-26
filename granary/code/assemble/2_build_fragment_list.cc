@@ -134,9 +134,8 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // An upcoming instruction makes this stack valid.
     case IA_VALID_STACK:
       if (STACK_INVALID == frag->stack.status) {
-        AddBlockTailToWorkList(
-            builder, frag, nullptr, next_instr,
-            StackUsageInfo(STACK_VALID, STACK_STATUS_INHERIT_UNI));
+        AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
+                               StackUsageInfo(STACK_VALID));
         return false;
       } else {
         frag->stack.status = STACK_VALID;
@@ -149,9 +148,8 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case IA_INVALID_STACK:
       if (STACK_VALID == frag->stack.status || frag->attr.has_native_instrs) {
         frag->attr.can_add_succ_to_partition = false;
-        AddBlockTailToWorkList(
-            builder, frag, nullptr, next_instr,
-            StackUsageInfo(STACK_INVALID, STACK_STATUS_DONT_INHERIT));
+        AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
+                               StackUsageInfo(STACK_INVALID));
         return false;
       } else {
         frag->stack.status = STACK_INVALID;
@@ -178,10 +176,10 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
     // by the stack undefinedness of the `MOV RSP, [X]`.
     case IA_UNKNOWN_STACK_ABOVE:
-      if (STACK_VALID == frag->stack.status) return true;  // Skip.
       frag->attr.can_add_succ_to_partition = false;
+      frag->stack.status = STACK_INVALID;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo());
+                             StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
       return false;
 
     // Here we've got something like:
@@ -195,9 +193,9 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //       i.e. for user space instrumentation.
     case IA_UNKNOWN_STACK_BELOW:
       GRANARY_ASSERT(0 != arch::REDZONE_SIZE_BYTES);
-      AddBlockTailToWorkList(
-          builder, frag, nullptr, next_instr,
-          StackUsageInfo(STACK_UNKNOWN, STACK_STATUS_INHERIT_SUCC));
+      frag->stack.inherit_constraint = STACK_STATUS_INHERIT_PRED;
+      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
+                             StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
       return false;
 
     // Function return address. Used when mangling indirect function calls.
@@ -219,9 +217,8 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //       to be valid.
     case IA_CHANGES_INTERRUPT_STATE:
       frag->attr.can_add_succ_to_partition = false;
-      AddBlockTailToWorkList(
-          builder, frag, nullptr, next_instr,
-          StackUsageInfo(STACK_VALID, STACK_STATUS_INHERIT_UNI));
+      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
+                             StackUsageInfo(STACK_VALID));
       return false;
 
     // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not

@@ -40,25 +40,13 @@ extern void exit_group(int) __attribute__((noreturn));
 namespace granary {
 namespace {
 
-#define SA_SIGINFO  0x4
-#define SA_RESTORER 0x04000000
+static char await_attach_stack[SIGSTKSZ];
+static struct sigaltstack await_attach_signal_stack = {
+  &(await_attach_stack[0]),  // ss_sp
+  0,  // ss_flags
+  SIGSTKSZ,  // ss_size
+};
 
-// Illegal instruction (ANSI). In Granary, these would come up because of
-// failed assertions.
-#define SIGILL      4
-
-// Segmentation violation (ANSI). This is really just a page fault or a
-// general protection fault.
-#define SIGSEGV     11
-
-// Biggest signal number + 1 (including real-time signals).
-#define _NSIG       65
-
-// A copy of the original sigaction for some signals that Granary tries to
-// take over.
-//
-// TODO(pag): Implement proper signal takeover.
-static struct sigaction old_sigaction[_NSIG];
 
 // Initialize Granary for debugging by GDB. For example, if one is doing:
 //
@@ -66,22 +54,17 @@ static struct sigaction old_sigaction[_NSIG];
 //
 // Then in another terminal, one can do:
 //
-//    gdb ls
-//    > attach <pid that is printed out>
-//    > c
+//    sudo gdb /bin/ls
+//    (gdb) a <pid that is printed out>
+//    (gdb) c
 //
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
-static void AwaitAttach(int num, void *info, void *context) {
+static void AwaitAttach(int) {
   char buff[2];
   os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
   os::Log(os::LogOutput, "Press enter to continue.\n");
   read(0, buff, 1);
-
-  // Invoke the old handler (if any) before returning.
-  if (old_sigaction[num].sa_sigaction) {
-    (old_sigaction[num].sa_sigaction)(num, info, context);
-  }
 }
 
 // Used to attach a signal handler to an arbitrary signal, such that when the
@@ -89,12 +72,13 @@ static void AwaitAttach(int num, void *info, void *context) {
 // Granary to be attached to the process.
 static void AwaitAttachOnSignal(int signum) {
   struct sigaction new_sigaction;
-  memset(&(old_sigaction[signum]), 0, sizeof new_sigaction);
   memset(&new_sigaction, 0, sizeof new_sigaction);
-  new_sigaction.sa_sigaction = &AwaitAttach;
-  new_sigaction.sa_flags = SA_SIGINFO | SA_RESTORER;
-  new_sigaction.sa_restorer = &rt_sigreturn;
-  rt_sigaction(signum, &new_sigaction, &(old_sigaction[signum]), _NSIG / 8);
+  memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
+  new_sigaction.sa_handler = &AwaitAttach;
+  new_sigaction.sa_restorer = rt_sigreturn;
+  new_sigaction.sa_flags = static_cast<int>(
+      SA_RESETHAND | SA_ONSTACK | SA_RESTORER);
+  rt_sigaction(signum, &new_sigaction, nullptr, _NSIG / 8);
 }
 
 // Initialize Granary for debugging. This is geared toward GDB-based debugging,
@@ -104,14 +88,13 @@ static void AwaitAttachOnSignal(int signum) {
 // attached.
 static void InitDebug(void) {
   if (FLAG_help) return;
+  sigaltstack(&await_attach_signal_stack, nullptr);
   if (FLAG_debug_gdb_prompt) {
-    AwaitAttach(0, nullptr, nullptr);
+    AwaitAttach(-1);
   } else {
     AwaitAttachOnSignal(SIGSEGV);
+    AwaitAttachOnSignal(SIGILL);
   }
-
-  // E.g. assertion failure that invokes `__builtin_trap`.
-  AwaitAttachOnSignal(SIGILL);
 }
 
 // Searches for a specific environment variable.

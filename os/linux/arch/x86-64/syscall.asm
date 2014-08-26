@@ -124,6 +124,12 @@ DEFINE_FUNC(rt_sigaction)
     ret
 END_FUNC(rt_sigaction)
 
+DEFINE_FUNC(sigaltstack)
+    mov     eax, 131  // `__NR_sigaltstack`.
+    syscall
+    ret
+END_FUNC(sigaltstack)
+
 DEFINE_INST_FUNC(exit_group)
     mov     eax, 231  // `__NR_exit_group`.
     xor     rdi, rdi

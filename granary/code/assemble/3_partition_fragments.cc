@@ -238,7 +238,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (STACK_UNKNOWN == cfrag->stack.status) {
+      if (STACK_UNKNOWN == cfrag->stack.status || true) {
         cfrag->stack.status = STACK_INVALID;
       }
     }

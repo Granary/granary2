@@ -276,6 +276,35 @@ define print-meta-entry
 end
 
 
+# find-meta-entry
+#
+# Finds and prints the block meta-data whose `CacheMetaData::start_pc == $arg0`,
+# assuming that meta-data is still located in the meta-data trace.
+define find-meta-entry
+  set language c++
+  set $__pc = (granary::CachePC) $arg0
+  set $__i = 0
+  set $__m = (granary::BlockMetaData *) 0
+
+  while $__i < GRANARY_META_LOG_LENGTH
+    set $__sm = (char *) granary_meta_log[$__i].meta
+    if $__sm
+      set $__fpc = *((granary::CachePC *) &($__sm[16]))
+      if $__fpc == $__pc
+        set $__m = (granary::BlockMetaData *) $__sm
+        set $__i = GRANARY_META_LOG_LENGTH
+      end
+    end
+    set $__i = $__i + 1
+  end
+
+  if $__m
+    print-block-meta $__m
+  end
+  dont-repeat
+end
+
+
 # print-xed-reg
 #
 # Prints out a XED register, given the value of the register in `$arg0`.
