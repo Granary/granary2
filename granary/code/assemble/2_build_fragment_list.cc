@@ -218,7 +218,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case IA_CHANGES_INTERRUPT_STATE:
       frag->attr.can_add_succ_to_partition = false;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo(STACK_VALID));
+                             StackUsageInfo(GRANARY_IF_KERNEL(STACK_VALID)));
       return false;
 
     // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not
