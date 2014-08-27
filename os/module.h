@@ -242,10 +242,10 @@ class ModuleManager {
 void InitModuleManager(void);
 
 // Returns a pointer to the module containing some program counter.
-const Module *FindModuleContainingPC(AppPC pc);
+const Module *ModuleContainingPC(AppPC pc);
 
 // Returns a pointer to the first module whose name matches `name`.
-const Module *FindModuleByName(const char *name);
+const Module *ModuleByName(const char *name);
 
 // Returns an iterator to all currently loaded modules.
 ConstModuleIterator LoadedModules(void);

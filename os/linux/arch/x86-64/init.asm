@@ -2,9 +2,7 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-START_FILE
-
-    .intel_syntax noprefix
+START_FILE_INTEL
 
 #ifdef GRANARY_WHERE_user
 #ifndef GRANARY_TARGET_test

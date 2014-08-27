@@ -19,6 +19,17 @@ class UserSpaceInstrumenter : public InstrumentationTool {
     // programs, where attaching GDB early on in the program's execution
     // causes the bug to disappear.
     //
+    // Note: This type of behavior is very common, particularly because of the
+    //       interaction between GDB's "hidden" breakpoints and Granary. GDB
+    //       automatically inserts many breakpoints into programs (e.g. into
+    //       various `pthread` functions). Granary is not aware of this, and so
+    //       it only sees the `INT3` instructions, which it takes a signal to
+    //       (locally) detach. However, in user space, the `transparent_returns`
+    //       tool is enabled by default, and so the local detach behaves like a
+    //       full thread detach. If the bug in question only happens after (in
+    //       the thread's execution) one of the hidden breakpoints is hit, then
+    //       the bug (caused by Granary) will likely never show up.
+    //
     // In this code, `EAX` is the Linux kernel ABI-defined register for
     // passing the syscall number, and `EDI` is the register for passing the
     // first argument, in this case, the signal number to the `rt_sigaction`

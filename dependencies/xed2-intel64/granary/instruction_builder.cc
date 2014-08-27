@@ -100,12 +100,13 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
     std::cout << ", A" << i << " a" << i;
   }
 
+  auto isel = instr - xed_inst_table_base();
   std::cout << ") {\n"
             << INDENT << "BuildInstruction(instr, XED_ICLASS_"
                       << xed_iclass_enum_t2str(xed_inst_iclass(instr))
                       << ", XED_IFORM_"
                       << xed_iform_enum_t2str(iform)
-                      << ", XED_CATEGORY_"
+                      << ", " << isel << ", XED_CATEGORY_"
                       << xed_category_enum_t2str(xed_inst_category(instr))
                       << ");\n";
 

@@ -102,6 +102,7 @@ const xed_inst_t *SelectInstruction(const Instruction *instr) {
       return nullptr;
     } else if (MatchOperandTypes(instr, xedi)) {
       instr->iform = xed_inst_iform_enum(xedi);  // Update in-place.
+      instr->isel = static_cast<unsigned>(xedi - xed_inst_table_base());
       return xedi;
     }
   }

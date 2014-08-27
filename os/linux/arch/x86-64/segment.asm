@@ -2,7 +2,7 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-START_FILE
+START_FILE_INTEL
 
 // Get the user-space TLS base address.
 //
@@ -10,8 +10,8 @@ START_FILE
 //       pointed to by the base address of the segment descriptor for `FS`
 //       is a pointer to said base address (i.e. self-reference).
 DEFINE_FUNC(granary_arch_get_segment_base)
-    movq %GRANARY_IF_USER_ELSE(fs, gs):0, %rax;
-    retq;
+    mov rax, [GRANARY_IF_USER_ELSE(fs, gs):0];
+    ret
 END_FUNC(granary_arch_get_segment_base)
 
 END_FILE

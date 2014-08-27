@@ -168,14 +168,26 @@ class BranchTargetBuilder {
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
-                      xed_iform_enum_t iform, xed_category_enum_t category);
+                      xed_iform_enum_t iform, unsigned isel,
+                      xed_category_enum_t category);
+
+// TODO(pag): These must be manually checked/updated any time XED is updated.
+//
+// These numbers can be found by running XED's tables example.
+enum : unsigned {
+  LEA_GPRv_AGEN_ISEL  = 1734U,
+  BNDCN_BND_AGEN_ISEL = 127U,
+  BNDCU_BND_AGEN_ISEL = 133U,
+  BNDCL_BND_AGEN_ISEL = 784U,
+  BNDMK_BND_AGEN_ISEL = 1170U
+};
 
 // Custom LEA instruction builder for source register operands. This is like
 // doing `dest = src1 + src2`.
 template <typename A0, typename A1, typename A2>
 inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
-                   XED_CATEGORY_MISC);
+                   LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
   RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
@@ -185,7 +197,7 @@ inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
 template <typename A0>
 inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
-                   XED_CATEGORY_MISC);
+                   LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
@@ -194,7 +206,7 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
 template <typename A0>
 inline static void BNDCN_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_BNDCN, XED_IFORM_BNDCN_BND_AGEN,
-                   XED_CATEGORY_MPX);
+                   BNDCN_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
@@ -203,7 +215,7 @@ inline static void BNDCN_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
 template <typename A0>
 inline static void BNDCU_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_BNDCU, XED_IFORM_BNDCU_BND_AGEN,
-                   XED_CATEGORY_MPX);
+                   BNDCU_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
@@ -212,7 +224,7 @@ inline static void BNDCU_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
 template <typename A0>
 inline static void BNDCL_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_BNDCL, XED_IFORM_BNDCL_BND_AGEN,
-                   XED_CATEGORY_MPX);
+                   BNDCL_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }
@@ -221,7 +233,7 @@ inline static void BNDCL_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
 template <typename A0>
 inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
   BuildInstruction(instr, XED_ICLASS_BNDMK, XED_IFORM_BNDMK_BND_AGEN,
-                   XED_CATEGORY_MPX);
+                   BNDMK_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
 }

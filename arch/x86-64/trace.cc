@@ -37,6 +37,7 @@ struct RegisterState {
   uint64_t rdx;
   uint64_t rcx;
   uint64_t rax;
+  uint64_t rsp;
   uint64_t rip;  // Return address.
 };
 
@@ -56,6 +57,11 @@ alignas(CACHE_LINE_SIZE_BYTES) unsigned granary_block_log_index = 0;
 void granary_trace_block_regs(const RegisterState *regs) {
   auto index = __sync_fetch_and_add(&granary_block_log_index, 1U);
   auto &log_regs(granary_block_log[index % GRANARY_BLOCK_LOG_LENGTH]);
+
+  // Adjust the logged stack pointer to accoutn for the return address and the
+  // potential user-space redzone.
+  log_regs.rsp += ADDRESS_WIDTH_BYTES + REDZONE_SIZE_BYTES;
+
   memcpy(&log_regs, regs, sizeof *regs);
 }
 

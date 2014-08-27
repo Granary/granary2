@@ -118,7 +118,7 @@ void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 
 // Returns a pointer to the module containing an application `pc`.
 const os::Module *InstrumentationTool::ModuleContainingPC(AppPC pc) {
-  return os::FindModuleContainingPC(pc);
+  return os::ModuleContainingPC(pc);
 }
 
 // Begin inserting some inline assembly. This takes in an optional scope

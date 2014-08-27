@@ -52,15 +52,16 @@ namespace {
 //
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
-extern "C" void AwaitAttach(int signum, void *siginfo, void *context) {
+void AwaitAttach(int signum, void *siginfo, void *context) {
   char buff[2];
   os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
   os::Log(os::LogOutput, "Press enter to continue.\n");
   read(0, buff, 1);
 
+  // Useful for debugging purposes.
   GRANARY_USED(signum);
-  GRANARY_USED(siginfo);
-  GRANARY_USED(context);
+  GRANARY_USED(siginfo);  // `siginfo_t *`.
+  GRANARY_USED(context);  // `ucontext *` on Linux.
 }
 
 // Used to attach a signal handler to an arbitrary signal, such that when the
@@ -82,7 +83,6 @@ static void AwaitAttachOnSignal(int signum) {
 // attached.
 static void InitDebug(void) {
   if (FLAG_help) return;
-  //sigaltstack(&await_attach_signal_stack, nullptr);
   if (FLAG_debug_gdb_prompt) {
     AwaitAttach(-1, nullptr, nullptr);
   } else {

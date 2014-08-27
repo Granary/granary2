@@ -23,6 +23,9 @@ extern NativeInstruction *AddFallThroughJump(Fragment *frag,
 // Note: This has an architecture-specific implementation.
 extern bool IsNearRelativeJump(NativeInstruction *instr);
 
+// Catches erroneous fall-throughs off the end of the basic block.
+GRANARY_IF_DEBUG( extern void AddFallThroughTrap(Fragment *frag); )
+
 }  // namespace arch
 namespace {
 
@@ -82,7 +85,8 @@ void AddConnectingJumps(FragmentList *frags) {
   auto first = frags->First();
   auto next_ptr = &(first->next);
   first->was_encode_ordered = true;
-  OrderFragment(first, next_ptr);
+  GRANARY_IF_DEBUG( next_ptr = ) OrderFragment(first, next_ptr);
+
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
     auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
     auto frag_next = frag->next;
@@ -104,6 +108,11 @@ void AddConnectingJumps(FragmentList *frags) {
       arch::AddFallThroughJump(frag, fall_through);
     }
   }
+
+  // Helps to debug the case where execution falls off the end of a basic block.
+  GRANARY_IF_DEBUG( *next_ptr = new Fragment; );
+  GRANARY_IF_DEBUG( frags->Append(*next_ptr); )
+  GRANARY_IF_DEBUG( arch::AddFallThroughTrap(*next_ptr); )
 }
 
 }  // namespace granary

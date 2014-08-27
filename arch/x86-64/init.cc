@@ -19,10 +19,10 @@ namespace arch {
 xed_state_t XED_STATE;
 
 // Table of all implicit operands.
-const Operand *IMPLICIT_OPERANDS[XED_IFORM_LAST] = {nullptr};
+const Operand *IMPLICIT_OPERANDS[XED_MAX_INST_TABLE_NODES] = {nullptr};
 
 // Number of implicit operands for each iform.
-int NUM_IMPLICIT_OPERANDS[XED_IFORM_LAST] = {0};
+int NUM_IMPLICIT_OPERANDS[XED_MAX_INST_TABLE_NODES] = {0};
 
 // Categories of every iclass.
 xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
@@ -122,15 +122,11 @@ static void InitIformFlags(void) {
 // Invoke a function one every implicit operand of each iclass.
 static void ForEachImplicitOperand(
     const std::function<void(const xed_inst_t *, const xed_operand_t *,
-                        unsigned)> &cb) {
-  auto prev_iform = XED_IFORM_INVALID;
-  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
-    auto instr = xed_inst_table_base() + sel;
-
+                             unsigned, unsigned)> &cb) {
+  for (auto isel = 0U; isel < XED_MAX_INST_TABLE_NODES; ++isel) {
+    auto instr = xed_inst_table_base() + isel;
     auto iform = xed_inst_iform_enum(instr);
-    if (XED_IFORM_INVALID == iform || prev_iform == iform) continue;
-
-    prev_iform = iform;
+    if (XED_IFORM_INVALID == iform) continue;
 
     auto iclass = xed_inst_iclass(instr);
     auto num_ops = xed_inst_noperands(instr);
@@ -138,7 +134,7 @@ static void ForEachImplicitOperand(
       auto op = xed_inst_operand(instr, i);
       if (XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(op) &&
           !IsAmbiguousOperand(iclass, iform, i)) {
-        cb(instr, op, i);
+        cb(instr, op, i, isel);
       }
     }
   }
@@ -147,9 +143,9 @@ static void ForEachImplicitOperand(
 // Returns the total number of implicit operands.
 static size_t CountImplicitOperands(void) {
   size_t num_implicit_ops(0);
-  auto func = [&] (const xed_inst_t *instr, const xed_operand_t *, unsigned) {
-    auto iform = xed_inst_iform_enum(instr);
-    GRANARY_IF_DEBUG( auto new_num_ops = ) ++NUM_IMPLICIT_OPERANDS[iform];
+  auto func = [&] (const xed_inst_t *, const xed_operand_t *, unsigned,
+                   unsigned isel) {
+    GRANARY_IF_DEBUG( auto new_num_ops = ) ++NUM_IMPLICIT_OPERANDS[isel];
     GRANARY_ASSERT(11 >= new_num_ops);  // Max case is `PUSHAD`.
     ++num_implicit_ops;
   };
@@ -272,14 +268,13 @@ static void InitImplicitOperand(const xed_inst_t *instr,
 // Initializes the implicit operands in the table.
 static void InitImplicitOperands(Operand *op) {
   auto func = [&] (const xed_inst_t *instr, const xed_operand_t *instr_op,
-                   unsigned i) {
+                   unsigned i, unsigned isel) {
     InitImplicitOperand(instr, instr_op, op, i);
 
     // Initialize the first implicit operand for this iform and move to
     // initialize the next operand.
-    auto iform = xed_inst_iform_enum(instr);
-    if (!IMPLICIT_OPERANDS[iform]) {
-      IMPLICIT_OPERANDS[iform] = op;
+    if (!IMPLICIT_OPERANDS[isel]) {
+      IMPLICIT_OPERANDS[isel] = op;
     }
     op++;
   };

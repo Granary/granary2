@@ -381,6 +381,8 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->decoded_pc = pc;
   instr->iclass = xed_decoded_inst_get_iclass(xedd);
   instr->iform = xed_decoded_inst_get_iform_enum(xedd);
+  instr->isel = static_cast<unsigned>(xed_decoded_inst_inst(xedd) -
+                                      xed_inst_table_base());
   instr->category = xed_decoded_inst_get_category(xedd);
   instr->decoded_length = static_cast<uint8_t>(
       xed_decoded_inst_get_length(xedd));

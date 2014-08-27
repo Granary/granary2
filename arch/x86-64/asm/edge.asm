@@ -2,7 +2,7 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-START_FILE
+START_FILE_INTEL
 
 DECLARE_FUNC(granary_enter_direct_edge)
 DECLARE_FUNC(granary_enter_indirect_edge)
@@ -23,12 +23,12 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     // If we've already translated the target block, then increment the
     // execution counter. This is a saturating counter, where one counter
     // counts up to 32 bits, and the other counts the number of overflows.
-    push    %rax
-    mov     $2, %rax
-    xaddq   %rax, DirectEdge_num_executions(%rdi)
-    jo      .Lback_to_code_cache  // Alreadt executed.
+    push    rax
+    mov     rax, 2
+    xaddq   [rdi + DirectEdge_num_executions], rax
+    jo      .Lback_to_code_cache  // Already executed.
 
-    test    %rax, %rax
+    test    rax, rax
     jnz     .Lback_to_code_cache  // Already executed
 
     // We'll assume that if the value before incrementing was zero that we "won"
@@ -40,49 +40,45 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
 
   .Ltranslate_block:
     // Save all regs, except `RDI` and `RSI`.
-    push    %rcx
-    push    %rdx
-    push    %rbx
-    push    %rbp
-    push    %r8
-    push    %r9
-    push    %r10
-    push    %r11
-    push    %r12
-    push    %r13
-    push    %r14
-    push    %r15
+    push    rcx
+    push    rdx
+    push    rbx
+    push    rbp
+    push    r8
+    push    r9
+    push    r10
+    push    r11
+    push    r12
+    push    r13
+    push    r14
+    push    r15
 
     // Align the stack to a 16-byte boundary.
-    push    %rsp
-    push    (%rsp)
-    and     $-16, %rsp
-
-    //GRANARY_IF_USER(PUSHA_XMM)
+    push    rsp
+    push    [rsp]
+    and     rsp, -16
 
     call    granary_enter_direct_edge
 
-    //GRANARY_IF_USER(POPA_XMM)
-
     // Restore the old stack alignment.
-    mov     8(%rsp), %rsp
+    mov     rsp, [rsp + 8]
 
     // Restore the regs, except `RDI` and `RSI`.
-    pop     %r15
-    pop     %r14
-    pop     %r13
-    pop     %r12
-    pop     %r11
-    pop     %r10
-    pop     %r9
-    pop     %r8
-    pop     %rbp
-    pop     %rbx
-    pop     %rdx
-    pop     %rcx
+    pop     r15
+    pop     r14
+    pop     r13
+    pop     r12
+    pop     r11
+    pop     r10
+    pop     r9
+    pop     r8
+    pop     rbp
+    pop     rbx
+    pop     rdx
+    pop     rcx
 
   .Lback_to_code_cache:
-    pop     %rax
+    pop     rax
     ret
 END_FUNC(granary_arch_enter_direct_edge)
 
@@ -100,49 +96,45 @@ END_FUNC(granary_arch_enter_direct_edge)
 // Note: `RDI` is live on exit, and so must be saved/restored.
 DEFINE_FUNC(granary_arch_enter_indirect_edge)
     // Save all regs, except `RSI`, and `RCX`.
-    push    %rax
-    push    %rdi
-    push    %rdx
-    push    %rbx
-    push    %rbp
-    push    %r8
-    push    %r9
-    push    %r10
-    push    %r11
-    push    %r12
-    push    %r13
-    push    %r14
-    push    %r15
+    push    rax
+    push    rdi
+    push    rdx
+    push    rbx
+    push    rbp
+    push    r8
+    push    r9
+    push    r10
+    push    r11
+    push    r12
+    push    r13
+    push    r14
+    push    r15
 
-    mov     %rcx, %rdx  // Move `RCX` into `arg3`.
+    mov     rdx, rcx  // Move `RCX` into `arg3`.
 
     // Align the stack to a 16-byte boundary.
-    push    %rsp
-    push    (%rsp)
-    and     $-16, %rsp
-
-    //GRANARY_IF_USER(PUSHA_XMM)
+    push    rsp
+    push    [rsp]
+    and     rsp, -16
 
     call    granary_enter_indirect_edge
 
-    //GRANARY_IF_USER(POPA_XMM)
-
     // Restore the old stack alignment.
-    mov     8(%rsp), %rsp
+    mov     rsp, [rsp + 8]
 
-    pop     %r15
-    pop     %r14
-    pop     %r13
-    pop     %r12
-    pop     %r11
-    pop     %r10
-    pop     %r9
-    pop     %r8
-    pop     %rbp
-    pop     %rbx
-    pop     %rdx
-    pop     %rdi
-    pop     %rax
+    pop     r15
+    pop     r14
+    pop     r13
+    pop     r12
+    pop     r11
+    pop     r10
+    pop     r9
+    pop     r8
+    pop     rbp
+    pop     rbx
+    pop     rdx
+    pop     rdi
+    pop     rax
     ret
 END_FUNC(granary_arch_enter_indirect_edge)
 

@@ -10,6 +10,9 @@
 #include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
+#include "granary/cache.h"  // For `NativeAddress`.
+
+#include "os/logging.h"
 
 namespace granary {
 namespace arch {
@@ -39,6 +42,47 @@ bool IsNearRelativeJump(NativeInstruction *instr) {
       return false;
   }
 }
+
+#ifdef GRANARY_DEBUG
+# ifdef GRANARY_WHERE_user
+extern "C" {
+extern int getpid(void);
+extern long long read(int __fd, void *__buf, size_t __nbytes);
+}  // extern C
+
+namespace {
+
+static void TrapOnBadFallThrough(void) {
+  char buff[2];
+  os::Log(os::LogOutput, "Fell off the end of a basic block!\n"
+                         "Process ID for attaching GDB: %d\n", getpid());
+  while (true) read(0, buff, 1);  // Never return!
+  GRANARY_ASSERT(false);
+}
+
+// A pointer to a native address, that points to `TrapOnBadFallThrough`. This
+// will be a memory leak, but that is fine.
+static NativeAddress *trap_func_ptr = nullptr;
+
+}  // namespace
+# endif  // GRANARY_WHERE_user
+
+// Catches erroneous fall-throughs off the end of the basic block.
+void AddFallThroughTrap(Fragment *frag) {
+  arch::Instruction ni;
+# ifdef GRANARY_WHERE_user
+  if (GRANARY_UNLIKELY(!trap_func_ptr)) {
+    new NativeAddress(UnsafeCast<PC>(TrapOnBadFallThrough), &trap_func_ptr);
+  }
+  CALL_NEAR_MEMv(&ni, &(trap_func_ptr->addr));
+  frag->instrs.Append(new NativeInstruction(&ni));
+
+# else  // GRANARY_WHERE_kernel
+  UD2(&ni);
+  frag->instrs.Append(new NativeInstruction(&ni));
+# endif
+}
+#endif  // GRANARY_DEBUG
 
 }  // namespace arch
 }  // namespace granary

@@ -220,6 +220,7 @@ class Instruction : public InstructionInterface {
 
     xed_iclass_enum_t iclass:16;
     mutable xed_iform_enum_t iform:16;  // Original iform at decode time.
+    mutable unsigned isel:16;  // Instruction selection at decode time.
     xed_category_enum_t category:8;
 
     // Decoded length of this instruction, or 0 if it wasn't decoded.

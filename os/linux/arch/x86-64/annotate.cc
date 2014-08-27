@@ -179,7 +179,7 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   if (IsA<ControlFlowInstruction *>(instr)) return;
 
   auto fault_pc = instr->DecodedPC();
-  auto module = FindModuleContainingPC(fault_pc);
+  auto module = ModuleContainingPC(fault_pc);
 
   // Get this module's exception tables.
   auto exception_tables = reinterpret_cast<const ExceptionTableBounds *>(

@@ -61,7 +61,6 @@ xed_decoded_inst_inst( const xed_decoded_inst_t* p) {
     return p->_inst;
 }
 
-
 /// @ingroup DEC
 /// Return the instruction #xed_category_enum_t enumeration
 static XED_INLINE xed_category_enum_t

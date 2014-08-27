@@ -1,7 +1,12 @@
 
 #include "granary/base/base.h"
 
-#define START_FILE .text
+#define START_FILE \
+    .text
+#define START_FILE_INTEL \
+    .intel_syntax noprefix @N@\
+    .text
+    
 #define END_FILE
 #define SYMBOL(x) x
 

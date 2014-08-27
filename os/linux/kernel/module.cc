@@ -22,7 +22,7 @@ namespace {
 
 // Get the module kind based on information already present in `mod` or based on
 // the module's name.
-static ModuleKind GetModuleKind(LinuxKernelModule *mod) {
+static ModuleKind ModuleKind(LinuxKernelModule *mod) {
   switch (mod->kind) {
     case LinuxKernelModule::GRANARY_MODULE:
       return ModuleKind::GRANARY;
@@ -43,8 +43,8 @@ static ModuleKind GetModuleKind(LinuxKernelModule *mod) {
 static void UpdateModule(ModuleManager *manager, LinuxKernelModule *mod) {
   auto module = reinterpret_cast<Module *>(mod->module);
   if (!module) {
-    GRANARY_ASSERT(nullptr == FindModuleByName(mod->name));
-    module = new Module(GetModuleKind(mod), mod->name);
+    GRANARY_ASSERT(nullptr == ModuleByName(mod->name));
+    module = new Module(ModuleKind(mod), mod->name);
     if (mod->exception_tables.start && mod->exception_tables.stop &&
         mod->exception_tables.start <= mod->exception_tables.stop) {
       module->where_data = &(mod->exception_tables);

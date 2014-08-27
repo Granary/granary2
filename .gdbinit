@@ -805,6 +805,41 @@ define restore-regs
   dont-repeat
 end
 
+# restore-exec-entry <entry number>
+#
+# Restore the register state that was present at the time of the exec entry
+# `$arg0`.
+define restore-exec-entry
+  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
+  set $__i = ($__i - 1) % GRANARY_BLOCK_LOG_LENGTH
+  set $__regs = &(granary_block_log[$__i])
+
+  # Save the current register state so that if we want to, we can
+  # restore it later on to continue execution.
+  if !$__regs_saved
+    save-regs
+  end
+
+  set $r15 = $__regs->r15
+  set $r14 = $__regs->r14
+  set $r13 = $__regs->r13
+  set $r12 = $__regs->r12
+  set $r11 = $__regs->r11
+  set $r10 = $__regs->r10
+  set $r9  = $__regs->r9
+  set $r8  = $__regs->r8
+  set $rdi = $__regs->rdi
+  set $rsi = $__regs->rsi
+  set $rbp = $__regs->rbp
+  set $rbx = $__regs->rbx
+  set $rdx = $__regs->rdx
+  set $rcx = $__regs->rcx
+  set $rax = $__regs->rax
+  set $rsp = $__regs->rsp
+  set $eflags = (unsigned) $__regs->rflags
+  set $rip = $__regs->rip
+end
+
 # restore-regs-state <kernel regs pointer>
 #
 # Restore the machine state described by the Linux kernel `struct pt_regs`.
