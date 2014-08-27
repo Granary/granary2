@@ -7,7 +7,9 @@ using namespace granary;
 GRANARY_DEFINE_bool(count_execs, false,
     "Count the number of times each block is executed. This option is only "
     "meaningful for dynamic instrumentation. By default, `count_bbs` does not "
-    "count the number of executions of each basic block.");
+    "count the number of executions of each basic block.",
+
+    "count_bbs");
 
 // Records the static number of basic blocks. This could be an underestimation
 // of the total number of basic blocks in the instrumented binary, but an

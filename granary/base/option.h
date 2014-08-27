@@ -10,7 +10,7 @@
 #define GRANARY_HAS_FLAG_NAME(name) GRANARY_CAT(HAS_FLAG_, name)
 #define GRANARY_INTERNAL_FLAG_NAME(name) GRANARY_CAT(INTERNAL_FLAG_, name)
 
-#define GRANARY_REGISTER_OPTION(name, parser, docstring) \
+#define GRANARY_REGISTER_OPTION(name, parser, docstring, ...) \
   static granary::Option GRANARY_CAT(OPTION_, name) = { \
       nullptr, \
       GRANARY_TO_STRING(name), \
@@ -18,18 +18,19 @@
       &granary::detail::parser, \
       reinterpret_cast<void *>(&GRANARY_INTERNAL_FLAG_NAME(name)), \
       &GRANARY_HAS_FLAG_NAME(name), \
-      docstring \
+      docstring, \
+      "" __VA_ARGS__ \
   }; \
   __attribute__((constructor(101), used)) \
   static void GRANARY_CAT(RegisterOption_, name)(void) { \
     granary::detail::RegisterOption(&GRANARY_CAT(OPTION_, name)); \
   }
 
-#define GRANARY_DEFINE_string(name, default_value, docstring) \
+#define GRANARY_DEFINE_string(name, default_value, docstring, ...) \
   GRANARY_DECLARE_string(name); \
   namespace { \
   static const char *GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring) \
+  GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   const char *&GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
@@ -38,11 +39,11 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern const char *&GRANARY_FLAG_NAME(name)
 
-#define GRANARY_DEFINE_bool(name, default_value, docstring) \
+#define GRANARY_DEFINE_bool(name, default_value, docstring, ...) \
   GRANARY_DECLARE_bool(name); \
   namespace { \
   bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring) \
+  GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
@@ -51,11 +52,11 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern bool &GRANARY_FLAG_NAME(name)
 
-#define GRANARY_DEFINE_positive_int(name, default_value, docstring) \
+#define GRANARY_DEFINE_positive_int(name, default_value, docstring, ...) \
   GRANARY_DECLARE_positive_int(name); \
   namespace { \
   static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring) \
+  GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
@@ -64,11 +65,11 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern int &GRANARY_FLAG_NAME(name)
 
-#define GRANARY_DEFINE_unsigned(name, default_value, docstring) \
+#define GRANARY_DEFINE_unsigned(name, default_value, docstring, ...) \
   GRANARY_DECLARE_unsigned(name); \
   namespace { \
   static unsigned GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParseUnsignedIntOption, docstring) \
+  GRANARY_REGISTER_OPTION(name, ParseUnsignedIntOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   unsigned &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
@@ -77,11 +78,11 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern unsigned &GRANARY_FLAG_NAME(name)
 
-#define GRANARY_DEFINE_mask(name, default_value, docstring) \
+#define GRANARY_DEFINE_mask(name, default_value, docstring, ...) \
   GRANARY_DECLARE_mask(name); \
   namespace { \
   static uint64_t GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
-  GRANARY_REGISTER_OPTION(name, ParseBitMaskOption, docstring) \
+  GRANARY_REGISTER_OPTION(name, ParseBitMaskOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   uint64_t &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
@@ -101,6 +102,7 @@ struct Option {
   void * const value;
   bool *has_value;
   const char * const docstring;
+  const char * const tool_name;
 };
 
 typedef LinkedListIterator<Option> OptionIterator;

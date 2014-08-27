@@ -5,10 +5,12 @@
 using namespace granary;
 
 GRANARY_DEFINE_string(attach_to_syscalls, "*",
-                      "Comma-separated list of specific system call numbers "
-                      "to which Granary should be attached. The default "
-                      "value is `*`, which means that Granary should attach to "
-                      "all system calls.");
+    "Comma-separated list of specific system call numbers "
+    "to which Granary should be attached. The default "
+    "value is `*`, which means that Granary should attach to "
+    "all system calls.",
+
+    "kernel");
 
 // TODO:
 //  1) Make sure all exception tables are sorted.

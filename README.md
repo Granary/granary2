@@ -51,7 +51,7 @@ You can use Granary's "injector" (called `grr`) to inject Granary into a
 process. Below is an example where Granary is injected into `ls` using `grr`.
 
 ```basemake
-./bin/debug_user/grr -- ls
+./bin/debug_linux_user/grr -- ls
 ```
 
 Command-line arguments can be passed to `grr`, and they will be forwarded to
@@ -59,8 +59,17 @@ Granary itself. For example, if you've already compiled Granary's clients (see
 below) then you could try the following:
 
 ```basemake
-./bin/debug_user/grr --tools=watchpoints -- ls
+./bin/debug_linux_user/grr --tools=watchpoints -- ls
 ```
+
+The list of available command-line arguments can be seen by invoking:
+
+```basemake
+./bin/debug_linux_user/grr --help -- ls
+```
+
+Granary's injector doesn't actually understand Granary arguments, hence the
+requirement of specificying *some* executable to instrument.
 
 #### Kernel Space
 

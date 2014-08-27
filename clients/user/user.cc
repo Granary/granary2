@@ -4,8 +4,6 @@
 
 using namespace granary;
 
-extern "C" int disable_copy_prop = 0;
-
 // Tool that helps user-space instrumentation work.
 class UserSpaceInstrumenter : public InstrumentationTool {
  public:

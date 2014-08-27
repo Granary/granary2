@@ -225,6 +225,9 @@ void PrintAllOptions(void) {
   char line_buff[LINE_LENGTH];
   for (auto option : OptionIterator(OPTIONS)) {
     os::Log(os::LogOutput, "--\033[1m%s\033[m", option->name);
+    if (option->tool_name[0]) {
+      os::Log(os::LogOutput, " \x1B[32m(%s)\033[m", option->tool_name);
+    }
     auto docstring = option->docstring;
     do {
       docstring = BufferDocString(line_buff, docstring);

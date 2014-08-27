@@ -5,24 +5,28 @@
 using namespace granary;
 
 GRANARY_DEFINE_mask(address_mask, 0,
-                    "Mask that is used to filter addresses. If zero then all "
-                    "addresses are accepted.\n"
-                    "\n"
-                    "If `(addr & addr_mask) != 0` then the write is recorded "
-                    "into an in-memory log. Log entries contain four "
-                    "components:\n"
-                    "  1) Target address of the write.\n"
-                    "  2) Value being written to memory.\n"
-                    "  3) Application address of the instruction doing the\n"
-                    "     write.\n"
-                    "  4) Cache address of the instruction doing the write.");
+    "Mask that is used to filter addresses. If zero then all addresses are "
+    "accepted.\n"
+    "\n"
+    "If `(addr & addr_mask) != 0` then the write is recorded "
+    "into an in-memory log. Log entries contain four "
+    "components:\n"
+    "  1) Target address of the write.\n"
+    "  2) Value being written to memory.\n"
+    "  3) Application address of the instruction doing the\n"
+    "     write.\n"
+    "  4) Cache address of the instruction doing the write.",
+
+    "find_write");
 
 GRANARY_DEFINE_mask(value_mask, 0,
-                    "Mask that is used to filter values. If zero then all "
-                    "values are accepted.\n"
-                    "\n"
-                    "If `(value & value_mask) != 0` then the write is recorded "
-                    "into an in-memory log.");
+    "Mask that is used to filter values. If zero then all values are "
+    "accepted.\n"
+    "\n"
+    "If `(value & value_mask) != 0` then the write is recorded "
+    "into an in-memory log.",
+
+    "find_write");
 
 // Tool that implements several kernel-space special cases for instrumenting
 // common binaries.

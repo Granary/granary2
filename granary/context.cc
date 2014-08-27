@@ -26,10 +26,10 @@ GRANARY_DEFINE_positive_int(block_cache_slab_size, 512,
     "context maintains its own block code allocator. The default value is "
     "`512` pages per slab (2MB).");
 
-GRANARY_DEFINE_positive_int(edge_cache_slab_size, 16,
+GRANARY_DEFINE_positive_int(edge_cache_slab_size, 256,
     "The number of pages allocated at once to store edge code. Each "
     "context maintains its own edge code allocator. The default value is "
-    "`16` pages per slab.");
+    "`256` pages per slab (1MB).");
 
 namespace granary {
 namespace arch {
