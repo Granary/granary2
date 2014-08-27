@@ -123,16 +123,12 @@ static const char *PathToName(char *path) {
   if (after_last_slash) {
     name = after_last_slash;  // Update the beginning of the name.
   }
-  // Truncate the name at the first period or dash (e.g. `*.so`).
+  // Truncate the name at the first period (e.g. `*.so`).
   for (auto ch(name); *ch; ++ch) {
     if ('.' == *ch || '-' == *ch) {
       *ch = '\0';
       break;
     }
-  }
-  // If the name begins with `lib` (e.g. `libc.so`) then remove the `lib` part.
-  if ('l' == name[0] && 'i' == name[1] && 'b' == name[2]) {
-    name += 3;
   }
   return name;
 }
@@ -145,7 +141,7 @@ static ModuleKind KindFromName(const char *name, int num_modules) {
   } else if ('[' == name[0]) {  // [vdso], [vsyscall], [stack], [heap].
     return ModuleKind::DYNAMIC;
   } else {
-    if (StringsMatch(GRANARY_NAME_STRING, name)) {
+    if (StringsMatch("lib" GRANARY_NAME_STRING, name)) {
       return ModuleKind::GRANARY;
     }
   }

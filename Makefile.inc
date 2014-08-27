@@ -22,11 +22,11 @@ GRANARY_HEADER_MACRO_DEFS =
 # Allow the clang static analyzer to interpose on the build.
 #
 # Note: To get this to work, I had to manually modify the file
-#		`/usr/share/clang/scan-build/ccc-analyzer` and set the default
-#		compilers to `clang` and `clang++` in all cases. Alternatively, the
-#		following should achieve the same results:
-#			export CCC_CC=clang
-#			export CCC_CXX=clang++
+#       `/usr/share/clang/scan-build/ccc-analyzer` and set the default
+#       compilers to `clang` and `clang++` in all cases. Alternatively, the
+#       following should achieve the same results:
+#           export CCC_CC=clang
+#           export CCC_CXX=clang++
 ifeq (1,$(GRANARY_SCAN_BUILD))
 	GRANARY_OLD_CC := $(GRANARY_CC)
 	GRANARY_OLD_CXX := $(GRANARY_CXX)
@@ -77,7 +77,6 @@ GRANARY_GMOCK_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googlemock
 GRANARY_DEV_NULL = > /dev/null 2>&1 ||:
 
 # Figure out the generated files directories.
-# TODO(pag): Make generated source files target-specific?
 GRANARY_GEN_SRC_DIR = $(GRANARY_SRC_DIR)/generated
 GRANARY_GEN_BIN_DIR = $(GRANARY_BIN_DIR)/generated
 

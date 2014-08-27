@@ -29,7 +29,7 @@ class ModuleManagerTest : public Test {
 };
 
 TEST_F(ModuleManagerTest, EmptyDoesNotFindLibC) {
-  ASSERT_TRUE(nullptr == m1.FindByName("c"));
+  ASSERT_TRUE(nullptr == m1.FindByName("libc"));
 }
 
 TEST_F(ModuleManagerTest, EmptyHasExitWithInternalRefresh) {
@@ -41,15 +41,15 @@ TEST_F(ModuleManagerTest, WithBuiltinFindsGranary) {
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsLibC) {
-  ASSERT_TRUE(nullptr != m2.FindByName("c"));
+  ASSERT_TRUE(nullptr != m2.FindByName("libc"));
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsPthreads) {
-  ASSERT_TRUE(nullptr != m2.FindByName("pthread"));
+  ASSERT_TRUE(nullptr != m2.FindByName("libpthread"));
 }
 
 TEST_F(ModuleManagerTest, WithBuiltinFindsLibDL) {
-  ASSERT_TRUE(nullptr != m2.FindByName("dl"));
+  ASSERT_TRUE(nullptr != m2.FindByName("libdl"));
 }
 
 TEST_F(ModuleManagerTest, FindRegisteredModule) {
