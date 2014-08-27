@@ -29,6 +29,7 @@ core
 *.log
 *.tmp
 *.dump
+*log.txt
 
 # Generated files
 generated/*
