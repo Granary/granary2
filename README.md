@@ -16,9 +16,15 @@ Setup
   *Note:* If `clang-3.5` is not available on your distribution, then try getting
   `clang-3.4` or `clang-3.3`.
 
+  *Note:* Verify that `llvm-link-3.5` is installed on your system. If you don't
+  have it, then you can manually specify a different version of `llvm-link`. For
+  example, `make all GRANARY_LLVM_LINK=llvm-link`  (this will use the system 
+  default `llvm-link`).
+
 2. Make sure you have Python 2.7 or above, but not Python 3. If you have
   multiple Python versions on your machine, but 2.7 is not the default, then
-  specify the path to the Python 2.7 binary using `GRANARY_PYTHON=/path/to/python`.
+  you can still specify the path to the Python 2.7. For example: 
+  `make all GRANARY_PYTHON=/path/to/python`.
 
 ### Step 1: Initial setup.
 
