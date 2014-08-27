@@ -8,6 +8,11 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "Enable transparent return addresses? The default is `"
     GRANARY_IF_USER_ELSE("yes", "no") "`.");
 
+GRANARY_DEFINE_bool(using_undodb, false,
+    "Enable support for UndoDB's reversible debugger? This forces Granary "
+    "to (locally) detach when code from UndoDB's `libundodb_autotracer_preload"
+    "_x64.so`. The default value is `no`.");
+
 // Implements transparent return addresses. This means that the return
 // addresses from instrumented function calls will point to native code and
 // not into Granary's code cache.
@@ -86,6 +91,18 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
     } while (instr != search_instr);
   }
 
+  bool IgnoreFunctionCall(BasicBlock *target) {
+    if (!FLAG_using_undodb) return false;
+
+    auto direct_target = DynamicCast<DirectBasicBlock *>(target);
+    if (!direct_target) return false;
+
+    auto target_pc = direct_target->StartAppPC();
+    auto module = ModuleContainingPC(target_pc);
+
+    return StringsMatch("undodb_autotracer_preload_x64", module->Name());
+  }
+
   // Instrument the control-flow instructions, specifically: function call
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
@@ -97,6 +114,7 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
       for (auto succ : block->Successors()) {
         // Convert a function call into a `PUSH; JMP` combination.
         if (succ.cfi->IsFunctionCall()) {
+          if (IgnoreFunctionCall(succ.block)) continue;
           AddTransparentRetAddr(succ.cfi);
           RemoveTailInstructions(decoded_block, succ.cfi);
           factory->RequestBlock(succ.block);  // Walk into the call.

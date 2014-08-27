@@ -10,13 +10,15 @@ Setup
 
 1. Get LLVM and clang:
   ```basemake
-  sudo apt-get install llvm libc++-dev libc++1 clang-3.5 binutils
+  sudo apt-get install clang-3.5 llvm libc++-dev libc++1 binutils
   ```
 
   *Note:* If `clang-3.5` is not available on your distribution, then try getting
   `clang-3.4` or `clang-3.3`.
 
-2. Make sure you have Python 2.7 or above, but not Python 3. 
+2. Make sure you have Python 2.7 or above, but not Python 3. If you have
+  multiple Python versions on your machine, but 2.7 is not the default, then
+  specify the path to the Python 2.7 binary using `GRANARY_PYTHON=/path/to/python`.
 
 ### Step 1: Initial setup.
 

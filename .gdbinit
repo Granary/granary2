@@ -68,7 +68,7 @@ if !$in_user_space
 # User space breakpoints.
 else
   b __assert_fail
-
+  b abort
   handle SIGSEGV stop print nopass
   handle SIGILL stop print nopass
 end
@@ -702,38 +702,6 @@ define get-next-block
 end
 
 
-# print-block
-#
-# Treat `$arg0` as a pointer to a `BasicBlock`, and print the block as a cluster
-# of DOT digraph nodes. A cluster is used because some blocks contain internal
-# control-flow, which is then printed as individual blocks.
-define print-block
-  
-  dont-repeat
-end
-
-
-# print-cfg
-#
-# Treat `$arg0` as a pointer to a `LocalControlFlowGraph`, and print a DOT
-# digraph of the LCFG to `/tmp/graph.dot`, then display it using `XDot`.
-define print-cfg
-  set language c++
-  set $__c = (granary::LocalControlFlowGraph *) $arg0
-  set $__b = $__c->first_block
-
-  printf "digraph {\n"
-
-  while $__b
-    print-block $__b
-    get-next-block $__b
-  end
-  dont-repeat
-
-  printf "}\n"
-end
-
-
 # Saved machine state.
 set $__reg_r15 = 0
 set $__reg_r14 = 0
@@ -805,6 +773,7 @@ define restore-regs
   dont-repeat
 end
 
+
 # restore-exec-entry <entry number>
 #
 # Restore the register state that was present at the time of the exec entry
@@ -840,10 +809,44 @@ define restore-exec-entry
   set $rip = $__regs->rip
 end
 
-# restore-regs-state <kernel regs pointer>
+
+# restore-ucontext <`struct ucontext` pointer>
+#
+# Restore the machine state designed by the Linux `struct ucontext` structure.
+define restore-ucontext
+  set $__regs = &(((struct ucontext *) $arg0)->uc_mcontext.gregs[0])
+
+  # Save the current register state so that if we want to, we can
+  # restore it later on to continue execution.
+  if !$__regs_saved
+    save-regs
+  end
+
+  set $r15 = $__regs[7]
+  set $r14 = $__regs[6]
+  set $r13 = $__regs[5]
+  set $r12 = $__regs[4]
+  set $r11 = $__regs[3]
+  set $r10 = $__regs[2]
+  set $r9  = $__regs[1]
+  set $r8  = $__regs[0]
+  set $rdi = $__regs[8]
+  set $rsi = $__regs[9]
+  set $rbp = $__regs[10]
+  set $rbx = $__regs[11]
+  set $rdx = $__regs[12]
+  set $rcx = $__regs[14]
+  set $rax = $__regs[13]
+  set $rsp = $__regs[15]
+  set $eflags = (unsigned) $__regs[17]
+  set $rip = $__regs[16]
+end
+
+
+# restore-pt-regs <kernel `struct pt_regs` pointer>
 #
 # Restore the machine state described by the Linux kernel `struct pt_regs`.
-define restore-regs-state
+define restore-pt-regs
   set $__regs = (struct pt_regs *) $arg0
 
   # Save the current register state so that if we want to, we can
