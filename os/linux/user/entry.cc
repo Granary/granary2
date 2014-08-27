@@ -40,14 +40,6 @@ extern void exit_group(int) __attribute__((noreturn));
 namespace granary {
 namespace {
 
-static char await_attach_stack[SIGSTKSZ];
-static struct sigaltstack await_attach_signal_stack = {
-  &(await_attach_stack[0]),  // ss_sp
-  0,  // ss_flags
-  SIGSTKSZ,  // ss_size
-};
-
-
 // Initialize Granary for debugging by GDB. For example, if one is doing:
 //
 //    grr --tools=foo -- ls
@@ -60,11 +52,15 @@ static struct sigaltstack await_attach_signal_stack = {
 //
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
-static void AwaitAttach(int) {
+extern "C" void AwaitAttach(int signum, void *siginfo, void *context) {
   char buff[2];
   os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
   os::Log(os::LogOutput, "Press enter to continue.\n");
   read(0, buff, 1);
+
+  GRANARY_USED(signum);
+  GRANARY_USED(siginfo);
+  GRANARY_USED(context);
 }
 
 // Used to attach a signal handler to an arbitrary signal, such that when the
@@ -74,10 +70,8 @@ static void AwaitAttachOnSignal(int signum) {
   struct sigaction new_sigaction;
   memset(&new_sigaction, 0, sizeof new_sigaction);
   memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.sa_handler = &AwaitAttach;
-  new_sigaction.sa_restorer = rt_sigreturn;
-  new_sigaction.sa_flags = static_cast<int>(
-      SA_RESETHAND | SA_ONSTACK | SA_RESTORER);
+  new_sigaction.sa_sigaction = &AwaitAttach;
+  new_sigaction.sa_flags = SA_SIGINFO;
   rt_sigaction(signum, &new_sigaction, nullptr, _NSIG / 8);
 }
 
@@ -88,12 +82,13 @@ static void AwaitAttachOnSignal(int signum) {
 // attached.
 static void InitDebug(void) {
   if (FLAG_help) return;
-  sigaltstack(&await_attach_signal_stack, nullptr);
+  //sigaltstack(&await_attach_signal_stack, nullptr);
   if (FLAG_debug_gdb_prompt) {
-    AwaitAttach(-1);
+    AwaitAttach(-1, nullptr, nullptr);
   } else {
     AwaitAttachOnSignal(SIGSEGV);
     AwaitAttachOnSignal(SIGILL);
+    AwaitAttachOnSignal(SIGTRAP);
   }
 }
 

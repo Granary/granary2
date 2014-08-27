@@ -410,9 +410,7 @@ static void AddEntryFragment(FragmentList *frags,
 template <typename T>
 static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
   Fragment *frag = new T;
-  auto label = new LabelInstruction();
-  SetMetaData(label, frag);
-  frag->instrs.Append(label);
+
   frag->successors[0] = succ;
   frag->partition.Union(frag, inherit);
   frag->flag_zone.Union(frag, inherit);

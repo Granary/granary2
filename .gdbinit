@@ -68,6 +68,9 @@ if !$in_user_space
 # User space breakpoints.
 else
   b __assert_fail
+
+  handle SIGSEGV stop print nopass
+  handle SIGILL stop print nopass
 end
 
 

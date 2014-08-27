@@ -230,9 +230,10 @@ int Instruction::ComputedOffsetBelowStackPointer(void) const {
 //
 // Note: the RFLAGS register is always the last implicit operand.
 bool Instruction::ReadsFlags(void) const {
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iform];
   if (num_implicit_ops) {
-    const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+    const auto &op(IMPLICIT_OPERANDS[iform][num_implicit_ops - 1]);
     return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
            op.reg.IsFlags() && (op.IsRead() || op.IsConditionalWrite());
   } else {
@@ -246,9 +247,10 @@ bool Instruction::ReadsFlags(void) const {
 //
 // Note: the RFLAGS register is always the last operand.
 bool Instruction::WritesFlags(void) const {
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iform];
   if (num_implicit_ops) {
-    const auto &op(IMPLICIT_OPERANDS[iclass][num_implicit_ops - 1]);
+    const auto &op(IMPLICIT_OPERANDS[iform][num_implicit_ops - 1]);
     return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
            op.reg.IsFlags() && op.IsWrite();
   } else {
@@ -292,8 +294,10 @@ void Instruction::AnalyzeStackUsage(void) const {
     }
     AnalyzeOperandStackUsage(self, op);
   }
-  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iclass]; ++i) {
-    AnalyzeOperandStackUsage(self, IMPLICIT_OPERANDS[iclass][i]);
+
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iform]; ++i) {
+    AnalyzeOperandStackUsage(self, IMPLICIT_OPERANDS[iform][i]);
   }
 }
 
@@ -358,8 +362,9 @@ void Instruction::ForEachOperand(
     }
     CallWithOperand(&op, func);
   }
-  auto implicit_ops = IMPLICIT_OPERANDS[iclass];
-  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iclass]; ++i) {
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  auto implicit_ops = IMPLICIT_OPERANDS[iform];
+  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[iform]; ++i) {
     auto implicit_op = const_cast<Operand *>(&(implicit_ops[i]));
     CallWithOperand(implicit_op, func);
   }
@@ -445,8 +450,9 @@ bool TryMatchOperand(MatchState *state, OperandMatcher m, Operand *op, int i) {
 size_t Instruction::CountMatchedOperands(
     std::initializer_list<OperandMatcher> &&matchers) {
   MatchState state = {0, {false}};
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iclass];
-  const auto implicit_ops = IMPLICIT_OPERANDS[iclass];
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[iform];
+  const auto implicit_ops = IMPLICIT_OPERANDS[iform];
   for (auto m : matchers) {
     int op_num = 0;
     auto matched = false;

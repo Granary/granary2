@@ -19,10 +19,10 @@ namespace arch {
 xed_state_t XED_STATE;
 
 // Table of all implicit operands.
-const Operand *IMPLICIT_OPERANDS[XED_ICLASS_LAST] = {nullptr};
+const Operand *IMPLICIT_OPERANDS[XED_IFORM_LAST] = {nullptr};
 
-// Number of implicit operands for each iclass.
-int NUM_IMPLICIT_OPERANDS[XED_ICLASS_LAST] = {0};
+// Number of implicit operands for each iform.
+int NUM_IMPLICIT_OPERANDS[XED_IFORM_LAST] = {0};
 
 // Categories of every iclass.
 xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
@@ -123,15 +123,16 @@ static void InitIformFlags(void) {
 static void ForEachImplicitOperand(
     const std::function<void(const xed_inst_t *, const xed_operand_t *,
                         unsigned)> &cb) {
-  auto last_iclass = XED_ICLASS_INVALID;
+  auto prev_iform = XED_IFORM_INVALID;
   for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
     auto instr = xed_inst_table_base() + sel;
-    auto iclass = xed_inst_iclass(instr);
+
     auto iform = xed_inst_iform_enum(instr);
-    if (iclass == last_iclass) {
-      continue;
-    }
-    last_iclass = iclass;
+    if (XED_IFORM_INVALID == iform || prev_iform == iform) continue;
+
+    prev_iform = iform;
+
+    auto iclass = xed_inst_iclass(instr);
     auto num_ops = xed_inst_noperands(instr);
     for (auto i = 0U; i < num_ops; ++i) {
       auto op = xed_inst_operand(instr, i);
@@ -147,8 +148,8 @@ static void ForEachImplicitOperand(
 static size_t CountImplicitOperands(void) {
   size_t num_implicit_ops(0);
   auto func = [&] (const xed_inst_t *instr, const xed_operand_t *, unsigned) {
-    auto iclass = xed_inst_iclass(instr);
-    GRANARY_IF_DEBUG( auto new_num_ops = ) ++NUM_IMPLICIT_OPERANDS[iclass];
+    auto iform = xed_inst_iform_enum(instr);
+    GRANARY_IF_DEBUG( auto new_num_ops = ) ++NUM_IMPLICIT_OPERANDS[iform];
     GRANARY_ASSERT(11 >= new_num_ops);  // Max case is `PUSHAD`.
     ++num_implicit_ops;
   };
@@ -228,7 +229,7 @@ static bool ConvertNonTerminalOperand(Operand *instr_op,
       FillRegisterOperand(instr_op, XED_REG_RAX); return true;
     case XED_NONTERMINAL_ORBP:
       FillRegisterOperand(instr_op, XED_REG_RBP); return true;
-    case XED_NONTERMINAL_ORDX:
+    case XED_NONTERMINAL_ORDX:  // Output to RDX, e.g. in MUL_GPRv.
       FillRegisterOperand(instr_op, XED_REG_RDX); return true;
     case XED_NONTERMINAL_ORSP:  // Output to RSP.
       FillRegisterOperand(instr_op, XED_REG_RSP); return true;
@@ -274,11 +275,11 @@ static void InitImplicitOperands(Operand *op) {
                    unsigned i) {
     InitImplicitOperand(instr, instr_op, op, i);
 
-    // Initialize the first implicit operand for this iclass and move to
+    // Initialize the first implicit operand for this iform and move to
     // initialize the next operand.
-    auto iclass = xed_inst_iclass(instr);
-    if (!IMPLICIT_OPERANDS[iclass]) {
-      IMPLICIT_OPERANDS[iclass] = op;
+    auto iform = xed_inst_iform_enum(instr);
+    if (!IMPLICIT_OPERANDS[iform]) {
+      IMPLICIT_OPERANDS[iform] = op;
     }
     op++;
   };

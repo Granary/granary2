@@ -6,15 +6,17 @@
 #include "granary/base/string.h"
 
 #include "os/logging.h"
-
+#include <fcntl.h>
 extern "C" {
 
+extern int open(const char *filename, int flags, ...);
 extern long long write(int __fd, const void *__buf, size_t __n);
 
 }
 namespace granary {
 namespace os {
 namespace {
+
 static int OUTPUT_FD[] = {
     1,  // LogOutput
     2,  // LogWarning

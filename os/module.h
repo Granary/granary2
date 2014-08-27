@@ -98,7 +98,7 @@ class Module {
   // Return a module offset object for a program counter (that is expected to
   // be contained inside of the module). If the program counter is not part of
   // the module then the returned object is all nulled.
-  ModuleOffset OffsetOf(AppPC pc) const;
+  ModuleOffset OffsetOfPC(AppPC pc) const;
 
   // Returns true if a module contains the code address `pc`, and if that code
   // address is marked as executable.

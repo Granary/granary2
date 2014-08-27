@@ -73,13 +73,7 @@ static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   // can potentially alter what the offset to them is later on (in the event
   // that virtual regs are spilled to the stack).
   if (!op.is_compound && !op.reg.IsStackPointer()) {
-
-    // Minor optimization attempt to move de-references of RAX outside of flag
-    // zones. In the worst case, we'll likely just remove the resulting `LEA`
-    // instruction with copy propagation.
-    if (XED_REG_RAX != op.reg.EncodeToNative()) {
-      return;
-    }
+    return;
   }
 
   // All built-in memory operands, other than `XLAT`, a simple dereferences

@@ -17,36 +17,46 @@ namespace arch {
 
 // Returns a valid `SSAOperand` pointer to the operand being copied if this
 // instruction is a copy instruction, otherwise returns `nullptr`.
-SSAOperand *GetCopiedOperand(const NativeInstruction *instr) {
-  auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
-  if (!ssa_instr) return nullptr;  // E.g. no operands, or operates on stack.
-
+SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
+                             SSAInstruction *ssa_instr) {
   if (1UL != ssa_instr->defs.Size() || !ssa_instr->uses.Size()) {
     return nullptr;
   }
 
   const auto &instruction(instr->instruction);
-  const auto iclass = instruction.iclass;
+  GRANARY_IF_DEBUG( const auto &op0(instruction.ops[0]);)
+  const auto &op1(instruction.ops[1]);
 
   // We don't allow copy propagation of the stack pointer, and we require that
   // catch issues like `MOV r16, r16` not being copy-propagatable because the
   // first (written) operand preserves bytes on write, and therefore appears
   // in `uses` instead of `defs`.
   VirtualRegister copied_reg;
-  if (XED_ICLASS_MOV == iclass) {
-    if (!instruction.ops[0].IsRegister()) return nullptr;
-    if (!instruction.ops[1].IsRegister()) return nullptr;
-    copied_reg = instruction.ops[1].reg;
-  } else if (XED_ICLASS_LEA == iclass && 2 == instruction.num_explicit_ops) {
-    if (instruction.ops[1].is_compound) {
-      copied_reg = VirtualRegister::FromNative(instruction.ops[1].mem.reg_base);
+  if (XED_IFORM_MOV_GPRv_GPRv_89 == instruction.iform ||
+      XED_IFORM_MOV_GPRv_GPRv_8B == instruction.iform) {
+    GRANARY_ASSERT(op0.IsRegister());
+    GRANARY_ASSERT(op1.IsRegister());
+    copied_reg = op1.reg;
+
+  } else if (XED_ICLASS_LEA == instruction.iclass &&
+             2 == instruction.num_explicit_ops) {
+    if (op1.is_compound) {
+      if (op1.mem.reg_index || op1.mem.disp || 1 != op1.mem.scale) {
+        return nullptr;
+      }
+      copied_reg = VirtualRegister::FromNative(op1.mem.reg_base);
     } else {
-      copied_reg = instruction.ops[1].reg;
+      copied_reg = op1.reg;
     }
   } else {
     return nullptr;
   }
   if (copied_reg.IsStackPointer()) return nullptr;
+
+  // This shouldn't come up because we'll see that `op0.reg` is actually a
+  // `READ_WRITE` use, and therefore `0 == ssa_instr->defs.Size()`.
+  GRANARY_ASSERT(!op0.reg.PreservesBytesOnWrite());
+
   return &(ssa_instr->uses[0]);
 }
 

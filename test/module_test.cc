@@ -83,7 +83,7 @@ TEST_F(ModuleTest, DoesNotContainNullptr) {
 }
 
 TEST_F(ModuleTest, ReturnsInvalidOffset) {
-  auto offset = mod.OffsetOf(nullptr);
+  auto offset = mod.OffsetOfPC(nullptr);
   EXPECT_TRUE(nullptr == offset.module);
   EXPECT_TRUE(0 == offset.offset);
 }
@@ -116,7 +116,7 @@ class ModuleRangeTest : public Test {
   void TestOffsetsInRange(void) {
     uintptr_t addr_offset(0);
     for (auto addr = 100UL; addr < 200UL; ++addr) {
-      auto offset = mod.OffsetOf(UnsafeCast<AppPC>(addr));
+      auto offset = mod.OffsetOfPC(UnsafeCast<AppPC>(addr));
       EXPECT_EQ(&mod, offset.module);
       EXPECT_EQ(addr_offset, offset.offset);
       ++addr_offset;

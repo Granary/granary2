@@ -4,6 +4,8 @@
 
 using namespace granary;
 
+extern "C" int disable_copy_prop = 0;
+
 // Tool that helps user-space instrumentation work.
 class UserSpaceInstrumenter : public InstrumentationTool {
  public:
@@ -12,7 +14,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   void InstrumentSyscall(ControlFlowInstruction *syscall) {
     BeginInlineAssembly();
 
-    // Prevents user-space code from replacing the `SIGSEGV` an `SIGILL`
+    // Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`
     // signal handlers. This is to help in the debugging of user space
     // programs, where attaching GDB early on in the program's execution
     // causes the bug to disappear.
@@ -31,7 +33,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
                           "TEST r64 RSI, r64 RSI;"
                           "JZ l %1;"
 
-                          // Precent overriding of `SIGSEGV = 11`.
+                          // Prevent overriding of `SIGSEGV = 11`.
                           "CMP r32 EDI, i32 11;"
                           "JNZ l %1;"
 

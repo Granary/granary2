@@ -17,6 +17,7 @@
 
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
+#include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
 #include "granary/context.h"
@@ -51,6 +52,8 @@ namespace {
 static const auto kEnterDirect = granary_arch_enter_direct_edge;
 static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 
+// Used to make a move of an address smaller. This is only really helpful in
+// user space.
 static void Shorten_MOV_GPRv_IMMv(arch::Instruction *ni) {
   if (32 >= ni->ops[1].width) {
     ni->ops[0].width = 32;
@@ -58,6 +61,15 @@ static void Shorten_MOV_GPRv_IMMv(arch::Instruction *ni) {
     ni->ops[1].width = 32;
   }
 }
+
+// Helps us distinguish call going through an edge from an un/conditional
+// jump.
+static bool TargetStackIsValid(const DirectEdge *edge) {
+  const auto target_meta = MetaDataCast<StackMetaData *>(
+      edge->dest_meta.load(std::memory_order_relaxed));
+  return target_meta->has_stack_hint && target_meta->behaves_like_callstack;
+}
+
 }  // namespace
 
 // Generates the direct edge entry code for getting onto a Granary private
@@ -113,6 +125,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
   auto pc = edge->edge_code;
+  auto target_stack_valid = TargetStackIsValid(edge);
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
   // The first time this is executed, it will jump to the next instruction,
@@ -122,10 +135,13 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   ENC(JMP_MEMv(&ni, &(edge->entry_target)));
   edge->entry_target = pc;  // `pc` is the address of the next instruction.
 
-  GRANARY_IF_USER(ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                         BaseDispMemOp(-REDZONE_SIZE_BYTES,
-                                                       XED_REG_RSP,
-                                                       ADDRESS_WIDTH_BITS))));
+  if (REDZONE_SIZE_BYTES && !target_stack_valid) {
+    ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                           BaseDispMemOp(-REDZONE_SIZE_BYTES,
+                                         XED_REG_RSP,
+                                         ADDRESS_WIDTH_BITS)));
+  }
+
   // Steal `RDI` (arg1 on Itanium C++ ABI) to hold the address of the
   // `DirectEdge` data structure.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RDI));
@@ -140,10 +156,12 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   ENC(POP_GPRv_51(&ni, XED_REG_RDI));
 
   // Restore back to the native stack.
-  GRANARY_IF_USER(ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                         BaseDispMemOp(REDZONE_SIZE_BYTES,
-                                                       XED_REG_RSP,
-                                                       ADDRESS_WIDTH_BITS))));
+  if (REDZONE_SIZE_BYTES && !target_stack_valid) {
+    ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                           BaseDispMemOp(REDZONE_SIZE_BYTES,
+                                         XED_REG_RSP,
+                                         ADDRESS_WIDTH_BITS)));
+  }
 
   // Jump to the resolved PC, independent of profiling. As mentioned above,
   // if two or more threads are racing to translate a block, then the behavior
@@ -258,6 +276,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
   auto exit_to_block = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
+  auto is_call_ret = cfi->IsFunctionCall() ||
+                     IsA<ReturnBasicBlock *>(cfi->TargetBlock());
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
   // we will often use the combination of a `branch_instr` and
@@ -291,6 +311,16 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   GRANARY_ASSERT(target_op.IsRegister());  // Enforced by `1_mangle.cc`.
 
   // --------------------- in_edge --------------------------------
+
+  if (REDZONE_SIZE_BYTES && !is_call_ret) {
+    APP(in_edge,
+        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                           BaseDispMemOp(-REDZONE_SIZE_BYTES,
+                                         XED_REG_RSP,
+                                         ADDRESS_WIDTH_BITS));
+        ni.is_stack_blind = true;
+        ni.analyzed_stack_usage = false; );
+  }
 
   // Copy the target, just in case it's stored in `RCX` or `RDI`.
   auto cfi_target = target_op.reg;
@@ -387,6 +417,17 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
                         ni.is_stack_blind = true;
                         ni.analyzed_stack_usage = false; );
   }
+
+  if (REDZONE_SIZE_BYTES && !is_call_ret) {
+    APP(compare_target,
+        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                           BaseDispMemOp(REDZONE_SIZE_BYTES,
+                                         XED_REG_RSP,
+                                         ADDRESS_WIDTH_BITS));
+        ni.is_stack_blind = true;
+        ni.analyzed_stack_usage = false; );
+  }
+
   // --------------------- exit_to_block --------------------------------
 
   APP(exit_to_block, UD2(&ni));

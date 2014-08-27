@@ -115,7 +115,7 @@ Module::~Module(void) {
 // Return a module offset object for a program counter (that is expected to
 // be contained inside of the module). If the program counter is not part of
 // the module then the returned object is all nulled.
-ModuleOffset Module::OffsetOf(AppPC pc) const {
+ModuleOffset Module::OffsetOfPC(AppPC pc) const {
   ReadLocked locker(&ranges_lock);
   auto range = FindRange(ranges, pc);
   if (!range) {

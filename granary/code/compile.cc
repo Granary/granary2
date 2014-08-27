@@ -199,7 +199,6 @@ static void Encode(FragmentList *frags) {
             &(ninstr->instruction), ninstr->instruction.EncodedPC());
         GRANARY_ASSERT(encoded);
         GRANARY_ASSERT(expected_length == ninstr->instruction.EncodedLength());
-        GRANARY_ASSERT(!ninstr->IsInterruptCall());
       }
     }
   }
@@ -240,20 +239,22 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
 // data is encoded.
 static void ConnectEdgesToInstructions(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (!cfrag->branch_instr) continue;
+    auto cfrag = DynamicCast<CodeFragment *>(frag);
+    if (!cfrag) continue;
+    if (!cfrag->branch_instr) continue;
 
-      // Try to get the direct edge (if any) that is targeted by `branch_instr`.
-      auto direct_edge_frag = DynamicCast<ExitFragment *>(
-          cfrag->successors[FRAG_SUCC_BRANCH]);
-      if (!direct_edge_frag) continue;
-      if (EDGE_KIND_DIRECT != direct_edge_frag->edge.kind) continue;
+    // Try to get the direct edge (if any) that is targeted by `branch_instr`.
+    auto edge_frag = DynamicCast<ExitFragment *>(
+        cfrag->successors[FRAG_SUCC_BRANCH]);
+    if (!edge_frag) continue;
+    if (EDGE_KIND_DIRECT != edge_frag->edge.kind) continue;
 
-      // Tell the edge data structure what instruction will eventually need to
-      // be patched (after that instruction's target is eventually resolved)
-      auto edge = direct_edge_frag->edge.direct;
-      edge->patch_instruction_pc = cfrag->branch_instr->instruction.EncodedPC();
-    }
+    GRANARY_ASSERT(IsA<ControlFlowInstruction *>(cfrag->branch_instr));
+
+    // Tell the edge data structure what instruction will eventually need to
+    // be patched (after that instruction's target is eventually resolved)
+    auto edge = edge_frag->edge.direct;
+    edge->patch_instruction_pc = cfrag->branch_instr->instruction.EncodedPC();
   }
 }
 

@@ -295,18 +295,30 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   // Note: Using `arch::Instruction::HasIndirectTarget` because this might have
   //       been a jump to far-away native code, which might have been mangled
   //       into an indirect jump.
-  if (instr->IsJump() && !instr->IsConditionalJump() &&
-      !instr->instruction.HasIndirectTarget()) {
+  //
+  // Note: Preventing direct jumps to `DirectBasicBlock`s from being elided so
+  //       that they end up being linked to their respective
+  //       `DirectEdge::patch_instruction_pc` in `granary/code/compile.cc`.
+  if (instr->IsJump() &&
+      !instr->IsConditionalJump() &&
+      !instr->instruction.HasIndirectTarget() &&
+      !IsA<DirectBasicBlock *>(target_block)) {
     GRANARY_ASSERT(nullptr != target_frag);
-    frag->attr.can_add_succ_to_partition = false;
+
+    // In the case of `Jcc; JMP`, this can help avoid added intermediate
+    // useless fragments.
+    if (CODE_TYPE_INST == frag->type || frag->attr.has_native_instrs) {
+      frag->attr.can_add_succ_to_partition = false;
+    }
+
     frag->successors[FRAG_SUCC_FALL_THROUGH] = target_frag;
     return;
   }
 
   // An example of where this condition might not be triggered is:
-  //          CALL ...    <-- forces a new fragment on fall-through.
+  //          Jcc ...     <-- forces a new fragment on fall-through.
   //          ---------
-  //          Jcc ...     <-- Don't add a predecessor fragment here.
+  //          JMP ...     <-- Don't add a predecessor fragment here.
   // Here, we just take over the existing fragment.
   CodeFragment *pred_frag(nullptr);
   if (CODE_TYPE_INST == frag->type || frag->attr.has_native_instrs) {

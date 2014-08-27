@@ -14,7 +14,9 @@ namespace granary {
 //    2) Trivial effective address -> register.
 //    3) Register -> base address of memory operand.
 //    4) Effective address -> memory arch_operand.
-void PropagateRegisterCopies(FragmentList *frags);
+//
+// Returns true if anything was done.
+bool PropagateRegisterCopies(FragmentList *frags);
 
 }  // namespace granary
 

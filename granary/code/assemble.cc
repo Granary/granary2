@@ -27,7 +27,7 @@ GRANARY_DEFINE_bool(debug_log_fragments, false,
     "Log the assembled fragments before doing final linking. The default is "
     "`no`.");
 
-GRANARY_DEFINE_positive_int(num_copy_propagations, 1,
+GRANARY_DEFINE_unsigned(num_copy_propagations, 1,
     "The number of iterations of copy propagation to run. The default is `1`.");
 
 namespace granary {
@@ -74,8 +74,8 @@ FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
   // Perform a single step of copy propagation. The purpose of this is to
   // allow us to get rid of redundant defs/uses of registers that are created
   // by earlier steps.
-  for (auto i = 0; i < FLAG_num_copy_propagations; ++i) {
-    PropagateRegisterCopies(&frags);
+  for (auto i = 0U; i < FLAG_num_copy_propagations; ++i) {
+    if (!PropagateRegisterCopies(&frags)) break;
   }
 
   // Schedule the virtual registers into either physical registers or memory

@@ -14,6 +14,7 @@
   static granary::Option GRANARY_CAT(OPTION_, name) = { \
       nullptr, \
       GRANARY_TO_STRING(name), \
+      GRANARY_TO_STRING(no_ ## name), \
       &granary::detail::parser, \
       reinterpret_cast<void *>(&GRANARY_INTERNAL_FLAG_NAME(name)), \
       &GRANARY_HAS_FLAG_NAME(name), \
@@ -63,6 +64,19 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern int &GRANARY_FLAG_NAME(name)
 
+#define GRANARY_DEFINE_unsigned(name, default_value, docstring) \
+  GRANARY_DECLARE_unsigned(name); \
+  namespace { \
+  static unsigned GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
+  GRANARY_REGISTER_OPTION(name, ParseUnsignedIntOption, docstring) \
+  } \
+  bool GRANARY_HAS_FLAG_NAME(name) = false; \
+  unsigned &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+
+#define GRANARY_DECLARE_unsigned(name) \
+  extern bool GRANARY_HAS_FLAG_NAME(name); \
+  extern unsigned &GRANARY_FLAG_NAME(name)
+
 #define GRANARY_DEFINE_mask(name, default_value, docstring) \
   GRANARY_DECLARE_mask(name); \
   namespace { \
@@ -82,6 +96,7 @@ namespace granary {
 struct Option {
   Option *next;
   const char * const name;
+  const char * const alt_name;  // Only used for booleans.
   void (* const parse)(Option *);
   void * const value;
   bool *has_value;
@@ -111,8 +126,11 @@ void ParseStringOption(Option *option);
 void ParseBoolOption(Option *option);
 
 // Parse an option that will be interpreted as an unsigned integer but stored
-// as a signed integer.
+// as a signed integer, and whose valid is >= 1.
 void ParsePositiveIntOption(Option *option);
+
+// Parse an option that will be interpreted as an unsigned integer.
+void ParseUnsignedIntOption(Option *option);
 
 // Parse an option as a bitmask. Bitmasks are hexadecimal numbers that
 void ParseBitMaskOption(Option *option);

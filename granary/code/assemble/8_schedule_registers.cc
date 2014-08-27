@@ -19,7 +19,8 @@ namespace arch {
 // instruction is a copy instruction, otherwise returns `nullptr`.
 //
 // Note: This has an architecture-specific implementation.
-extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr);
+extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
+                                    SSAInstruction *ssa_instr);
 
 // Create an instruction to copy a GPR to a spill slot.
 //
@@ -1185,12 +1186,11 @@ static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
   }
 }
 
-
 // Try to eliminate a redundant copy instruction.
 static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
                                      NativeInstruction *instr,
                                      SSAInstruction *ssa_instr) {
-  if (!arch::GetCopiedOperand(instr)) return false;
+  if (!arch::GetCopiedOperand(instr, ssa_instr)) return false;
 
   // Ignore nodes that were scheduled by the partition-local scheduler.
   auto dest_node = ssa_instr->defs[0].nodes[0];

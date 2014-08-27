@@ -220,7 +220,8 @@ static const char *BufferDocString(char *buff, const char *docstring) {
 
 // Works for --help option: print out each options along with their document.
 void PrintAllOptions(void) {
-  os::Log(os::LogOutput, "Usage for user space: grr <options> -- <executable>\n\n");
+  os::Log(os::LogOutput, "Usage for user space: grr <options> "
+                         "-- <executable>\n\n");
   char line_buff[LINE_LENGTH];
   for (auto option : OptionIterator(OPTIONS)) {
     os::Log(os::LogOutput, "--\033[1m%s\033[m", option->name);
@@ -248,8 +249,7 @@ void RegisterOption(Option *option) {
 
 // Parse an option that is a string.
 void ParseStringOption(Option *option) {
-  auto value = FindValueForName(option->name);
-  if (value) {
+  if (auto value = FindValueForName(option->name)) {
     *(option->has_value) = true;
     *reinterpret_cast<const char **>(option->value) = value;
   }
@@ -257,8 +257,7 @@ void ParseStringOption(Option *option) {
 
 // Parse an option that will be interpreted as a boolean value.
 void ParseBoolOption(Option *option) {
-  auto value = FindValueForName(option->name);
-  if (value) {
+  if (auto value = FindValueForName(option->name)) {
     switch (*value) {
       case '1': case 'y': case 'Y': case 't': case 'T':
       case '\0':  // Treat the presence of the option as truth.
@@ -272,14 +271,19 @@ void ParseBoolOption(Option *option) {
       default:
         break;
     }
+
+  // Alternative name, e.g. `--foo` vs. `--no_foo`.
+  } else if (auto alt_value = FindValueForName(option->alt_name)) {
+    GRANARY_ASSERT('\0' == alt_value[0]);
+    *(option->has_value) = true;
+    *reinterpret_cast<bool *>(option->value) = false;
   }
 }
 
 // Parse an option that will be interpreted as an unsigned integer but stored
 // as a signed integer.
 void ParsePositiveIntOption(Option *option) {
-  auto value = FindValueForName(option->name);
-  if (value) {
+  if (auto value = FindValueForName(option->name)) {
     int int_value(0);
     if (DeFormat(value, "%u", reinterpret_cast<unsigned *>(&int_value))) {
       if (0 < int_value) {
@@ -290,10 +294,20 @@ void ParsePositiveIntOption(Option *option) {
   }
 }
 
+// Parse an option that will be interpreted as an unsigned integer.
+void ParseUnsignedIntOption(Option *option) {
+  if (auto value = FindValueForName(option->name)) {
+    unsigned uint_value(0);
+    if (DeFormat(value, "%u", &uint_value)) {
+      *(option->has_value) = true;
+      *reinterpret_cast<unsigned *>(option->value) = uint_value;
+    }
+  }
+}
+
 // Parse an option as a bitmask.
 void ParseBitMaskOption(Option *option) {
-  auto value = FindValueForName(option->name);
-  if (value) {
+  if (auto value = FindValueForName(option->name)) {
     uint64_t uint_value(0);
     if (DeFormat(value, "%lx", &uint_value) ||
         DeFormat(value, "0x%lx", &uint_value) ||

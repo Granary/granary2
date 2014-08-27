@@ -339,6 +339,13 @@ class InlineAssemblyParser {
       auto bb = new ReturnBasicBlock(cfg, nullptr /* no meta-data */);
       cfg->AddBlock(bb);
       new_instr = new ControlFlowInstruction(&data, bb);
+
+    // Allows for injecting of `INT3`s at convenient locations.
+    } else if (data.IsInterruptCall()) {
+      data.analyzed_stack_usage = false;
+      data.is_stack_blind = true;
+      new_instr = new NativeInstruction(&data);
+
     } else {
       new_instr = new NativeInstruction(&data);
     }

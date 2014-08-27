@@ -42,7 +42,8 @@ extern VirtualRegister GetRegister(const SSAOperand &op);
 // instruction is a copy instruction, otherwise returns `nullptr`.
 //
 // Note: This has an architecture-specific implementation.
-extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr);
+extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
+                                    SSAInstruction *ssa_instr);
 
 // Returns true if we can propagate the register `source` into the place of the
 // register `dest`.
@@ -129,7 +130,7 @@ static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
     }
   } else if (auto ninstr = DynamicCast<const NativeInstruction *>(instr)) {
     if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
-      if (auto copied_value = arch::GetCopiedOperand(ninstr)) {
+      if (auto copied_value = arch::GetCopiedOperand(ninstr, ssa_instr)) {
         auto &reg_operand(ssa_instr->defs[0]);
         auto defined_reg = arch::GetRegister(reg_operand);
         auto &reg_value(defs[defined_reg]);
@@ -296,7 +297,10 @@ static void FixInstruction(NativeInstruction *ninstr,
 //    2) Trivial effective address -> register.
 //    3) Register -> base address of memory operand.
 //    4) Effective address -> memory arch_operand.
-void PropagateRegisterCopies(FragmentList *frags) {
+//
+// Returns true if anything was done.
+bool PropagateRegisterCopies(FragmentList *frags) {
+  auto ret = false;
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       if (code_frag->attr.is_compensation_code) {
@@ -308,6 +312,7 @@ void PropagateRegisterCopies(FragmentList *frags) {
           if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
             if (UpdateUses(defs, ssa_instr)) {
               FixInstruction(ninstr, ssa_instr);
+              ret = true;
             }
           }
         }
@@ -315,6 +320,7 @@ void PropagateRegisterCopies(FragmentList *frags) {
       }
     }
   }
+  return ret;
 }
 
 }  // namespace granary
