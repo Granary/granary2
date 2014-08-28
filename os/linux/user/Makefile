@@ -60,6 +60,7 @@ $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 		-nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
 		$(GRANARY_LIBRARY_OBJ) \
 		$(GRANARY_LD_FLAGS_LATE) "-Wl,-Bsymbolic" \
+		"-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/export.syms" \
 		-o $(GRANARY_LIBRARY)
 
 # Make the final granary executables.

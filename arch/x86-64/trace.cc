@@ -21,6 +21,7 @@ extern "C" {
 extern void granary_trace_block(void);
 
 struct RegisterState {
+  uint64_t thread;
   uint64_t rflags;  // Last to be pushed.
   uint64_t r15;
   uint64_t r14;
@@ -45,6 +46,18 @@ enum {
   GRANARY_BLOCK_LOG_LENGTH = 1024
 };
 
+GRANARY_IF_USER( static __thread uint64_t thread_id = 0; )
+GRANARY_IF_USER( static std::atomic<uint64_t> num_threads(ATOMIC_VAR_INIT(1)); )
+
+void InitThreadId(RegisterState *regs) {
+#ifdef GRANARY_WHERE_user
+  if (!thread_id) thread_id = num_threads.fetch_add(1);
+  regs->thread = thread_id;
+#else
+  regs->thread = regs->rsp / (2 * PAGE_SIZE_BYTES);
+#endif
+}
+
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
 RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
@@ -63,6 +76,7 @@ void granary_trace_block_regs(const RegisterState *regs) {
   log_regs.rsp += ADDRESS_WIDTH_BYTES + REDZONE_SIZE_BYTES;
 
   memcpy(&log_regs, regs, sizeof *regs);
+  InitThreadId(&log_regs);
 }
 
 }  // extern C

@@ -52,7 +52,7 @@ namespace {
 //
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
-void AwaitAttach(int signum, void *siginfo, void *context) {
+extern "C" void AwaitAttach(int signum, void *siginfo, void *context) {
   char buff[2];
   os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
   os::Log(os::LogOutput, "Press enter to continue.\n");

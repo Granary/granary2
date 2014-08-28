@@ -170,7 +170,7 @@ define print-exec-entry-impl
   end
 
   # Print the regs state.
-  printf "Trace log entry %d\n", $arg0
+  printf "Trace log entry %d in thread %ld\n", $arg0, $__r->thread
   printf "   r15 = %#18lx   r14 = %#18lx\n", $__r->r15, $__r->r14
   printf "   r13 = %#18lx   r12 = %#18lx\n", $__r->r13, $__r->r12
   printf "   r11 = %#18lx   r10 = %#18lx\n", $__r->r11, $__r->r10

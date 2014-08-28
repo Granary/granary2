@@ -71,7 +71,6 @@ CachePC Translate(ContextInterface *context, IndirectEdge *edge,
                   AppPC target_app_pc) {
   auto meta = context->AllocateBlockMetaData(edge->meta_template,
                                              target_app_pc);
-
   LocalControlFlowGraph cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentIndirect();

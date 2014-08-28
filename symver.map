@@ -1,5 +1,5 @@
 granary {
-    global:
+    local:
         memcpy; memset; memmove; memcmp;
         strcpy; strlen; strcmp;
         
@@ -9,11 +9,15 @@ granary {
         sigaltstack; rt_sigaction; rt_sigreturn;
         exit_group;
         
-        __cxa_throw;
+        fprintf; abort; strncat;
+        stdout; stderr;
+        
         __cxa_allocate_exception;
+        __cxa_atexit;
         __cxa_free_exception;
-        _ZSt25__throw_bad_function_callv;
         __cxa_pure_virtual;
+        __cxa_throw;
+        _ZSt25__throw_bad_function_callv;
         _ZdlPv;
         _Znam;
         _Znwm;

@@ -29,9 +29,11 @@ DEFINE_FUNC(granary_trace_block)
     push r14
     push r15
     pushfq
+    push 0  // Temporary thread ID.
     lea rdi, [rsp]
     GRANARY_IF_KERNEL( cli )  // Disable interrupts.
     call granary_trace_block_regs
+    lea rsp, [rsp + 8]  // Space for thread ID.
     popfq
     pop r15
     pop r14

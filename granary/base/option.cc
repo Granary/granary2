@@ -280,6 +280,7 @@ void ParseBoolOption(Option *option) {
     GRANARY_ASSERT('\0' == alt_value[0]);
     *(option->has_value) = true;
     *reinterpret_cast<bool *>(option->value) = false;
+    GRANARY_UNUSED(alt_value);
   }
 }
 
