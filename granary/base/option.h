@@ -8,7 +8,6 @@
 
 #define GRANARY_FLAG_NAME(name) GRANARY_CAT(FLAG_, name)
 #define GRANARY_HAS_FLAG_NAME(name) GRANARY_CAT(HAS_FLAG_, name)
-#define GRANARY_INTERNAL_FLAG_NAME(name) GRANARY_CAT(INTERNAL_FLAG_, name)
 
 #define GRANARY_REGISTER_OPTION(name, parser, docstring, ...) \
   static granary::Option GRANARY_CAT(OPTION_, name) = { \
@@ -16,7 +15,7 @@
       GRANARY_TO_STRING(name), \
       GRANARY_TO_STRING(no_ ## name), \
       &granary::detail::parser, \
-      reinterpret_cast<void *>(&GRANARY_INTERNAL_FLAG_NAME(name)), \
+      reinterpret_cast<void *>(&GRANARY_FLAG_NAME(name)), \
       &GRANARY_HAS_FLAG_NAME(name), \
       docstring, \
       "" __VA_ARGS__ \
@@ -29,67 +28,62 @@
 #define GRANARY_DEFINE_string(name, default_value, docstring, ...) \
   GRANARY_DECLARE_string(name); \
   namespace { \
-  static const char *GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseStringOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
-  const char *&GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+  const char *GRANARY_FLAG_NAME(name)(default_value)
 
 #define GRANARY_DECLARE_string(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
-  extern const char *&GRANARY_FLAG_NAME(name)
+  extern const char *GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_bool(name, default_value, docstring, ...) \
   GRANARY_DECLARE_bool(name); \
   namespace { \
-  bool GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseBoolOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
-  bool &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+  bool GRANARY_FLAG_NAME(name)(default_value)
 
 #define GRANARY_DECLARE_bool(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
-  extern bool &GRANARY_FLAG_NAME(name)
+  extern bool GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_positive_int(name, default_value, docstring, ...) \
   GRANARY_DECLARE_positive_int(name); \
   namespace { \
-  static int GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParsePositiveIntOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
-  int &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+  int GRANARY_FLAG_NAME(name)(default_value)
 
 #define GRANARY_DECLARE_positive_int(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
-  extern int &GRANARY_FLAG_NAME(name)
+  extern int GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_unsigned(name, default_value, docstring, ...) \
   GRANARY_DECLARE_unsigned(name); \
   namespace { \
-  static unsigned GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseUnsignedIntOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
-  unsigned &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+  unsigned GRANARY_FLAG_NAME(name)(default_value)
 
 #define GRANARY_DECLARE_unsigned(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
-  extern unsigned &GRANARY_FLAG_NAME(name)
+  extern unsigned GRANARY_FLAG_NAME(name)
 
 #define GRANARY_DEFINE_mask(name, default_value, docstring, ...) \
   GRANARY_DECLARE_mask(name); \
   namespace { \
-  static uint64_t GRANARY_INTERNAL_FLAG_NAME(name) = (default_value); \
   GRANARY_REGISTER_OPTION(name, ParseBitMaskOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
-  uint64_t &GRANARY_FLAG_NAME(name)(GRANARY_INTERNAL_FLAG_NAME(name))
+  uint64_t GRANARY_FLAG_NAME(name)(default_value)
 
 #define GRANARY_DECLARE_mask(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
-  extern uint64_t &GRANARY_FLAG_NAME(name)
+  extern uint64_t GRANARY_FLAG_NAME(name)
 
 namespace granary {
 

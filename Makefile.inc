@@ -211,7 +211,8 @@ GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 
 # Mask some of the libc and libc++ symbols with Granary equivalents.
-GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symver.map"
+GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symbol.versions"
+GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/symbol.exports"
 
 # Code linting.
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint

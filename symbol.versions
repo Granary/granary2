@@ -1,0 +1,6 @@
+granary {
+    global:
+        environ; _init;
+    local:
+        *;
+};
