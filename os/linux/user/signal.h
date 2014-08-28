@@ -16,6 +16,9 @@
 // Trap instruction (POSIX).
 #define SIGTRAP       5
 
+// BUS error (4.2 BSD). E.g. trying to execute some bad memory.
+#define SIGBUS        7
+
 // Segmentation violation (ANSI). This is really just a page fault or a
 // general protection fault.
 #define SIGSEGV       11
@@ -49,11 +52,11 @@ struct sigaction {
 #define sa_sigaction __sigaction_handler.sa_sigaction
 
 // Alternate, preferred interface.
-struct sigaltstack {
+typedef struct sigaltstack {
   void *ss_sp;
   int ss_flags;
   size_t ss_size;
-};
+} stack_t;
 
 extern int rt_sigaction(int signum, const struct sigaction *act,
                         struct sigaction *oldact, size_t sigsetsize);

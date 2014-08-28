@@ -40,6 +40,8 @@ extern void exit_group(int) __attribute__((noreturn));
 namespace granary {
 namespace {
 
+alignas(arch::PAGE_SIZE_BYTES) static char sigstack[SIGSTKSZ];
+
 // Initialize Granary for debugging by GDB. For example, if one is doing:
 //
 //    grr --tools=foo -- ls
@@ -86,8 +88,11 @@ static void InitDebug(void) {
   if (FLAG_debug_gdb_prompt) {
     AwaitAttach(-1, nullptr, nullptr);
   } else {
+    const stack_t ss = {&(sigstack[0]), 0, SIGSTKSZ};
+    sigaltstack(&ss, nullptr);
     AwaitAttachOnSignal(SIGSEGV);
     AwaitAttachOnSignal(SIGILL);
+    AwaitAttachOnSignal(SIGBUS);
     AwaitAttachOnSignal(SIGTRAP);
   }
 }
