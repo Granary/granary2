@@ -194,7 +194,7 @@ class Fragment {
 
   // Connects together fragments into an `EncodeOrderedFragmentList`.
   Fragment *next;
-  bool was_encode_ordered;
+  int encoded_order;
 
   // Where was this fragment encoded?
   int encoded_size;
@@ -374,6 +374,27 @@ class alignas(alignof(void *)) CodeAttributes {
   // to the same partition. Therefore, this is a local constraint only.
   bool can_add_succ_to_partition:1;
 
+  // Can this fragment be added into its successor's partition? This is similar
+  // to `can_add_succ_to_partition`. The major concern is that we don't want
+  // the same partition to span across something like a function or system
+  // call. One reason this is the case is because we can't prove that a register
+  // that we save before a function/system call should unconditionally hold the
+  // saved value after the function/system call. In the case of a system call,
+  // we could make a stronger assumption based on the ABI; however, the current
+  // approach to tracking register liveness is not prepared to handle such
+  // assumptions, as it is a backward-only data-flow problem. For example, if
+  // we say that RCX is dead after a syscall, then:
+  //
+  //       F1
+  //      /  \
+  //     F2  syscall -->
+  //      \  /
+  //       F3
+  //
+  // We would see that RCX is dead in F1, but it's not clear if it is live or
+  // dead in F2 because the system doesn't propagate that "death" to F3.
+  bool can_add_pred_to_partition:1;
+
   // Does this fragment have any native instructions in it, or is it just full
   // or annotations, labels, and other things? We use this to try to avoid
   // adding redundant fragments (e.g. if you had multiple labels in a row).
@@ -401,6 +422,14 @@ class alignas(alignof(void *)) CodeAttributes {
   // partition exit fragment. This tail will NOT be emitted along with the
   // rest of code, but will be emitted to a special cache.
   bool is_in_edge_code:1;
+
+  // Does this fragment follow (via straight-line execution, e.g. through
+  // fall-throughs) a `ControlFlowInstruction`?
+  bool follows_cfi:1;
+
+  // Count of the number of predecessors of this fragment (at fragment build
+  // time).
+  uint8_t num_predecessors;
 
 } __attribute__((packed));
 

@@ -12,6 +12,11 @@
 namespace granary {
 namespace arch {
 
+// Don't encode `instr`, but leave it in place.
+//
+// Note: This has an architecture-specific implementation.
+extern void ElideInstruction(Instruction *instr);
+
 // Adds a fall-through jump, if needed, to this fragment.
 //
 // Note: This has an architecture-specific implementation.
@@ -29,21 +34,27 @@ GRANARY_IF_DEBUG( extern void AddFallThroughTrap(Fragment *frag); )
 }  // namespace arch
 namespace {
 
-static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr);
+static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr,
+                                int * const order);
 
-static Fragment **VisitOrderedFragment(Fragment *succ, Fragment **next_ptr) {
-  if (succ && !succ->was_encode_ordered) {
+static Fragment **VisitOrderedFragment(Fragment *succ, Fragment **next_ptr,
+                                       int * const order) {
+  if (succ && !succ->encoded_order) {
     *next_ptr = succ;
     next_ptr = &(succ->next);
-    succ->was_encode_ordered = true;
-    return OrderFragment(succ, next_ptr);
+    succ->encoded_order = (*order)++;
+    return OrderFragment(succ, next_ptr, order);
   } else {
     return next_ptr;
   }
 }
 
 // Add the fragments to a total ordering.
-static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
+//
+// TODO(pag): Turn this recursion into a work-list based approach, ideally by
+//            using `Fragment::next`.
+static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr,
+                                int * const order) {
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any). This affects the determination on
   // whether or not a fall-through branch needs to be added.
@@ -54,19 +65,20 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
     swap_successors = IsA<IndirectBasicBlock *>(target_block) ||
                       IsA<ReturnBasicBlock *>(target_block);
     visit_branch_first = swap_successors || arch::IsNearRelativeJump(cfi);
+
   } else if (auto br = DynamicCast<BranchInstruction *>(frag->branch_instr)) {
     visit_branch_first = arch::IsNearRelativeJump(br);
   }
 
   if (visit_branch_first) {
     next_ptr = VisitOrderedFragment(frag->successors[FRAG_SUCC_BRANCH],
-                                    next_ptr);
+                                    next_ptr, order);
   }
 
   // Default: depth-first order, where fall-through naturally comes up as a
   // straight-line preference.
   for (auto succ : frag->successors) {
-    next_ptr = VisitOrderedFragment(succ, next_ptr);
+    next_ptr = VisitOrderedFragment(succ, next_ptr, order);
   }
 
   if (swap_successors) {
@@ -77,6 +89,23 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
   return next_ptr;
 }
 
+// Try to remove useless direct jump instructions that will only have a zero
+// displacement.
+static void TryElideBranches(NativeInstruction *branch_instr) {
+  auto &ainstr(branch_instr->instruction);
+
+  // Note: Using the `ainstr` instead of `branch_instr` for checks as some
+  //       direct jumps to native code are mangled into indirect jumps (because
+  //       the target is too far away), but this is hidden, except from the
+  //       `arch::Instruction` interface.
+  if (ainstr.IsJump() && !ainstr.IsConditionalJump() &&
+      !ainstr.HasIndirectTarget() &&
+      (IsA<BranchInstruction *>(branch_instr) ||
+       IsA<ControlFlowInstruction *>(branch_instr))) {
+    arch::ElideInstruction(&ainstr);
+  }
+}
+
 }  // namespace
 
 // Adds connection (direct) control-flow instructions (branches/jumps) between
@@ -84,28 +113,35 @@ static Fragment **OrderFragment(Fragment *frag, Fragment **next_ptr) {
 void AddConnectingJumps(FragmentList *frags) {
   auto first = frags->First();
   auto next_ptr = &(first->next);
-  first->was_encode_ordered = true;
-  GRANARY_IF_DEBUG( next_ptr = ) OrderFragment(first, next_ptr);
+  int order(2);
+  first->encoded_order = 1;
+  GRANARY_IF_DEBUG( next_ptr = ) OrderFragment(first, next_ptr, &order);
 
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
-    auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
+    auto frag_fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
+    auto frag_branch = frag->successors[FRAG_SUCC_BRANCH];
     auto frag_next = frag->next;
 
+    if (frag_branch && frag_branch == frag_next && !frag_branch->encoded_pc) {
+      TryElideBranches(frag->branch_instr);
+    }
+
     // No fall-through.
-    if (!fall_through) {
+    if (!frag_fall_through) {
       continue;
 
     // Last fragment in the list, but it has a fall-through.
     } else if (!frag_next) {
-      arch::AddFallThroughJump(frag, fall_through);
+      arch::AddFallThroughJump(frag, frag_fall_through);
 
     // Has a fall-through that's not the next fragment.
-    } else if (fall_through != frag_next) {
-      arch::AddFallThroughJump(frag, fall_through);
+    } else if (frag_fall_through != frag_next) {
+      arch::AddFallThroughJump(frag, frag_fall_through);
 
     // Has a fall-through that's an exit fragment.
-    } else if (IsA<ExitFragment *>(fall_through) && fall_through->encoded_pc) {
-      arch::AddFallThroughJump(frag, fall_through);
+    } else if (IsA<ExitFragment *>(frag_fall_through) &&
+               frag_fall_through->encoded_pc) {
+      arch::AddFallThroughJump(frag, frag_fall_through);
     }
   }
 

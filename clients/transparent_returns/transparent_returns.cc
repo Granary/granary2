@@ -92,9 +92,20 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
+
+
+
     for (auto block : cfg->NewBlocks()) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
       if (!decoded_block) continue;
+
+      auto entry_pc = decoded_block->StartAppPC();
+      auto mod = ModuleContainingPC(entry_pc);
+      auto offset = mod->OffsetOfPC(entry_pc);
+      if (StringsMatch("libc", mod->Name()) && 0xec529 == offset.offset) {
+        granary_curiosity();
+        return;
+      }
 
       for (auto succ : block->Successors()) {
         // Convert a function call into a `PUSH; JMP` combination.

@@ -62,14 +62,20 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> instr) {
 
 // Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  GRANARY_ASSERT(!IsA<AnnotationInstruction *>(instr));
+  if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+    if (IA_BEGIN_BASIC_BLOCK == annot->annotation ||
+        IA_END_BASIC_BLOCK == annot->annotation) {
+      return std::unique_ptr<Instruction>(nullptr);
+    }
+  }
+
   instr->list.Unlink();
 
   // If we're unlinking a branch then make sure that the target itself does
   // not continue to reference the branch.
-  auto branch = DynamicCast<BranchInstruction *>(instr);
-  if (branch) {
-    *(branch->TargetLabel()->DataPtr<void *>()) = nullptr;
+  if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
+    GRANARY_ASSERT(1 <= branch->TargetLabel()->data);
+    branch->TargetLabel()->data -= 1;
   }
 
   return std::unique_ptr<Instruction>(instr);
@@ -219,10 +225,6 @@ void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
   instruction.SetDecodedPC(decoded_pc);
 }
 
-bool NativeInstruction::IsVirtualRegSaveRestore(void) const {
-  return instruction.IsVirtualRegSaveRestore();
-}
-
 // Get the opcode name.
 const char *NativeInstruction::OpCodeName(void) const {
   return instruction.OpCodeName();
@@ -254,7 +256,7 @@ BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 
   // Mark this label as being targeted by some instruction.
-  *target->DataPtr<uint64_t>() += 1;
+  target->data += 1;
 }
 
 // Return the targeted instruction of this branch.

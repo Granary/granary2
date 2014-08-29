@@ -44,7 +44,6 @@ else
 end
 
 # Generic breakpoints.
-catch throw
 b granary_unreachable
 b granary_curiosity
 b __stack_chk_fail
@@ -68,9 +67,6 @@ if !$in_user_space
 # User space breakpoints.
 else
   b __assert_fail
-  b abort
-  handle SIGSEGV stop print nopass
-  handle SIGILL stop print nopass
 end
 
 
@@ -147,7 +143,7 @@ end
 #       itself; however, the `RIP` reported by the entry will be faithful to
 #       the true beginning of the block in the code cache.
 define print-exec-entry-impl
-  set $__r = $arg0
+  set $__r = $arg1
 
   # Figure out the block start pc, $__brip, and the first non-trace logger
   # instruction of the block, $__rip.
@@ -170,7 +166,7 @@ define print-exec-entry-impl
   end
 
   # Print the regs state.
-  printf "Trace log entry %d in thread %ld\n", $arg0, $__r->thread
+  printf "Trace log entry %u in thread %ld\n", $arg0, $__r->thread
   printf "   r15 = %#18lx   r14 = %#18lx\n", $__r->r15, $__r->r14
   printf "   r13 = %#18lx   r12 = %#18lx\n", $__r->r13, $__r->r12
   printf "   r11 = %#18lx   r10 = %#18lx\n", $__r->r11, $__r->r10
@@ -195,9 +191,9 @@ define print-exec-entry-impl
   print-exec-entry-flag $__r->rflags 16 "RF"
   printf "\n"
 
-  if $argc == 2
-    printf "\nFirst %d instructions:\n", $arg1
-    print-instructions $__rip $arg1
+  if $argc == 3
+    printf "\nFirst %d instructions:\n", $arg2
+    print-instructions $__rip $arg2
   end
   
   dont-repeat
@@ -223,9 +219,9 @@ define print-exec-entry
   set $__r = &(granary_block_log[$__i])
 
   if 2 == $argc
-    print-exec-entry-impl $__r $arg1
+    print-exec-entry-impl $arg0 $__r $arg1
   else
-    print-exec-entry-impl $__r
+    print-exec-entry-impl $arg0 $__r
   end
 
   dont-repeat
@@ -248,8 +244,8 @@ define print-block-meta
     set $__desc = $__descs[$__i]
     set $__bytes = ((char *) $__m) + $__offset
     python None ; \
-      dstr = gdb.execute("p $__desc\n", from_tty=True, to_string=True) ; \
-      m = re.search(r"granary::MetaDataDescriptor<([^,]+),", dstr) ; \
+      dstr = gdb.execute("p *$__desc\n", from_tty=True, to_string=True) ; \
+      m = re.search(r"granary::Construct<([^>]+)>", dstr) ; \
       cls = m.group(1) ; \
       ms = gdb.execute("p *((%s *)$__bytes)" % cls, \
         from_tty=True, to_string=True) ; \
@@ -807,6 +803,9 @@ define restore-exec-entry
   set $rsp = $__regs->rsp
   set $eflags = (unsigned) $__regs->rflags
   set $rip = $__regs->rip
+  if $in_user_space
+    set $rip = $rip + 8
+  end
 end
 
 

@@ -106,17 +106,20 @@ CodeAttributes::CodeAttributes(void)
       branch_is_function_call(false),
       branch_is_jump(false),
       can_add_succ_to_partition(true),
+      can_add_pred_to_partition(true),
       has_native_instrs(false),
       modifies_flags(false),
       is_block_head(false),
       is_return_target(false),
       is_compensation_code(false),
-      is_in_edge_code(false) {}
+      is_in_edge_code(false),
+      follows_cfi(false),
+      num_predecessors(0) {}
 
 Fragment::Fragment(void)
     : list(),
       next(nullptr),
-      was_encode_ordered(false),
+      encoded_order(0),
       encoded_size(0),
       encoded_pc(nullptr),
       instrs(),
@@ -246,8 +249,8 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
       auto &ainstr(ninstr->instruction);
       if (ainstr.IsNoOp()) continue;  // Skip no-ops.
 
-      if (!ninstr->IsAppInstruction()) {
-        Log(level, "&nbsp;  ");
+      if (!ainstr.WillBeEncoded()) {
+        Log(level, "N/E! ");
       }
       Log(level, "%s", ninstr->ISelName());
       LogInputOperands(level, ninstr);
@@ -268,6 +271,8 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 // If this fragment is the head of a basic block then log the basic block's
 // entry address.
 static void LogBlockHeader(LogLevel level, const Fragment *frag) {
+  if (frag->encoded_order) Log(level, "%d ", frag->encoded_order);
+
   if (IsA<PartitionEntryFragment *>(frag)) {
     Log(level, "allocate space|");
   } else if (IsA<PartitionExitFragment *>(frag)) {
@@ -294,8 +299,10 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     if (code->attr.is_in_edge_code) Log(level, "inedge ");
     if (code->attr.modifies_flags) Log(level, "mflags ");
     if (!code->attr.can_add_succ_to_partition) Log(level, "!addsucc2p ");
+    if (!code->attr.can_add_pred_to_partition) Log(level, "!add2predp ");
     if (code->attr.branches_to_code) Log(level, "-&gt;code ");
     if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
+    if (code->attr.follows_cfi) Log(level, "cfi~&gt; ");
     if (STACK_INVALID == code->stack.status) Log(level, "badstack ");
     if (code->encoded_size) Log(level, "size=%d ", code->encoded_size);
     if (code->branch_instr) {

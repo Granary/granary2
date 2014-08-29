@@ -93,7 +93,7 @@ struct FragmentBuilder {
 static void AddBlockTailToWorkList(
     FragmentBuilder *builder, CodeFragment *predecessor,
     LabelInstruction *label, Instruction *first_instr, StackUsageInfo stack,
-    FragmentSuccessorSelector succ=FRAG_SUCC_FALL_THROUGH) {
+    FragmentSuccessorSelector succ_sel=FRAG_SUCC_FALL_THROUGH) {
   Fragment *tail_frag(nullptr);
 
   // Already added to work list.
@@ -118,9 +118,22 @@ static void AddBlockTailToWorkList(
 
     tail_frag = frag;
   }
+
+  if (auto code_tail_frag = DynamicCast<CodeFragment *>(tail_frag)) {
+    code_tail_frag->attr.num_predecessors += 1;
+
+    // Propagate the "follows a CFI" condition. This is used later when
+    // partitioning to make sure that code following a function call or system
+    // call is not placed in the same partition as code that jumps around the
+    // function or system call.
+    if (FRAG_SUCC_FALL_THROUGH == succ_sel && predecessor->attr.follows_cfi) {
+      code_tail_frag->attr.follows_cfi = true;
+    }
+  }
+
   // Add it to the fragment control-flow graph.
-  GRANARY_ASSERT(!predecessor->successors[succ]);
-  predecessor->successors[succ] = tail_frag;
+  GRANARY_ASSERT(!predecessor->successors[succ_sel]);
+  predecessor->successors[succ_sel] = tail_frag;
 }
 
 // Process an annotation instruction. Returns `true` if iteration should
@@ -234,14 +247,6 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
                           BranchInstruction *instr) {
   auto target_label = instr->TargetLabel();
 
-  // Direct unconditional jump; turn it into a fall-through.
-  if (instr->IsJump() && !instr->IsConditionalJump() &&
-      !instr->HasIndirectTarget()) {
-    AddBlockTailToWorkList(builder, frag, target_label, target_label->Next(),
-                           StackUsageInfo());
-    return;
-  }
-
   // Makes the fragment into an application fragment; if the current fragment
   // is an instrumentation fragment then we need to split the fragment for
   // the branch.
@@ -290,52 +295,17 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   auto target_block = instr->TargetBlock();
   auto target_frag = target_block->fragment;
 
-  // Direct unconditional jump; turn it into a fall-through.
-  //
-  // Note: Using `arch::Instruction::HasIndirectTarget` because this might have
-  //       been a jump to far-away native code, which might have been mangled
-  //       into an indirect jump.
-  //
-  // Note: Preventing direct jumps to `DirectBasicBlock`s from being elided so
-  //       that they end up being linked to their respective
-  //       `DirectEdge::patch_instruction_pc` in `granary/code/compile.cc`.
-  if (instr->IsJump() &&
-      !instr->IsConditionalJump() &&
-      !instr->instruction.HasIndirectTarget() &&
-      !IsA<DirectBasicBlock *>(target_block)) {
-    GRANARY_ASSERT(nullptr != target_frag);
+  auto pred_frag = frag;
+  frag = new CodeFragment;
 
-    // In the case of `Jcc; JMP`, this can help avoid added intermediate
-    // useless fragments.
-    if (CODE_TYPE_INST == frag->type || frag->attr.has_native_instrs) {
-      frag->attr.can_add_succ_to_partition = false;
-    }
+  pred_frag->successors[FRAG_SUCC_FALL_THROUGH] = frag;
+  pred_frag->attr.can_add_succ_to_partition = false;
 
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = target_frag;
-    return;
-  }
-
-  // An example of where this condition might not be triggered is:
-  //          Jcc ...     <-- forces a new fragment on fall-through.
-  //          ---------
-  //          JMP ...     <-- Don't add a predecessor fragment here.
-  // Here, we just take over the existing fragment.
-  CodeFragment *pred_frag(nullptr);
-  if (CODE_TYPE_INST == frag->type || frag->attr.has_native_instrs) {
-    auto frag_with_cfi = new CodeFragment;
-    frag_with_cfi->attr.block_meta = frag->attr.block_meta;
-
-    frag->successors[FRAG_SUCC_FALL_THROUGH] = frag_with_cfi;
-    frag->attr.can_add_succ_to_partition = false;
-
-    builder->frags->InsertAfter(frag, frag_with_cfi);
-
-    pred_frag = frag;
-    frag = frag_with_cfi;
-  }
+  builder->frags->InsertAfter(pred_frag, frag);
 
   frag->type = CODE_TYPE_APP;  // Force it to application code.
   frag->branch_instr = instr;
+  frag->attr.block_meta = pred_frag->attr.block_meta;
   frag->attr.has_native_instrs = true;
   frag->attr.branch_is_function_call = instr->IsFunctionCall();
   frag->attr.branch_is_indirect = instr->HasIndirectTarget();
@@ -389,6 +359,12 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   if (instr->IsFunctionCall() || instr->IsConditionalJump() ||
       instr->IsSystemCall() || instr->IsInterruptCall()) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr->Next(), frag->stack);
+
+    auto fall_through_frag = DynamicCast<CodeFragment *>(
+        frag->successors[FRAG_SUCC_FALL_THROUGH]);
+
+    fall_through_frag->attr.can_add_pred_to_partition = false;
+    fall_through_frag->attr.follows_cfi = true;
   }
 
   // Add in the CFI.
@@ -428,6 +404,23 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
   return true;
 }
 
+// Process a label instruction. Returns `true` if the label is skipped, and
+// false if the label splits the fragment.
+static bool ProcessLabel(FragmentBuilder *builder, CodeFragment *frag,
+                         LabelInstruction *label, Instruction *next_instr) {
+  if (!label->data) return true;  // Skip it.
+
+  // TODO(pag): Temporary stop-gap to handle the problem of two partition
+  //            entrypoints being added when trying to jump around a syscall.
+  if (!frag->attr.has_native_instrs &&
+      !frag->attr.can_add_pred_to_partition) {
+    frag->attr.can_add_succ_to_partition = false;
+  }
+
+  AddBlockTailToWorkList(builder, frag, label, next_instr, StackUsageInfo());
+  return false;
+}
+
 // Process a fragment that just came from the head of the work list. This
 // involves iteration through the instruction list beginning at `instr` and
 // deciding which instructions to put into `frag`, and when to stop building
@@ -443,10 +436,7 @@ static void ProcessFragment(FragmentBuilder *builder, CodeFragment *frag,
     // branches. The `data` field of the label counts the number of incoming
     // branches.
     if (auto label_instr = DynamicCast<LabelInstruction *>(instr)) {
-      if (!label_instr->data) continue;  // Skip it.
-      AddBlockTailToWorkList(builder, frag, label_instr, next_instr,
-                             StackUsageInfo());
-      return;
+      if (!ProcessLabel(builder, frag, label_instr, next_instr)) return;
 
     // Annotation instructions either introduce fragment splits, modify fragment
     // attributes, or are ignored.

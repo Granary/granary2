@@ -328,8 +328,6 @@ class NativeInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
 
-  GRANARY_INTERNAL_DEFINITION bool IsVirtualRegSaveRestore(void) const;
-
   // Get the opcode name. The opcode name of an instruction is a semantic
   // name that conveys the meaning of the instruction, but not necessarily
   // any particular encoding of the instruction. For example, many different

@@ -177,6 +177,11 @@ class Instruction : public InstructionInterface {
     return is_save_restore;
   }
 
+  // Will this instruction be encoded?
+  inline bool WillBeEncoded(void) const {
+    return !dont_encode;
+  }
+
   // Apply a function on every operand.
   void ForEachOperand(const std::function<void(granary::Operand *)> &func);
 

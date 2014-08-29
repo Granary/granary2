@@ -17,6 +17,11 @@
 namespace granary {
 namespace arch {
 
+// Don't encode `instr`, but leave it in place.
+void ElideInstruction(Instruction *instr) {
+  instr->dont_encode = true;
+}
+
 // Adds a fall-through jump, if needed, to this fragment.
 NativeInstruction *AddFallThroughJump(Fragment *frag,
                                       Fragment *fall_through_frag) {

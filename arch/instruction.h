@@ -103,6 +103,9 @@ class InstructionInterface {
   // Is this a specially inserted virtual register save or restore instruction?
   bool IsVirtualRegSaveRestore(void) const;
 
+  // Will this instruction be encoded?
+  bool WillBeEncoded(void) const;
+
   const char *OpCodeName(void) const;
   const char *ISelName(void) const;
 

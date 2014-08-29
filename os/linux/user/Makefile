@@ -55,7 +55,7 @@ $(GRANARY_LIBRARY_OBJ):
 # Makes `libgranary.so`, the user-space shared library version of Granary.
 $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 	@echo "Compiling library $(GRANARY_LIBRARY)"
-	@$(GRANARY_CC) $(GRANARY_COMMON_ARCH_FLAGS) \
+	@$(GRANARY_CC) $(GRANARY_DEBUG_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS) \
 		$(GRANARY_LD_FLAGS) \
 		-nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
 		$(GRANARY_LIBRARY_OBJ) \

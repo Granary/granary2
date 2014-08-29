@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
+#include "granary/base/option.h"
 
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/iterator.h"
@@ -14,6 +15,12 @@
 
 #include "granary/breakpoint.h"
 #include "granary/util.h"
+
+#ifdef GRANARY_WHERE_user
+GRANARY_DEFINE_bool(try_spill_VRs_to_stack, true,
+    "Should Granary try to spill virtual registers onto the call stack? The "
+    "default is `yes`.");
+#endif  // GRANARY_WHERE_user
 
 namespace granary {
 namespace {
@@ -92,6 +99,7 @@ static void RemoveUselessFrags(FragmentList *frags) {
       if (cfrag->attr.is_block_head) break;
       if (cfrag->attr.is_return_target) break;
       if (!cfrag->attr.can_add_succ_to_partition) break;
+      if (!cfrag->attr.can_add_pred_to_partition) break;
       if (cfrag->branch_instr) break;
       if (cfrag->successors[FRAG_SUCC_BRANCH]) break;
       if (HasUsefulInstructions(cfrag)) break;
@@ -238,7 +246,8 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (STACK_UNKNOWN == cfrag->stack.status || true) {
+      if (STACK_UNKNOWN == cfrag->stack.status
+          GRANARY_IF_USER( || !FLAG_try_spill_VRs_to_stack )) {
         cfrag->stack.status = STACK_INVALID;
       }
     }
@@ -268,7 +277,20 @@ static void GroupFragments(FragmentList *frags) {
           //       the code that generates the indirect edge code fragments.
           if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;
 
+          // Can't put this fragment into the same partition as any of its
+          // predecessors. This happens if this fragment is the fall-through of
+          // a control-flow instruction.
+          if (!succ_cfrag->attr.can_add_pred_to_partition) continue;
+
           if (succ_cfrag->stack.status != cfrag->stack.status) continue;
+
+          // Make sure that code following a CFI (function or system call) is
+          // not partitioned together with code jumping around the CFI.
+          if (1 < succ_cfrag->attr.num_predecessors &&
+              succ_cfrag->attr.follows_cfi != cfrag->attr.follows_cfi) {
+            continue;
+          }
+
           cfrag->partition.Union(cfrag, succ_cfrag);
         }
       }
