@@ -2,6 +2,7 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
+    .file "trace.asm"
 START_FILE_INTEL
 
 DECLARE_FUNC(granary_trace_block_regs)

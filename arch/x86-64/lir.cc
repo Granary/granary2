@@ -18,7 +18,7 @@ namespace granary {
 namespace lir {
 
 // Indirect jump to an existing basic block.
-std::unique_ptr<ControlFlowInstruction> IndirectJump(
+std::unique_ptr<Instruction> IndirectJump(
     BasicBlock *target_block, const granary::Operand &op) {
 
   arch::Instruction ni;
@@ -37,24 +37,31 @@ std::unique_ptr<ControlFlowInstruction> IndirectJump(
   } else {
     GRANARY_ASSERT(false);
   }
-  return std::unique_ptr<ControlFlowInstruction>(
+  return std::unique_ptr<Instruction>(
       new ControlFlowInstruction(&ni, target_block));
 }
 
 // Call to an existing basic block.
-std::unique_ptr<ControlFlowInstruction> Call(BasicBlock *target_block) {
+std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
   arch::Instruction ni;
   CALL_NEAR_RELBRd(&ni, target_block->StartAppPC());
-  return std::unique_ptr<ControlFlowInstruction>(
+  return std::unique_ptr<Instruction>(
       new ControlFlowInstruction(&ni, target_block));
 }
 
 // Jump to an existing basic block.
-std::unique_ptr<ControlFlowInstruction> Jump(BasicBlock *target_block) {
+std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
   arch::Instruction ni;
   JMP_RELBRd(&ni, target_block->StartAppPC());
-  return std::unique_ptr<ControlFlowInstruction>(
+  return std::unique_ptr<Instruction>(
       new ControlFlowInstruction(&ni, target_block));
+}
+
+// Materialize a return from a function.
+std::unique_ptr<Instruction> Return(BlockFactory *factory) {
+  arch::Instruction ni;
+  RET_NEAR(&ni);
+  return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni));
 }
 
 }  // namespace lir

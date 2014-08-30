@@ -170,7 +170,7 @@ define print-exec-entry-impl
   printf "   r15 = %#18lx   r14 = %#18lx\n", $__r->r15, $__r->r14
   printf "   r13 = %#18lx   r12 = %#18lx\n", $__r->r13, $__r->r12
   printf "   r11 = %#18lx   r10 = %#18lx\n", $__r->r11, $__r->r10
-  printf "   r9  = %#18lx   r9  = %#18lx\n", $__r->r9,  $__r->r8
+  printf "   r9  = %#18lx   r8  = %#18lx\n", $__r->r9,  $__r->r8
   printf "   rdi = %#18lx   rsi = %#18lx\n", $__r->rdi, $__r->rsi
   printf "   rbp = %#18lx   rbx = %#18lx\n", $__r->rbp, $__r->rbx
   printf "   rdx = %#18lx   rcx = %#18lx\n", $__r->rdx, $__r->rcx

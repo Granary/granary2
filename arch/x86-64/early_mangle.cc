@@ -201,7 +201,9 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
   instr->writes_to_stack_pointer = does_write;
 }
 
-// Mangle a `PUSH_MEMv` instruction.
+// Mangle a `PUSH_MEMv` instruction. We have to mangle this because otherwise
+// we might hit the situation where we need to do a memory-to-memory move, but
+// can't pull it off with just a `MOV`.
 static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   GRANARY_ASSERT(-1 != instr->effective_operand_width);
   auto op = instr->ops[0];
@@ -256,7 +258,7 @@ static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
   if (instr->ops[0].IsMemory()) {
     ManglePushMemOp(block, instr);
   } else if (instr->ops[0].IsImmediate()) {
-    ManglePushImmOp(block, instr);
+    if (false) ManglePushImmOp(block, instr);  // Disabled for now.
   } else if (XED_IFORM_PUSH_FS == instr->iform ||
              XED_IFORM_PUSH_GS == instr->iform) {
     ManglePushSegReg(block, instr);

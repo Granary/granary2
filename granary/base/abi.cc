@@ -2,6 +2,17 @@
 #ifndef GRANARY_TARGET_test
 extern "C" {
 
+__extension__ typedef int __guard __attribute__((mode(__DI__)));
+
+// Called when initializing a static variable inside of a function. Treat
+// `guard` as an atomic spin lock.
+int __cxa_guard_acquire (__guard *g) {
+  while (__sync_lock_test_and_set(g, 1)) { }
+  return 1;
+}
+void __cxa_guard_release (__guard *g) { *g = 0; }
+void __cxa_guard_abort (__guard *) {}
+
 // C++ exception handling.
 void __cxa_throw(void) { __builtin_trap(); }
 void __cxa_allocate_exception(void) { __builtin_trap(); }

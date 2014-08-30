@@ -242,7 +242,7 @@ static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
 }
 
 // Pull out an immediate operand from the XED instruction.
-static void ConvertImmediateOperand(Instruction *instr,
+static void ConvertImmediateOperand(Instruction *,
                                     Operand *instr_op,
                                     const xed_decoded_inst_t *xedd,
                                     xed_operand_enum_t op_name) {
@@ -265,6 +265,7 @@ static void ConvertImmediateOperand(Instruction *instr,
   instr_op->width = static_cast<int16_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
 
+#if 0  // Disabled for now: Not doing early mangle of PUSH_IMMz or PUSH_IMMb.
   // Ensure that we reflect the size of the stack pointer change in the size of
   // the immediate. This is a special case, where early mangling will lift the
   // immediate out of the `PUSH`.
@@ -276,6 +277,7 @@ static void ConvertImmediateOperand(Instruction *instr,
     instr_op->imm.as_int = static_cast<intptr_t>(
         xed_decoded_inst_get_signed_immediate(xedd));
   }
+#endif
 }
 
 // Returns `true` if a particular operand is a register operand. In practice

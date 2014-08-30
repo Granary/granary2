@@ -10,6 +10,8 @@
 #define END_FILE
 #define SYMBOL(x) x
 
+#define L(x) .L ## x
+
 #define GLOBAL_LABEL(x) SYMBOL(x)
 
 #define DECLARE_FUNC(x) \
@@ -34,7 +36,16 @@
 #define END_FUNC(x) \
     ud2 @N@\
     .cfi_endproc @N@
-    
+
+#define DEFINE_UINT64(x) \
+    .bss @N@\
+    .align 8 @N@\
+    .globl SYMBOL(x) @N@\
+    .type SYMBOL(x), @object @N@\
+    .size SYMBOL(x), 8 @N@\
+SYMBOL(x): @N@\
+    .zero 8 @N@
+
 #define HEX(v) $0x ## v
 #define PUSHF pushf
 #define POPF popf

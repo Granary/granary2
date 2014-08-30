@@ -36,22 +36,22 @@ SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
       XED_IFORM_MOV_GPRv_GPRv_8B == instruction.iform) {
     GRANARY_ASSERT(op0.IsRegister());
     GRANARY_ASSERT(op1.IsRegister());
-    copied_reg = op1.reg;
+    if (op1.reg.IsStackPointer()) return nullptr;
 
   } else if (XED_ICLASS_LEA == instruction.iclass &&
              2 == instruction.num_explicit_ops) {
     if (op1.is_compound) {
-      if (op1.mem.reg_index || op1.mem.disp || 1 != op1.mem.scale) {
-        return nullptr;
-      }
-      copied_reg = VirtualRegister::FromNative(op1.mem.reg_base);
+      auto base_reg = VirtualRegister::FromNative(op1.mem.reg_base);
+      if (base_reg.IsStackPointer()) return nullptr;
+
+      auto index_reg = VirtualRegister::FromNative(op1.mem.reg_base);
+      if (index_reg.IsStackPointer()) return nullptr;
     } else {
-      copied_reg = op1.reg;
+      if (op1.reg.IsStackPointer()) return nullptr;
     }
   } else {
     return nullptr;
   }
-  if (copied_reg.IsStackPointer()) return nullptr;
 
   // This shouldn't come up because we'll see that `op0.reg` is actually a
   // `READ_WRITE` use, and therefore `0 == ssa_instr->defs.Size()`.

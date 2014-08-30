@@ -126,12 +126,12 @@ class BlockFactory {
   // with a CTI.
   DirectBasicBlock *Materialize(AppPC start_pc);
 
- private:
-  BlockFactory(void) = delete;
-
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
   NativeInstruction *MakeInstruction(arch::Instruction *instr);
+
+ private:
+  BlockFactory(void) = delete;
 
   // Add the fall-through instruction for a block.
   GRANARY_INTERNAL_DEFINITION

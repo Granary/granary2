@@ -129,8 +129,11 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
   if (!cfi) return;
 
   BasicBlock *fall_through(nullptr);
+
+  GRANARY_ASSERT(!cfi->IsInterruptCall());
+
   if (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
-      cfi->IsSystemCall() || cfi->IsInterruptCall()) {
+      cfi->IsSystemCall()) {
     fall_through = new DirectBasicBlock(
         cfg, context->AllocateBlockMetaData(pc));
     block->AppendInstruction(std::move(lir::Jump(fall_through)));
@@ -216,7 +219,9 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     }
     AnnotateInstruction(this, block, before_instr, pc);
     instr = block->LastInstruction()->Previous();
+
   } while (!IsA<ControlFlowInstruction *>(instr));
+
   AddFallThroughInstruction(block , instr, pc);
 }
 

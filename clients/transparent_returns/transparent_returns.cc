@@ -45,9 +45,39 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
 //            have a purpose-built tool that re-implements selective transparent
 //            return addresses, and requires that use user manually specifies
 //            `--transparent_returns=no` at the command-line.
-class TransparentRetsInstrumenter : public InstrumentationTool {
+
+class TransparentRetsInstrumenterEarly : public InstrumentationTool {
  public:
-  virtual ~TransparentRetsInstrumenter(void) = default;
+  virtual ~TransparentRetsInstrumenterEarly(void) = default;
+
+  // Instrument the control-flow instructions, specifically: function call
+  // instructions.
+  virtual void InstrumentControlFlow(BlockFactory *,
+                                     LocalControlFlowGraph *cfg) {
+    for (auto block : cfg->NewBlocks()) {
+      auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
+      if (!decoded_block) continue;
+
+      for (auto succ : block->Successors()) {
+        if (!succ.cfi->IsFunctionReturn()) continue;
+
+        // Specialize the return. Behind the scenes, this will convert the
+        // return into an indirect jump.
+        //
+        // Note: `ReturnBasicBlock`s can have meta-data, but usually don't.
+        //       Their meta-data is created lazily when first requested with
+        //       `MetaData`. One can check if a `ReturnBasicBlock` has meta-data
+        //       and optionally operate on it if non-NULL by invoking the
+        //       `UnsafeMetaData` method instead.
+        DynamicCast<ReturnBasicBlock *>(succ.block)->MetaData();
+      }
+    }
+  }
+};
+
+class TransparentRetsInstrumenterLate : public InstrumentationTool {
+ public:
+  virtual ~TransparentRetsInstrumenterLate(void) = default;
 
   // Push on a return address for either of a direct or indirect function
   // call.
@@ -56,13 +86,16 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
 
     // Compute return address.
     auto ret_addr_pc = cfi->DecodedPC() + cfi->DecodedLength();
+    auto ret_addr_uint = reinterpret_cast<uintptr_t>(ret_addr_pc);
+    auto is_u32 = static_cast<uint32_t>(ret_addr_uint) == ret_addr_uint;
     ImmediateOperand ret_addr(reinterpret_cast<uintptr_t>(ret_addr_pc),
-                              arch::ADDRESS_WIDTH_BYTES);
+                              is_u32 ? 32 : arch::ADDRESS_WIDTH_BYTES);
 
     // Push on the native return address.
     BeginInlineAssembly({&ret_addr});
-    InlineBefore(cfi, "MOV r64 %1, i64 %0;"
-                      "PUSH r64 %1;"_x86_64);
+    InlineBeforeIf(cfi, is_u32,   "PUSH i32 %0;"_x86_64);
+    InlineBeforeIf(cfi, !is_u32,  "MOV r64 %1, i64 %0;"
+                                  "PUSH r64 %1;"_x86_64);
     EndInlineAssembly();
 
     // Convert the (in)direct call into a jump.
@@ -92,49 +125,30 @@ class TransparentRetsInstrumenter : public InstrumentationTool {
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
-
-
-
     for (auto block : cfg->NewBlocks()) {
       auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
       if (!decoded_block) continue;
 
-      auto entry_pc = decoded_block->StartAppPC();
-      auto mod = ModuleContainingPC(entry_pc);
-      auto offset = mod->OffsetOfPC(entry_pc);
-      if (StringsMatch("libc", mod->Name()) && 0xec529 == offset.offset) {
-        granary_curiosity();
-        return;
-      }
-
       for (auto succ : block->Successors()) {
-        // Convert a function call into a `PUSH; JMP` combination.
-        if (succ.cfi->IsFunctionCall()) {
-          AddTransparentRetAddr(succ.cfi);
-          RemoveTailInstructions(decoded_block, succ.cfi);
-          factory->RequestBlock(succ.block);  // Walk into the call.
-          break;  // Won't have any more successors.
+        if (!succ.cfi->IsFunctionCall()) continue;
 
-        // Specialize the return. Behind the scenes, this will convert the
-        // return into an indirect jump.
-        //
-        // Note: `ReturnBasicBlock`s can have meta-data, but usually don't.
-        //       Their meta-data is created lazily when first requested with
-        //       `MetaData`. One can check if a `ReturnBasicBlock` has meta-data
-        //       and optionally operate on it if non-NULL by invoking the
-        //       `UnsafeMetaData` method instead.
-        } else if (succ.cfi->IsFunctionReturn()) {
-          DynamicCast<ReturnBasicBlock *>(succ.block)->MetaData();
-        }
+        // Convert a function call into a `PUSH; JMP` combination.
+        AddTransparentRetAddr(succ.cfi);
+        RemoveTailInstructions(decoded_block, succ.cfi);
+        factory->RequestBlock(succ.block);  // Walk into the call.
+        break;  // Won't have any more successors.
       }
     }
   }
 };
 
+
 // Initialize the `transparent_rets` tool.
 GRANARY_CLIENT_INIT({
   if (FLAG_transparent_returns) {
-    RegisterInstrumentationTool<TransparentRetsInstrumenter>(
-        "transparent_returns");
+    RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
+        "transparent_returns_early");
+    RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
+        "transparent_returns_late");
   }
 })

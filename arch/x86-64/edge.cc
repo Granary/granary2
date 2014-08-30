@@ -20,6 +20,7 @@
 #include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
+#include "granary/cache.h"
 #include "granary/context.h"
 
 #define ENC(...) \
@@ -43,6 +44,13 @@ extern "C" {
 extern void granary_arch_enter_direct_edge(void);
 extern void granary_arch_enter_indirect_edge(void);
 
+#ifdef GRANARY_WHERE_kernel
+// Granary's `granary_nmi_edge_handler` uses these to distinguish between
+// a real NMI, an NMI from an indirect edge, and an NMI from a direct edge.
+extern granary::CachePC granary_direct_edge_return_rip;
+extern granary::CachePC granary_indirect_edge_return_rip;
+#endif
+
 }  // extern C
 
 namespace granary {
@@ -51,6 +59,23 @@ namespace {
 
 static const auto kEnterDirect = granary_arch_enter_direct_edge;
 static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
+
+static NativeAddress *enter_direct_addr = nullptr;
+static NativeAddress *enter_indirect_addr = nullptr;
+
+static void CALL_NEAR(arch::Instruction *ni, CachePC pc, AppPC target_pc,
+                      NativeAddress **na) {
+  auto diff = target_pc - pc;
+  if (0 > diff) diff = -diff;
+  if (4294966272LL >= diff) {  // 2^32 - 1024.
+    CALL_NEAR_RELBRd(ni, target_pc);
+  } else {
+    if (!*na) {
+      new NativeAddress(target_pc, na);
+    }
+    CALL_NEAR_MEMv(ni, &((*na)->addr));
+  }
+}
 
 // Used to make a move of an address smaller. This is only really helpful in
 // user space.
@@ -84,10 +109,11 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
-  ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
-  GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
-  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
-                                             XED_REG_RSP)); )
+  GRANARY_IF_USER( ENC(PUSHFQ(&ni);
+                   ni.effective_operand_width = arch::GPR_WIDTH_BITS; ); )
+  //GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
+  //GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
+  //                                           XED_REG_RSP)); )
 
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`.
@@ -97,21 +123,21 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
+#ifdef GRANARY_WHERE_user
   auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
-  auto diff = granary_entrypoint_pc - pc;
-  if (0 > diff) diff = -diff;
-  if (4294966272LL >= diff) {  // 2^32 - 1024.
-    ENC(CALL_NEAR_RELBRd(&ni, granary_entrypoint_pc));
-  } else {
-    ENC(CALL_NEAR_MEMv(&ni, &kEnterDirect));
-  }
+  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
+#else  // GRANARY_WHERE_kernel
+  ENC(INT_IMMb(&ni, 2));  // Raise an NMI.
+  granary_direct_edge_return_rip = pc;
+#endif
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
   // Restore the flags, and potentially re-enable interrupts.
-  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
-                                             XED_REG_RSP)); )
-  ENC(POPFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+  //GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
+  //                                           XED_REG_RSP)); )
+  GRANARY_IF_USER( ENC(POPFQ(&ni);
+                   ni.effective_operand_width = arch::GPR_WIDTH_BITS; ); )
 
   // Return back into the edge code.
   ENC(RET_NEAR(&ni); ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
@@ -129,9 +155,14 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
   // The first time this is executed, it will jump to the next instruction,
-  // which also agrees with pretetching and predicting of unknown branches.
+  // which also agrees with prefetching and predicting of unknown branches.
+  //
   // If profiling isn't enabled, then later executions will jump directly
   // to where they are meant to go.
+  //
+  // Another benefit to this approach is that if patching is not enabled, then
+  // Granary's code cache is append-only, meaning that it can (in theory)
+  // instrument itself without having to support SMC.
   ENC(JMP_MEMv(&ni, &(edge->entry_target)));
   edge->entry_target = pc;  // `pc` is the address of the next instruction.
 
@@ -191,12 +222,13 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
   // Save the flags and potentially disable interrupts.
-  ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
-  GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
+  GRANARY_IF_USER( ENC(PUSHFQ(&ni);
+                   ni.effective_operand_width = arch::GPR_WIDTH_BITS; ); )
+  //GRANARY_IF_KERNEL( ENC(CLI(&ni)); )
 
   // Swap onto Granary's private stack.
-  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
-                                             XED_REG_RSP)); )
+  //GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
+  //                                           XED_REG_RSP)); )
 
   // Save `RSI` (arg 2 by Itanium ABI), and use `RSI` to pass the context into
   // `granary::EnterGranary`. `RDI` already holds the address of the
@@ -207,24 +239,24 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
+#ifdef GRANARY_WHERE_user
   auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterIndirect);
-  auto diff = granary_entrypoint_pc - pc;
-  if (0 > diff) diff = -diff;
-  if (4294966272LL >= diff) {  // 2^32 - 1024.
-    ENC(CALL_NEAR_RELBRd(&ni, granary_entrypoint_pc));
-  } else {
-    ENC(CALL_NEAR_MEMv(&ni, &kEnterIndirect));
-  }
+  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
+#else  // GRANARY_WHERE_kernel
+  ENC(INT_IMMb(&ni, 2));  // Raise an NMI.
+  granary_indirect_edge_return_rip = pc;
+#endif
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
   // Swap back to the native stack.
-  GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
-                                             XED_REG_RSP)); )
+  //GRANARY_IF_KERNEL( ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK),
+  //                                           XED_REG_RSP)); )
 
   // Restore the flags, and potentially re-enable interrupts. After this
   // instruction, it is reasonably likely that we will hit an interrupt.
-  ENC(POPFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+  GRANARY_IF_USER( ENC(POPFQ(&ni);
+                   ni.effective_operand_width = arch::GPR_WIDTH_BITS; ); )
 
   // Return back into the in-edge code.
   ENC(JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),

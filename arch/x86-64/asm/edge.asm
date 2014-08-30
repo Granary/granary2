@@ -2,6 +2,7 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
+    .file "edge.asm"
 START_FILE_INTEL
 
 DECLARE_FUNC(granary_enter_direct_edge)
@@ -26,19 +27,18 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     push    rax
     mov     rax, 2
     xaddq   [rdi + DirectEdge_num_executions], rax
-    jo      .Lback_to_code_cache  // Already executed.
+    jo      L(back_to_code_cache)  // Already executed.
 
     test    rax, rax
-    jnz     .Lback_to_code_cache  // Already executed
+    jnz     L(back_to_code_cache)  // Already executed
 
     // We'll assume that if the value before incrementing was zero that we "won"
     // and that if two threads get in, then it is either because there is enough
     // contention on this code to cause an overflow, or because we're in user
     // space and we were de-scheduled, thus making time for the overflow to
     // occur.
-    jmp     .Ltranslate_block
 
-  .Ltranslate_block:
+L(translate_block):
     // Save all regs, except `RDI` and `RSI`.
     push    rcx
     push    rdx
@@ -77,7 +77,7 @@ DEFINE_FUNC(granary_arch_enter_direct_edge)
     pop     rdx
     pop     rcx
 
-  .Lback_to_code_cache:
+L(back_to_code_cache):
     pop     rax
     ret
 END_FUNC(granary_arch_enter_direct_edge)

@@ -233,7 +233,7 @@ void PrintAllOptions(void) {
       docstring = BufferDocString(line_buff, docstring);
       os::Log(os::LogOutput, "\n        %s", line_buff);
     } while (*docstring);
-    os::Log(os::LogOutput, "\n");
+    os::Log(os::LogOutput, "\n\n");
   }
 }
 

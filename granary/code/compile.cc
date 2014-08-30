@@ -21,7 +21,23 @@
 
 GRANARY_DEFINE_bool(debug_trace_exec, false,
     "Trace the execution of the program. This records the register state on "
-    "entry to every basic block. The default is `no`.");
+    "entry to every basic block. The default is `no`.\n"
+    "\n"
+    "The execution trace can be inspected from GDB by issuing the "
+    "`print-exec-entry` command. For example, `print-exec-entry 0` will print "
+    "the registers on entry to the most recently executed basic block. An "
+    "optional second parameter can be passed to the command, which tells "
+    "GDB how many instructions to decode from the block. For example, "
+    "`print-exec-entry 1 20` will print the registers on entry to the 2nd most "
+    "recently executed basic block, and decode and print the 20 instructions "
+    "starting at the beginning of the basic block.\n"
+    "\n"
+    "A value representative of a \"thread id\" is printed along with each "
+    "entry. In user space, this value uniquely identifies a thread, but has "
+    "no correlation with a thread's ID (tid) from the perspective of the OS. "
+    "In kernel space, this value is a shifted version of the stack pointer, "
+    "and might make interrupt handlers appear to execute in the same or "
+    "different threads than the interrupted tasks.");
 
 namespace granary {
 namespace arch {

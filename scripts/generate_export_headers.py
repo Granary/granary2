@@ -10,6 +10,7 @@ import sys
 EXPORT_HEADERS = [
   "arch/base.h",
   "arch/cpu.h",
+  "arch/util.h",
 
   "granary/base/abi.h",
   "granary/base/base.h",

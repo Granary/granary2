@@ -176,6 +176,24 @@ class InlineAssemblyParser {
       op->reg = reg_op->Register();
     } else {
       ParseArchReg();
+      ConsumeWhiteSpace();
+      if (Peek('+')) {
+        op->is_compound = true;
+        op->mem.reg_base = static_cast<xed_reg_enum_t>(op->reg.EncodeToNative());
+        op->mem.reg_index = XED_REG_INVALID;
+        op->mem.scale = 0;
+
+        Accept('+');
+        ConsumeWhiteSpace();
+
+        char buff[20] = {'\0'};
+        ParseWord(buff);
+        if ('0' == buff[0] && ('x' == buff[1] || 'X' == buff[1])) {
+          DeFormat(buff, "%x", &(op->mem.disp));
+        } else {
+          DeFormat(buff, "%d", &(op->mem.disp));
+        }
+      }
     }
     op->type = XED_ENCODER_OPERAND_TYPE_MEM;
     ConsumeWhiteSpace();
@@ -303,6 +321,9 @@ class InlineAssemblyParser {
         }
         op_size = std::max(op_size, instr_op.width);
       }
+    }
+    if (XED_CATEGORY_PUSH == data.category) {
+      op_size = arch::ADDRESS_WIDTH_BITS;
     }
     data.effective_operand_width = op_size;
   }

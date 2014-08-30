@@ -24,12 +24,12 @@
 GRANARY_DEFINE_positive_int(block_cache_slab_size, 512,
     "The number of pages allocated at once to store basic block code. Each "
     "context maintains its own block code allocator. The default value is "
-    "`512` pages per slab (2MB).");
+    "`512` pages per slab (2MiB).");
 
 GRANARY_DEFINE_positive_int(edge_cache_slab_size, 256,
     "The number of pages allocated at once to store edge code. Each "
     "context maintains its own edge code allocator. The default value is "
-    "`256` pages per slab (1MB).");
+    "`256` pages per slab (1MiB).");
 
 namespace granary {
 namespace arch {
@@ -132,8 +132,10 @@ Context::Context(void)
 void Context::InitTools(const char *tool_names) {
 
   // Force register some tools that should get priority over all others.
-  tool_manager.Register("transparent_returns");
   tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
+
+  // Registered early so that all returns start off specialized by default.
+  tool_manager.Register("transparent_returns_early");
 
   // Register tools specified at the command-line.
   ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
@@ -141,6 +143,10 @@ void Context::InitTools(const char *tool_names) {
       [&] (const char *tool_name) {
         tool_manager.Register(tool_name);
       });
+
+  // Registered last so that transparent returns applies to all control-flow
+  // after every other tool has made control-flow decisions.
+  tool_manager.Register("transparent_returns_late");
 
   // Initialize all tools. Tool initialization is typically where tools will
   // register their specific their block meta-data, therefore it is important

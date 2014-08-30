@@ -25,9 +25,9 @@ DEFINE_FUNC(mmap)
     mov    eax, 9  // `__NR_mmap`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_mmap_error
+    jae    L(granary_mmap_error)
     ret
-.Lgranary_mmap_error:
+L(granary_mmap_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(mmap)
@@ -36,9 +36,9 @@ DEFINE_FUNC(munmap)
     mov    eax, 11  // `__NR_munmap`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_munmap_error
+    jae    L(granary_munmap_error)
     ret
-.Lgranary_munmap_error:
+L(granary_munmap_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(munmap)
@@ -47,9 +47,9 @@ DEFINE_FUNC(mprotect)
     mov    eax, 10  // `__NR_mprotect`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_mprotect_error
+    jae    L(granary_mprotect_error)
     ret
-.Lgranary_mprotect_error:
+L(granary_mprotect_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(mprotect)
@@ -58,9 +58,9 @@ DEFINE_FUNC(mlock)
     mov    eax, 149  // `__NR_mlock`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_mlock_error
+    jae    L(granary_mlock_error)
     ret
-.Lgranary_mlock_error:
+L(granary_mlock_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(mlock)
@@ -69,9 +69,9 @@ DEFINE_FUNC(open)
     mov    eax, 2  // `__NR_open`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_open_error
+    jae    L(granary_open_error)
     ret
-.Lgranary_open_error:
+L(granary_open_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(open)
@@ -80,9 +80,9 @@ DEFINE_FUNC(close)
     mov    eax, 3  // `__NR_close`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_close_error
+    jae    L(granary_close_error)
     ret
-.Lgranary_close_error:
+L(granary_close_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(close)
@@ -91,9 +91,9 @@ DEFINE_FUNC(read)
     mov    eax, 0  // `__NR_read`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_read_error
+    jae    L(granary_read_error)
     ret
-.Lgranary_read_error:
+L(granary_read_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(read)
@@ -102,9 +102,9 @@ DEFINE_FUNC(write)
     mov    eax,1  // `__NR_write`.
     syscall
     cmp    rax,0xfffffffffffff001
-    jae    .Lgranary_write_error
+    jae    L(granary_write_error)
     ret
-.Lgranary_write_error:
+L(granary_write_error):
     or     rax,0xffffffffffffffff
     ret
 END_FUNC(write)

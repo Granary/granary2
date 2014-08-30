@@ -90,15 +90,19 @@ namespace {
 // instruction. We don't need to simulate changes to the stack pointer.
 static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
   auto op = instr->instruction.ops[0];
-  if (op.IsRegister()) {
-    auto mem_width = instr->instruction.effective_operand_width;
-    GRANARY_ASSERT(0 < mem_width);
-    MOV_MEMv_GPRv(
-        &(instr->instruction),
-        arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width),
-        op.reg);
+  auto mem_width = instr->instruction.effective_operand_width;
+  GRANARY_ASSERT(0 < mem_width);
+  auto mem_op(arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width));
 
-  // Things like `PUSH_IMMv`, `PUSH_FS/GS`, and `PUSH_MEMv` should have already
+  if (op.IsRegister()) {
+    MOV_MEMv_GPRv(&(instr->instruction), mem_op, op.reg);
+
+  } else if (op.IsImmediate()) {
+    const auto imm = static_cast<uint32_t>(op.imm.as_uint);
+    GRANARY_ASSERT(imm == op.imm.as_uint);
+    MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+
+  // Things like `PUSH_FS/GS`, and `PUSH_MEMv` should have already
   // been early mangled.
   } else {
     GRANARY_ASSERT(false);

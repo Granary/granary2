@@ -11,7 +11,23 @@
 
 GRANARY_DEFINE_bool(debug_trace_meta, false,
     "Trace the meta-data that is committed to the code cache index. The default "
-    "is `no`.");
+    "is `no`.\n"
+    "\n"
+    "The meta-data trace can be inspected from GDB by issuing the "
+    "`print-meta-entry` command. For example, `print-meta-entry 0` will print "
+    "the most recently indexed blocked meta-data."
+    ""
+    "A printed meta-data entry attempts to dump the fields of the individual "
+    "data structures embedded within the meta-data, as well as the translation "
+    "group to which the block associated with the meta-data belongs. Each time "
+    "a context switch into Granary leads to the translation of some code, the "
+    "group number is incremented. The value is therefore a lower bound for the "
+    "number of context switches in/out of Granary.\n"
+    "\n"
+    "Multiple blocks (and therefore block meta-datas) can belong to a single "
+    "translation group. This is typical, as some tools (and even Granary "
+    "itself) will request the more than one blocks be translated during a "
+    "single request.");
 
 namespace granary {
 namespace {

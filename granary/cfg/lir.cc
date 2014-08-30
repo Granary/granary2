@@ -12,8 +12,8 @@ namespace lir {
 
 // Materialize a future basic block and insert a direct jump to that
 // basic block.
-std::unique_ptr<ControlFlowInstruction>
-Jump(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
+std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc,
+                                  BlockRequestKind request) {
   auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return Jump(block);
@@ -21,8 +21,8 @@ Jump(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
 
 // Materialize a future basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<ControlFlowInstruction>
-Call(BlockFactory *factory, AppPC target_pc, BlockRequestKind request) {
+std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc,
+                                  BlockRequestKind request) {
   auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return Call(block);

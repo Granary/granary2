@@ -10,7 +10,7 @@ START_FILE_INTEL
 //       pointed to by the base address of the segment descriptor for `FS`
 //       is a pointer to said base address (i.e. self-reference).
 DEFINE_FUNC(granary_arch_get_segment_base)
-    mov rax, [GRANARY_IF_USER_ELSE(fs, gs):0];
+    mov rax, qword ptr [GRANARY_IF_USER_ELSE(fs, gs):0]
     ret
 END_FUNC(granary_arch_get_segment_base)
 
