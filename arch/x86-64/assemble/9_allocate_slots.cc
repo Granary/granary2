@@ -45,17 +45,17 @@ void AllocateEnableInterrupts(InstructionList *instrs) {
       ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Test to see if we should re-enable interrupts.
-  APP(TEST_MEMv_IMMz_F7r0(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0,
-                                         GPR_WIDTH_BITS),
-                               1U << 9U));
+  APP(BT_MEMv_IMMb(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0, GPR_WIDTH_BITS),
+                        static_cast<uint8_t>(9)));
   auto restore_flags = new LabelInstruction;
-  JNZ_RELBRb(&ni, nullptr);
+
+  JNB_RELBRb(&ni, restore_flags);  // IF = 0.
   instrs->Append(new BranchInstruction(&ni, restore_flags));
 
   // Re-enable interrupts by changing the flags that were `PUSHFQ`d onto the
   // stack.
   APP(OR_MEMv_IMMz(&ni, BaseDispMemOp(0, XED_REG_RSP, GPR_WIDTH_BITS),
-                         1U << 9U));
+                        1U << 9U));
 
   // Restore the flags.
   instrs->Append(restore_flags);

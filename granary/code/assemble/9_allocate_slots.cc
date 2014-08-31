@@ -218,7 +218,7 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
 
 #ifdef GRANARY_DEBUG
 // Very that no instructions in this region use virtual registers.
-static void VerifyHasNotSlots(Fragment *frag) {
+static void VerifyAllSlotsScheduled(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->ForEachOperand([=] (Operand *op) {
@@ -241,7 +241,7 @@ static void VerifyHasNotSlots(Fragment *frag) {
 #ifdef GRANARY_DEBUG
 // Verify that the no (obvious) instructions in this region can change the
 // interrupt state.
-static void VerifyInterruptsNotChanges(Fragment *frag) {
+static void VerifyInterruptsNotChanged(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       auto &ainstr(ninstr->instruction);
@@ -259,7 +259,7 @@ static void AllocateSlotsStackInvalid(Fragment *frag) {
   } else if (IsA<PartitionExitFragment *>(frag)) {
     arch::AllocateEnableInterrupts(&(frag->instrs));
   } else {
-    GRANARY_IF_DEBUG( VerifyInterruptsNotChanges(frag); )
+    GRANARY_IF_DEBUG( VerifyInterruptsNotChanged(frag); )
   }
 }
 #endif  // GRANARY_WHERE_kernel
@@ -269,7 +269,7 @@ static void AllocateStackSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     auto partition = frag->partition.Value();
     if (!partition->num_slots) {
-      GRANARY_IF_DEBUG( VerifyHasNotSlots(frag); )
+      GRANARY_IF_DEBUG( VerifyAllSlotsScheduled(frag); )
       continue;
     }
     if (!partition->analyze_stack_frame)  {

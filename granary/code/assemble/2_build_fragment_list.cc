@@ -201,11 +201,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //          <IA_UNKNOWN_STACK_BELOW> ------.
     //          MOV RBP, RSP   <-- caused by --'
     //          MOV [RBP - 8], RDI   <-- accesses redzone (below RSP).
-    //
-    // Note: This annotation is only generated if `REDZONE_SIZE_BYTES > 0`,
-    //       i.e. for user space instrumentation.
     case IA_UNKNOWN_STACK_BELOW:
-      GRANARY_ASSERT(0 != arch::REDZONE_SIZE_BYTES);
       frag->stack.inherit_constraint = STACK_STATUS_INHERIT_PRED;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                              StackUsageInfo(STACK_STATUS_INHERIT_SUCC));

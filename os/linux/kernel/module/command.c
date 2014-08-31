@@ -44,8 +44,12 @@ static void ProcessInit(const char *options) {
 }
 
 // Attach Granary to the kernel.
+//extern void InitPerCPUState(void);
 extern void TakeoverSyscallTable(void);
+//extern void TakeoverIDT(void);
 static void ProcessAttach(void) {
+  //InitPerCPUState();
+  //TakeoverIDT();
   TakeoverSyscallTable();
   printk("[granary] Attached.\n");
 }

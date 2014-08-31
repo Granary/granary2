@@ -22,10 +22,6 @@ unsigned long CycleCount(void) {
   return (high_order << 32U) | low_order;
 }
 
-extern "C" {
-
-}  // extern C
-
 bool TryDisableInterrupts(void) {
   unsigned long flags;
   GRANARY_INLINE_ASSEMBLY("pushfq; pop %0; cli" : "=r"(flags));

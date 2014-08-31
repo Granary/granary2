@@ -19,6 +19,7 @@ GRANARY_DEFINE_bool(profile_direct_edges, false,
 //            not needed.
 
 #ifdef GRANARY_WHERE_kernel
+// Initialized by `os/*/kernel/module/slot.c`
 void *granary_stack_begin = nullptr;
 void *granary_stack_end = nullptr;
 #endif  // GRANARY_WHERE_kernel

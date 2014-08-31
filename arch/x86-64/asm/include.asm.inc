@@ -15,6 +15,7 @@
 #define GLOBAL_LABEL(x) SYMBOL(x)
 
 #define DECLARE_FUNC(x) \
+    .text @N@\
     .extern SYMBOL(x)
 
 #define DEFINE_FUNC(x) \
@@ -45,6 +46,10 @@
     .size SYMBOL(x), 8 @N@\
 SYMBOL(x): @N@\
     .zero 8 @N@
+
+#define DECLARE_UINT64(x) \
+    .bss @N@\
+    .extern SYMBOL(x)
 
 #define HEX(v) $0x ## v
 #define PUSHF pushf
