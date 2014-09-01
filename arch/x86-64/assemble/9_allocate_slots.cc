@@ -378,12 +378,8 @@ static void AllocateSlots(NativeInstruction *instr) {
   if (XED_ICLASS_MOV != ainstr.iclass && XED_ICLASS_XCHG != ainstr.iclass) {
     return;
   }
-
-  if (ainstr.ops[0].IsMemory()) {
-    if (ainstr.ops[0].reg.IsVirtualSlot()) AllocateSlot(ainstr.ops[0]);
-  } else if (ainstr.ops[1].IsMemory()) {
-    if (ainstr.ops[1].reg.IsVirtualSlot()) AllocateSlot(ainstr.ops[1]);
-  }
+  if (IsSpillSlot(ainstr.ops[0])) AllocateSlot(ainstr.ops[0]);
+  if (IsSpillSlot(ainstr.ops[1])) AllocateSlot(ainstr.ops[1]);
 }
 
 }  // namespace

@@ -221,7 +221,7 @@ struct TracedMetaData {
 };
 
 enum {
-  GRANARY_META_LOG_LENGTH = 1024
+  GRANARY_META_LOG_LENGTH = 4096
 };
 
 // The recorded entries in the trace. This is a global variable so that GDB

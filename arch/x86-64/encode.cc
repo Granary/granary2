@@ -126,23 +126,6 @@ static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo,
   }
 }
 
-// Truncate the displacement value according to the computed width of the
-// displacement.
-static void TruncateDisplacementToWidth(xed_enc_displacement_t *disp) {
-  switch (disp->displacement_width) {
-    case 32:
-      disp->displacement &= 0xFFFFFFFFULL;
-      break;
-    case 16:
-      disp->displacement &= 0xFFFFULL;
-      break;
-    case 8:
-      disp->displacement &= 0xFFULL;
-      break;
-    default: return;
-  }
-}
-
 // Encode a memory operand.
 static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
   GRANARY_ASSERT(!op.is_annotation_instr);
@@ -155,7 +138,6 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
       auto width = ImmediateWidthBits(op.mem.disp);
       width = 16 == width ? 32 : std::min(32, width);
       xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(width);
-      TruncateDisplacementToWidth(&(xedo->u.mem.disp));
     }
     xedo->u.mem.index = op.mem.reg_index;
     xedo->u.mem.scale = op.mem.scale;

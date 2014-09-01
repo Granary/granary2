@@ -124,7 +124,7 @@ class Instruction : public InstructionInterface {
   bool HasIndirectTarget(void) const;
 
   inline bool IsNoOp(void) const {
-    return XED_CATEGORY_NOP == category;
+    return XED_CATEGORY_NOP == category || XED_CATEGORY_WIDENOP == category;
   }
 
   // Returns true if an instruction reads from the stack pointer.
