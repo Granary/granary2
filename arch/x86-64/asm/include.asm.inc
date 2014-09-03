@@ -51,6 +51,16 @@ SYMBOL(x): @N@\
     .bss @N@\
     .extern SYMBOL(x)
 
+#define ALIGN_STACK_16(clobber_reg) \
+    mov clobber_reg, rsp @N@\
+    lea clobber_reg, qword ptr [clobber_reg - 16] @N@\
+    and clobber_reg, -16 @N@\
+    xchg clobber_reg, rsp @N@\
+    mov qword ptr [rsp], clobber_reg
+
+#define UNALIGN_STACK \
+    pop rsp
+
 #define HEX(v) $0x ## v
 #define PUSHF pushf
 #define POPF popf

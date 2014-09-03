@@ -145,17 +145,12 @@ end
 define print-exec-entry-impl
   set $__r = $arg1
 
-  # Figure out the block start pc, $__brip, and the first non-trace logger
-  # instruction of the block, $__rip.
-  set $__rip = $__r->rip
-  set $__brip = $__r->rip - 5
+  # Adjust the instruction pointer for the size of the `CALL_NEAR_REBRd`.
+  set $__rip = $__r->rip + 5
+  
+  # Adjust the instruction pointer for the size of the stack-shifting `LEA`s.
   if $in_user_space
-    # Adjust the instruction pointer for the size of `lea rsp, [rsp + 128]`
-    set $__rip = $__rip + 8
-
-    # Adjust the block start pc for `lea rsp, [rsp - 128]`, whihc is 5 bytes
-    # (not 8).
-    set $__brip = $__brip - 5
+    set $__rip = $__rip + 13
   end
 
   # Figure out if the tracer injected an indirect or direct call, where a
@@ -174,7 +169,7 @@ define print-exec-entry-impl
   printf "   rdi = %#18lx   rsi = %#18lx\n", $__r->rdi, $__r->rsi
   printf "   rbp = %#18lx   rbx = %#18lx\n", $__r->rbp, $__r->rbx
   printf "   rdx = %#18lx   rcx = %#18lx\n", $__r->rdx, $__r->rcx
-  printf "   rax = %#18lx   rip = %#18lx\n", $__r->rax, $__brip
+  printf "   rax = %#18lx   rip = %#18lx\n", $__r->rax, $__r->rip
   printf "   flags ="
 
   # Print the flags state.
@@ -214,9 +209,8 @@ end
 #
 # Note: The program must be run with `--debug_trace_exec=yes`.
 define print-exec-entry
-  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0
-  set $__i = ($__i - 1) % GRANARY_BLOCK_LOG_LENGTH
-  set $__r = &(granary_block_log[$__i])
+  set $__i = granary_block_log_index + GRANARY_BLOCK_LOG_LENGTH - $arg0 - 1
+  set $__r = &(granary_block_log[$__i % GRANARY_BLOCK_LOG_LENGTH])
 
   if 2 == $argc
     print-exec-entry-impl $arg0 $__r $arg1
@@ -224,6 +218,33 @@ define print-exec-entry
     print-exec-entry-impl $arg0 $__r
   end
 
+  dont-repeat
+end
+
+
+# find-exec-entry
+#
+# Finds and prints the most recent execution trace entry, where the `rip` of the
+# entry equals `$arg0`.
+define find-exec-entry
+  set language c++
+  set $__i = granary_block_log_index - 1
+  set $__min_i = $__i - GRANARY_BLOCK_LOG_LENGTH
+  set $__offset = 0
+  set $__found = 0
+
+  while $__i >= 0 && $__i >= $__min_i
+    set $__r = &(granary_block_log[$__i % GRANARY_BLOCK_LOG_LENGTH])
+    if $__r->rip == $arg0
+      set $__found = 1
+      set $__i = 0
+    end
+    set $__i = $__i - 1
+    set $__offset = $__offset + 1
+  end
+  if $__found
+    print-exec-entry $__offset
+  end
   dont-repeat
 end
 
@@ -277,19 +298,23 @@ end
 
 # find-meta-entry
 #
-# Finds and prints the block meta-data whose `CacheMetaData::start_pc == $arg0`,
-# assuming that meta-data is still located in the meta-data trace.
+# Finds and prints the block meta-data whose `AppMetaData::start_pc == $arg0`
+# or `CacheMetaData::start_pc == $arg0`, assuming that meta-data is still
+# located in the meta-data trace.
 define find-meta-entry
   set language c++
   set $__pc = (granary::CachePC) $arg0
   set $__i = 0
+  set $__g = 0
   set $__m = (granary::BlockMetaData *) 0
 
   while $__i < GRANARY_META_LOG_LENGTH
     set $__sm = (char *) granary_meta_log[$__i].meta
     if $__sm
-      set $__fpc = *((granary::CachePC *) &($__sm[16]))
-      if $__fpc == $__pc
+      set $__fpc_app = *((granary::AppPC *) &($__sm[8]))
+      set $__fpc_cache = *((granary::CachePC *) &($__sm[16]))
+      if $__fpc_app == $__pc || $__fpc_cache == $__pc
+        set $__g = granary_meta_log[$__i].group
         set $__m = (granary::BlockMetaData *) $__sm
         set $__i = GRANARY_META_LOG_LENGTH
       end
@@ -298,6 +323,7 @@ define find-meta-entry
   end
 
   if $__m
+    printf "Meta-data %p in group %lu:\n", $__m, $__g
     print-block-meta $__m
   end
   dont-repeat

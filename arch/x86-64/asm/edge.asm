@@ -53,15 +53,11 @@ L(translate_block):
     push    r14
     push    r15
 
-    // Align the stack to a 16-byte boundary.
-    push    rsp
-    push    [rsp]
-    and     rsp, -16
+    ALIGN_STACK_16(r15)
 
     call    granary_enter_direct_edge
 
-    // Restore the old stack alignment.
-    mov     rsp, [rsp + 8]
+    UNALIGN_STACK
 
     // Restore the regs, except `RDI` and `RSI`.
     pop     r15
@@ -112,15 +108,11 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
 
     mov     rdx, rcx  // Move `RCX` into `arg3`.
 
-    // Align the stack to a 16-byte boundary.
-    push    rsp
-    push    [rsp]
-    and     rsp, -16
+    ALIGN_STACK_16(r15)
 
     call    granary_enter_indirect_edge
 
-    // Restore the old stack alignment.
-    mov     rsp, [rsp + 8]
+    UNALIGN_STACK
 
     pop     r15
     pop     r14

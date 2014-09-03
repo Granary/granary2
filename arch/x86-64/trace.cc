@@ -43,7 +43,9 @@ struct RegisterState {
 };
 
 enum {
-  GRANARY_BLOCK_LOG_LENGTH = 1024
+  GRANARY_BLOCK_LOG_LENGTH = 4096,
+  LEA_GPRv_AGEN_LEN = 5,
+  CALL_RELBRd_LEN = 5
 };
 
 GRANARY_IF_USER( static __thread uint64_t thread_id = 0; )
@@ -71,11 +73,15 @@ void granary_trace_block_regs(const RegisterState *regs) {
   auto index = __sync_fetch_and_add(&granary_block_log_index, 1U);
   auto &log_regs(granary_block_log[index % GRANARY_BLOCK_LOG_LENGTH]);
 
-  // Adjust the logged stack pointer to accoutn for the return address and the
-  // potential user-space redzone.
-  log_regs.rsp += ADDRESS_WIDTH_BYTES + REDZONE_SIZE_BYTES;
-
   memcpy(&log_regs, regs, sizeof *regs);
+
+  // Adjust the logged stack pointer to account for the return address and the
+  // potential user-space redzone. Also adjust the instruction pointer pointer
+  // to adjust for the size of the call and potential stack shifting
+  // instructions.
+  log_regs.rsp += ADDRESS_WIDTH_BYTES + REDZONE_SIZE_BYTES;
+  log_regs.rip -= CALL_RELBRd_LEN GRANARY_IF_USER( + LEA_GPRv_AGEN_LEN);
+
   InitThreadId(&log_regs);
 }
 

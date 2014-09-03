@@ -58,14 +58,14 @@ void *memcpy(void * __restrict dest, const void * __restrict src,
 }
 
 void *checked_memset(void *dest, int val_, unsigned long num_bytes) {
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
   const auto begin_addr = reinterpret_cast<char *>(dest);
   const auto end_addr = begin_addr + num_bytes;
   GRANARY_ASSERT(begin_addr < &granary_begin_protected_bss ||
                  begin_addr >= &granary_end_protected_bss);
   GRANARY_ASSERT(end_addr < &granary_begin_protected_bss ||
                  end_addr >= &granary_end_protected_bss);
-#endif
+#endif  // GRANARY_TARGET_debug
   return memset(dest, val_, num_bytes);
 }
 

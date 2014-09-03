@@ -23,7 +23,7 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->isel = isel;
   instr->category = category;
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
   instr->note_create = note;
   auto mod = __builtin_return_address(1);
   (instr->note_create ? instr->note_alter : instr->note_create) = mod;

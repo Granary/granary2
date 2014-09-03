@@ -141,8 +141,7 @@ ifeq (release,$(GRANARY_TARGET))  # release
     GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
-	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS) -DGRANARY_DEBUG
-	GRANARY_HEADER_MACRO_DEFS += -DGRANARY_DEBUG
+	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS_LATE += "-Wl,-g"
 endif
@@ -213,7 +212,9 @@ GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 
 # Mask some of the libc and libc++ symbols with Granary equivalents.
 GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symbol.versions"
-#GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/symbol.exports"
+ifeq (release,$(GRANARY_TARGET))
+	GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/symbol.exports"
+endif
 
 # Code linting.
 GRANARY_LINT_DIR = $(GRANARY_SRC_DIR)/dependencies/cpplint

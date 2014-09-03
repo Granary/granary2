@@ -79,7 +79,7 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
   return slab;
 }
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 namespace {
 static bool MemoryNotInUse(void *mem, size_t num_bytes) {
   auto bytes = reinterpret_cast<uint8_t *>(mem);
@@ -92,7 +92,7 @@ static bool MemoryNotInUse(void *mem, size_t num_bytes) {
   return true;
 }
 }  // namespace
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
@@ -147,12 +147,12 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     }
     next = head->next;
   } while (!free_list.compare_exchange_strong(head, next));
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
   if (head) {
     // Maintain the invariant that is checked by `MemoryNotInUse`.
     memset(head, DEALLOCATED_MEMORY_POISON, sizeof (void *));
   }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
   return head;
 }
 

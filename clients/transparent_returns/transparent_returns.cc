@@ -10,6 +10,31 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
 
     "transparent_returns");
 
+GRANARY_DEFINE_unsigned(max_num_translation_requests, 0,
+    "The maximum number of translation requests that can be made of Granary "
+    "before execution goes native.\n"
+    "\n"
+    "This option is particularly useful for binary-search type debugging of "
+    "problematic clients or Granary bugs. The idea here is that if Granary "
+    "is introducing a bug into a program (where there was none before), then "
+    "sometimes the bug can be narrowed down to a particular translation "
+    "request by changing the value of this flag.\n"
+    "\n"
+    "Note: This is only valid if `--transparent_returns` is enabled.",
+
+    "transparent_returns");
+
+GRANARY_DECLARE_bool(debug_log_fragments);
+GRANARY_DEFINE_bool(log_last_translation_request, false,
+    "Should the last translation request be logged? What this means is that "
+    "Granary will log a DOT digraph of its internal 'fragment control flow "
+    "graph', but only for the last translation request.\n"
+    "\n"
+    "Note: This is only meaningful if the `--max_num_translation_requests`\n"
+    "      flag is being used.",
+
+    "transparent_returns");
+
 // Implements transparent return addresses. This means that the return
 // addresses from instrumented function calls will point to native code and
 // not into Granary's code cache.
@@ -75,9 +100,32 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
   }
 };
 
+static std::atomic<unsigned> num_translation_requests(ATOMIC_VAR_INIT(1U));
+
 class TransparentRetsInstrumenterLate : public InstrumentationTool {
  public:
+  TransparentRetsInstrumenterLate(void)
+      : InstrumentationTool(),
+        is_first_request(true) {}
+
   virtual ~TransparentRetsInstrumenterLate(void) = default;
+
+  // Remove all instructions starting from (and including) `search_instr`.
+  void RemoveTailInstructions(DecodedBasicBlock *block,
+                              const Instruction *search_instr) {
+    auto first_instr = block->FirstInstruction();
+    auto last_instr = block->LastInstruction();
+
+    if (search_instr == last_instr) return;
+
+    Instruction *instr(nullptr);
+    do {
+      instr = last_instr->Previous();
+      if (instr == first_instr) break;
+      Instruction::Unlink(instr);
+    } while (instr != search_instr);
+  }
+
 
   // Push on a return address for either of a direct or indirect function
   // call.
@@ -110,36 +158,57 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
     }
   }
 
-  // Remove all instructions starting from (and including) `search_instr`.
-  void RemoveTailInstructions(DecodedBasicBlock *block,
-                              const Instruction *search_instr) {
-    auto last_instr = block->LastInstruction();
-    Instruction *instr(nullptr);
-    do {
-      instr = last_instr->Previous();
-      Instruction::Unlink(instr);
-    } while (instr != search_instr);
+  // Add a return address to the
+  void AddReturnAddressToBlock(BlockFactory *factory,
+                               DecodedBasicBlock *block) {
+    if (!block) return;
+    for (auto succ : block->Successors()) {
+      if (!succ.cfi->IsFunctionCall()) continue;
+
+      // Convert a function call into a `PUSH; JMP` combination.
+      AddTransparentRetAddr(succ.cfi);
+      RemoveTailInstructions(block, succ.cfi);
+      factory->RequestBlock(succ.block);  // Walk into the call.
+      break;  // Won't have any more successors.
+    }
+  }
+
+  // Returns `true` if execution should go native on this basic block.
+  bool GoNativeOnBlock(BlockFactory *factory, DecodedBasicBlock *block) {
+    if (!HAS_FLAG_max_num_translation_requests) return false;
+
+    if (!is_first_request) return false;
+    is_first_request = false;
+
+    auto curr_req = num_translation_requests.fetch_add(1U);
+    if (curr_req < FLAG_max_num_translation_requests) {
+      if (FLAG_log_last_translation_request &&
+          (curr_req + 1) == FLAG_max_num_translation_requests) {
+        FLAG_debug_log_fragments = true;
+      }
+      return false;
+    }
+
+    RemoveTailInstructions(block, block->FirstInstruction()->Next());
+    block->PrependInstruction(lir::Jump(factory, block->StartAppPC(),
+                                        REQUEST_NATIVE));
+    return true;
   }
 
   // Instrument the control-flow instructions, specifically: function call
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
-    for (auto block : cfg->NewBlocks()) {
-      auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-      if (!decoded_block) continue;
-
-      for (auto succ : block->Successors()) {
-        if (!succ.cfi->IsFunctionCall()) continue;
-
-        // Convert a function call into a `PUSH; JMP` combination.
-        AddTransparentRetAddr(succ.cfi);
-        RemoveTailInstructions(decoded_block, succ.cfi);
-        factory->RequestBlock(succ.block);  // Walk into the call.
-        break;  // Won't have any more successors.
+    if (!GoNativeOnBlock(factory, cfg->EntryBlock())) {
+      for (auto block : cfg->NewBlocks()) {
+        AddReturnAddressToBlock(factory,
+                                DynamicCast<DecodedBasicBlock *>(block));
       }
     }
   }
+
+ private:
+  bool is_first_request;
 };
 
 

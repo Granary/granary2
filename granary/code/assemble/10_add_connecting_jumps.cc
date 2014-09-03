@@ -128,6 +128,12 @@ void AddConnectingJumps(FragmentList *frags) {
 
     // No fall-through.
     if (!frag_fall_through) {
+
+      // Not sure if this can happen: we've got a direct jump that behaves like
+      // a fall-through, but the next fragment isn't the jump's target, and the
+      // jump itself won't be encoded.
+      GRANARY_ASSERT(!(frag->branch_instr && frag_next != frag_branch &&
+                       !frag->branch_instr->instruction.WillBeEncoded()));
       continue;
 
     // Last fragment in the list, but it has a fall-through.

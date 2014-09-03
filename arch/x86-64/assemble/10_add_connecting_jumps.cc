@@ -48,7 +48,7 @@ bool IsNearRelativeJump(NativeInstruction *instr) {
   }
 }
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 # ifdef GRANARY_WHERE_user
 extern "C" {
 extern int getpid(void);
@@ -87,7 +87,7 @@ void AddFallThroughTrap(Fragment *frag) {
   frag->instrs.Append(new NativeInstruction(&ni));
 # endif
 }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
 
 }  // namespace arch
 }  // namespace granary

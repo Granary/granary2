@@ -11,6 +11,7 @@
 #include "granary/context.h"
 #include "granary/init.h"
 
+#include "os/logging.h"
 #include "os/memory.h"
 #include "os/module.h"
 
@@ -61,12 +62,15 @@ void PreInit(void) {
 void Init(void) {
   os::InitHeap();  // Initialize the Granary heap.
   os::InitModuleManager();  // Initialize the global module manager.
+  os::InitLog();  // Initialize the logging infrastructure.
 
-  // Initialize the driver (e.g. XED, DynamoRIO). This usually performs from
+  // Initialize the driver (e.g. XED, DynamoRIO). This usually performs some
   // architecture-specific checks to determine which architectural features
-  // are enabled.
+  // are enabled. This depends on heap allocation.
   arch::Init();
 
+  // TODO(pag): Refactor this into an `InitContext` call, and move `context`
+  //            to be inside `context.cc`.
   context.Construct();
   InitClients();
   context->InitTools(FLAG_tools);

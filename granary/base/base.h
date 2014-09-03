@@ -67,7 +67,7 @@
 # define GRANARY_ENABLE_IF(...) __VA_ARGS__
 #endif
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 # define GRANARY_IF_DEBUG(...) __VA_ARGS__
 # define GRANARY_IF_DEBUG_(...) __VA_ARGS__ ,
 # define _GRANARY_IF_DEBUG(...) , __VA_ARGS__
@@ -79,7 +79,7 @@
 # define _GRANARY_IF_DEBUG(...)
 # define GRANARY_IF_DEBUG_ELSE(a, b) b
 # define GRANARY_ASSERT(...)
-#endif
+#endif  // GRANARY_TARGET_debug
 
 #ifdef GRANARY_ARCH_INTERNAL
 # define GRANARY_ARCH_PUBLIC public

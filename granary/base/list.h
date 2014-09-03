@@ -6,7 +6,7 @@
 #include "granary/base/base.h"
 #include "granary/base/type_trait.h"
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 # include "granary/breakpoint.h"
 #endif
 
@@ -22,7 +22,7 @@ class ListHead {
  public:
   ListHead(void);
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
   // Ensure that the correct `object` pointer is being passed to the `ListHead`
   // public APIs.
   template <typename T>
@@ -33,7 +33,7 @@ class ListHead {
     const void *next_this_ptr(this + 1);
     GRANARY_ASSERT(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr);
   }
-#endif
+#endif // GRANARY_TARGET_debug
 
   // Returns true if this list element is attached to any other list elements.
   inline bool IsAttached(void) const {

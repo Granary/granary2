@@ -82,14 +82,14 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
         }
       }
     }
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
     // Simple verification step.
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
       ++partition->num_partition_entry_frags;
       GRANARY_ASSERT(1 == partition->num_partition_entry_frags);
     }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
   }
 }
 
@@ -216,7 +216,7 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
   }
 }
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 // Very that no instructions in this region use virtual registers.
 static void VerifyAllSlotsScheduled(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
@@ -235,10 +235,10 @@ static void VerifyAllSlotsScheduled(Fragment *frag) {
     }
   }
 }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
 
 #ifdef GRANARY_WHERE_kernel
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 // Verify that the no (obvious) instructions in this region can change the
 // interrupt state.
 static void VerifyInterruptsNotChanged(Fragment *frag) {
@@ -251,7 +251,7 @@ static void VerifyInterruptsNotChanged(Fragment *frag) {
     }
   }
 }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
 
 static void AllocateSlotsStackInvalid(Fragment *frag) {
   if (IsA<PartitionEntryFragment *>(frag)) {

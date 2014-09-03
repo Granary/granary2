@@ -16,18 +16,19 @@
 
 #include "os/logging.h"
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 # include "granary/base/option.h"
 GRANARY_DEFINE_bool(debug_log_instr_note, false,
-                    "Should the note field, if present, be logged along with "
-                    "the instructions? In some situations, this can help to "
-                    "pinpoint what function was responsible for introducing an "
-                    "instruction. The default value is `no`.\n"
-                    "\n"
-                    "An instruction note is the return address of the function "
-                    "that likely created the instruction. This can be helpful "
-                    "when trying to discover the source of an instruction.");
-#endif  // GRANARY_DEBUG
+    "Should the note field, if present, be logged along with the instructions? "
+    "In some situations, this can help to pinpoint what function was "
+    "responsible for introducing an instruction. The default value is `no`.\n"
+    "\n"
+    "An instruction note is the return address of the function that likely "
+    "created the instruction. This can be helpful when trying to discover the "
+    "source of an instruction.\n"
+    "\n"
+    "Note: This is only meaningful if `--debug_log_fragments` is used.");
+#endif  // GRANARY_TARGET_debug
 
 namespace granary {
 
@@ -256,11 +257,16 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);
       Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
-#ifdef GRANARY_DEBUG
-      if (FLAG_debug_log_instr_note && ainstr.note_create) {
-        Log(level, "note: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_create);\
+#ifdef GRANARY_TARGET_debug
+      if (FLAG_debug_log_instr_note) {
+        if (ainstr.note_create) {
+          Log(level, "cnote: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_create);
+        }
+        if (ainstr.note_alter) {
+          Log(level, "anote: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_alter);
+        }
       }
-#endif
+#endif  // GRANARY_TARGET_debug
     } else if (IsA<LabelInstruction *>(instr)) {
       Log(level, "LABEL %lx:<BR ALIGN=\"LEFT\"/>",
           reinterpret_cast<uintptr_t>(instr));

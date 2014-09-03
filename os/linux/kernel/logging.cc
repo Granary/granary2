@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-// TODO(pag): Issue #1: Refactor this code to use an output stream.
+#define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
@@ -9,6 +9,9 @@
 
 namespace granary {
 namespace os {
+
+// Initialize the logging mechanism.
+void InitLog(void) {}
 
 // Log something.
 int Log(LogLevel, const char *, ...) {

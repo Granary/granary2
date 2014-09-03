@@ -524,7 +524,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   AddCompensationRegKills(comp);
 }
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 // Asserts that there are nodes (of any type) on entry to frag that are
 // associated with virtual registers. This can happen in the case where some
 // instrumentation reads from a virtual register before writing to it. We
@@ -536,7 +536,7 @@ static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
     GRANARY_ASSERT(!reg.IsVirtual());
   }
 }
-#endif
+#endif  // GRANARY_TARGET_debug
 
 // For indirect control-flow instructions (e.g. call/jump through a register),
 // we need to share the register with the target fragment, assuming that the
@@ -589,18 +589,18 @@ static void AddCompensatingFragments(FragmentList *frags) {
       }
 
     } else if (IsA<PartitionEntryFragment *>(frag)) {
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
       for (auto succ : frag->successors) {
         if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
           CheckForUndefinedVirtualRegs(ssa_succ);
         }
       }
-#endif
+#endif  // GRANARY_TARGET_debug
     }
   }
 }
 
-#ifdef GRANARY_DEBUG
+#ifdef GRANARY_TARGET_debug
 // Verify that the sets of virtual registers used in each partition are
 // disjoint.
 static void VerifyVRUsage(FragmentList *frags) {
@@ -624,7 +624,7 @@ static void VerifyVRUsage(FragmentList *frags) {
     }
   }
 }
-#endif  // GRANARY_DEBUG
+#endif  // GRANARY_TARGET_debug
 }  // namespace
 
 // Build a graph for the SSA definitions associated with the fragments.

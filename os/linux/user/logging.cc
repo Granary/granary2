@@ -2,12 +2,17 @@
 
 // TODO(pag): Issue #1: Refactor this code to use an output stream.
 
+#define GRANARY_INTERNAL
+
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 
 #include "os/logging.h"
-#include <fcntl.h>
+
 extern "C" {
+
+#define O_WRONLY  01
+#define O_CREAT   0100
 
 extern int open(const char *filename, int flags, ...);
 extern long long write(int __fd, const void *__buf, size_t __n);
@@ -18,11 +23,11 @@ namespace os {
 namespace {
 
 static int OUTPUT_FD[] = {
-    1,  // LogOutput
-    2,  // LogWarning
-    2,  // LogError
-    2,  // LogFatalError
-    2,  // LogDebug
+    2,  // LogOutput; defaults to `stderr`.
+    -1,  // LogWarning
+    -1,  // LogError
+    -1,  // LogFatalError
+    -1,  // LogDebug
     -1
 };
 
@@ -66,6 +71,17 @@ static char *WriteGenericInt(char *buff, uint64_t data, bool is_64_bit,
 }
 
 }  // namespace
+
+// Initialize the logging mechanism.
+void InitLog(void) {
+  // TODO(pag): Refactor this to take a log file or fd as a command-line flag.
+  OUTPUT_FD[LogLevel::LogWarning] = open("/tmp/granary_error.log",
+                                         O_CREAT | O_WRONLY);
+  OUTPUT_FD[LogLevel::LogError] = OUTPUT_FD[LogLevel::LogWarning];
+  OUTPUT_FD[LogLevel::LogFatalError] = OUTPUT_FD[LogLevel::LogError];
+  OUTPUT_FD[LogLevel::LogDebug] = open("/tmp/granary_debug.log",
+                                       O_CREAT | O_WRONLY);
+}
 
 // Log something.
 int Log(LogLevel level, const char *format, ...) {

@@ -42,10 +42,9 @@ bool InstructionDecoder::Decode(Instruction *instr, AppPC pc) {
 // mangling might involve adding many new instructions to deal with some
 // instruction set peculiarities, and sometimes we only want to speculatively
 // decode and instruction and not add these extra instructions to a block.
-void InstructionDecoder::Mangle(DecodedBasicBlock *block,
-                                Instruction *instr) {
+void InstructionDecoder::Mangle(DecodedBasicBlock *block, Instruction *instr) {
   GRANARY_ASSERT(XED_ICLASS_INVALID != instr->iclass);
-  MangleDecodedInstruction(block, instr, false);
+  MangleDecodedInstruction(block, instr);
 }
 
 namespace {

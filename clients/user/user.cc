@@ -149,8 +149,8 @@ class UserSpaceInstrumenter : public InstrumentationTool {
         auto module = ModuleContainingPC(decoded_pc);
         auto module_name = module->Name();
         auto offset = module->OffsetOfPC(decoded_pc);
-        if (StringsMatch("ld", module_name) &&
-            0x77a3 == offset.offset) {
+        if (StringsMatch("libswscale_plugin", module_name) &&
+            (6520 == offset.offset || 6522 == offset.offset)) {
           granary_curiosity();
         }
       }*/

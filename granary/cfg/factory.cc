@@ -186,15 +186,15 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 // Decode an instruction list starting at `pc` and link the decoded
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
-  auto pc = block->StartAppPC();
+  auto decode_pc = block->StartAppPC();
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
     // Exist mostly to document instruction boundaries to client code.
     block->AppendInstruction(
-        new AnnotationInstruction(IA_BEGIN_LOGICAL_INSTRUCTION, pc));
+        new AnnotationInstruction(IA_BEGIN_LOGICAL_INSTRUCTION, decode_pc));
 
-    auto decoded_pc = pc;
+    auto decoded_pc = decode_pc;
     auto before_instr = block->LastInstruction()->Previous();
 
     // If we can't decode the instruction then just jump directly to it. Also,
@@ -202,7 +202,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     // that is because of GDB debugging (or something similar) and go native
     // there as well.
     arch::Instruction dinstr;
-    if (!decoder.DecodeNext(&dinstr, &pc) || dinstr.IsInterruptCall()) {
+    if (!decoder.DecodeNext(&dinstr, &decode_pc) || dinstr.IsInterruptCall()) {
       auto native_block = new NativeBasicBlock(decoded_pc);
       block->AppendInstruction(std::move(lir::Jump(native_block)));
       return;
@@ -215,14 +215,14 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     instr = ninstr;
     block->AppendInstruction(ninstr);
     if (ninstr->IsAppInstruction()) {
-      os::AnnotateAppInstruction(this, block, ninstr, pc);
+      os::AnnotateAppInstruction(this, block, ninstr, decode_pc);
     }
-    AnnotateInstruction(this, block, before_instr, pc);
+    AnnotateInstruction(this, block, before_instr, decode_pc);
     instr = block->LastInstruction()->Previous();
 
   } while (!IsA<ControlFlowInstruction *>(instr));
 
-  AddFallThroughInstruction(block , instr, pc);
+  AddFallThroughInstruction(block , instr, decode_pc);
 }
 
 // Iterates through the blocks and tries to materialize `DirectBasicBlock`s.

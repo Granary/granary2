@@ -14,6 +14,10 @@ enum LogLevel : int {
   LogDebug = 4
 };
 
+// Initialize the logging mechanism.
+GRANARY_INTERNAL_DEFINITION void InitLog(void);
+
+// Log something.
 int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 
 }  // namespace os
