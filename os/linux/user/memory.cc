@@ -65,9 +65,12 @@ void *AllocatePages(int num, MemoryIntent intent) {
   auto flags = MAP_PRIVATE;
   auto fd = -1;
 
-#ifdef GRANARY_TARGET_test
   if (MemoryIntent::EXECUTABLE == intent) {
     prot |= PROT_EXEC;
+  }
+
+#ifdef GRANARY_TARGET_test
+  if (MemoryIntent::EXECUTABLE == intent) {
     if (GRANARY_UNLIKELY(-1 == code_cache_fd)) {
       InitCodeCacheFD();
     }
