@@ -212,6 +212,8 @@ void MetaDataManager::InitAllocator(void) {
   allocator.Construct(max_num_allocs, offset, size, size);
 }
 
+#ifndef GRANARY_RECURSIVE
+
 extern "C" {
 
 // Represents a trace entry containing some meta-data.
@@ -246,4 +248,7 @@ void TraceMetaData(uint64_t group, const BlockMetaData *meta) {
   }
 }
 
+#else
+void TraceMetaData(uint64_t, const BlockMetaData *) {}
+#endif  // GRANARY_RECURSIVE
 }  // namespace granary

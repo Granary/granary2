@@ -18,6 +18,7 @@ GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
 GRANARY_LINT_CODE ?= 1# 0, 1
 GRANARY_HEADER_MACRO_DEFS =
+GRANARY_RECURSIVE ?= 0
 
 # Allow the clang static analyzer to interpose on the build.
 #
@@ -120,6 +121,11 @@ GRANARY_COMMON_CXX_FLAGS = -std=c++11 -stdlib=libc++
 ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_COMMON_MACROS += -DGRANARY_WITH_VALGRIND
 	GRANARY_CXX_FLAGS += -fno-inline
+endif
+
+# Enable recursive instrumentation (Granary instrumenting Granary).
+ifeq (1,$(GRANARY_RECURSIVE))
+  GRANARY_COMMON_MACROS += -DGRANARY_RECURSIVE
 endif
 
 GRANARY_HEADER_MACRO_DEFS += $(GRANARY_COMMON_MACROS)

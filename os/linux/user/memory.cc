@@ -33,7 +33,7 @@ extern int mlock(const void *__addr, size_t __len);
 }  // extern C
 namespace granary {
 namespace os {
-#ifdef GRANARY_TARGET_test
+#ifdef GRANARY_RECURSIVE
 namespace {
 
 static int code_cache_fd = -1;
@@ -53,7 +53,7 @@ static void InitCodeCacheFD(void) {
 }
 
 }  // namespace
-#endif  // GRANARY_TARGET_test
+#endif  // GRANARY_RECURSIVE
 
 // Initialize the Granary heap.
 void InitHeap(void) {}
@@ -69,7 +69,7 @@ void *AllocatePages(int num, MemoryIntent intent) {
     prot |= PROT_EXEC;
   }
 
-#ifdef GRANARY_TARGET_test
+#ifdef GRANARY_RECURSIVE
   if (MemoryIntent::EXECUTABLE == intent) {
     if (GRANARY_UNLIKELY(-1 == code_cache_fd)) {
       InitCodeCacheFD();
@@ -81,7 +81,7 @@ void *AllocatePages(int num, MemoryIntent intent) {
   }
 #else
   flags |= MAP_ANONYMOUS;
-#endif
+#endif  // GRANARY_RECURSIVE
 
   auto num_bytes = static_cast<size_t>(arch::PAGE_SIZE_BYTES * num);
   auto ret = mmap(nullptr, num_bytes, prot, flags, fd, 0);

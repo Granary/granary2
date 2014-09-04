@@ -822,9 +822,6 @@ define restore-exec-entry
   set $rsp = $__regs->rsp
   set $eflags = (unsigned) $__regs->rflags
   set $rip = $__regs->rip
-  if $in_user_space
-    set $rip = $rip + 8
-  end
 end
 
 

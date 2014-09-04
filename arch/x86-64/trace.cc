@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+
 #include "arch/x86-64/builder.h"
 
 #include "granary/base/string.h"
@@ -13,6 +14,8 @@
 
 namespace granary {
 namespace arch {
+
+#ifndef GRANARY_RECURSIVE
 extern "C" {
 
 // The entrypoint to the trace log. This is an assemble routine that records
@@ -21,7 +24,7 @@ extern "C" {
 extern void granary_trace_block(void);
 
 struct RegisterState {
-  uint64_t thread;
+  uint64_t thread;  // Zero is initially pushed.
   uint64_t rflags;  // Last to be pushed.
   uint64_t r15;
   uint64_t r14;
@@ -39,7 +42,7 @@ struct RegisterState {
   uint64_t rcx;
   uint64_t rax;
   uint64_t rsp;
-  uint64_t rip;  // Return address.
+  uint64_t rip;  // Return address; implicitly pushed via `CALL`.
 };
 
 enum {
@@ -128,6 +131,13 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
                                                        ADDRESS_WIDTH_BITS)));
   }
 }
+
+#else
+
+// Adds in some extra "tracing" instructions to the beginning of a basic block.
+void AddBlockTracer(Fragment *, BlockMetaData *, CachePC) {}
+
+#endif  // GRANARY_RECURSIVE
 
 }  // namespace arch
 }  // namespace granary

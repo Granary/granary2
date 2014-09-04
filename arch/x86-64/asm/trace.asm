@@ -2,6 +2,8 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
+#ifndef GRANARY_RECURSIVE
+
     .file "trace.asm"
 START_FILE_INTEL
 
@@ -56,3 +58,5 @@ DEFINE_FUNC(granary_trace_block)
 END_FUNC(granary_trace_block)
 
 END_FILE
+
+#endif  // GRANARY_RECURSIVE
