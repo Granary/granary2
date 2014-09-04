@@ -4,6 +4,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "test/util/simple_init.h"
+
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
 #include "granary/base/string.h"
@@ -21,6 +23,10 @@ class ModuleManagerTest : public Test {
         mod(new os::Module(os::ModuleKind::KERNEL_MODULE,
                            GRANARY_NAME_STRING)) {
     m2.RegisterAllBuiltIn();
+  }
+
+  static void SetUpTestCase(void) {
+    SimpleInitGranary();
   }
 
   os::ModuleManager m1;
