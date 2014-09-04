@@ -153,13 +153,6 @@ define print-exec-entry-impl
     set $__rip = $__rip + 13
   end
 
-  # Figure out if the tracer injected an indirect or direct call, where a
-  # direct call is 5 bytes long with opcode 0xe8 and an indirect call is 6 bytes
-  # long with opcode 0xff.
-  if 0xe8 != *((unsigned char *) ($__r->rip - 5))
-    set $__brip = $__brip - 1
-  end
-
   # Print the regs state.
   printf "Trace log entry %u in thread %ld\n", $arg0, $__r->thread
   printf "   r15 = %#18lx   r14 = %#18lx\n", $__r->r15, $__r->r14

@@ -14,7 +14,7 @@ extern "C" {
 #define O_WRONLY  01
 #define O_CREAT   0100
 
-extern int open(const char *filename, int flags, ...);
+extern int open(const char *filename, int flags, void *);
 extern long long write(int __fd, const void *__buf, size_t __n);
 
 }
@@ -76,11 +76,11 @@ static char *WriteGenericInt(char *buff, uint64_t data, bool is_64_bit,
 void InitLog(void) {
   // TODO(pag): Refactor this to take a log file or fd as a command-line flag.
   OUTPUT_FD[LogLevel::LogWarning] = open("/tmp/granary_error.log",
-                                         O_CREAT | O_WRONLY);
+                                         O_CREAT | O_WRONLY, nullptr);
   OUTPUT_FD[LogLevel::LogError] = OUTPUT_FD[LogLevel::LogWarning];
   OUTPUT_FD[LogLevel::LogFatalError] = OUTPUT_FD[LogLevel::LogError];
   OUTPUT_FD[LogLevel::LogDebug] = open("/tmp/granary_debug.log",
-                                       O_CREAT | O_WRONLY);
+                                       O_CREAT | O_WRONLY, nullptr);
 }
 
 // Log something.

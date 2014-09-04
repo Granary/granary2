@@ -11,7 +11,7 @@
 
 extern "C" {
 
-extern int open(const char *__file, int __oflag, ...);
+extern int open(const char *__file, int __oflag, void *);
 extern int close(int __fd);
 extern long long read(int __fd, void *__buf, size_t __nbytes);
 
@@ -34,7 +34,7 @@ FineGrainedLock file_buffer_lock;
 class Lexer {
  public:
   explicit Lexer(void)
-      : fd(open("/proc/self/maps", 0 /* O_RDONLY */)),
+      : fd(open("/proc/self/maps", 0 /* O_RDONLY */, nullptr)),
         file_offset(0),
         token_offset(0),
         try_fill_buffer(true) {

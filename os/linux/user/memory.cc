@@ -1,19 +1,29 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "arch/base.h"
+
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
+
+#include "granary/breakpoint.h"
 
 #include "os/memory.h"
 
-#define PROT_READ 0x1
-#define PROT_WRITE 0x2
-#define PROT_EXEC 0x4
+#define O_CREAT       0100
+#define O_RDONLY      00
+#define O_RDWR        02
+#define O_CLOEXEC     02000000
 
-#define MAP_PRIVATE 0x02
+#define PROT_READ     0x1
+#define PROT_WRITE    0x2
+#define PROT_EXEC     0x4
+
+#define MAP_PRIVATE   0x02
 #define MAP_ANONYMOUS 0x20
 
 extern "C" {
 
+extern int open(const char *__file, int __oflag, void *);
 extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
                   int __fd, long __offset);
 extern int munmap(void *__addr, size_t __len);
@@ -23,6 +33,27 @@ extern int mlock(const void *__addr, size_t __len);
 }  // extern C
 namespace granary {
 namespace os {
+#ifdef GRANARY_TARGET_test
+namespace {
+
+static int code_cache_fd = -1;
+static FineGrainedLock code_cache_fd_lock;
+
+// Initialize a temporary file descriptor for this code cache. This is so that
+// in user space, we can associate the code cache with something in
+// `/proc/self/maps`. This isn't needed for the correct function of Granary but
+// instead helps to enable recursive instrumentation (Granary instrumenting
+// Granary).
+static void InitCodeCacheFD(void) {
+  FineGrainedLocked locker(&code_cache_fd_lock);
+  if (-1 == code_cache_fd) {
+    code_cache_fd = open("/dev/zero", O_RDONLY, nullptr);
+    GRANARY_ASSERT(-1 != code_cache_fd);
+  }
+}
+
+}  // namespace
+#endif  // GRANARY_TARGET_test
 
 // Initialize the Granary heap.
 void InitHeap(void) {}
@@ -31,12 +62,26 @@ void InitHeap(void) {}
 // protection.
 void *AllocatePages(int num, MemoryIntent intent) {
   auto prot = PROT_READ | PROT_WRITE;
+  auto flags = MAP_PRIVATE;
+  auto fd = -1;
+
+#ifdef GRANARY_TARGET_test
   if (MemoryIntent::EXECUTABLE == intent) {
     prot |= PROT_EXEC;
+    if (GRANARY_UNLIKELY(-1 == code_cache_fd)) {
+      InitCodeCacheFD();
+    }
+    fd = code_cache_fd;
+
+  } else {
+    flags |= MAP_ANONYMOUS;
   }
+#else
+  flags |= MAP_ANONYMOUS;
+#endif
+
   auto num_bytes = static_cast<size_t>(arch::PAGE_SIZE_BYTES * num);
-  auto ret = mmap(nullptr, num_bytes, prot, MAP_PRIVATE | MAP_ANONYMOUS,
-                          -1, 0);
+  auto ret = mmap(nullptr, num_bytes, prot, flags, fd, 0);
   if (MemoryIntent::EXECUTABLE == intent) {
     mlock(ret, num_bytes);
   }
