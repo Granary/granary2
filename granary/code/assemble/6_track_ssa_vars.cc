@@ -6,6 +6,7 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
+#include "granary/code/register.h"
 #include "granary/code/ssa.h"
 
 #include "granary/code/assemble/6_track_ssa_vars.h"

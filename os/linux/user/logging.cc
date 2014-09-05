@@ -27,7 +27,7 @@ static int OUTPUT_FD[] = {
     -1,  // LogWarning
     -1,  // LogError
     -1,  // LogFatalError
-    -1,  // LogDebug
+    2,  // LogDebug
     -1
 };
 
@@ -79,8 +79,6 @@ void InitLog(void) {
                                          O_CREAT | O_WRONLY, nullptr);
   OUTPUT_FD[LogLevel::LogError] = OUTPUT_FD[LogLevel::LogWarning];
   OUTPUT_FD[LogLevel::LogFatalError] = OUTPUT_FD[LogLevel::LogError];
-  OUTPUT_FD[LogLevel::LogDebug] = open("/tmp/granary_debug.log",
-                                       O_CREAT | O_WRONLY, nullptr);
 }
 
 // Log something.

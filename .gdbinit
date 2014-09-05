@@ -163,7 +163,7 @@ define print-exec-entry-impl
   printf "   rbp = %#18lx   rbx = %#18lx\n", $__r->rbp, $__r->rbx
   printf "   rdx = %#18lx   rcx = %#18lx\n", $__r->rdx, $__r->rcx
   printf "   rax = %#18lx   rip = %#18lx\n", $__r->rax, $__r->rip
-  printf "   flags ="
+  printf "   rsp = %#18lx   flags =", $__r->rsp
 
   # Print the flags state.
   print-exec-entry-flag $__r->rflags 0 "CF"
