@@ -38,7 +38,7 @@ struct IsolatedRegState {
     uint64_t R15;
   };
   uint8_t redzone_low[1024];
-  uint8_t stack[2048];
+  uint8_t stack[8192];
   uint8_t redzone_high[1024];
 } __attribute__((packed));
 

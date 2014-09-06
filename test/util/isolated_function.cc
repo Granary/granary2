@@ -12,8 +12,8 @@
 #include "test/util/isolated_function.h"
 
 extern "C" {
-  extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
-}
+extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
+}  // extern "C"
 
 namespace {
 static char signal_stack[SIGSTKSZ];
