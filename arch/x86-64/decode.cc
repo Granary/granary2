@@ -260,6 +260,8 @@ static void ConvertImmediateOperand(Instruction *,
     instr_op->type = XED_ENCODER_OPERAND_TYPE_IMM1;
     instr_op->imm.as_uint = static_cast<uintptr_t>(
         xed_decoded_inst_get_second_immediate(xedd));
+  } else {
+    GRANARY_ASSERT(false);
   }
   instr_op->width = static_cast<int16_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
@@ -339,7 +341,6 @@ static bool ConvertDecodedOperand(Instruction *instr,
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr, instr_op, xedd, op_name);
   } else {
-    // Ignore `XED_OPERAND_AGEN`, which is only for LEA.
     instr_op->type = XED_ENCODER_OPERAND_TYPE_INVALID;
     GRANARY_ASSERT(false);  // TODO(pag): Implement this!
   }
