@@ -3,6 +3,8 @@
 #ifndef GRANARY_CFG_LIR_H_
 #define GRANARY_CFG_LIR_H_
 
+#include "arch/context.h"
+
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
 
@@ -39,6 +41,10 @@ std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc,
 std::unique_ptr<Instruction> Return(BlockFactory *factory);
 
 std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
+
+// Call to a client function that takes in an argument to an
+// `arch::MachineContext` pointer.
+std::unique_ptr<Instruction> ContextCall(void (*func)(arch::MachineContext *));
 
 }  // namespace lir
 }  // namespace granary

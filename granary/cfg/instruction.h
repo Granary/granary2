@@ -194,7 +194,11 @@ enum InstructionAnnotation {
   // Represents a definite change in the interrupt delivery state. If this
   // happens then we must break a fragment and isolate the instruction that
   // is changing the interrupt state.
-  IA_CHANGES_INTERRUPT_STATE
+  IA_CHANGES_INTERRUPT_STATE,
+
+  // Represents a call to a client function that saves and restores the
+  // entire machine context.
+  IA_CONTEXT_CALL
 };
 
 // An annotation instruction is an environment-specific and implementation-

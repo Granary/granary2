@@ -41,6 +41,20 @@ static void AssignPrivateStack(void *info) {
   (void) info;
 }
 
+// Initializes some "magic" bytes at the base of a Granary stack. These bytes
+// should never be modified, and if they are, then it is a hint that a stack
+// overflow has occurred.
+static void InitStackMagic(struct GranaryStack *stack) {
+  stack->data[0] = 0xAB;
+  stack->data[1] = 0xCD;
+  stack->data[2] = 0xEF;
+  stack->data[3] = 0x01;
+  stack->data[4] = 0x23;
+  stack->data[5] = 0x45;
+  stack->data[6] = 0x67;
+  stack->data[7] = 0x89;
+}
+
 static void AllocatePrivateStacks(void) {
   int num_cpus = num_possible_cpus();
   cpu_stacks = alloc_pages_exact(num_cpus * sizeof(struct GranaryStack),
@@ -49,6 +63,9 @@ static void AllocatePrivateStacks(void) {
   granary_stack_begin = cpu_stacks;
   granary_stack_end = &(cpu_stacks[num_cpus]);
 
+  for (auto i = 0; i < num_cpus; ++i) {
+    InitStackMagic(&(cpu_stacks[i]));
+  }
 }
 
 static void AllocateCPUSlots(void) {

@@ -889,3 +889,29 @@ define restore-pt-regs
   set $eflags = $__regs->flags
   set $rip = $__regs->ip
 end
+
+
+# check-for-kernel-stack-overflow
+#
+# Checks to see if the Granary stacks in kernel space overflowed.
+define check-for-kernel-stack-overflow-impl
+  if $arg0 == $arg1->data[$arg2]
+    printf "Stack overflowed!\n"
+  end
+end
+define check-for-kernel-stack-overflow
+  set $__s = (struct GranaryStack *) granary_stack_begin
+  set $__s_end = (struct GranaryStack *) granary_stack_end
+
+  while $__s < $__s_end
+    check-for-kernel-stack-overflow-impl 0xAB $__s 0
+    check-for-kernel-stack-overflow-impl 0xCD $__s 1
+    check-for-kernel-stack-overflow-impl 0xEF $__s 2
+    check-for-kernel-stack-overflow-impl 0x01 $__s 3
+    check-for-kernel-stack-overflow-impl 0x23 $__s 4
+    check-for-kernel-stack-overflow-impl 0x45 $__s 5
+    check-for-kernel-stack-overflow-impl 0x67 $__s 6
+    check-for-kernel-stack-overflow-impl 0x89 $__s 7
+    set $__s = $__s + 1
+  end
+end

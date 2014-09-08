@@ -37,7 +37,6 @@ class MachineContext {
   uint64_t rdx;
   uint64_t rcx;
   uint64_t rax;
-  GRANARY_CONST uint64_t rsp;
 
  private:
   GRANARY_IF_EXTERNAL( MachineContext(void) = delete; )
