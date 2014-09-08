@@ -3,7 +3,6 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-
 #include "arch/x86-64/builder.h"
 
 #include "granary/base/string.h"

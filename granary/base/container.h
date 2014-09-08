@@ -46,7 +46,7 @@ class Container {
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(Container, (T));
 };
 
-// Semi-generic container for an internal Granary+ type, where the specifics
+// Semi-generic container for an internal Granary type, where the specifics
 // of that type are not published to non-`GRANARY_INTERNAL` code.
 template <typename T, unsigned long kSize, unsigned long kAlign=8>
 class OpaqueContainer {

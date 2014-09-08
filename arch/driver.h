@@ -9,13 +9,14 @@
 
 // Include the generic driver interfaces that can be directly used.
 #include "arch/init.h"
+#include "arch/context.h"
 #include "arch/decode.h"
 #include "arch/encode.h"
 
 // Include "documentation" driver interfaces (for example:
 // `arch::InstructionInterface`and `arch::OperandInterface`). These serve
 // only to document what methods are publicly available on driver classes, as
-// well as what methods must be implemented by people porting Granary+ to a new
+// well as what methods must be implemented by people porting Granary to a new
 // architecture/driver.
 #include "arch/instruction.h"
 #include "arch/operand.h"

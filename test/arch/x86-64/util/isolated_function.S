@@ -28,13 +28,11 @@ BEGIN_FUNC(RunFunctionInContext)
     xchg 120(%rsi), %r15;
     xchg 48(%rsi), %rsi;    /* ...but it's down here. */
 
-#if 0
     push %rax;              /* Clear out the arithmetic flags */
     xor %rax, %rax;
     sahf;
     pop %rax;
     cld;
-#endif
 
     /* Overwrite the target of the call on the stack, assumes redzone */
     lea 8(%rsp), %rsp;

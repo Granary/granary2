@@ -144,16 +144,6 @@ class UserSpaceInstrumenter : public InstrumentationTool {
                                      LocalControlFlowGraph *cfg) {
     if (!FLAG_debug_fix_hidden_breakpoints) return;
     for (auto block : cfg->NewBlocks()) {
-      /*if (IsA<DecodedBasicBlock *>(block)) {
-        auto decoded_pc = block->StartAppPC();
-        auto module = ModuleContainingPC(decoded_pc);
-        auto module_name = module->Name();
-        auto offset = module->OffsetOfPC(decoded_pc);
-        if (StringsMatch("libswscale_plugin", module_name) &&
-            (6520 == offset.offset || 6522 == offset.offset)) {
-          granary_curiosity();
-        }
-      }*/
       for (auto succ : block->Successors()) {
         if (succ.cfi->HasIndirectTarget()) continue;
         if (!IsA<NativeBasicBlock *>(succ.block)) continue;

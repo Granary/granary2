@@ -90,7 +90,7 @@ class InstructionInterface {
   // Note: If a dynamic offset is computed (e.g. stack pointer + register), then
   //       an ABI-specific value is returned. For example, for OSes running on
   //       x86-64/amd64 architectures, the user space red zone amount (-128) is
-  //       returned, regardless of if Granary+ is instrumenting user space or
+  //       returned, regardless of if Granary is instrumenting user space or
   //       kernel code.
   int ComputedOffsetBelowStackPointer(void) const;
 

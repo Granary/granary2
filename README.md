@@ -1,7 +1,7 @@
-Granary+
-========
+Granary
+=======
 
-Check out the Wiki!
+Check out the [Wiki](https://github.com/Granary/granary2/wiki)!
 
 Setup
 -----
