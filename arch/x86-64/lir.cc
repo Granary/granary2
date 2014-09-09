@@ -18,8 +18,8 @@ namespace granary {
 namespace lir {
 
 // Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(
-    BasicBlock *target_block, const granary::Operand &op) {
+std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
+                                          const granary::Operand &op) {
 
   arch::Instruction ni;
   if (auto mem = DynamicCast<granary::MemoryOperand *>(&op)) {

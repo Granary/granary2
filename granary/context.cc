@@ -263,6 +263,12 @@ LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;
 }
 
+// Returns a pointer to the `CachePC` associated with the context-callable
+// function at `func_addr`.
+CachePC Context::ContextCallablePC(uintptr_t func_addr) {
+
+}
+
 namespace {
 static std::atomic<ContextInterface *> context(ATOMIC_VAR_INIT(nullptr));
 }

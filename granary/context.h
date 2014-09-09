@@ -11,6 +11,8 @@
 #include "granary/base/lock.h"
 #include "granary/base/pc.h"
 
+#include "granary/base/tiny_map.h"
+
 #include "granary/cache.h"
 #include "granary/index.h"
 #include "granary/metadata.h"
@@ -30,14 +32,21 @@ class MetaDataDescription;
 class MetaDataManager;
 class InstrumentationTool;
 class InstrumentationManager;
+class NativeAddress;
 
-// Interface for environments in Granary.
+#ifdef GRANARY_TARGET_test
+
+// Interface for contexts in Granary. Used only for the `test` target for
+// mocking out the `Context` class. Beyond that, the extra indirection
+// introduced by the virtual dispatch is unwanted.
 class ContextInterface {
  public:
   ContextInterface(void) = default;
 
   // Needed for linking against the base vtable.
   virtual ~ContextInterface(void);
+
+  virtual void InitTools(const char *tool_names) = 0;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
@@ -73,60 +82,83 @@ class ContextInterface {
 
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
+
+  // Returns a pointer to the `CachePC` associated with the context-callable
+  // function at `func_addr`.
+  virtual NativeAddress *ContextCallablePC(uintptr_t func_addr) = 0;
 };
 
-// Manages environmental information that changes how Granary behaves. For
-// example, in the Linux kernel, the environmental data gives the instruction
-// decoder access to the kernel's exception tables, so that it can annotate
-// instructions as potentially faulting.
-class Context : public ContextInterface {
+#else
+# ifndef ContextInterface
+#   define ContextInterface Context
+# endif
+#endif  // GRANARY_TARGET_test
+
+// Groups together all of the major data structures related to an
+// instrumentation "session". All non-trivial state is packaged within the
+// context
+class Context GRANARY_IF_TEST( : public ContextInterface ) {
  public:
-  // Initialize the this instrumentation.
   Context(void);
 
+  GRANARY_TEST_VIRTUAL
+  ~Context(void);
+
   // Initialize all tools from a comma-separated list of tools.
+  GRANARY_TEST_VIRTUAL
   void InitTools(const char *tool_names);
 
-  virtual ~Context(void);
-
   // Allocate and initialize some `BlockMetaData`.
-  virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) override;
+  GRANARY_TEST_VIRTUAL
+  BlockMetaData *AllocateBlockMetaData(AppPC start_pc);
 
   // Allocate and initialize some `BlockMetaData`, based on some existing
   // meta-data template `meta_template`.
-  virtual BlockMetaData *AllocateBlockMetaData(
-      const BlockMetaData *meta_template, AppPC start_pc) override;
+  GRANARY_TEST_VIRTUAL
+  BlockMetaData *AllocateBlockMetaData(const BlockMetaData *meta_template,
+                                       AppPC start_pc);
 
   // Allocate and initialize some empty `BlockMetaData`.
-  virtual BlockMetaData *AllocateEmptyBlockMetaData(void) override;
+  GRANARY_TEST_VIRTUAL
+  BlockMetaData *AllocateEmptyBlockMetaData(void);
 
   // Register some meta-data with Granary.
-  virtual void RegisterMetaData(const MetaDataDescription *desc) override;
+  GRANARY_TEST_VIRTUAL
+  void RegisterMetaData(const MetaDataDescription *desc);
 
   // Allocate instances of the tools that will be used to instrument blocks.
-  virtual InstrumentationTool *AllocateTools(void) override;
+  GRANARY_TEST_VIRTUAL
+  InstrumentationTool *AllocateTools(void);
 
   // Free the allocated tools.
-  virtual void FreeTools(InstrumentationTool *tools) override;
+  GRANARY_TEST_VIRTUAL
+  void FreeTools(InstrumentationTool *tools);
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
-  virtual DirectEdge *AllocateDirectEdge(
-      BlockMetaData *dest_block_meta) override;
+  GRANARY_TEST_VIRTUAL
+  DirectEdge *AllocateDirectEdge(BlockMetaData *dest_block_meta);
 
   // Allocates an indirect edge data structure.
-  virtual IndirectEdge *AllocateIndirectEdge(
-      const BlockMetaData *dest_block_meta) override;
+  GRANARY_TEST_VIRTUAL
+  IndirectEdge *AllocateIndirectEdge(const BlockMetaData *dest_block_meta);
 
   // Returns a pointer to the code cache that is used for allocating code for
   // basic blocks.
-  virtual CodeCache *BlockCodeCache(void) override;
+  GRANARY_TEST_VIRTUAL
+  CodeCache *BlockCodeCache(void);
 
   // Get a pointer to this context's code cache index.
-  virtual LockedIndex *CodeCacheIndex(void) override;
+  GRANARY_TEST_VIRTUAL
+  LockedIndex *CodeCacheIndex(void);
+
+  // Returns a pointer to the `CachePC` associated with the context-callable
+  // function at `func_addr`.
+  GRANARY_TEST_VIRTUAL
+  NativeAddress *ContextCallablePC(uintptr_t func_addr);
 
  private:
-  // Manages all metadata allocated/understood by this environment.
+  // Manages all meta-data allocated/understood by this environment.
   MetaDataManager metadata_manager;
 
   // Manages all tools that instrument code that is taken over by this
@@ -159,6 +191,12 @@ class Context : public ContextInterface {
 
   // Code cache index for normal blocks.
   LockedIndex code_cache_index;
+
+  // Mapping of context callable functions to their code cache equivalents. In
+  // the code cache, these functions are wrapped with code that save/restore
+  // registers, etc.
+  FineGrainedLock context_callables_lock;
+  TinyMap<uintptr_t, NativeAddress *, 32> context_callables;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

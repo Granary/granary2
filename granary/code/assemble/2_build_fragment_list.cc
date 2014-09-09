@@ -65,6 +65,13 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
                                               CodeFragment *predecessor_frag,
                                               BlockMetaData *dest_block_meta);
 
+// Generates some code to target some client function. The generated code saves
+// the machine context and passes it directly to the client function for direct
+// manipulation.
+extern CodeFragment *GenerateContextCallCode(ContextInterface *context,
+                                             FragmentList *frags,
+                                             CodeFragment *pred,
+                                             uintptr_t func_addr);
 }  // namespace arch
 namespace {
 
@@ -143,6 +150,10 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
   auto next_instr = instr->Next();
   switch (instr->annotation) {
     case IA_END_BASIC_BLOCK: granary_curiosity(); return false;
+
+    // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not
+    // also a `LabelInstruction`.
+    case IA_LABEL: GRANARY_ASSERT(false); return true;
 
     // An upcoming instruction makes this stack valid.
     case IA_VALID_STACK:
@@ -230,9 +241,15 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
                              StackUsageInfo(GRANARY_IF_KERNEL(STACK_VALID)));
       return false;
 
-    // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not
-    // also a `LabelInstruction`.
-    case IA_LABEL: GRANARY_ASSERT(false); return true;
+    // Calls out to some client code.
+    case IA_CONTEXT_CALL: {
+      frag->attr.can_add_succ_to_partition = false;
+      auto context_frag = arch::GenerateContextCallCode(builder, frag,
+                                                      instr->data);
+      AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr,
+                             StackUsageInfo());
+      return false;
+    }
 
     default: return true;
   }

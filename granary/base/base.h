@@ -81,6 +81,17 @@
 # define GRANARY_ASSERT(...)
 #endif  // GRANARY_TARGET_debug
 
+#ifdef GRANARY_TARGET_test
+# define GRANARY_TEST_VIRTUAL virtual
+# define GRANARY_IF_TEST(...) __VA_ARGS__
+#else
+# define GRANARY_TEST_VIRTUAL
+# define GRANARY_IF_TEST(...)
+# ifndef ContextInterface
+#   define ContextInterface Context  // Minor hack!
+# endif
+#endif  // GRANARY_TARGET_test
+
 #ifdef GRANARY_ARCH_INTERNAL
 # define GRANARY_ARCH_PUBLIC public
 #else
