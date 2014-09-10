@@ -44,7 +44,18 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 
 // Call to a client function that takes in an argument to an
 // `arch::MachineContext` pointer.
-std::unique_ptr<Instruction> ContextCall(void (*func)(arch::MachineContext *));
+//
+// A context call does not allow one to see intermediate virtual register
+// state. Therefore, context calls do not have access to virtual registers.
+// This limits there applicability to places where the instrumentation code
+// wants to see the native machine context as it would be without
+std::unique_ptr<Instruction> CallWithContext(
+    void (*func)(arch::MachineContext *));
+
+// TODO(pag): OutlineCall, add a function that simply calls to some client code
+//            and has access to virtual registers.
+// TODO(pag): InlineCall, inline the code of a function directly into the
+//            code.
 
 }  // namespace lir
 }  // namespace granary

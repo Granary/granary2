@@ -701,6 +701,15 @@ define print-frags
 end
 
 
+# log-frags
+#
+# Treat `$arg0` as a pointer to a `FragmentList` and use `granary::Log` to log
+# the fragments to `stdout` or `stderr`. 
+define log-frags
+  p granary::os::Log(granary::os::LogOutput, &frags)
+end
+
+
 # get-next-block
 #
 # Treat `$arg0` as a pointer to a `BasicBlock`, and update the variable `$__b`

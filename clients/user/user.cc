@@ -2,6 +2,8 @@
 
 #include <granary.h>
 
+#include "clients/user/syscall.h"
+
 using namespace granary;
 
 GRANARY_DEFINE_bool(debug_fix_hidden_breakpoints, false,
@@ -19,59 +21,53 @@ GRANARY_DEFINE_bool(debug_fix_hidden_breakpoints, false,
 
     "user");
 
+// Defined in `clients/user/syscall.cc`, but not exported to other clients.
+extern void HookSystemCallEntry(arch::MachineContext *);
+extern void HookSystemCallExit(arch::MachineContext *);
+
+namespace {
+
+#define __NR_rt_sigaction  13
+#define SIGSEGV         11
+#define SIGILL          4
+#define SIGUNUSED       31
+
+// Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`
+// signal handlers. This is to help in the debugging of user space
+// programs, where attaching GDB early on in the program's execution
+// causes the bug to disappear.
+static void SuppressSigAction(SystemCallContext ctx, void *) {
+  if (__NR_rt_sigaction != ctx.Number()) return;
+
+  // If `act == NULL` then code is querying the current state of the signal
+  // handler.
+  if (!ctx.Arg1()) return;
+
+  auto signum = ctx.Arg0();
+  if (SIGSEGV != signum && SIGILL != signum) return;
+
+  // Turn this `sigaction` into a no-op.
+  ctx.Arg0() = SIGUNUSED;
+  ctx.Arg1() = 0;
+  ctx.Arg2() = 0;
+}
+
+}  // namespace
+
 // Tool that helps user-space instrumentation work.
 class UserSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~UserSpaceInstrumenter(void) = default;
 
+  virtual void Init(void) {
+    AddSystemCallEntryFunction(SuppressSigAction);
+  }
+
+  // Adds in the hooks that allow other tools (including this tool) to hook
+  // the system call handlers in high-level way.
   void InstrumentSyscall(ControlFlowInstruction *syscall) {
-    BeginInlineAssembly();
-
-    // Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`
-    // signal handlers. This is to help in the debugging of user space
-    // programs, where attaching GDB early on in the program's execution
-    // causes the bug to disappear.
-    //
-    // Note: This type of behavior is very common, particularly because of the
-    //       interaction between GDB's "hidden" breakpoints and Granary. GDB
-    //       automatically inserts many breakpoints into programs (e.g. into
-    //       various `pthread` functions). Granary is not aware of this, and so
-    //       it only sees the `INT3` instructions, which it takes a signal to
-    //       (locally) detach. However, in user space, the `transparent_returns`
-    //       tool is enabled by default, and so the local detach behaves like a
-    //       full thread detach. If the bug in question only happens after (in
-    //       the thread's execution) one of the hidden breakpoints is hit, then
-    //       the bug (caused by Granary) will likely never show up.
-    //
-    // In this code, `EAX` is the Linux kernel ABI-defined register for
-    // passing the syscall number, and `EDI` is the register for passing the
-    // first argument, in this case, the signal number to the `rt_sigaction`
-    // system call.
-    InlineBefore(syscall, // Filter only on `rt_sigaction = 13`
-                          "CMP r32 EAX, i32 13;"
-                          "JNZ l %1;"
-
-                          // Ignore if `act == NULL`, i.e. user space code
-                          // is querying the current state of the signal
-                          // handler.
-                          "TEST r64 RSI, r64 RSI;"
-                          "JZ l %1;"
-
-                          // Prevent overriding of `SIGSEGV = 11`.
-                          "CMP r32 EDI, i32 11;"
-                          "JNZ l %1;"
-
-                          // Prevent overriding of `SIGILL = 4`.
-                          "CMP r32 EDI, i32 4;"
-                          "JNZ l %1;"
-
-                          // Pretend that the syscall failed by returning
-                          // `-EINVAL == -22`.
-                          "MOV r64 RAX, i64 -22;"
-                          "JMP l %0;"
-                          "LABEL %1:"_x86_64);
-    InlineAfter(syscall,  "LABEL %0:"_x86_64);
-    EndInlineAssembly();
+    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
+    syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
   }
 
   // GDB inserts hidden breakpoints into programs, especially in programs

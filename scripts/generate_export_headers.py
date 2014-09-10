@@ -159,9 +159,14 @@ def strip_combined_files(new_lines):
 def main(where, source_dir, export_dir, extra_flags):
   system_includes, lines = combine_output_files(source_dir)
   preprocess_combined_files(source_dir, lines, extra_flags)
-  new_lines = filter_macros("/tmp/granary_export2.h", "/tmp/granary_export3.h")
+  new_lines = ["#ifndef GRANARY_H_"]
+  new_lines.append("#define GRANARY_H_")
+  new_lines.extend(filter_macros("/tmp/granary_export2.h",
+                                 "/tmp/granary_export3.h"))
   new_lines.extend(combine_system_headers(system_includes))
   strip_combined_files(new_lines)
+  new_lines.append("#endif  // GRANARY_H_")
+  new_lines.append("")  
   open(os.path.join(export_dir, "granary.h"), "w").write(
       "\n".join(new_lines))
 

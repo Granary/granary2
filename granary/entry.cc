@@ -51,14 +51,10 @@ static bool OnGranaryStack(void) {
 #endif  // GRANARY_WHERE_kernel
 
 }  // namespace
-
-// Forward declarations.
-void EnterGranary(DirectEdge *edge, ContextInterface *context);
-void EnterGranary(IndirectEdge *edge, ContextInterface *context,
-                  AppPC app_pc);
+extern "C" {
 
 // Enter into Granary to begin the translation process for a direct edge.
-void EnterGranary(DirectEdge *edge, ContextInterface *context) {
+void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
   GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
 
   auto meta = edge->dest_meta.exchange(nullptr, std::memory_order_seq_cst);
@@ -79,23 +75,9 @@ void EnterGranary(DirectEdge *edge, ContextInterface *context) {
 //         jump has a default non-`REQUEST_LATER` materialization strategy.
 //      3) We need to prepend the out-edge code to the resulting code (by
 //         "instantiating" the out edge into a fragment).
-void EnterGranary(IndirectEdge *edge, ContextInterface *context,
+void granary_enter_indirect_edge(IndirectEdge *edge, ContextInterface *context,
                   AppPC target_app_pc) {
   Translate(context, edge, target_app_pc);
 }
-
-}  // namespace granary
-
-extern "C" {
-
-// Convenient C name for `EnterGranary` above. This name is referenced by
-// assembly files.
-void granary_enter_direct_edge(void)
-    __attribute__((alias ("_ZN7granary12EnterGranaryEPNS_10DirectEdge"
-                          "EPNS_16ContextInterfaceE")));
-
-void granary_enter_indirect_edge(void)
-    __attribute__((alias ("_ZN7granary12EnterGranaryEPNS_12IndirectEdgeEPNS_"
-                          "16ContextInterfaceEPKh")));
-
 }  // extern C
+}  // namespace granary

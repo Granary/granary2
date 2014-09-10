@@ -22,6 +22,9 @@ enum {
   CACHE_LINE_SIZE_BYTES = 64,
   CACHE_LINE_SIZE_BITS = 64 * 8,
 
+  // Size of the code to do a context call.
+  CONTEXT_CALL_CODE_SIZE_BYTES = 80,
+
   // Upper bound on the size of edge-specific direct edge code. Ideally this
   // should be as small as possible.
   DIRECT_EDGE_CODE_SIZE_BYTES = GRANARY_IF_KERNEL_ELSE(40, 48),

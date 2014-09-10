@@ -68,10 +68,10 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
 // Generates some code to target some client function. The generated code saves
 // the machine context and passes it directly to the client function for direct
 // manipulation.
-extern CodeFragment *GenerateContextCallCode(ContextInterface *context,
-                                             FragmentList *frags,
-                                             CodeFragment *pred,
-                                             uintptr_t func_addr);
+extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
+                                               FragmentList *frags,
+                                               CodeFragment *pred,
+                                               uintptr_t func_addr);
 }  // namespace arch
 namespace {
 
@@ -241,11 +241,11 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
                              StackUsageInfo(GRANARY_IF_KERNEL(STACK_VALID)));
       return false;
 
-    // Calls out to some client code.
+    // Calls out to some client code. This creates a new fragment that cannot
+    // be added to any existing partition.
     case IA_CONTEXT_CALL: {
-      frag->attr.can_add_succ_to_partition = false;
-      auto context_frag = arch::GenerateContextCallCode(builder, frag,
-                                                      instr->data);
+      auto context_frag = arch::CreateContextCallFragment(
+          builder->context, builder->frags, frag, instr->data);
       AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr,
                              StackUsageInfo());
       return false;

@@ -66,7 +66,7 @@ std::unique_ptr<Instruction> Return(BlockFactory *factory) {
 
 // Call to a client function that takes in an argument to an
 // `arch::MachineContext` pointer.
-std::unique_ptr<Instruction> ContextCall(void (*func)(arch::MachineContext *)) {
+std::unique_ptr<Instruction> CallWithContext(void (*func)(arch::MachineContext *)) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
       IA_CONTEXT_CALL, func));
 }

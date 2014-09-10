@@ -32,7 +32,10 @@ class MetaDataDescription;
 class MetaDataManager;
 class InstrumentationTool;
 class InstrumentationManager;
-class NativeAddress;
+
+namespace arch {
+class MachineContextCallback;
+}  // namespace arch
 
 #ifdef GRANARY_TARGET_test
 
@@ -83,9 +86,10 @@ class ContextInterface {
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
 
-  // Returns a pointer to the `CachePC` associated with the context-callable
-  // function at `func_addr`.
-  virtual NativeAddress *ContextCallablePC(uintptr_t func_addr) = 0;
+  // Returns a pointer to the `arch::MachineContextCallback` associated with
+  // the context-callable function at `func_addr`.
+  virtual arch::MachineContextCallback *ContextCallback(
+      uintptr_t func_addr) = 0;
 };
 
 #else
@@ -152,10 +156,10 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   GRANARY_TEST_VIRTUAL
   LockedIndex *CodeCacheIndex(void);
 
-  // Returns a pointer to the `CachePC` associated with the context-callable
-  // function at `func_addr`.
+  // Returns a pointer to the `arch::MachineContextCallback` associated with
+  // the context-callable function at `func_addr`.
   GRANARY_TEST_VIRTUAL
-  NativeAddress *ContextCallablePC(uintptr_t func_addr);
+  arch::MachineContextCallback *ContextCallback(uintptr_t func_addr);
 
  private:
   // Manages all meta-data allocated/understood by this environment.
@@ -195,8 +199,8 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   // Mapping of context callable functions to their code cache equivalents. In
   // the code cache, these functions are wrapped with code that save/restore
   // registers, etc.
-  FineGrainedLock context_callables_lock;
-  TinyMap<uintptr_t, NativeAddress *, 32> context_callables;
+  FineGrainedLock context_callbacks_lock;
+  TinyMap<uintptr_t, arch::MachineContextCallback *, 32> context_callbacks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

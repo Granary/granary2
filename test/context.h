@@ -15,11 +15,13 @@ class MockContext : public granary::ContextInterface {
   MockContext(void) = default;
   virtual ~MockContext(void) = default;
 
-  /// Returns a pointer to the module containing some program counter.
+  MOCK_METHOD1(InitTools, void(const char *));
+
+  // Returns a pointer to the module containing some program counter.
   MOCK_METHOD1(FindModuleContainingPC,
                const granary::os::Module *(granary::AppPC));
 
-  /// Returns a pointer to the module containing some program counter.
+  // Returns a pointer to the module containing some program counter.
   MOCK_METHOD1(FindModuleByName, const granary::os::Module *(const char *));
 
   // Returns an iterator to all currently loaded modules.
@@ -77,7 +79,12 @@ class MockContext : public granary::ContextInterface {
   MOCK_METHOD0(BlockCodeCache, granary::CodeCache *(void));
 
   // Get a pointer to this context's code cache index.
-  MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *());
+  MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *(void));
+
+  // Returns a pointer to the `arch::MachineContextCallback` associated with
+  // the context-callable function at `func_addr`.
+  MOCK_METHOD1(ContextCallback,
+               granary::arch::MachineContextCallback *(uintptr_t func_addr));
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);

@@ -64,6 +64,7 @@ namespace {
 static const auto kEnterDirect = granary_arch_enter_direct_edge;
 static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 
+// TODO(pag): Potential leak.
 static NativeAddress *enter_direct_addr = nullptr;
 static NativeAddress *enter_indirect_addr = nullptr;
 

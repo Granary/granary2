@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "arch/base.h"
+#include "arch/context.h"
 
 #include "granary/base/container.h"
 #include "granary/base/option.h"
@@ -60,6 +61,10 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 // Note: This has an architecture-specific implementation.
 extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
+
+// Generates the wrapper code for a context callback.
+extern void GenerateContextCallCode(MachineContextCallback *callback);
+
 }  // namespace arch
 namespace os {
 extern Container<ModuleManager> global_module_manager;
@@ -102,9 +107,21 @@ static os::Module *MakeCodeCacheMod(ContextInterface *context,
   return new os::Module(os::ModuleKind::GRANARY_CODE_CACHE, name, context);
 }
 
+// Free a linked list of edges.
+template <typename EdgeT>
+static void FreeEdgeList(EdgeT *edge) {
+  EdgeT *next_edge = nullptr;
+  for (; edge; edge = next_edge) {
+    next_edge = edge->next;
+    delete edge;
+  }
+}
+
 }  // namespace
 
+#ifdef GRANARY_TARGET_test
 ContextInterface::~ContextInterface(void) {}
+#endif  // GRANARY_TARGET_test
 
 Context::Context(void)
     : metadata_manager(),
@@ -120,12 +137,20 @@ Context::Context(void)
       unpatched_edge_list(nullptr),
       indirect_edge_list_lock(),
       indirect_edge_list(nullptr),
-      code_cache_index(new Index) {
+      code_cache_index(new Index),
+      context_callbacks_lock(),
+      context_callbacks() {
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
   os::global_module_manager->Register(block_code_cache_mod);
   os::global_module_manager->Register(edge_code_cache_mod);
+}
+
+Context::~Context(void) {
+  FreeEdgeList(patched_edge_list);
+  FreeEdgeList(unpatched_edge_list);
+  FreeEdgeList(indirect_edge_list);
 }
 
 // Initialize all tools from a comma-separated list of tools.
@@ -156,26 +181,6 @@ void Context::InitTools(const char *tool_names) {
     tool->Init();
   }
   tool_manager.FreeTools(tools);
-}
-
-namespace {
-
-// Free a linked list of edges.
-template <typename EdgeT>
-static void FreeEdgeList(EdgeT *edge) {
-  EdgeT *next_edge = nullptr;
-  for (; edge; edge = next_edge) {
-    next_edge = edge->next;
-    delete edge;
-  }
-}
-
-}  // namespace
-
-Context::~Context(void) {
-  FreeEdgeList(patched_edge_list);
-  FreeEdgeList(unpatched_edge_list);
-  FreeEdgeList(indirect_edge_list);
 }
 
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
@@ -265,8 +270,20 @@ LockedIndex *Context::CodeCacheIndex(void) {
 
 // Returns a pointer to the `CachePC` associated with the context-callable
 // function at `func_addr`.
-CachePC Context::ContextCallablePC(uintptr_t func_addr) {
+arch::MachineContextCallback *Context::ContextCallback(uintptr_t func_addr) {
+  auto edge_code = edge_code_cache.AllocateBlock(
+      arch::CONTEXT_CALL_CODE_SIZE_BYTES);
+  auto cb = new arch::MachineContextCallback(
+      reinterpret_cast<AppPC>(func_addr), edge_code);
 
+  do {  // Generate the wrapper code fore the callback.
+    CodeCacheTransaction transaction(
+        &edge_code_cache, edge_code,
+        edge_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+    arch::GenerateContextCallCode(cb);
+  } while (0);
+
+  return cb;
 }
 
 namespace {
