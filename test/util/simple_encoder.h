@@ -7,12 +7,12 @@
 
 #include "arch/init.h"
 
+#include "granary/index.h"
 #include "granary/metadata.h"
 
 #include "os/module.h"
 
 #include "test/context.h"
-#include "test/index.h"
 
 // Test fixture that can be used for simple instrumenting and encoding test
 // cases.
@@ -41,7 +41,6 @@ class SimpleEncoderTest : public testing::Test {
   granary::CodeCache code_cache;
   granary::CodeCache edge_cache;
   granary::MetaDataManager meta_manager;
-  MockIndex *index;
   granary::LockedIndex locked_index;
 };
 

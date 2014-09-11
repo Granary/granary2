@@ -56,22 +56,7 @@ struct IndexFindResponse {
   BlockMetaData *meta;
 };
 
-// Interface for operating on a code cache index.
-class IndexInterface {
- public:
-  virtual ~IndexInterface(void);
-
-  // Perform a lookup operation in the code cache index. Lookup operations might
-  // not return exact matches, as hinted at by the `status` field of the
-  // `IndexFindResponse` structure. This has to do with block unification.
-  virtual IndexFindResponse Request(BlockMetaData *meta) = 0;
-
-  // Insert a block into the code cache index.
-  virtual void Insert(BlockMetaData *meta) = 0;
-};
-
 namespace internal {
-
 enum {
   NUM_POINTERS_PER_PAGE = arch::PAGE_SIZE_BYTES / sizeof(void *)
 };
@@ -94,24 +79,28 @@ class MetaDataArray;
 //
 // Note: This class does not handle concurrent access/modification. That must
 //       be handled at a higher layer.
-class Index : public IndexInterface, public internal::IndexArrayMem {
+class Index : public internal::IndexArrayMem {
  public:
   Index(void) = default;
 
   // Deletes all meta-data arrays and the various stored meta-data.
-  virtual ~Index(void);
+  ~Index(void);
 
   // Perform a lookup operation in the code cache index. Lookup operations might
   // not return exact matches, as hinted at by the `status` field of the
   // `IndexFindResponse` structure. This has to do with block unification.
-  virtual IndexFindResponse Request(BlockMetaData *meta) override;
+  IndexFindResponse Request(BlockMetaData *meta);
 
   // Insert a block into the code cache index.
-  virtual void Insert(BlockMetaData *meta) override;
+  void Insert(BlockMetaData *meta);
+
+  // Remove all meta-data (from the index) associated with any application
+  // code falling in the address range `[begin, end)`. Returns a pointer to
+  // a linked list (via `IndexMetaData`) of all removed block meta-data.
+  BlockMetaData *RemoveRange(AppPC begin, AppPC end);
 
  private:
-  // The `- 1` is to account for a vtable pointer.
-  internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE - 1];
+  internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Index);
 };
@@ -126,7 +115,7 @@ class LockedIndexTransaction;
 // environment.
 class LockedIndex {
  public:
-  explicit LockedIndex(IndexInterface *index_)
+  explicit LockedIndex(Index *index_)
       : index(index_),
         index_lock() {}
 
@@ -146,7 +135,7 @@ class LockedIndex {
   LockedIndex(void) = delete;
 
   // Index backing this `LockedIndex`.
-  IndexInterface * const index;
+  Index * const index;
 
   // Reader/write lock that guards the index. This allows concurrent reads, but
   // gives writers mutual exclusion.
@@ -169,6 +158,10 @@ class LockedIndexTransaction {
     return index->Request(meta);
   }
 
+  inline BlockMetaData *RemoveRange(AppPC begin, AppPC end) {
+    return index->RemoveRange(begin, end);
+  }
+
   inline void Insert(BlockMetaData *meta) {
     index->Insert(meta);
   }
@@ -180,7 +173,7 @@ class LockedIndexTransaction {
  private:
   LockedIndexTransaction(void) = delete;
 
-  IndexInterface * const index;
+  Index * const index;
   ReaderWriterLock * const lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LockedIndexTransaction);

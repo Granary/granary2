@@ -45,6 +45,9 @@ class InstrumentationTool {
   // Initialize this tool.
   virtual void Init(void);
 
+  // Tear down this tool.
+  virtual void Exit(void);
+
   // Used to instrument code entrypoints.
   virtual void InstrumentEntryPoint(BlockFactory *factory,
                                     CompensationBasicBlock *entry_block,

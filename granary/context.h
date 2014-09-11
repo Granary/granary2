@@ -86,6 +86,9 @@ class ContextInterface {
   // Get a pointer to this context's code cache index.
   virtual LockedIndex *CodeCacheIndex(void) = 0;
 
+  // Invalidate blocks that have been committed to the code cache index.
+  virtual void InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) = 0;
+
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
   virtual arch::MachineContextCallback *ContextCallback(
@@ -156,6 +159,14 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   GRANARY_TEST_VIRTUAL
   LockedIndex *CodeCacheIndex(void);
 
+  // Invalidate blocks that have been committed to the code cache index. This
+  // invalidates all blocks in the range `[begin_addr, end_addr)`.
+  //
+  // Note: We assume that `begin_addr <= end_addr` and that both `begin_addr`
+  //       and `end_addr` are page-aligned.
+  GRANARY_TEST_VIRTUAL
+  void InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr);
+
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
   GRANARY_TEST_VIRTUAL
@@ -196,7 +207,7 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   // Code cache index for normal blocks.
   LockedIndex code_cache_index;
 
-  // Mapping of context callable functions to their code cache equivalents. In
+  // Mapping of context callback functions to their code cache equivalents. In
   // the code cache, these functions are wrapped with code that save/restore
   // registers, etc.
   FineGrainedLock context_callbacks_lock;

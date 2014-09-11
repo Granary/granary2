@@ -119,7 +119,7 @@ class Module {
 
   // Remove a range from a module.
   GRANARY_INTERNAL_DEFINITION
-  void RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
+  bool RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
 
   // Remove all ranges from this module.
   GRANARY_INTERNAL_DEFINITION void RemoveRanges(void);
@@ -159,7 +159,7 @@ class Module {
   // Note: This must be invoked with the module's `ranges_lock` held as
   //       `WriteLocked`.
   GRANARY_INTERNAL_DEFINITION
-  void RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr);
+  bool RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr);
 
   // Adds a range into the range list. This will no do conflict resolution.
   GRANARY_INTERNAL_DEFINITION
@@ -224,6 +224,10 @@ class ModuleManager {
   // This function should only be invoked once per `ModuleManager` instance.
   void ReRegisterAllBuiltIn(void);
 
+  // Remove a range of addresses that may be part of one or more modules.
+  // Returns `true` if changes were made.
+  bool RemoveRange(uintptr_t begin_addr, uintptr_t end_addr);
+
   // Returns an iterator over all loaded modules.
   inline ConstModuleIterator Modules(void) const {
     return ConstModuleIterator(modules);
@@ -241,6 +245,8 @@ class ModuleManager {
 // Initializes the module manager.
 void InitModuleManager(void);
 
+#endif  // GRANARY_INTERNAL
+
 // Returns a pointer to the module containing some program counter.
 const Module *ModuleContainingPC(AppPC pc);
 
@@ -250,7 +256,9 @@ const Module *ModuleByName(const char *name);
 // Returns an iterator to all currently loaded modules.
 ConstModuleIterator LoadedModules(void);
 
-#endif  // GRANARY_INTERNAL
+// Invalidate all cache code related belonging to some module code. Returns
+// true if any module code was invalidated as a result of this operation.
+bool InvalidateModuleCode(AppPC start_pc, int num_bytes);
 
 }  // namespace os
 }  // namespace granary

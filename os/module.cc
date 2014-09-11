@@ -159,9 +159,9 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
 }
 
 // Remove a range from a module.
-void Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
+bool Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
   WriteLocked locker(&ranges_lock);
-  RemoveRangeConflicts(begin_addr, end_addr);
+  return RemoveRangeConflicts(begin_addr, end_addr);
 }
 
 // Remove all ranges from this module.
@@ -191,12 +191,13 @@ void Module::AddRange(ModuleAddressRange *range) {
 //
 // Note: This must be invoked with the module's `ranges_lock` held as
 //       `WriteLocked`.
-void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
+bool Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
+  auto ret = false;
   for (auto curr_elem : ModuleAddressRangeZipper(&ranges)) {
     auto curr = curr_elem.Get();
     if (curr->begin_addr < end_addr &&
         curr->end_addr > begin_addr) {
-
+      ret = true;
       if (curr->begin_addr < begin_addr) {
         if (end_addr < curr->end_addr) {  // `range` is contained in `curr`.
           auto offset = curr->begin_offset + (end_addr - curr->begin_addr);
@@ -222,6 +223,7 @@ void Module::RemoveRangeConflicts(uintptr_t begin_addr, uintptr_t end_addr) {
       break;
     }
   }
+  return ret;
 }
 
 // Adds a range into the range list. This will no do conflict resolution.
@@ -290,6 +292,20 @@ void ModuleManager::Register(Module *module) {
   module->next = modules;
   modules = module;
 }
+
+#define ROUND_DOWN_TO_PAGE(x) ((x) >> 12) << 12
+
+// Remove a range of addresses that may be part of one or more modules.
+// Returns `true` if changes were made.
+bool ModuleManager::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
+  WriteLocked locker(&modules_lock);
+  auto ret = false;
+  for (auto module : ModuleIterator(modules)) {
+    ret = module->RemoveRange(begin_addr, end_addr) || ret;
+  }
+  return ret;
+}
+
 namespace {
 static bool done_init = false;
 }  // namespace
@@ -316,6 +332,23 @@ const Module *ModuleByName(const char *name) {
 // Returns an iterator to all currently loaded modules.
 ConstModuleIterator LoadedModules(void) {
   return global_module_manager->Modules();
+}
+
+// Invalidate all cache code related belonging to some module code. Returns
+// true if any module code was invalidated as a result of this operation.
+bool InvalidateModuleCode(AppPC start_pc, int num_bytes_) {
+  auto num_bytes = ROUND_DOWN_TO_PAGE(static_cast<uintptr_t>(num_bytes_) +
+                                      arch::PAGE_SIZE_BYTES - 1UL);
+  auto begin_addr = ROUND_DOWN_TO_PAGE(reinterpret_cast<uintptr_t>(start_pc));
+  auto end_addr = begin_addr + num_bytes;
+
+  if (global_module_manager->RemoveRange(begin_addr, end_addr)) {
+    GlobalContext()->InvalidateIndexedBlocks(
+        reinterpret_cast<AppPC>(begin_addr),
+        reinterpret_cast<AppPC>(end_addr));
+    return true;
+  }
+  return false;
 }
 
 }  // namespace os

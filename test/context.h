@@ -81,6 +81,10 @@ class MockContext : public granary::ContextInterface {
   // Get a pointer to this context's code cache index.
   MOCK_METHOD0(CodeCacheIndex, granary::LockedIndex *(void));
 
+  // Invalidate blocks that have been committed to the code cache index.
+  MOCK_METHOD2(InvalidateIndexedBlocks,
+               void(granary::AppPC begin_addr, granary::AppPC end_addr));
+
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
   MOCK_METHOD1(ContextCallback,

@@ -29,8 +29,7 @@ SimpleEncoderTest::SimpleEncoderTest(void)
                      "[edge cache]", &context),
       code_cache(&code_cache_mod, 1),
       edge_cache(&edge_cache_mod, 1),
-      index(new MockIndex),
-      locked_index(index) {
+      locked_index(new Index) {
   meta_manager.Register<AppMetaData>();
   meta_manager.Register<CacheMetaData>();
   meta_manager.Register<IndexMetaData>();
@@ -58,9 +57,6 @@ CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
 
   EXPECT_CALL(context, CodeCacheIndex())
       .WillRepeatedly(Return(&locked_index));
-
-  EXPECT_CALL(*index, Request(meta))
-      .WillOnce(Return(IndexFindResponse{UnificationStatus::REJECT, nullptr}));
 
   // Called for the "lazy" meta-data on the function return.
   EXPECT_CALL(context, AllocateEmptyBlockMetaData())

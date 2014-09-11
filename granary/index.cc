@@ -21,9 +21,6 @@ static BlockMetaData * const META_ARRAY_END = \
     reinterpret_cast<BlockMetaData *>(1ULL);
 
 }  // namespace
-
-IndexInterface::~IndexInterface(void) {}
-
 namespace internal {
 
 enum {
@@ -64,14 +61,18 @@ namespace {
 
 enum {
   NUM_IGNORED_BITS = 3,
-  MAX_FIRST_INDEX = internal::NUM_POINTERS_PER_PAGE - 1,
-  NUM_BITS_PER_ARRAY = __builtin_popcount(MAX_FIRST_INDEX)
+  MAX_FIRST_INDEX = internal::NUM_POINTERS_PER_PAGE,
+  NUM_BITS_PER_ARRAY = __builtin_popcount(MAX_FIRST_INDEX - 1)
 };
 
 // Represents the index levels for some meta-data.
 struct MetaDataIndex {
   uintptr_t first;
   uintptr_t second;
+
+  inline bool operator!=(const MetaDataIndex &that) const {
+    return first != that.first || second != that.second;
+  }
 };
 
 static MetaDataIndex AddrToIndex(uintptr_t addr) {
@@ -81,10 +82,31 @@ static MetaDataIndex AddrToIndex(uintptr_t addr) {
   };
 }
 
+static MetaDataIndex NextIndex(MetaDataIndex index) {
+  if (internal::NUM_POINTERS_PER_PAGE == (index.second + 1)) {
+    return {
+      (index.first + 1) % MAX_FIRST_INDEX,
+      0
+    };
+  } else {
+    return {
+      index.first,
+      index.second + 1
+    };
+  }
+}
+
 // Returns the index into the code cache for a given piece of meta-data.
 static MetaDataIndex GetIndex(BlockMetaData *meta) {
   const auto app_meta = MetaDataCast<AppMetaData *>(meta);
   return AddrToIndex(reinterpret_cast<uintptr_t>(app_meta->start_pc));
+}
+
+static AppPC GetAppPC(BlockMetaData *meta) {
+  if (auto app_meta = MetaDataCast<AppMetaData *>(meta)) {
+    return app_meta->start_pc;
+  }
+  return nullptr;
 }
 
 // Match some meta-data that we are search for (`search`) against a linked
@@ -118,6 +140,31 @@ static IndexFindResponse MatchMetaData(BlockMetaData *ls,
     ls = MetaDataCast<IndexMetaData *>(ls)->next;
   }
   return response;
+}
+
+// Unlinks meta-data that falls in the range `[begin, end)`.
+//
+// TODO(pag): This doesn't handle the case where a block begins before `begin`
+//            but ends inside of `[begin, end)`. For now I will assume this
+//            doesn't happen in practice. One exception might be JITs.
+static BlockMetaData *UnlinkMetaData(BlockMetaData **prev_ptr,
+                                     BlockMetaData *removed,
+                                     AppPC begin, AppPC end) {
+  auto meta = *prev_ptr;
+  while (meta && meta != META_ARRAY_END) {
+    auto index_meta = MetaDataCast<IndexMetaData *>(meta);
+    auto next_meta = index_meta->next;
+    auto meta_pc = GetAppPC(meta);
+    if (begin <= meta_pc && meta_pc < end) {
+      *prev_ptr = next_meta;  // Unlink.
+      index_meta->next = removed;
+      removed = index_meta->next;
+    } else {
+      prev_ptr = &(index_meta->next);
+    }
+    meta = next_meta;
+  }
+  return removed;
 }
 
 }  // namespace
@@ -167,6 +214,25 @@ void Index::Insert(BlockMetaData *meta) {
 
   index_meta->next = metas;  // Add it in.
   metas = meta;
+}
+
+// Remove all meta-data (from the index) associated with any application
+// code falling in the address range `[begin, end)`. Returns a pointer to
+// a linked list (via `IndexMetaData`) of all removed block meta-data.
+BlockMetaData *Index::RemoveRange(AppPC begin, AppPC end) {
+  GRANARY_ASSERT(begin <= end);
+  BlockMetaData *ret(nullptr);
+  auto index = AddrToIndex(reinterpret_cast<uintptr_t>(begin));
+  auto end_index = AddrToIndex(reinterpret_cast<uintptr_t>(end));
+
+  for (; index != end_index; index = NextIndex(index)) {
+    auto array = arrays[index.first];
+    if (!array) continue;
+    auto &metas(array->metas[index.second]);
+    if (!metas) continue;
+    ret = UnlinkMetaData(&metas, ret, begin, end);
+  }
+  return ret;
 }
 
 }  // namespace granary

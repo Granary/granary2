@@ -117,6 +117,16 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
+// Exit all tools. Tool `Exit` methods should restore any global state to
+// their initial values.
+static void ExitTools(InstrumentationManager *tool_manager) {
+  auto tools = tool_manager->AllocateTools();
+  for (auto tool : ToolIterator(tools)) {
+    tool->Exit();
+  }
+  tool_manager->FreeTools(tools);
+}
+
 }  // namespace
 
 #ifdef GRANARY_TARGET_test
@@ -148,6 +158,7 @@ Context::Context(void)
 }
 
 Context::~Context(void) {
+  ExitTools(&tool_manager);
   FreeEdgeList(patched_edge_list);
   FreeEdgeList(unpatched_edge_list);
   FreeEdgeList(indirect_edge_list);
@@ -266,6 +277,19 @@ CodeCache *Context::BlockCodeCache(void) {
 // Get a pointer to this context's code cache index.
 LockedIndex *Context::CodeCacheIndex(void) {
   return &code_cache_index;
+}
+
+// Invalidate blocks that have been committed to the code cache index. This
+// invalidates all blocks in the range `[begin_addr, end_addr)`.
+void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
+  BlockMetaData *meta(nullptr);
+  do {
+    LockedIndexTransaction transaction(&code_cache_index);
+    meta = transaction.RemoveRange(begin_addr, end_addr);
+  } while (0);
+
+  // TODO(pag): Do something with `meta`!! This is a major memory leak at the
+  //            moment.
 }
 
 // Returns a pointer to the `CachePC` associated with the context-callable

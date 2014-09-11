@@ -89,6 +89,9 @@ InstrumentationTool::~InstrumentationTool(void) {
 // Initialize this tool.
 void InstrumentationTool::Init(void) {}
 
+// Exit this tool.
+void InstrumentationTool::Exit(void) {}
+
 // Used to instrument code entrypoints.
 void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
                                                CompensationBasicBlock *,

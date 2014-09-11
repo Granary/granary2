@@ -84,9 +84,11 @@
 #ifdef GRANARY_TARGET_test
 # define GRANARY_TEST_VIRTUAL virtual
 # define GRANARY_IF_TEST(...) __VA_ARGS__
+# define _GRANARY_IF_TEST(...) , __VA_ARGS__
 #else
 # define GRANARY_TEST_VIRTUAL
 # define GRANARY_IF_TEST(...)
+# define _GRANARY_IF_TEST(...)
 # ifndef ContextInterface
 #   define ContextInterface Context  // Minor hack!
 # endif
