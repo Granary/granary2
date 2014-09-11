@@ -16,7 +16,10 @@ namespace arch {
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, unsigned isel,
                       xed_category_enum_t category) {
-  GRANARY_IF_DEBUG( auto note = instr->note_create; )
+#ifdef GRANARY_TARGET_debug
+  auto note = instr->note_create;
+  auto decoded_pc = instr->decoded_pc;
+#endif
   memset(instr, 0, sizeof *instr);
   instr->iclass = iclass;
   instr->iform = iform;
@@ -24,6 +27,7 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->category = category;
 
 #ifdef GRANARY_TARGET_debug
+  instr->decoded_pc = decoded_pc;
   instr->note_create = note;
   auto mod = __builtin_return_address(1);
   (instr->note_create ? instr->note_alter : instr->note_create) = mod;

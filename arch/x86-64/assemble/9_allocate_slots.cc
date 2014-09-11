@@ -96,11 +96,23 @@ static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
 
   if (op.IsRegister()) {
     MOV_MEMv_GPRv(&(instr->instruction), mem_op, op.reg);
+    instr->instruction.effective_operand_width = mem_width;
 
   } else if (op.IsImmediate()) {
-    const auto imm = static_cast<uint32_t>(op.imm.as_uint);
-    GRANARY_ASSERT(imm == op.imm.as_uint);
-    MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+
+    // Note: Templated `ImmediateBuilder` in `MOV_MEMv_IMMz` uses the type of
+    //       `imm` as a hint about the true width of `imm`.
+    if (16 == mem_width) {
+      const auto imm = static_cast<uint16_t>(op.imm.as_uint);
+      GRANARY_ASSERT(imm == op.imm.as_uint);
+      MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+    } else {
+      const auto imm = static_cast<uint32_t>(op.imm.as_uint);
+      GRANARY_ASSERT(imm == op.imm.as_uint);
+      MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+    }
+
+    instr->instruction.effective_operand_width = mem_width;
 
   // Things like `PUSH_FS/GS`, and `PUSH_MEMv` should have already
   // been early mangled.
@@ -120,6 +132,7 @@ static void ManglePop(NativeInstruction *instr, int adjusted_offset) {
         &(instr->instruction),
         op.reg,
         arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width));
+    instr->instruction.effective_operand_width = mem_width;
 
   // Things like `POP_FS/GS` and `POP_MEMv` should have already been
   // early mangled.
@@ -272,6 +285,7 @@ static void MangleArith(NativeInstruction *instr) {
   //       Things that this doesn't do a good job of preserving are the
   //       BCD adjust / auxiliary carry flag, and the parity flag.
   arch::TEST_GPRv_GPRv(&ainstr, XED_REG_RSP, XED_REG_RSP);
+  ainstr.effective_operand_width = GPR_WIDTH_BITS;
 }
 
 // Mangle an indirect call into a NOP, as it will fall-through to edge code.

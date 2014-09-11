@@ -209,12 +209,12 @@ class Instruction : public InstructionInterface {
            XED_ICLASS_FWAIT == iclass;
   }
 
-  // Where was this instruction encoded/decoded.
-  alignas(alignof(void *)) union {
+  // Where was this instruction encoded/decoded. When debugging, it's helpful
+  // to have the `decoded_pc` remain around, even through alterations to
+  // an instruction (it combines nicely with `note_create` and `note_alter`).
+  alignas(alignof(void *)) GRANARY_IF_DEBUG_ELSE(struct, union) {
     AppPC decoded_pc;
-    uintptr_t decoded_addr;
     CachePC encoded_pc;
-    uintptr_t encoded_addr;
   };
 
 #pragma clang diagnostic push
