@@ -148,7 +148,7 @@ static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
 
 // Relativize a control-flow instruction.
 static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
-  if (cfi->IsNoOp()) return;  // Elided.
+  if (cfi->IsNoOp() || !cfi->instruction.WillBeEncoded()) return;  // Elided.
 
   // Note: We use the `arch::Instruction::HasIndirectTarget` instead of
   //       `ControlFlowInstruction::HasIndirectTarget` because the latter
