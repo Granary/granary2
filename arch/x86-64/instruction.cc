@@ -31,6 +31,7 @@ Instruction::Instruction(const Instruction &that) {
 }
 
 bool Instruction::HasIndirectTarget(void) const {
+  // TODO(pag): Refactor to test `iform` with a `switch`?
   if (IsFunctionCall() || IsUnconditionalJump()) {
     return XED_ENCODER_OPERAND_TYPE_REG == ops[0].type ||
            XED_ENCODER_OPERAND_TYPE_MEM == ops[0].type ||

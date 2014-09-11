@@ -46,7 +46,7 @@ static void SuppressSigAction(SystemCallContext ctx, void *) {
   auto signum = ctx.Arg0();
   if (SIGSEGV != signum && SIGILL != signum) return;
 
-  // Turn this `sigaction` into a no-op.
+  // Turn this `sigaction` into a no-op (that will likely return `-EINVAL`)
   ctx.Arg0() = SIGUNUSED;
   ctx.Arg1() = 0;
   ctx.Arg2() = 0;

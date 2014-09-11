@@ -52,8 +52,12 @@ static void TryElideBranches(NativeInstruction *branch_instr) {
 }
 
 struct FragmentWorkList {
-
+  // First fragment on the work list.
   Fragment *next;
+
+  // Pointer to the `Fragment::next` field, so that we can chain fragments
+  // together into an encode-ordered list. As fragments are dequeued from the
+  // work list, they are appended to the encode-ordered list.
   Fragment **next_ptr;
   int order;
 
@@ -66,6 +70,10 @@ struct FragmentWorkList {
   }
 };
 
+// Places fragments into their encoded order. This tries to make sure that
+// targets of near jumps are placed directly after the blocks with the branches,
+// and it also tries to make sure that specialized call/return/jump lookup
+// fragments are executed before anything else.
 static void OrderFragment(FragmentWorkList *work_list, Fragment *frag) {
   // Special case: want (specialized) indirect branch targets to be ordered
   // before the fall-through (if any). This affects the determination on

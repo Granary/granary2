@@ -706,7 +706,9 @@ end
 # Treat `$arg0` as a pointer to a `FragmentList` and use `granary::Log` to log
 # the fragments to `stdout` or `stderr`. 
 define log-frags
-  p granary::os::Log(granary::os::LogOutput, &frags)
+  set language c++
+  p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) frags)
+  dont-repeat
 end
 
 
