@@ -4,7 +4,6 @@
 
 #include "arch/init.h"
 
-#include "granary/base/container.h"
 #include "granary/base/option.h"
 
 #include "granary/client.h"
@@ -14,10 +13,6 @@
 #include "os/logging.h"
 #include "os/memory.h"
 #include "os/module.h"
-
-GRANARY_DEFINE_string(tools, "",
-    "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--tools=print_bbs,follow_jumps`.");
 
 GRANARY_DEFINE_bool(help, false,
     "Print this message.");
@@ -33,12 +28,6 @@ extern InitFuncPtr granary_end_init_array[];
 }  // extern "C"
 namespace granary {
 namespace {
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wglobal-constructors"
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
-GRANARY_EARLY_GLOBAL static Container<Context> context;
-#pragma clang diagnostic pop
 
 // Have we already pre-initialized Granary? This is mostly only relevant for
 // the test cases, where a given test fixture might initialize Granary, and
@@ -59,7 +48,7 @@ void PreInit(void) {
 }
 
 // Initialize Granary.
-void Init(void) {
+void Init(InitReason reason) {
   os::InitHeap();  // Initialize the Granary heap.
   os::InitModuleManager();  // Initialize the global module manager.
   os::InitLog();  // Initialize the logging infrastructure.
@@ -69,12 +58,9 @@ void Init(void) {
   // are enabled. This depends on heap allocation.
   arch::Init();
 
-  // TODO(pag): Refactor this into an `InitContext` call, and move `context`
-  //            to be inside `context.cc`.
-  context.Construct();
+  InitContext();
   InitClients();
-  context->InitTools(FLAG_tools);
-  SetGlobalContext(context.AddressOf());
+  InitTools(reason);
 }
 
 }  // namespace granary

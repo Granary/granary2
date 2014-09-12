@@ -128,9 +128,17 @@ DEFINE_FUNC(sigaltstack)
     ret
 END_FUNC(sigaltstack)
 
-DEFINE_INST_FUNC(exit_group)
-    mov     eax, 231  // `__NR_exit_group`.
+DECLARE_FUNC(granary_exit)
+DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.
     xor     rdi, rdi
+    jmp     exit_group
+END_FUNC(exit_group_ok)
+DEFINE_FUNC(exit_group)
+    push    rdi
+    xor     rdi, rdi  // `ExitReason::EXIT_PROGRAM`.
+    call    granary_exit
+    pop rdi
+    mov     eax, 231  // `__NR_exit_group`.
     syscall
 END_FUNC(exit_group)
 

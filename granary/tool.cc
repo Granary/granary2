@@ -5,6 +5,7 @@
 #include "arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 
 #include "granary/cfg/instruction.h"
@@ -14,6 +15,10 @@
 #include "granary/tool.h"
 
 #include "os/module.h"
+
+GRANARY_DEFINE_string(tools, "",
+    "Comma-seprated list of tools to dynamically load on start-up. "
+    "For example: `--tools=print_bbs,follow_jumps`.");
 
 namespace granary {
 
@@ -87,10 +92,10 @@ InstrumentationTool::~InstrumentationTool(void) {
 }
 
 // Initialize this tool.
-void InstrumentationTool::Init(void) {}
+void InstrumentationTool::Init(InitReason) {}
 
 // Exit this tool.
-void InstrumentationTool::Exit(void) {}
+void InstrumentationTool::Exit(ExitReason) {}
 
 // Used to instrument code entrypoints.
 void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
@@ -317,6 +322,11 @@ void RegisterInstrumentationTool(
       depends_on[id][required_id] = true;
     }
   }
+}
+
+// Initialize all Granary tools for the active Granary context.
+void InitTools(InitReason reason) {
+  GlobalContext()->InitTools(reason, FLAG_tools);
 }
 
 }  // namespace granary

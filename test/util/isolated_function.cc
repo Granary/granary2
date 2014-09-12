@@ -9,6 +9,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "granary/base/lock.h"
+
 #include "test/util/isolated_function.h"
 
 extern "C" {
@@ -22,6 +24,9 @@ static stack_t alternate_stack = {
   .ss_sp = &(signal_stack[0])
 };
 
+granary::FineGrainedLock regs_lock;
+IsolatedRegState regs1, regs2, regs3;
+
 }  // namespace
 
 // Runs a function and an instrumented function in an "isolated" context
@@ -33,7 +38,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   stack_t orig_signal_stack;
   sigaltstack(&alternate_stack, &orig_signal_stack);
 
-  IsolatedRegState regs1, regs2, regs3;
+  granary::FineGrainedLocked locker(&regs_lock);
 
   memset(&regs1, 0, sizeof regs1);
   setup_state(&regs1);

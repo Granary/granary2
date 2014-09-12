@@ -117,16 +117,6 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
-// Exit all tools. Tool `Exit` methods should restore any global state to
-// their initial values.
-static void ExitTools(InstrumentationManager *tool_manager) {
-  auto tools = tool_manager->AllocateTools();
-  for (auto tool : ToolIterator(tools)) {
-    tool->Exit();
-  }
-  tool_manager->FreeTools(tools);
-}
-
 }  // namespace
 
 #ifdef GRANARY_TARGET_test
@@ -158,14 +148,13 @@ Context::Context(void)
 }
 
 Context::~Context(void) {
-  ExitTools(&tool_manager);
   FreeEdgeList(patched_edge_list);
   FreeEdgeList(unpatched_edge_list);
   FreeEdgeList(indirect_edge_list);
 }
 
 // Initialize all tools from a comma-separated list of tools.
-void Context::InitTools(const char *tool_names) {
+void Context::InitTools(InitReason reason, const char *tool_names) {
 
   // Force register some tools that should get priority over all others.
   tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
@@ -189,7 +178,17 @@ void Context::InitTools(const char *tool_names) {
   // to initialize all tools before finalizing the meta-data manager.
   auto tools = tool_manager.AllocateTools();
   for (auto tool : ToolIterator(tools)) {
-    tool->Init();
+    tool->Init(reason);
+  }
+  tool_manager.FreeTools(tools);
+}
+
+// Exit all tools. Tool `Exit` methods should restore any global state to
+// their initial values.
+void Context::ExitTools(ExitReason reason) {
+  auto tools = tool_manager.AllocateTools();
+  for (auto tool : ToolIterator(tools)) {
+    tool->Exit(reason);
   }
   tool_manager.FreeTools(tools);
 }
@@ -311,17 +310,21 @@ arch::MachineContextCallback *Context::ContextCallback(uintptr_t func_addr) {
 }
 
 namespace {
-static std::atomic<ContextInterface *> context(ATOMIC_VAR_INIT(nullptr));
-}
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+GRANARY_EARLY_GLOBAL static Container<Context> context;
+#pragma clang diagnostic pop
+}  // namespace
 
-// Changes the active context.
-void SetGlobalContext(ContextInterface *context_) {
-  context.store(context_);
+// Initializes a new active context.
+void InitContext(void) {
+  context.Construct();
 }
 
 // Loads the active context.
 ContextInterface *GlobalContext(void) {
-  return context.load();
+  return context.AddressOf();
 }
 
 }  // namespace granary

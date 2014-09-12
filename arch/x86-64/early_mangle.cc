@@ -179,7 +179,9 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.reg = offset;
 #else
-  // TODO(pag): The above code was buggy.
+  // TODO(pag): The above code was buggy, but might be worth re-visiting. The
+  //            bug came out when doing recursive instrumentation of Granary's
+  //            test cases.
   GRANARY_UNUSED(block);
   GRANARY_UNUSED(op);
 #endif

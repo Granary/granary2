@@ -5,11 +5,16 @@
 
 namespace granary {
 
+enum InitReason {
+  INIT_PROGRAM = 0,
+  INIT_ATTACH
+};
+
 // Runs the constructors from the initialization array.
 GRANARY_INTERNAL_DEFINITION void PreInit(void);
 
 // Initializes Granary.
-GRANARY_INTERNAL_DEFINITION void Init(void);
+GRANARY_INTERNAL_DEFINITION void Init(InitReason reason);
 
 }  // namespace granary
 

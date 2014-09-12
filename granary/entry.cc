@@ -18,12 +18,6 @@ GRANARY_DEFINE_bool(profile_direct_edges, false,
 // TODO(pag): Add an option that says put edge code in for all blocks, even if
 //            not needed.
 
-#ifdef GRANARY_WHERE_kernel
-// Initialized by `os/*/kernel/module/slot.c`
-void *granary_stack_begin = nullptr;
-void *granary_stack_end = nullptr;
-#endif  // GRANARY_WHERE_kernel
-
 namespace granary {
 namespace {
 
@@ -42,16 +36,27 @@ static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
   std::atomic_thread_fence(std::memory_order_release);
 }
 
-#ifdef GRANARY_WHERE_kernel
+#if defined(GRANARY_WHERE_kernel) && defined(GRANARY_TARGET_debug)
+
+extern "C" {
+// Initialized by `os/*/kernel/module/slot.c`
+void *granary_stack_begin = nullptr;
+void *granary_stack_end = nullptr;
+}  // extern C
+
 // Check that we're executing from a Granary-specific stack.
-static bool OnGranaryStack(void) {
+static inline bool OnGranaryStack(void) {
   auto sp = __builtin_frame_address(0);
   return granary_stack_begin <= sp && sp < granary_stack_end;
 }
-#endif  // GRANARY_WHERE_kernel
+#endif  // GRANARY_WHERE_kernel && GRANARY_WHERE_debug
 
 }  // namespace
 extern "C" {
+
+// TODO(pag): Can we simplify all edge-related code by depending on
+//            `GlobalContext`? Challenge seems to actually be dealing with
+//            slots mechanism.
 
 // Enter into Granary to begin the translation process for a direct edge.
 void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
@@ -76,7 +81,7 @@ void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
 //      3) We need to prepend the out-edge code to the resulting code (by
 //         "instantiating" the out edge into a fragment).
 void granary_enter_indirect_edge(IndirectEdge *edge, ContextInterface *context,
-                  AppPC target_app_pc) {
+                                 AppPC target_app_pc) {
   Translate(context, edge, target_app_pc);
 }
 }  // extern C

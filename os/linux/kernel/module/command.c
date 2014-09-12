@@ -31,14 +31,14 @@ static int MatchCommand(const char *command, const char *key) {
 }
 
 // Initialize Granary.
-extern void _ZN7granary4InitEv(void);
+extern void _ZN7granary4InitENS_10InitReasonE(int);
 extern void _ZN7granary11InitOptionsEPKc(const char *);
 extern void InitModules(void);
 extern void InitSlots(void);
 static void ProcessInit(const char *options) {
   InitSlots();
   _ZN7granary11InitOptionsEPKc(options);  // `granary::InitOptions`.
-  _ZN7granary4InitEv();  // `granary::Init`.
+  _ZN7granary4InitENS_10InitReasonE(1 /* INIT_ATTACH */);  // `granary::Init`.
   InitModules();
   printk("[granary] Initialized.\n");
 }

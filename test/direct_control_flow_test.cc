@@ -166,7 +166,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
      public: \
       tool_name ## _DirectControlFlowTest(void) \
           : context() { \
-        context.InitTools(#tool_name); \
+        context.InitTools(ENTRY_ATTACH, #tool_name); \
       } \
       \
       virtual ~tool_name ## _DirectControlFlowTest(void) = default; \

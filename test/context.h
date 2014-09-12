@@ -15,7 +15,8 @@ class MockContext : public granary::ContextInterface {
   MockContext(void) = default;
   virtual ~MockContext(void) = default;
 
-  MOCK_METHOD1(InitTools, void(const char *));
+  MOCK_METHOD2(InitTools, void(granary::InitReason, const char *));
+  MOCK_METHOD1(ExitTools, void(granary::ExitReason));
 
   // Returns a pointer to the module containing some program counter.
   MOCK_METHOD1(FindModuleContainingPC,

@@ -23,6 +23,8 @@
 // general protection fault.
 #define SIGSEGV       11
 
+#define SIGUNUSED     31
+
 // Biggest signal number + 1 (including real-time signals).
 #define _NSIG         65
 

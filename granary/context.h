@@ -14,6 +14,7 @@
 #include "granary/base/tiny_map.h"
 
 #include "granary/cache.h"
+#include "granary/exit.h"
 #include "granary/index.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
@@ -49,7 +50,9 @@ class ContextInterface {
   // Needed for linking against the base vtable.
   virtual ~ContextInterface(void);
 
-  virtual void InitTools(const char *tool_names) = 0;
+  virtual void InitTools(InitReason, const char *tool_names) = 0;
+
+  virtual void ExitTools(ExitReason) = 0;
 
   // Allocate and initialize some `BlockMetaData`.
   virtual BlockMetaData *AllocateBlockMetaData(AppPC start_pc) = 0;
@@ -113,7 +116,11 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
 
   // Initialize all tools from a comma-separated list of tools.
   GRANARY_TEST_VIRTUAL
-  void InitTools(const char *tool_names);
+  void InitTools(InitReason reason, const char *tool_names);
+
+  // Exit all tools.
+  GRANARY_TEST_VIRTUAL
+  void ExitTools(ExitReason reason);
 
   // Allocate and initialize some `BlockMetaData`.
   GRANARY_TEST_VIRTUAL
@@ -216,8 +223,8 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };
 
-// Changes the active context.
-void SetGlobalContext(ContextInterface *context);
+// Initializes a new active context.
+void InitContext(void);
 
 // Loads the active context.
 ContextInterface *GlobalContext(void);

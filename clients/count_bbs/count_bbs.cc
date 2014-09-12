@@ -32,7 +32,7 @@ class BlockCounter : public MutableMetaData<BlockCounter> {
 // Simple tool for static and dynamic basic block counting.
 class BBCount : public InstrumentationTool {
  public:
-  virtual void Init(void) {
+  virtual void Init(InitReason) {
     if (FLAG_count_execs) {
       RegisterMetaData<BlockCounter>();
     }

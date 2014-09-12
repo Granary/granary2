@@ -11,6 +11,8 @@
 #include "granary/code/inline_assembly.h"
 
 #include "granary/entry.h"
+#include "granary/exit.h"
+#include "granary/init.h"
 #include "granary/metadata.h"
 
 namespace granary {
@@ -43,10 +45,10 @@ class InstrumentationTool {
   virtual ~InstrumentationTool(void);
 
   // Initialize this tool.
-  virtual void Init(void);
+  virtual void Init(InitReason reason);
 
   // Tear down this tool.
-  virtual void Exit(void);
+  virtual void Exit(ExitReason reason);
 
   // Used to instrument code entrypoints.
   virtual void InstrumentEntryPoint(BlockFactory *factory,
@@ -299,6 +301,9 @@ inline static void RegisterInstrumentationTool(
   RegisterInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
                              required_tools);
 }
+
+// Initialize all Granary tools for the active Granary context.
+GRANARY_INTERNAL_DEFINITION void InitTools(InitReason reason);
 
 }  // namespace granary
 

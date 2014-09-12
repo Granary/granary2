@@ -35,7 +35,7 @@ extern uint8_t granary_end_inst_exports;
 // then we'll redirect execution to `exit_group`, which exit all
 // threads in the process.
 GRANARY_IF_USER( extern uint8_t _fini; )
-GRANARY_IF_USER( extern uint8_t exit_group; )
+GRANARY_IF_USER( extern uint8_t exit_group_ok; )
 
 }  // extern C
 enum {
@@ -432,8 +432,8 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
 #ifdef GRANARY_WHERE_user
     // If we try to go to `_fini`, then redirect execution to `exit_group`.
     if (&_fini == target_pc) {
-      target_pc = &exit_group;
-      app_meta->start_pc = &exit_group;
+      target_pc = &exit_group_ok;
+      app_meta->start_pc = &exit_group_ok;
     }
 #endif
     GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
