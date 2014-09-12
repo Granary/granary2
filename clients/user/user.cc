@@ -21,10 +21,6 @@ extern void RemoveAllHooks(void);
 
 namespace {
 
-#define __NR_munmap         11
-#define __NR_rt_sigaction   13
-#define __NR_exit_group     231
-
 // Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`
 // signal handlers. This is to help in the debugging of user space
 // programs, where attaching GDB early on in the program's execution
@@ -84,72 +80,6 @@ class UserSpaceInstrumenter : public InstrumentationTool {
 
   virtual void Exit(ExitReason) {
     RemoveAllHooks();
-  }
-
-  // GDB inserts hidden breakpoints into programs, especially in programs
-  // using `pthreads`. When Granary comes across these breakpoints, it most
-  // likely will detach, which, when combined with the `transparent_returns`
-  // tool, results in full thread detaches. Here we try to handle these special
-  // cases in a completely non-portable way. The comments, however, give
-  // some guidance as to how to port this.
-  bool FixHiddenBreakpoints(BlockFactory *factory, ControlFlowInstruction *cfi,
-                            BasicBlock *block) {
-    auto fixed = false;
-    auto decoded_pc = block->StartAppPC();
-    auto module = ModuleContainingPC(decoded_pc);
-    auto module_name = module->Name();
-    auto offset = module->OffsetOfPC(decoded_pc);
-
-    const char *append_asm(nullptr);
-    std::unique_ptr<Instruction> append_instr(nullptr);
-
-    if (StringsMatch("dl", module_name)) {
-      if (0x10970 == offset.offset) {
-        // Emulate `__GI__dl_debug_state` (or just `_dl_debug_state`), which is
-        // a function that only does `RET` or `REPZ RET`, and exists solely to
-        // be hooked by GDB.
-        append_instr = lir::Return(factory);
-      }
-    } else if (StringsMatch("ld", module_name)) {
-      if (0x100fd == offset.offset) {
-        // Emulate `call_init+93`, then jump to `call_init+100`.
-        append_asm = "MOV r64 RDX, m64 [RBX+0x108];";
-        append_instr = lir::Jump(factory, decoded_pc + 7);
-
-      } else if (0x10970 == offset.offset) {
-        // Another case of `__GI__dl_debug_state`.
-        append_instr = lir::Return(factory);
-      }
-    } else if (StringsMatch("libpthread", module_name)) {
-      if (0x6f50 == offset.offset) {
-        // `__GI___nptl_create_event`, similar to `_dl_debug_state`.
-        append_instr = lir::Return(factory);
-      }
-    }
-
-    if (append_asm) {
-      BeginInlineAssembly();
-      InlineBefore(cfi, append_asm);
-      EndInlineAssembly();
-      fixed = true;
-    }
-
-    if (append_instr.get()) {
-      cfi->InsertBefore(std::move(append_instr));
-      fixed = true;
-    }
-
-    if (fixed) {
-      Instruction::Unlink(cfi);
-      return true;
-    }
-
-    os::Log(os::LogOutput, "code = %p\n", decoded_pc);
-    os::Log(os::LogOutput, "module = %s\n", module_name);
-    os::Log(os::LogOutput, "offset = %lx\n\n", offset.offset);
-
-    granary_curiosity();
-    return false;
   }
 
   // Adds in the hooks that allow other tools (including this tool) to hook

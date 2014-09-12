@@ -99,8 +99,10 @@ void FreePages(void *addr, int num, MemoryIntent) {
 // Changes the memory protection of some pages.
 void ProtectPages(void *addr, int num, MemoryProtection prot) {
   int prot_bits(0);
-  if (MemoryProtection::EXECUTABLE == prot) {
+  if (MemoryProtection::PATCHABLE_EXECUTABLE == prot) {
     prot_bits = PROT_EXEC | PROT_READ | PROT_WRITE;
+  } else if (MemoryProtection::EXECUTABLE == prot) {
+    prot_bits = PROT_EXEC | PROT_READ;
   } else if (MemoryProtection::READ_ONLY == prot) {
     prot_bits = PROT_READ;
   } else if (MemoryProtection::READ_WRITE == prot) {

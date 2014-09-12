@@ -130,8 +130,6 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
   // Push on a return address for either of a direct or indirect function
   // call.
   void AddTransparentRetAddr(ControlFlowInstruction *cfi) {
-    GRANARY_ASSERT(cfi->IsAppInstruction());
-
     // Compute return address.
     auto ret_addr_pc = cfi->DecodedPC() + cfi->DecodedLength();
     auto ret_addr_uint = reinterpret_cast<uintptr_t>(ret_addr_pc);
@@ -164,6 +162,7 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
     if (!block) return;
     for (auto succ : block->Successors()) {
       if (!succ.cfi->IsFunctionCall()) continue;
+      if (!succ.cfi->IsAppInstruction()) continue;
 
       // Convert a function call into a `PUSH; JMP` combination.
       AddTransparentRetAddr(succ.cfi);

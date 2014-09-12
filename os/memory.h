@@ -11,7 +11,8 @@ namespace os {
 // execute permissions; however, limiting to these three kinds of protections
 // serves as a good discipline.
 enum class MemoryProtection {
-  EXECUTABLE,  // Implies read.
+  PATCHABLE_EXECUTABLE,
+  EXECUTABLE = PATCHABLE_EXECUTABLE GRANARY_IF_DEBUG(GRANARY_IF_USER( + 1)),
   READ_ONLY,
   READ_WRITE,
   INACCESSIBLE

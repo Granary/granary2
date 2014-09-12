@@ -114,7 +114,8 @@ int StageEncode(FragmentList *frags, CachePC estimated_encode_pc) {
 }
 
 // Relativize the instructions of a fragment.
-static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
+static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
+                                   bool *update_encode_addresses) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->instruction.SetEncodedPC(curr_pc);
@@ -126,23 +127,44 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc) {
           IA_RETURN_ADDRESS == annot->annotation) {
         annot->data = reinterpret_cast<uintptr_t>(curr_pc);
 
-      // Update some pointer somewhere with the encoded address of this
-      // instruction.
+      // Record the `curr_pc` for later updating by `UpdateEncodeAddresses`.
       } else if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
-        *reinterpret_cast<CachePC *>(annot->data) = curr_pc;
+        SetMetaData(annot, curr_pc);
+        *update_encode_addresses = true;
       }
     }
   }
 }
 
+// Update the pointers associated with all `IA_UPDATE_ENCODED_ADDRESS`
+// annotation instructions. This needs to be done *after* encoded to avoid
+// a nasty race where one thread does an indirect jump based on the updated
+// pointer and jumps into some incomplete code sequence.
+static void UpdateEncodeAddresses(FragmentList *frags) {
+  for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
+    for (auto instr : InstructionListIterator(frag->instrs)) {
+      if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+        // Update some pointer somewhere with the encoded address of this
+        // instruction.
+        if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
+          auto cache_pc_ptr = reinterpret_cast<CachePC *>(annot->data);
+          *cache_pc_ptr = GetMetaData<CachePC>(annot);
+        }
+      }
+    }
+  }
+}
+
+
 // Assign program counters to every fragment and instruction.
-static void RelativizeCode(FragmentList *frags, CachePC cache_code) {
+static void RelativizeCode(FragmentList *frags, CachePC cache_code,
+                           bool *update_addresses) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     if (!frag->encoded_pc) {
       frag->encoded_pc = cache_code;
       cache_code += frag->encoded_size;
     }
-    RelativizeInstructions(frag, frag->encoded_pc);
+    RelativizeInstructions(frag, frag->encoded_pc, update_addresses);
   }
 }
 
@@ -283,11 +305,18 @@ static void Encode(FragmentList *frags, CodeCache *block_cache) {
   if (auto num_bytes = StageEncode(frags, estimated_addr)) {
     auto cache_code = block_cache->AllocateBlock(num_bytes);
     auto cache_code_end = cache_code + num_bytes;
-    RelativizeCode(frags, cache_code);
+    auto update_addresses = false;
+    RelativizeCode(frags, cache_code, &update_addresses);
     RelativizeControlFlow(frags);
 
-    CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
-    Encode(frags);
+    do {
+      CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
+      Encode(frags);
+    } while (0);
+
+    if (GRANARY_UNLIKELY(update_addresses)) {
+      UpdateEncodeAddresses(frags);
+    }
   }
   AssignBlockCacheLocations(frags);
   ConnectEdgesToInstructions(frags);

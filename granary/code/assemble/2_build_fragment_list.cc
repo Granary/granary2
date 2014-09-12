@@ -77,8 +77,18 @@ namespace {
 
 // Worklist item for building a fragment.
 struct FragmentInProgress {
+  // Next thing to process in the work list.
   FragmentInProgress *next;
+
+  // Fragment to build.
   CodeFragment *frag;
+
+  // Predecessor of `frag`. Helpful for debugging when there's an assertion
+  // failure somewhere. In this case, we can go down to `BuildFragmentList` and
+  // see what fragment led to `frag`s creation.
+  GRANARY_IF_DEBUG( CodeFragment *pred_frag; )
+
+  // First instruction to process for addition to `frag`.
   Instruction *instr;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(FragmentInProgress, {
@@ -115,6 +125,7 @@ static void AddBlockTailToWorkList(
 
     auto elm = new FragmentInProgress;
     elm->frag = frag;
+    GRANARY_IF_DEBUG( elm->pred_frag = predecessor; )
     elm->instr = first_instr;
     elm->next = builder->next;
 
@@ -486,6 +497,7 @@ static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
 
   auto elm = new FragmentInProgress;
   elm->frag = frag;
+  GRANARY_IF_DEBUG( elm->pred_frag = nullptr; )
   elm->instr = block->FirstInstruction()->Next();
   elm->next = builder->next;
 
@@ -586,9 +598,11 @@ void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
   while (auto item = builder.next) {
     builder.next = item->next;
     auto frag = item->frag;
+    GRANARY_IF_DEBUG( auto pred = item->pred_frag; )
     auto instr = item->instr;
     delete item;
     ProcessFragment(&builder, frag, instr);
+    GRANARY_IF_DEBUG(GRANARY_USED(pred));
   }
 }
 

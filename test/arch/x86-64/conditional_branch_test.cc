@@ -92,7 +92,7 @@ class ConditionalBranchTest : public Test {
   virtual ~ConditionalBranchTest(void) = default;
   ConditionalBranchTest(void)
       : context() {
-    context.InitTools(ENTRY_ATTACH, "all_func_blocks");
+    context.InitTools(INIT_ATTACH, "all_func_blocks");
   }
 
   static void SetUpTestCase(void) {
