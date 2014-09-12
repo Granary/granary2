@@ -57,13 +57,14 @@ static void InitStackMagic(struct GranaryStack *stack) {
 
 static void AllocatePrivateStacks(void) {
   int num_cpus = num_possible_cpus();
+  int i = 0;
   cpu_stacks = alloc_pages_exact(num_cpus * sizeof(struct GranaryStack),
                                  GFP_KERNEL);
 
   granary_stack_begin = cpu_stacks;
   granary_stack_end = &(cpu_stacks[num_cpus]);
 
-  for (auto i = 0; i < num_cpus; ++i) {
+  for (i = 0; i < num_cpus; ++i) {
     InitStackMagic(&(cpu_stacks[i]));
   }
 }
