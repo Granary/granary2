@@ -155,7 +155,6 @@ static void UpdateEncodeAddresses(FragmentList *frags) {
   }
 }
 
-
 // Assign program counters to every fragment and instruction.
 static void RelativizeCode(FragmentList *frags, CachePC cache_code,
                            bool *update_addresses) {

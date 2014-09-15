@@ -38,8 +38,8 @@ class SystemCallContext {
   inline uint64_t &ReturnValue(void) const {
     return *granary::os::abi::SystemCallReturnValue(context);
   }
-  inline int Number(void) const {
-    return static_cast<int>(*granary::os::abi::SystemCallNumber(context));
+  inline uint64_t &Number(void) const {
+    return *granary::os::abi::SystemCallNumber(context);
   }
  private:
   granary::arch::MachineContext * const context;

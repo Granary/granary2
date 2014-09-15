@@ -18,8 +18,11 @@
 #define PROT_WRITE    0x2
 #define PROT_EXEC     0x4
 
+#define MAP_SHARED    0x01
 #define MAP_PRIVATE   0x02
+#define MAP_FIXED     0x10
 #define MAP_ANONYMOUS 0x20
+#define MAP_32BIT     0x40
 
 extern "C" {
 
@@ -57,6 +60,63 @@ static void InitCodeCacheFD(void) {
   }
 }
 
+// For caching MMAPings. Most `operator new`-based allocators are served by
+// `os::AllocatePages`, and use this function in the same way. Here, we try
+// to coalesce some of those `mmap`s into larger chunks to avoid performing a
+// lot of small `mmap`s to grow Granary's heap.
+enum {
+  MMAP_CACHE_MULT = 64
+};
+static FineGrainedLock mmap_cache_lock;
+static uint8_t *remaining_mem = nullptr;
+static int last_prot = 0;
+static int last_fd = 0;
+static size_t remaining_size = 0;
+
+// Initialize the `mmap` cache.
+static void *InitMmapCache(size_t num_bytes, int prot, int flags, int fd) {
+  auto cache_num_bytes = num_bytes * MMAP_CACHE_MULT;
+  uint8_t *ret = reinterpret_cast<uint8_t *>(
+      mmap(nullptr, cache_num_bytes, prot, flags, fd, 0));
+  last_prot = prot;
+  last_fd = fd;
+  remaining_size = cache_num_bytes - num_bytes;
+  remaining_mem = ret + num_bytes;
+  return ret;
+}
+
+// Try to use the `mmap` cache for an allocation.
+static void *TryUseMmapCache(size_t num_bytes, int prot, int flags, int fd) {
+  FineGrainedLocked locker(&mmap_cache_lock);
+  if (!remaining_size) {
+    return InitMmapCache(num_bytes, prot, flags, fd);
+
+  } else if (num_bytes > remaining_size ||
+             prot != last_prot ||
+             fd != last_fd) {
+    return mmap(nullptr, num_bytes, prot, flags, fd, 0);
+
+  } else if (remaining_size >= num_bytes) {
+    auto ret = remaining_mem;
+    remaining_size -= num_bytes;
+    remaining_mem += num_bytes;
+    return ret;
+
+  } else {
+    GRANARY_ASSERT(false);
+    return nullptr;
+  }
+}
+
+// A very naive caching version of mmap.
+static void *CachingMmap(size_t num_bytes, int prot, int flags, int fd) {
+  if (0 != (PROT_EXEC & prot)) {
+    return mmap(nullptr, num_bytes, prot, flags, fd, 0);
+  }
+  return TryUseMmapCache(num_bytes, prot, flags, fd);
+}
+
+
 }  // namespace
 
 // Initialize the Granary heap.
@@ -66,25 +126,22 @@ void InitHeap(void) {}
 // protection.
 void *AllocatePages(int num, MemoryIntent intent) {
   auto prot = PROT_READ | PROT_WRITE;
-  auto flags = MAP_PRIVATE;
+  auto flags = MAP_PRIVATE | MAP_32BIT;
   auto fd = -1;
-
-  if (MemoryIntent::EXECUTABLE == intent) {
-    prot |= PROT_EXEC;
-  }
 
   if (MemoryIntent::EXECUTABLE == intent) {
     if (GRANARY_UNLIKELY(-1 == code_cache_fd)) {
       InitCodeCacheFD();
     }
     fd = code_cache_fd;
+    prot |= PROT_EXEC;
 
   } else {
     flags |= MAP_ANONYMOUS;
   }
 
   auto num_bytes = static_cast<size_t>(arch::PAGE_SIZE_BYTES * num);
-  auto ret = mmap(nullptr, num_bytes, prot, flags, fd, 0);
+  auto ret = CachingMmap(num_bytes, prot, flags, fd);
   if (MemoryIntent::EXECUTABLE == intent) {
     mlock(ret, num_bytes);
   }

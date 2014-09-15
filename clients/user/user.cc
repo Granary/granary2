@@ -8,7 +8,17 @@
 using namespace granary;
 
 extern "C" {
+
+#define MAP_SHARED    0x01
+#define MAP_PRIVATE   0x02
+#define MAP_FIXED     0x10
+#define MAP_ANONYMOUS 0x20
+#define MAP_32BIT     0x40
+
 extern void exit_group(int) __attribute__((noreturn));
+extern void munmap(void *mem, unsigned long size);
+extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
+                  int __fd, long __offset);
 }  // extern C
 
 // Defined in `clients/user/signal.cc`, but not exported to other clients.
@@ -52,7 +62,12 @@ static void InvalidateUnmappedMemory(SystemCallContext ctx, void *) {
     // TODO(pag): Evil hack that allows us to avoid proper code cache
     //            invalidation for the time being. We will elide a `munmap` if
     //            it's unmapping code.
-    ctx.Arg1() = 0;
+    munmap(reinterpret_cast<void *>(addr), len);
+    ctx.Number() = __NR_mmap;
+    ctx.Arg2() = 0;  // PROT_NONE.
+    ctx.Arg3() = MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED;
+    ctx.Arg4() = std::numeric_limits<uintptr_t>::max();  // -1.
+    ctx.Arg5() = 0;  // offset.
   }
 }
 
