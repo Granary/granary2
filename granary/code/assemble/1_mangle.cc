@@ -5,6 +5,7 @@
 
 #include "arch/base.h"
 #include "arch/driver.h"
+#include "arch/util.h"
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"
@@ -65,29 +66,6 @@ extern void MangleIndirectReturn(DecodedBasicBlock *block,
 }  // namespace arch
 namespace {
 
-template <unsigned num_bits>
-struct RelAddress;
-
-// Relative address displacement suitable for x86 rel32 branches.
-template <>
-struct RelAddress<32> {
-  enum : ptrdiff_t {
-    // ~3.9 GB, close enough to 2^32 (4GB), but with a margin of error to
-    // account fora bad estimate of `Relativizer::cache_pc`.
-    MAX_OFFSET = 4187593113L
-  };
-};
-
-// Relative address displacement suitable for ARM rel24 branches.
-template <>
-struct RelAddress<24> {
-  enum : ptrdiff_t {
-    // 15 MB, close enough to 2^24 (16MB), but with a margin of error to
-    // account for a bad estimate of `Relativizer::cache_pc`.
-    MAX_OFFSET = 15728640L
-  };
-};
-
 // Manages simple relativization checks / tasks.
 class BlockMangler {
  public:
@@ -104,7 +82,7 @@ class BlockMangler {
     if (!relative_pc) return false;  // Don't have a target for it.
     auto signed_diff = relative_pc - cache_pc;
     auto diff = 0 > signed_diff ? -signed_diff : signed_diff;
-    return MAX_BRANCH_OFFSET < diff;
+    return arch::MaxRelativeOffset() < diff;
   }
 
   // Relativize a particular memory operation within a memory instruction.
@@ -233,10 +211,6 @@ class BlockMangler {
 
  private:
   BlockMangler(void) = delete;
-
-  enum : ptrdiff_t {
-    MAX_BRANCH_OFFSET = RelAddress<arch::REL_BRANCH_WIDTH_BITS>::MAX_OFFSET
-  };
 
   DecodedBasicBlock *block;
   PC cache_pc;

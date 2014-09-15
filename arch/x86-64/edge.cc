@@ -72,7 +72,7 @@ static void CALL_NEAR(arch::Instruction *ni, CachePC pc, AppPC target_pc,
                       NativeAddress **na) {
   auto diff = target_pc - pc;
   if (0 > diff) diff = -diff;
-  if (4294966272LL >= diff) {  // 2^32 - 1024.
+  if (arch::MaxRelativeOffset() >= diff) {  // 2^32 - 1024.
     CALL_NEAR_RELBRd(ni, target_pc);
   } else {
     if (!*na) {

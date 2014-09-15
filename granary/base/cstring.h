@@ -15,6 +15,7 @@ void *memmove(void *dest, const void *src, unsigned long num_bytes);
 unsigned long strlen(const char *);
 int strcmp(const char *, const char *);
 char *strcpy(char *, const char *);
+char *strncpy(char *dest, const char *source, unsigned long max_len);
 #ifdef __cplusplus
 }
 #endif  // __cplusplus

@@ -40,6 +40,7 @@ static void InitGranaryPath(const char *exec_name) {
     exit(EXIT_FAILURE);
   }
   last_slash[1] = '\0';
+  sprintf(&(last_slash[1]), "lib" GRANARY_TO_STRING(GRANARY_NAME) ".so");
 }
 
 
@@ -50,11 +51,7 @@ static void SetPreload(void) {
   if (preloads) {
     index = snprintf(LD_PRELOAD, LD_PRELOAD_LEN, "%s ", preloads);
   }
-  snprintf(
-      &(LD_PRELOAD[index]),
-      LD_PRELOAD_LEN - index,
-      "%slib" GRANARY_TO_STRING(GRANARY_NAME) ".so",
-      GRANARY_PATH);
+  snprintf(&(LD_PRELOAD[index]), LD_PRELOAD_LEN - index, "%s", GRANARY_PATH);
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
 }
 
@@ -72,8 +69,13 @@ static int SetArgs(int argc, const char **argv) {
       break;
     }
   }
-  setenv("GRANARY_OPTIONS", ARGS, 1);
   return i + 1;
+}
+
+// Pass environment variables to `libgranary.so`.
+static void SetEnv(void) {
+  setenv("GRANARY_OPTIONS", ARGS, 1);
+  setenv("GRANARY_PATH", GRANARY_PATH, 1);
 }
 
 extern char **environ;
@@ -82,6 +84,7 @@ extern char **environ;
 int main(int argc, const char *argv[]) {
   InitGranaryPath(argv[0]);
   SetPreload();
+  SetEnv();
   argv = &(argv[SetArgs(argc, argv)]);
   if (!argv[0] || !argv[0][0]) return 0;
   return execvpe(argv[0], (char * const *) argv, (char * const *) environ);

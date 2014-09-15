@@ -51,14 +51,10 @@ enum {
 
   // Byte value with which to poison executable memory. This should normally
   // correspond to something that .
-  EXEC_MEMORY_POISON_BYTE = 0xCC
-};
-
-// Feature support that guides architecture-oblivious optimization routines.
-enum {
+  EXEC_MEMORY_POISON_BYTE = 0xCC,
 
   // The maximum width of a relative branch.
-  REL_BRANCH_WIDTH_BITS = 32
+  REL_ADDR_WIDTH_BITS = 32
 };
 
 }  // namespace arch

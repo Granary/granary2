@@ -3,6 +3,8 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
+#include "arch/util.h"
+
 #include "arch/x86-64/base.h"
 #include "arch/x86-64/builder.h"
 #include "arch/x86-64/context.h"
@@ -38,7 +40,7 @@ static void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
                       AppPC target_pc, const AppPC *target_pc_ptr) {
   auto diff = target_pc - encode_pc;
   if (0 > diff) diff = -diff;
-  if (4294966272LL >= diff) {  // 2^32 - 1024.
+  if (arch::MaxRelativeOffset() >= diff) {  // 2^32 - 1024.
     CALL_NEAR_RELBRd(ni, target_pc);
   } else {
     CALL_NEAR_MEMv(ni, target_pc_ptr);

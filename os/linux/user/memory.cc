@@ -23,6 +23,10 @@
 
 extern "C" {
 
+// Path to the loaded Granary library. Code cache `mmap`s are associated with
+// this file.
+char granary_mmap_path[1024] = {'\0'};
+
 extern int open(const char *__file, int __oflag, void *);
 extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
                   int __fd, long __offset);
@@ -33,7 +37,6 @@ extern int mlock(const void *__addr, size_t __len);
 }  // extern C
 namespace granary {
 namespace os {
-#ifdef GRANARY_RECURSIVE
 namespace {
 
 static int code_cache_fd = -1;
@@ -44,16 +47,17 @@ static FineGrainedLock code_cache_fd_lock;
 // `/proc/self/maps`. This isn't needed for the correct function of Granary but
 // instead helps to enable recursive instrumentation (Granary instrumenting
 // Granary).
+//
+// TODO(pag): Make this use libgranary.so or granary.out.
 static void InitCodeCacheFD(void) {
   FineGrainedLocked locker(&code_cache_fd_lock);
   if (-1 == code_cache_fd) {
-    code_cache_fd = open("/dev/zero", O_RDONLY, nullptr);
+    code_cache_fd = open(granary_mmap_path, O_RDONLY, nullptr);
     GRANARY_ASSERT(-1 != code_cache_fd);
   }
 }
 
 }  // namespace
-#endif  // GRANARY_RECURSIVE
 
 // Initialize the Granary heap.
 void InitHeap(void) {}
@@ -69,7 +73,6 @@ void *AllocatePages(int num, MemoryIntent intent) {
     prot |= PROT_EXEC;
   }
 
-#ifdef GRANARY_RECURSIVE
   if (MemoryIntent::EXECUTABLE == intent) {
     if (GRANARY_UNLIKELY(-1 == code_cache_fd)) {
       InitCodeCacheFD();
@@ -79,9 +82,6 @@ void *AllocatePages(int num, MemoryIntent intent) {
   } else {
     flags |= MAP_ANONYMOUS;
   }
-#else
-  flags |= MAP_ANONYMOUS;
-#endif  // GRANARY_RECURSIVE
 
   auto num_bytes = static_cast<size_t>(arch::PAGE_SIZE_BYTES * num);
   auto ret = mmap(nullptr, num_bytes, prot, flags, fd, 0);

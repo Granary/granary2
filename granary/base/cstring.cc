@@ -122,6 +122,22 @@ char *strcpy(char *dest, const char *source) {
   return dest;
 }
 
+char *strncpy(char *dest, const char *source, unsigned long max_len) {
+  if (GRANARY_LIKELY(dest != source)) {
+    auto i = 0UL;
+    for (; i < max_len; ++i) {
+      auto chr = source[i];
+      ACCESS_ONCE(dest[i]) = chr;
+      if (!chr) break;
+    }
+    if (i >= max_len && max_len) {
+      dest[max_len - 1] = '\0';
+    }
+  }
+  return dest;
+}
+
+
 unsigned long strlen(const char *str) {
   auto len = 0UL;
   if (GRANARY_LIKELY(nullptr != str)) {
