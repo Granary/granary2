@@ -7,6 +7,12 @@
 
 using namespace granary;
 
+GRANARY_DEFINE_bool(early_attach, true,
+    "Should Granary attach to the user program when Granary is first "
+    "loaded? The default is `yes`.",
+
+    "user");
+
 extern "C" {
 
 #define MAP_SHARED    0x01
@@ -59,9 +65,12 @@ static void InvalidateUnmappedMemory(SystemCallContext ctx, void *) {
   auto len = ctx.Arg1();
   if (os::InvalidateModuleCode(reinterpret_cast<AppPC>(addr),
                                static_cast<int>(len))) {
-    // TODO(pag): Evil hack that allows us to avoid proper code cache
-    //            invalidation for the time being. We will elide a `munmap` if
-    //            it's unmapping code.
+    // Turn an `munmap` into a `munmap+mmap(MAP_FIXED)` pair, such that the
+    // memory is relinquished, but the address space remains allocated.
+    //
+    // Note: There is a potential race between the `munmap` and `mmap`. If this
+    //       becomes a problem then we can synchronize `mmap`, `munmap` and
+    //       `mremap`.
     munmap(reinterpret_cast<void *>(addr), len);
     ctx.Number() = __NR_mmap;
     ctx.Arg2() = 0;  // PROT_NONE.
@@ -97,11 +106,14 @@ class UserSpaceInstrumenter : public InstrumentationTool {
     RemoveAllHooks();
   }
 
-  // Adds in the hooks that allow other tools (including this tool) to hook
-  // the system call handlers in high-level way.
-  void InstrumentSyscall(ControlFlowInstruction *syscall) {
-    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
-    syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
+  virtual void InstrumentEntrypoint(BlockFactory *factory,
+                                    CompensationBasicBlock *entry_block,
+                                    EntryPointKind kind, int) {
+    if (ENTRYPOINT_USER_LOAD == kind && !FLAG_early_attach) {
+      for (auto succ : entry_block->Successors()) {
+        factory->RequestBlock(succ.block, REQUEST_NATIVE);
+      }
+    }
   }
 
   virtual void InstrumentBlock(DecodedBasicBlock *block) {
@@ -110,6 +122,14 @@ class UserSpaceInstrumenter : public InstrumentationTool {
         InstrumentSyscall(succ.cfi);
       }
     }
+  }
+
+ protected:
+  // Adds in the hooks that allow other tools (including this tool) to hook
+  // the system call handlers in high-level way.
+  void InstrumentSyscall(ControlFlowInstruction *syscall) {
+    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
+    syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
   }
 };
 

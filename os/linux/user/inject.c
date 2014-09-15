@@ -57,7 +57,7 @@ static void SetPreload(void) {
 
 // Combine the arguments into a single string for passing as an environment
 // variable to the program that will be instrumented.
-static int SetArgs(int argc, const char **argv) {
+static int InitGranaryOptions(int argc, const char **argv) {
   int index = 0;
   unsigned long max_len = ARGS_LEN;
   int i = 1;
@@ -82,10 +82,12 @@ extern char **environ;
 
 // Run a command under Granary's control by setting up LD_PRELOAD.
 int main(int argc, const char *argv[]) {
+  int first_app_arg;
   InitGranaryPath(argv[0]);
+  first_app_arg = InitGranaryOptions(argc, argv);
   SetPreload();
   SetEnv();
-  argv = &(argv[SetArgs(argc, argv)]);
+  argv = &(argv[first_app_arg]);
   if (!argv[0] || !argv[0][0]) return 0;
   return execvpe(argv[0], (char * const *) argv, (char * const *) environ);
 }

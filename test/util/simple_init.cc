@@ -19,6 +19,9 @@ extern "C" {
 // Path to the loaded Granary library. Code cache `mmap`s are associated with
 // this file.
 extern char granary_mmap_path[];
+
+// Part of `libc`.
+extern const char *getenv(const char *);
 }  // extern C
 
 void SimpleInitGranary(void) {
