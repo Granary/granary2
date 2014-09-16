@@ -98,7 +98,7 @@ static bool MemoryNotInUse(void *mem, size_t num_bytes) {
 void *SlabAllocator::Allocate(void) {
   void *address(AllocateFromFreeList());
   if (!address) {
-    FineGrainedLocked locker(&slab_lock);
+    SpinLockedRegion locker(&slab_lock);
     auto slab_number = next_allocation_number / num_allocations_per_slab;
     auto slab = GetOrAllocateSlab(slab_number);
     auto index = next_allocation_number - slab->min_allocation_number;

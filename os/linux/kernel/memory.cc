@@ -53,7 +53,7 @@ struct DynamicHeap {
   std::atomic<int> num_allocated_pages;
 
   // Lock on reading/modifying `free_pages`.
-  FineGrainedLock free_pages_lock;
+  SpinLock free_pages_lock;
 
   // Pages in the heap;
   PageFrame *heap;
@@ -78,7 +78,7 @@ struct StaticHeap : public DynamicHeap<kNumPages> {
 //       pages cross two slots.
 template <int kNumPages>
 void *DynamicHeap<kNumPages>::AllocatePagesSlow(int num_) {
-  FineGrainedLocked locker(&free_pages_lock);
+  SpinLockedRegion locker(&free_pages_lock);
   auto i = 0U;
   auto num = static_cast<uint32_t>(num_);
   auto first_set_bit_reset = static_cast<uint32_t>(NUM_BITS_PER_FREE_SET_SLOT);
@@ -152,7 +152,7 @@ template <int kNumPages>
 void DynamicHeap<kNumPages>::FreePages(void *addr, int num) {
   auto addr_uint = reinterpret_cast<uintptr_t>(addr);
   auto num_pages = static_cast<uintptr_t>(num);
-  FineGrainedLocked locker(&free_pages_lock);
+  SpinLockedRegion locker(&free_pages_lock);
   for (auto i(0UL); i < num_pages; ++i) {
     FreePage(addr_uint + (i * arch::PAGE_SIZE_BYTES));
   }

@@ -203,12 +203,12 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
 
   // List of patched and not-yet-patched direct edges, as well as a lock that
   // protects both lists.
-  FineGrainedLock edge_list_lock;
+  SpinLock edge_list_lock;
   DirectEdge *patched_edge_list;
   DirectEdge *unpatched_edge_list;
 
   // List of indirect edges.
-  FineGrainedLock indirect_edge_list_lock;
+  SpinLock indirect_edge_list_lock;
   IndirectEdge *indirect_edge_list;
 
   // Code cache index for normal blocks.
@@ -217,7 +217,7 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   // Mapping of context callback functions to their code cache equivalents. In
   // the code cache, these functions are wrapped with code that save/restore
   // registers, etc.
-  FineGrainedLock context_callbacks_lock;
+  SpinLock context_callbacks_lock;
   TinyMap<uintptr_t, arch::MachineContextCallback *, 32> context_callbacks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);

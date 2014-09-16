@@ -116,7 +116,7 @@ Module::~Module(void) {
 // be contained inside of the module). If the program counter is not part of
 // the module then the returned object is all nulled.
 ModuleOffset Module::OffsetOfPC(AppPC pc) const {
-  ReadLocked locker(&ranges_lock);
+  ReadLockedRegion locker(&ranges_lock);
   auto range = FindRange(ranges, pc);
   if (!range) {
     return ModuleOffset(nullptr, 0);
@@ -129,7 +129,7 @@ ModuleOffset Module::OffsetOfPC(AppPC pc) const {
 // Returns true if a module contains the code address `pc`, and if that code
 // address is marked as executable.
 bool Module::Contains(AppPC pc) const {
-  ReadLocked locker(&ranges_lock);
+  ReadLockedRegion locker(&ranges_lock);
   return nullptr != FindRange(ranges, pc);
 }
 
@@ -151,7 +151,7 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
   if (begin_addr < end_addr) {
     auto range = new ModuleAddressRange(begin_addr, end_addr,
                                         begin_offset, perms);
-    WriteLocked locker(&ranges_lock);
+    WriteLockedRegion locker(&ranges_lock);
     AddRange(range);
   } else {
     AddRange(end_addr, begin_addr, begin_offset, perms);
@@ -160,7 +160,7 @@ void Module::AddRange(uintptr_t begin_addr, uintptr_t end_addr,
 
 // Remove a range from a module.
 bool Module::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
-  WriteLocked locker(&ranges_lock);
+  WriteLockedRegion locker(&ranges_lock);
   return RemoveRangeConflicts(begin_addr, end_addr);
 }
 
@@ -256,7 +256,7 @@ ModuleManager::~ModuleManager(void) {
 GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
   for (auto num_attempts = 0; num_attempts < 2; ++num_attempts) {
     do {
-      ReadLocked locker(&modules_lock);
+      ReadLockedRegion locker(&modules_lock);
       for (auto module : ModuleIterator(modules)) {
         if (module->Contains(pc)) {
           return module;
@@ -270,7 +270,7 @@ GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
 
 // Find a module given its name.
 GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
-  ReadLocked locker(&modules_lock);
+  ReadLockedRegion locker(&modules_lock);
   for (auto module : ModuleIterator(modules)) {
     if (StringsMatch(module->name, name)) {
       return module;
@@ -288,7 +288,7 @@ void ModuleManager::Register(Module *module) {
     }
   }
 #endif  // GRANARY_TARGET_test
-  WriteLocked locker(&modules_lock);
+  WriteLockedRegion locker(&modules_lock);
   module->next = modules;
   modules = module;
 }
@@ -298,7 +298,7 @@ void ModuleManager::Register(Module *module) {
 // Remove a range of addresses that may be part of one or more modules.
 // Returns `true` if changes were made.
 bool ModuleManager::RemoveRange(uintptr_t begin_addr, uintptr_t end_addr) {
-  WriteLocked locker(&modules_lock);
+  WriteLockedRegion locker(&modules_lock);
   auto ret = false;
   for (auto module : ModuleIterator(modules)) {
     ret = module->RemoveRange(begin_addr, end_addr) || ret;

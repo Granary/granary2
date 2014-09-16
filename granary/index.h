@@ -125,7 +125,7 @@ class LockedIndex {
 
   // Perform a lookup in the index. Lookups can execute concurrently.
   inline IndexFindResponse Request(BlockMetaData *meta) {
-    ReadLocked locker(&index_lock);
+    ReadLockedRegion locker(&index_lock);
     return index->Request(meta);
   }
 

@@ -115,7 +115,7 @@ CachePC CodeAllocator::Allocate(os::Module *module, int alignment, int size) {
 
 // Allocate a new slab of memory for executable code.
 void CodeAllocator::AllocateSlab(os::Module *module) {
-  FineGrainedLocked locker(&slab_lock);
+  SpinLockedRegion locker(&slab_lock);
   auto curr_slab = slab.load(std::memory_order_acquire);
   if (curr_slab->offset.load(std::memory_order_acquire) < num_bytes) {
     // The lock was contended, and then someone allocated. Now we've gone and

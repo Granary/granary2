@@ -9,9 +9,9 @@ namespace granary {
 
 // Implements a simple atomic spin lock. Spin locks should be used sparingly
 // and for fine-grained locking.
-class FineGrainedLock {
+class SpinLock {
  public:
-  inline FineGrainedLock(void)
+  inline SpinLock(void)
       : is_locked(ATOMIC_VAR_INIT(false)) {}
 
   // Blocks execution by spinning until the lock has been acquired.
@@ -29,27 +29,27 @@ class FineGrainedLock {
  private:
   std::atomic<bool> is_locked;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(SpinLock);
 };
 
 // Ensures that a lock is held within some scope.
-class FineGrainedLocked {
+class SpinLockedRegion {
  public:
-  inline explicit FineGrainedLocked(FineGrainedLock *lock_)
+  inline explicit SpinLockedRegion(SpinLock *lock_)
       : lock(lock_) {
     lock->Acquire();
   }
 
-  inline ~FineGrainedLocked(void) {
+  inline ~SpinLockedRegion(void) {
     lock->Release();
   }
 
  private:
-  FineGrainedLocked(void) = delete;
+  SpinLockedRegion(void) = delete;
 
-  FineGrainedLock * const  lock;
+  SpinLock * const  lock;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(FineGrainedLocked);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(SpinLockedRegion);
 };
 
 #define GRANARY_LOCKED(lock_name, ...) \
@@ -78,97 +78,43 @@ class ReaderWriterLock {
 };
 
 // Ensures that a read lock is held within some scope.
-class ReadLocked {
+class ReadLockedRegion {
  public:
-  inline explicit ReadLocked(ReaderWriterLock *lock_)
+  inline explicit ReadLockedRegion(ReaderWriterLock *lock_)
       : lock(lock_) {
     lock->ReadAcquire();
   }
 
-  inline ~ReadLocked(void) {
+  inline ~ReadLockedRegion(void) {
     lock->ReadRelease();
   }
 
  private:
-  ReadLocked(void) = delete;
+  ReadLockedRegion(void) = delete;
 
   ReaderWriterLock * const lock;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReadLocked);
-};
-
-// Ensures that a read lock is held within some scope, so long as `cond_` is
-// true.
-class ConditionallyReadLocked {
- public:
-  inline ConditionallyReadLocked(ReaderWriterLock *lock_, bool cond_)
-      : lock(lock_),
-        cond(cond_) {
-    if (cond) {
-      lock->ReadAcquire();
-    }
-  }
-
-  inline ~ConditionallyReadLocked(void) {
-    if (cond) {
-      lock->ReadRelease();
-    }
-  }
-
- private:
-  ConditionallyReadLocked(void) = delete;
-
-  ReaderWriterLock * const lock;
-  const bool cond;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ConditionallyReadLocked);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReadLockedRegion);
 };
 
 // Ensures that a write lock is held within some scope.
-class WriteLocked {
+class WriteLockedRegion {
  public:
-  inline explicit WriteLocked(ReaderWriterLock *lock_)
+  inline explicit WriteLockedRegion(ReaderWriterLock *lock_)
       : lock(lock_) {
     lock->WriteAcquire();
   }
 
-  inline ~WriteLocked(void) {
+  inline ~WriteLockedRegion(void) {
     lock->WriteRelease();
   }
 
  private:
-  WriteLocked(void) = delete;
+  WriteLockedRegion(void) = delete;
 
   ReaderWriterLock * const lock;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(WriteLocked);
-};
-
-// Ensures that a read lock is held within some scope, so long as `cond_` is
-// true.
-class ConditionallyWriteLocked {
- public:
-  inline ConditionallyWriteLocked(ReaderWriterLock *lock_, bool cond_)
-      : lock(lock_),
-        cond(cond_) {
-    if (cond) {
-      lock->WriteAcquire();
-    }
-  }
-
-  inline ~ConditionallyWriteLocked(void) {
-    if (cond) {
-      lock->WriteRelease();
-    }
-  }
-
- private:
-  ConditionallyWriteLocked(void) = delete;
-
-  ReaderWriterLock * const lock;
-  const bool cond;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ConditionallyWriteLocked);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(WriteLockedRegion);
 };
 
 }  // namespace granary

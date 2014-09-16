@@ -105,7 +105,7 @@ class SlabAllocator {
 
   std::atomic<FreeList *> free_list;
 
-  FineGrainedLock slab_lock;
+  SpinLock slab_lock;
   size_t next_slab_number;
   size_t next_allocation_number;
 

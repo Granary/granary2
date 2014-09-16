@@ -6,7 +6,7 @@
 namespace granary {
 
 // Blocks execution by spinning until the lock has been acquired.
-void FineGrainedLock::Acquire(void) {
+void SpinLock::Acquire(void) {
   if (TryAcquire()) {
     return;
   }
@@ -14,19 +14,19 @@ void FineGrainedLock::Acquire(void) {
 }
 
 // Tries to acquire the lock, knowing that the lock is currently contended.
-void FineGrainedLock::ContendedAcquire(void) {
+void SpinLock::ContendedAcquire(void) {
   do {
     arch::Relax();
   } while (is_locked.load(std::memory_order_relaxed) || !TryAcquire());
 }
 
 // Returns true if the lock was acquired.
-bool FineGrainedLock::TryAcquire(void) {
+bool SpinLock::TryAcquire(void) {
   return !is_locked.exchange(true, std::memory_order_acquire);
 }
 
 // Release the lock. Assumes that the lock is acquired.
-void FineGrainedLock::Release(void) {
+void SpinLock::Release(void) {
   is_locked.store(false, std::memory_order_release);
 }
 

@@ -337,7 +337,7 @@ void Compile(ContextInterface *context, LocalControlFlowGraph *cfg,
   auto block_cache = context->BlockCodeCache();
   auto frags = Assemble(context, block_cache, cfg);
   do {
-    FineGrainedLocked locker(&(edge->out_edge_pc_lock));
+    SpinLockedRegion locker(&(edge->out_edge_pc_lock));
     arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
     Encode(&frags, block_cache);
   } while (false);

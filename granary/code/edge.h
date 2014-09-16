@@ -119,7 +119,7 @@ class IndirectEdge {
   //        or jumps to the "miss" code (2; base case), which transfers control
   //        to (1).
   CachePC out_edge_pc;
-  FineGrainedLock out_edge_pc_lock;
+  SpinLock out_edge_pc_lock;
 
   // Meta-data template associated with targets of this indirect CFI.
   const BlockMetaData * const meta_template;

@@ -43,7 +43,7 @@ namespace os {
 namespace {
 
 static int code_cache_fd = -1;
-static FineGrainedLock code_cache_fd_lock;
+static SpinLock code_cache_fd_lock;
 
 // Initialize a temporary file descriptor for this code cache. This is so that
 // in user space, we can associate the code cache with something in
@@ -53,7 +53,7 @@ static FineGrainedLock code_cache_fd_lock;
 //
 // TODO(pag): Make this use libgranary.so or granary.out.
 static void InitCodeCacheFD(void) {
-  FineGrainedLocked locker(&code_cache_fd_lock);
+  SpinLockedRegion locker(&code_cache_fd_lock);
   if (-1 == code_cache_fd) {
     code_cache_fd = open(granary_mmap_path, O_RDONLY, nullptr);
     GRANARY_ASSERT(-1 != code_cache_fd);
@@ -67,7 +67,7 @@ static void InitCodeCacheFD(void) {
 enum {
   MMAP_CACHE_MULT = 64
 };
-static FineGrainedLock mmap_cache_lock;
+static SpinLock mmap_cache_lock;
 static uint8_t *remaining_mem = nullptr;
 static int last_prot = 0;
 static int last_fd = 0;
@@ -87,7 +87,7 @@ static void *InitMmapCache(size_t num_bytes, int prot, int flags, int fd) {
 
 // Try to use the `mmap` cache for an allocation.
 static void *TryUseMmapCache(size_t num_bytes, int prot, int flags, int fd) {
-  FineGrainedLocked locker(&mmap_cache_lock);
+  SpinLockedRegion locker(&mmap_cache_lock);
   if (!remaining_size) {
     return InitMmapCache(num_bytes, prot, flags, fd);
 

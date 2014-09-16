@@ -247,7 +247,7 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
   } while (0);
 
   do {  // Add the edge to the unpatched list.
-    FineGrainedLocked locker(&edge_list_lock);
+    SpinLockedRegion locker(&edge_list_lock);
     edge->next = unpatched_edge_list;
     unpatched_edge_list = edge;
   } while (0);
@@ -261,7 +261,7 @@ IndirectEdge *Context::AllocateIndirectEdge(
   GRANARY_ASSERT(dest_block_meta->manager == &metadata_manager);
 
   auto edge = new IndirectEdge(dest_block_meta, indirect_edge_entry_code);
-  FineGrainedLocked locker(&indirect_edge_list_lock);
+  SpinLockedRegion locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;
   indirect_edge_list = edge;
   return edge;

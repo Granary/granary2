@@ -46,7 +46,7 @@ class CodeAllocator {
   const int num_bytes;
 
   // Lock acquired when we want to overwrite the `slab` pointer.
-  FineGrainedLock slab_lock;
+  SpinLock slab_lock;
 
   // Pointer to the head of the slab list.
   std::atomic<internal::CodeSlab *> slab;

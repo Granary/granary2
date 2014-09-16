@@ -38,11 +38,7 @@ struct IsolatedRegState {
     uint64_t R15;
   };
   uint8_t redzone_low[1024];
-#ifdef GRANARY_RECURSIVE
-  uint8_t stack[16384];
-#else
-  uint8_t stack[2048];
-#endif  // GRANARY_RECURSIVE
+  uint8_t stack[16384 << 1];
   uint8_t redzone_high[1024];
 } __attribute__((packed));
 

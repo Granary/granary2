@@ -53,7 +53,7 @@ class CodeCache {
  private:
   // Lock around the whole code cache, which prevents multiple people from
   // reading/writing to the cache at once.
-  FineGrainedLock lock;
+  SpinLock lock;
 
   // Allocator used to allocate blocks from this code cache.
   CodeAllocator allocator;

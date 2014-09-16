@@ -27,7 +27,7 @@ enum {
 // Global buffer and lock for reading `/proc/self/maps`. This isn't stack
 // allocated as we don't want to unnecessarily risk blowing the stack.
 static char file_buffer[BUFF_SIZE];
-FineGrainedLock file_buffer_lock;
+SpinLock file_buffer_lock;
 
 // Tokenize a file. This splits the file byte spaces and treats new lines and
 // non-whitespace sequences of characters as tokens.
@@ -199,7 +199,7 @@ static void ParseMapsFile(ModuleManager *manager) {
 // Find all built-in modules. In user space, this will go and find things like
 // libc. In kernel space, this will identify already loaded modules.
 void ModuleManager::RegisterAllBuiltIn(void) {
-  FineGrainedLocked locker(&file_buffer_lock);
+  SpinLockedRegion locker(&file_buffer_lock);
   ParseMapsFile(this);
 }
 

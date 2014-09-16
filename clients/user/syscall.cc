@@ -61,7 +61,7 @@ static void FreeHookList(SystemCallClosure *closure) {
 // Deletes all hooks and restores the syscall hooking system to its original
 // state. This is done during `User::Exit`.
 void RemoveAllHooks(void) {
-  WriteLocked locker(&syscall_hooks_lock);
+  WriteLockedRegion locker(&syscall_hooks_lock);
   FreeHookList(entry_hooks);
   FreeHookList(exit_hooks);
   entry_hooks = nullptr;
@@ -72,7 +72,7 @@ void RemoveAllHooks(void) {
 
 // Handle a system call entrypoint.
 void HookSystemCallEntry(arch::MachineContext *context) {
-  ReadLocked locker(&syscall_hooks_lock);
+  ReadLockedRegion locker(&syscall_hooks_lock);
   SystemCallContext syscall_context(context);
   for (auto closure : SystemCallClosureIterator(entry_hooks)) {
     closure->callback(syscall_context, closure->data);
@@ -81,7 +81,7 @@ void HookSystemCallEntry(arch::MachineContext *context) {
 
 // Handle a system call exit.
 void HookSystemCallExit(arch::MachineContext *context) {
-  ReadLocked locker(&syscall_hooks_lock);
+  ReadLockedRegion locker(&syscall_hooks_lock);
   SystemCallContext syscall_context(context);
   for (auto closure : SystemCallClosureIterator(exit_hooks)) {
     closure->callback(syscall_context, closure->data);
@@ -93,7 +93,7 @@ void AddSystemCallEntryFunction(SystemCallHook *callback,
                                 void *data,
                                 CleanUpData *delete_data) {
   auto closure = new SystemCallClosure(callback, data, delete_data);
-  WriteLocked locker(&syscall_hooks_lock);
+  WriteLockedRegion locker(&syscall_hooks_lock);
   *next_entry_hook = closure;
   next_entry_hook = &(closure->next);
 }
@@ -103,7 +103,7 @@ void AddSystemCallExitFunction(SystemCallHook *callback,
                                void *data,
                                CleanUpData *delete_data) {
   auto closure = new SystemCallClosure(callback, data, delete_data);
-  WriteLocked locker(&syscall_hooks_lock);
+  WriteLockedRegion locker(&syscall_hooks_lock);
   *next_exit_hook = closure;
   next_exit_hook = &(closure->next);
 }

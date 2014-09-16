@@ -13,8 +13,12 @@
 
 #include "test/util/isolated_function.h"
 
+using namespace granary;
+
 extern "C" {
 extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
+
+int watchpoint = 0;
 }  // extern "C"
 
 namespace {
@@ -24,7 +28,7 @@ static stack_t alternate_stack = {
   .ss_sp = &(signal_stack[0])
 };
 
-granary::FineGrainedLock regs_lock;
+SpinLock regs_lock;
 IsolatedRegState regs1, regs2, regs3;
 
 }  // namespace
@@ -38,7 +42,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   stack_t orig_signal_stack;
   sigaltstack(&alternate_stack, &orig_signal_stack);
 
-  granary::FineGrainedLocked locker(&regs_lock);
+  SpinLockedRegion locker(&regs_lock);
 
   memset(&regs1, 0, sizeof regs1);
   setup_state(&regs1);
@@ -58,6 +62,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   memset(&regs1, 0, sizeof regs1);
   setup_state(&regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
+  watchpoint = 1;
   RunFunctionInContext(reinterpret_cast<void *>(instrumented_func), &regs1);
 
   // Compare bytes that are the same across the two native runs. This ensures
@@ -66,10 +71,11 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   auto regs1_bytes = reinterpret_cast<uint8_t *>(&regs1);
   auto regs2_bytes = reinterpret_cast<uint8_t *>(&regs2);
   auto regs3_bytes = reinterpret_cast<uint8_t *>(&regs3);
-  for (auto i = 0ULL; i < sizeof regs1; ++i) {
+  for (auto i = sizeof regs1; i-- > 0; ) {
     if (regs2_bytes[i] == regs3_bytes[i]) {
-      EXPECT_EQ(regs1_bytes[i], regs2_bytes[i]);
       if (regs1_bytes[i] != regs2_bytes[i]) {
+        watchpoint = 0;
+        EXPECT_EQ(regs1_bytes[i], regs2_bytes[i]);
         break;
       }
     }
