@@ -8,7 +8,9 @@ using namespace granary;
 
 GRANARY_DEFINE_bool(debug_gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
-    "is `yes`.");
+    "is `yes`.",
+
+    "user");
 
 extern "C" {
 extern int getpid(void);

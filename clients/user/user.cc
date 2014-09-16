@@ -13,6 +13,16 @@ GRANARY_DEFINE_bool(early_attach, true,
 
     "user");
 
+GRANARY_DEFINE_bool(hook_syscalls, true,
+    "Should Granary hook into a program's system calls? The default is `yes`.\n"
+    "\n"
+    "Note: Granary needs to hook system calls for comprehensively\n"
+    "      instrumenting user space programs. However, if a program isn't\n"
+    "      being comprehensively instrumented, then system calls need not be\n"
+    "      hooked.",
+
+    "user");
+
 extern "C" {
 
 #define MAP_SHARED    0x01
@@ -96,14 +106,18 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   virtual ~UserSpaceInstrumenter(void) = default;
 
   virtual void Init(InitReason) {
-    AddSystemCallEntryFunction(SuppressSigAction);
-    AddSystemCallEntryFunction(InvalidateUnmappedMemory);
-    AddSystemCallEntryFunction(ExitGranary);
+    if (FLAG_hook_syscalls) {
+      AddSystemCallEntryFunction(SuppressSigAction);
+      AddSystemCallEntryFunction(InvalidateUnmappedMemory);
+      AddSystemCallEntryFunction(ExitGranary);
+    }
     InitGDBDebug();
   }
 
   virtual void Exit(ExitReason) {
-    RemoveAllHooks();
+    if (FLAG_hook_syscalls) {
+      RemoveAllHooks();
+    }
   }
 
   virtual void InstrumentEntrypoint(BlockFactory *factory,
@@ -117,6 +131,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   }
 
   virtual void InstrumentBlock(DecodedBasicBlock *block) {
+    if (!FLAG_hook_syscalls) return;
     for (auto succ : block->Successors()) {
       if (succ.cfi->IsSystemCall()) {
         InstrumentSyscall(succ.cfi);

@@ -71,6 +71,8 @@ static SpinLock mmap_cache_lock;
 static uint8_t *remaining_mem = nullptr;
 static int last_prot = 0;
 static int last_fd = 0;
+static int num_failed_requests = 0;
+static int num_remaining_requests = 0;
 static size_t remaining_size = 0;
 
 // Initialize the `mmap` cache.
@@ -82,6 +84,8 @@ static void *InitMmapCache(size_t num_bytes, int prot, int flags, int fd) {
   last_fd = fd;
   remaining_size = cache_num_bytes - num_bytes;
   remaining_mem = ret + num_bytes;
+  num_failed_requests = 0;
+  num_remaining_requests = MMAP_CACHE_MULT - 1;
   return ret;
 }
 
@@ -89,17 +93,23 @@ static void *InitMmapCache(size_t num_bytes, int prot, int flags, int fd) {
 static void *TryUseMmapCache(size_t num_bytes, int prot, int flags, int fd) {
   SpinLockedRegion locker(&mmap_cache_lock);
   if (!remaining_size) {
+  initialize:
     return InitMmapCache(num_bytes, prot, flags, fd);
 
   } else if (num_bytes > remaining_size ||
              prot != last_prot ||
              fd != last_fd) {
+    num_failed_requests += 1;
+    if (num_failed_requests >= (num_remaining_requests / 2)) {
+      goto initialize;
+    }
     return mmap(nullptr, num_bytes, prot, flags, fd, 0);
 
   } else if (remaining_size >= num_bytes) {
     auto ret = remaining_mem;
     remaining_size -= num_bytes;
     remaining_mem += num_bytes;
+    num_remaining_requests -= 1;
     return ret;
 
   } else {

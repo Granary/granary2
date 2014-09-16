@@ -6,32 +6,17 @@ using namespace granary;
 
 GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "Enable transparent return addresses? The default is `"
-    GRANARY_IF_USER_ELSE("yes", "no") "`.",
-
-    "transparent_returns");
-
-GRANARY_DEFINE_unsigned(max_num_translation_requests, 0,
-    "The maximum number of translation requests that can be made of Granary "
-    "before execution goes native.\n"
+    GRANARY_IF_USER_ELSE("yes", "no") "`.\n"
     "\n"
-    "This option is particularly useful for binary-search type debugging of "
-    "problematic clients or Granary bugs. The idea here is that if Granary "
-    "is introducing a bug into a program (where there was none before), then "
-    "sometimes the bug can be narrowed down to a particular translation "
-    "request by changing the value of this flag.\n"
+    "Note: Enabling transparent returns will introduce significant\n"
+    "      performance overheads due to the extra complications involved\n"
+    "      specializing function return targets."
+    GRANARY_IF_USER("\n"
     "\n"
-    "Note: This is only valid if `--transparent_returns` is enabled.",
-
-    "transparent_returns");
-
-GRANARY_DECLARE_bool(debug_log_fragments);
-GRANARY_DEFINE_bool(log_last_translation_request, false,
-    "Should the last translation request be logged? What this means is that "
-    "Granary will log a DOT digraph of its internal 'fragment control flow "
-    "graph', but only for the last translation request.\n"
-    "\n"
-    "Note: This is only meaningful if the `--max_num_translation_requests`\n"
-    "      flag is being used.",
+    "Note: Granary needs to preserve return address transparency when\n"
+    "      comprehensively instrumenting user space programs. However, if a\n"
+    "      program isn't being comprehensively instrumented, then return\n"
+    "      address transparency can likely be enabled."),
 
     "transparent_returns");
 
@@ -100,17 +85,16 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
   }
 };
 
-static std::atomic<unsigned> num_translation_requests(ATOMIC_VAR_INIT(1U));
-
 class TransparentRetsInstrumenterLate : public InstrumentationTool {
  public:
   TransparentRetsInstrumenterLate(void)
-      : InstrumentationTool(),
-        is_first_request(true) {}
+      : InstrumentationTool() {}
 
   virtual ~TransparentRetsInstrumenterLate(void) = default;
 
   // Remove all instructions starting from (and including) `search_instr`.
+  //
+  // TODO(pag): Refactor this into some kind of helper routine.
   void RemoveTailInstructions(DecodedBasicBlock *block,
                               const Instruction *search_instr) {
     auto first_instr = block->FirstInstruction();
@@ -145,6 +129,9 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
     EndInlineAssembly();
 
     // Convert the (in)direct call into a jump.
+    //
+    // TODO(pag): Refactor the conversion of a function call into a tail-call
+    //            into a helper routine.
     if (cfi->HasIndirectTarget()) {
       RegisterOperand target_reg;
       GRANARY_IF_DEBUG( auto matched = ) cfi->MatchOperands(
@@ -172,42 +159,15 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
     }
   }
 
-  // Returns `true` if execution should go native on this basic block.
-  bool GoNativeOnBlock(BlockFactory *factory, DecodedBasicBlock *block) {
-    if (!HAS_FLAG_max_num_translation_requests) return false;
-
-    if (!is_first_request) return false;
-    is_first_request = false;
-
-    auto curr_req = num_translation_requests.fetch_add(1U);
-    if (curr_req < FLAG_max_num_translation_requests) {
-      if (FLAG_log_last_translation_request &&
-          (curr_req + 1) == FLAG_max_num_translation_requests) {
-        FLAG_debug_log_fragments = true;
-      }
-      return false;
-    }
-
-    RemoveTailInstructions(block, block->FirstInstruction()->Next());
-    block->PrependInstruction(lir::Jump(factory, block->StartAppPC(),
-                                        REQUEST_NATIVE));
-    return true;
-  }
-
   // Instrument the control-flow instructions, specifically: function call
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
-    if (!GoNativeOnBlock(factory, cfg->EntryBlock())) {
-      for (auto block : cfg->NewBlocks()) {
-        AddReturnAddressToBlock(factory,
-                                DynamicCast<DecodedBasicBlock *>(block));
-      }
+    for (auto block : cfg->NewBlocks()) {
+      AddReturnAddressToBlock(factory,
+                              DynamicCast<DecodedBasicBlock *>(block));
     }
   }
-
- private:
-  bool is_first_request;
 };
 
 

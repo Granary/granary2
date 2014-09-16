@@ -5,8 +5,8 @@
 
 namespace granary {
 
-enum EntryPointKind {
-  ENTRYPOINT_KERNEL_SYSCALL,
+enum EntryPointKind : unsigned {
+  ENTRYPOINT_KERNEL_SYSCALL = 0,
   ENTRYPOINT_KERNEL_INTERRUPT,
   ENTRYPOINT_MODULE_INIT,
   ENTRYPOINT_MODULE_EXIT,

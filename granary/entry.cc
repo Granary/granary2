@@ -11,12 +11,17 @@
 
 GRANARY_DEFINE_bool(profile_direct_edges, false,
     "Should all direct edge control-flow transfers be profiled before they "
-    "are patched? The default is `no`.\n\n"
-    "Note: If this is enabled then it will likely incur substantial "
-    "overheads.");
+    "are patched? The default is `no`.\n"
+    "\n"
+    "Note: If this is enabled then it will likely incur substantial\n"
+    "      overheads, especially for multi-threaded programs. This is\n"
+    "      because there is one shared profile counter per edge data\n"
+    "      structure.");
 
 // TODO(pag): Add an option that says put edge code in for all blocks, even if
 //            not needed.
+
+// TODO(pag): Only do profiling on conditional edges?
 
 namespace granary {
 namespace {
