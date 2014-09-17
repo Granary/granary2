@@ -226,6 +226,16 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
   has_ambiguous_arg[XED_IFORM_FMULP_X87_ST0] = true;
   is_ambiguous_arg[XED_IFORM_FMULP_X87_ST0][1] = true;
 
+  // FPREM, FPREM1
+  instr_table[XED_ICLASS_FPREM].has_ambigiuous_ops = true;
+  instr_table[XED_ICLASS_FPREM1].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1] = true;
+  has_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1][0] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1][1] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1][0] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1][1] = true;
+
   // FISTP, FISTTP
   instr_table[XED_ICLASS_FISTP].has_ambigiuous_ops = true;
   instr_table[XED_ICLASS_FISTTP].has_ambigiuous_ops = true;
