@@ -4,17 +4,14 @@
 
 include ../../Makefile.inc
 
-CLIENT_NAME := user
+CLIENT_NAME := util
 CLIENT_SRC_DIR := $(GRANARY_SRC_DIR)/clients/$(CLIENT_NAME)
+CLIENT_BIN_DIR := $(GRANARY_BIN_DIR)/clients/$(CLIENT_NAME)
 CLIENT_OBJ := $(GRANARY_BIN_DIR)/$(CLIENT_NAME)_client.o
-
-$(CLIENT_OBJ): $(CLIENT_SRC_DIR)/$(CLIENT_NAME).cc
-	@echo "Building CXX object $@"
+CLIENT_DEP_OBJS := $(CLIENT_BIN_DIR)/closure.o
+$(CLIENT_OBJ): $(CLIENT_DEP_OBJS)
+	@echo "Building combined object $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+	@$(GRANARY_LD) -g -r $^ -o $@
 
-ifeq (user,$(GRANARY_WHERE))
 all: $(CLIENT_OBJ)
-else
-all:
-endif

@@ -4,7 +4,7 @@
 
 include ../../Makefile.inc
 
-CLIENT_NAME := user
+CLIENT_NAME := gdb
 CLIENT_SRC_DIR := $(GRANARY_SRC_DIR)/clients/$(CLIENT_NAME)
 CLIENT_OBJ := $(GRANARY_BIN_DIR)/$(CLIENT_NAME)_client.o
 

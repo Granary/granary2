@@ -4,6 +4,7 @@
 
 #include "clients/user/signal.h"
 #include "clients/user/syscall.h"
+#include "clients/util/closure.h"
 
 using namespace granary;
 
@@ -36,40 +37,10 @@ extern void munmap(void *mem, unsigned long size);
 extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
                   int __fd, long __offset);
 }  // extern C
-
-// Defined in `clients/user/signal.cc`, but not exported to other clients.
-extern void InitGDBDebug(void);
-
-// Defined in `clients/user/syscall.cc`, but not exported to other clients.
-extern void HookSystemCallEntry(arch::MachineContext *);
-extern void HookSystemCallExit(arch::MachineContext *);
-extern void RemoveAllHooks(void);
-
 namespace {
 
-// Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`
-// signal handlers. This is to help in the debugging of user space
-// programs, where attaching GDB early on in the program's execution
-// causes the bug to disappear.
-static void SuppressSigAction(SystemCallContext ctx, void *) {
-  if (__NR_rt_sigaction != ctx.Number()) return;
-
-  // If `act == NULL` then code is querying the current state of the signal
-  // handler.
-  if (!ctx.Arg1()) return;
-
-  // Turn this `sigaction` into a no-op (that will likely return `-EINVAL`)
-  auto signum = ctx.Arg0();
-  if (SIGILL == signum || SIGTRAP == signum ||
-      SIGBUS == signum || SIGSEGV == signum) {
-    ctx.Arg0() = SIGUNUSED;
-    ctx.Arg1() = 0;
-    ctx.Arg2() = 0;
-  }
-}
-
 // Invalidates any code cache blocks related to an mmap request.
-static void InvalidateUnmappedMemory(SystemCallContext ctx, void *) {
+static void InvalidateUnmappedMemory(void *, SystemCallContext ctx) {
   if (__NR_munmap != ctx.Number()) return;
   auto addr = ctx.Arg0();
   auto len = ctx.Arg1();
@@ -92,13 +63,50 @@ static void InvalidateUnmappedMemory(SystemCallContext ctx, void *) {
 
 // Handle proper Granary exit procedures. Granary's `exit_group` function
 // deals with proper `Exit`ing of all tools.
-static void ExitGranary(SystemCallContext ctx, void *) {
+static void ExitGranary(void *, SystemCallContext ctx) {
   if (__NR_exit_group == ctx.Number()) {
     exit_group(static_cast<int>(ctx.Arg0()));
   }
 }
 
+//
+static ClosureList<SystemCallContext> entry_hooks GRANARY_GLOBAL;
+static ClosureList<SystemCallContext> exit_hooks GRANARY_GLOBAL;
+
+// Deletes all hooks and restores the syscall hooking system to its original
+// state. This is done during `User::Exit`.
+static void RemoveAllHooks(void) {
+  entry_hooks.Reset();
+  exit_hooks.Reset();
+}
+
 }  // namespace
+
+// Handle a system call entrypoint.
+void HookSystemCallEntry(arch::MachineContext *context) {
+  entry_hooks.ApplyAll(SystemCallContext(context));
+}
+
+// Handle a system call exit.
+void HookSystemCallExit(arch::MachineContext *context) {
+  exit_hooks.ApplyAll(SystemCallContext(context));
+}
+
+// Register a function to be called before a system call is made.
+void AddSystemCallEntryFunction(SystemCallHook *callback,
+                                void *data,
+                                CleanUpData *delete_data) {
+  if (!FLAG_hook_syscalls) return;
+  entry_hooks.Add(callback, data, delete_data);
+}
+
+// Register a function to be called after a system call is made.
+void AddSystemCallExitFunction(SystemCallHook *callback,
+                               void *data,
+                               CleanUpData *delete_data) {
+  if (!FLAG_hook_syscalls) return;
+  exit_hooks.Add(callback, data, delete_data);
+}
 
 // Tool that helps user-space instrumentation work.
 class UserSpaceInstrumenter : public InstrumentationTool {
@@ -106,12 +114,8 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   virtual ~UserSpaceInstrumenter(void) = default;
 
   virtual void Init(InitReason) {
-    if (FLAG_hook_syscalls) {
-      AddSystemCallEntryFunction(SuppressSigAction);
-      AddSystemCallEntryFunction(InvalidateUnmappedMemory);
-      AddSystemCallEntryFunction(ExitGranary);
-    }
-    InitGDBDebug();
+    AddSystemCallEntryFunction(InvalidateUnmappedMemory);
+    AddSystemCallEntryFunction(ExitGranary);
   }
 
   virtual void Exit(ExitReason) {

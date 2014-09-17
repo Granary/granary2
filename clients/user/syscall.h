@@ -48,7 +48,7 @@ class SystemCallContext {
 // Callback types for system calls. The exit hook is interesting because it
 // gives access the machine context prior to the system call (so that arguments,
 // if clobbered by the syscall), can be correctly found.
-typedef void (SystemCallHook)(SystemCallContext context, void *data);
+typedef void (SystemCallHook)(void *data, SystemCallContext context);
 typedef void (CleanUpData)(void *);
 
 // Register a function to be called before a system call is made. `data` is
