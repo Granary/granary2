@@ -54,8 +54,14 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 std::unique_ptr<Instruction> CallWithContext(
     void (*func)(arch::MachineContext *));
 
-// TODO(pag): OutlineCall, add a function that simply calls to some client code
-//            and has access to virtual registers.
+#if 0
+template <typename R, typename... Args>
+std::unique_ptr<Instruction> CallWithArgs(R (*func)(Args...),
+                                          std::initializer_list<Operand *>) {
+
+}
+#endif
+
 // TODO(pag): InlineCall, inline the code of a function directly into the
 //            code.
 
