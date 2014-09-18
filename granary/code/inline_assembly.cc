@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/base/string.h"
+#include "granary/base/cstring.h"
 
 #include "granary/code/inline_assembly.h"
 
@@ -27,7 +27,8 @@ InlineAssemblyVariable::InlineAssemblyVariable(Operand *op) {
 // Initialize this inline assembly scope.
 InlineAssemblyScope::InlineAssemblyScope(
     std::initializer_list<Operand *> inputs)
-    : vars() {
+    : UnownedCountedObject(),
+      vars() {
   memset(&vars, 0, sizeof vars);
   memset(&(var_is_initialized[0]), 0, sizeof var_is_initialized);
   for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {

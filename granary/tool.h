@@ -87,85 +87,6 @@ class InstrumentationTool {
     RegisterMetaData(GetMetaDataDescription<T>::Get());
   }
 
- protected:
-
-  // Returns a pointer to the module containing an application `pc`.
-  const os::Module *ModuleContainingPC(AppPC pc);
-
-  // Begin inserting some inline assembly. This takes in an optional scope
-  // specifier, which allows tools to use the same variables in two or more
-  // different contexts/scopes of instrumentation and not have them clash. This
-  // specifies the beginning of some scope. Any virtual registers defined in
-  // this scope will be live until the next `EndInlineAssembly` within the same
-  // block, by the same tool, with the same `scope_id`.
-  //
-  // Note: `scope_id`s must be non-negative integers.
-  void BeginInlineAssembly(std::initializer_list<Operand *> inputs,
-                           int scope_id=0);
-
-  inline void BeginInlineAssembly(int scope_id=0) {
-    BeginInlineAssembly(std::initializer_list<Operand *>{}, scope_id);
-  }
-
-  // Switch to a different scope of inline assembly.
-  void ContinueInlineAssembly(int scope_id);
-
-  // End the current inline assembly scope.
-  void EndInlineAssembly(void);
-
-  // Inline some assembly code before `instr`, but only if `cond` is true.
-  // Returns the inlined instruction, or `instr` if `cond` is false.
-  template <typename... Strings>
-  inline Instruction *InlineBeforeIf(Instruction *instr, bool cond,
-                                     Strings... lines) {
-    if (cond) {
-      return InlineBefore(instr, {lines...});
-    } else {
-      return instr;
-    }
-  }
-
-  // Inline some assembly code before `instr`. Returns the inlined instruction.
-  template <typename... Strings>
-  inline Instruction *InlineBefore(Instruction *instr, Strings... lines) {
-    return InlineBefore(instr, {lines...});
-  }
-
-  // Inline some assembly code after `instr`, but only if `cond` is true.
-  // Returns the inlined instruction, or `instr` if `cond` is false.
-  template <typename... Strings>
-  inline Instruction *InlineAfterIf(Instruction *instr, bool cond,
-                                    Strings... lines) {
-    if (cond) {
-      return InlineAfter(instr, {lines...});
-    } else {
-      return instr;
-    }
-  }
-
-  // Inline some assembly code after `instr`. Returns the inlined instruction.
-  template <typename... Strings>
-  Instruction *InlineAfter(Instruction *instr, Strings... lines) {
-    return InlineAfter(instr, {lines...});
-  }
-
-  // TODO(pag): Need to expose static methods on a tool to flush a
-  //            CachedBasicBlock.
-
-  // TODO(pag): Should there be a static methods for begin/end everything? Or
-  //            something to signify an environment switch? Or maybe just
-  //            something to signify a takeover event?
-  //                --> Perhaps a takeover event on a module, and a release
-  //                    event on a module.
-
-  // Inline some assembly code before `instr`. Returns the inlined instruction.
-  Instruction *InlineBefore(Instruction *instr,
-                            std::initializer_list<const char *> lines);
-
-  // Inline some assembly code after `instr`. Returns the inlined instruction.
-  Instruction *InlineAfter(Instruction *instr,
-                           std::initializer_list<const char *> lines);
-
  GRANARY_PUBLIC:
 
   // Register some meta-data with the meta-data manager associated with this
@@ -179,9 +100,6 @@ class InstrumentationTool {
   GRANARY_POINTER(ContextInterface) *context;
 
  private:
-  GRANARY_CONST int curr_scope;
-  GRANARY_POINTER(InlineAssemblyScope) *scopes[MAX_NUM_INLINE_ASM_SCOPES];
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationTool);
 };
 

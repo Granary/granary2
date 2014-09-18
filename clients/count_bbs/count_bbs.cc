@@ -62,9 +62,8 @@ class BBCount : public InstrumentationTool {
     // the block-specific execution counter.
     auto meta = GetMetaData<BlockCounter>(bb);
     MemoryOperand counter_addr(&(meta->count));
-    BeginInlineAssembly({&counter_addr});
-    InlineBefore(insert_instr, "INC m64 %0;"_x86_64);
-    EndInlineAssembly();
+    lir::InlineAssembly asm_({&counter_addr});
+    asm_.InlineBefore(insert_instr, "INC m64 %0;"_x86_64);
   }
 };
 

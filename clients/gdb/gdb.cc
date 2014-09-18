@@ -105,7 +105,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
                             BasicBlock *block) {
     auto fixed = false;
     auto decoded_pc = block->StartAppPC();
-    auto module = ModuleContainingPC(decoded_pc);
+    auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
     auto offset = module->OffsetOfPC(decoded_pc);
     auto call_native = false;

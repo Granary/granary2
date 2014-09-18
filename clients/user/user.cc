@@ -69,7 +69,7 @@ static void ExitGranary(void *, SystemCallContext ctx) {
   }
 }
 
-//
+// Hooks that other clients can use for interposing on system calls.
 static ClosureList<SystemCallContext> entry_hooks GRANARY_GLOBAL;
 static ClosureList<SystemCallContext> exit_hooks GRANARY_GLOBAL;
 

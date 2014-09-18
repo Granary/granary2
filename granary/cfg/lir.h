@@ -10,6 +10,8 @@
 
 #include "granary/cfg/factory.h"
 
+#include "granary/code/inline_assembly.h"
+
 namespace granary {
 
 class BasicBlock;
@@ -56,6 +58,64 @@ std::unique_ptr<Instruction> CallWithContext(
 //            and has access to virtual registers.
 // TODO(pag): InlineCall, inline the code of a function directly into the
 //            code.
+
+// Represents a block of inline assembly.
+class InlineAssembly {
+ public:
+  explicit InlineAssembly(std::initializer_list<Operand *> operands);
+  ~InlineAssembly(void);
+
+  // Inline some assembly code before `instr`, but only if `cond` is true.
+  // Returns the inlined instruction, or `instr` if `cond` is false.
+  template <typename... Strings>
+  inline Instruction *InlineBeforeIf(Instruction *instr, bool cond,
+                                     Strings... lines) {
+    if (cond) {
+      return InlineBefore(instr, {lines...});
+    } else {
+      return instr;
+    }
+  }
+
+  // Inline some assembly code before `instr`. Returns the inlined instruction.
+  template <typename... Strings>
+  inline Instruction *InlineBefore(Instruction *instr, Strings... lines) {
+    return InlineBefore(instr, {lines...});
+  }
+
+  // Inline some assembly code after `instr`, but only if `cond` is true.
+  // Returns the inlined instruction, or `instr` if `cond` is false.
+  template <typename... Strings>
+  inline Instruction *InlineAfterIf(Instruction *instr, bool cond,
+                                    Strings... lines) {
+    if (cond) {
+      return InlineAfter(instr, {lines...});
+    } else {
+      return instr;
+    }
+  }
+
+  // Inline some assembly code after `instr`. Returns the inlined instruction.
+  template <typename... Strings>
+  Instruction *InlineAfter(Instruction *instr, Strings... lines) {
+    return InlineAfter(instr, {lines...});
+  }
+
+  // Inline some assembly code before `instr`. Returns the inlined instruction.
+  Instruction *InlineBefore(Instruction *instr,
+                            std::initializer_list<const char *> lines);
+
+  // Inline some assembly code after `instr`. Returns the inlined instruction.
+  Instruction *InlineAfter(Instruction *instr,
+                           std::initializer_list<const char *> lines);
+
+ private:
+  InlineAssembly(void) = delete;
+
+  GRANARY_POINTER(InlineAssemblyScope) *scope;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssembly);
+};
 
 }  // namespace lir
 }  // namespace granary

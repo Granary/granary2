@@ -71,25 +71,13 @@ static int ToolId(const char *name) {
 //       tool class can register tool-specific meta-data.
 InstrumentationTool::InstrumentationTool(void)
     : next(nullptr),
-      context(context),
-      curr_scope(-1) {
+      context(context) {
   GRANARY_ASSERT(nullptr != context);
-  for (auto &scope : scopes) {
-    scope = nullptr;
-  }
 }
 #pragma clang diagnostic pop
 
 // Closes any open inline assembly scopes.
-InstrumentationTool::~InstrumentationTool(void) {
-  curr_scope = 0;
-  for (auto scope : scopes) {
-    if (scope) {
-      EndInlineAssembly();
-    }
-    ++curr_scope;
-  }
-}
+InstrumentationTool::~InstrumentationTool(void) {}
 
 // Initialize this tool.
 void InstrumentationTool::Init(InitReason) {}
@@ -123,81 +111,6 @@ void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // but is never re-executed for the same (tool, BB) pair in the current
 // instrumentation session.
 void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
-
-// Returns a pointer to the module containing an application `pc`.
-const os::Module *InstrumentationTool::ModuleContainingPC(AppPC pc) {
-  return os::ModuleContainingPC(pc);
-}
-
-// Begin inserting some inline assembly. This takes in an optional scope
-// specifier, which allows tools to use the same variables in two or more
-// different contexts/scopes of instrumentation and not have them clash. This
-// specifies the beginning of some scope. Any virtual registers defined in
-// this scope will be live until the next `EndInlineAssembly` within the same
-// block, by the same tool, with the same `scope_id`.
-//
-// Note: `scope_id`s must be non-negative integers.
-void InstrumentationTool::BeginInlineAssembly(
-    std::initializer_list<Operand *> inputs, int scope_id) {
-  ContinueInlineAssembly(scope_id);
-  EndInlineAssembly();
-  curr_scope = scope_id;
-  scopes[scope_id] = new InlineAssemblyScope(inputs);
-}
-
-// Switch to a different scope of inline assembly.
-void InstrumentationTool::ContinueInlineAssembly(int scope_id) {
-  GRANARY_ASSERT(0 <= scope_id && scope_id < MAX_NUM_INLINE_ASM_SCOPES);
-  curr_scope = scope_id;
-}
-
-// End the current inline assembly scope.
-void InstrumentationTool::EndInlineAssembly(void) {
-  if (-1 != curr_scope && scopes[curr_scope]) {
-    auto &scope(scopes[curr_scope]);
-    if (scope->CanDestroy()) {
-      delete scope;
-    }
-    scope = nullptr;
-    curr_scope = -1;
-  }
-}
-
-namespace {
-// Make a new inline assembly instruction.
-static Instruction *MakeInlineAssembly(InlineAssemblyScope *scope,
-                                       const char *line) {
-  auto block = new InlineAssemblyBlock(scope, line);
-  return new AnnotationInstruction(IA_INLINE_ASSEMBLY, block);
-}
-}  // namespace
-
-// Inline some assembly code before `instr`. Returns the inlined instruction.
-Instruction *InstrumentationTool::InlineBefore(
-    Instruction *instr, std::initializer_list<const char *> lines) {
-  GRANARY_ASSERT(-1 != curr_scope);
-  auto scope = scopes[curr_scope];
-  GRANARY_ASSERT(nullptr != scope);
-  for (auto line : lines) {
-    if (line) {
-      instr = instr->InsertBefore(MakeInlineAssembly(scope, line));
-    }
-  }
-  return instr;
-}
-
-// Inline some assembly code after `instr`. Returns the inlined instruction.
-Instruction *InstrumentationTool::InlineAfter(
-    Instruction *instr, std::initializer_list<const char *> lines) {
-  GRANARY_ASSERT(-1 != curr_scope);
-  auto scope = scopes[curr_scope];
-  for (auto line : lines) {
-    if (line) {
-      instr = instr->InsertAfter(MakeInlineAssembly(scope, line));
-    }
-  }
-  return instr;
-}
 
 // Register some meta-data with the meta-data manager associated with this
 // tool.

@@ -122,11 +122,10 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
                               is_u32 ? 32 : arch::ADDRESS_WIDTH_BYTES);
 
     // Push on the native return address.
-    BeginInlineAssembly({&ret_addr});
-    InlineBeforeIf(cfi, is_u32,   "PUSH i32 %0;"_x86_64);
-    InlineBeforeIf(cfi, !is_u32,  "MOV r64 %1, i64 %0;"
-                                  "PUSH r64 %1;"_x86_64);
-    EndInlineAssembly();
+    lir::InlineAssembly asm_({&ret_addr});
+    asm_.InlineBeforeIf(cfi, is_u32,  "PUSH i32 %0;"_x86_64);
+    asm_.InlineBeforeIf(cfi, !is_u32, "MOV r64 %1, i64 %0;"
+                                      "PUSH r64 %1;"_x86_64);
 
     // Convert the (in)direct call into a jump.
     //

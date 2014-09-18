@@ -67,13 +67,13 @@ class InlineAssemblyScope : public UnownedCountedObject {
     ALIGNMENT = 1
   })
 
-  InlineAssemblyScope(void) = delete;
-
   // Variables used/referenced/created within the scope.
   InlineAssemblyVariable vars[MAX_NUM_INLINE_VARS];
   bool var_is_initialized[MAX_NUM_INLINE_VARS];
 
  private:
+  InlineAssemblyScope(void) = delete;
+
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssemblyScope);
 };
 
@@ -101,6 +101,7 @@ class InlineAssemblyBlock {
   InlineAssemblyScope * const scope;
   const char * const assembly;
 };
+
 #endif  // GRANARY_INTERNAL
 
 #define GRANARY_DEFINE_ASM_OP(arch, param, ret) \

@@ -41,14 +41,14 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
     RegisterOperand address(dst_addr);
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
 
-    BeginInlineAssembly({&address, &address_mask, &value});
+    lir::InlineAssembly asm_({&address, &address_mask, &value});
     if (FLAG_address_mask) {
-      InlineBefore(instr, "MOV r64 %4, i64 %1;"
-                          "TEST r64 %4, r64 %0;"
-                          "JZ l %3;"_x86_64);
+      asm_.InlineBefore(instr,
+          "MOV r64 %4, i64 %1;"
+          "TEST r64 %4, r64 %0;"
+          "JZ l %3;"_x86_64);
     }
-    InlineBefore(instr,   "LABEL %3:"_x86_64);
-    EndInlineAssembly();
+    asm_.InlineBefore(instr, "LABEL %3:"_x86_64);
   }
 
   // Writing the value of a register to memory.
@@ -58,19 +58,20 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
     ImmediateOperand value_mask(FLAG_value_mask, arch::ADDRESS_WIDTH_BYTES);
 
-    BeginInlineAssembly({&address, &address_mask, &value, &value_mask});
+    lir::InlineAssembly asm_({&address, &address_mask, &value, &value_mask});
     if (FLAG_address_mask) {
-      InlineBefore(instr, "MOV r64 %5, i64 %1;"
-                          "TEST r64 %5, r64 %0;"
-                          "JZ l %4;"_x86_64);
+      asm_.InlineBefore(instr,
+          "MOV r64 %5, i64 %1;"
+          "TEST r64 %5, r64 %0;"
+          "JZ l %4;"_x86_64);
     }
     if (FLAG_value_mask) {
-      InlineBefore(instr, "MOV r64 %5, i64 %3;"
-                          "TEST r64 %5, r64 %2;"
-                          "JZ l %4;"_x86_64);
+      asm_.InlineBefore(instr,
+          "MOV r64 %5, i64 %3;"
+          "TEST r64 %5, r64 %2;"
+          "JZ l %4;"_x86_64);
     }
-    InlineBefore(instr, "LABEL %4:");
-    EndInlineAssembly();
+    asm_.InlineBefore(instr, "LABEL %4:");
   }
 
   virtual void InstrumentBlock(DecodedBasicBlock *block) {
