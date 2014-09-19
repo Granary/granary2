@@ -83,10 +83,8 @@ class Watchpoints : public InstrumentationTool {
       MemoryOperand unwatched_addr_mloc(unwatched_addr, mloc.ByteWidth());
       mloc.Ref().ReplaceWith(unwatched_addr_mloc);
 
-    // Restore the original only if it's an implicit register (and so we
-    // modified the register in place instead of modifying a copy), and if
-    // the register itself is not killed by the instruction, and not dead
-    // after the instruction.
+    // Restore the tainted bits if the memory operand was implicit, and if the
+    // watched address was not overwritten by the instruction.
     } else if (!instr->MatchOperands(ExactWriteOnlyTo(watched_addr_reg))) {
       GRANARY_ASSERT(watched_addr.IsNative());
       asm_.InlineAfter(instr,
