@@ -198,7 +198,11 @@ enum InstructionAnnotation {
 
   // Represents a call to a client function that saves and restores the
   // entire machine context.
-  IA_CONTEXT_CALL
+  IA_CONTEXT_CALL,
+
+  // Represents a call to a client function that passes along some arguments
+  // as well.
+  IA_OUTLINE_CALL
 };
 
 // An annotation instruction is an environment-specific and implementation-

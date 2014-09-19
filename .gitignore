@@ -14,6 +14,7 @@ bin
 *.trace
 *.d
 core
+gdb_record.*
 
 # Eclipse-specific.
 .cproject

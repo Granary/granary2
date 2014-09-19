@@ -21,9 +21,6 @@ DECLARE_FUNC(granary_enter_indirect_edge)
 //       `RSI` is a pointer to the `ContextInferface` data structure.
 DEFINE_FUNC(granary_arch_enter_direct_edge)
 
-    // If we've already translated the target block, then increment the
-    // execution counter. This is a saturating counter, where one counter
-    // counts up to 32 bits, and the other counts the number of overflows.
     push    rax
     mov     rax, 2
     xaddq   [rdi + DirectEdge_num_executions], rax

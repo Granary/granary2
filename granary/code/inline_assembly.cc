@@ -31,9 +31,12 @@ InlineAssemblyScope::InlineAssemblyScope(
       vars() {
   memset(&vars, 0, sizeof vars);
   memset(&(var_is_initialized[0]), 0, sizeof var_is_initialized);
+
   for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {
-    new (&(vars[i])) InlineAssemblyVariable(inputs.begin()[i]);
-    var_is_initialized[i] = true;
+    if (auto op = inputs.begin()[i]) {
+      new (&(vars[i])) InlineAssemblyVariable(op);
+      var_is_initialized[i] = true;
+    }
   }
 }
 
@@ -54,6 +57,17 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
   scope->Release();
   if (scope->CanDestroy()) {
     delete scope;
+  }
+}
+
+// Initialize the inline function call.
+InlineFunctionCall::InlineFunctionCall(AppPC target,
+                                       std::initializer_list<Operand *> ops)
+    : target_app_pc(target) {
+  auto max_i = std::min<size_t>(MAX_NUM_FUNC_OPERANDS, ops.size());
+  for (auto i = 0UL; i < max_i; ++i) {
+    const auto op = ops.begin()[i];
+    args[i].UnsafeReplace(op->Extract());
   }
 }
 

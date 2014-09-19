@@ -16,8 +16,8 @@
 namespace granary {
 
 enum {
-  MAX_NUM_INLINE_ASM_SCOPES = 4,
-  MAX_NUM_INLINE_VARS = 16
+  MAX_NUM_INLINE_VARS = 16,
+  MAX_NUM_FUNC_OPERANDS = 5
 };
 
 #ifdef GRANARY_INTERNAL
@@ -100,6 +100,30 @@ class InlineAssemblyBlock {
 
   InlineAssemblyScope * const scope;
   const char * const assembly;
+
+ private:
+  InlineAssemblyBlock(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssemblyBlock);
+};
+
+// Represents an "inline" function call. Depending on the use, this might be
+// a function that is inlined directly into the code, or where a call out to
+// `target_app_pc` is added.
+class InlineFunctionCall {
+ public:
+  InlineFunctionCall(AppPC target, std::initializer_list<Operand *> ops);
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(InlineFunctionCall, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
+
+  AppPC target_app_pc;
+  Operand args[MAX_NUM_FUNC_OPERANDS];
+
+ private:
+  InlineFunctionCall(void) = delete;
+   GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineFunctionCall);
 };
 
 #endif  // GRANARY_INTERNAL

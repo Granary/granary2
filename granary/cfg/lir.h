@@ -15,6 +15,7 @@
 namespace granary {
 
 class BasicBlock;
+class DecodedBasicBlock;
 class Instruction;
 class AnnotationInstruction;
 class Operand;
@@ -54,13 +55,20 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 std::unique_ptr<Instruction> CallWithContext(
     void (*func)(arch::MachineContext *));
 
-#if 0
-template <typename R, typename... Args>
-std::unique_ptr<Instruction> CallWithArgs(R (*func)(Args...),
-                                          std::initializer_list<Operand *>) {
-
+// Insert a "outline" call to some client code. This call can have access to
+// virtual registers by means of its arguments. At least one argument is
+// required.
+template <typename Arg1, typename... Args>
+inline static std::unique_ptr<Instruction> CallWithArgs(
+    void (*func)(Arg1, Args...), std::initializer_list<Operand *> ops) {
+  return CallWithArgs(UnsafeCast<AppPC>(func), ops);
 }
-#endif
+
+// Insert a "outline" call to some client code. This call can have access to
+// virtual registers by means of its arguments. At least one argument is
+// required.
+std::unique_ptr<Instruction> CallWithArgs(AppPC func_addr,
+                                          std::initializer_list<Operand *>);
 
 // TODO(pag): InlineCall, inline the code of a function directly into the
 //            code.
@@ -114,6 +122,9 @@ class InlineAssembly {
   // Inline some assembly code after `instr`. Returns the inlined instruction.
   Instruction *InlineAfter(Instruction *instr,
                            std::initializer_list<const char *> lines);
+
+  // Gives access to one of the registers defined within the inline assembly.
+  RegisterOperand &Register(DecodedBasicBlock *block, int reg_num) const;
 
  private:
   InlineAssembly(void) = delete;

@@ -7,6 +7,8 @@
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/lir.h"
 
+#include "granary/code/inline_assembly.h"
+
 namespace granary {
 namespace lir {
 
@@ -26,6 +28,24 @@ std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc,
   auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return Call(block);
+}
+
+
+// Call to a client function that takes in an argument to an
+// `arch::MachineContext` pointer.
+std::unique_ptr<Instruction> CallWithContext(
+    void (*func)(arch::MachineContext *)) {
+  return std::unique_ptr<Instruction>(new AnnotationInstruction(
+      IA_CONTEXT_CALL, func));
+}
+
+// Insert a "outline" call to some client code. This call can have access to
+// virtual registers by means of its arguments. At least one argument is
+// required.
+std::unique_ptr<Instruction> CallWithArgs(
+    AppPC func_addr, std::initializer_list<Operand *> ops) {
+  return std::unique_ptr<Instruction>(new AnnotationInstruction(
+      IA_OUTLINE_CALL, new InlineFunctionCall(func_addr, ops)));
 }
 
 InlineAssembly::InlineAssembly(std::initializer_list<Operand *> operands)
@@ -69,6 +89,21 @@ Instruction *InlineAssembly::InlineAfter(
   return instr;
 }
 
+// Gives access to one of the registers defined within the inline assembly.
+//
+// This is a bit tricky because inline assembly is only parsed later. The
+// solution employed is to "pre allocated" the virtual register number when
+// it's requested here, then use that later when the virtual register is
+// needed.
+RegisterOperand &InlineAssembly::Register(DecodedBasicBlock *block,
+                                          int reg_num) const {
+  if (!scope->var_is_initialized[reg_num]) {
+    RegisterOperand reg_op(block->AllocateVirtualRegister());
+    memcpy(scope->vars[reg_num].reg.AddressOf(), &reg_op, sizeof reg_op);
+    scope->var_is_initialized[reg_num] = true;
+  }
+  return *(scope->vars[reg_num].reg.AddressOf());
+}
 
 }  // namespace lir
 }  // namespace granary

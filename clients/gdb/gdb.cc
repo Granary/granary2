@@ -92,7 +92,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
   // register a signal handler for `SEGFAULT`s that will prompt for GDB to be
   // attached.
   virtual void Init(InitReason) {
-    AddSystemCallEntryFunction(SuppressSigAction);
+    if (!FLAG_debug_gdb_prompt) AddSystemCallEntryFunction(SuppressSigAction);
   }
 
   // GDB inserts hidden breakpoints into programs, especially in programs
