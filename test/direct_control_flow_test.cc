@@ -10,6 +10,7 @@
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/lir.h"
 
 #include "granary/context.h"
 #include "granary/tool.h"
@@ -65,7 +66,7 @@ class CallUnrollerTool : public InstrumentationTool {
       : num_to_unroll(10) {}
   virtual ~CallUnrollerTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                       LocalControlFlowGraph *cfg) {
+                                     LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsFunctionCall()) {
@@ -139,9 +140,8 @@ class WatchpointsLikeTool : public InstrumentationTool {
 
     RegisterOperand watched_addr_reg(watched_addr);
 
-    BeginInlineAssembly({&watched_addr_reg});
-    InlineBefore(instr, "BT r64 %0, i8 48;");
-    EndInlineAssembly();
+    lir::InlineAssembly asm_({&watched_addr_reg});
+    asm_.InlineBefore(instr, "BT r64 %0, i8 48;");
   }
 
   // Instrument a basic block.
