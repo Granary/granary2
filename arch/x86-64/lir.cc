@@ -64,12 +64,5 @@ std::unique_ptr<Instruction> Return(BlockFactory *factory) {
   return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni));
 }
 
-// Call to a client function that takes in an argument to an
-// `arch::MachineContext` pointer.
-std::unique_ptr<Instruction> CallWithContext(void (*func)(arch::MachineContext *)) {
-  return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_CONTEXT_CALL, func));
-}
-
 }  // namespace lir
 }  // namespace granary

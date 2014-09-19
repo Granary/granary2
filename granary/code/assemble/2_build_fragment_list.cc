@@ -262,6 +262,12 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
       return false;
     }
 
+    // Calls out to some client code, but the call has access to the existing
+    // virtual register state.
+    case IA_OUTLINE_CALL: {
+      return true;
+    }
+
     default: return true;
   }
 }

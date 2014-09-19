@@ -88,7 +88,6 @@ void GenerateContextCallCode(MachineContextCallback *callback) {
   // TODO(pag): Remove ABI-specific use of RDI.
   ENC(LEA_GPRv_AGEN(&ni, XED_REG_RDI, BaseDispMemOp(0, XED_REG_RSP,
                                                     ADDRESS_WIDTH_BITS)));
-
   // Call the callback.
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
 
