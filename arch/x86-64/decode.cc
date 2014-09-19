@@ -369,6 +369,7 @@ static void ConvertDecodedPrefixes(Instruction *instr,
     instr->has_prefix_rep = xed_operand_values_has_rep_prefix(xedd);
     instr->has_prefix_repne = xed_operand_values_has_repne_prefix(xedd);
   }
+  instr->has_prefix_lock = xed_operand_values_has_lock_prefix(xedd);
 }
 
 // Convert a `xed_decoded_inst_t` into an `Instruction`.
@@ -386,7 +387,8 @@ static void ConvertDecodedInstruction(Instruction *instr,
   instr->decoded_length = static_cast<uint8_t>(
       xed_decoded_inst_get_length(xedd));
   ConvertDecodedPrefixes(instr, xedd);
-  instr->is_atomic = xed_operand_values_get_atomic(xedd);
+  instr->is_atomic = xed_operand_values_get_atomic(xedd) ||
+                     instr->has_prefix_lock;
   instr->effective_operand_width = static_cast<int16_t>(
       xed_decoded_inst_get_operand_width(xedd));
   ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
