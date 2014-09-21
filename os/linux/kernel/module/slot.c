@@ -22,10 +22,8 @@ struct GranaryStack {
   char data[4096 * 8];
 };
 
-#if defined(GRANARY_WHERE_kernel) && defined(GRANARY_TARGET_debug)
-extern void *granary_stack_begin;
-extern void *granary_stack_end;
-#endif
+void *granary_stack_begin = NULL;
+void *granary_stack_end = NULL;
 
 static unsigned long curr_stack = 0;
 static struct GranaryStack *cpu_stacks = NULL;
@@ -63,10 +61,8 @@ static void AllocatePrivateStacks(void) {
   cpu_stacks = alloc_pages_exact(num_cpus * sizeof(struct GranaryStack),
                                  GFP_KERNEL);
 
-#if defined(GRANARY_WHERE_kernel) && defined(GRANARY_TARGET_debug)
   granary_stack_begin = cpu_stacks;
   granary_stack_end = &(cpu_stacks[num_cpus]);
-#endif
 
   for (i = 0; i < num_cpus; ++i) {
     InitStackMagic(&(cpu_stacks[i]));

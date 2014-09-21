@@ -235,6 +235,11 @@ const char *NativeInstruction::ISelName(void) const {
   return instruction.ISelName();
 }
 
+// Returns the names of the instruction prefixes on this instruction.
+const char *NativeInstruction::PrefixNames(void) const {
+  return instruction.PrefixNames();
+}
+
 // Invoke a function on every operand.
 void NativeInstruction::ForEachOperandImpl(
     const std::function<void(Operand *)> &func) {

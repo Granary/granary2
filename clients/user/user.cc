@@ -147,8 +147,12 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   // Adds in the hooks that allow other tools (including this tool) to hook
   // the system call handlers in high-level way.
   void InstrumentSyscall(ControlFlowInstruction *syscall) {
-    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
-    syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
+    if (!entry_hooks.IsEmpty()) {
+      syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
+    }
+    if (!exit_hooks.IsEmpty()) {
+      syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
+    }
   }
 };
 

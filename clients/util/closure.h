@@ -71,6 +71,10 @@ class ClosureList {
     }
   }
 
+  inline bool IsEmpty(void) const {
+    return nullptr == first;
+  }
+
  private:
   void FreeAll(void) {
     for (ClosureType *next_closure(nullptr); first; first = next_closure) {

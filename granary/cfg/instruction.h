@@ -345,6 +345,9 @@ class NativeInstruction : public Instruction {
   // type of operands this instructions takes, etc.
   const char *ISelName(void) const;
 
+  // Returns the names of the instruction prefixes on this instruction.
+  const char *PrefixNames(void) const;
+
   // Try to match and bind one or more operands from this instruction.
   //
   // Note: Matches are attempted in order!

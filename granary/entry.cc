@@ -45,8 +45,8 @@ static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
 
 extern "C" {
 // Initialized by `os/*/kernel/module/slot.c`
-void *granary_stack_begin = nullptr;
-void *granary_stack_end = nullptr;
+extern void *granary_stack_begin;
+extern void *granary_stack_end;
 }  // extern C
 
 // Check that we're executing from a Granary-specific stack.

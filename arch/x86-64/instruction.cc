@@ -317,6 +317,19 @@ const char *Instruction::ISelName(void) const {
   return xed_iform_enum_t2str(iform);
 }
 
+// Get the names of the prefixes.
+const char *Instruction::PrefixNames(void) const {
+  if (has_prefix_rep) {
+    return "REP";
+  } else if (has_prefix_repne) {
+    return "REPNE";
+  } else if (has_prefix_lock) {
+    return "LOCK";
+  } else {
+    return "";
+  }
+}
+
 namespace {
 
 // Invoke a function on a `arch::Operand` that has been converted into a

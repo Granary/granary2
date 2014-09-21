@@ -74,10 +74,10 @@ namespace {
 static CachePC CreateDirectEntryCode(ContextInterface *context,
                                      CodeCache *edge_code_cache) {
   auto entry_code = edge_code_cache->AllocateBlock(
-      arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+      arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES);
   CodeCacheTransaction transaction(
       edge_code_cache, entry_code,
-      entry_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+      entry_code + arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES);
   arch::GenerateDirectEdgeEntryCode(context, entry_code);
   return entry_code;
 }

@@ -295,6 +295,7 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
+      str->UpdateFormat("m%d ", static_cast<int>(width));
       if (XED_REG_INVALID != segment) {
         str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
       }
@@ -311,7 +312,8 @@ void Operand::EncodeToString(OperandString *str) const {
     case XED_ENCODER_OPERAND_TYPE_SEG1:
       if (reg.IsNative()) {
         auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        str->UpdateFormat("%s%s%s", prefix, xed_reg_enum_t2str(arch_reg), suffix);
+        str->UpdateFormat("%sr%d %s%s", prefix, reg.BitWidth(),
+                          xed_reg_enum_t2str(arch_reg), suffix);
       } else if (reg.IsVirtual()) {
         str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
       } else if (reg.IsVirtualSlot()) {
@@ -332,6 +334,7 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
+      str->UpdateFormat("m%d ", static_cast<int>(width));
       if (XED_REG_INVALID != segment) {
         str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
       }

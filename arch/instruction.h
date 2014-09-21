@@ -108,6 +108,7 @@ class InstructionInterface {
 
   const char *OpCodeName(void) const;
   const char *ISelName(void) const;
+  const char *PrefixNames(void) const;
 
   // Apply a function to every operand.
   void ForEachOperand(const std::function<void(granary::Operand *)> &func);

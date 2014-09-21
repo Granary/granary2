@@ -253,6 +253,8 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
       if (!ainstr.WillBeEncoded()) {
         Log(level, "N/E! ");
       }
+      auto prefix_names = ninstr->PrefixNames();
+      if (prefix_names && prefix_names[0]) Log(level, "%s ", prefix_names);
       Log(level, "%s", ninstr->ISelName());
       LogInputOperands(level, ninstr);
       LogOutputOperands(level, ninstr);

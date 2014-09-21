@@ -289,6 +289,48 @@ define print-meta-entry
 end
 
 
+# save-meta-pcs
+#
+# Lists out all application program counters in the log and saves the output
+# to the file name specified by `$arg0`.
+define save-meta-pcs
+  set language c++
+  set logging file $arg0
+  set logging on
+  printf ""
+  set logging off
+  set logging on
+  set logging redirect on
+  set $__i = 0
+  while $__i < GRANARY_META_LOG_LENGTH && $__i < granary_meta_log_index
+    set $__m = (unsigned long *) granary_meta_log[$__i].meta
+    if $__m[1]
+      x/i $__m[1]
+    end
+    set $__i = $__i + 1
+  end
+  set logging off
+  dont-repeat
+end
+
+
+# save-kernel-log
+#
+# Saves the kernel log to the file name specified by `$arg0`.
+define save-kernel-log
+  set language c++
+  set logging file $arg0
+  set logging on
+  printf ""
+  set logging off
+  set logging on
+  set logging redirect on
+  printf "%s", granary_log_buffer
+  set logging off
+  dont-repeat
+end
+
+
 # find-meta-entry
 #
 # Finds and prints the block meta-data whose `AppMetaData::start_pc == $arg0`

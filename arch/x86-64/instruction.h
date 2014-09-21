@@ -169,8 +169,11 @@ class Instruction : public InstructionInterface {
   // Get the opcode name.
   const char *OpCodeName(void) const;
 
-  // Get the instruction selected name.
+  // Get the instruction selection name.
   const char *ISelName(void) const;
+
+  // Get the names of the prefixes.
+  const char *PrefixNames(void) const;
 
   // Is this a specially inserted virtual register save or restore instruction?
   inline bool IsVirtualRegSaveRestore(void) const {

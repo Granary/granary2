@@ -152,7 +152,7 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Return back into the edge code.
   ENC(RET_NEAR(&ni); ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
 
-  GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+  GRANARY_ASSERT(arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES >= (pc - start_pc));
 }
 
 // Generates the direct edge code for a given `DirectEdge` structure.
@@ -210,11 +210,6 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // back into the edge code because `edge->exit_target` is initialized
   // above to point to into the edge code.
   ENC(JMP_MEMv(&ni, &(edge->exit_target)));
-
-  // Make it so that the CPU doesn't prefetch after the `JMP`. It's typical for
-  // the first execution of an indirect jump to predict the target as the next
-  // instruction.
-  ENC(UD2(&ni));
 
   GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
 }

@@ -27,7 +27,8 @@ enum {
 
   // Upper bound on the size of edge-specific direct edge code. Ideally this
   // should be as small as possible.
-  DIRECT_EDGE_CODE_SIZE_BYTES = GRANARY_IF_KERNEL_ELSE(40, 48),
+  DIRECT_EDGE_CODE_SIZE_BYTES = GRANARY_IF_KERNEL_ELSE(32, 48),
+  DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES = 48,
 
   // Upper bound on the size of indirect edge code. Ideally this should be as
   // small as possible.
@@ -36,6 +37,7 @@ enum {
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,
 
+  // TODO(pag): This is OS ABI-specific.
   REDZONE_SIZE_BYTES = GRANARY_IF_USER_ELSE(128, 0),
 
   // Size of widest general purpose registers.
