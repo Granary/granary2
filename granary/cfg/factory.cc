@@ -73,9 +73,12 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
     if (-1 == block->generation) {
       block->generation = generation + 1;
     }
-    has_pending_request = true;
+    auto old_strategy = block->materialize_strategy;
     block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
                                               strategy);
+    if (old_strategy != block->materialize_strategy) {
+      has_pending_request = true;
+    }
   }
 }
 
