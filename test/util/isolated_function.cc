@@ -45,8 +45,8 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   SpinLockedRegion locker(&regs_lock);
 
   memset(&regs1, 0, sizeof regs1);
-  setup_state(&regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
+  setup_state(&regs1);
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
   memcpy(&regs2, &regs1, sizeof regs1);
 
@@ -54,14 +54,14 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   // can eventually distinguish what changes and what stays the same.
   memset(&regs1, 0, sizeof regs1);
   memset(&(regs1.stack), 0xAB, sizeof regs1.stack);
-  setup_state(&regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
+  setup_state(&regs1);
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
   memcpy(&regs3, &regs1, sizeof regs1);
 
   memset(&regs1, 0, sizeof regs1);
-  setup_state(&regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
+  setup_state(&regs1);
   watchpoint = 1;
   RunFunctionInContext(reinterpret_cast<void *>(instrumented_func), &regs1);
 
