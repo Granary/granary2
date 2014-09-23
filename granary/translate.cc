@@ -23,17 +23,37 @@ namespace {
 // Records the number of context switches into Granary.
 std::atomic<uint64_t> num_context_switches(ATOMIC_VAR_INIT(0));
 
+// In some cases, some blocks can become completely unreachable (via control
+// flow). In these cases, no code is generated for these blocks, and so delete
+// their meta-datas.
+static void ReapUnreachableBlocks(LocalControlFlowGraph *cfg) {
+  for (auto block : cfg->Blocks()) {
+    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      if (!decoded_block->StartCachePC()) {
+        delete decoded_block->meta;
+        decoded_block->meta = nullptr;
+      }
+    }
+  }
+}
+
 // Add the decoded blocks to the code cache index.
 static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   LockedIndexTransaction transaction(index);
   auto trace_group = num_context_switches.fetch_add(1);
+  auto reap_unreachable = false;
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      auto meta = decoded_block->MetaData();
-      TraceMetaData(trace_group, meta);
-      transaction.Insert(meta);
+      if (decoded_block->StartCachePC()) {
+        auto meta = decoded_block->MetaData();
+        TraceMetaData(trace_group, meta);
+        transaction.Insert(meta);
+      } else {
+        reap_unreachable = true;
+      }
     }
   }
+  if (reap_unreachable) ReapUnreachableBlocks(cfg);
 }
 
 }  // namespace

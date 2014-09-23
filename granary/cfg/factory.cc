@@ -219,6 +219,8 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     block->AppendInstruction(ninstr);
     if (ninstr->IsAppInstruction()) {
       os::AnnotateAppInstruction(this, block, ninstr, decode_pc);
+      instr = block->LastInstruction()->Previous();
+      if (IsA<ControlFlowInstruction *>(instr)) break;
     }
     AnnotateInstruction(this, block, before_instr, decode_pc);
     instr = block->LastInstruction()->Previous();
