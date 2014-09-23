@@ -79,10 +79,7 @@ class BlockMangler {
 
   // Returns true if an address needs relativizing.
   bool AddressNeedsRelativizing(PC relative_pc) const {
-    if (!relative_pc) return false;  // Don't have a target for it.
-    auto signed_diff = relative_pc - cache_pc;
-    auto diff = 0 > signed_diff ? -signed_diff : signed_diff;
-    return arch::MaxRelativeOffset() < diff;
+    return !arch::AddrIsOffsetReachable(cache_pc, relative_pc);
   }
 
   // Relativize a particular memory operation within a memory instruction.

@@ -38,9 +38,7 @@ namespace {
 // TODO(pag): Generalize this.
 static void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
                       AppPC target_pc, const AppPC *target_pc_ptr) {
-  auto diff = target_pc - encode_pc;
-  if (0 > diff) diff = -diff;
-  if (arch::MaxRelativeOffset() >= diff) {  // 2^32 - 1024.
+  if (AddrIsOffsetReachable(encode_pc, target_pc)) {
     CALL_NEAR_RELBRd(ni, target_pc);
   } else {
     CALL_NEAR_MEMv(ni, target_pc_ptr);

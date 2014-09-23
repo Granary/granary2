@@ -6,6 +6,7 @@
 #include "arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/cast.h"
 #include "granary/base/type_trait.h"
 
 namespace granary {
@@ -27,7 +28,7 @@ struct RelOffset {
 
     // Remove a hefty portion of slack to account for a bad estimate of
     // `Relativizer::cache_pc`.
-    MAX_VALUE = SIGNED_MAX - (SIGNED_MAX >> 2),
+    MAX_VALUE = SIGNED_MAX - (SIGNED_MAX >> 4),
     MIN_VALUE = -SIGNED_MAX
   };
 };
@@ -39,6 +40,14 @@ inline static constexpr ptrdiff_t MaxRelativeOffset(void) {
 
 inline static constexpr ptrdiff_t MinRelativeOffset(void) {
   return detail::RelOffset<REL_ADDR_WIDTH_BITS>::MIN_VALUE;
+}
+
+template <typename A, typename B>
+inline static bool AddrIsOffsetReachable(A source, B dest) {
+  auto source_addr = UnsafeCast<intptr_t>(source);
+  auto dest_addr = UnsafeCast<intptr_t>(dest);
+  auto diff = source_addr - dest_addr;
+  return MinRelativeOffset() <= diff && diff <= MaxRelativeOffset();
 }
 
 #ifdef GRANARY_ECLIPSE

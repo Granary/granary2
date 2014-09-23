@@ -68,11 +68,9 @@ static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 static NativeAddress *enter_direct_addr = nullptr;
 static NativeAddress *enter_indirect_addr = nullptr;
 
-static void CALL_NEAR(arch::Instruction *ni, CachePC pc, AppPC target_pc,
+static void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc, AppPC target_pc,
                       NativeAddress **na) {
-  auto diff = target_pc - pc;
-  if (0 > diff) diff = -diff;
-  if (arch::MaxRelativeOffset() >= diff) {  // 2^32 - 1024.
+  if (AddrIsOffsetReachable(encode_pc, target_pc)) {  // 2^32 - 1024.
     CALL_NEAR_RELBRd(ni, target_pc);
   } else {
     if (!*na) {

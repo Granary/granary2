@@ -27,8 +27,8 @@ GRANARY_DEFINE_bool(debug_log_fragments, false,
     "Log the assembled fragments before doing final linking. The default is "
     "`no`.");
 
-GRANARY_DEFINE_unsigned(num_copy_propagations, 1,
-    "The number of iterations of copy propagation to run. The default is `1`.");
+GRANARY_DEFINE_unsigned(num_copy_propagations, 2,
+    "The number of iterations of copy propagation to run. The default is `2`.");
 
 namespace granary {
 

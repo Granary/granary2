@@ -204,13 +204,12 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     //
     // TODO(pag): Mask high order bits if 32 bits? For segment offsets, this
     //            doesn't seem to matter.
-    if (ADDRESS_WIDTH_BITS == xedo->u.mem.disp.displacement_width) {
+    if (ADDRESS_WIDTH_BITS == xedo->u.mem.disp.displacement_width &&
+      AddrIsOffsetReachable(next_addr, op.addr.as_int)) {
       auto diff = op.addr.as_int - next_addr;
-      if (32 >= ImmediateWidthBits(diff)) {
-        xedo->u.mem.disp.displacement = static_cast<uint32_t>(diff);
-        xedo->u.mem.disp.displacement_width = 32;
-        xedo->u.mem.base = XED_REG_RIP;
-      }
+      xedo->u.mem.disp.displacement = static_cast<uint32_t>(diff);
+      xedo->u.mem.disp.displacement_width = 32;
+      xedo->u.mem.base = XED_REG_RIP;
     }
   }
 }

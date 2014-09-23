@@ -400,7 +400,8 @@ class alignas(alignof(void *)) CodeAttributes {
   // adding redundant fragments (e.g. if you had multiple labels in a row).
   bool has_native_instrs:1;
 
-  // Does this fragment have any instructions that write to the flags?
+  // Does this fragment have any instructions that read/write to the flags?
+  bool reads_flags:1;
   bool modifies_flags:1;
 
   // Does this fragment represent the beginning of a basic block?

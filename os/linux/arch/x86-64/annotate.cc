@@ -180,6 +180,7 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 
   auto fault_pc = instr->DecodedPC();
   auto module = ModuleContainingPC(fault_pc);
+  if (!module) return;
 
   // Get this module's exception tables.
   auto exception_tables = reinterpret_cast<const ExceptionTableBounds *>(
@@ -209,7 +210,9 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
     //            is (semantically) allowed to fault?
     //
     //            See Issue #19.
-
+    NOP_90(&(instr->instruction));
+    instr->InsertAfter(lir::Jump(new NativeBasicBlock(fault_pc)));
+    return;
 
   // Writes to user space memory.
   } else if (instr->MatchOperands(WriteTo(dest))) {
@@ -268,11 +271,6 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   }
 
   if (!handler) {
-    if (-1 == mem_size) {
-      NOP_90(&(instr->instruction));
-      instr->InsertAfter(lir::Jump(new NativeBasicBlock(fault_pc)));
-      return;
-    }
     GRANARY_ASSERT(XED_IFORM_MOV_SEG_MEMw != instr->instruction.iform);
     GRANARY_ASSERT(-1 != mem_size);
     handler = exception_funcs[recovers_from_error][is_write][Order(mem_size)];
@@ -296,6 +294,11 @@ void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   //        no_fault: MOV RCX, saved_rcx
   //                  <instr>
   //                  ...
+  //
+  // TODO(pag): For REP-based instructions, need to make sure that *none* of
+  //            the accessed memory faults. Would need to pre-mangle into a
+  //            LOOP-form, then apply the above translation to the interior
+  //            instructions.
 
   // Just assume that the stack is valid, it's easier that way.
   instr->InsertBefore(new AnnotationInstruction(IA_VALID_STACK));

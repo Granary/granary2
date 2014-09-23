@@ -73,8 +73,8 @@ extern void NotifyModuleStateChange(struct LinuxKernelModule *mod);
 // Note: This function won't actually be instrumented.
 __attribute__((section(".text.inst_exports")))
 static int EventModuleStateChange(struct notifier_block *nb,
-                                   unsigned long mod_state,
-                                   void *vmod) {
+                                  unsigned long mod_state,
+                                  void *vmod) {
   struct module *mod = (struct module *) vmod;
   struct LinuxKernelModule *kmod = FindModule(mod->name);
   if (!kmod) {

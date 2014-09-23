@@ -415,13 +415,19 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
 
   // Application instructions in an instrumentation fragment are not allowed
   // to read or write the flags, or to change the stack pointer.
+  //
+  // This has extra strict requirements that let us convert some
+  // `CODE_TYPE_INST` fragments into `CODE_TYPE_APP` fragments.
   } else if (CODE_TYPE_INST == frag->type && is_app &&
+             (frag->attr.reads_flags || frag->attr.modifies_flags) &&
              (reads_flags || writes_flags || writes_stack_ptr)) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
   }
 
   // We're appending the instruction.
+  if (is_app && CODE_TYPE_INST == frag->type) frag->type = CODE_TYPE_APP;
+  if (reads_flags) frag->attr.reads_flags = true;
   if (writes_flags) frag->attr.modifies_flags = true;
   frag->attr.has_native_instrs = true;
   frag->instrs.Append(instr->UnsafeUnlink().release());

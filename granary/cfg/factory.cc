@@ -423,24 +423,29 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
     BlockMetaData *meta) {
   auto app_meta = MetaDataCast<AppMetaData *>(meta);
   auto target_pc = app_meta->start_pc;
-  auto module = os::ModuleContainingPC(app_meta->start_pc);
 
-  // Aagh! Indirect jump to some already cached code. For the time being,
-  // give up and just go to the target and ignore the meta-data.
-  if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
-    return MaterializeToExistingBlock(cfg, meta, target_pc);
-  }
-
-  if (os::ModuleKind::GRANARY == module->Kind()) {
-#ifdef GRANARY_WHERE_user
-    // If we try to go to `_fini`, then redirect execution to `exit_group`.
-    if (&_fini == target_pc) {
-      target_pc = &exit_group_ok;
-      app_meta->start_pc = &exit_group_ok;
+  if (auto module = os::ModuleContainingPC(app_meta->start_pc)) {
+    // Aagh! Indirect jump to some already cached code. For the time being,
+    // give up and just go to the target and ignore the meta-data.
+    if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
+      return MaterializeToExistingBlock(cfg, meta, target_pc);
     }
+
+    if (os::ModuleKind::GRANARY == module->Kind()) {
+#ifdef GRANARY_WHERE_user
+      // If we try to go to `_fini`, then redirect execution to `exit_group`.
+      if (&_fini == target_pc) {
+        target_pc = &exit_group_ok;
+        app_meta->start_pc = &exit_group_ok;
+      }
 #endif
-    GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
-                   target_pc < &granary_end_inst_exports);
+      GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
+                     target_pc < &granary_end_inst_exports);
+    }
+
+  // TODO(pag): In release builds, module tracking is basically ignored.
+  } else {
+    GRANARY_ASSERT(false);
   }
 
   auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);

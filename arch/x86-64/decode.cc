@@ -407,6 +407,7 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
       GRANARY_ASSERT(false);
       break;
     }
+
     const auto category = xed_decoded_inst_get_category(&xedd);
     if (XED_CATEGORY_NOP == category) {  // Skip NOPs.
       pc += xed_decoded_inst_get_length(&xedd);
@@ -418,6 +419,7 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
     switch (instr->iclass) {
       case XED_ICLASS_UD2:
       case XED_ICLASS_HLT:  // TODO(pag): Add support for me!
+      case XED_ICLASS_SWAPGS:  // TODO(pag): Add support for me!
         return nullptr;
       case XED_ICLASS_XBEGIN:
       case XED_ICLASS_XEND:

@@ -109,6 +109,7 @@ CodeAttributes::CodeAttributes(void)
       can_add_succ_to_partition(true),
       can_add_pred_to_partition(true),
       has_native_instrs(false),
+      reads_flags(false),
       modifies_flags(false),
       is_block_head(false),
       is_return_target(false),
