@@ -2,12 +2,32 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-START_FILE
-
-    .intel_syntax noprefix
+START_FILE_INTEL
 
 #ifdef GRANARY_WHERE_kernel
 
+// A REP MOVS that can fault.
+#define MAKE_REP_MOVS(size_bytes, size_name, offs) \
+    DEFINE_INST_FUNC(granary_extable_rep_movs_ ## size_bytes)               @N@\
+        1:  rep movs size_name PTR es:[rdi],size_name PTR ds:[rsi]          @N@\
+        2:                                                                  @N@\
+        .section .fixup,"ax"                                                @N@\
+        3:  mov QWORD PTR [rsp + 8], rsp                                    @N@\
+            ret                                                             @N@\
+        .section __ex_table,"a"                                             @N@\
+        .balign 8                                                           @N@\
+        .long 1b - .,3b - . + offs                                          @N@\
+        .section .text.inst_exports                                         @N@\
+            mov QWORD PTR [rsp + 8], 0                                      @N@\
+            ret                                                             @N@\
+    END_FUNC(granary_extable_rep_movs_ ## size_bytes)
+
+MAKE_REP_MOVS(8, BYTE, 0)
+MAKE_REP_MOVS(16, WORD, 0)
+MAKE_REP_MOVS(32, DWORD, 0)
+MAKE_REP_MOVS(64, QWORD, 0)
+
+#if 0
 // Make reader and writer functions for each memory operand size. These
 // functions will read or write to the memory address stored in `RCX`, and if
 // the memory operation raises a page fault, then `1` will be stored in `RCX`,
@@ -18,7 +38,7 @@ START_FILE
 // explicit.
 
 #define MAKE_READ_FUNC(size, size_name, insn, dest_reg, offs) \
-    DEFINE_FUNC(granary_uaccess_read_ ## size)  @N@\
+    DEFINE_FUNC(granary_extable_read_ ## size)  @N@\
     1:  insn   dest_reg, size_name ptr [rcx]    @N@\
     2:                                          @N@\
     .section .fixup,"ax"                        @N@\
@@ -31,10 +51,10 @@ START_FILE
     .text                                       @N@\
         mov     rcx, 0                          @N@\
         ret                                     @N@\
-    END_FUNC(granary_uaccess_read_ ## size)
+    END_FUNC(granary_extable_read_ ## size)
 
 #define MAKE_WRITE_FUNC(size, size_name, offs) \
-    DEFINE_FUNC(granary_uaccess_write_ ## size) @N@\
+    DEFINE_FUNC(granary_extable_write_ ## size) @N@\
     1:  mov   size_name ptr [rcx], 0            @N@\
     2:                                          @N@\
     .section .fixup,"ax"                        @N@\
@@ -47,10 +67,10 @@ START_FILE
     .text                                       @N@\
         mov     ecx, 0                          @N@\
         ret                                     @N@\
-    END_FUNC(granary_uaccess_write_ ## size)
+    END_FUNC(granary_extable_write_ ## size)
 
 #define MAKE_SEG_WRITE_FUNC(seg) \
-    DEFINE_FUNC(granary_uaccess_write_seg_ ## seg)  @N@\
+    DEFINE_FUNC(granary_extable_write_seg_ ## seg)  @N@\
     1:  mov   seg, ecx                              @N@\
     2:                                              @N@\
     .section .fixup,"ax"                            @N@\
@@ -63,10 +83,10 @@ START_FILE
     .text                                           @N@\
         mov     ecx, 0                              @N@\
         ret                                         @N@\
-    END_FUNC(granary_uaccess_write_seg_ ## size)
+    END_FUNC(granary_extable_write_seg_ ## size)
 
 #define MAKE_NSTR_FUNC(insn) \
-    DEFINE_FUNC(granary_uaccess_ ## insn)   @N@\
+    DEFINE_FUNC(granary_extable_ ## insn)   @N@\
     1:  insn                                @N@\
     2:                                      @N@\
     .section .fixup,"ax"                    @N@\
@@ -79,7 +99,7 @@ START_FILE
     .text                                   @N@\
         mov     ecx, 0                      @N@\
         ret                                 @N@\
-    END_FUNC(granary_uaccess_ ## insn)
+    END_FUNC(granary_extable_ ## insn)
 
 MAKE_READ_FUNC(8, byte, movzx, ecx, 0)
 MAKE_READ_FUNC(16, word, movzx, ecx, 0)
@@ -111,6 +131,8 @@ MAKE_SEG_WRITE_FUNC(ss)
 MAKE_NSTR_FUNC(rdmsr)
 MAKE_NSTR_FUNC(wrmsr)
 MAKE_NSTR_FUNC(fwait)
+
+#endif
 
 #endif  // GRANARY_WHERE_kernel
 

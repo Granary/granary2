@@ -261,20 +261,20 @@ static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
 
 // Forward declaration.
-class RegisterTracker;
+class RegisterSet;
 
 namespace detail {
 
 template <bool kIsLive>
-class RegisterTrackerIterator {
+class RegisterSetIterator {
  public:
-  typedef RegisterTrackerIterator<kIsLive> Iterator;
+  typedef RegisterSetIterator<kIsLive> Iterator;
 
-  RegisterTrackerIterator(void)
+  RegisterSetIterator(void)
       : tracker(nullptr),
         num(arch::NUM_GENERAL_PURPOSE_REGISTERS) {}
 
-  explicit RegisterTrackerIterator(const RegisterTracker *tracker_)
+  explicit RegisterSetIterator(const RegisterSet *tracker_)
       : tracker(tracker_),
         num(0U) {
     Advance();
@@ -297,20 +297,20 @@ class RegisterTrackerIterator {
  private:
   void Advance(void);
 
-  const RegisterTracker * const tracker;
+  const RegisterSet * const tracker;
   uint16_t num;
 };
 
 }  // namespace detail
 
 // Base implementation of a register tracker.
-class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
+class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
  public:
-  typedef detail::RegisterTrackerIterator<true> Iterator;
+  typedef detail::RegisterSetIterator<true> Iterator;
 
-  RegisterTracker(void) = default;
+  RegisterSet(void) = default;
 
-  inline RegisterTracker(const RegisterTracker &that) {
+  inline RegisterSet(const RegisterSet &that) {
     Copy(that);
   }
 
@@ -381,19 +381,19 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   // Returns true if there was a change in the set of live registers. This is
   // useful when we want to be conservative about the potentially live
   // registers out of a specific block.
-  bool Union(const RegisterTracker &that);
+  bool Union(const RegisterSet &that);
 
   // Intersect some other live register set with the current live register set.
   // Returns true if there was a change in the set of live registers. This is
   // useful when we want to be conservative about the potentially dead registers
   // out of a specific block.
-  bool Intersect(const RegisterTracker &that);
+  bool Intersect(const RegisterSet &that);
 
   // Returns true if two register usage tracker sets are equivalent.
-  bool Equals(const RegisterTracker &that) const;
+  bool Equals(const RegisterSet &that) const;
 
   // Overwrites one register usage tracker with another.
-  RegisterTracker &operator=(const RegisterTracker &that);
+  RegisterSet &operator=(const RegisterSet &that);
 
  protected:
   typedef typename RemoveReference<decltype(storage[0])>::Type StorageT;
@@ -404,7 +404,7 @@ class RegisterTracker : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
 
 namespace detail {
 template <bool kIsLive>
-void RegisterTrackerIterator<kIsLive>::Advance(void) {
+void RegisterSetIterator<kIsLive>::Advance(void) {
   for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
          kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
 }
@@ -416,13 +416,13 @@ void RegisterTrackerIterator<kIsLive>::Advance(void) {
 // A register is used if the register appears anywhere in an instruction.
 //
 // Note: By default, all registers are treated as dead.
-class UsedRegisterTracker : public RegisterTracker {
+class UsedRegisterSet : public RegisterSet {
  public:
-  inline UsedRegisterTracker(void) {
+  inline UsedRegisterSet(void) {
     KillAll();
   }
 
-  typedef detail::RegisterTrackerIterator<true> Iterator;
+  typedef detail::RegisterSetIterator<true> Iterator;
 
   inline Iterator begin(void) const {
     return Iterator(this);
@@ -443,7 +443,7 @@ class UsedRegisterTracker : public RegisterTracker {
   // Note: This function has an architecture-specific implementation.
   void ReviveRestrictedRegisters(const NativeInstruction *instr);
 
-  inline void Join(const UsedRegisterTracker &that) {
+  inline void Join(const UsedRegisterSet &that) {
     Union(that);
   }
 };
@@ -456,13 +456,13 @@ class UsedRegisterTracker : public RegisterTracker {
 // definition of the register.
 //
 // Note: By default, all registers are treated as dead.
-class LiveRegisterTracker : public RegisterTracker {
+class LiveRegisterSet : public RegisterSet {
  public:
-  inline LiveRegisterTracker(void) {
+  inline LiveRegisterSet(void) {
     KillAll();
   }
 
-  typedef detail::RegisterTrackerIterator<true> Iterator;
+  typedef detail::RegisterSetIterator<true> Iterator;
 
   inline Iterator begin(void) const {
     return Iterator(this);
@@ -484,48 +484,8 @@ class LiveRegisterTracker : public RegisterTracker {
   //       not by the tracker itself.
   void Visit(NativeInstruction *instr);
 
-  inline void Join(const LiveRegisterTracker &that) {
+  inline void Join(const LiveRegisterSet &that) {
     Union(that);
-  }
-};
-
-// A class that tracks conservatively dead, general-purpose registers within a
-// straight-line sequence of instructions.
-//
-// A register is conservatively dead if there exists any control-flow path from
-// the current instruction of a definition of the instruction.
-//
-// Note: By default, all registers are treated as live.
-class DeadRegisterTracker : public RegisterTracker {
- public:
-  inline DeadRegisterTracker(void) {
-    ReviveAll();
-  }
-
-  typedef detail::RegisterTrackerIterator<false> Iterator;
-
-  inline Iterator begin(void) const {
-    return Iterator(this);
-  }
-
-  inline Iterator end(void) const {
-    return Iterator();
-  }
-
-  // Update this register tracker by visiting the operands of an instruction.
-  //
-  // Note: This treats conditional writes to a register as reviving that
-  //       register.
-  //
-  // Note: This *only* inspects register usage in the instruction, and does
-  //       *not* consider any implied register usage (e.g. treat all regs as
-  //       dead before a jump). Implied register usage is treated as a policy
-  //       decision that must be made by the user of a register tracker, and
-  //       not by the tracker itself.
-  void Visit(NativeInstruction *instr);
-
-  inline void Join(const DeadRegisterTracker &that) {
-    Intersect(that);
   }
 };
 

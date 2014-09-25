@@ -26,8 +26,8 @@ namespace arch {
 class Instruction : public InstructionInterface {
  public:
   enum {
-    MAX_NUM_EXPLICIT_OPS = XED_ENCODER_OPERANDS_MAX,
-    MAX_NUM_OPS = 11
+    MAX_NUM_EXPLICIT_OPERANDS = XED_ENCODER_OPERANDS_MAX,
+    MAX_NUM_OPERANDS = 11
   };
 
   Instruction(void);
@@ -186,6 +186,12 @@ class Instruction : public InstructionInterface {
     return !dont_encode;
   }
 
+  // Can this instruction not be the cause of a fragment split? This has to
+  // do with `granary/code/assemble/2_build_fragment_list.cc`.
+  inline bool CantSplitFragment(void) {
+    return dont_split_fragment;
+  }
+
   // Apply a function on every operand.
   void ForEachOperand(const std::function<void(granary::Operand *)> &func);
 
@@ -252,6 +258,10 @@ class Instruction : public InstructionInterface {
     mutable bool writes_to_stack_pointer:1;
     mutable bool analyzed_stack_usage:1;
 
+    // Should we force this instruction to *not* split the fragment, even if
+    // other indicators make it seem like we should split the fragment?
+    bool dont_split_fragment:1;
+
     // Is this an atomic operation?
     bool is_atomic:1;
 
@@ -306,7 +316,7 @@ class Instruction : public InstructionInterface {
   // All operands that Granary can make sense of. This includes implicit and
   // suppressed operands. The order between these and those referenced via
   // `xed_inst_t` is maintained.
-  Operand ops[MAX_NUM_EXPLICIT_OPS];
+  Operand ops[MAX_NUM_EXPLICIT_OPERANDS];
 
   // Useful for debugging the creation location of an instruction and the
   // alteration location of an instruction.

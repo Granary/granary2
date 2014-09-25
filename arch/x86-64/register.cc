@@ -186,7 +186,7 @@ bool VirtualRegister::IsFlags(void) const {
 // Update this register tracker by marking some registers as used (i.e.
 // restricted). This allows us to communicate some architecture-specific
 // encoding constraints to the register scheduler.
-void UsedRegisterTracker::ReviveRestrictedRegisters(
+void UsedRegisterSet::ReviveRestrictedRegisters(
     const NativeInstruction *instr) {
   if (GRANARY_UNLIKELY(instr->instruction.uses_legacy_registers)) {
     Revive(14);  // XED_REG_R15
@@ -202,12 +202,68 @@ void UsedRegisterTracker::ReviveRestrictedRegisters(
   for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
     const auto &op(ainstr.ops[i]);
     if (!op.is_sticky) continue;
-    if (op.IsRegister() || (op.IsMemory() && !op.is_compound)) {
+    if (op.IsRegister()) {
       Revive(op.reg);
+    } else if (op.IsMemory()) {
+      if (op.is_compound) {
+        Revive(VirtualRegister(op.mem.reg_base));
+        Revive(VirtualRegister(op.mem.reg_index));
+      } else {
+        Revive(op.reg);
+      }
     }
-    // TODO(pag): Handle `else` case? This is to deal with ambiguous operands
-    //            that need to be fixed to specific registers, as in
-    //            `IN` and `OUT`.
+  }
+}
+
+
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterSet::Visit(NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  const auto &ainstr(instr->instruction);
+  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
+    const auto &op(ainstr.ops[i]);
+    if (op.IsRegister()) {
+      Revive(op.reg);
+    } else if (op.IsMemory()) {
+      if (op.is_compound) {
+        Revive(VirtualRegister(op.mem.reg_base));
+        Revive(VirtualRegister(op.mem.reg_index));
+      } else {
+        Revive(op.reg);
+      }
+    }
+  }
+}
+
+// Update this register tracker by visiting the operands of an instruction.
+//
+// Note: This treats conditional writes to a register as reviving that
+//       register.
+void LiveRegisterSet::Visit(NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  const auto &ainstr(instr->instruction);
+  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
+    const auto &op(ainstr.ops[i]);
+    if (op.IsRegister()) {
+      const auto &reg(op.reg);
+      // Read, read/write, conditional write, or partial write.
+      if (op.IsRead() || op.IsConditionalWrite() ||
+          reg.PreservesBytesOnWrite()) {
+        Revive(reg);
+      } else if (op.IsWrite()) {  // Write-only.
+        Kill(reg);
+      } else {
+        GRANARY_ASSERT(false);
+      }
+    } else if (op.IsMemory()) {
+      if (op.is_compound) {
+        Revive(VirtualRegister(op.mem.reg_base));
+        Revive(VirtualRegister(op.mem.reg_index));
+      } else {
+        Revive(op.reg);
+      }
+    }
   }
 }
 

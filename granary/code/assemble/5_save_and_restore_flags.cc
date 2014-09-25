@@ -38,13 +38,13 @@ static void InitLiveRegsOnExit(FragmentList *frags) {
   }
 }
 
-static LiveRegisterTracker LiveRegsOnEntry(Fragment *frag) {
+static LiveRegisterSet LiveRegsOnEntry(Fragment *frag) {
   return frag->regs.live_on_entry;
 }
 
 // Returns the live registers on exit from a fragment.
-static LiveRegisterTracker LiveRegsOnExit(Fragment *frag) {
-  LiveRegisterTracker regs;
+static LiveRegisterSet LiveRegsOnExit(Fragment *frag) {
+  LiveRegisterSet regs;
   if (IsA<ExitFragment *>(frag)) {
     regs = LiveRegsOnEntry(frag);
   } else if (frag->branch_instr) {
@@ -68,7 +68,7 @@ static LiveRegisterTracker LiveRegsOnExit(Fragment *frag) {
 // registers on entry to this fragment has changed since the last time we
 // analyzed this fragment.
 static bool AnalyzeFragRegs(Fragment *frag) {
-  LiveRegisterTracker regs(LiveRegsOnExit(frag));
+  LiveRegisterSet regs(LiveRegsOnExit(frag));
   auto changed = !frag->regs.live_on_exit.Equals(regs);
   auto seen_native_instr = false;
   frag->regs.live_on_exit = regs;

@@ -106,6 +106,10 @@ class InstructionInterface {
   // Will this instruction be encoded?
   bool WillBeEncoded(void) const;
 
+  // Can this instruction not be the cause of a fragment split? This has to
+  // do with `granary/code/assemble/2_build_fragment_list.cc`.
+  bool CantSplitFragment(void);
+
   const char *OpCodeName(void) const;
   const char *ISelName(void) const;
   const char *PrefixNames(void) const;

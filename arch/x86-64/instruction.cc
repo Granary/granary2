@@ -440,7 +440,7 @@ static bool MatchOperand(OperandMatcher matcher, const Operand &op) {
 
 struct MatchState {
   size_t num_matched;
-  bool was_matched[Instruction::MAX_NUM_OPS];
+  bool was_matched[Instruction::MAX_NUM_OPERANDS];
 };
 
 // Try to match an operand, and update the `MatchState` accordingly.

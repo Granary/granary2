@@ -10,7 +10,7 @@
 namespace granary {
 
 // Kill a specific register.
-void RegisterTracker::Kill(VirtualRegister reg) {
+void RegisterSet::Kill(VirtualRegister reg) {
   if (reg.IsNative() && reg.IsGeneralPurpose()) {
     Kill(reg.Number());
   }
@@ -19,7 +19,7 @@ void RegisterTracker::Kill(VirtualRegister reg) {
 // Kill a specific register, where we treat this register is being part of
 // a write. This takes into account the fact that two or more registers might
 // alias the same data.
-void RegisterTracker::WriteKill(VirtualRegister reg) {
+void RegisterSet::WriteKill(VirtualRegister reg) {
   if (reg.IsNative() && reg.IsGeneralPurpose()) {
     if (reg.PreservesBytesOnWrite()) {
       Revive(reg.Number());
@@ -30,7 +30,7 @@ void RegisterTracker::WriteKill(VirtualRegister reg) {
 }
 
 // Kill a specific register.
-void RegisterTracker::Revive(VirtualRegister reg) {
+void RegisterSet::Revive(VirtualRegister reg) {
   if (reg.IsNative() && reg.IsGeneralPurpose()) {
     Revive(reg.Number());
   }
@@ -40,7 +40,7 @@ void RegisterTracker::Revive(VirtualRegister reg) {
 // Returns true if there was a change in the set of live registers. This is
 // useful when we want to be conservative about the potentially live
 // registers out of a specific block.
-bool RegisterTracker::Union(const RegisterTracker &that) {
+bool RegisterSet::Union(const RegisterSet &that) {
   bool changed = false;
   for (size_t i = 0; i < STORAGE_LEN; ++i) {
     StorageT new_val = static_cast<StorageT>(storage[i] | that.storage[i]);
@@ -54,7 +54,7 @@ bool RegisterTracker::Union(const RegisterTracker &that) {
 // Returns true if there was a change in the set of live registers. This is
 // useful when we want to be conservative about the potentially dead registers
 // out of a specific block.
-bool RegisterTracker::Intersect(const RegisterTracker &that) {
+bool RegisterSet::Intersect(const RegisterSet &that) {
   bool changed = false;
   for (size_t i = 0; i < STORAGE_LEN; ++i) {
     StorageT new_val = static_cast<StorageT>(storage[i] & that.storage[i]);
@@ -65,7 +65,7 @@ bool RegisterTracker::Intersect(const RegisterTracker &that) {
 }
 
 // Returns true if two register usage tracker sets are equivalent.
-bool RegisterTracker::Equals(const RegisterTracker &that) const {
+bool RegisterSet::Equals(const RegisterSet &that) const {
   for (size_t i = 0; i < STORAGE_LEN; ++i) {
     if (storage[i] != that.storage[i]) {
       return false;
@@ -75,98 +75,11 @@ bool RegisterTracker::Equals(const RegisterTracker &that) const {
 }
 
 // Overwrites one register usage tracker with another.
-RegisterTracker &RegisterTracker::operator=(const RegisterTracker &that) {
+RegisterSet &RegisterSet::operator=(const RegisterSet &that) {
   if (this != &that) {
     this->Copy(that);
   }
   return *this;
-}
-
-// Update this register tracker by marking all registers that appear in an
-// instruction as used.
-void UsedRegisterTracker::Visit(NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) {
-    return;
-  }
-  instr->ForEachOperand([=] (Operand *op) {
-    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2;
-      mloc->CountMatchedRegisters({&r1, &r2});
-      Revive(r1);
-      Revive(r2);
-    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
-      Revive(rloc->Register());
-    }
-  });
-}
-
-// Update this register tracker by visiting the operands of an instruction.
-//
-// Note: This treats conditional writes to a register as reviving that
-//       register.
-void LiveRegisterTracker::Visit(NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) {
-    return;
-  }
-  instr->ForEachOperand([=] (Operand *op) {
-    // All registers participating in a memory operand are reads, because
-    // they are used to compute the effective address of the memory operand.
-    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2;
-      mloc->CountMatchedRegisters({&r1, &r2});
-      Revive(r1);
-      Revive(r2);
-    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
-      auto reg = rloc->Register();
-      if (reg.IsNative() && reg.IsGeneralPurpose()) {
-        // Read, read/write, conditional write, or partial write.
-        if (op->IsRead() || op->IsConditionalWrite() ||
-            reg.PreservesBytesOnWrite()) {
-          Revive(reg.Number());
-        } else if (op->IsWrite()) {  // Write-only.
-          Kill(reg.Number());
-        }
-      }
-    }
-  });
-}
-
-// Update this register tracker by visiting the operands of an instruction.
-//
-// Note: This treats conditional writes to a register as reviving that
-//       register.
-void DeadRegisterTracker::Visit(NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) {
-    return;
-  }
-  // Treat conditional writes, read/writes, and partial writes as unconditional
-  // writes. The idea is that what we really want to track is whether any part
-  // of the register has potentially been modified.
-  instr->ForEachOperand([=] (Operand *op) {
-    if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
-      auto reg = rloc->Register();
-      if (op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
-        Kill(reg);  // Read/write, write, conditional write.
-      }
-    }
-  });
-  instr->ForEachOperand([=] (Operand *op) {
-    // All registers participating in a memory operand are reads, because
-    // they are used to compute the effective address of the memory operand.
-    if (auto mloc = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2;
-      mloc->CountMatchedRegisters({&r1, &r2});
-      Revive(r1);
-      Revive(r2);
-
-    // If this register operand doesn't write, then it's a read.
-    } else if (auto rloc = DynamicCast<RegisterOperand *>(op)) {
-      auto reg = rloc->Register();
-      if (!op->IsWrite() && reg.IsNative() && reg.IsGeneralPurpose()) {
-        Revive(reg.Number());
-      }
-    }
-  });
 }
 
 }  // namespace granary

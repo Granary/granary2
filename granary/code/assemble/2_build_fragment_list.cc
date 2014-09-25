@@ -424,7 +424,8 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
 
   // Instrumentation instructions in an application fragment are allowed to
   // read but not write the flags.
-  } else if (CODE_TYPE_APP == frag->type && !is_app && writes_flags) {
+  } else if (CODE_TYPE_APP == frag->type && !is_app && writes_flags &&
+             !instr->instruction.CantSplitFragment()) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
 

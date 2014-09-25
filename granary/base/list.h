@@ -42,7 +42,7 @@ class ListHead {
 
   // Get the object that comes after the object that contains this list head.
   template <typename T>
-  T *GetNext(const T *object) const {
+  inline T *GetNext(const T *object) const {
     GRANARY_IF_DEBUG( CheckObject(object); )
     if (!next) {
       return nullptr;
@@ -64,7 +64,7 @@ class ListHead {
 
   // Get the object that comes before the object that contains this list head.
   template <typename T>
-  T *GetPrevious(const T *object) const {
+  inline T *GetPrevious(const T *object) const {
     GRANARY_IF_DEBUG( CheckObject(object); )
     if (!prev) {
       return nullptr;

@@ -14,7 +14,7 @@ class NativeInstruction;
 namespace os {
 
 // Annotate an application instruction.
-void AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
+bool AnnotateAppInstruction(BlockFactory *factory, DecodedBasicBlock *block,
                             NativeInstruction *instr, AppPC next_pc);
 
 }  // namespace os

@@ -190,6 +190,7 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto decode_pc = block->StartAppPC();
+  auto stop = false;
   arch::InstructionDecoder decoder;
   Instruction *instr(nullptr);
   do {
@@ -217,16 +218,12 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     auto ninstr = MakeInstruction(&dinstr);
     instr = ninstr;
     block->AppendInstruction(ninstr);
-    if (ninstr->IsAppInstruction()) {
-      os::AnnotateAppInstruction(this, block, ninstr, decode_pc);
-      instr = block->LastInstruction()->Previous();
-      if (IsA<ControlFlowInstruction *>(instr)) break;
-    }
     AnnotateInstruction(this, block, before_instr, decode_pc);
+    stop = ninstr->IsAppInstruction() &&
+           os::AnnotateAppInstruction(this, block, ninstr, decode_pc);
+
     instr = block->LastInstruction()->Previous();
-
-  } while (!IsA<ControlFlowInstruction *>(instr));
-
+  } while (stop || !IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(block , instr, decode_pc);
 }
 

@@ -15,7 +15,8 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
         (LabelInstruction, 2 * 3 * 5),
       (NativeInstruction, 2 * 7),
         (BranchInstruction, 2 * 7 * 11),
-        (ControlFlowInstruction, 2 * 7 * 13))
+        (ControlFlowInstruction, 2 * 7 * 13),
+          (ExceptionalControlFlowInstruction, 2 * 7 * 13 * 19))
 
 GRANARY_DEFINE_BASE_CLASS(Instruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
@@ -23,6 +24,7 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
 
 Instruction *Instruction::Next(void) {
   return list.GetNext(this);
@@ -146,7 +148,8 @@ LabelInstruction::LabelInstruction(void)
       fragment(nullptr) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
-    : instruction(*instruction_) {
+    : instruction(*instruction_),
+      os_annotation(nullptr) {
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
@@ -317,5 +320,8 @@ BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
 void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
   target = new_target;
 }
+
+ExceptionalControlFlowInstruction::ExceptionalControlFlowInstruction(void)
+    : ControlFlowInstruction()
 
 }  // namespace granary

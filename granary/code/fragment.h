@@ -128,8 +128,8 @@ class RegisterUsageInfo {
  public:
   RegisterUsageInfo(void);
 
-  LiveRegisterTracker live_on_entry;
-  LiveRegisterTracker live_on_exit;
+  LiveRegisterSet live_on_entry;
+  LiveRegisterSet live_on_exit;
 
 };
 
@@ -266,10 +266,10 @@ class FlagZone {
   VirtualRegister flag_killed_reg;
 
   // Registers used anywhere within this flag zone.
-  UsedRegisterTracker used_regs;
+  UsedRegisterSet used_regs;
 
   // Live registers on exit from this flags zone.
-  LiveRegisterTracker live_regs;
+  LiveRegisterSet live_regs;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(FlagZone, {
     SHARED = false,
@@ -427,6 +427,9 @@ class alignas(alignof(void *)) CodeAttributes {
   // Does this fragment follow (via straight-line execution, e.g. through
   // fall-throughs) a `ControlFlowInstruction`?
   bool follows_cfi:1;
+
+  // Is there an instruction in this fragment with an OS-specific annotation?
+  bool has_os_annotation:1;
 
   // Count of the number of predecessors of this fragment (at fragment build
   // time).

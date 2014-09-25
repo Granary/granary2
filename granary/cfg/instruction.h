@@ -247,7 +247,7 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
@@ -279,7 +279,7 @@ class LabelInstruction final : public AnnotationInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
   GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(LabelInstruction, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
@@ -375,12 +375,17 @@ class NativeInstruction : public Instruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeInstruction, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
  GRANARY_ARCH_PUBLIC:
+  // Mid-level IR that represents the instruction.
   GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
+
+  // OS-specific annotation for this instruction. For example, in the Linux
+  // kernel, this would be an exception table entry.
+  GRANARY_INTERNAL_DEFINITION const void *os_annotation;
 
  private:
   friend class ControlFlowInstruction;
@@ -417,7 +422,7 @@ class BranchInstruction final : public NativeInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(BranchInstruction, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
@@ -436,7 +441,7 @@ class BranchInstruction final : public NativeInstruction {
 //
 // Note: A special case is that a non-local control-flow instruction can
 //       redirect control back to the beginning of the basic block.
-class ControlFlowInstruction final : public NativeInstruction {
+class ControlFlowInstruction : public NativeInstruction {
  public:
   virtual ~ControlFlowInstruction(void);
 
@@ -451,7 +456,7 @@ class ControlFlowInstruction final : public NativeInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ControlFlowInstruction, {
-    SHARED = true,
+    SHARED = false,
     ALIGNMENT = 1
   })
 
@@ -471,6 +476,53 @@ class ControlFlowInstruction final : public NativeInstruction {
   void ChangeTarget(BasicBlock *new_target) const;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
+};
+
+// Represents an exceptional control-flow instruction. These are instructions
+// that the OS expects to fault and handles in a specific way that doesn't
+// necessarily return execution to the next instruction.
+class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
+ public:
+  GRANARY_INTERNAL_DEFINITION
+  ControlFlowInstruction(const arch::Instruction *instruction_,
+                         BasicBlock *target_);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction,
+                                   ExceptionalControlFlowInstruction)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ExceptionalControlFlowInstruction, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ GRANARY_PROTECTED:
+
+  // Used registers in the instruction, before any mangling might have
+  // happened. These are the registers that absolutely must be saved before
+  // the instruction executes and restored if the instruction faults and
+  // doesn't return to the faulting PC.
+  GRANARY_INTERNAL_DEFINITION UsedRegisterSet used_regs;
+
+  // This is the set of registers that we use to restore the regs from
+  // `used_regs`.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister saved_regs[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+
+  // Can this instruction be re-started?
+  GRANARY_INTERNAL_DEFINITION bool is_restartable;
+
+  // What registers were read and written by this instruction? This is only
+  // relevant to re-startable instructions, where we need to handle these
+  // instructions on a case-by-case basis (e.g. restoring some but not all
+  // bits).
+  GRANARY_INTERNAL_DEFINITION UsedRegisterSet rw_regs;
+
+  // OS-specific exception info.
+  GRANARY_INTERNAL_DEFINITION const void *exception_info;
+
+ private:
+  ExceptionalControlFlowInstruction(void) = delete;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ExceptionalControlFlowInstruction);
 };
 
 }  // namespace granary

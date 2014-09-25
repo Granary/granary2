@@ -384,7 +384,7 @@ struct GPRScheduler {
   // return `true` if a preferred GPR is found. Also, if a preferred GPR is
   // found then the GPR will be marked as live in `min_gpr_num`, thus preventing
   // it from being a preferred GPR again.
-  VirtualRegister GetPreferredGPR(UsedRegisterTracker *preferred_gprs) {
+  VirtualRegister GetPreferredGPR(UsedRegisterSet *preferred_gprs) {
     auto ret = false;
     auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<int>::max();
@@ -406,7 +406,7 @@ struct GPRScheduler {
 
   // Get some GPR for use, so long as the GPR is not part of the
   // `avoid_reg_set`.
-  VirtualRegister GetGPR(const UsedRegisterTracker &avoid_reg_set) {
+  VirtualRegister GetGPR(const UsedRegisterSet &avoid_reg_set) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
     auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<int>::max();
@@ -437,7 +437,7 @@ static bool IsLive(SSANodeMap &nodes, VirtualRegister reg, SSANodeId node_id) {
 
 // Try to get a GPR for use by an instruction.
 static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr,
-                              const UsedRegisterTracker &used_regs) {
+                              const UsedRegisterSet &used_regs) {
   VirtualRegister agpr;
   if (pgpr.IsValid() && used_regs.IsDead(pgpr)) {
     return pgpr;  // Try to use the preferred GPR if possible.
@@ -583,7 +583,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
   for (Instruction *prev_instr(nullptr); instr; instr = prev_instr) {
     prev_instr = instr->Previous();
 
-    UsedRegisterTracker used_regs;
+    UsedRegisterSet used_regs;
     SSAInstruction *ssa_instr(nullptr);
     auto is_defined = false;
     auto is_used = false;
@@ -734,7 +734,7 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
     }
   }
 
-  UsedRegisterTracker preferred_gprs;
+  UsedRegisterSet preferred_gprs;
 
   do {
     reg = VirtualRegister();
@@ -1003,7 +1003,7 @@ struct FragmentScheduler {
   // Tries to get a GPR that can be spill shared and isn't used by the current
   // instruction. Returns `true` if a register is found and updates `reg`,
   // otherwise returns `false`.
-  bool TryGetSharedGPR(const UsedRegisterTracker &avoid_reg_set,
+  bool TryGetSharedGPR(const UsedRegisterSet &avoid_reg_set,
                        VirtualRegister *reg) {
     for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       auto &loc(gpr_locations[i]);
@@ -1017,7 +1017,7 @@ struct FragmentScheduler {
 
   // Get some GPR for use, so long as the GPR is not part of the
   // `avoid_reg_set`.
-  VirtualRegister GetGPR(const UsedRegisterTracker &avoid_reg_set) {
+  VirtualRegister GetGPR(const UsedRegisterSet &avoid_reg_set) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
     auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<int>::max();
@@ -1063,7 +1063,7 @@ struct FragmentScheduler {
 static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
                                      SSAOperand &op,
                                      NativeInstruction *instr,
-                                     const UsedRegisterTracker &used_regs,
+                                     const UsedRegisterSet &used_regs,
                                      SSAFragment *frag) {
   auto node = op.nodes[0];
   auto vr = node->reg;
@@ -1151,7 +1151,7 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
 }
 
 static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
-                         const UsedRegisterTracker &used_regs) {
+                         const UsedRegisterSet &used_regs) {
   auto frag = sched->frag;
   for (auto gpr : used_regs) {
     auto &gpr_home(sched->Loc(gpr));
@@ -1239,7 +1239,7 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
         break;
       }
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      UsedRegisterTracker used_regs;
+      UsedRegisterSet used_regs;
       auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
       if (!ssa_instr) continue;
 
@@ -1265,7 +1265,7 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
     }
   }
 
-  UsedRegisterTracker all_regs;
+  UsedRegisterSet all_regs;
   all_regs.ReviveAll();
   for (auto gpr : all_regs) {
     auto &gpr_home(sched.Loc(gpr));
