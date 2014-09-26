@@ -1352,7 +1352,9 @@ void ScheduleRegisters(FragmentList *frags) {
   ScheduleFragmentLocalRegs(frags);
   FreeSSAData(frags);
   FreeFlagZones(frags);
-  OptimizeSavesAndRestores(frags);
+
+  // TODO(pag): Fix me, slots get shared somehow.
+  if (false) OptimizeSavesAndRestores(frags);
 }
 
 }  // namespace granary

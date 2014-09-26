@@ -18,8 +18,6 @@ GRANARY_DEFINE_bool(count_execs, false,
 // same basic block).
 std::atomic<uint64_t> NUM_BBS(ATOMIC_VAR_INIT(0));
 
-namespace {
-
 // Runtime block execution counter.
 class BlockCounter : public MutableMetaData<BlockCounter> {
  public:
@@ -47,32 +45,12 @@ class BBCount : public InstrumentationTool {
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
     if (!FLAG_count_execs) {
-      return;
+      MemoryOperand counter_addr(&(GetMetaData<BlockCounter>(bb)->count));
+      lir::InlineAssembly asm_({&counter_addr});
+      asm_.InlineAfter(bb->FirstInstruction(), "INC m64 %0;"_x86_64);
     }
-    Instruction *insert_instr = bb->FirstInstruction();
-
-    // Try to find a good place to insert this instruction such that the
-    // placement is before an instruction that kills the flags (but doesn't
-    // read them).
-    for (auto instr : bb->ReversedAppInstructions()) {
-      if (!IsA<ControlFlowInstruction *>(instr) &&
-          instr->WritesConditionCodes() &&
-          !instr->ReadsConditionCodes()) {
-        insert_instr = instr;
-      }
-    }
-
-    // Now that we have an insertion spot (either first instruction, or before
-    // and instruction that kills the flags), go and insert the increment to
-    // the block-specific execution counter.
-    auto meta = GetMetaData<BlockCounter>(bb);
-    MemoryOperand counter_addr(&(meta->count));
-    lir::InlineAssembly asm_({&counter_addr});
-    asm_.InlineBefore(insert_instr, "INC m64 %0;"_x86_64);
   }
 };
-
-}  // namespace
 
 // Initialize the `count_bbs` tool.
 GRANARY_CLIENT_INIT({

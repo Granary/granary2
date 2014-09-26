@@ -118,6 +118,9 @@ class MetaDataDescription {
   // different environments.
   GRANARY_CONST int id;
 
+  // Offset of T within a `BlockMetaData`.
+  uintptr_t offset;
+
   // Where in the generic meta-data is this specific meta-data.
   const size_t size;
   const size_t align;
@@ -138,7 +141,7 @@ class GetMetaDataDescription {
  public:
   static_assert(IsMetaData<T>::RESULT, "Type `T` must be a meta-data type.");
 
-  static MetaDataDescription *Get(void) {
+  inline static const MetaDataDescription *Get(void) {
     return &(MetaDataDescriptor<
       T,
       IsIndexableMetaData<T>::RESULT,
@@ -198,6 +201,7 @@ UnificationStatus CanUnify(const void *a, const void *b) {
 template <typename T>
 MetaDataDescription MetaDataDescriptor<T, true, false, false>::kDescription = {
     -1,
+    std::numeric_limits<uintptr_t>::max(),
     sizeof(T),
     alignof(T),
     &(Construct<T>),
@@ -212,6 +216,7 @@ MetaDataDescription MetaDataDescriptor<T, true, false, false>::kDescription = {
 template <typename T>
 MetaDataDescription MetaDataDescriptor<T, false, true, false>::kDescription = {
     -1,
+    std::numeric_limits<uintptr_t>::max(),
     sizeof(T),
     alignof(T),
     &(Construct<T>),
@@ -226,6 +231,7 @@ MetaDataDescription MetaDataDescriptor<T, false, true, false>::kDescription = {
 template <typename T>
 MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
     -1,
+    std::numeric_limits<uintptr_t>::max(),
     sizeof(T),
     alignof(T),
     &(Construct<T>),
@@ -265,9 +271,6 @@ class BlockMetaData {
   GRANARY_INTERNAL_DEFINITION
   void JoinWith(const BlockMetaData *meta);
 
-  // Cast some generic meta-data into some specific meta-data.
-  void *Cast(MetaDataDescription *desc);
-
   // Free this metadata.
   GRANARY_INTERNAL_DEFINITION static void operator delete(void *address);
 
@@ -279,11 +282,11 @@ class BlockMetaData {
 
 // Cast some generic meta-data into some specific meta-data.
 template <typename T>
-T MetaDataCast(BlockMetaData *meta) {
+inline static T MetaDataCast(BlockMetaData *meta) {
   typedef typename RemovePointer<T>::Type M;
-  return GRANARY_LIKELY(nullptr != meta)
-      ? reinterpret_cast<T>(meta->Cast(GetMetaDataDescription<M>::Get()))
-      : nullptr;
+  if (!meta) return nullptr;
+  return reinterpret_cast<T>(reinterpret_cast<uintptr_t>(meta) +
+                             GetMetaDataDescription<M>::Get()->offset);
 }
 
 #ifdef GRANARY_INTERNAL
@@ -299,7 +302,8 @@ class MetaDataManager {
   // the `Register` method that operates directly on a meta-data description.
   template <typename T>
   inline void Register(void) {
-    Register(const_cast<MetaDataDescription *>(GetMetaDataDescription<T>::Get()));
+    Register(const_cast<MetaDataDescription *>(
+        GetMetaDataDescription<T>::Get()));
   }
 
   // Register some meta-data with Granary.
@@ -340,10 +344,6 @@ class MetaDataManager {
   // Info on all registered meta-data within this manager. These are indexed
   // by the `MetaDataDescription::id` field.
   MetaDataDescription *descriptions[MAX_NUM_MANAGED_METADATAS];
-
-  // Offsets of each meta-data object within the block meta-data block. These
-  // are indexed by the `MetaDataDescription::id` field.
-  size_t offsets[MAX_NUM_MANAGED_METADATAS];
 
   // Slab allocator for allocating meta-data objects.
   Container<internal::SlabAllocator> allocator;

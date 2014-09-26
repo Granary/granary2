@@ -103,10 +103,7 @@ static MetaDataIndex GetIndex(BlockMetaData *meta) {
 }
 
 static AppPC GetAppPC(BlockMetaData *meta) {
-  if (auto app_meta = MetaDataCast<AppMetaData *>(meta)) {
-    return app_meta->start_pc;
-  }
-  return nullptr;
+  return meta ? MetaDataCast<AppMetaData *>(meta)->start_pc : nullptr;
 }
 
 // Match some meta-data that we are search for (`search`) against a linked

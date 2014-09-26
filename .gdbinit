@@ -250,12 +250,11 @@ define print-block-meta
   set language c++
   set $__m = (granary::BlockMetaData *) $arg0
   set $__man = *((granary::MetaDataManager **) $arg0)
-  set $__offsets = &($__man->offsets[0])
   set $__descs = &($__man->descriptions[0])
   set $__i = 0
   while $__descs[$__i]
-    set $__offset = $__offsets[$__i]
     set $__desc = $__descs[$__i]
+    set $__offset = $__desc->offset
     set $__bytes = ((char *) $__m) + $__offset
     python None ; \
       dstr = gdb.execute("p *$__desc\n", from_tty=True, to_string=True) ; \

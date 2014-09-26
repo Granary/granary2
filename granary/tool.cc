@@ -115,7 +115,7 @@ void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 // Register some meta-data with the meta-data manager associated with this
 // tool.
 void InstrumentationTool::RegisterMetaData(const MetaDataDescription *desc) {
-  context->RegisterMetaData(const_cast<MetaDataDescription *>(desc));
+  context->RegisterMetaData(desc);
 }
 
 // Initialize an empty tool manager.

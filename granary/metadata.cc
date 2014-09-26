@@ -38,14 +38,6 @@ static std::atomic<int> next_description_id(ATOMIC_VAR_INIT(0));
 
 }  // namespace
 
-// Cast some generic meta-data into some specific meta-data.
-void *BlockMetaData::Cast(MetaDataDescription *desc) {
-  GRANARY_ASSERT(-1 != desc->id);
-  GRANARY_ASSERT(nullptr != manager->descriptions[desc->id]);
-  auto meta_ptr = reinterpret_cast<uintptr_t>(this);
-  return reinterpret_cast<void *>(meta_ptr + manager->offsets[desc->id]);
-}
-
 // Initialize a new meta-data instance. This involves separately initializing
 // the contained meta-data within this generic meta-data.
 BlockMetaData::BlockMetaData(MetaDataManager *manager_)
@@ -53,8 +45,8 @@ BlockMetaData::BlockMetaData(MetaDataManager *manager_)
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto desc : manager->descriptions) {
     if (desc) {
-      auto offset = manager->offsets[desc->id];
-      desc->initialize(reinterpret_cast<void *>(this_ptr + offset));
+      GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
+      desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
     }
   }
 }
@@ -65,8 +57,7 @@ BlockMetaData::~BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   for (auto desc : manager->descriptions) {
     if (desc) {
-      auto offset = manager->offsets[desc->id];
-      desc->destroy(reinterpret_cast<void *>(this_ptr + offset));
+      desc->destroy(reinterpret_cast<void *>(this_ptr + desc->offset));
     }
   }
 }
@@ -78,7 +69,7 @@ BlockMetaData *BlockMetaData::Copy(void) const {
   auto that_ptr = reinterpret_cast<uintptr_t>(manager->Allocate());
   for (auto desc : manager->descriptions) {
     if (desc) {
-      auto offset = manager->offsets[desc->id];
+      const auto offset = desc->offset;
       desc->copy_initialize(reinterpret_cast<void *>(that_ptr + offset),
                             reinterpret_cast<const void *>(this_ptr + offset));
     }
@@ -94,7 +85,7 @@ bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   for (auto desc : manager->descriptions) {
     if (desc && desc->compare_equals) {  // Indexable.
-      auto offset = manager->offsets[desc->id];
+      const auto offset = desc->offset;
       auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
       auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
       if (!desc->compare_equals(this_meta, that_meta)) {
@@ -113,7 +104,7 @@ UnificationStatus BlockMetaData::CanUnifyWith(
   auto can_unify = UnificationStatus::ACCEPT;
   for (auto desc : manager->descriptions) {
     if (desc && desc->can_unify) {  // Unifiable.
-      auto offset = manager->offsets[desc->id];
+      const auto offset = desc->offset;
       auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
       auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
       auto local_can_unify = desc->can_unify(this_meta, that_meta);
@@ -129,7 +120,7 @@ void BlockMetaData::JoinWith(const BlockMetaData *that) {
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   for (auto desc : manager->descriptions) {
     if (desc) {
-      auto offset = manager->offsets[desc->id];
+      const auto offset = desc->offset;
       auto this_meta = reinterpret_cast<void *>(this_ptr + offset);
       auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
       desc->join(this_meta, that_meta);
@@ -149,24 +140,28 @@ MetaDataManager::MetaDataManager(void)
       is_finalized(false),
       allocator() {
   memset(&(descriptions[0]), 0, sizeof(descriptions));
-  memset(&(offsets[0]), 0, sizeof(offsets));
 }
 
 MetaDataManager::~MetaDataManager(void) {
+  for (auto desc : descriptions) {
+    if (desc) {
+      desc->id = -1;
+      desc->offset = std::numeric_limits<uintptr_t>::max();
+    }
+  }
   allocator->Destroy();
   allocator.Destroy();
 }
 
-// Register some meta-data with the meta-data manager. This is a no-op if the
-// meta-data has already been registered.
+// Register some meta-data with the meta-data manager.
 void MetaDataManager::Register(MetaDataDescription *desc) {
-  if (GRANARY_UNLIKELY(!is_finalized)) {
-    if (-1 == desc->id) {
-      desc->id = next_description_id.fetch_add(1);
-      GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > desc->id);
-    }
-    descriptions[desc->id] = desc;
+  GRANARY_ASSERT(!is_finalized);
+  GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() == desc->offset);
+  if (-1 == desc->id) {
+    desc->id = next_description_id.fetch_add(1);
+    GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > desc->id);
   }
+  descriptions[desc->id] = desc;
 }
 
 // Allocate some meta-data. If the manager hasn't been finalized then this
@@ -197,7 +192,7 @@ void MetaDataManager::Finalize(void) {
   for (auto desc : descriptions) {
     if (desc) {
       size += GRANARY_ALIGN_FACTOR(size, desc->align);
-      offsets[desc->id] = size;
+      desc->offset = size;
       size += desc->size;
     }
   }

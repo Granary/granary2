@@ -16,7 +16,8 @@ namespace granary {
 //       then this function will not create meta-data on the return block.
 template <typename T>
 inline static T *GetMetaData(InstrumentedBasicBlock *block) {
-  return MetaDataCast<T *>(block->UnsafeMetaData());
+  auto meta = block->UnsafeMetaData();
+  return meta ? MetaDataCast<T *>(meta) : nullptr;
 }
 
 // Get a basic block's meta-data.
