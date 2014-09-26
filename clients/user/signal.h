@@ -33,9 +33,11 @@
 
 extern "C" {
 
+#ifndef _SIGSET_H_types
 typedef struct {
   unsigned long int __val[(1024 / (8 * sizeof (unsigned long int)))];
 } __sigset_t;
+#endif  // _SIGSET_H_types
 
 // Get the kernel `sigaction` structure.
 typedef void (*__sighandler_t) (int);

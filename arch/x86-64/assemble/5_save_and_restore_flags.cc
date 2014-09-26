@@ -104,7 +104,7 @@ void InjectSaveFlags(Fragment *frag) {
   // Step 1: Save the native version of `flag_killed_reg` into `flag_save_reg`.
   if (sr.save_flag_killed_reg) {
     PREP(MOV_GPRv_GPRv_89(&ni, zone->flag_save_reg, zone->flag_killed_reg);
-         ni.is_save_restore = true; );
+         ni.is_save_restore = false; );
   }
 }
 
@@ -135,7 +135,7 @@ void InjectRestoreFlags(Fragment *frag) {
   if (sr.save_flag_killed_reg) {
     APP(
       MOV_GPRv_GPRv_89(&ni, zone->flag_killed_reg, zone->flag_save_reg);
-      ni.is_save_restore = true; );
+      ni.is_save_restore = false; );
   }
 }
 

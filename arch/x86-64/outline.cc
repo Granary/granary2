@@ -175,7 +175,7 @@ Callback *GenerateOutlineCallback(CodeCache *cache, InlineFunctionCall *call) {
 #define MOVE_ARG(arg, reg) \
   if (arg < num_args) APP( \
      MOV_GPRv_GPRv_89(&ni, reg, call->arg_regs[arg]); \
-     ni.ops[0].is_definition = false; )
+     ni.ops[0].is_definition = true; )
 
 #define RESTORE_ARG(arg, reg) \
   if (arg < num_args) \

@@ -43,8 +43,10 @@ class BBCount : public InstrumentationTool {
 
   virtual ~BBCount(void) = default;
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+    if (IsA<CompensationBasicBlock *>(bb)) return;
+
     NUM_BBS.fetch_add(1);
-    if (!FLAG_count_execs) {
+    if (FLAG_count_execs) {
       MemoryOperand counter_addr(&(GetMetaData<BlockCounter>(bb)->count));
       lir::InlineAssembly asm_({&counter_addr});
       asm_.InlineAfter(bb->FirstInstruction(), "INC m64 %0;"_x86_64);

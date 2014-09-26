@@ -584,6 +584,21 @@ define print-instr
 end
 
 
+# print-module-of
+#
+# Prints the module associated with a given program counter `$arg0`.
+define print-module-of
+  set language c++
+  set $__pc = (granary::AppPC)$arg0
+  set $__m = granary::os::ModuleContainingPC($__pc)
+  if $__m
+    set $__o = $__m->OffsetOfPC($__pc)
+    printf "   Module: %s\n   Offset: 0x%lx\n", $__m->name, $__o.offset
+  end
+  dont-repeat
+end
+
+
 # get-next-instr
 #
 # Treat `$arg0` as a pointer to an `Instruction`, and set `$__i` to be a pointer

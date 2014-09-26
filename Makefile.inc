@@ -1,7 +1,10 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
 GRANARY_CC ?= clang
+GRANARY_CC_STD ?= gnu99
 GRANARY_CXX ?= clang++
+GRANARY_CXX_LIB ?= libc++
+GRANARY_CXX_STD ?= c++11
 GRANARY_LD ?= gold
 GRANARY_LLVM_LINK ?= llvm-link-3.5
 GRANARY_AR ?= ar
@@ -114,8 +117,8 @@ GRANARY_COMMON_MACROS += -DGRANARY_TARGET_$(GRANARY_TARGET)
 GRANARY_COMMON_MACROS += -DGRANARY_OS_$(GRANARY_OS)
 
 # Use GNU C99 and standard C++11.
-GRANARY_CC_FLAGS += -std=gnu99
-GRANARY_COMMON_CXX_FLAGS = -std=c++11 -stdlib=libc++
+GRANARY_CC_FLAGS += -std=$(GRANARY_CC_STD)
+GRANARY_COMMON_CXX_FLAGS = -std=$(GRANARY_CXX_STD) -stdlib=$(GRANARY_CXX_LIB)
 
 # Enable valgrind checking of code.
 ifeq (1,$(GRANARY_WITH_VALGRIND))

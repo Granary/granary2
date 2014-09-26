@@ -177,7 +177,8 @@ class Instruction : public InstructionInterface {
 
   // Is this a specially inserted virtual register save or restore instruction?
   inline bool IsVirtualRegSaveRestore(void) const {
-    return is_save_restore;
+    return false;
+    //return is_save_restore;  // TODO(pag): Fix issue #41.
   }
 
   // Will this instruction be encoded?
