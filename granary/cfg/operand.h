@@ -280,12 +280,6 @@ class ImmediateOperand : public Operand {
   inline ImmediateOperand(void)
       : Operand() {}
 
-  // Initialize an immediate operand from a pointer.
-  //
-  // Note: This has a driver-specific implementation.
-  explicit ImmediateOperand(void *ptr);
-  explicit ImmediateOperand(const void *ptr);
-
   // Initialize a immediate operand from a signed integer, where the value has
   // a width of `width_bytes`.
   //
@@ -297,6 +291,22 @@ class ImmediateOperand : public Operand {
   //
   // Note: This has a driver-specific implementation.
   ImmediateOperand(uintptr_t imm, int width_bytes);
+
+
+  template <typename T, typename EnableIf<IsPointer<T>::RESULT>::Type=0>
+  inline explicit ImmediateOperand(T ptr)
+      : ImmediateOperand(reinterpret_cast<uintptr_t>(ptr),
+                         arch::ADDRESS_WIDTH_BYTES) {}
+
+  template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
+  inline explicit ImmediateOperand(T imm)
+      : ImmediateOperand(static_cast<intptr_t>(imm),
+                         static_cast<int>(sizeof(T))) {}
+
+  template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
+  inline explicit ImmediateOperand(T imm)
+      : ImmediateOperand(static_cast<uintptr_t>(imm),
+                         static_cast<int>(sizeof(T))) {}
 
   // Extract the value as an unsigned integer.
   //

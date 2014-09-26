@@ -99,7 +99,7 @@ class ContextInterface {
 
   // Returns a pointer to the code cache code associated with some outline-
   // callable function at `func_addr`.
-  virtual const arch::Callback *OutlineCallback(InlineFunctionCall *call);
+  virtual const arch::Callback *OutlineCallback(InlineFunctionCall *call) = 0;
 };
 
 #else

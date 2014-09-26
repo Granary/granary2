@@ -1108,8 +1108,8 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
 // Case 5: Schedule a fragment-local register definition. This enables slot
 // sharing within the fragment.
 static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
-                                     SSAOperand &op, NativeInstruction *instr
-                                     _GRANARY_IF_DEBUG(SSAFragment *frag)) {
+                                     SSAOperand &op, NativeInstruction *instr,
+                                     SSAFragment *frag) {
   auto node = op.nodes[0];
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
@@ -1258,7 +1258,7 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
         ScheduleFragmentLocalUse(&sched, def_op, ninstr, used_regs, frag);
       }
       for (auto &def_op : ssa_instr->defs) {
-        ScheduleFragmentLocalDef(&sched, def_op, ninstr _GRANARY_IF_DEBUG(frag));
+        ScheduleFragmentLocalDef(&sched, def_op, ninstr, frag);
       }
     } else {
       continue;

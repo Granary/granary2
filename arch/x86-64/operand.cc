@@ -179,31 +179,6 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg)
   op_ptr = TOMBSTONE;
 }
 
-// Initialize an immediate operand from a pointer.
-//
-// Note: This has a driver-specific implementation.
-ImmediateOperand::ImmediateOperand(void *ptr)
-    : Operand() {
-  op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-  op->width = arch::ADDRESS_WIDTH_BITS;
-  op->imm.as_uint = reinterpret_cast<uintptr_t>(ptr);
-  if (!(op->imm.as_uint >> 32)) op->width = 32;
-  op->rw = XED_OPERAND_ACTION_R;
-  op->is_sticky = false;
-  op_ptr = TOMBSTONE;
-}
-
-ImmediateOperand::ImmediateOperand(const void *ptr)
-    : Operand() {
-  op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-  op->width = arch::ADDRESS_WIDTH_BITS;
-  op->imm.as_uint = reinterpret_cast<uintptr_t>(ptr);
-  if (!(op->imm.as_uint >> 32)) op->width = 32;
-  op->rw = XED_OPERAND_ACTION_R;
-  op->is_sticky = false;
-  op_ptr = TOMBSTONE;
-}
-
 // Initialize a immediate operand from a signed integer, where the value has
 // a width of `width_bytes`.
 ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)

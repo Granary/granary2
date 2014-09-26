@@ -194,6 +194,8 @@ void ExtendFragmentWithOutlineCall(ContextInterface *context,
 
   Instruction ni;
 
+  frag->attr.has_native_instrs = true;
+
   // Note: Separates the copying of (ops -> arg VRs) and (arg VRs -> arg GPRs)
   //       so that if the ops depend on the arg GPRs, then they won't be
   //       overwritten when storing the args. The extra redundancies are cleaned
