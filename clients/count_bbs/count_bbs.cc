@@ -38,6 +38,11 @@ class BBCount : public InstrumentationTool {
     }
   }
 
+  virtual void Exit(ExitReason) {
+    os::Log(os::LogOutput, "%lu blocks were translated.\n",
+            NUM_BBS.load());
+  }
+
   virtual ~BBCount(void) = default;
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     NUM_BBS.fetch_add(1);
