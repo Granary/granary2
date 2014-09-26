@@ -284,7 +284,6 @@ class BlockMetaData {
 template <typename T>
 inline static T MetaDataCast(BlockMetaData *meta) {
   typedef typename RemovePointer<T>::Type M;
-  if (!meta) return nullptr;
   return reinterpret_cast<T>(reinterpret_cast<uintptr_t>(meta) +
                              GetMetaDataDescription<M>::Get()->offset);
 }

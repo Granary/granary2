@@ -46,6 +46,7 @@ class BBCount : public InstrumentationTool {
     if (IsA<CompensationBasicBlock *>(bb)) return;
 
     NUM_BBS.fetch_add(1);
+
     if (FLAG_count_execs) {
       MemoryOperand counter_addr(&(GetMetaData<BlockCounter>(bb)->count));
       lir::InlineAssembly asm_({&counter_addr});

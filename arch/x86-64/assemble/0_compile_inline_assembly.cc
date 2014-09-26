@@ -52,10 +52,23 @@ class InlineAssemblyParser {
   void ParseInstructions(void) {
     char buff[20] = {'\0'};
     while (*ch) {
+      bool is_locked = false;
+      bool is_rep = false;
+      bool is_repne = false;
+    get_opcode:
       ConsumeWhiteSpace();
       ParseWord(buff);
       if (buff[0]) {
-        if (StringsMatch(buff, "LABEL")) {
+        if (StringsMatch(buff, "LOCK")) {
+          is_locked = true;
+          goto get_opcode;
+        } else if (StringsMatch(buff, "REP") || StringsMatch(buff, "REPE")) {
+          is_rep = true;
+          goto get_opcode;
+        } else if (StringsMatch(buff, "REPNE")) {
+          is_repne = true;
+          goto get_opcode;
+        } else if (StringsMatch(buff, "LABEL")) {
           ParseLabel();
           Accept(':');
         } else {
@@ -74,6 +87,9 @@ class InlineAssemblyParser {
             ConsumeWhiteSpace();
           } while (ParseOperand());
           Accept(';');
+          data.has_prefix_lock = is_locked;
+          data.has_prefix_rep = is_rep;
+          data.has_prefix_repne = is_repne;
           FinalizeInstruction();
         }
       }
