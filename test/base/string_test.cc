@@ -407,9 +407,25 @@ TEST(FormatTest, FormatStringTest) {
   EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
 }
 
-#pragma clang diagnostic pop
+TEST(DeFormatTest, DeFormatStringTest) {
+  uint64_t num(0);
+  EXPECT_EQ(1, DeFormat("1", "%lu", &num));
+  EXPECT_EQ(1UL, num);
 
-// TODO(pag): Issue #2: Test `DeFormat`.
+  num = 0;
+  EXPECT_EQ(1, DeFormat("1", "%lx", &num));
+  EXPECT_EQ(1UL, num);
+
+  num = 0;
+  EXPECT_EQ(1, DeFormat("0x1", "0x%lx", &num));
+  EXPECT_EQ(1UL, num);
+
+  num = 0;
+  EXPECT_EQ(1, DeFormat("0x1", "0x%lX", &num));
+  EXPECT_EQ(1UL, num);
+}
+
+#pragma clang diagnostic pop
 
 TEST(ForEachCommaSeparatedStringTest, Check) {
   ForEachCommaSeparatedString<10>(nullptr, [](const char *) {

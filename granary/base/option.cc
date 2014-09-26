@@ -313,9 +313,9 @@ void ParseUnsignedIntOption(Option *option) {
 void ParseBitMaskOption(Option *option) {
   if (auto value = FindValueForName(option->name)) {
     uint64_t uint_value(0);
-    if (DeFormat(value, "%lx", &uint_value) ||
-        DeFormat(value, "0x%lx", &uint_value) ||
-        DeFormat(value, "0X%lx", &uint_value)) {
+    if (DeFormat(value, "0x%lx", &uint_value) ||
+        DeFormat(value, "0X%lx", &uint_value) ||
+        DeFormat(value, "%lx", &uint_value)) {
       *(option->has_value) = true;
       *reinterpret_cast<uint64_t *>(option->value) = uint_value;
     }

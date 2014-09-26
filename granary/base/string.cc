@@ -241,7 +241,7 @@ int DeFormat(const char * __restrict buffer,
   for (; buffer[0] && format[0]; ) {
     if ('%' != format[0]) {  // Treat `%%` as a single char.
       if (format[0] != buffer[0]) {
-        return num_args;
+        goto done;
       } else {
         ++buffer;
         ++format;
@@ -249,7 +249,7 @@ int DeFormat(const char * __restrict buffer,
       }
     } else if ('%' == format[1]) {  // match `%%` in format to `%` in buffer.
       if ('%' != buffer[0]) {
-        return num_args;
+        goto done;
       }  else {
         ++buffer;
         format += 2;
@@ -267,6 +267,7 @@ int DeFormat(const char * __restrict buffer,
         is_signed = true;
         goto generic_int;
 
+      case 'X':
       case 'x':  // Unsigned hexadecimal number.
         is_signed = false;
         base = 16;
@@ -286,7 +287,7 @@ int DeFormat(const char * __restrict buffer,
           ++num_args;
           break;
         } else {
-          return num_args;
+          goto done;
         }
       }
 
@@ -303,6 +304,7 @@ int DeFormat(const char * __restrict buffer,
 
     ++format;
   }
+done:
   va_end(args);
   return num_args;
 }
