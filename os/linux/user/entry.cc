@@ -17,6 +17,8 @@
 #include "granary/init.h"
 #include "granary/translate.h"
 
+#include "os/logging.h"
+
 GRANARY_DECLARE_bool(help);
 
 extern "C" {
@@ -68,6 +70,14 @@ static void Attach(AppPC *start_pc_ptr) {
   // TODO(pag): Attach to signals.
 }
 
+[[noreturn]]
+static void DisplayHelpMessage(void) {
+  os::InitLog();
+  PrintAllOptions();
+  os::ExitLog();
+  exit_group(0);
+}
+
 }  // namespace
 }  // namespace granary
 
@@ -80,8 +90,7 @@ void granary_init(granary::AppPC *attach_pc_ptr) {
   strncpy(&(granary_mmap_path[0]), GetEnv("GRANARY_PATH"), 1023);
   InitOptions(GetEnv("GRANARY_OPTIONS"));
   if (FLAG_help) {
-    PrintAllOptions();
-    exit_group(0);
+    DisplayHelpMessage();
     GRANARY_ASSERT(false);  // Not reached.
   }
   Init(INIT_PROGRAM);

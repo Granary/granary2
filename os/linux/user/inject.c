@@ -53,6 +53,11 @@ static void SetPreload(void) {
   }
   snprintf(&(LD_PRELOAD[index]), LD_PRELOAD_LEN - index, "%s", GRANARY_PATH);
   setenv("LD_PRELOAD", LD_PRELOAD, 1);
+
+  // This should improve performance by making the dynamic loader pre-load
+  // PLT entries. This way, we don't need to go through so much indirection
+  // on calls through the PLT / GOT.
+  setenv("LD_BIND_NOW", "1", 1);
 }
 
 // Combine the arguments into a single string for passing as an environment
