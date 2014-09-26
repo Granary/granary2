@@ -89,7 +89,12 @@ class MockContext : public granary::ContextInterface {
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
   MOCK_METHOD1(ContextCallback,
-               granary::arch::MachineContextCallback *(uintptr_t func_addr));
+               const granary::arch::Callback *(granary::AppPC));
+
+  // Returns a pointer to the code cache code associated with some outline-
+  // callable function at `func_addr`.
+  MOCK_METHOD1(OutlineCallback,
+               const granary::arch::Callback *(granary::InlineFunctionCall *));
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(MockContext);

@@ -7,6 +7,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/pc.h"
+#include "granary/base/type_trait.h"
 
 #include "granary/cfg/factory.h"
 
@@ -55,20 +56,58 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 std::unique_ptr<Instruction> CallWithContext(
     void (*func)(arch::MachineContext *));
 
-// Insert a "outline" call to some client code. This call can have access to
-// virtual registers by means of its arguments. At least one argument is
-// required.
-template <typename Arg1, typename... Args>
-inline static std::unique_ptr<Instruction> CallWithArgs(
-    void (*func)(Arg1, Args...), std::initializer_list<Operand *> ops) {
-  return CallWithArgs(UnsafeCast<AppPC>(func), ops);
+namespace detail {
+
+inline static void InitInlineOp(Operand *op, const Operand &arg_op) {
+  new (op) Operand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, const Operand &&arg_op) {
+  new (op) Operand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, VirtualRegister reg) {
+  new (op) RegisterOperand(reg);
+}
+
+template <typename T, typename EnableIf<IsPointer<T>::RESULT>::Type=0>
+inline static void InitInlineOp(Operand *op, T ptr) {
+  new (op) ImmediateOperand(ptr);
+}
+
+template <typename T, typename EnableIf<IsInteger<T>::RESULT>::Type=0>
+inline static void InitInlineOp(Operand *op, T ptr) {
+  new (op) ImmediateOperand(ptr);
+}
+
+inline static void InitInlineOps(Operand *, size_t, size_t) {}
+
+template <typename T, typename... Args>
+inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
+                                 T arg, Args... args) {
+  if (i >= num || i >= MAX_NUM_FUNC_OPERANDS) return;
+  InitInlineOp(&(ops[i]), arg);
+  InitInlineOps(ops, i + 1, num, args...);
 }
 
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> CallWithArgs(AppPC func_addr,
-                                          std::initializer_list<Operand *>);
+std::unique_ptr<Instruction> CallWithArgs(DecodedBasicBlock *block,
+                                          AppPC func_addr, Operand *ops);
+
+}  // namespace detail
+
+// Insert a "outline" call to some client code. This call can have access to
+// virtual registers by means of its arguments. At least one argument is
+// required.
+template <typename FuncT, typename... Args>
+inline static std::unique_ptr<Instruction> CallWithArgs(
+    DecodedBasicBlock *block, FuncT func, Args... args) {
+  Operand ops[MAX_NUM_FUNC_OPERANDS];
+  detail::InitInlineOps(ops, 0UL, sizeof...(args), args...);
+  return detail::CallWithArgs(block, UnsafeCast<AppPC>(func), ops);
+}
 
 // TODO(pag): InlineCall, inline the code of a function directly into the
 //            code.

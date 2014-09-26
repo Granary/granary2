@@ -14,6 +14,7 @@
 
 #include "granary/code/register.h"
 
+#include "arch/util.h"
 #include "arch/x86-64/instruction.h"
 
 namespace granary {
@@ -33,6 +34,11 @@ class RegisterBuilder {
   inline RegisterBuilder(VirtualRegister reg_,
                          xed_operand_action_enum_t action_)
       : reg(reg_),
+        action(action_) {}
+
+  inline RegisterBuilder(const Operand &that,
+                         xed_operand_action_enum_t action_)
+      : reg(that.reg),
         action(action_) {}
 
   // Add this register as an operand to the instruction `instr`.
@@ -268,6 +274,18 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
   return op;
 }
 
+inline static void SHIFT_REDZONE(Instruction *instr) {
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(-REDZONE_SIZE_BYTES,
+                                                  XED_REG_RSP,
+                                                  ADDRESS_WIDTH_BITS));
+}
+
+inline static void UNSHIFT_REDZONE(Instruction *instr) {
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(REDZONE_SIZE_BYTES,
+                                                  XED_REG_RSP,
+                                                  ADDRESS_WIDTH_BITS));
+}
+
 }  // namespace arch
 }  // namespace granary
 
@@ -275,5 +293,21 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
 #ifndef GRANARY_EXCLUDE_INSTRUCTION_BUILDER
 # include "generated/xed2-intel64/instruction_builder.cc"
 #endif
+
+namespace granary {
+namespace arch {
+
+// Generate a near call that might go through memory.
+static inline void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
+                             AppPC target_pc, const AppPC *target_pc_ptr) {
+  if (AddrIsOffsetReachable(encode_pc, target_pc)) {
+    CALL_NEAR_RELBRd(ni, target_pc);
+  } else {
+    CALL_NEAR_MEMv(ni, target_pc_ptr);
+  }
+}
+
+}  // namespace arch
+}  // namespace granary
 
 #endif  // ARCH_X86_64_BUILDER_H_

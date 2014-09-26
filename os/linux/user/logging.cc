@@ -5,6 +5,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
+#include "granary/base/lock.h"
 #include "granary/base/string.h"
 
 #include "os/logging.h"
@@ -17,204 +18,79 @@ extern "C" {
 extern int open(const char *filename, int flags, void *);
 extern long long write(int __fd, const void *__buf, size_t __n);
 
-}
+enum {
+  LOG_BUFFER_SIZE = 32768 << 5,
+  LOG_BUFFER_SAFE_SIZE = LOG_BUFFER_SIZE - 4096
+};
+
+char granary_log_buffer[LOG_BUFFER_SIZE] = {'\0'};
+unsigned long granary_log_buffer_index = 0;
+
+}  // extern C
 namespace granary {
 namespace os {
 namespace {
 
 static int OUTPUT_FD[] = {
-    2,  // LogOutput; defaults to `stderr`.
-    -1,  // LogWarning
-    -1,  // LogError
-    -1,  // LogFatalError
-    2,  // LogDebug
-    -1
+  -1,  // LogOutput; goes to `/dev/stdout`.
+  -1,  // LogWarning
+  -1,  // LogError
+  -1,  // LogFatalError
+  -1,  // LogDebug; goes to `/dev/stderr`.
+  -1
 };
 
-typedef decltype('a') CharLiteral;
-
-static char *WriteGenericInt(char *buff, uint64_t data, bool is_64_bit,
-                             bool is_signed, unsigned base) {
-  if (!data) {
-    *buff++ = '0';
-    return buff;
-  }
-
-  // Sign-extend a 32-bit signed value to 64-bit.
-  if (!is_64_bit && is_signed) {
-    data = static_cast<uint64_t>(static_cast<int64_t>(
-      static_cast<int32_t>(data & 0xFFFFFFFFULL)));
-  }
-
-  // Treat everything as 64-bit.
-  if (is_signed) {
-    const int64_t signed_data(static_cast<int64_t>(data));
-    if (signed_data < 0) {
-      *buff++ = '-';
-      data = static_cast<uint64_t>(-signed_data);
-    }
-  }
-
-  uint64_t max_base(base);
-  for (; data / max_base; max_base *= base) { }
-  for (max_base /= base; max_base; max_base /= base) {
-    const uint64_t digit(data / max_base);
-    if (digit < 10) {
-      *buff++ = static_cast<char>(static_cast<CharLiteral>(digit) + '0');
-    } else {
-      *buff++ = static_cast<char>(static_cast<CharLiteral>(digit - 10) + 'a');
-    }
-    data -= digit * max_base;
-  }
-
-  return buff;
-}
+static SpinLock log_buffer_lock;
+static int log_buffer_fd = -1;
 
 }  // namespace
 
 // Initialize the logging mechanism.
 void InitLog(void) {
-  // TODO(pag): Refactor this to take a log file or fd as a command-line flag.
+  OUTPUT_FD[LogLevel::LogOutput] = open("/dev/stdout", O_WRONLY, nullptr);
   OUTPUT_FD[LogLevel::LogWarning] = open("/tmp/granary_error.log",
                                          O_CREAT | O_WRONLY, nullptr);
   OUTPUT_FD[LogLevel::LogError] = OUTPUT_FD[LogLevel::LogWarning];
   OUTPUT_FD[LogLevel::LogFatalError] = OUTPUT_FD[LogLevel::LogError];
+  OUTPUT_FD[LogLevel::LogDebug] = open("/dev/stderr", O_WRONLY, nullptr);
+}
+
+// Exit the log.
+void ExitLog(void) {
+  SpinLockedRegion locker(&log_buffer_lock);
+  if (granary_log_buffer_index) {
+    write(log_buffer_fd, granary_log_buffer, granary_log_buffer_index);
+    granary_log_buffer_index = 0;
+    log_buffer_fd = -1;
+  }
 }
 
 // Log something.
 int Log(LogLevel level, const char *format, ...) {
-  enum {
-    WRITE_BUFF_SIZE = 255
-  };
-
-  int num_written(0);
-  char write_buff[WRITE_BUFF_SIZE + 1] = {'\0'};
-  char *write_ch(&(write_buff[0]));
-  //const char * const write_ch_end(&(write_buff[WRITE_BUFF_SIZE]));
-  char * const write_ch_begin(&(write_buff[0]));
-
   va_list args;
   va_start(args, format);
+  const auto fd = OUTPUT_FD[level];
 
-  bool is_64_bit(false);
-  bool is_signed(false);
-  unsigned base(10);
-  const char *sub_string(nullptr);
-  uint64_t generic_int_data(0);
+  SpinLockedRegion locker(&log_buffer_lock);
 
-  for (const char *ch(format); *ch; ) {
-
-    // Buffer parts of the string between arguments. The somewhat unusual
-    // bounds comparisons are to avoid clashing with `-Wstrict-overflow`.
-    while (0 <= (write_ch - write_ch_begin) &&
-           WRITE_BUFF_SIZE > (write_ch - write_ch_begin) &&
-           *ch && '%' != *ch) {
-      *write_ch++ = *ch++;
-    }
-
-    // Output the so-far buffered string.
-    if (write_ch > write_ch_begin) {
-      num_written += static_cast<int>(write(
-          OUTPUT_FD[static_cast<unsigned>(level)],
-          write_ch_begin,
-          static_cast<unsigned long>(write_ch - write_ch_begin)));
-      write_ch = write_ch_begin;
-    }
-
-    // If we're done, then break out.
-    if (!*ch) {
-      break;
-
-    // Not an argument, it's actually a %%
-    } else if ('%' == *ch && '%' == ch[1]) {
-      *write_ch++ = '%';
-      ch += 2;
-      continue;
-    }
-
-    // ASSERT('%' == *ch);
-    ++ch;
-
-    is_64_bit = false;
-    is_signed = false;
-    base = 10;
-
-  retry:
-    switch (*ch) {
-      case 'c':  // Character.
-        *write_ch++ = static_cast<char>(va_arg(args, int));
-        ++ch;
-        break;
-
-      case 's':  // String.
-        sub_string = va_arg(args, const char *);
-        if (sub_string) {
-          num_written += static_cast<int>(write(
-              OUTPUT_FD[static_cast<unsigned>(level)],
-              sub_string,
-              StringLength(sub_string)));
-        }
-        ++ch;
-        break;
-
-      case 'd':  // Signed decimal number.
-        is_signed = true;
-        goto generic_int;
-
-      case 'x':  // Unsigned hexadecimal number.
-        is_signed = false;
-        base = 16;
-        goto generic_int;
-
-      case 'p':  // Pointer.
-        is_64_bit = true;
-        base = 16;
-        goto generic_int;
-
-      case 'u':  // Unsigned number.
-      generic_int:
-        if (is_64_bit) {
-          generic_int_data = va_arg(args, uint64_t);
-        } else {
-          generic_int_data = va_arg(args, uint32_t);
-        }
-        write_ch = WriteGenericInt(
-          write_ch, generic_int_data, is_64_bit, is_signed, base);
-        ++ch;
-        break;
-
-      case 'l':  // Long (64-bit) number.
-        is_64_bit = true;
-        ++ch;
-        goto retry;
-
-      case 'f':  // Floats and doubles are all treated as doubles.
-        *write_ch++ = 'F';
-        ++ch;
-        break;
-
-      case '\0':  // End of string.
-        *write_ch++ = '%';
-        break;
-
-      default:  // Unknown.
-        // ASSERT(false);
-        ++ch;
-        break;
-    }
+  // Flush the buffer.
+  if (granary_log_buffer_index &&
+      (granary_log_buffer_index >= LOG_BUFFER_SAFE_SIZE || log_buffer_fd != fd)) {
+    write(fd, granary_log_buffer, granary_log_buffer_index);
+    granary_log_buffer_index = 0;
+    granary_log_buffer[0] = '\0';
   }
+
+  // Fill the buffer.
+  auto ret = VarFormat(&(granary_log_buffer[granary_log_buffer_index]),
+                       sizeof granary_log_buffer - granary_log_buffer_index - 1,
+                       format, args);
+
+  granary_log_buffer_index += ret;
+  log_buffer_fd = fd;
 
   va_end(args);
-
-  // Output the so-far buffered string.
-  if (write_ch > write_ch_begin) {
-    num_written += static_cast<int>(write(
-        OUTPUT_FD[static_cast<unsigned>(level)],
-        write_ch_begin,
-        static_cast<unsigned long>(write_ch - write_ch_begin)));
-  }
-
-  return num_written;
+  return static_cast<int>(ret);
 }
 
 }  // namespace os

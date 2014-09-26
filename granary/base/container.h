@@ -58,6 +58,7 @@ class OpaqueContainer {
   OpaqueContainer(SelfT &&that) = default;  // NOLINT
 
 #ifdef GRANARY_INTERNAL
+
   // Copy construct the contained object.
   explicit OpaqueContainer(const T &that) {
     new (operator->()) T(that);

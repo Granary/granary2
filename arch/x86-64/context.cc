@@ -13,6 +13,7 @@
 #include "granary/code/fragment.h"
 
 #include "granary/breakpoint.h"
+#include "granary/cache.h"
 #include "granary/context.h"
 
 #define ENC(...) \
@@ -35,20 +36,8 @@ namespace granary {
 namespace arch {
 namespace {
 
-// TODO(pag): Generalize this.
-static void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
-                      AppPC target_pc, const AppPC *target_pc_ptr) {
-  if (AddrIsOffsetReachable(encode_pc, target_pc)) {
-    CALL_NEAR_RELBRd(ni, target_pc);
-  } else {
-    CALL_NEAR_MEMv(ni, target_pc_ptr);
-  }
-}
-
-}  // namespace
-
 // Generates the wrapper code for a context callback.
-void GenerateContextCallCode(MachineContextCallback *callback) {
+void GenerateContextCallCode(Callback *callback) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -120,15 +109,27 @@ void GenerateContextCallCode(MachineContextCallback *callback) {
                  (pc - callback->wrapped_callback));
 }
 
+}  // namespace
+
+// Generates the wrapper code for a context callback.
+Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
+  auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
+  auto callback = new Callback(func_pc, edge_code);
+  CodeCacheTransaction transaction(
+      cache, edge_code, edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
+  GenerateContextCallCode(callback);
+  return callback;
+}
+
 // Generates some code to target some client function. The generated code saves
 // the machine context and passes it directly to the client function for direct
 // manipulation.
 CodeFragment *CreateContextCallFragment(ContextInterface *context,
                                         FragmentList *frags, CodeFragment *pred,
-                                        uintptr_t func_addr) {
+                                        AppPC func_pc) {
   auto call_frag = new CodeFragment;
   auto exit_frag = new ExitFragment(FRAG_EXIT_NATIVE);
-  auto cc = context->ContextCallback(func_addr);
+  auto cc = context->ContextCallback(func_pc);
 
   exit_frag->encoded_pc = nullptr;  // !!!!
 
@@ -147,26 +148,14 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
 
   Instruction ni;
 
-  if (REDZONE_SIZE_BYTES) {
-    APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(-REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS)));
-  }
-
+  if (REDZONE_SIZE_BYTES) APP(SHIFT_REDZONE(&ni));
   GRANARY_ASSERT(nullptr != cc->wrapped_callback);
   CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
   ni.is_stack_blind = true;
   auto call = new NativeInstruction(&ni);
   call_frag->instrs.Append(call);
   call_frag->branch_instr = call;
-
-  if (REDZONE_SIZE_BYTES) {
-    APP(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS)));
-  }
+  if (REDZONE_SIZE_BYTES) APP(UNSHIFT_REDZONE(&ni));
 
   return call_frag;
 }

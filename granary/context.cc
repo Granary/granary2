@@ -63,7 +63,11 @@ extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
 
 // Generates the wrapper code for a context callback.
-extern void GenerateContextCallCode(MachineContextCallback *callback);
+extern Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc);
+
+// Generates the wrapper code for an outline callback.
+extern Callback *GenerateOutlineCallback(CodeCache *cache,
+                                         InlineFunctionCall *call);
 
 }  // namespace arch
 namespace os {
@@ -293,19 +297,23 @@ void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
 
 // Returns a pointer to the `CachePC` associated with the context-callable
 // function at `func_addr`.
-arch::MachineContextCallback *Context::ContextCallback(uintptr_t func_addr) {
-  auto edge_code = edge_code_cache.AllocateBlock(
-      arch::CONTEXT_CALL_CODE_SIZE_BYTES);
-  auto cb = new arch::MachineContextCallback(
-      reinterpret_cast<AppPC>(func_addr), edge_code);
+const arch::Callback *Context::ContextCallback(AppPC func_pc) {
+  SpinLockedRegion locker(&arg_callbacks_lock);
+  auto *&cb(context_callbacks[func_pc]);
+  if (!cb) {
+    cb = arch::GenerateContextCallback(&edge_code_cache, func_pc);
+  }
+  return cb;
+}
 
-  do {  // Generate the wrapper code fore the callback.
-    CodeCacheTransaction transaction(
-        &edge_code_cache, edge_code,
-        edge_code + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-    arch::GenerateContextCallCode(cb);
-  } while (0);
-
+// Returns a pointer to the code cache code associated with some outline-
+// callable function at `func_addr`.
+const arch::Callback *Context::OutlineCallback(InlineFunctionCall *call) {
+  SpinLockedRegion locker(&arg_callbacks_lock);
+  auto &cb(outline_callbacks[call->target_app_pc]);
+  if (!cb) {
+    cb = arch::GenerateOutlineCallback(&edge_code_cache, call);
+  }
   return cb;
 }
 

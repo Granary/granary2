@@ -19,27 +19,28 @@ namespace arch {
 // instruction is a copy instruction, otherwise returns `nullptr`.
 SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
                              SSAInstruction *ssa_instr) {
-  if (1UL != ssa_instr->defs.Size() || !ssa_instr->uses.Size()) {
-    return nullptr;
-  }
+  if (1UL != ssa_instr->defs.Size()) return nullptr;
+  if (!ssa_instr->uses.Size()) return nullptr;
 
-  const auto &instruction(instr->instruction);
-  GRANARY_IF_DEBUG( const auto &op0(instruction.ops[0]);)
-  const auto &op1(instruction.ops[1]);
+  const auto &ainstr(instr->instruction);
+  if (ainstr.is_save_restore) return nullptr;
+
+  GRANARY_IF_DEBUG( const auto &op0(ainstr.ops[0]);)
+  const auto &op1(ainstr.ops[1]);
 
   // We don't allow copy propagation of the stack pointer, and we require that
   // catch issues like `MOV r16, r16` not being copy-propagatable because the
   // first (written) operand preserves bytes on write, and therefore appears
   // in `uses` instead of `defs`.
   VirtualRegister copied_reg;
-  if (XED_IFORM_MOV_GPRv_GPRv_89 == instruction.iform ||
-      XED_IFORM_MOV_GPRv_GPRv_8B == instruction.iform) {
+  if (XED_IFORM_MOV_GPRv_GPRv_89 == ainstr.iform ||
+      XED_IFORM_MOV_GPRv_GPRv_8B == ainstr.iform) {
     GRANARY_ASSERT(op0.IsRegister());
     GRANARY_ASSERT(op1.IsRegister());
     if (op1.reg.IsStackPointer()) return nullptr;
 
-  } else if (XED_ICLASS_LEA == instruction.iclass &&
-             2 == instruction.num_explicit_ops) {
+  } else if (XED_ICLASS_LEA == ainstr.iclass &&
+             2 == ainstr.num_explicit_ops) {
     if (op1.is_compound) {
       auto base_reg = VirtualRegister::FromNative(op1.mem.reg_base);
       if (base_reg.IsStackPointer()) return nullptr;

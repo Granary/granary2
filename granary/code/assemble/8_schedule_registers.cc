@@ -1079,7 +1079,8 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
     VirtualRegister slot;
 
     // Case 3. We can share this VR's spill slot with another.
-    if (sched->TryGetSharedGPR(used_regs, &agpr)) {
+    if (!instr->instruction.IsVirtualRegSaveRestore() &&
+        sched->TryGetSharedGPR(used_regs, &agpr)) {
       auto &agpr_home(sched->Loc(agpr));
       GRANARY_ASSERT(RegLocationType::LIVE_SLOT == agpr_home.type);
       slot = agpr_home.loc;
@@ -1107,7 +1108,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
 // Case 5: Schedule a fragment-local register definition. This enables slot
 // sharing within the fragment.
 static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
-                                     SSAOperand &op
+                                     SSAOperand &op, NativeInstruction *instr
                                      _GRANARY_IF_DEBUG(SSAFragment *frag)) {
   auto node = op.nodes[0];
   auto vr = node->reg;
@@ -1132,9 +1133,21 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
   vr_home = {VirtualRegister(), RegLocationType::GPR}; // Reset.
   sched->DeleteLoc(vr);  // Kill `vr_home`.
 
-  gpr_home.type = RegLocationType::LIVE_SLOT;  // Enables slot-sharing.
-  inv_gpr_home.loc = VirtualRegister();  // Will help signal an error.
-  inv_gpr_home.type = RegLocationType::GPR;
+  // Need to be "greedy" about virtual save/restore regs, so that the peephole
+  // optimizer recognizes opportunities.
+  if (instr->instruction.IsVirtualRegSaveRestore()) {
+    frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(gpr_homed_by_vr,
+                                                         gpr_home.loc));
+    gpr_home.loc = gpr_homed_by_vr;
+    gpr_home.type = RegLocationType::GPR;
+    inv_gpr_home = {gpr_homed_by_vr, RegLocationType::GPR};
+
+  // Enable slot sharing (default).
+  } else {
+    gpr_home.type = RegLocationType::LIVE_SLOT;  // Enables slot-sharing.
+    inv_gpr_home.loc = VirtualRegister();  // Will help signal an error.
+    inv_gpr_home.type = RegLocationType::GPR;
+  }
 }
 
 static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
@@ -1245,7 +1258,7 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
         ScheduleFragmentLocalUse(&sched, def_op, ninstr, used_regs, frag);
       }
       for (auto &def_op : ssa_instr->defs) {
-        ScheduleFragmentLocalDef(&sched, def_op _GRANARY_IF_DEBUG(frag));
+        ScheduleFragmentLocalDef(&sched, def_op, ninstr _GRANARY_IF_DEBUG(frag));
       }
     } else {
       continue;

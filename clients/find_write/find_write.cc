@@ -28,6 +28,34 @@ GRANARY_DEFINE_mask(value_mask, 0,
 
     "find_write");
 
+namespace {
+static void ReportWrite8(AppPC pc, void *address, uint8_t value) {
+  os::Log(os::LogDebug, "1,%p,%p,%x\n", pc, address, value);
+}
+static void ReportWrite16(AppPC pc, void *address, uint16_t value) {
+  os::Log(os::LogDebug, "2,%p,%p,%x\n", pc, address, value);
+}
+static void ReportWrite32(AppPC pc, void *address, uint32_t value) {
+  os::Log(os::LogDebug, "4,%p,%p,%x\n", pc, address, value);
+}
+static void ReportWrite64(AppPC pc, void *address, uint64_t value) {
+  os::Log(os::LogDebug, "8,%p,%p,%lx\n", pc, address, value);
+}
+static AppPC GetWriteReporter(Operand &op) {
+  switch (op.BitWidth()) {
+    case 8:
+      return UnsafeCast<AppPC>(ReportWrite8);
+    case 16:
+      return UnsafeCast<AppPC>(ReportWrite16);
+    case 32:
+      return UnsafeCast<AppPC>(ReportWrite32);
+    case 64:
+    default:
+      return UnsafeCast<AppPC>(ReportWrite64);
+  }
+}
+}  // namespace
+
 // Tool that implements several kernel-space special cases for instrumenting
 // common binaries.
 class MemoryWriteInstrumenter : public InstrumentationTool {
@@ -35,7 +63,8 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   virtual ~MemoryWriteInstrumenter(void) = default;
 
   // Writing an immediate constant to memory.
-  void InstrumentMemoryWrite(NativeInstruction *instr, VirtualRegister dst_addr,
+  void InstrumentMemoryWrite(DecodedBasicBlock *block, AppPC pc,
+                             NativeInstruction *instr, VirtualRegister dst_addr,
                              ImmediateOperand &value) {
     if (FLAG_value_mask && !(FLAG_value_mask & value.UInt())) return;
     RegisterOperand address(dst_addr);
@@ -48,11 +77,14 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %4, r64 %0;"
           "JZ l %3;"_x86_64);
     }
+    instr->InsertBefore(lir::CallWithArgs(
+        block, GetWriteReporter(value), pc, address, value));
     asm_.InlineBefore(instr, "LABEL %3:"_x86_64);
   }
 
   // Writing the value of a register to memory.
-  void InstrumentMemoryWrite(NativeInstruction *instr, VirtualRegister dst_addr,
+  void InstrumentMemoryWrite(DecodedBasicBlock *block, AppPC pc,
+                             NativeInstruction *instr, VirtualRegister dst_addr,
                              RegisterOperand &value) {
     RegisterOperand address(dst_addr);
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
@@ -71,12 +103,19 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %5, r64 %2;"
           "JZ l %4;"_x86_64);
     }
+    instr->InsertBefore(lir::CallWithArgs(
+        block, GetWriteReporter(value), pc, address, value));
     asm_.InlineBefore(instr, "LABEL %4:");
   }
 
   virtual void InstrumentBlock(DecodedBasicBlock *block) {
+    AppPC pc(nullptr);
     for (auto instr : block->Instructions()) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if(auto instr_pc = ninstr->DecodedPC()) {
+          pc = instr_pc;
+        }
+
         if (!StringsMatch("MOV", ninstr->OpCodeName())) continue;
 
         MemoryOperand dst;
@@ -86,11 +125,11 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
 
         if (ninstr->MatchOperands(WriteTo(dst), ReadFrom(src_imm))) {
           if (dst.MatchRegister(dst_addr)) {
-            InstrumentMemoryWrite(ninstr, dst_addr, src_imm);
+            InstrumentMemoryWrite(block, pc, ninstr, dst_addr, src_imm);
           }
         } else if (ninstr->MatchOperands(WriteTo(dst), ReadFrom(src_reg))) {
           if (dst.MatchRegister(dst_addr)) {
-            InstrumentMemoryWrite(ninstr, dst_addr, src_reg);
+            InstrumentMemoryWrite(block, pc, ninstr, dst_addr, src_reg);
           }
         }
       }

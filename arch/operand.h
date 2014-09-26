@@ -17,9 +17,11 @@ namespace arch {
 // interface class cannot be used as-is as the methods don't exist.
 class alignas(16) OperandInterface {
  public:
+  bool IsValid(void) const;
   bool IsRead(void) const;
 
   bool IsWrite(void) const;
+  bool IsSemanticDefinition(void) const;
 
   bool IsConditionalRead(void) const;
 

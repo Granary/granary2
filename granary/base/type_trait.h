@@ -99,6 +99,15 @@ struct IsPointer<Ret (*)(Args...)> : public TrueType {};
 template <typename A>
 struct IsPointer<A *> : public TrueType {};
 
+template <typename A>
+struct IsPointer<const A *> : public TrueType {};
+
+template <typename A>
+struct IsPointer<volatile A *> : public TrueType {};
+
+template <typename A>
+struct IsPointer<const volatile A *> : public TrueType {};
+
 GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
 
 template <typename A>

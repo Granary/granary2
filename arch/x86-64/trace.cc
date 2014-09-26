@@ -100,35 +100,18 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
                     CachePC estimated_encode_pc) {
   Instruction ni;
 
-  if (REDZONE_SIZE_BYTES) {
-    PREP(LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(REDZONE_SIZE_BYTES,
-                                                       XED_REG_RSP,
-                                                       ADDRESS_WIDTH_BITS)));
-  }
+  // Note: Instructions prepended in reverse to get desired effect.
 
-  auto target_addr = UnsafeCast<uintptr_t>(granary_trace_block);
-  auto encode_addr = reinterpret_cast<uintptr_t>(estimated_encode_pc);
-  auto target_pc = reinterpret_cast<PC>(target_addr);
-  auto diff = std::max(encode_addr, target_addr) -
-              std::min(encode_addr, target_addr);
-
-  // TODO(pag): Generalize the following pattern, as in the first Granary.
-  if (diff > 4187593113UL) {  // > ~3.9GB away; don't risk it for a rel32.
+  if (REDZONE_SIZE_BYTES) PREP(UNSHIFT_REDZONE(&ni));
+  auto target_pc = UnsafeCast<PC>(granary_trace_block);
+  if (!AddrIsOffsetReachable(target_pc, estimated_encode_pc)) {
     auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
     auto addr = new NativeAddress(target_pc, &(cache_meta->native_addresses));
-    PREP(CALL_NEAR_MEMv(&ni, addr);
-         ni.is_stack_blind = true;
-         ni.analyzed_stack_usage = false; );
+    PREP(CALL_NEAR_MEMv(&ni, addr));
   } else {
-    PREP(CALL_NEAR_RELBRd(&ni, target_pc);
-         ni.is_stack_blind = true;
-         ni.analyzed_stack_usage = false; );
+    PREP(CALL_NEAR_RELBRd(&ni, target_pc));
   }
-  if (REDZONE_SIZE_BYTES) {
-    PREP(LEA_GPRv_AGEN(&ni, XED_REG_RSP, BaseDispMemOp(-REDZONE_SIZE_BYTES,
-                                                       XED_REG_RSP,
-                                                       ADDRESS_WIDTH_BITS)));
-  }
+  if (REDZONE_SIZE_BYTES) PREP(SHIFT_REDZONE(&ni));
 }
 
 #else

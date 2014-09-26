@@ -104,12 +104,24 @@ arch::Operand *Operand::UnsafeExtract(void) const {
   return op_ptr;
 }
 
+bool Operand::IsValid(void) const {
+  if (TOMBSTONE == op_ptr) {
+    return op->IsValid();
+  } else {
+    return nullptr != op_ptr;
+  }
+}
+
 bool Operand::IsRead(void) const {
   return op_ptr && op->IsRead();
 }
 
 bool Operand::IsWrite(void) const {
   return op_ptr && op->IsWrite();
+}
+
+bool Operand::IsSemanticDefinition(void) const {
+  return op_ptr && op->IsSemanticDefinition();
 }
 
 bool Operand::IsConditionalRead(void) const {

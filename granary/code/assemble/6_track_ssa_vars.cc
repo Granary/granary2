@@ -145,7 +145,8 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op
   } else if (op->IsConditionalWrite() || op->IsReadWrite()) {
     ssa_op.action = SSAOperandAction::READ_WRITE;
   } else if (op->IsWrite()) {
-    if (reg_op->Register().PreservesBytesOnWrite()) {
+    const auto reg(reg_op->Register());
+    if (!op->IsSemanticDefinition() && reg.PreservesBytesOnWrite()) {
       ssa_op.action = SSAOperandAction::READ_WRITE;
     } else {
       ssa_op.action = SSAOperandAction::WRITE;

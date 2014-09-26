@@ -71,7 +71,7 @@ namespace {
 
 // Try to peephole optimize the following pattern that represents the filling of
 // a spilled native register.
-//      MOV_GPRv_GPRv_89 <native>, <spill>
+//      MOV_GPRv_GPRv_89/8B <native>, <spill>
 //      MOV_GPRv_MEMv <spill>, [slot:N]
 // Into:
 //      MOV_GPRv_MEMv <native>, [slot:N]
@@ -80,24 +80,23 @@ static granary::Instruction *OptRestoreGPR(NativeInstruction *instr,
   auto &ainstr(instr->instruction);
   auto &next_ainstr(next_instr->instruction);
   if (next_ainstr.is_save_restore ||
-      XED_IFORM_MOV_GPRv_GPRv_89 != ainstr.iform ||
+      (XED_IFORM_MOV_GPRv_GPRv_89 != ainstr.iform &&
+       XED_IFORM_MOV_GPRv_GPRv_8B != ainstr.iform) ||
       XED_IFORM_MOV_GPRv_MEMv != next_ainstr.iform ||
       !next_ainstr.ops[1].reg.IsVirtualSlot() ||
       ainstr.ops[1].reg != next_ainstr.ops[0].reg ||
       ainstr.ops[1].reg.ByteWidth() != next_ainstr.ops[0].reg.ByteWidth()) {
     return next_instr;
   }
-
-  next_ainstr.ops[0] = ainstr.ops[0];
+  memcpy(&(next_ainstr.ops[0]), &(ainstr.ops[0]), sizeof ainstr.ops[0]);
   NOP_90(&ainstr);
-
   return next_instr->Next();
 }
 
 // Try to peephole optimize the following pattern that represents the spilling
 // of a native register.
 //      MOV_MEMv_GPRv [slot:N], <spill>
-//      MOV_GPRv_GPRv_89 <spill>, <native>
+//      MOV_GPRv_GPRv_89/8B <spill>, <native>
 // Into:
 //      MOV_MEMv_GPRv [slot:N], <native>
 static granary::Instruction *OptSaveGPR(NativeInstruction *instr,
@@ -106,16 +105,15 @@ static granary::Instruction *OptSaveGPR(NativeInstruction *instr,
   auto &next_ainstr(next_instr->instruction);
   if (ainstr.is_save_restore ||
       XED_IFORM_MOV_MEMv_GPRv != ainstr.iform ||
-      XED_IFORM_MOV_GPRv_GPRv_89 != next_ainstr.iform ||
+      (XED_IFORM_MOV_GPRv_GPRv_89 != next_ainstr.iform &&
+       XED_IFORM_MOV_GPRv_GPRv_8B != next_ainstr.iform) ||
       !ainstr.ops[0].reg.IsVirtualSlot() ||
       ainstr.ops[1].reg != next_ainstr.ops[0].reg ||
       ainstr.ops[1].reg.ByteWidth() != next_ainstr.ops[0].reg.ByteWidth()) {
     return next_instr;
   }
-
-  ainstr.ops[1] = next_ainstr.ops[1];
+  memcpy(&(ainstr.ops[1]), &(next_ainstr.ops[1]), sizeof ainstr.ops[1]);
   NOP_90(&next_ainstr);
-
   return next_instr->Next();
 }
 

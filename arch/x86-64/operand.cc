@@ -33,6 +33,12 @@ bool OperandRef::ReplaceWith(const Operand &repl_op) {
 
 // Returns whether or not this operand can be replaced / modified.
 bool Operand::IsModifiable(void) const {
+
+  static_assert(sizeof(op) >= sizeof(arch::Operand) &&
+                alignof(op) >= alignof(arch::Operand) &&
+                0 == (alignof(op) % alignof(arch::Operand)),
+                "Invalid size or alignment for `OpaqueContainer`.");
+
   return op->is_explicit && !op->is_sticky;
 }
 
@@ -169,6 +175,31 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg)
   op->width = static_cast<int16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+// Initialize an immediate operand from a pointer.
+//
+// Note: This has a driver-specific implementation.
+ImmediateOperand::ImmediateOperand(void *ptr)
+    : Operand() {
+  op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
+  op->width = arch::ADDRESS_WIDTH_BITS;
+  op->imm.as_uint = reinterpret_cast<uintptr_t>(ptr);
+  if (!(op->imm.as_uint >> 32)) op->width = 32;
+  op->rw = XED_OPERAND_ACTION_R;
+  op->is_sticky = false;
+  op_ptr = TOMBSTONE;
+}
+
+ImmediateOperand::ImmediateOperand(const void *ptr)
+    : Operand() {
+  op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
+  op->width = arch::ADDRESS_WIDTH_BITS;
+  op->imm.as_uint = reinterpret_cast<uintptr_t>(ptr);
+  if (!(op->imm.as_uint >> 32)) op->width = 32;
+  op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
 }

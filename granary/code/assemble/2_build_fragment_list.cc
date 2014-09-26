@@ -71,7 +71,15 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
 extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
                                                FragmentList *frags,
                                                CodeFragment *pred,
-                                               uintptr_t func_addr);
+                                               AppPC func_pc);
+
+// Generates some code to target some client function. The generated code tries
+// to minimize the amount of saved/restored machine state, and punts on the
+// virtual register system for the rest.
+extern void ExtendFragmentWithOutlineCall(ContextInterface *context,
+                                          CodeFragment *frag,
+                                          InlineFunctionCall *call);
+
 }  // namespace arch
 namespace {
 
@@ -256,7 +264,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // be added to any existing partition.
     case IA_CONTEXT_CALL: {
       auto context_frag = arch::CreateContextCallFragment(
-          builder->context, builder->frags, frag, instr->data);
+          builder->context, builder->frags, frag, instr->Data<AppPC>());
       AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr,
                              StackUsageInfo());
       return false;
@@ -264,9 +272,10 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // Calls out to some client code, but the call has access to the existing
     // virtual register state.
-    case IA_OUTLINE_CALL: {
+    case IA_OUTLINE_CALL:
+      arch::ExtendFragmentWithOutlineCall(builder->context, frag,
+                                          instr->Data<InlineFunctionCall *>());
       return true;
-    }
 
     default: return true;
   }

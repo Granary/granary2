@@ -39,13 +39,13 @@ class MachineContext;
 // therefore this structure acts as a sort of dual to `NativeAddress`.
 //
 // This structure also records the cache target of the wrapped callback.
-class MachineContextCallback {
+class Callback {
  public:
-  MachineContextCallback(AppPC callback_, CachePC wrapped_callback_)
+  Callback(AppPC callback_, CachePC wrapped_callback_)
       : callback(callback_),
         wrapped_callback(wrapped_callback_) {}
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(MachineContextCallback, {
+  GRANARY_DEFINE_NEW_ALLOCATOR(Callback, {
     SHARED = true,
     ALIGNMENT = 16
   })
@@ -58,9 +58,9 @@ class MachineContextCallback {
   CachePC wrapped_callback;
 
  private:
-  MachineContextCallback(void) = delete;
+  Callback(void) = delete;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(MachineContextCallback);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(Callback);
 };
 #endif  // GRANARY_INTERNAL
 

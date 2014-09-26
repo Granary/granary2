@@ -4,6 +4,7 @@
 #define GRANARY_CODE_INLINE_ASSEMBLY_H_
 
 #include "granary/base/base.h"  // For `size_t`.
+#include "granary/base/pc.h"  // For `AppPC`.
 
 #ifdef GRANARY_INTERNAL
 # include "granary/base/container.h"
@@ -17,7 +18,7 @@ namespace granary {
 
 enum {
   MAX_NUM_INLINE_VARS = 16,
-  MAX_NUM_FUNC_OPERANDS = 5
+  MAX_NUM_FUNC_OPERANDS = 6
 };
 
 #ifdef GRANARY_INTERNAL
@@ -111,7 +112,12 @@ class InlineAssemblyBlock {
 // `target_app_pc` is added.
 class InlineFunctionCall {
  public:
-  InlineFunctionCall(AppPC target, std::initializer_list<Operand *> ops);
+  InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
+                     Operand ops[MAX_NUM_FUNC_OPERANDS]);
+
+  inline int NumArguments(void) const {
+    return num_args;
+  }
 
   GRANARY_DEFINE_NEW_ALLOCATOR(InlineFunctionCall, {
     SHARED = true,
@@ -119,7 +125,10 @@ class InlineFunctionCall {
   })
 
   AppPC target_app_pc;
+  int num_args;
   Operand args[MAX_NUM_FUNC_OPERANDS];
+  VirtualRegister saved_regs[MAX_NUM_FUNC_OPERANDS];
+  VirtualRegister arg_regs[MAX_NUM_FUNC_OPERANDS];
 
  private:
   InlineFunctionCall(void) = delete;

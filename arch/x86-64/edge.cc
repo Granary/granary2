@@ -9,7 +9,6 @@
 #include "arch/x86-64/slot.h"
 
 #include "granary/base/base.h"
-#include "granary/base/option.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
@@ -22,12 +21,6 @@
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
-
-enum {
-  // Should we use an NMI to get into Granary instead of a call and switch
-  // stacks? This should be `0` as it was somewhat of a failed experiment.
-  USE_NMI = 0
-};
 
 #define ENC(...) \
   do { \
@@ -49,11 +42,6 @@ extern "C" {
 // The direct edge entrypoint code.
 extern void granary_arch_enter_direct_edge(void);
 extern void granary_arch_enter_indirect_edge(void);
-
-// Granary's `granary_nmi_edge_handler` uses these to distinguish between
-// a real NMI, an NMI from an indirect edge, and an NMI from a direct edge.
-extern granary::CachePC granary_direct_edge_return_rip;
-extern granary::CachePC granary_indirect_edge_return_rip;
 
 }  // extern C
 
@@ -116,7 +104,7 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Disable interrupts and swap stacks.
-  if (!USE_NMI GRANARY_IF_USER( && false)) {
+  if (GRANARY_IF_USER_ELSE(false, true)) {
     ENC(CLI(&ni));
     ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK), XED_REG_RSP));
   }
@@ -129,18 +117,13 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  if (USE_NMI) {
-    ENC(INT_IMMb(&ni, static_cast<uint8_t>(2)));  // Raise an NMI.
-    granary_direct_edge_return_rip = pc;
-  } else {
-    auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
-    ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
-  }
+  auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
+  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
   // Swap stacks.
-  if (!USE_NMI GRANARY_IF_USER( && false)) {
+  if (GRANARY_IF_USER_ELSE(false, true)) {
     ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK), XED_REG_RSP));
   }
 
@@ -175,10 +158,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   edge->entry_target = pc;  // `pc` is the address of the next instruction.
 
   if (REDZONE_SIZE_BYTES && !target_stack_valid) {
-    ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(-REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS)));
+    ENC(SHIFT_REDZONE(&ni));
   }
 
   // Steal `RDI` (arg1 on Itanium C++ ABI) to hold the address of the
@@ -196,10 +176,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
 
   // Restore back to the native stack.
   if (REDZONE_SIZE_BYTES && !target_stack_valid) {
-    ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS)));
+    ENC(UNSHIFT_REDZONE(&ni));
   }
 
   // Jump to the resolved PC, independent of profiling. As mentioned above,
@@ -227,7 +204,7 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Save the flags and potentially disable interrupts.
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
-  if (!USE_NMI GRANARY_IF_USER( && false)) {
+  if (GRANARY_IF_USER_ELSE(false, true)) {
     // Disable interrupts and swap onto Granary's private stack.
     ENC(CLI(&ni));
     ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK), XED_REG_RSP));
@@ -242,17 +219,12 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  if (USE_NMI) {
-    ENC(INT_IMMb(&ni, static_cast<uint8_t>(2)));  // Raise an NMI.
-    granary_indirect_edge_return_rip = pc;
-  } else {
-    auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterIndirect);
-    ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
-  }
+  auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterIndirect);
+  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
-  if (!USE_NMI GRANARY_IF_USER( && false)) {
+  if (GRANARY_IF_USER_ELSE(false, true)) {
     // Swap back to the native stack.
     ENC(XCHG_MEMv_GPRv(&ni, SlotMemOp(os::SLOT_PRIVATE_STACK), XED_REG_RSP));
   }
@@ -349,10 +321,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   if (REDZONE_SIZE_BYTES && !is_call_ret) {
     APP(in_edge,
-        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(-REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS));
+        SHIFT_REDZONE(&ni);
         ni.is_stack_blind = true;
         ni.analyzed_stack_usage = false; );
   }

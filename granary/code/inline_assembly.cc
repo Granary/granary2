@@ -4,6 +4,8 @@
 
 #include "granary/base/cstring.h"
 
+#include "granary/cfg/basic_block.h"
+
 #include "granary/code/inline_assembly.h"
 
 #include "granary/breakpoint.h"
@@ -61,13 +63,22 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
 }
 
 // Initialize the inline function call.
-InlineFunctionCall::InlineFunctionCall(AppPC target,
-                                       std::initializer_list<Operand *> ops)
-    : target_app_pc(target) {
-  auto max_i = std::min<size_t>(MAX_NUM_FUNC_OPERANDS, ops.size());
-  for (auto i = 0UL; i < max_i; ++i) {
-    const auto op = ops.begin()[i];
-    args[i].UnsafeReplace(op->Extract());
+InlineFunctionCall::InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
+                                       Operand ops[MAX_NUM_FUNC_OPERANDS])
+    : target_app_pc(target),
+      num_args(0) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
+  memcpy(args, ops, sizeof(args));
+#pragma clang diagnostic pop
+  for (; num_args < MAX_NUM_FUNC_OPERANDS; ++num_args) {
+    if (args[num_args].IsValid()) {
+      saved_regs[num_args] = block->AllocateVirtualRegister();
+      arg_regs[num_args] = block->AllocateVirtualRegister();
+    } else {
+      break;
+    }
+    if (!args[num_args].IsValid()) break;
   }
 }
 

@@ -203,6 +203,13 @@ class InlineAssemblyParser {
   // Like labels, this will create/initialize a new reg op if it isn't already
   // initialized.
   void ParseRegOp(void) {
+    auto is_def = false;
+    if (Peek('@')) {
+      char buff[20] = {'\0'};
+      ParseWord(buff);
+      is_def = StringsMatch("@def", buff);
+      ConsumeWhiteSpace();
+    }
     auto var_num = ParseVar();
     auto &reg_op(scope->vars[var_num].reg);
     if (!scope->var_is_initialized[var_num]) {
@@ -213,6 +220,7 @@ class InlineAssemblyParser {
     } else {
       memcpy(op, reg_op->Extract(), sizeof *op);
     }
+    op->is_definition = is_def;
   }
 
   void ParseImmediate(void) {

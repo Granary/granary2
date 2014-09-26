@@ -17,6 +17,7 @@ class DirectBasicBlock;
 class InstrumentedBasicBlock;
 class BlockMetaData;
 class HashFunction;
+class Instruction;
 
 #ifdef GRANARY_INTERNAL
 namespace arch {

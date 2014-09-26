@@ -17,6 +17,9 @@ enum LogLevel : int {
 // Initialize the logging mechanism.
 GRANARY_INTERNAL_DEFINITION void InitLog(void);
 
+// Exit the log.
+GRANARY_INTERNAL_DEFINITION void ExitLog(void);
+
 // Log something.
 int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 

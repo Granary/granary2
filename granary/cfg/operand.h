@@ -93,8 +93,10 @@ class Operand {
 
   virtual ~Operand(void);
 
+  bool IsValid(void) const;
   bool IsRead(void) const;
   bool IsWrite(void) const;
+  bool IsSemanticDefinition(void) const;
   bool IsConditionalRead(void) const;
   bool IsConditionalWrite(void) const;
 
@@ -240,6 +242,9 @@ class MemoryOperand : public Operand {
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, MemoryOperand)
 };
 
+static_assert(sizeof(MemoryOperand) == sizeof(Operand),
+              "`MemoryOperand`s must have the same size as `Operand`s.");
+
 // Represents a register operand. This might be a general-purpose register, a
 // non-general purpose architectural register, or a virtual register.
 class RegisterOperand : public Operand {
@@ -265,12 +270,21 @@ class RegisterOperand : public Operand {
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, RegisterOperand)
 };
 
+static_assert(sizeof(RegisterOperand) == sizeof(Operand),
+              "`RegisterOperand`s must have the same size as `Operand`s.");
+
 // Represents an immediate integer operand.
 class ImmediateOperand : public Operand {
  public:
   using Operand::Operand;
   inline ImmediateOperand(void)
       : Operand() {}
+
+  // Initialize an immediate operand from a pointer.
+  //
+  // Note: This has a driver-specific implementation.
+  explicit ImmediateOperand(void *ptr);
+  explicit ImmediateOperand(const void *ptr);
 
   // Initialize a immediate operand from a signed integer, where the value has
   // a width of `width_bytes`.
@@ -297,6 +311,9 @@ class ImmediateOperand : public Operand {
   GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
 };
 
+static_assert(sizeof(ImmediateOperand) == sizeof(Operand),
+              "`ImmediateOperand`s must have the same size as `Operand`s.");
+
 // Represents a label that can be used as the target of a branch.
 class LabelOperand : public Operand {
  public:
@@ -317,6 +334,9 @@ class LabelOperand : public Operand {
  private:
   LabelOperand(void) = delete;
 };
+
+static_assert(sizeof(LabelOperand) == sizeof(Operand),
+              "`LabelOperand`s must have the same size as `Operand`s.");
 
 // High-level operand actions. Underneath these high-level actions we can
 // specialize to different types of reads and write with:

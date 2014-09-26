@@ -9,7 +9,10 @@
 #include "os/logging.h"
 
 // Visible from GDB.
-extern "C" char granary_log_buffer[32768 << 5] = {'\0'};
+extern "C" {
+char granary_log_buffer[32768 << 5] = {'\0'};
+unsigned long granary_log_buffer_index = 0;
+}  // extern C
 
 namespace granary {
 namespace os {
@@ -17,9 +20,11 @@ namespace os {
 // Initialize the logging mechanism.
 void InitLog(void) {}
 
+// Exit the log.
+void ExitLog(void) {}
+
 namespace {
 static SpinLock log_buffer_lock;
-static unsigned long log_buffer_index = 0;
 }
 
 // Log something.
@@ -30,11 +35,11 @@ int Log(LogLevel, const char *format, ...) {
   va_list args;
   va_start(args, format);
   auto ret = 0UL;
-  if (log_buffer_index < sizeof granary_log_buffer) {
-    ret = VarFormat(&(granary_log_buffer[log_buffer_index]),
-                    sizeof granary_log_buffer - log_buffer_index - 1,
+  if (granary_log_buffer_index < sizeof granary_log_buffer) {
+    ret = VarFormat(&(granary_log_buffer[granary_log_buffer_index]),
+                    sizeof granary_log_buffer - granary_log_buffer_index - 1,
                     format, args);
-    log_buffer_index += ret;
+    granary_log_buffer_index += ret;
   }
   va_end(args);
   return static_cast<int>(ret);

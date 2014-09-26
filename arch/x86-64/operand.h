@@ -37,12 +37,17 @@ class alignas(16) Operand : public OperandInterface {
         is_explicit(false),
         is_compound(false),
         is_effective_address(false),
-        is_annotation_instr(false) {
+        is_annotation_instr(false),
+        is_definition(false) {
     imm.as_uint = 0;
   }
 
   Operand(const Operand &op);
   Operand &operator=(const Operand &that);
+
+  inline bool IsValid(void) const {
+    return XED_ENCODER_OPERAND_TYPE_INVALID != type;
+  }
 
   inline bool IsRead(void) const {
     return xed_operand_action_read(rw);
@@ -50,6 +55,10 @@ class alignas(16) Operand : public OperandInterface {
 
   inline bool IsWrite(void) const {
     return xed_operand_action_written(rw);
+  }
+
+  inline bool IsSemanticDefinition(void) const {
+    return is_definition;
   }
 
   inline bool IsConditionalRead(void) const {
@@ -157,6 +166,11 @@ class alignas(16) Operand : public OperandInterface {
     // encoded program counter? This is used when mangling indirect calls,
     // because we need to manually PUSH the return address onto the stack.
     bool is_annotation_instr:1;
+
+    // Is this a definition of a register? Sometimes we need to ignore the
+    // semantics of x86 register usage, e.g. a write to an 8-bit virtual
+    // register should always be treated as having an implicit data dependency.
+    bool is_definition:1;
   } __attribute__((packed));
 
 #pragma clang diagnostic pop

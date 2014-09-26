@@ -39,14 +39,17 @@ std::unique_ptr<Instruction> CallWithContext(
       IA_CONTEXT_CALL, func));
 }
 
+namespace detail {
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> CallWithArgs(
-    AppPC func_addr, std::initializer_list<Operand *> ops) {
+std::unique_ptr<Instruction> CallWithArgs(DecodedBasicBlock *block,
+                                          AppPC func_addr, Operand *ops) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_OUTLINE_CALL, new InlineFunctionCall(func_addr, ops)));
+      IA_OUTLINE_CALL, new InlineFunctionCall(block, func_addr, ops)));
 }
+
+}  // namespace detail
 
 InlineAssembly::InlineAssembly(std::initializer_list<Operand *> operands)
     : scope(new InlineAssemblyScope(operands)) {}
@@ -99,7 +102,10 @@ RegisterOperand &InlineAssembly::Register(DecodedBasicBlock *block,
                                           int reg_num) const {
   if (!scope->var_is_initialized[reg_num]) {
     RegisterOperand reg_op(block->AllocateVirtualRegister());
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
     memcpy(scope->vars[reg_num].reg.AddressOf(), &reg_op, sizeof reg_op);
+#pragma clang diagnostic pop
     scope->var_is_initialized[reg_num] = true;
   }
   return *(scope->vars[reg_num].reg.AddressOf());

@@ -33,9 +33,10 @@ class MetaDataDescription;
 class MetaDataManager;
 class InstrumentationTool;
 class InstrumentationManager;
+class InlineFunctionCall;
 
 namespace arch {
-class MachineContextCallback;
+class Callback;
 }  // namespace arch
 
 #ifdef GRANARY_TARGET_test
@@ -94,8 +95,11 @@ class ContextInterface {
 
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
-  virtual arch::MachineContextCallback *ContextCallback(
-      uintptr_t func_addr) = 0;
+  virtual const arch::Callback *ContextCallback(AppPC func_addr) = 0;
+
+  // Returns a pointer to the code cache code associated with some outline-
+  // callable function at `func_addr`.
+  virtual const arch::Callback *OutlineCallback(InlineFunctionCall *call);
 };
 
 #else
@@ -177,7 +181,12 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   // Returns a pointer to the `arch::MachineContextCallback` associated with
   // the context-callable function at `func_addr`.
   GRANARY_TEST_VIRTUAL
-  arch::MachineContextCallback *ContextCallback(uintptr_t func_addr);
+  const arch::Callback *ContextCallback(AppPC func_pc);
+
+  // Returns a pointer to the code cache code associated with some outline-
+  // callable function at `func_addr`.
+  GRANARY_TEST_VIRTUAL
+  const arch::Callback *OutlineCallback(InlineFunctionCall *call);
 
  private:
   // Manages all meta-data allocated/understood by this environment.
@@ -215,10 +224,16 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   LockedIndex code_cache_index;
 
   // Mapping of context callback functions to their code cache equivalents. In
-  // the code cache, these functions are wrapped with code that save/restore
+  // the code cache, these functions are wrapped with code that saves/restores
   // registers, etc.
   SpinLock context_callbacks_lock;
-  TinyMap<uintptr_t, arch::MachineContextCallback *, 32> context_callbacks;
+  TinyMap<AppPC, arch::Callback *, 8> context_callbacks;
+
+  // Mapping of arguments callback functions to their code cache equivalents.
+  // In the code cache, these functions are wrapped with code that saves/
+  // restores registers, etc.
+  SpinLock arg_callbacks_lock;
+  TinyMap<AppPC, arch::Callback *, 8> outline_callbacks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

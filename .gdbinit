@@ -314,10 +314,10 @@ define save-meta-pcs
 end
 
 
-# save-kernel-log
+# save-log
 #
 # Saves the kernel log to the file name specified by `$arg0`.
-define save-kernel-log
+define save-log
   set language c++
   set logging file $arg0
   set logging on
@@ -749,6 +749,7 @@ end
 # the fragments to `stdout` or `stderr`. 
 define log-frags
   set language c++
+  set granary_log_buffer_index = 0
   p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) frags)
   dont-repeat
 end

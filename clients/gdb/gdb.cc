@@ -17,6 +17,7 @@ GRANARY_DEFINE_bool(debug_gdb_prompt, true,
 
 extern "C" {
 extern int getpid(void);
+extern long long write(int __fd, const void *__buf, size_t __n);
 extern long long read(int __fd, void *__buf, size_t __nbytes);
 
 }  // extern C
@@ -35,9 +36,12 @@ namespace {
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
 extern "C" void AwaitAttach(int signum, void *siginfo, void *context) {
-  char buff[2];
-  os::Log(os::LogOutput, "Process ID for attaching GDB: %d\n", getpid());
-  os::Log(os::LogOutput, "Press enter to continue.\n");
+  char buff[1024];
+  auto num_bytes = Format(
+      buff, sizeof buff,
+      "Process ID for attaching GDB: %d\nPress enter to continue.\n",
+      getpid());
+  write(1, buff, num_bytes);
   read(0, buff, 1);
 
   // Useful for debugging purposes.
