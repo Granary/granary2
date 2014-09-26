@@ -17,9 +17,9 @@ GRANARY_DEFINE_bool(early_attach, true,
 GRANARY_DEFINE_bool(hook_syscalls, true,
     "Should Granary hook into a program's system calls? The default is `yes`.\n"
     "\n"
-    "Note: Granary needs to hook system calls for comprehensively\n"
-    "      instrumenting user space programs. However, if a program isn't\n"
-    "      being comprehensively instrumented, then system calls need not be\n"
+    "Note: Granary must hook system calls for comprehensive instrumentation\n"
+    "      of user space programs to work. However, if a program isn't being\n"
+    "      comprehensively instrumented, then system calls need not be\n"
     "      hooked.",
 
     "user");
