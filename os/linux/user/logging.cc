@@ -6,9 +6,18 @@
 
 #include "granary/base/base.h"
 #include "granary/base/lock.h"
+#include "granary/base/option.h"
 #include "granary/base/string.h"
 
 #include "os/logging.h"
+
+GRANARY_DEFINE_string(output_log_file, "/dev/stdout",
+    "The log file used by Granary for otuputting messages to "
+    "`os::LogLevel::LogOutput`. The default value is `/dev/stdout`.");
+
+GRANARY_DEFINE_string(debug_log_file, "/dev/stderr",
+    "The log file used by Granary for outputting messages to "
+    "`os::LogLevel::LogDebug`. The default value is `/dev/stderr`.");
 
 extern "C" {
 
@@ -33,9 +42,6 @@ namespace {
 
 static int OUTPUT_FD[] = {
   -1,  // LogOutput; goes to `/dev/stdout`.
-  -1,  // LogWarning
-  -1,  // LogError
-  -1,  // LogFatalError
   -1,  // LogDebug; goes to `/dev/stderr`.
   -1
 };
@@ -47,12 +53,10 @@ static int log_buffer_fd = -1;
 
 // Initialize the logging mechanism.
 void InitLog(void) {
-  OUTPUT_FD[LogLevel::LogOutput] = open("/dev/stdout", O_WRONLY, nullptr);
-  OUTPUT_FD[LogLevel::LogWarning] = open("/tmp/granary_error.log",
-                                         O_CREAT | O_WRONLY, nullptr);
-  OUTPUT_FD[LogLevel::LogError] = OUTPUT_FD[LogLevel::LogWarning];
-  OUTPUT_FD[LogLevel::LogFatalError] = OUTPUT_FD[LogLevel::LogError];
-  OUTPUT_FD[LogLevel::LogDebug] = open("/dev/stderr", O_WRONLY, nullptr);
+  OUTPUT_FD[LogLevel::LogOutput] = open(
+      FLAG_output_log_file, O_WRONLY, nullptr);
+  OUTPUT_FD[LogLevel::LogDebug] = open(
+      FLAG_debug_log_file, O_WRONLY, nullptr);
 }
 
 // Exit the log.

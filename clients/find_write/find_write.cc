@@ -5,7 +5,7 @@
 using namespace granary;
 
 GRANARY_DEFINE_mask(address_mask, std::numeric_limits<uintptr_t>::max(),
-    "Mask that is used to filter addresses. If all bits are set then all\n"
+    "Mask that is used to filter addresses. If all bits are set then all "
     "addresses are accepted.\n"
     "\n"
     "If `(addr & addr_mask) != 0` then the write is recorded "
@@ -20,7 +20,7 @@ GRANARY_DEFINE_mask(address_mask, std::numeric_limits<uintptr_t>::max(),
     "find_write");
 
 GRANARY_DEFINE_mask(value_mask, std::numeric_limits<uintptr_t>::max(),
-    "Mask that is used to filter values. If all bits are set then all values\n"
+    "Mask that is used to filter values. If all bits are set then all values "
     "are accepted.\n"
     "\n"
     "If `(value & value_mask) != 0` then the write is recorded "

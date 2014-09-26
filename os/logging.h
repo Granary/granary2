@@ -8,10 +8,7 @@ namespace os {
 
 enum LogLevel : int {
   LogOutput = 0,
-  LogWarning = 1,
-  LogError = 2,
-  LogFatalError = 3,
-  LogDebug = 4
+  LogDebug = 1
 };
 
 // Initialize the logging mechanism.

@@ -39,7 +39,7 @@ class BBCount : public InstrumentationTool {
   }
 
   virtual void Exit(ExitReason) {
-    os::Log(os::LogOutput, "%lu blocks were translated.\n",
+    os::Log(os::LogDebug, "%lu blocks were translated.\n",
             NUM_BBS.load());
   }
 
