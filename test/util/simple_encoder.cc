@@ -58,13 +58,6 @@ CachePC SimpleEncoderTest::InstrumentAndEncode(AppPC pc) {
   EXPECT_CALL(context, CodeCacheIndex())
       .WillRepeatedly(Return(&locked_index));
 
-  // Called for the "lazy" meta-data on the function return.
-  EXPECT_CALL(context, AllocateEmptyBlockMetaData())
-      .Times(1)
-      .WillOnce(InvokeWithoutArgs([&] {
-        return meta_manager.Allocate();
-      }));
-
   // Allocate all tools to instrument the first block.
   EXPECT_CALL(context, AllocateTools())
       .Times(1)
