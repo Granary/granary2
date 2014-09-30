@@ -23,6 +23,11 @@ GRANARY_MODULE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME).ko
 GRANARY_SHIPPED_BIN = $(GRANARY_MOD_BIN_DIR)/granary_bin.o_shipped
 GRANARY_SHIPPED_CMD = $(GRANARY_MOD_BIN_DIR)/.granary_bin.o.cmd
 
+# All objects that need to be put together to form the library.
+GRANARY_O_FILES = os.o granary.o arch.o driver.o
+GRANARY_O_FILES += $(addsuffix _client.o,$(GRANARY_CLIENTS))
+GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
+
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
 	@$(GRANARY_LD) -r $^ -o $(GRANARY_OS_OBJ)
@@ -37,11 +42,11 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
 
 # Create an `_shipped` file out of the existing granary objects in the main
 # binary dir.
-$(GRANARY_SHIPPED_BIN):
+$(GRANARY_SHIPPED_BIN): $(GRANARY_OBJS)
 	@mkdir -p $(GRANARY_MOD_BIN_DIR)
 	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
 	@$(GRANARY_LD) \
-		-r $(wildcard $(GRANARY_BIN_DIR)/*.o) \
+		-r $(GRANARY_OBJS) \
 		-o $(GRANARY_SHIPPED_BIN)
 	# Make a `.cmd` file for the shipped object file.
 	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)

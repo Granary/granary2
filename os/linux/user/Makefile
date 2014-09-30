@@ -19,6 +19,11 @@ GRANARY_INJECTOR_FLAGS = -O3 -g0 -fno-asynchronous-unwind-tables -std=gnu99
 GRANARY_LIBRARY_OBJ = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).o
 GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
 
+# All objects that need to be put together to form the library.
+GRANARY_O_FILES = os.o granary.o arch.o driver.o
+GRANARY_O_FILES += $(addsuffix _client.o,$(GRANARY_CLIENTS))
+GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
+
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
 	@$(GRANARY_LD) -g -r $^ -o $(GRANARY_OS_OBJ)
@@ -32,7 +37,7 @@ lint:
 all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
 
 # Makes `grr`, the user-space injector if `libgranary.so`.
-$(GRANARY_INJECTOR):
+$(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
 	@echo "Compiling injector $(GRANARY_INJECTOR)"
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
         -c $(GRANARY_WHERE_SRC_DIR)/inject.c \
@@ -45,12 +50,12 @@ $(GRANARY_INJECTOR):
 # files. We have this extra step so that we can add in the linker script at a
 # stage where it will have the desired effect, while also not causing any later
 # load-time issues due to R_386_RELATIVE (0x08) PLT relocation types.
-$(GRANARY_LIBRARY_OBJ):
+$(GRANARY_LIBRARY_OBJ): $(GRANARY_OBJS)
 	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
 	@$(GRANARY_LD) -g \
 		-z initfirst \
 		-T $(GRANARY_SRC_DIR)/linker.lds \
-		-r $(filter-out $(GRANARY_LIBRARY_OBJ),$(wildcard $(GRANARY_BIN_DIR)/*.o)) \
+		-r $(GRANARY_OBJS) \
 		-o $(GRANARY_LIBRARY_OBJ)
 
 # Makes `libgranary.so`, the user-space shared library version of Granary.

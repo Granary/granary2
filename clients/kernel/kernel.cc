@@ -2,6 +2,8 @@
 
 #include <granary.h>
 
+#ifdef GRANARY_WHERE_kernel
+
 using namespace granary;
 
 GRANARY_DEFINE_string(attach_to_syscalls, "*",
@@ -70,3 +72,5 @@ GRANARY_CLIENT_INIT({
   }
   RegisterInstrumentationTool<KernelSpaceInstrumenter>("kernel");
 })
+
+#endif  // GRANARY_WHERE_kernel

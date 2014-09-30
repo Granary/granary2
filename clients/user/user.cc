@@ -2,6 +2,8 @@
 
 #include <granary.h>
 
+#ifdef GRANARY_WHERE_user
+
 #include "clients/user/signal.h"
 #include "clients/user/syscall.h"
 #include "clients/util/closure.h"
@@ -160,3 +162,5 @@ class UserSpaceInstrumenter : public InstrumentationTool {
 GRANARY_CLIENT_INIT({
   RegisterInstrumentationTool<UserSpaceInstrumenter>("user");
 })
+
+#endif  // GRANARY_WHERE_user
