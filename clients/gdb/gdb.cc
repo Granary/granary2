@@ -107,7 +107,6 @@ class GDBDebuggerHelper : public InstrumentationTool {
   // some guidance as to how to port this.
   bool FixHiddenBreakpoints(BlockFactory *factory, ControlFlowInstruction *cfi,
                             BasicBlock *block) {
-    auto fixed = false;
     auto decoded_pc = block->StartAppPC();
     auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
@@ -123,24 +122,19 @@ class GDBDebuggerHelper : public InstrumentationTool {
       call_native = 0x6f50 == offset.offset || 0x6f60 == offset.offset;
     }
 
-    // GDB somtimes puts `int3`s on specific functions so that I knows when key
-    // events (e.g. thread creation) happen.
+    // GDB somtimes puts `int3`s on specific functions so that it knows when
+    // key events (e.g. thread creation) happen. Most of these functions are
+    // basically no-ops, so would can just manually call them recursively).
     if (call_native) {
       cfi->InsertBefore(lir::Call(factory, decoded_pc, REQUEST_NATIVE));
       cfi->InsertBefore(lir::Return(factory));
-      fixed = true;
-    }
 
-    if (fixed) {
       Instruction::Unlink(cfi);
       return true;
     }
 
-    os::Log(os::LogOutput, "code = %p\n", decoded_pc);
-    os::Log(os::LogOutput, "module = %s\n", module_name);
-    os::Log(os::LogOutput, "offset = %lx\n\n", offset.offset);
-
-    granary_curiosity();
+    os::Log(os::LogOutput, "code = %p\nmodule = %s\noffset = %lx\n\n",
+            decoded_pc, module_name, offset.offset);
     return false;
   }
 
