@@ -20,6 +20,18 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
 
     "transparent_returns");
 
+class RetAddrInCodeCache : public IndexableMetaData<RetAddrInCodeCache> {
+ public:
+  RetAddrInCodeCache(void)
+      : returns_to_cache(!FLAG_transparent_returns) {}
+
+  bool Equals(const RetAddrInCodeCache *that) const {
+    return returns_to_cache == that->returns_to_cache;
+  }
+
+  bool returns_to_cache;
+};
+
 // Implements transparent return addresses. This means that the return
 // addresses from instrumented function calls will point to native code and
 // not into Granary's code cache.
@@ -60,16 +72,52 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
  public:
   virtual ~TransparentRetsInstrumenterEarly(void) = default;
 
+  virtual void Init(InitReason) {
+    RegisterMetaData<RetAddrInCodeCache>();
+  }
+
+  // Should the return be specialized?
+  bool ShouldSpecializeReturn(BasicBlock *block) {
+    return !GetMetaData<RetAddrInCodeCache>(block)->returns_to_cache;
+  }
+
+  // Is `block` something that can still be specialized?
+  bool IsFutureBlock(BasicBlock *block) {
+    return IsA<DirectBasicBlock *>(block) || IsA<IndirectBasicBlock *>(block);
+  }
+
+  // Propagates the meta-data tracking of whether or not the return address is
+  // located in the code cache or is transparent.
+  void SetRetAddrLocation(BasicBlock *predecessor,
+                          detail::BasicBlockSuccessor succ) {
+    if (succ.cfi->IsFunctionCall()) {
+      GetMetaData<RetAddrInCodeCache>(succ.block)->returns_to_cache = \
+          !FLAG_transparent_returns;
+    } else {
+      *GetMetaData<RetAddrInCodeCache>(succ.block) = \
+          *GetMetaData<RetAddrInCodeCache>(predecessor);
+    }
+  }
+
+  // Used to instrument code entrypoints.
+  virtual void InstrumentEntryPoint(BlockFactory *,
+                                    CompensationBasicBlock *entry_block,
+                                    EntryPointKind kind, int) {
+    if (ENTRYPOINT_USER_LOAD == kind) {
+      GetMetaData<RetAddrInCodeCache>(entry_block)->returns_to_cache = false;
+      for (auto succ : entry_block->Successors()) {
+        SetRetAddrLocation(entry_block, succ);
+      }
+    }
+  }
+
   // Instrument the control-flow instructions, specifically: function call
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
-      auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
-      if (!decoded_block) continue;
-
       for (auto succ : block->Successors()) {
-        if (!succ.cfi->IsFunctionReturn()) continue;
+        if (IsFutureBlock(succ.block)) SetRetAddrLocation(block, succ);
 
         // Specialize the return. Behind the scenes, this will convert the
         // return into an indirect jump.
@@ -79,7 +127,10 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
         //       `MetaData`. One can check if a `ReturnBasicBlock` has meta-data
         //       and optionally operate on it if non-NULL by invoking the
         //       `UnsafeMetaData` method instead.
-        DynamicCast<ReturnBasicBlock *>(succ.block)->MetaData();
+        if (succ.cfi->IsFunctionReturn() && ShouldSpecializeReturn(block)) {
+          GetMetaDataStrict<RetAddrInCodeCache>(
+              succ.block)->returns_to_cache = false;
+        }
       }
     }
   }
@@ -109,7 +160,6 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
       Instruction::Unlink(instr);
     } while (instr != search_instr);
   }
-
 
   // Push on a return address for either of a direct or indirect function
   // call.
@@ -143,8 +193,7 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
   }
 
   // Add a return address to the
-  void AddReturnAddressToBlock(BlockFactory *factory,
-                               DecodedBasicBlock *block) {
+  void AddRetAddrToBlock(BlockFactory *factory, DecodedBasicBlock *block) {
     if (!block) return;
     for (auto succ : block->Successors()) {
       if (!succ.cfi->IsFunctionCall()) continue;
@@ -163,19 +212,18 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
-      AddReturnAddressToBlock(factory,
-                              DynamicCast<DecodedBasicBlock *>(block));
+      AddRetAddrToBlock(factory, DynamicCast<DecodedBasicBlock *>(block));
     }
   }
 };
 
-
 // Initialize the `transparent_rets` tool.
 GRANARY_CLIENT_INIT({
+  RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
+      "transparent_returns_early");
+
   if (FLAG_transparent_returns) {
-    RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
-        "transparent_returns_early");
     RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
-        "transparent_returns_late");
+        "transparent_returns_late", {"transparent_returns_early"});
   }
 })
