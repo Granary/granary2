@@ -412,7 +412,10 @@ namespace {
 CompensationBasicBlock *MaterializeToExistingBlock(LocalControlFlowGraph *cfg,
                                                    BlockMetaData *meta,
                                                    AppPC non_transparent_pc) {
-  return AdaptToBlock(cfg, meta, new NativeBasicBlock(non_transparent_pc));
+  auto block = AdaptToBlock(cfg, meta,
+                            new NativeBasicBlock(non_transparent_pc));
+  cfg->AddBlock(block);
+  return block;
 }
 
 }  // namespace
@@ -430,10 +433,10 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
     // Aagh! Indirect jump to some already cached code. For the time being,
     // give up and just go to the target and ignore the meta-data.
     if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
+      granary_curiosity();  // TODO(pag): Issue #42.
       return MaterializeToExistingBlock(cfg, meta, target_pc);
-    }
 
-    if (os::ModuleKind::GRANARY == module->Kind()) {
+    } else if (os::ModuleKind::GRANARY == module->Kind()) {
 #ifdef GRANARY_WHERE_user
       // If we try to go to `_fini`, then redirect execution to `exit_group`.
       if (&_fini == target_pc) {
