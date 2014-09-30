@@ -5,7 +5,7 @@
 
 #include <algorithm>
 #include <bitset>
-#include <cstddef>
+#include <stddef.h>
 #include <set>
 
 extern "C" {
