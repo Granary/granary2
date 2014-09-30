@@ -25,7 +25,7 @@ extern "C" {
 #define O_CREAT   0100
 #define O_APPEND  02000
 
-extern int open(const char *filename, int flags, void *);
+extern int open(const char *filename, int flags, int);
 extern long long write(int __fd, const void *__buf, size_t __n);
 
 enum {
@@ -55,15 +55,15 @@ static int log_buffer_fd = -1;
 // Initialize the logging mechanism.
 void InitLog(void) {
   OUTPUT_FD[LogLevel::LogOutput] = open(
-      FLAG_output_log_file, O_WRONLY | O_CREAT | O_APPEND, nullptr);
+      FLAG_output_log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
   OUTPUT_FD[LogLevel::LogDebug] = open(
-      FLAG_debug_log_file, O_WRONLY | O_CREAT | O_APPEND, nullptr);
+      FLAG_debug_log_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
 }
 
 // Exit the log.
 void ExitLog(void) {
   SpinLockedRegion locker(&log_buffer_lock);
-  if (granary_log_buffer_index) {
+  if (granary_log_buffer_index && -1 != log_buffer_fd) {
     write(log_buffer_fd, granary_log_buffer, granary_log_buffer_index);
     granary_log_buffer_index = 0;
     log_buffer_fd = -1;
