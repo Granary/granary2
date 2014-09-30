@@ -23,6 +23,7 @@ extern "C" {
 
 #define O_WRONLY  01
 #define O_CREAT   0100
+#define O_APPEND  02000
 
 extern int open(const char *filename, int flags, void *);
 extern long long write(int __fd, const void *__buf, size_t __n);
@@ -54,9 +55,9 @@ static int log_buffer_fd = -1;
 // Initialize the logging mechanism.
 void InitLog(void) {
   OUTPUT_FD[LogLevel::LogOutput] = open(
-      FLAG_output_log_file, O_WRONLY, nullptr);
+      FLAG_output_log_file, O_WRONLY | O_CREAT | O_APPEND, nullptr);
   OUTPUT_FD[LogLevel::LogDebug] = open(
-      FLAG_debug_log_file, O_WRONLY, nullptr);
+      FLAG_debug_log_file, O_WRONLY | O_CREAT | O_APPEND, nullptr);
 }
 
 // Exit the log.

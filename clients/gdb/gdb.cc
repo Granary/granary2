@@ -105,7 +105,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
   // tool, results in full thread detaches. Here we try to handle these special
   // cases in a completely non-portable way. The comments, however, give
   // some guidance as to how to port this.
-  bool FixHiddenBreakpoints(BlockFactory *factory, ControlFlowInstruction *cfi,
+  void FixHiddenBreakpoints(BlockFactory *factory, ControlFlowInstruction *cfi,
                             BasicBlock *block) {
     auto decoded_pc = block->StartAppPC();
     auto module = os::ModuleContainingPC(decoded_pc);
@@ -130,12 +130,18 @@ class GDBDebuggerHelper : public InstrumentationTool {
       cfi->InsertBefore(lir::Return(factory));
 
       Instruction::Unlink(cfi);
-      return true;
-    }
 
-    os::Log(os::LogOutput, "code = %p\nmodule = %s\noffset = %lx\n\n",
-            decoded_pc, module_name, offset.offset);
-    return false;
+    } else if (!StringsMatch("libundodb_autotracer_preload_x64", module_name)) {
+      os::Log(os::LogOutput, "code = %p\nmodule = %s\noffset = %lx\n\n",
+              decoded_pc, module_name, offset.offset);
+    }
+  }
+
+  void DontInstrumentUndoDB(BlockFactory *factory, DirectBasicBlock *block) {
+    auto module = os::ModuleContainingPC(block->StartAppPC());
+    if (StringsMatch("libundodb_autotracer_preload_x64", module->Name())) {
+      factory->RequestBlock(block, REQUEST_NATIVE);
+    }
   }
 
   virtual void InstrumentControlFlow(BlockFactory *factory,
@@ -143,9 +149,11 @@ class GDBDebuggerHelper : public InstrumentationTool {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->HasIndirectTarget()) continue;
-        if (!IsA<NativeBasicBlock *>(succ.block)) continue;
-        FixHiddenBreakpoints(factory, succ.cfi, succ.block);
-        break;
+        if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
+          DontInstrumentUndoDB(factory, direct_block);
+        } else if (!IsA<NativeBasicBlock *>(succ.block)) {
+          FixHiddenBreakpoints(factory, succ.cfi, succ.block);
+        }
       }
     }
   }
