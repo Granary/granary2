@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/list.h"
+#include "granary/base/lock.h"
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
@@ -32,9 +33,11 @@ GRANARY_DEFINE_bool(debug_trace_meta, false,
 namespace granary {
 namespace {
 
+static SpinLock manager_lock;
+
 // The next meta-data description ID that we can assign. Every meta-data
 // description has a unique, global ID.
-static std::atomic<int> next_description_id(ATOMIC_VAR_INIT(0));
+static int next_description_id = 0;
 
 }  // namespace
 
@@ -140,6 +143,8 @@ MetaDataManager::MetaDataManager(void)
       is_finalized(false),
       allocator() {
   memset(&(descriptions[0]), 0, sizeof(descriptions));
+  manager_lock.Acquire();
+  next_description_id = 0;
 }
 
 MetaDataManager::~MetaDataManager(void) {
@@ -151,6 +156,7 @@ MetaDataManager::~MetaDataManager(void) {
   }
   allocator->Destroy();
   allocator.Destroy();
+  manager_lock.Release();
 }
 
 // Register some meta-data with the meta-data manager.
@@ -158,7 +164,7 @@ void MetaDataManager::Register(MetaDataDescription *desc) {
   GRANARY_ASSERT(!is_finalized);
   GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() == desc->offset);
   if (-1 == desc->id) {
-    desc->id = next_description_id.fetch_add(1);
+    desc->id = next_description_id++;
     GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > desc->id);
   }
   descriptions[desc->id] = desc;
