@@ -62,6 +62,10 @@ void InitThreadId(RegisterState *regs) {
 #endif
 }
 
+// Additional offset introduced by having granary be too far away from the
+// code cache.
+uint64_t granary_extra_rip_offset = 0;
+
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
 RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
@@ -82,7 +86,8 @@ void granary_trace_block_regs(const RegisterState *regs) {
   // to adjust for the size of the call and potential stack shifting
   // instructions.
   log_regs.rsp += ADDRESS_WIDTH_BYTES + REDZONE_SIZE_BYTES;
-  log_regs.rip -= CALL_RELBRd_LEN GRANARY_IF_USER( + LEA_GPRv_AGEN_LEN);
+  log_regs.rip -= CALL_RELBRd_LEN + granary_extra_rip_offset
+                  GRANARY_IF_USER( + LEA_GPRv_AGEN_LEN);
 
   InitThreadId(&log_regs);
 }
@@ -108,6 +113,7 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
     auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
     auto addr = new NativeAddress(target_pc, &(cache_meta->native_addresses));
     PREP(CALL_NEAR_MEMv(&ni, addr));
+    if (!granary_extra_rip_offset) granary_extra_rip_offset = 2;
   } else {
     PREP(CALL_NEAR_RELBRd(&ni, target_pc));
   }

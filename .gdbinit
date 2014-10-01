@@ -146,7 +146,7 @@ define print-exec-entry-impl
   set $__r = $arg1
 
   # Adjust the instruction pointer for the size of the `CALL_NEAR_REBRd`.
-  set $__rip = $__r->rip + 5
+  set $__rip = $__r->rip + 5 + granary_extra_rip_offset
   
   # Adjust the instruction pointer for the size of the stack-shifting `LEA`s.
   if $in_user_space
