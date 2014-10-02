@@ -42,8 +42,7 @@ extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
 namespace {
 
 // Invalidates any code cache blocks related to an mmap request.
-static void InvalidateUnmappedMemory(void *, SystemCallContext ctx) {
-  if (__NR_munmap != ctx.Number()) return;
+static void InvalidateUnmappedMemory(SystemCallContext ctx) {
   auto addr = ctx.Arg0();
   auto len = ctx.Arg1();
   if (os::InvalidateModuleCode(reinterpret_cast<AppPC>(addr),
@@ -63,12 +62,10 @@ static void InvalidateUnmappedMemory(void *, SystemCallContext ctx) {
   }
 }
 
-// Handle proper Granary exit procedures. Granary's `exit_group` function
-// deals with proper `Exit`ing of all tools.
-static void ExitGranary(void *, SystemCallContext ctx) {
-  if (__NR_exit_group == ctx.Number()) {
-    exit_group(static_cast<int>(ctx.Arg0()));
-  }
+// Use Granary's `exit_group` function to handle process exit. This will lead
+// to all tools exiting.
+static void ExitGranary(SystemCallContext ctx) {
+  exit_group(static_cast<int>(ctx.Arg0()));
 }
 
 // Hooks that other clients can use for interposing on system calls.
@@ -86,7 +83,22 @@ static void RemoveAllHooks(void) {
 
 // Handle a system call entrypoint.
 void HookSystemCallEntry(arch::MachineContext *context) {
-  entry_hooks.ApplyAll(SystemCallContext(context));
+  SystemCallContext ctx(context);
+  entry_hooks.ApplyAll(ctx);
+
+  // Note: We apply these hooks *after* the `entry_hooks` so that client-added
+  //       hooks can have visibility on all system calls before Granary mangles
+  //       them.
+
+  // Handle proper Granary exit procedures. Granary's `exit_group` function
+  // deals with proper `Exit`ing of all tools.
+  if (GRANARY_UNLIKELY(__NR_exit_group == ctx.Number())) {
+    ExitGranary(ctx);
+
+  // Manipulate certain kinds of memory operations.
+  } else if (__NR_munmap == ctx.Number()) {
+    InvalidateUnmappedMemory(ctx);
+  }
 }
 
 // Handle a system call exit.
@@ -114,11 +126,6 @@ void AddSystemCallExitFunction(SystemCallHook *callback,
 class UserSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~UserSpaceInstrumenter(void) = default;
-
-  virtual void Init(InitReason) {
-    AddSystemCallEntryFunction(InvalidateUnmappedMemory);
-    AddSystemCallEntryFunction(ExitGranary);
-  }
 
   virtual void Exit(ExitReason) {
     if (FLAG_hook_syscalls) {
