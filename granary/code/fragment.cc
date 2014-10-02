@@ -117,7 +117,7 @@ CodeAttributes::CodeAttributes(void)
       is_in_edge_code(false),
       follows_cfi(false),
       has_os_annotation(false),
-      num_predecessors(0){}
+      num_predecessors(0) {}
 
 Fragment::Fragment(void)
     : list(),

@@ -307,6 +307,35 @@ static inline void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
   }
 }
 
+#ifdef GRANARY_CACHE_H_
+// Generate a near call that might go through memory, where the memory location
+// is a `NativeAddress` structure associated with some block.
+static inline void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc,
+                             AppPC target_pc, NativeAddress **na) {
+  if (AddrIsOffsetReachable(encode_pc, target_pc)) {  // 2^32 - 1024.
+    CALL_NEAR_RELBRd(ni, target_pc);
+  } else {
+    auto call_na = new NativeAddress(target_pc, na);
+    CALL_NEAR_MEMv(ni, &(call_na->addr));
+  }
+}
+
+// A version of `CALL_NEAR` that might use a `NativeAddress`, but assumes that
+// `na` is a pointer to a global variable that will hold a shared
+// `NativeAddress` for `target_pc`.
+static inline void CALL_NEAR_GLOBAL(arch::Instruction *ni, CachePC encode_pc,
+                                    AppPC target_pc, NativeAddress **na) {
+  if (AddrIsOffsetReachable(encode_pc, target_pc)) {  // 2^32 - 1024.
+    CALL_NEAR_RELBRd(ni, target_pc);
+  } else {
+    auto call_na = *na;
+    if (!call_na) {
+      call_na = new NativeAddress(target_pc, na);
+    }
+    CALL_NEAR_MEMv(ni, &(call_na->addr));
+  }
+}
+#endif  // GRANARY_CACHE_H_
 }  // namespace arch
 }  // namespace granary
 

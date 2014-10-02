@@ -33,8 +33,7 @@ GRANARY_DEFINE_unsigned(num_copy_propagations, 2,
 namespace granary {
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
-                      LocalControlFlowGraph *cfg) {
+FragmentList Assemble(ContextInterface *context, LocalControlFlowGraph *cfg) {
 
   // Compile all inline assembly instructions by parsing the inline assembly
   // instructions and doing code generation for them.
@@ -43,7 +42,7 @@ FragmentList Assemble(ContextInterface *context, CodeCache *code_cache,
   // "Fix" instructions that might use PC-relative operands that are now too
   // far away from their original data/targets (e.g. if the code cache is really
   // far away from the original native code in memory).
-  MangleInstructions(code_cache, cfg);
+  MangleInstructions(cfg);
 
   FragmentList frags;
 

@@ -183,6 +183,34 @@ bool VirtualRegister::IsFlags(void) const {
   return XED_REG_FLAGS_FIRST <= reg_num && XED_REG_FLAGS_LAST >= reg_num;
 }
 
+
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterSet::Visit(const NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  Visit(&(instr->instruction));
+}
+
+
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterSet::Visit(const arch::Instruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+    const auto &op(instr->ops[i]);
+    if (op.IsRegister()) {
+      Revive(op.reg);
+    } else if (op.IsMemory()) {
+      if (op.is_compound) {
+        Revive(VirtualRegister::FromNative(op.mem.reg_base));
+        Revive(VirtualRegister::FromNative(op.mem.reg_index));
+      } else {
+        Revive(op.reg);
+      }
+    }
+  }
+}
+
 // Update this register tracker by marking some registers as used (i.e.
 // restricted). This allows us to communicate some architecture-specific
 // encoding constraints to the register scheduler.
@@ -206,29 +234,8 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
       Revive(op.reg);
     } else if (op.IsMemory()) {
       if (op.is_compound) {
-        Revive(VirtualRegister(op.mem.reg_base));
-        Revive(VirtualRegister(op.mem.reg_index));
-      } else {
-        Revive(op.reg);
-      }
-    }
-  }
-}
-
-
-// Update this register tracker by marking all registers that appear in an
-// instruction as used.
-void UsedRegisterSet::Visit(NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
-  const auto &ainstr(instr->instruction);
-  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
-    const auto &op(ainstr.ops[i]);
-    if (op.IsRegister()) {
-      Revive(op.reg);
-    } else if (op.IsMemory()) {
-      if (op.is_compound) {
-        Revive(VirtualRegister(op.mem.reg_base));
-        Revive(VirtualRegister(op.mem.reg_index));
+        Revive(VirtualRegister::FromNative(op.mem.reg_base));
+        Revive(VirtualRegister::FromNative(op.mem.reg_index));
       } else {
         Revive(op.reg);
       }
@@ -258,8 +265,8 @@ void LiveRegisterSet::Visit(NativeInstruction *instr) {
       }
     } else if (op.IsMemory()) {
       if (op.is_compound) {
-        Revive(VirtualRegister(op.mem.reg_base));
-        Revive(VirtualRegister(op.mem.reg_index));
+        Revive(VirtualRegister::FromNative(op.mem.reg_base));
+        Revive(VirtualRegister::FromNative(op.mem.reg_index));
       } else {
         Revive(op.reg);
       }

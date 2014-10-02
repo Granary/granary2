@@ -18,7 +18,6 @@ START_FILE_INTEL
         .balign 8                                                           @N@\
         .long 1b - .,3b - . + offs                                          @N@\
         .section .text.inst_exports                                         @N@\
-            mov QWORD PTR [rsp + 8], 0                                      @N@\
             ret                                                             @N@\
     END_FUNC(granary_extable_rep_movs_ ## size_bytes)
 

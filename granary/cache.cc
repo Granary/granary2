@@ -9,11 +9,19 @@
 #include "os/memory.h"
 
 namespace granary {
+namespace {
+static CachePC cache_pc_estimate = nullptr;
+}
 
 CodeCache::CodeCache(os::Module *module_, int slab_size)
     : lock(),
       allocator(slab_size),
-      module(module_) {}
+      module(module_) {
+
+  if (!cache_pc_estimate) {
+    cache_pc_estimate = allocator.Allocate(module, 1, 0);
+  }
+}
 
 // Allocate a block of code from this code cache.
 CachePC CodeCache::AllocateBlock(int size) {
@@ -56,7 +64,15 @@ void DisableWritesToCode(CachePC begin, CachePC end) {
 static inline void EnableWritesToCode(CachePC, CachePC) {}
 static inline void DisableWritesToCode(CachePC, CachePC) {}
 #endif  // GRANARY_WHERE_user && GRANARY_TARGET_debug
+
 }  // namespace
+
+// Provides a good estimation of the location of the code cache. This is used
+// by all code that computes whether or not an address is too far away from the
+// code cache.
+CachePC EstimatedCachePC(void) {
+  return cache_pc_estimate;
+}
 
 // Begin a transaction that will read or write to the code cache.
 //

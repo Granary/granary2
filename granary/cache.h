@@ -92,6 +92,11 @@ class CodeCacheTransaction {
 };
 
 #ifdef GRANARY_INTERNAL
+// Provides a good estimation of the location of the code cache. This is used
+// by all code that computes whether or not an address is too far away from the
+// code cache.
+CachePC EstimatedCachePC(void);
+
 // Some architectures cannot encode arbitrarily (i.e. beyond 24- or 32-bits
 // of relative displacement) far jumps; however, they sometimes can encode far
 // jumps that use 32- or even 64-bit relative or absolute memory locations,

@@ -18,7 +18,7 @@
 #include "granary/index.h"
 #include "granary/util.h"
 
-#include "os/annotate.h"
+#include "os/exception.h"
 #include "os/module.h"
 
 namespace granary {
@@ -38,6 +38,17 @@ GRANARY_IF_USER( extern uint8_t _fini; )
 GRANARY_IF_USER( extern uint8_t exit_group_ok; )
 
 }  // extern C
+namespace arch {
+
+// Save some architectural state before `instr` executes, so that if a
+// recoverable exception occurs while executing `instr`, we can handle it.
+//
+// Note: This has an architecture-specific implementation.
+void SaveStateForExceptionCFI(DecodedBasicBlock *block,
+                              ExceptionalControlFlowInstruction *instr,
+                              granary::Instruction *before_instr);
+
+}  // namespace arch
 enum {
   MAX_NUM_MATERIALIZATION_REQUESTS = 1024
 };
@@ -97,8 +108,11 @@ static CompensationBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
 }  // namespace
 
 // Convert a decoded instruction into the internal Granary instruction IR.
-NativeInstruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
+NativeInstruction *BlockFactory::MakeInstruction(
+    arch::Instruction *instr, const arch::Instruction *orig_instr) {
   BasicBlock *target_block(nullptr);
+  AppPC recovery_pc(nullptr);
+  AppPC emulation_pc(nullptr);
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
       target_block = new IndirectBasicBlock(
@@ -114,9 +128,18 @@ NativeInstruction *BlockFactory::MakeInstruction(arch::Instruction *instr) {
       target_block = new NativeBasicBlock(nullptr);
     }
 
+  // Direct jump or call.
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
     auto meta = context->AllocateBlockMetaData(instr->BranchTargetPC());
     target_block = new DirectBasicBlock(cfg, meta);
+
+  // Instruction that can trigger a recoverable exception.
+  } else if (os::GetExceptionInfo(orig_instr, &recovery_pc, &emulation_pc)) {
+    auto meta = context->AllocateBlockMetaData(recovery_pc);
+    return new ExceptionalControlFlowInstruction(
+        instr, orig_instr, new DirectBasicBlock(cfg, meta), emulation_pc);
+
+  // Normal instruction.
   } else {
     return new NativeInstruction(instr);
   }
@@ -165,7 +188,15 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
   auto in_undefined_state = false;
   auto changes_interrupt_state = false;
   for (auto instr : InstructionListIterator(begin)) {
-    if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+
+    // If we generated an exceptional control-flow instruction, then go and
+    // save a bunch of machine state before the instruction.
+    if (auto exc = DynamicCast<ExceptionalControlFlowInstruction *>(instr)) {
+      arch::SaveStateForExceptionCFI(block, exc, begin);
+
+    // Use the existing annotations added by the early mangler to generate new
+    // annotations.
+    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       if (IA_INVALID_STACK == annot->annotation) {
         in_undefined_state = true;
       } else if (IA_VALID_STACK == annot->annotation) {
@@ -192,20 +223,21 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto decode_pc = block->StartAppPC();
   auto stop = false;
   arch::InstructionDecoder decoder;
+  arch::Instruction dinstr;
+  arch::Instruction ainstr;
   Instruction *instr(nullptr);
   do {
-    // Exist mostly to document instruction boundaries to client code.
-    block->AppendInstruction(
-        new AnnotationInstruction(IA_BEGIN_LOGICAL_INSTRUCTION, decode_pc));
-
     auto decoded_pc = decode_pc;
-    auto before_instr = block->LastInstruction()->Previous();
+    auto before_instr = new AnnotationInstruction(
+        IA_BEGIN_LOGICAL_INSTRUCTION, decode_pc);
+
+    // Exist mostly to document instruction boundaries to client code.
+    block->AppendInstruction(before_instr);
 
     // If we can't decode the instruction then just jump directly to it. Also,
     // if the instruction raises an interrupt, e.g. the debug trap, then assume
     // that is because of GDB debugging (or something similar) and go native
     // there as well.
-    arch::Instruction dinstr;
     if (!decoder.DecodeNext(&dinstr, &decode_pc) || dinstr.IsInterruptCall()) {
       auto native_block = new NativeBasicBlock(decoded_pc);
       block->AppendInstruction(std::move(lir::Jump(native_block)));
@@ -214,13 +246,11 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
 
     // Apply early mangling to the instruction, then add it in and annotate
     // it accordingly.
+    memcpy(&ainstr, &dinstr, sizeof ainstr);
     decoder.Mangle(block, &dinstr);
-    auto ninstr = MakeInstruction(&dinstr);
-    instr = ninstr;
-    block->AppendInstruction(ninstr);
+
+    block->AppendInstruction(MakeInstruction(&dinstr, &ainstr));
     AnnotateInstruction(this, block, before_instr, decode_pc);
-    stop = ninstr->IsAppInstruction() &&
-           os::AnnotateAppInstruction(this, block, ninstr, decode_pc);
 
     instr = block->LastInstruction()->Previous();
   } while (stop || !IsA<ControlFlowInstruction *>(instr));

@@ -129,7 +129,8 @@ class BlockFactory {
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
-  NativeInstruction *MakeInstruction(arch::Instruction *instr);
+  NativeInstruction *MakeInstruction(arch::Instruction *instr,
+                                     const arch::Instruction *orig_instr);
 
  private:
   BlockFactory(void) = delete;

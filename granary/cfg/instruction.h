@@ -484,8 +484,10 @@ class ControlFlowInstruction : public NativeInstruction {
 class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
  public:
   GRANARY_INTERNAL_DEFINITION
-  ControlFlowInstruction(const arch::Instruction *instruction_,
-                         BasicBlock *target_);
+  ExceptionalControlFlowInstruction(const arch::Instruction *instruction_,
+                                    const arch::Instruction *orig_instruction_,
+                                    BasicBlock *exception_target_,
+                                    AppPC emulation_pc_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction,
                                    ExceptionalControlFlowInstruction)
@@ -495,6 +497,8 @@ class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
   })
 
  GRANARY_PROTECTED:
+  // Decoded instruction before it was mangled.
+  GRANARY_INTERNAL_DEFINITION arch::Instruction orig_instruction;
 
   // Used registers in the instruction, before any mangling might have
   // happened. These are the registers that absolutely must be saved before
@@ -507,17 +511,8 @@ class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
   GRANARY_INTERNAL_DEFINITION
   VirtualRegister saved_regs[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 
-  // Can this instruction be re-started?
-  GRANARY_INTERNAL_DEFINITION bool is_restartable;
-
-  // What registers were read and written by this instruction? This is only
-  // relevant to re-startable instructions, where we need to handle these
-  // instructions on a case-by-case basis (e.g. restoring some but not all
-  // bits).
-  GRANARY_INTERNAL_DEFINITION UsedRegisterSet rw_regs;
-
-  // OS-specific exception info.
-  GRANARY_INTERNAL_DEFINITION const void *exception_info;
+  // Internal Granary code that handles emulating the original instruction.
+  GRANARY_INTERNAL_DEFINITION AppPC emulation_pc;
 
  private:
   ExceptionalControlFlowInstruction(void) = delete;

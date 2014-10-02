@@ -68,6 +68,8 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
 // Generates some code to target some client function. The generated code saves
 // the machine context and passes it directly to the client function for direct
 // manipulation.
+//
+// Note: This function has an architecture-specific implementation.
 extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
                                                FragmentList *frags,
                                                CodeFragment *pred,
@@ -76,9 +78,19 @@ extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
 // Generates some code to target some client function. The generated code tries
 // to minimize the amount of saved/restored machine state, and punts on the
 // virtual register system for the rest.
+//
+// Note: This function has an architecture-specific implementation.
 extern void ExtendFragmentWithOutlineCall(ContextInterface *context,
                                           CodeFragment *frag,
                                           InlineFunctionCall *call);
+
+// Process an exceptional control-flow instruction.
+//
+// Note: `instr` already belongs to `frag`.
+//
+// Note: This function has an architecture-specific implementation.
+extern void ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
+                                  ExceptionalControlFlowInstruction *instr);
 
 }  // namespace arch
 namespace {
@@ -327,6 +339,25 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
   frag->instrs.Append(instr->UnsafeUnlink().release());
 }
 
+// Process a native instruction. Returns `true` if the instruction is added
+// to the fragment, and false if the instruction splits the fragment.
+static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
+                               NativeInstruction *instr);
+
+// Process an exceptional control-flow instruction.
+static void ProcessExceptionalCFI(FragmentBuilder *builder, CodeFragment *frag,
+                                  ExceptionalControlFlowInstruction *instr) {
+  if (!ProcessNativeInstr(builder, frag, instr)) {
+    auto elm = builder->next;
+    builder->next = elm->next;
+    frag = elm->frag;
+    delete elm;
+    GRANARY_IF_DEBUG(auto ret = ) ProcessNativeInstr(builder, frag, instr);
+    GRANARY_ASSERT(ret);
+  }
+  arch::ProcessExceptionalCFI(builder->frags, frag, instr);
+}
+
 // Process a control-flow instruction.
 static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
                        ControlFlowInstruction *instr) {
@@ -488,6 +519,12 @@ static void ProcessFragment(FragmentBuilder *builder, CodeFragment *frag,
     // target.
     } else if (auto branch_instr = DynamicCast<BranchInstruction *>(instr)) {
       ProcessBranch(builder, frag, branch_instr);
+      return;
+
+    // Exceptional control-flow instruction.
+    } else if (auto exc = DynamicCast<ExceptionalControlFlowInstruction *>(
+                   instr)) {
+      ProcessExceptionalCFI(builder, frag, exc);
       return;
 
     // Found a control-flow instruction.

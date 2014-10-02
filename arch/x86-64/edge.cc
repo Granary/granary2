@@ -5,7 +5,6 @@
 
 #include "arch/driver.h"
 #include "arch/util.h"
-#include "arch/x86-64/builder.h"
 #include "arch/x86-64/slot.h"
 
 #include "granary/base/base.h"
@@ -21,6 +20,9 @@
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
+
+// After `cache.h` to get `NativeAddress`.
+#include "arch/x86-64/builder.h"
 
 #define ENC(...) \
   do { \
@@ -55,18 +57,6 @@ static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 // TODO(pag): Potential leak.
 static NativeAddress *enter_direct_addr = nullptr;
 static NativeAddress *enter_indirect_addr = nullptr;
-
-static void CALL_NEAR(arch::Instruction *ni, CachePC encode_pc, AppPC target_pc,
-                      NativeAddress **na) {
-  if (AddrIsOffsetReachable(encode_pc, target_pc)) {  // 2^32 - 1024.
-    CALL_NEAR_RELBRd(ni, target_pc);
-  } else {
-    if (!*na) {
-      new NativeAddress(target_pc, na);
-    }
-    CALL_NEAR_MEMv(ni, &((*na)->addr));
-  }
-}
 
 // Used to make a move of an address smaller. This is only really helpful in
 // user space.
@@ -118,7 +108,7 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
   auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
-  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
+  ENC(CALL_NEAR_GLOBAL(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
@@ -220,7 +210,7 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
   auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterIndirect);
-  ENC(CALL_NEAR(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
+  ENC(CALL_NEAR_GLOBAL(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 

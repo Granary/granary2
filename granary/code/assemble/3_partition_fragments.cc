@@ -290,7 +290,6 @@ static void GroupFragments(FragmentList *frags) {
               succ_cfrag->attr.follows_cfi != cfrag->attr.follows_cfi) {
             continue;
           }
-
           cfrag->partition.Union(cfrag, succ_cfrag);
         }
       }

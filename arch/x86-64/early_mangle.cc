@@ -546,8 +546,6 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_POPFQ:
     case XED_ICLASS_CLI:
     case XED_ICLASS_STI:
-    case XED_ICLASS_WRMSR:
-    case XED_ICLASS_FWAIT:
       block->AppendInstruction(
           new AnnotationInstruction(IA_CHANGES_INTERRUPT_STATE));
       break;

@@ -86,10 +86,14 @@ class BlockMangler {
   void RelativizeMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
     const void *mptr(nullptr);
     if (mloc.IsExplicit() && mloc.MatchPointer(mptr)) {
-      if (AddressNeedsRelativizing(mptr) ||
-          arch::AddressNeedsRelativizing(mptr)) {
-        arch::RelativizeMemOp(block, instr, mloc, mptr);
-      }
+      // Can be accessed using a PC-relative memory operand.
+      if (!AddressNeedsRelativizing(mptr)) return;
+
+      // Can be accessed using an absolute address.
+      if (!arch::AddressNeedsRelativizing(mptr)) return;
+
+      // Too far to be relative, and too big to be absolute.
+      arch::RelativizeMemOp(block, instr, mloc, mptr);
     }
   }
 
@@ -216,13 +220,10 @@ class BlockMangler {
 }  // namespace
 
 // Relativize the native instructions within a LCFG.
-void MangleInstructions(CodeCache *code_cache,
-                        LocalControlFlowGraph* cfg) {
-  auto estimated_encode_loc = code_cache->AllocateBlock(0);
-
+void MangleInstructions(LocalControlFlowGraph* cfg) {
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      BlockMangler mangler(decoded_block, estimated_encode_loc);
+      BlockMangler mangler(decoded_block, EstimatedCachePC());
       mangler.Mangle();
     }
   }

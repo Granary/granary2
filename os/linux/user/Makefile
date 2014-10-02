@@ -55,7 +55,7 @@ $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
 $(GRANARY_LIBRARY_OBJ): $(GRANARY_OBJS)
 	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
 	@$(GRANARY_LD) -g \
-		-z initfirst \
+		-z initfirst -z interpose -z nodelete -z noexecstack -z now \
 		-T $(GRANARY_SRC_DIR)/linker.lds \
 		-r $(GRANARY_OBJS) \
 		-o $(GRANARY_LIBRARY_OBJ)

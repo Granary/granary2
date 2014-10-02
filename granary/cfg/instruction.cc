@@ -321,7 +321,16 @@ void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
   target = new_target;
 }
 
-ExceptionalControlFlowInstruction::ExceptionalControlFlowInstruction(void)
-    : ControlFlowInstruction()
+ExceptionalControlFlowInstruction::ExceptionalControlFlowInstruction(
+    const arch::Instruction *instruction_,
+    const arch::Instruction *orig_instruction_,
+    BasicBlock *exception_target_, AppPC emulation_pc_)
+    : ControlFlowInstruction(instruction_, exception_target_),
+      emulation_pc(emulation_pc_) {
+  GRANARY_ASSERT(!orig_instruction_->WritesToStackPointer());
+
+  memcpy(&orig_instruction, orig_instruction_, sizeof orig_instruction);
+  used_regs.Visit(orig_instruction_);
+}
 
 }  // namespace granary

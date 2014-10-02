@@ -61,7 +61,7 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
 std::unique_ptr<Instruction> Return(BlockFactory *factory) {
   arch::Instruction ni;
   RET_NEAR(&ni);
-  return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni));
+  return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni, &ni));
 }
 
 }  // namespace lir

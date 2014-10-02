@@ -297,7 +297,7 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 
 // Encodes the fragments into the specified code caches.
 static void Encode(FragmentList *frags, CodeCache *block_cache) {
-  auto estimated_addr = block_cache->AllocateBlock(0);
+  auto estimated_addr = EstimatedCachePC();
   if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) {
     AddBlockTracers(frags, estimated_addr);
   }
@@ -325,21 +325,19 @@ static void Encode(FragmentList *frags, CodeCache *block_cache) {
 
 // Compile some instrumented code.
 void Compile(ContextInterface *context, LocalControlFlowGraph *cfg) {
-  auto block_cache = context->BlockCodeCache();
-  auto frags = Assemble(context, block_cache, cfg);
-  Encode(&frags, block_cache);
+  auto frags = Assemble(context, cfg);
+  Encode(&frags, context->BlockCodeCache());
   FreeFragments(&frags);
 }
 
 // Compile some instrumented code for an indirect edge.
 void Compile(ContextInterface *context, LocalControlFlowGraph *cfg,
              IndirectEdge *edge, AppPC target_app_pc) {
-  auto block_cache = context->BlockCodeCache();
-  auto frags = Assemble(context, block_cache, cfg);
+  auto frags = Assemble(context, cfg);
   do {
     SpinLockedRegion locker(&(edge->out_edge_pc_lock));
     arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
-    Encode(&frags, block_cache);
+    Encode(&frags, context->BlockCodeCache());
   } while (false);
   FreeFragments(&frags);
 }

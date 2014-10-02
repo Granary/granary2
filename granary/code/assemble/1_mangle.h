@@ -10,12 +10,10 @@
 namespace granary {
 
 // Forward declarations.
-class CodeCache;
 class LocalControlFlowGraph;
 
 // Relativize the native instructions within a LCFG.
-void MangleInstructions(CodeCache *code_cache,
-                        LocalControlFlowGraph* cfg);
+void MangleInstructions(LocalControlFlowGraph* cfg);
 
 }  // namespace granary
 

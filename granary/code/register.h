@@ -434,7 +434,12 @@ class UsedRegisterSet : public RegisterSet {
 
   // Update this register tracker by marking all registers that appear in an
   // instruction as used.
-  void Visit(NativeInstruction *instr);
+  void Visit(const NativeInstruction *instr);
+
+  // Update this register tracker by marking all registers that appear in an
+  // instruction as used.
+  GRANARY_INTERNAL_DEFINITION
+  void Visit(const arch::Instruction *instr);
 
   // Update this register tracker by marking some registers as used (i.e.
   // restricted). This allows us to communicate some architecture-specific

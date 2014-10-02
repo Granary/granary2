@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifdef GRANARY_WHERE_kernel
+#if 0
 
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
