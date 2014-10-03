@@ -136,9 +136,10 @@ NativeInstruction *BlockFactory::MakeInstruction(
   // Instruction that can trigger a recoverable exception.
   } else if (os::GetExceptionInfo(orig_instr, &recovery_pc, &emulation_pc)) {
     auto meta = context->AllocateBlockMetaData(recovery_pc);
-    return new ExceptionalControlFlowInstruction(
-        instr, orig_instr, new DirectBasicBlock(cfg, meta), emulation_pc);
-
+    auto block = new DirectBasicBlock(cfg, meta);
+    RequestBlock(block, REQUEST_DENIED);
+    return new ExceptionalControlFlowInstruction(instr, orig_instr, block,
+                                                 emulation_pc);
   // Normal instruction.
   } else {
     return new NativeInstruction(instr);
@@ -150,7 +151,6 @@ NativeInstruction *BlockFactory::MakeInstruction(
 void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
                                              Instruction *last_instr,
                                              AppPC pc) {
-
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
   if (!cfi) return;
 
@@ -158,21 +158,26 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
 
   GRANARY_ASSERT(!cfi->IsInterruptCall());
 
-  if (cfi->IsFunctionCall() || cfi->IsConditionalJump() ||
-      cfi->IsSystemCall()) {
-    fall_through = new DirectBasicBlock(
-        cfg, context->AllocateBlockMetaData(pc));
-    block->AppendInstruction(std::move(lir::Jump(fall_through)));
-  } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
-    fall_through = cfi->TargetBlock();
-  }
-
   // If we're doing a function call or a direct jump, then always
   // materialize the next block. In the case of function calls, this
   // lets us avoid issues related to `setjmp` and `longjmp`. In both
   // cases, this allows us to avoid unnecessary edge code when we know
   // ahead of time that we will reach the desired code.
-  if (cfi->IsFunctionCall() || cfi->IsUnconditionalJump()) {
+  auto request_fall_through = cfi->IsFunctionCall() ||
+                              IsA<ExceptionalControlFlowInstruction *>(cfi);
+
+  if (request_fall_through || cfi->IsConditionalJump() || cfi->IsSystemCall()) {
+    fall_through = new DirectBasicBlock(cfg,
+                                        context->AllocateBlockMetaData(pc));
+    block->AppendInstruction(std::move(lir::Jump(fall_through)));
+
+  // Inherit the fall-through from the target.
+  } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
+    fall_through = cfi->TargetBlock();
+    request_fall_through = true;
+  }
+
+  if (request_fall_through) {
     RequestBlock(fall_through, REQUEST_CHECK_INDEX_AND_LCFG);
   }
 }
@@ -221,7 +226,6 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   auto decode_pc = block->StartAppPC();
-  auto stop = false;
   arch::InstructionDecoder decoder;
   arch::Instruction dinstr;
   arch::Instruction ainstr;
@@ -253,7 +257,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     AnnotateInstruction(this, block, before_instr, decode_pc);
 
     instr = block->LastInstruction()->Previous();
-  } while (stop || !IsA<ControlFlowInstruction *>(instr));
+  } while (!IsA<ControlFlowInstruction *>(instr));
   AddFallThroughInstruction(block , instr, decode_pc);
 }
 

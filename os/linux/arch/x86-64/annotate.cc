@@ -51,15 +51,17 @@ extern void granary_extable_write_16(void);
 extern void granary_extable_write_32(void);
 extern void granary_extable_write_64(void);
 
+extern void granary_extable_write_error_8(void);
+extern void granary_extable_write_error_16(void);
+extern void granary_extable_write_error_32(void);
+extern void granary_extable_write_error_64(void);
+
 extern void granary_extable_read_error_8(void);
 extern void granary_extable_read_error_16(void);
 extern void granary_extable_read_error_32(void);
 extern void granary_extable_read_error_64(void);
 
-extern void granary_extable_write_error_8(void);
-extern void granary_extable_write_error_16(void);
-extern void granary_extable_write_error_32(void);
-extern void granary_extable_write_error_64(void);
+
 
 extern void granary_extable_write_seg_fs(void);
 extern void granary_extable_write_seg_gs(void);
@@ -70,7 +72,6 @@ extern void granary_extable_write_seg_ss(void);
 
 extern void granary_extable_rdmsr(void);
 extern void granary_extable_wrmsr(void);
-
 extern void granary_extable_fwait(void);
 
 }  // extern C

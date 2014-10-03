@@ -89,8 +89,9 @@ extern void ExtendFragmentWithOutlineCall(ContextInterface *context,
 // Note: `instr` already belongs to `frag`.
 //
 // Note: This function has an architecture-specific implementation.
-extern void ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
-                                  ExceptionalControlFlowInstruction *instr);
+extern CodeFragment *ProcessExceptionalCFI(
+    FragmentList *frags, CodeFragment *frag,
+    ExceptionalControlFlowInstruction *instr);
 
 }  // namespace arch
 namespace {
@@ -347,15 +348,18 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
 // Process an exceptional control-flow instruction.
 static void ProcessExceptionalCFI(FragmentBuilder *builder, CodeFragment *frag,
                                   ExceptionalControlFlowInstruction *instr) {
+  auto next_instr = instr->Next();
   if (!ProcessNativeInstr(builder, frag, instr)) {
     auto elm = builder->next;
     builder->next = elm->next;
     frag = elm->frag;
+    GRANARY_ASSERT(instr == elm->instr);
     delete elm;
     GRANARY_IF_DEBUG(auto ret = ) ProcessNativeInstr(builder, frag, instr);
     GRANARY_ASSERT(ret);
   }
-  arch::ProcessExceptionalCFI(builder->frags, frag, instr);
+  frag = arch::ProcessExceptionalCFI(builder->frags, frag, instr);
+  AddBlockTailToWorkList(builder, frag, nullptr, next_instr, frag->stack);
 }
 
 // Process a control-flow instruction.

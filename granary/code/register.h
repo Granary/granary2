@@ -18,6 +18,7 @@ class Operand;
 
 GRANARY_INTERNAL_DEFINITION namespace arch {
 class Instruction;
+class Operand;
 }  // namespace arch
 
 // The kind of a virtual register.
@@ -436,17 +437,26 @@ class UsedRegisterSet : public RegisterSet {
   // instruction as used.
   void Visit(const NativeInstruction *instr);
 
-  // Update this register tracker by marking all registers that appear in an
-  // instruction as used.
+  // Note: This function has an architecture-specific implementation.
   GRANARY_INTERNAL_DEFINITION
   void Visit(const arch::Instruction *instr);
+
+  // Note: This function has an architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  void Visit(const arch::Operand *op);
 
   // Update this register tracker by marking some registers as used (i.e.
   // restricted). This allows us to communicate some architecture-specific
   // encoding constraints to the register scheduler.
-  //
-  // Note: This function has an architecture-specific implementation.
   void ReviveRestrictedRegisters(const NativeInstruction *instr);
+
+  // Note: This function has an architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  void ReviveRestrictedRegisters(const arch::Instruction *instr);
+
+  // Note: This function has an architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  void ReviveRestrictedRegisters(const arch::Operand *op);
 
   inline void Join(const UsedRegisterSet &that) {
     Union(that);
@@ -487,7 +497,15 @@ class LiveRegisterSet : public RegisterSet {
   //       live before a jump). Implied register usage is treated as a policy
   //       decision that must be made by the user of a register tracker, and
   //       not by the tracker itself.
-  void Visit(NativeInstruction *instr);
+  void Visit(const NativeInstruction *instr);
+
+  // Note: This function has an architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  void Visit(const arch::Instruction *instr);
+
+  // Note: This function has an architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  void Visit(const arch::Operand *op);
 
   inline void Join(const LiveRegisterSet &that) {
     Union(that);

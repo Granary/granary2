@@ -415,7 +415,6 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
     }
 
     ConvertDecodedInstruction(instr, &xedd, pc);
-
     switch (instr->iclass) {
       case XED_ICLASS_UD2:
       case XED_ICLASS_HLT:  // TODO(pag): Add support for me!

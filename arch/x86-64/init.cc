@@ -243,6 +243,34 @@ static bool ConvertNonTerminalOperand(Operand *instr_op,
   }
 }
 
+// Set the size of an implicit operand based on its xtype.
+static void InitOpSizeByXtype(Operand *instr_op,
+                              xed_operand_element_xtype_enum_t xtype) {
+  switch (xtype) {
+    case XED_OPERAND_XTYPE_B80: instr_op->width = 80; return;
+    case XED_OPERAND_XTYPE_F16: instr_op->width = 16; return;
+    case XED_OPERAND_XTYPE_F32: instr_op->width = 32; return;
+    case XED_OPERAND_XTYPE_F64: instr_op->width = 64; return;
+    case XED_OPERAND_XTYPE_F80: instr_op->width = 80; return;
+    case XED_OPERAND_XTYPE_I1: instr_op->width = 1; return;
+    case XED_OPERAND_XTYPE_I16: instr_op->width = 16; return;
+    case XED_OPERAND_XTYPE_I32: instr_op->width = 32; return;
+    case XED_OPERAND_XTYPE_I64: instr_op->width = 64; return;
+    case XED_OPERAND_XTYPE_I8: instr_op->width = 8; return;
+    //case XED_OPERAND_XTYPE_INT:
+    //case XED_OPERAND_XTYPE_STRUCT:
+    case XED_OPERAND_XTYPE_U128: instr_op->width = 128; return;
+    case XED_OPERAND_XTYPE_U16: instr_op->width = 16; return;
+    case XED_OPERAND_XTYPE_U256: instr_op->width = 256; return;
+    case XED_OPERAND_XTYPE_U32: instr_op->width = 32; return;
+    case XED_OPERAND_XTYPE_U64: instr_op->width = 64; return;
+    case XED_OPERAND_XTYPE_U8: instr_op->width = 8; return;
+    //case XED_OPERAND_XTYPE_UINT:
+    //case XED_OPERAND_XTYPE_VAR:
+    default: return;
+  }
+}
+
 // Initializes an implicit operand.
 static void InitImplicitOperand(const xed_inst_t *instr,
                                 const xed_operand_t *op, Operand *instr_op,
@@ -257,12 +285,12 @@ static void InitImplicitOperand(const xed_inst_t *instr,
   } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_MEM1 == op_name) {
     auto base01_op = xed_inst_operand(instr, i + 1);
     ConvertNonTerminalOperand(instr_op, base01_op);
-    instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   } else {
     GRANARY_ASSERT(false);
   }
   instr_op->is_sticky = true;
   instr_op->rw = xed_operand_rw(op);
+  InitOpSizeByXtype(instr_op, xed_operand_xtype(op));
 }
 
 // Initializes the implicit operands in the table.

@@ -146,8 +146,8 @@ endif
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
 	GRANARY_DEBUG_FLAGS += -g3
-    GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-    GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+  GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+  GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
@@ -189,10 +189,10 @@ ifeq (debug0,"$(GRANARY_TARGET)$(GRANARY_WITH_VALGRIND)")
 	GRANARY_COMMON_ARCH_FLAGS += -ftrapv -fsanitize=undefined-trap
 	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
 
-    GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
-    GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
-    GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations
-    GRANARY_COMMON_WARN_FLAGS += -Wno-switch-enum
+  GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
+  GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
+  GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations
+  GRANARY_COMMON_WARN_FLAGS += -Wno-switch-enum
 endif
 
 # Enable various warnings and errors.
@@ -255,7 +255,7 @@ ifndef GRANARY_IN_TEST_DIR
 $(GRANARY_BIN_DIR)/%.S: $(GRANARY_SRC_DIR)/%.asm
 	@echo "Processing assembly file $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -E -o $@ -x c -std=c99 $< 
+	@$(GRANARY_CC) $(GRANARY_ASM_FLAGS) -E -o $@ -x c -std=c99 $<
 	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/post_process_asm.py $@
 
 # Compile an assembly source file into an object file.

@@ -29,7 +29,7 @@ GRANARY_DEFINE_string(attach_to_syscalls, "*",
 //     on with that?
 
 static TinySet<int, 10> syscalls;
-
+#if 0
 class IndirectFromSched : public IndexableMetaData<IndirectFromSched> {
  public:
   IndirectFromSched(void)
@@ -44,9 +44,10 @@ class IndirectFromSched : public IndexableMetaData<IndirectFromSched> {
 
 GRANARY_DECLARE_bool(debug_log_fragments);
 
+
 static std::atomic<int> ici(ATOMIC_VAR_INIT(0));
 extern "C" AppPC indirect_calls[100] = {0ULL};
-
+#endif
 // Tool that implements several kernel-space special cases for instrumenting
 // common binaries.
 class KernelSpaceInstrumenter : public InstrumentationTool {
@@ -59,7 +60,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
       : decode(false),
         go_native(false),
         num_cfis(0) {
-    FLAG_debug_log_fragments = false;
+    //FLAG_debug_log_fragments = false;
   }
 
   virtual ~KernelSpaceInstrumenter(void) = default;
@@ -81,11 +82,11 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
       InstrumentSyscall(factory, block, category);
     }
   }
+#if 0
 
   virtual void Init(InitReason) {
     RegisterMetaData<IndirectFromSched>();
   }
-#if 1
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->Blocks()) {

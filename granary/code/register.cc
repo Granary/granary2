@@ -82,4 +82,27 @@ RegisterSet &RegisterSet::operator=(const RegisterSet &that) {
   return *this;
 }
 
+
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterSet::Visit(const NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  Visit(&(instr->instruction));
+}
+
+// Update this register tracker by marking some registers as used (i.e.
+// restricted). This allows us to communicate some architecture-specific
+// encoding constraints to the register scheduler.
+void UsedRegisterSet::ReviveRestrictedRegisters(
+    const NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  ReviveRestrictedRegisters(&(instr->instruction));
+}
+
+// Update this register tracker by visiting the operands of an instruction.
+void LiveRegisterSet::Visit(const NativeInstruction *instr) {
+  if (GRANARY_UNLIKELY(!instr)) return;
+  Visit(&(instr->instruction));
+}
+
 }  // namespace granary

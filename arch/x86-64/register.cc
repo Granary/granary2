@@ -14,6 +14,15 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace arch {
+
+// Table of all implicit operands.
+extern const Operand * const IMPLICIT_OPERANDS[];
+
+// Number of implicit operands for each iclass.
+extern const int NUM_IMPLICIT_OPERANDS[];
+
+}  // namespace arch
 
 // See `http://sandpile.org/x86/gpr.htm` for more details on general-purpose
 // registers in x86-64.
@@ -183,30 +192,29 @@ bool VirtualRegister::IsFlags(void) const {
   return XED_REG_FLAGS_FIRST <= reg_num && XED_REG_FLAGS_LAST >= reg_num;
 }
 
-
-// Update this register tracker by marking all registers that appear in an
-// instruction as used.
-void UsedRegisterSet::Visit(const NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
-  Visit(&(instr->instruction));
-}
-
-
 // Update this register tracker by marking all registers that appear in an
 // instruction as used.
 void UsedRegisterSet::Visit(const arch::Instruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
   for (auto i = 0; i < instr->num_explicit_ops; ++i) {
-    const auto &op(instr->ops[i]);
-    if (op.IsRegister()) {
-      Revive(op.reg);
-    } else if (op.IsMemory()) {
-      if (op.is_compound) {
-        Revive(VirtualRegister::FromNative(op.mem.reg_base));
-        Revive(VirtualRegister::FromNative(op.mem.reg_index));
-      } else {
-        Revive(op.reg);
-      }
+    Visit(&(instr->ops[i]));
+  }
+  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
+      i < num_ops; ++i) {
+    Visit(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
+  }
+}
+
+// Update this register tracker by marking all registers that appear in an
+// instruction as used.
+void UsedRegisterSet::Visit(const arch::Operand *op) {
+  if (op->IsRegister()) {
+    Revive(op->reg);
+  } else if (op->IsMemory()) {
+    if (op->is_compound) {
+      Revive(VirtualRegister::FromNative(op->mem.reg_base));
+      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+    } else {
+      Revive(op->reg);
     }
   }
 }
@@ -215,8 +223,11 @@ void UsedRegisterSet::Visit(const arch::Instruction *instr) {
 // restricted). This allows us to communicate some architecture-specific
 // encoding constraints to the register scheduler.
 void UsedRegisterSet::ReviveRestrictedRegisters(
-    const NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(instr->instruction.uses_legacy_registers)) {
+    const arch::Instruction *instr) {
+
+  // If legacy registers are used, then we likely can't use the extra 8
+  // registers introduced by x86-64 as they require a REX prefix.
+  if (GRANARY_UNLIKELY(instr->uses_legacy_registers)) {
     Revive(14);  // XED_REG_R15
     Revive(13);
     Revive(12);
@@ -226,19 +237,30 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
     Revive(8);
     Revive(7);  // XED_REG_R8
   }
-  const auto &ainstr(instr->instruction);
-  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
-    const auto &op(ainstr.ops[i]);
-    if (!op.is_sticky) continue;
-    if (op.IsRegister()) {
-      Revive(op.reg);
-    } else if (op.IsMemory()) {
-      if (op.is_compound) {
-        Revive(VirtualRegister::FromNative(op.mem.reg_base));
-        Revive(VirtualRegister::FromNative(op.mem.reg_index));
-      } else {
-        Revive(op.reg);
-      }
+
+  // Now: Revive all registers that are part of *sticky* operands.
+  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+    ReviveRestrictedRegisters(&(instr->ops[i]));
+  }
+  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
+       i < num_ops; ++i) {
+    ReviveRestrictedRegisters(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
+  }
+}
+
+// Update this register tracker by marking some registers as used (i.e.
+// restricted). This allows us to communicate some architecture-specific
+// encoding constraints to the register scheduler.
+void UsedRegisterSet::ReviveRestrictedRegisters(const arch::Operand *op) {
+  if (!op->is_sticky) return;  // THIS IS KEY!!!
+  if (op->IsRegister()) {
+    Revive(op->reg);
+  } else if (op->IsMemory()) {
+    if (op->is_compound) {
+      Revive(VirtualRegister::FromNative(op->mem.reg_base));
+      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+    } else {
+      Revive(op->reg);
     }
   }
 }
@@ -247,29 +269,38 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
 //
 // Note: This treats conditional writes to a register as reviving that
 //       register.
-void LiveRegisterSet::Visit(NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
-  const auto &ainstr(instr->instruction);
-  for (auto i = 0; i < ainstr.num_explicit_ops; ++i) {
-    const auto &op(ainstr.ops[i]);
-    if (op.IsRegister()) {
-      const auto &reg(op.reg);
-      // Read, read/write, conditional write, or partial write.
-      if (op.IsRead() || op.IsConditionalWrite() ||
-          reg.PreservesBytesOnWrite()) {
-        Revive(reg);
-      } else if (op.IsWrite()) {  // Write-only.
-        Kill(reg);
-      } else {
-        GRANARY_ASSERT(false);
-      }
-    } else if (op.IsMemory()) {
-      if (op.is_compound) {
-        Revive(VirtualRegister::FromNative(op.mem.reg_base));
-        Revive(VirtualRegister::FromNative(op.mem.reg_index));
-      } else {
-        Revive(op.reg);
-      }
+void LiveRegisterSet::Visit(const arch::Instruction *instr) {
+  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+    Visit(&(instr->ops[i]));
+  }
+  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
+      i < num_ops; ++i) {
+    Visit(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
+  }
+}
+
+// Update this register tracker by visiting an operand of an instruction.
+//
+// Note: This treats conditional writes to a register as reviving that
+//       register.
+void LiveRegisterSet::Visit(const arch::Operand *op) {
+  if (op->IsRegister()) {
+    const auto &reg(op->reg);
+    // Read, read/write, conditional write, or partial write.
+    if (op->IsRead() || op->IsConditionalWrite() ||
+        reg.PreservesBytesOnWrite()) {
+      Revive(reg);
+    } else if (op->IsWrite()) {  // Write-only.
+      Kill(reg);
+    } else {
+      GRANARY_ASSERT(false);
+    }
+  } else if (op->IsMemory()) {
+    if (op->is_compound) {
+      Revive(VirtualRegister::FromNative(op->mem.reg_base));
+      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+    } else {
+      Revive(op->reg);
     }
   }
 }
