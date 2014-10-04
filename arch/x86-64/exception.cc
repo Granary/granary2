@@ -15,13 +15,6 @@
 // After `cache.h` to get `NativeAddress`.
 #include "arch/x86-64/builder.h"
 
-#define BEFORE_NOSTACK(f, i, ...) \
-  do { \
-    __VA_ARGS__ ; \
-    ni.is_stack_blind = true; \
-    f->instrs.InsertBefore(i, new NativeInstruction(&ni)); \
-  } while (0)
-
 #define APP_NOSTACK(f, ...) \
   do { \
     __VA_ARGS__ ; \
@@ -74,26 +67,133 @@ static CodeFragment *MakeCodeSuccessor(FragmentList *frags, CodeFragment *frag,
 // pushed operands.
 static int PushOperands(CodeFragment *frag,
                         ExceptionalControlFlowInstruction *instr,
-                        Instruction &ni) {
+                        Instruction &ni, VirtualRegister *pop_on_sucess) {
   auto &ainstr(instr->instruction);
   switch (ainstr.iform) {
     case XED_IFORM_MOV_SEG_MEMw:
-      BEFORE_NOSTACK(frag, instr, PUSH_MEMv(&ni, ainstr.ops[1]);
-                     ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_MEMv(&ni, ainstr.ops[1]);
+                  ni.effective_operand_width = 64);
       return 1;
+
     case XED_IFORM_MOV_SEG_GPR16:
-      BEFORE_NOSTACK(frag, instr, PUSH_GPRv_50(&ni,
-                                               ainstr.ops[1].reg.WidenedTo(8));
-                     ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[1].reg.WidenedTo(8));
+                  ni.effective_operand_width = 64);
       return 1;
+
     case XED_IFORM_MOV_MEMb_IMMb:
-      BEFORE_NOSTACK(frag, instr, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
-                     ni.effective_operand_width = 64);
-      BEFORE_NOSTACK(frag, instr, PUSH_IMMb(&ni, ainstr.ops[1]);
-                     ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
+                  ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_IMMb(&ni, ainstr.ops[1]);
+                  ni.effective_operand_width = 64);
       return 2;
 
+    case XED_IFORM_MOV_MEMb_GPR8:
+    case XED_IFORM_MOV_MEMv_GPRv:
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
+                  ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[1].reg.WidenedTo(8));
+                  ni.effective_operand_width = 64);
+      return 2;
+
+    // Handle `XCHG`. One trickiness is that we need to pop the source operand
+    // to make sure that the code sees the change.
+    case XED_IFORM_XCHG_MEMb_GPR8:
+    case XED_IFORM_XCHG_MEMv_GPRv: {
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
+                  ni.effective_operand_width = 64);
+      auto push_reg = ainstr.ops[1].reg.WidenedTo(8);
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, push_reg);
+                  ni.effective_operand_width = 64);
+      pop_on_sucess[1] = push_reg;
+      return 2;
+    }
+
+    case XED_IFORM_MOV_GPR8_MEMb:
+    case XED_IFORM_MOV_GPRv_MEMv: {
+      auto push_reg = ainstr.ops[0].reg.WidenedTo(8);
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, push_reg);
+                  ni.effective_operand_width = 64);
+      pop_on_sucess[0] = push_reg;
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[1].reg);
+                  ni.effective_operand_width = 64);
+      return 2;
+    }
+
+    // Handle `FXRSTOR64` and `PREFETCHT0`.
+    case XED_IFORM_FXRSTOR64_MEMmfpxenv:
+    case XED_IFORM_PREFETCHT0_MEMmprefetch:
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
+                  ni.effective_operand_width = 64);
+      return 1;
+
     default: return 0;
+  }
+}
+
+// Find which registers are read and written in the instruction.
+static void FindRWRegs(ExceptionalControlFlowInstruction *instr, bool *is_rw) {
+  for (auto gpr : instr->used_regs) {
+    RegisterOperand gpr_op(gpr);
+    is_rw[gpr.Number()] = instr->MatchOperands(ExactReadAndWriteTo(gpr_op));
+  }
+}
+
+// Restore the registers to their saved states (or a modification thereof) in
+// the event that an exception occurred.
+static void RestoreRegsOnFailure(CodeFragment *recovery_frag,
+                                 ExceptionalControlFlowInstruction *instr,
+                                 Instruction &ni, bool *is_rw) {
+  const auto &ainstr(instr->instruction);
+  const auto is_restartable = ainstr.has_prefix_rep || ainstr.has_prefix_repne;
+  for (auto gpr : instr->used_regs) {
+    const auto gpr_num = gpr.Number();
+    auto saved_gpr = instr->saved_regs[gpr_num];
+
+    // Restore the register to a close-enough version of it's old state that
+    // also hopefully maintains the changes that successfully completed before
+    // the instruction was interrupted.
+    if (is_restartable && is_rw[gpr_num]) {
+      APP(recovery_frag, BSWAP_GPRv(&ni, gpr));
+      APP(recovery_frag, BSWAP_GPRv(&ni, saved_gpr));
+      APP(recovery_frag, MOV_GPRv_GPRv_89(&ni, gpr.WidenedTo(4),
+                                          saved_gpr.WidenedTo(4)));
+      APP(recovery_frag, BSWAP_GPRv(&ni, gpr));
+
+    // Restore the GPR itself. There might be some redundancy here for read-
+    // only operands, but whatever.
+    } else {
+      APP(recovery_frag, MOV_GPRv_GPRv_89(&ni, gpr, saved_gpr));
+    }
+  }
+}
+
+// Corrects the stack pointer after an exception to account for any operand
+// spilling performed before the emulated instruction.
+static void UnspillRegsOnFailure(CodeFragment *frag,  Instruction &ni,
+                                 int num_pushed_ops) {
+  if (!num_pushed_ops) return;
+  // Restore RSP if there was a fault.
+  APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                                  BaseDispMemOp(num_pushed_ops * 8,
+                                                XED_REG_RSP,
+                                                ADDRESS_WIDTH_BITS)));
+}
+
+// Restore the stack pointer back to where it was supposed to be. This also
+// allows us to communicate register state changes from the emulated
+// instruction back into the application by popping off specific registers.
+static void UnspillRegsOnSuccess(CodeFragment *frag, Instruction &ni,
+                                 VirtualRegister *pop_on_sucess,
+                                 int num_pushed_ops) {
+  for (auto i = num_pushed_ops; i-- > 0; ) {
+    if (pop_on_sucess[i].IsValid()) {
+      APP_NOSTACK(frag, POP_GPRv_51(&ni, pop_on_sucess[i]);
+                        ni.effective_operand_width = GPR_WIDTH_BITS;);
+    } else {
+      APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                                      BaseDispMemOp(8, XED_REG_RSP,
+                                                    ADDRESS_WIDTH_BITS)));
+    }
   }
 }
 
@@ -108,20 +208,16 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   Instruction ni;
   auto &ainstr(instr->instruction);
   auto meta = MetaDataCast<CacheMetaData *>(frag->attr.block_meta);
-  auto num_pushed_ops = PushOperands(frag, instr, ni);
-  auto undo_push_op = BaseDispMemOp(num_pushed_ops * 8,
-                                    XED_REG_RSP, ADDRESS_WIDTH_BITS);
+  VirtualRegister pop_on_sucess[] = {VirtualRegister(), VirtualRegister()};
+  auto num_pushed_ops = PushOperands(frag, instr, ni, pop_on_sucess);
 
-  // Put these just before `ainstr` so that if any VR rescheduling was done,
-  // then it will be undone by the time the bottom-up pass hits `ainstr`, and
-  // so the registers used by `ainstr` will all be "right".
-  BEFORE_NOSTACK(frag, instr, CALL_NEAR(&ni, EstimatedCachePC(),
-                                        instr->emulation_pc,
-                                        &(meta->native_addresses)));
+  // Detect if a register is read and written in the instruction.
+  bool is_rw[NUM_GENERAL_PURPOSE_REGISTERS] = {false};
+  FindRWRegs(instr, is_rw);
 
-  // `instr` is here. We leave it in place so that the virtual register system
-  // can ensure the all native regs in use in it will be correct here.
-  ainstr.dont_encode = true;
+  // Emulate the original instruction.
+  APP_NOSTACK(frag, CALL_NEAR(&ni, EstimatedCachePC(), instr->emulation_pc,
+                              &(meta->native_addresses)));
 
   // This is tricky: What happens is that the CALL will either return to the
   // same place (no fault), or it will add 5 bytes to its return address, and
@@ -133,50 +229,30 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   JMP_RELBRd(&ni, no_fault_label);
   frag->instrs.Append(new BranchInstruction(&ni, no_fault_label));
 
-  if (num_pushed_ops) {
-    // Restore RSP if there was a fault.
-    APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP, undo_push_op));
-  }
+  UnspillRegsOnFailure(frag, ni, num_pushed_ops);
 
   JMP_RELBRd(&ni, fault_label);
   auto recovery_branch = new BranchInstruction(&ni, fault_label);
   frag->instrs.Append(recovery_branch);
   frag->branch_instr = recovery_branch;
   frag->instrs.Append(no_fault_label);
-  if (num_pushed_ops) {
-    // Restore RSP if there wasn't a fault.
-    APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP, undo_push_op));
-  }
 
+  UnspillRegsOnSuccess(frag, ni, pop_on_sucess, num_pushed_ops);
+
+  // `instr` is here. We leave it in place so that the virtual register system
+  // can ensure the all native regs in use in it will be correct here.
+  ainstr.dont_encode = true;
+  frag->instrs.Remove(instr);
+  frag->instrs.Append(instr);
+
+  // End the fragment with `instr`. This ideally ensures that all regs that
+  // need to be scheduled will be in there correct places before any of the
+  // above mess.
   auto recovery_frag = MakeCodeSuccessor(frags, frag, FRAG_SUCC_BRANCH);
   recovery_frag->attr.can_add_succ_to_partition = false;
   recovery_frag->instrs.Append(fault_label);
 
-  for (auto gpr : instr->used_regs) {
-    auto saved_gpr = instr->saved_regs[gpr.Number()];
-    RegisterOperand gpr_op(gpr);
-
-    // If the operand is a read/write operand, then assume that it's a string
-    // operation (e.g. MOVSB or REP MOVSB) and so then we should not restore
-    // the register to exactly its old state, but to a close-enough version of
-    // it.
-    //
-    // TODO(pag): It might actually be correct (for some OSes) to restore the
-    //            regs to their original states, and assume that the recovery
-    //            code is sufficiently general to handle re-doing some work.
-    if (instr->MatchOperands(ExactReadAndWriteTo(gpr_op))) {
-      APP(recovery_frag, BSWAP_GPRv(&ni, gpr));
-      APP(recovery_frag, BSWAP_GPRv(&ni, saved_gpr));
-      APP(recovery_frag, MOV_GPRv_GPRv_89(&ni, gpr.WidenedTo(4),
-                                          saved_gpr.WidenedTo(4)));
-      APP(recovery_frag, BSWAP_GPRv(&ni, gpr));
-
-    // Restore the GPR itself. There might be some redundancy here for read-
-    // only operands, but whatever.
-    } else {
-      APP(recovery_frag, MOV_GPRv_GPRv_89(&ni, gpr, saved_gpr));
-    }
-  }
+  RestoreRegsOnFailure(recovery_frag, instr, ni, is_rw);
 
   // The fragment builder will have associated an exit fragment with the
   // exception handling fragment. We'll add it as a successor of the recovery

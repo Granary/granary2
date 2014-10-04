@@ -38,14 +38,27 @@ extern const unsigned char granary_extable_write_error_16;
 extern const unsigned char granary_extable_write_error_32;
 extern const unsigned char granary_extable_write_error_64;
 
-extern const unsigned char granary_extable_swap_8;
-extern const unsigned char granary_extable_swap_16;
-extern const unsigned char granary_extable_swap_32;
-extern const unsigned char granary_extable_swap_64;
+extern const unsigned char granary_extable_read_8;
+extern const unsigned char granary_extable_read_16;
+extern const unsigned char granary_extable_read_32;
+extern const unsigned char granary_extable_read_64;
+
+extern const unsigned char granary_extable_read_error_8;
+extern const unsigned char granary_extable_read_error_16;
+extern const unsigned char granary_extable_read_error_32;
+extern const unsigned char granary_extable_read_error_64;
+
+extern const unsigned char granary_extable_xchg_8;
+extern const unsigned char granary_extable_xchg_16;
+extern const unsigned char granary_extable_xchg_32;
+extern const unsigned char granary_extable_xchg_64;
 
 extern const unsigned char granary_extable_rdmsr;
 extern const unsigned char granary_extable_wrmsr;
 extern const unsigned char granary_extable_fwait;
+extern const unsigned char granary_extable_fxrstor64;
+extern const unsigned char granary_extable_prefetcht0;
+
 #endif  // GRANARY_WHERE_kernel
 
 }  // extern C
@@ -82,9 +95,21 @@ static const AppPC emulate_write_mem[2][4] = {
   }
 };
 
-static const AppPC emulate_swap[4] = {
-  &granary_extable_swap_8, &granary_extable_swap_16,
-  &granary_extable_swap_32, &granary_extable_swap_64
+static const AppPC emulate_read_mem[2][4] = {
+  {
+    &granary_extable_read_8, &granary_extable_read_16,
+    &granary_extable_read_32, &granary_extable_read_64
+  },
+  {
+    &granary_extable_read_error_8, &granary_extable_read_error_16,
+    &granary_extable_read_error_32, &granary_extable_read_error_64
+  }
+};
+
+
+static const AppPC emulate_xchg[4] = {
+  &granary_extable_xchg_8, &granary_extable_xchg_16,
+  &granary_extable_xchg_32, &granary_extable_xchg_64
 };
 
 // Returns the faulting PC of an exception table entry.
@@ -158,6 +183,12 @@ static bool GetExceptionInfoSeg(const arch::Instruction *instr,
   return true;
 }
 
+#ifdef GRANARY_TARGET_debug
+static bool NotASegmentOffset(const arch::Operand &op) {
+  return XED_REG_INVALID == op.segment || XED_REG_DS == op.segment;
+}
+#endif  // GRANARY_TARGET_debug
+
 }  // namespace
 
 // Returns true if the instruction `instr` can cause an exception, and if
@@ -183,78 +214,87 @@ bool GetExceptionInfo(const arch::Instruction *instr, AppPC *recovery_pc,
   auto recovers_from_error = RecoveryEntryIsError(recovery_entry);
   *recovery_pc = FindRecoveryAddress(recovery_entry, recovers_from_error);
 
-  switch (instr->iclass) {
-    case XED_ICLASS_MOVSB:
+  switch (instr->iform) {
+    case XED_IFORM_MOVSB:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_rep_movs_8;
       return true;
 
-    case XED_ICLASS_MOVSW:
+    case XED_IFORM_MOVSW:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_rep_movs_16;
       return true;
 
-    case XED_ICLASS_MOVSD:
+    case XED_IFORM_MOVSD:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_rep_movs_32;
       return true;
 
-    case XED_ICLASS_MOVSQ:
+    case XED_IFORM_MOVSQ:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_rep_movs_64;
       return true;
 
-    case XED_ICLASS_WRMSR:
+    case XED_IFORM_WRMSR:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_wrmsr;
       return true;
 
-    case XED_ICLASS_RDMSR:
+    case XED_IFORM_RDMSR:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_rdmsr;
       return true;
 
-    case XED_ICLASS_FWAIT:
+    case XED_IFORM_FWAIT:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_fwait;
       return true;
 
-    // TODO(pag): How do we communicate the register back?
+    case XED_IFORM_FXRSTOR64_MEMmfpxenv:
+      GRANARY_ASSERT(!recovers_from_error);
+      *emulation_pc = &granary_extable_fxrstor64;
+      return true;
+
+    case XED_IFORM_PREFETCHT0_MEMmprefetch:
+      GRANARY_ASSERT(!recovers_from_error);
+      *emulation_pc = &granary_extable_prefetcht0;
+      return true;
+
     case XED_IFORM_XCHG_MEMb_GPR8:
       GRANARY_ASSERT(!recovers_from_error);
-      *emulation_pc = &granary_extable_swap_8;
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[0]));
+      *emulation_pc = &granary_extable_xchg_8;
       return true;
 
-    // TODO(pag): How do we communicate the register back?
     case XED_IFORM_XCHG_MEMv_GPRv:
       GRANARY_ASSERT(!recovers_from_error);
-      *emulation_pc = emulate_swap[Order(instr->ops[0])];
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[0]));
+      *emulation_pc = emulate_xchg[Order(instr->ops[0])];
       return true;
 
-    case XED_ICLASS_MOV:
-      switch (instr->iform) {
-        case XED_IFORM_MOV_SEG_MEMw:
-        case XED_IFORM_MOV_SEG_GPR16:
-          GRANARY_ASSERT(!recovers_from_error);
-          return GetExceptionInfoSeg(instr, emulation_pc);
+    case XED_IFORM_MOV_SEG_MEMw:
+    case XED_IFORM_MOV_SEG_GPR16:
+      GRANARY_ASSERT(!recovers_from_error);
+      return GetExceptionInfoSeg(instr, emulation_pc);
 
-        case XED_IFORM_MOV_MEMb_IMMb:
-          *emulation_pc = emulate_write_mem[recovers_from_error][0];
-          return true;
+    case XED_IFORM_MOV_MEMb_GPR8:
+    case XED_IFORM_MOV_MEMb_IMMb:
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[0]));
+      *emulation_pc = emulate_write_mem[recovers_from_error][0];
+      return true;
 
-        case XED_IFORM_MOV_MEMv_GPRv:
-          *emulation_pc = emulate_write_mem[recovers_from_error]
-                                           [Order(instr->ops[0])];
-          return true;
+    case XED_IFORM_MOV_MEMv_GPRv:
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[0]));
+      *emulation_pc = emulate_write_mem[recovers_from_error]
+                                       [Order(instr->ops[0])];
+      return true;
 
-        // TODO(pag): For reads, how do we communicate the register back?
-#if 0
-        case XED_IFORM_MOV_GPRv_MEMv:
-          *emulation_pc = emulate_read_mem[recovers_from_error]
-                                          [Order(instr->ops[0])];
-#endif
-        default: break;
-      }
+    case XED_IFORM_MOV_GPR8_MEMb:
+    case XED_IFORM_MOV_GPRv_MEMv:
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[1]));
+      *emulation_pc = emulate_read_mem[recovers_from_error]
+                                      [Order(instr->ops[1])];
+      return true;
 
     default:
       granary_curiosity();

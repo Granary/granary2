@@ -309,6 +309,14 @@ bool PropagateRegisterCopies(FragmentList *frags) {
       ReachingDefinintions defs;
       for (auto instr : InstructionListIterator(code_frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+
+          // Don't allow copy-propagation into an exceptional CFI. This
+          // simplifies the late mangling of these instructions, which requires
+          // case-by-case emulation, and so knowing, e.g., that the effective
+          // address of a memory operand is *always* in a register is a major
+          // simplification.
+          if (IsA<ExceptionalControlFlowInstruction *>(ninstr)) continue;
+
           if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {
             if (UpdateUses(defs, ssa_instr)) {
               FixInstruction(ninstr, ssa_instr);
