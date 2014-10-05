@@ -302,7 +302,9 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
                                     instr->effective_operand_width);
   APP(MOV_GPRv_MEMv(&ni, vr, stack_mem_op));
-  if (op.is_compound) {
+  if (op.IsPointer()) {
+    // Nothing.
+  } else if (op.is_compound) {
     if (XED_REG_RSP == op.mem.reg_base || XED_REG_ESP == op.mem.reg_base) {
       op.mem.disp += stack_shift;
     }

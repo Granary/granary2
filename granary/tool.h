@@ -181,7 +181,7 @@ class InstrumentationManager {
   bool is_finalized;
 
   // All tools registered with this manager.
-  int num_registed;
+  int num_registered;
   bool is_registered[MAX_NUM_TOOLS];
   const ToolDescription *descriptions[MAX_NUM_TOOLS];
 

@@ -29,6 +29,7 @@ class alignas(16) OperandInterface {
 
   bool IsRegister(void) const;
   bool IsMemory(void) const;
+  bool IsPointer(void) const;
   bool IsImmediate(void) const;
 
   void EncodeToString(OperandString *str) const;

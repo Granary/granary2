@@ -59,7 +59,8 @@ union alignas(alignof(void *)) VirtualRegister {
         kind(kind_),
         num_bytes(num_bytes_),
         byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
-        preserved_byte_mask(0) {
+        preserved_byte_mask(0),
+        is_segment_offset(false) {
     GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
   }
 
@@ -106,6 +107,11 @@ union alignas(alignof(void *)) VirtualRegister {
   //
   // Note: This has an architecture-specific implementation.
   static VirtualRegister StackPointer(void);
+
+  // Return the frame pointer register as a virtual register.
+  //
+  // Note: This has an architecture-specific implementation.
+  static VirtualRegister FramePointer(void);
 
   // Return the width (in bits) of this register.
   inline int BitWidth(void) const {

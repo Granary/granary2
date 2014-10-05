@@ -143,7 +143,8 @@ static void ManglePop(NativeInstruction *instr, int adjusted_offset) {
 
 // Returns true if an architectural operand looks like a spill slot.
 static bool IsSpillSlot(const arch::Operand &op) {
-  return op.IsMemory() && !op.is_compound && op.reg.IsVirtualSlot();
+  return op.IsMemory() && !op.IsPointer() && !op.is_compound &&
+         op.reg.IsVirtualSlot();
 }
 
 // Mangle the `PUSHF` and `PUSHFQ` instructions.
@@ -191,6 +192,8 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
 
 // Adjust a memory operand if it refers to the stack pointer.
 static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
+  if (mem_op->IsPointer()) return;
+
   if (mem_op->is_compound) {
     if (XED_REG_RSP == mem_op->mem.reg_base) {
       mem_op->mem.disp += adjusted_offset;

@@ -31,7 +31,7 @@ static ClosureList<WatchedOperand *> watchpoint_hooks GRANARY_GLOBAL;
 // "watched" (i.e. tainted) addresses from "unwatched" addresses. The
 // watchpoints instrumentation injects instructions to detect dereferences of
 // tainted addresses and ensures that memory instructions don't raise faults
-// when
+// when they are accessed.
 class Watchpoints : public InstrumentationTool {
  public:
   virtual ~Watchpoints(void) = default;
@@ -62,6 +62,7 @@ class Watchpoints : public InstrumentationTool {
         "MOV r64 %0, r64 %1;"  // Copy the original (%1).
         "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
         GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
+        "  INT3;"
         "  SHL r64 %0, i8 16;"
         "  SAR r64 %0, i8 16;"_x86_64);
 
@@ -98,7 +99,7 @@ class Watchpoints : public InstrumentationTool {
   // Instrument a basic block.
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     MemoryOperand mloc1, mloc2;
-    for (auto instr : bb->ReversedAppInstructions()) {
+    for (auto instr : bb->AppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
                                                      ReadOrWriteTo(mloc2));
       if (2 == num_matched) {

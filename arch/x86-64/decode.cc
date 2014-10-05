@@ -408,8 +408,9 @@ AppPC InstructionDecoder::DecodeInternal(Instruction *instr, AppPC pc) {
       break;
     }
 
+    // Skip NOPs.
     const auto category = xed_decoded_inst_get_category(&xedd);
-    if (XED_CATEGORY_NOP == category) {  // Skip NOPs.
+    if (XED_CATEGORY_NOP == category || XED_CATEGORY_WIDENOP == category) {
       pc += xed_decoded_inst_get_length(&xedd);
       continue;
     }

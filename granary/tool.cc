@@ -123,7 +123,7 @@ InstrumentationManager::InstrumentationManager(ContextInterface *context_)
     : max_align(0),
       max_size(0),
       is_finalized(false),
-      num_registed(0),
+      num_registered(0),
       allocator(),
       context(context_) {
   memset(&(is_registered[0]), 0, sizeof is_registered);
@@ -140,7 +140,7 @@ void InstrumentationManager::Register(const char *name) {
   if (auto desc = registered_tools[ToolId(name)]) {
     is_registered[desc->id] = true;
     Register(desc);
-    descriptions[num_registed++] = desc;
+    descriptions[num_registered++] = desc;
     max_size = GRANARY_MAX(max_size, desc->size);
     max_align = GRANARY_MAX(max_align, desc->align);
   }
@@ -157,7 +157,7 @@ void InstrumentationManager::Register(const ToolDescription *desc) {
         }
       }
     }
-    descriptions[num_registed++] = desc;
+    descriptions[num_registered++] = desc;
   }
 }
 

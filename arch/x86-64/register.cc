@@ -145,6 +145,14 @@ VirtualRegister VirtualRegister::StackPointer(void) {
   return VirtualRegister::FromNative(static_cast<int>(XED_REG_RSP));
 }
 
+// Return the frame pointer register as a virtual register.
+//
+// Note: This has an architecture-specific implementation.
+VirtualRegister VirtualRegister::FramePointer(void) {
+  // TODO(pag): This has an ABI-specific implementation.
+  return VirtualRegister::FromNative(static_cast<int>(XED_REG_RBP));
+}
+
 // Widen this virtual register to a specific bit width.
 void VirtualRegister::Widen(int dest_byte_width) {
   switch (dest_byte_width) {
@@ -209,7 +217,7 @@ void UsedRegisterSet::Visit(const arch::Instruction *instr) {
 void UsedRegisterSet::Visit(const arch::Operand *op) {
   if (op->IsRegister()) {
     Revive(op->reg);
-  } else if (op->IsMemory()) {
+  } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
       Revive(VirtualRegister::FromNative(op->mem.reg_base));
       Revive(VirtualRegister::FromNative(op->mem.reg_index));
@@ -255,7 +263,7 @@ void UsedRegisterSet::ReviveRestrictedRegisters(const arch::Operand *op) {
   if (!op->is_sticky) return;  // THIS IS KEY!!!
   if (op->IsRegister()) {
     Revive(op->reg);
-  } else if (op->IsMemory()) {
+  } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
       Revive(VirtualRegister::FromNative(op->mem.reg_base));
       Revive(VirtualRegister::FromNative(op->mem.reg_index));
@@ -295,7 +303,7 @@ void LiveRegisterSet::Visit(const arch::Operand *op) {
     } else {
       GRANARY_ASSERT(false);
     }
-  } else if (op->IsMemory()) {
+  } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
       Revive(VirtualRegister::FromNative(op->mem.reg_base));
       Revive(VirtualRegister::FromNative(op->mem.reg_index));

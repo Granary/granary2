@@ -80,6 +80,10 @@ class alignas(16) Operand : public OperandInterface {
            XED_ENCODER_OPERAND_TYPE_PTR == type;
   }
 
+  inline bool IsPointer(void) const {
+    return XED_ENCODER_OPERAND_TYPE_PTR == type;
+  }
+
   inline bool IsImmediate(void) const {
     return XED_ENCODER_OPERAND_TYPE_BRDISP == type ||
            XED_ENCODER_OPERAND_TYPE_IMM0 == type ||

@@ -283,6 +283,12 @@ bool GetExceptionInfo(const arch::Instruction *instr, AppPC *recovery_pc,
       *emulation_pc = emulate_write_mem[recovers_from_error][0];
       return true;
 
+    case XED_IFORM_MOV_MEMv_IMMz:
+      // Note: We use `PUSH_IMMz` in `arch/x86-64/exception.cc`, and the max
+      //       immediate size there is 32 bits.
+      GRANARY_ASSERT(32 >= instr->ops[1].BitWidth());
+
+    [[clang::fallthrough]];
     case XED_IFORM_MOV_MEMv_GPRv:
       GRANARY_ASSERT(NotASegmentOffset(instr->ops[0]));
       *emulation_pc = emulate_write_mem[recovers_from_error]

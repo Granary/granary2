@@ -128,7 +128,7 @@ endif
 
 # Enable recursive instrumentation (Granary instrumenting Granary).
 ifeq (1,$(GRANARY_RECURSIVE))
-  GRANARY_COMMON_MACROS += -DGRANARY_RECURSIVE
+	GRANARY_COMMON_MACROS += -DGRANARY_RECURSIVE
 endif
 
 GRANARY_HEADER_MACRO_DEFS += $(GRANARY_COMMON_MACROS)
@@ -146,8 +146,8 @@ endif
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
 	GRANARY_DEBUG_FLAGS += -g3
-  GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-  GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+	GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
+	GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
@@ -189,10 +189,10 @@ ifeq (debug0,"$(GRANARY_TARGET)$(GRANARY_WITH_VALGRIND)")
 	GRANARY_COMMON_ARCH_FLAGS += -ftrapv -fsanitize=undefined-trap
 	GRANARY_COMMON_ARCH_FLAGS += -fsanitize-undefined-trap-on-error
 
-  GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
-  GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
-  GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations
-  GRANARY_COMMON_WARN_FLAGS += -Wno-switch-enum
+	GRANARY_COMMON_WARN_FLAGS += -Weverything -Wno-c++98-compat-pedantic
+	GRANARY_COMMON_WARN_FLAGS += -Wno-padded -Wno-missing-prototypes
+	GRANARY_COMMON_WARN_FLAGS += -Wno-missing-variable-declarations
+	GRANARY_COMMON_WARN_FLAGS += -Wno-switch-enum
 endif
 
 # Enable various warnings and errors.
@@ -209,7 +209,7 @@ GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 # Disable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
 GRANARY_COMMON_WARN_FLAGS += -Wno-extended-offsetof -Wno-gnu -Wno-long-long
-GRANARY_COMMON_WARN_FLAGS += -Wno-c11-extensions
+GRANARY_COMMON_WARN_FLAGS += -Wno-c11-extensions -Wno-c99-extensions
 
 # Add the common flags to both the C++ and C compiler flags.
 GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS)

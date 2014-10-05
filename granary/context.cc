@@ -121,6 +121,14 @@ static void FreeEdgeList(EdgeT *edge) {
   }
 }
 
+template <typename T>
+static void FreeCallbacks(T &callback_map) {
+  for (auto &cb : callback_map.Values()) {
+    delete cb;
+    cb = nullptr;
+  }
+}
+
 }  // namespace
 
 #ifdef GRANARY_TARGET_test
@@ -143,7 +151,9 @@ Context::Context(void)
       indirect_edge_list(nullptr),
       code_cache_index(new Index),
       context_callbacks_lock(),
-      context_callbacks() {
+      context_callbacks(),
+      arg_callbacks_lock(),
+      outline_callbacks() {
   InitMetaData(&metadata_manager);
 
   // Tell this environment about all loaded modules.
@@ -155,6 +165,8 @@ Context::~Context(void) {
   FreeEdgeList(patched_edge_list);
   FreeEdgeList(unpatched_edge_list);
   FreeEdgeList(indirect_edge_list);
+  FreeCallbacks(context_callbacks);
+  FreeCallbacks(outline_callbacks);
 }
 
 // Initialize all tools from a comma-separated list of tools.

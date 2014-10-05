@@ -87,6 +87,13 @@ static int PushOperands(CodeFragment *frag,
                   ni.effective_operand_width = 64);
       return 2;
 
+    case XED_IFORM_MOV_MEMv_IMMz:
+      APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);
+                  ni.effective_operand_width = 64);
+      APP_NOSTACK(frag, PUSH_IMMz(&ni, ainstr.ops[1]);
+                  ni.effective_operand_width = 64);
+      return 2;
+
     case XED_IFORM_MOV_MEMb_GPR8:
     case XED_IFORM_MOV_MEMv_GPRv:
       APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);

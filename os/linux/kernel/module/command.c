@@ -85,12 +85,11 @@ static void ProcessCommand(const char *command) {
 // only process one command at a time.
 static ssize_t ParseCommand(struct file *file, const char __user *str,
                             size_t size, loff_t *offset) {
+  size_t command_size = size > COMMAND_BUFF_SIZE ? COMMAND_BUFF_SIZE : size;
   memset(&(command_buff), 0, COMMAND_BUFF_SIZE);
-  copy_from_user(
-      &(command_buff[0]),
-      str,
-      size > COMMAND_BUFF_SIZE ? COMMAND_BUFF_SIZE : size);
+  copy_from_user(&(command_buff[0]), str, command_size);
   command_buff[COMMAND_BUFF_SIZE] = '\0';
+  command_buff[command_size] = '\0';
 
   ProcessCommand(&(command_buff[0]));
 

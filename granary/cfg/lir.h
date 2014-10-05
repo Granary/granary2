@@ -58,12 +58,28 @@ std::unique_ptr<Instruction> CallWithContext(
 
 namespace detail {
 
-inline static void InitInlineOp(Operand *op, const Operand &arg_op) {
-  new (op) Operand(arg_op);
+inline static void InitInlineOp(Operand *op, const RegisterOperand &arg_op) {
+  new (op) RegisterOperand(arg_op);
 }
 
-inline static void InitInlineOp(Operand *op, const Operand &&arg_op) {
-  new (op) Operand(arg_op);
+inline static void InitInlineOp(Operand *op, const RegisterOperand &&arg_op) {
+  new (op) RegisterOperand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, const ImmediateOperand &arg_op) {
+  new (op) ImmediateOperand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, const ImmediateOperand &&arg_op) {
+  new (op) ImmediateOperand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, const MemoryOperand &arg_op) {
+  new (op) MemoryOperand(arg_op);
+}
+
+inline static void InitInlineOp(Operand *op, const MemoryOperand &&arg_op) {
+  new (op) MemoryOperand(arg_op);
 }
 
 inline static void InitInlineOp(Operand *op, VirtualRegister reg) {
@@ -122,9 +138,9 @@ class InlineAssembly {
   // Returns the inlined instruction, or `instr` if `cond` is false.
   template <typename... Strings>
   inline Instruction *InlineBeforeIf(Instruction *instr, bool cond,
-                                     Strings... lines) {
+                                     const char *line, Strings... lines) {
     if (cond) {
-      return InlineBefore(instr, {lines...});
+      return InlineBefore(instr, {line, lines...});
     } else {
       return instr;
     }
@@ -132,17 +148,18 @@ class InlineAssembly {
 
   // Inline some assembly code before `instr`. Returns the inlined instruction.
   template <typename... Strings>
-  inline Instruction *InlineBefore(Instruction *instr, Strings... lines) {
-    return InlineBefore(instr, {lines...});
+  inline Instruction *InlineBefore(Instruction *instr, const char *line,
+                                   Strings... lines) {
+    return InlineBefore(instr, {line, lines...});
   }
 
   // Inline some assembly code after `instr`, but only if `cond` is true.
   // Returns the inlined instruction, or `instr` if `cond` is false.
   template <typename... Strings>
   inline Instruction *InlineAfterIf(Instruction *instr, bool cond,
-                                    Strings... lines) {
+                                    const char *line, Strings... lines) {
     if (cond) {
-      return InlineAfter(instr, {lines...});
+      return InlineAfter(instr, {line, lines...});
     } else {
       return instr;
     }
@@ -150,8 +167,9 @@ class InlineAssembly {
 
   // Inline some assembly code after `instr`. Returns the inlined instruction.
   template <typename... Strings>
-  Instruction *InlineAfter(Instruction *instr, Strings... lines) {
-    return InlineAfter(instr, {lines...});
+  Instruction *InlineAfter(Instruction *instr, const char *line,
+                           Strings... lines) {
+    return InlineAfter(instr, {line, lines...});
   }
 
   // Inline some assembly code before `instr`. Returns the inlined instruction.

@@ -229,6 +229,8 @@ void ExtendFragmentWithOutlineCall(ContextInterface *context,
   RESTORE_ARG(2, XED_REG_RDX);
   RESTORE_ARG(1, XED_REG_RSI);
   RESTORE_ARG(0, XED_REG_RDI);
+
+  delete call;
 }
 
 }  // namespace arch
