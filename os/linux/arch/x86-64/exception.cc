@@ -56,6 +56,7 @@ extern const unsigned char granary_extable_xchg_64;
 extern const unsigned char granary_extable_rdmsr;
 extern const unsigned char granary_extable_wrmsr;
 extern const unsigned char granary_extable_fwait;
+extern const unsigned char granary_extable_fxsave64;
 extern const unsigned char granary_extable_fxrstor64;
 extern const unsigned char granary_extable_prefetcht0;
 
@@ -253,6 +254,11 @@ bool GetExceptionInfo(const arch::Instruction *instr, AppPC *recovery_pc,
     case XED_IFORM_FXRSTOR64_MEMmfpxenv:
       GRANARY_ASSERT(!recovers_from_error);
       *emulation_pc = &granary_extable_fxrstor64;
+      return true;
+
+    case XED_IFORM_FXSAVE64_MEMmfpxenv:
+      GRANARY_ASSERT(!recovers_from_error);
+      *emulation_pc = &granary_extable_fxsave64;
       return true;
 
     case XED_IFORM_PREFETCHT0_MEMmprefetch:

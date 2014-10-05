@@ -126,7 +126,8 @@ static int PushOperands(CodeFragment *frag,
       return 2;
     }
 
-    // Handle `FXRSTOR64` and `PREFETCHT0`.
+    // Handle `FXSAVE64`, `FXRSTOR64`, and `PREFETCHT0`.
+    case XED_IFORM_FXSAVE64_MEMmfpxenv:
     case XED_IFORM_FXRSTOR64_MEMmfpxenv:
     case XED_IFORM_PREFETCHT0_MEMmprefetch:
       APP_NOSTACK(frag, PUSH_GPRv_50(&ni, ainstr.ops[0].reg);

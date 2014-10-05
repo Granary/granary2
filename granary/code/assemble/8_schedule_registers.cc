@@ -1021,7 +1021,6 @@ struct FragmentScheduler {
     GRANARY_IF_DEBUG( auto found_reg = false; )
     auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<int>::max();
-    auto min_dead_gpr_num = min_gpr_num;
 
     for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       if (avoid_reg_set.IsLive(i)) continue;
@@ -1033,9 +1032,6 @@ struct FragmentScheduler {
       }
     }
     GRANARY_ASSERT(found_reg);
-    if (min_dead_gpr_num < arch::NUM_GENERAL_PURPOSE_REGISTERS) {
-      return NthArchGPR(min_dead_gpr_num);
-    }
     return NthArchGPR(min_gpr_num);
   }
 

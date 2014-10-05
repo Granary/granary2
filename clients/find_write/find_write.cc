@@ -28,6 +28,12 @@ GRANARY_DEFINE_mask(value_mask, std::numeric_limits<uintptr_t>::max(),
 
     "find_write");
 
+GRANARY_DEFINE_positive_int(min_write_size, 1,
+    "The minimum size of a write (in bytes) to memory that should be checked "
+    "and logged.",
+
+    "find_write");
+
 namespace {
 
 // Report an 8-bit memory write.
@@ -64,8 +70,10 @@ static AppPC GetWriteReporter(Operand &op) {
     case 32:
       return UnsafeCast<AppPC>(ReportWrite32);
     case 64:
-    default:
       return UnsafeCast<AppPC>(ReportWrite64);
+    default:
+      GRANARY_ASSERT(false);
+      return nullptr;
   }
 }
 }  // namespace
@@ -82,7 +90,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   // Writing an immediate constant to memory. Avoid a check on the value mask.
   void InstrumentMemoryWrite(DecodedBasicBlock *block, os::ModuleOffset loc,
                              NativeInstruction *instr, VirtualRegister dst_addr,
-                             ImmediateOperand &value) {
+                             MemoryOperand &mloc, ImmediateOperand &value) {
     if (FLAG_value_mask && !(FLAG_value_mask & value.UInt())) return;
     RegisterOperand address(dst_addr);
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
@@ -95,7 +103,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %4, r64 %0;"
           "JZ l %3;"_x86_64);
     }
-    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(value),
+    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(mloc),
                                           loc.module->Name(), loc.offset,
                                           address, value));
 
@@ -105,7 +113,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   // Writing the value of a register to memory.
   void InstrumentMemoryWrite(DecodedBasicBlock *block, os::ModuleOffset loc,
                              NativeInstruction *instr, VirtualRegister dst_addr,
-                             RegisterOperand &value) {
+                             MemoryOperand &mloc, RegisterOperand &value) {
     RegisterOperand address(dst_addr);
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
     ImmediateOperand value_mask(FLAG_value_mask, arch::ADDRESS_WIDTH_BYTES);
@@ -126,7 +134,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %5, r64 %2;"
           "JZ l %4;"_x86_64);
     }
-    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(value),
+    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(mloc),
                                           loc.module->Name(), loc.offset,
                                           address, value));
     asm_.InlineBefore(instr, "LABEL %4:");
@@ -134,31 +142,30 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
 
   // Instrument every memory write instruction.
   virtual void InstrumentBlock(DecodedBasicBlock *block) {
-    AppPC pc(block->StartAppPC());
-    auto module = os::ModuleContainingPC(pc);
-    for (auto instr : block->Instructions()) {
-      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-        if(auto instr_pc = ninstr->DecodedPC()) {
-          pc = instr_pc;
+    auto module = os::ModuleContainingPC(block->StartAppPC());
+    for (auto instr : block->AppInstructions()) {
+      if (!StringsMatch("MOV", instr->OpCodeName())) continue;
+
+      MemoryOperand dst;
+      VirtualRegister dst_addr;
+      ImmediateOperand src_imm;
+      RegisterOperand src_reg;
+      auto pc = instr->DecodedPC();
+
+      if (instr->MatchOperands(WriteTo(dst), ReadFrom(src_imm))) {
+        if (dst.ByteWidth() >= FLAG_min_write_size &&
+            dst.MatchRegister(dst_addr) &&
+            dst_addr.IsGeneralPurpose()) {
+          InstrumentMemoryWrite(block, module->OffsetOfPC(pc), instr,
+                                dst_addr, dst, src_imm);
         }
-
-        if (!StringsMatch("MOV", ninstr->OpCodeName())) continue;
-
-        MemoryOperand dst;
-        VirtualRegister dst_addr;
-        ImmediateOperand src_imm;
-        RegisterOperand src_reg;
-
-        if (ninstr->MatchOperands(WriteTo(dst), ReadFrom(src_imm))) {
-          if (dst.MatchRegister(dst_addr)) {
-            InstrumentMemoryWrite(block, module->OffsetOfPC(pc), ninstr,
-                                  dst_addr, src_imm);
-          }
-        } else if (ninstr->MatchOperands(WriteTo(dst), ReadFrom(src_reg))) {
-          if (dst.MatchRegister(dst_addr)) {
-            InstrumentMemoryWrite(block, module->OffsetOfPC(pc), ninstr,
-                                  dst_addr, src_reg);
-          }
+      } else if (instr->MatchOperands(WriteTo(dst), ReadFrom(src_reg))) {
+        if (dst.ByteWidth() >= FLAG_min_write_size &&
+            dst.MatchRegister(dst_addr) &&
+            dst_addr.IsGeneralPurpose() &&
+            src_reg.Register().IsGeneralPurpose()) {
+          InstrumentMemoryWrite(block, module->OffsetOfPC(pc), instr,
+                                dst_addr, dst, src_reg);
         }
       }
     }

@@ -242,6 +242,27 @@ define find-exec-entry
 end
 
 
+# log-exec-entries
+#
+# Logs all execution entries to the file `$arg0`.
+define log-exec-entries
+  set $__j = 0
+  set language c++
+  set logging file $arg0
+  set logging on
+  printf ""
+  set logging off
+  set logging on
+  set logging redirect on
+  while $__j < GRANARY_BLOCK_LOG_LENGTH
+    print-exec-entry $__j
+    set $__j = $__j + 1
+  end
+  set logging off
+  dont-repeat
+end
+
+
 # print-block-meta
 #
 # Interpret `$arg0` as a pointer to a `BlockMetaData` structure, and dump its

@@ -173,6 +173,7 @@ MAKE_INSTR_FUNC(fwait)
     END_FUNC(granary_extable_ ## insn)
 
 MAKE_MEM_INSTR_FUNC(fxrstor64)
+MAKE_MEM_INSTR_FUNC(fxsave64)
 MAKE_MEM_INSTR_FUNC(prefetcht0)
 
 // A read from some memory location that might fault. Makes sure that the new
