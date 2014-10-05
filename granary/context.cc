@@ -123,9 +123,8 @@ static void FreeEdgeList(EdgeT *edge) {
 
 template <typename T>
 static void FreeCallbacks(T &callback_map) {
-  for (auto &cb : callback_map.Values()) {
+  for (auto cb : callback_map.Values()) {
     delete cb;
-    cb = nullptr;
   }
 }
 
