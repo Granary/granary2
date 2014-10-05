@@ -262,6 +262,7 @@ static void AllocateSlotsStackInvalid(Fragment *frag) {
     GRANARY_IF_DEBUG( VerifyInterruptsNotChanged(frag); )
   }
 }
+
 #endif  // GRANARY_WHERE_kernel
 
 // Allocates space on the stack for virtual registers.

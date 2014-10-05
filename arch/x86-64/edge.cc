@@ -229,7 +229,7 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   ENC(UD2(&ni));
 
-  GRANARY_ASSERT(arch::INDIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+  GRANARY_ASSERT(arch::INDIRECT_EDGE_ENTRY_CODE_SIZE_BYTES >= (pc - start_pc));
 }
 
 // Update the attribute info of an indirect edge fragment.

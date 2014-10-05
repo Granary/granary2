@@ -59,10 +59,6 @@ static inline bool OnGranaryStack(void) {
 }  // namespace
 extern "C" {
 
-// TODO(pag): Can we simplify all edge-related code by depending on
-//            `GlobalContext`? Challenge seems to actually be dealing with
-//            slots mechanism.
-
 // Enter into Granary to begin the translation process for a direct edge.
 void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
   GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));

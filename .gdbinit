@@ -785,6 +785,26 @@ define get-next-block
 end
 
 
+# trace-exec
+#
+# Enable execution tracing.
+define trace-exec
+  set language c++
+  set FLAG_debug_trace_exec = true
+  dont-repeat
+end
+
+
+# trace-meta
+#
+# Enable block meta-data tracing.
+define trace-meta
+  set language c++
+  set FLAG_debug_trace_meta = true
+  dont-repeat
+end
+
+
 # Saved machine state.
 set $__reg_r15 = 0
 set $__reg_r14 = 0

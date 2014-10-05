@@ -10,6 +10,8 @@
 
 #include "granary/code/fragment.h"
 
+#include "granary/context.h"
+
 #define APP(...) \
   do { \
     __VA_ARGS__ ; \
@@ -21,48 +23,20 @@ namespace arch {
 
 // Returns a new instruction that will "allocate" the spill slots by disabling
 // interrupts.
-void AllocateDisableInterrupts(InstructionList *instrs) {
+void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
   GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
-  APP(PUSHFQ(&ni);
-      ni.is_stack_blind = true;
-      ni.analyzed_stack_usage = false;
-      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
-  APP(CLI(&ni));
-  APP(POP_MEMv(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0, GPR_WIDTH_BITS));
-      ni.is_stack_blind = true;
-      ni.analyzed_stack_usage = false; );
+  GRANARY_IF_KERNEL(APP(
+      CALL_NEAR_RELBRd(&ni, GlobalContext()->DisableInterruptCode())));
 }
 
 // Returns a new instruction that will "allocate" the spill slots by enabling
 // interrupts.
-void AllocateEnableInterrupts(InstructionList *instrs) {
+void AllocateEnableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
   GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
-  APP(PUSHFQ(&ni);
-      ni.is_stack_blind = true;
-      ni.analyzed_stack_usage = false;
-      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
-
-  // Test to see if we should re-enable interrupts.
-  APP(BT_MEMv_IMMb(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0, GPR_WIDTH_BITS),
-                        static_cast<uint8_t>(9)));
-  auto restore_flags = new LabelInstruction;
-
-  JNB_RELBRb(&ni, restore_flags);  // IF = 0.
-  instrs->Append(new BranchInstruction(&ni, restore_flags));
-
-  // Re-enable interrupts by changing the flags that were `PUSHFQ`d onto the
-  // stack.
-  APP(OR_MEMv_IMMz(&ni, BaseDispMemOp(0, XED_REG_RSP, GPR_WIDTH_BITS),
-                        1U << 9U));
-
-  // Restore the flags.
-  instrs->Append(restore_flags);
-  APP(POPFQ(&ni);
-      ni.is_stack_blind = true;
-      ni.analyzed_stack_usage = false;
-      ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+  GRANARY_IF_KERNEL(APP(
+      CALL_NEAR_RELBRd(&ni, GlobalContext()->EnableInterruptCode())));
 }
 
 // Returns a new instruction that will allocate some stack space for virtual

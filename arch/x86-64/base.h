@@ -33,6 +33,7 @@ enum {
   // Upper bound on the size of indirect edge code. Ideally this should be as
   // small as possible.
   INDIRECT_EDGE_CODE_SIZE_BYTES = 48,
+  INDIRECT_EDGE_ENTRY_CODE_SIZE_BYTES = 48,
 
   ADDRESS_WIDTH_BYTES = 8,
   ADDRESS_WIDTH_BITS = 64,

@@ -100,6 +100,14 @@ class ContextInterface {
   // Returns a pointer to the code cache code associated with some outline-
   // callable function at `func_addr`.
   virtual const arch::Callback *OutlineCallback(InlineFunctionCall *call) = 0;
+
+# ifdef GRANARY_WHERE_kernel
+  // Returns a pointer to the code that can disable interrupts.
+  virtual CachePC DisableInterruptCode(void) const = 0;
+
+  // Returns a pointer to the code that can enable interrupts.
+  virtual CachePC EnableInterruptCode(void) const = 0;
+# endif  // GRANARY_WHERE_kernel
 };
 
 #else
@@ -188,6 +196,16 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   GRANARY_TEST_VIRTUAL
   const arch::Callback *OutlineCallback(InlineFunctionCall *call);
 
+#ifdef GRANARY_WHERE_kernel
+  // Returns a pointer to the code that can disable interrupts.
+  GRANARY_TEST_VIRTUAL
+  CachePC DisableInterruptCode(void) const;
+
+  // Returns a pointer to the code that can enable interrupts.
+  GRANARY_TEST_VIRTUAL
+  CachePC EnableInterruptCode(void) const;
+#endif  // GRANARY_WHERE_kernel
+
  private:
   // Manages all meta-data allocated/understood by this environment.
   MetaDataManager metadata_manager;
@@ -197,18 +215,22 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   InstrumentationManager tool_manager;
 
   // Manages all basic block code allocated/understood by this environment.
-  os::Module *block_code_cache_mod;
+  os::Module * const block_code_cache_mod;
   CodeCache block_code_cache;
 
   // Manages all edge code allocated/understood by this environment.
-  os::Module *edge_code_cache_mod;
+  os::Module * const edge_code_cache_mod;
   CodeCache edge_code_cache;
 
   // Pointer to the code that performs the flag saving and stack switching for
   // in/direct edge code. This code is is the first step in entering Granary
   // via a direct edge code stub / in-edge jump.
-  CachePC direct_edge_entry_code;
-  CachePC indirect_edge_entry_code;
+  const CachePC direct_edge_entry_code;
+  const CachePC indirect_edge_entry_code;
+
+  // Pointer to the code that performs interrupt enabling and disabling.
+  const CachePC disable_interrupts_code;
+  const CachePC enable_interrupts_code;
 
   // List of patched and not-yet-patched direct edges, as well as a lock that
   // protects both lists.

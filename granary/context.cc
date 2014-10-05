@@ -62,10 +62,25 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
                                           CachePC edge);
 
+// Generates code that disables interrupts.
+//
+// Note: This has an architecture-specific implementation.
+extern void GenerateInterruptDisableCode(ContextInterface *, CachePC pc);
+
+// Generates code that re-enables interrupts (if they were disabled by the
+// interrupt disabling routine).
+//
+// Note: This has an architecture-specific implementation.
+extern void GenerateInterruptEnableCode(ContextInterface *, CachePC pc);
+
 // Generates the wrapper code for a context callback.
+//
+// Note: This has an architecture-specific implementation.
 extern Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc);
 
 // Generates the wrapper code for an outline callback.
+//
+// Note: This has an architecture-specific implementation.
 extern Callback *GenerateOutlineCallback(CodeCache *cache,
                                          InlineFunctionCall *call);
 
@@ -75,26 +90,13 @@ extern Container<ModuleManager> global_module_manager;
 }  // namespace os
 namespace {
 
-static CachePC CreateDirectEntryCode(ContextInterface *context,
-                                     CodeCache *edge_code_cache) {
-  auto entry_code = edge_code_cache->AllocateBlock(
-      arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES);
-  CodeCacheTransaction transaction(
-      edge_code_cache, entry_code,
-      entry_code + arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES);
-  arch::GenerateDirectEdgeEntryCode(context, entry_code);
-  return entry_code;
-}
-
-static CachePC CreateIndirectEntryCode(ContextInterface *context,
-                                       CodeCache *edge_code_cache) {
-  auto entry_code = edge_code_cache->AllocateBlock(
-      arch::INDIRECT_EDGE_CODE_SIZE_BYTES);
-  CodeCacheTransaction transaction(
-      edge_code_cache, entry_code,
-      entry_code + arch::INDIRECT_EDGE_CODE_SIZE_BYTES);
-  arch::GenerateIndirectEdgeEntryCode(context, entry_code);
-  return entry_code;
+template <typename T>
+static CachePC GenerateCode(ContextInterface *context,
+                            CodeCache *cache, T generator, int size) {
+  auto code = cache->AllocateBlock(size);
+  CodeCacheTransaction transaction(cache, code, code + size);
+  generator(context, code);
+  return code;
 }
 
 // Register internal meta-data.
@@ -141,8 +143,22 @@ Context::Context(void)
       block_code_cache(block_code_cache_mod, FLAG_block_cache_slab_size),
       edge_code_cache_mod(MakeCodeCacheMod(this, "[edge cache]")),
       edge_code_cache(edge_code_cache_mod, FLAG_edge_cache_slab_size),
-      direct_edge_entry_code(CreateDirectEntryCode(this, &edge_code_cache)),
-      indirect_edge_entry_code(CreateIndirectEntryCode(this, &edge_code_cache)),
+      direct_edge_entry_code(
+          GenerateCode(this, &edge_code_cache,
+                       arch::GenerateDirectEdgeEntryCode,
+                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
+      indirect_edge_entry_code(
+          GenerateCode(this, &edge_code_cache,
+                       arch::GenerateIndirectEdgeEntryCode,
+                       arch::INDIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
+      disable_interrupts_code(
+          GenerateCode(this, &edge_code_cache,
+                       arch::GenerateInterruptDisableCode,
+                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
+      enable_interrupts_code(
+          GenerateCode(this, &edge_code_cache,
+                       arch::GenerateInterruptEnableCode,
+                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
       edge_list_lock(),
       patched_edge_list(nullptr),
       unpatched_edge_list(nullptr),
@@ -327,6 +343,18 @@ const arch::Callback *Context::OutlineCallback(InlineFunctionCall *call) {
   }
   return cb;
 }
+
+#ifdef GRANARY_WHERE_kernel
+// Returns a pointer to the code that can disable interrupts.
+CachePC Context::DisableInterruptCode(void) const {
+  return disable_interrupts_code;
+}
+
+// Returns a pointer to the code that can enable interrupts.
+CachePC Context::EnableInterruptCode(void) const {
+  return enable_interrupts_code;
+}
+#endif  // GRANARY_WHERE_kernel
 
 namespace {
 #pragma clang diagnostic push
