@@ -88,13 +88,16 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
     RegisterMetaData<IndirectFromSched>();
   }
 #endif
-#if 0
+#if 1
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->Blocks()) {
       for (auto succ : block->Successors()) {
         auto addr = reinterpret_cast<uintptr_t>(succ.cfi->DecodedPC());
-        if ((0xffffffff81678760 <= addr && addr <= 0xffffffff81678ef7) ||  // __schedule
+        if ((0xffffffff8100b480 <= addr && addr < 0xffffffff8100b9b0) ||
+            (0xffffffff810160c0 <= addr && addr < 0xffffffff81016220) ||
+            (0xffffffff8165c080 <= addr && addr < 0xffffffff8165c880) ||
+            //(0xffffffff81678760 <= addr && addr <= 0xffffffff81678ef7) ||  // __schedule
             //(0xffffffff81678f00 <= addr && addr <= 0xffffffff81678f6c) ||  // schedule
             //(0xffffffff816808a0 <= addr && addr <= 0xffffffff816808b9) ||  // native_load_gs_index
             //(0xffffffff8167f5a6 <= addr && addr <= 0xffffffff8167f60a)) {  // int_with_check

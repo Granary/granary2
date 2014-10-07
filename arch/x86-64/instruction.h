@@ -181,6 +181,11 @@ class Instruction : public InstructionInterface {
     //return is_save_restore;  // TODO(pag): Fix issue #41.
   }
 
+  // Mark this instruction as not encodable.
+  inline void DontEncode(void) {
+    dont_encode = true;
+  }
+
   // Will this instruction be encoded?
   inline bool WillBeEncoded(void) const {
     return !dont_encode;

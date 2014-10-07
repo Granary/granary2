@@ -15,4 +15,8 @@ void granary_curiosity(void) {
   GRANARY_INLINE_ASSEMBLY("" ::: "memory");
 }
 
+void granary_interrupts_enabled(void) {
+  GRANARY_INLINE_ASSEMBLY("" ::: "memory");
+}
+
 }  // extern C

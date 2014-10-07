@@ -25,6 +25,7 @@ static char command_buff[COMMAND_BUFF_SIZE + 1] = {'\0'};
 
 static int seen_init = 0;
 static int seen_attach = 0;
+static int seen_first_init = 0;
 
 static int MatchCommand(const char *command, const char *key) {
   return strstr(command, key) == command;
@@ -36,11 +37,20 @@ extern void _ZN7granary11InitOptionsEPKc(const char *);
 extern void InitModules(void);
 extern void InitSlots(void);
 static void ProcessInit(const char *options) {
-  InitSlots();
+  if (!seen_first_init) {
+    InitSlots();
+    InitModules();
+    seen_first_init = 1;
+  }
   _ZN7granary11InitOptionsEPKc(options);  // `granary::InitOptions`.
   _ZN7granary4InitENS_10InitReasonE(1 /* INIT_ATTACH */);  // `granary::Init`.
-  InitModules();
   printk("[granary] Initialized.\n");
+}
+
+extern void granary_exit(int reason);
+static void ProcessExit(void) {
+  granary_exit(1 /* EXIT_DETACH */);
+  printk("[granary] Exited.\n");
 }
 
 // Attach Granary to the kernel.
@@ -78,11 +88,17 @@ static void ProcessCommand(const char *command) {
       seen_attach = 0;
       ProcessDetach();
     }
+  } else if (MatchCommand(command, "exit")) {
+    if (seen_init && !seen_attach) {
+      ProcessExit();
+      seen_init = 0;
+    }
   }
 }
 
 // A user space program wrote a command to Granary. We will assume that we can
 // only process one command at a time.
+__attribute__((section(".text.inst_exports")))
 static ssize_t ParseCommand(struct file *file, const char __user *str,
                             size_t size, loff_t *offset) {
   size_t command_size = size > COMMAND_BUFF_SIZE ? COMMAND_BUFF_SIZE : size;
@@ -97,6 +113,7 @@ static ssize_t ParseCommand(struct file *file, const char __user *str,
   return (ssize_t) size;
 }
 
+__attribute__((section(".text.inst_exports")))
 static ssize_t DumpLog(struct file *file, char __user *str, size_t size,
                        loff_t *offset) {
   (void) file; (void) str; (void) size; (void) offset;
