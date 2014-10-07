@@ -7,7 +7,7 @@ namespace granary {
 
 enum ExitReason {
   EXIT_PROGRAM = 0,
-  EXIT_DETACH
+  EXIT_DETACH = 1
 };
 
 }  // namespace granary

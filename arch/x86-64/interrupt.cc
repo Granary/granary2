@@ -4,12 +4,15 @@
 #define GRANARY_ARCH_INTERNAL
 
 #include "arch/driver.h"
-#include "arch/x86-64/builder.h"
 #include "arch/x86-64/slot.h"
 
 #include "granary/base/base.h"
 
+#include "granary/cache.h"
 #include "granary/context.h"
+
+// After `cache.h` to get `NativeAddress`.
+#include "arch/x86-64/builder.h"
 
 #define ENC(...) \
   do { \
@@ -46,6 +49,22 @@ void GenerateInterruptDisableCode(ContextInterface *, CachePC pc) {
   GRANARY_ASSERT(arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES >= (pc - start_pc));
 }
 
+#ifdef GRANARY_TARGET_debug
+extern "C" {
+
+// Function with a GDB breakpoint that helps warn about interrupts being
+// accidentally enabled.
+extern const unsigned char granary_interrupts_enabled;
+
+}  // extern C
+namespace {
+
+// TODO(pag): Potential leak.
+static NativeAddress *interrupts_enabled_addr = nullptr;
+
+}  // namespace
+#endif  // GRANARY_TARGET_debug
+
 // Generates code that re-enables interrupts (if they were disabled by the
 // interrupt disabling routine).
 void GenerateInterruptEnableCode(ContextInterface *, CachePC pc) {
@@ -58,6 +77,25 @@ void GenerateInterruptEnableCode(ContextInterface *, CachePC pc) {
   // exception that interrupts might have been abnormally disabled. We need to
   // decide if we should re-enable them.
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+
+#ifdef GRANARY_TARGET_debug
+  // Test to see if interrupts were erroneosly re-enabled.
+  ENC(BT_MEMv_IMMb(&ni, BaseDispMemOp(0, XED_REG_RSP, GPR_WIDTH_BITS),
+                        static_cast<uint8_t>(9)));
+
+  // JNB_RELBRd (6) + CALL_REBRd (5)
+  if (AddrIsOffsetReachable(pc, &granary_interrupts_enabled)) {
+    ENC(JNB_RELBRd(&ni, pc + 6 + 5));
+    ENC(CALL_NEAR_RELBRd(&ni, &granary_interrupts_enabled));
+
+  // JNB_RELBRd (6) + CALL_MEMv (7)
+  } else {
+    ENC(JNB_RELBRd(&ni, pc + 6 + 7));
+    ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_interrupts_enabled,
+                                  &interrupts_enabled_addr));
+  }
+
+#endif  // GRANARY_TARGET_debug
 
   // Test to see if we should re-enable interrupts.
   ENC(BT_MEMv_IMMb(&ni, SlotMemOp(os::SLOT_SAVED_FLAGS, 0, GPR_WIDTH_BITS),

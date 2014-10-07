@@ -59,7 +59,7 @@ $(GRANARY_SHIPPED_BIN): $(GRANARY_OBJS)
 #	   directory.
 #	3) Invoke kbuild on `bin/<triple>/module/Makefile`.
 $(GRANARY_MODULE): $(GRANARY_SHIPPED_BIN)
-	@cp -ar $(GRANARY_WHERE_SRC_DIR)/module $(GRANARY_BIN_DIR)
+	@cp -arp $(GRANARY_WHERE_SRC_DIR)/module $(GRANARY_BIN_DIR)
 	$(MAKE) -C $(GRANARY_KERNEL_DIR) \
 		M=$(GRANARY_MOD_BIN_DIR) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
 		modules

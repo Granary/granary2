@@ -46,6 +46,7 @@ end
 # Generic breakpoints.
 b granary_unreachable
 b granary_curiosity
+b granary_interrupts_enabled
 b __stack_chk_fail
 
 # Kernel space breakpoints

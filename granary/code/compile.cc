@@ -82,6 +82,7 @@ static int StageEncodeNativeInstructions(Fragment *frag,
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::STAGED);
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (ninstr->IsNoOp()) ninstr->instruction.DontEncode();
       GRANARY_IF_DEBUG( bool encoded = ) encoder.EncodeNext(
           &(ninstr->instruction), &encode_pc);
       GRANARY_ASSERT(encoded);

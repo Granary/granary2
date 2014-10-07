@@ -12,6 +12,10 @@
 
 #include "granary/util.h"
 
+enum : bool {
+  SHARE_SPILL_SLOTS = true
+};
+
 namespace granary {
 namespace arch {
 
@@ -506,15 +510,17 @@ static void ReplaceUsesOfVR(SSAInstruction *instr, SSANodeId node_id,
 // Gets a spill slot to be used by the partition-local register scheduler.
 static int GetSpillSlot(const SpillSlotSet &used_slots, int *num_slots) {
   auto ret = *num_slots;
-  GRANARY_IF_DEBUG( auto found_slot = false; )
-  for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
-    if (!used_slots.Get(i)) {
-      ret = i;
-      GRANARY_IF_DEBUG( found_slot = true; )
-      break;
+  if (SHARE_SPILL_SLOTS) {
+    GRANARY_IF_DEBUG( auto found_slot = false; )
+    for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
+      if (!used_slots.Get(i)) {
+        ret = i;
+        GRANARY_IF_DEBUG( found_slot = true; )
+        break;
+      }
     }
+    GRANARY_ASSERT(found_slot);
   }
-  GRANARY_ASSERT(found_slot);
   *num_slots = std::max(ret + 1, *num_slots);
   return ret;
 }
@@ -738,7 +744,10 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
 
   do {
     reg = VirtualRegister();
+    GRANARY_IF_DEBUG( auto found_reg = false; )
     for (auto frag : ReverseFragmentListIterator(last_frag)) {
+
+      // Filter on only a specific partition.
       if (frag->partition.Value() != partition) continue;
 
       auto ssa_frag = DynamicCast<SSAFragment *>(frag);
@@ -746,6 +755,7 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
 
       // Go find the register to schedule if we don't have one yet.
       if (!reg.IsValid()) {
+        GRANARY_ASSERT(!found_reg);
         last_frag = frag;
         if (!GetUnscheduledVR(ssa_frag, &reg, &node_id)) continue;
 
@@ -754,6 +764,9 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
         preferred_gpr = gpr_sched.GetPreferredGPR(&preferred_gprs);
         slot_num = FindSlotForVR(partition, first_frag, last_frag,
                                  reg, node_id);
+        GRANARY_IF_DEBUG( found_reg = true; )
+      } else {
+        GRANARY_ASSERT(found_reg);
       }
 
       sched.Construct(reg, node_id, slot_num, preferred_gpr);
@@ -761,6 +774,7 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
 
       if (frag == first_frag) break;
     }
+
   } while (reg.IsValid());
 }
 
@@ -1131,7 +1145,7 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
 
   // Need to be "greedy" about virtual save/restore regs, so that the peephole
   // optimizer recognizes opportunities.
-  if (instr->instruction.IsVirtualRegSaveRestore()) {
+  if (!SHARE_SPILL_SLOTS || instr->instruction.IsVirtualRegSaveRestore()) {
     frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(gpr_homed_by_vr,
                                                          gpr_home.loc));
     gpr_home.loc = gpr_homed_by_vr;

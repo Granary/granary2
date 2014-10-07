@@ -42,17 +42,14 @@
 extern "C" {
 
 // The direct edge entrypoint code.
-extern void granary_arch_enter_direct_edge(void);
-extern void granary_arch_enter_indirect_edge(void);
+extern const unsigned char granary_arch_enter_direct_edge;
+extern const unsigned char granary_arch_enter_indirect_edge;
 
 }  // extern C
 
 namespace granary {
 namespace arch {
 namespace {
-
-static const auto kEnterDirect = granary_arch_enter_direct_edge;
-static const auto kEnterIndirect = granary_arch_enter_indirect_edge;
 
 // TODO(pag): Potential leak.
 static NativeAddress *enter_direct_addr = nullptr;
@@ -107,8 +104,8 @@ void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterDirect);
-  ENC(CALL_NEAR_GLOBAL(&ni, pc, granary_entrypoint_pc, &enter_direct_addr));
+  ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_arch_enter_direct_edge,
+                       &enter_direct_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
@@ -209,8 +206,8 @@ void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  auto granary_entrypoint_pc = reinterpret_cast<CachePC>(kEnterIndirect);
-  ENC(CALL_NEAR_GLOBAL(&ni, pc, granary_entrypoint_pc, &enter_indirect_addr));
+  ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_arch_enter_indirect_edge,
+                       &enter_indirect_addr));
 
   ENC(POP_GPRv_51(&ni, XED_REG_RSI));
 
