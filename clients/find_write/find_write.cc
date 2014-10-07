@@ -154,15 +154,13 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
 
       if (instr->MatchOperands(WriteTo(dst), ReadFrom(src_imm))) {
         if (dst.ByteWidth() >= FLAG_min_write_size &&
-            dst.MatchRegister(dst_addr) &&
-            dst_addr.IsGeneralPurpose()) {
+            dst.MatchRegister(dst_addr) && dst_addr.IsGeneralPurpose()) {
           InstrumentMemoryWrite(block, module->OffsetOfPC(pc), instr,
                                 dst_addr, dst, src_imm);
         }
       } else if (instr->MatchOperands(WriteTo(dst), ReadFrom(src_reg))) {
         if (dst.ByteWidth() >= FLAG_min_write_size &&
-            dst.MatchRegister(dst_addr) &&
-            dst_addr.IsGeneralPurpose() &&
+            dst.MatchRegister(dst_addr) && dst_addr.IsGeneralPurpose() &&
             src_reg.Register().IsGeneralPurpose()) {
           InstrumentMemoryWrite(block, module->OffsetOfPC(pc), instr,
                                 dst_addr, dst, src_reg);
