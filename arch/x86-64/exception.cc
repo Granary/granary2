@@ -115,8 +115,10 @@ static int PushOperands(CodeFragment *frag,
       return 2;
     }
 
+    // Generic reads, sign-extensions, zero-extensions.
     case XED_IFORM_MOV_GPR8_MEMb:
-    case XED_IFORM_MOV_GPRv_MEMv: {
+    case XED_IFORM_MOV_GPRv_MEMv:
+    case XED_IFORM_MOVZX_GPRv_MEMb: {
       auto push_reg = ainstr.ops[0].reg.WidenedTo(8);
       APP_NOSTACK(frag, PUSH_GPRv_50(&ni, push_reg);
                   ni.effective_operand_width = 64);

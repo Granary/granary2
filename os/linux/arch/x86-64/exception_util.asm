@@ -212,6 +212,34 @@ MAKE_READ_FUNC(error_16, word, 0x7ffffff0)
 MAKE_READ_FUNC(error_32, dword, 0x7ffffff0)
 MAKE_READ_FUNC(error_64, qword, 0x7ffffff0)
 
+// A read from some memory location that might fault. Makes sure that the new
+// value of the register is communicated back to the caller.
+#define MAKE_READ_SX_FUNC(op, dest_size, dest_size_name, source_size, source_size_name) \
+    DEFINE_INST_FUNC(granary_extable_ ## op ## _ ## dest_size ## _ ## source_size)@N@\
+          push  rsi                                                         @N@\
+          push  rdi                                                         @N@\
+          mov   rdi, qword ptr [rsp + 24]                                   @N@\
+      1:  op    rsi_ ## dest_size_name, source_size_name ptr [rdi]          @N@\
+      2:                                                                    @N@\
+      .section .fixup,"ax"                                                  @N@\
+      3:  pushfq                                                            @N@\
+          add   QWORD PTR [rsp + 24], 5                                     @N@\
+          popfq                                                             @N@\
+          pop   rdi                                                         @N@\
+          pop   rsi                                                         @N@\
+          ret                                                               @N@\
+      .section __ex_table,"a"                                               @N@\
+      .balign 8                                                             @N@\
+      .long 1b - .,3b - .                                                   @N@\
+      .section .text.inst_exports                                           @N@\
+          mov   qword ptr [rsp + 32], rsi                                   @N@\
+          pop   rdi                                                         @N@\
+          pop   rsi                                                         @N@\
+          ret                                                               @N@\
+    END_FUNC(granary_extable_ ## op ## _ ## dest_size ## _ ## source_size)
+
+MAKE_READ_SX_FUNC(movzx, 32, dword, 8, byte)
+
 #endif  // GRANARY_WHERE_kernel
 
 END_FILE

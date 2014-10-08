@@ -827,6 +827,23 @@ define trace-meta
 end
 
 
+# print-kernel-modules
+#
+# Prints out all kernel modules.
+define print-kernel-modules
+  set language c++
+  set $__m = granary_kernel_modules
+  while $__m
+    printf "   %s:\n", $__m->name
+    printf "      Core: %#18lx - %#18lx\n", $__m->core_text_begin, $__m->core_text_end
+    printf "      Init: %#18lx - %#18lx\n", $__m->init_text_begin, $__m->init_text_begin
+    set $__m = $__m->next
+  end
+  printf "\n"
+  dont-repeat
+end
+
+
 # Saved machine state.
 set $__reg_r15 = 0
 set $__reg_r14 = 0

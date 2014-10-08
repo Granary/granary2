@@ -28,37 +28,39 @@ extern const uint8_t granary_extable_write_seg_ss;
 extern const uint8_t granary_extable_write_seg_fs;
 extern const uint8_t granary_extable_write_seg_gs;
 
-extern const unsigned char granary_extable_write_8;
-extern const unsigned char granary_extable_write_16;
-extern const unsigned char granary_extable_write_32;
-extern const unsigned char granary_extable_write_64;
+extern const uint8_t granary_extable_write_8;
+extern const uint8_t granary_extable_write_16;
+extern const uint8_t granary_extable_write_32;
+extern const uint8_t granary_extable_write_64;
 
-extern const unsigned char granary_extable_write_error_8;
-extern const unsigned char granary_extable_write_error_16;
-extern const unsigned char granary_extable_write_error_32;
-extern const unsigned char granary_extable_write_error_64;
+extern const uint8_t granary_extable_write_error_8;
+extern const uint8_t granary_extable_write_error_16;
+extern const uint8_t granary_extable_write_error_32;
+extern const uint8_t granary_extable_write_error_64;
 
-extern const unsigned char granary_extable_read_8;
-extern const unsigned char granary_extable_read_16;
-extern const unsigned char granary_extable_read_32;
-extern const unsigned char granary_extable_read_64;
+extern const uint8_t granary_extable_read_8;
+extern const uint8_t granary_extable_read_16;
+extern const uint8_t granary_extable_read_32;
+extern const uint8_t granary_extable_read_64;
 
-extern const unsigned char granary_extable_read_error_8;
-extern const unsigned char granary_extable_read_error_16;
-extern const unsigned char granary_extable_read_error_32;
-extern const unsigned char granary_extable_read_error_64;
+extern const uint8_t granary_extable_read_error_8;
+extern const uint8_t granary_extable_read_error_16;
+extern const uint8_t granary_extable_read_error_32;
+extern const uint8_t granary_extable_read_error_64;
 
-extern const unsigned char granary_extable_xchg_8;
-extern const unsigned char granary_extable_xchg_16;
-extern const unsigned char granary_extable_xchg_32;
-extern const unsigned char granary_extable_xchg_64;
+extern const uint8_t granary_extable_xchg_8;
+extern const uint8_t granary_extable_xchg_16;
+extern const uint8_t granary_extable_xchg_32;
+extern const uint8_t granary_extable_xchg_64;
 
-extern const unsigned char granary_extable_rdmsr;
-extern const unsigned char granary_extable_wrmsr;
-extern const unsigned char granary_extable_fwait;
-extern const unsigned char granary_extable_fxsave64;
-extern const unsigned char granary_extable_fxrstor64;
-extern const unsigned char granary_extable_prefetcht0;
+extern const uint8_t granary_extable_rdmsr;
+extern const uint8_t granary_extable_wrmsr;
+extern const uint8_t granary_extable_fwait;
+extern const uint8_t granary_extable_fxsave64;
+extern const uint8_t granary_extable_fxrstor64;
+extern const uint8_t granary_extable_prefetcht0;
+
+extern const uint8_t granary_extable_movzx_32_8;
 
 #endif  // GRANARY_WHERE_kernel
 
@@ -279,6 +281,7 @@ bool GetExceptionInfo(const arch::Instruction *instr, AppPC *recovery_pc,
       return true;
 
     case XED_IFORM_MOV_SEG_MEMw:
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[1]));
     case XED_IFORM_MOV_SEG_GPR16:
       GRANARY_ASSERT(!recovers_from_error);
       return GetExceptionInfoSeg(instr, emulation_pc);
@@ -306,6 +309,12 @@ bool GetExceptionInfo(const arch::Instruction *instr, AppPC *recovery_pc,
       GRANARY_ASSERT(NotASegmentOffset(instr->ops[1]));
       *emulation_pc = emulate_read_mem[recovers_from_error]
                                       [Order(instr->ops[1])];
+      return true;
+
+    case XED_IFORM_MOVZX_GPRv_MEMb:
+      GRANARY_ASSERT(!recovers_from_error);
+      GRANARY_ASSERT(NotASegmentOffset(instr->ops[1]));
+      *emulation_pc = &granary_extable_movzx_32_8;
       return true;
 
     default:
