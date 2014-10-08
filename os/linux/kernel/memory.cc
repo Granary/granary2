@@ -20,7 +20,7 @@ struct alignas(arch::PAGE_SIZE_BYTES) PageFrame {
 
 extern "C" {
 extern PageFrame *(*linux_module_alloc)(unsigned long);
-}
+}  // extern C
 
 template <int kNumPages>
 struct DynamicHeap {
@@ -161,17 +161,28 @@ void DynamicHeap<kNumPages>::FreePages(void *addr, int num) {
 namespace {
 enum {
   NUM_RW_PAGES = 4096,  // 16 MB.
-  NUM_EXEC_PAGES = 2048  // 8 MB.
+  NUM_EXEC_PAGES = 2048,  // 8 MB.
+  MODULE_ALLOC_SIZE = NUM_EXEC_PAGES * arch::PAGE_SIZE_BYTES
 };
 static Container<StaticHeap<NUM_RW_PAGES>> rw_memory GRANARY_UNPROTECTED_GLOBAL;
 static Container<DynamicHeap<NUM_EXEC_PAGES>> exec_memory;
+static PageFrame *backing_module_mem = nullptr;
 }  // namespace
 
 // Initialize the Granary heap.
 void InitHeap(void) {
+  if (!backing_module_mem) {
+    backing_module_mem = linux_module_alloc(MODULE_ALLOC_SIZE);
+  }
   rw_memory.Construct();
-  exec_memory.Construct(linux_module_alloc(
-      NUM_EXEC_PAGES * arch::PAGE_SIZE_BYTES));
+  exec_memory.Construct(backing_module_mem);
+}
+
+// Destroys the Granary heap.
+void ExitHeap(void) {
+  rw_memory.Destroy();
+  exec_memory.Destroy();
+  // TODO(pag): How to release `backing_module_mem`?
 }
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`

@@ -263,6 +263,9 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
 // Initializes a new active context.
 void InitContext(void);
 
+// Destroys the active context.
+void ExitContext(void);
+
 // Loads the active context.
 ContextInterface *GlobalContext(void);
 

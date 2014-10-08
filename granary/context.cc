@@ -369,6 +369,11 @@ void InitContext(void) {
   context.Construct();
 }
 
+// Destroys the active context.
+void ExitContext(void) {
+  context.Destroy();
+}
+
 // Loads the active context.
 ContextInterface *GlobalContext(void) {
   return context.AddressOf();

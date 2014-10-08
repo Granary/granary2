@@ -47,9 +47,9 @@ static void ProcessInit(const char *options) {
   printk("[granary] Initialized.\n");
 }
 
-extern void granary_exit(int reason);
+extern void granary_exit_slow(int reason);
 static void ProcessExit(void) {
-  granary_exit(1 /* EXIT_DETACH */);
+  granary_exit_slow(1 /* EXIT_DETACH */);
   printk("[granary] Exited.\n");
 }
 

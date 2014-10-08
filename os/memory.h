@@ -33,6 +33,9 @@ enum class MemoryIntent {
 // Initialize the Granary heap.
 void InitHeap(void);
 
+// Destroys the Granary heap.
+void ExitHeap(void);
+
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocatePages(int num, MemoryIntent intent=MemoryIntent::READ_WRITE);

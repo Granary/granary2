@@ -5,6 +5,7 @@ set print asm-demangle on
 set print object on
 set print static-members on
 set disassembly-flavor intel
+set backtrace limit 20
 set language c++
 
 # Make sure that the `re` module is available for use for executing Python code.

@@ -132,6 +132,11 @@ static void *CachingMmap(size_t num_bytes, int prot, int flags, int fd) {
 // Initialize the Granary heap.
 void InitHeap(void) {}
 
+// Destroys the Granary heap.
+void ExitHeap(void) {
+  // TODO(pag): Unmap all `mmap`ed pages.
+}
+
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocatePages(int num, MemoryIntent intent) {

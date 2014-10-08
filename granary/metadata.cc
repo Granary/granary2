@@ -77,7 +77,6 @@ BlockMetaData *BlockMetaData::Copy(void) const {
                             reinterpret_cast<const void *>(this_ptr + offset));
     }
   }
-
   return reinterpret_cast<BlockMetaData *>(that_ptr);
 }
 

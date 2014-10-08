@@ -319,6 +319,13 @@ void InitModuleManager(void) {
   global_module_manager.Construct();
 }
 
+// Exits the module manager.
+void ExitModuleManager(void) {
+  if (!done_init) return;
+  done_init = false;
+  global_module_manager.Destroy();
+}
+
 // Returns a pointer to the module containing some program counter.
 const Module *ModuleContainingPC(AppPC pc) {
   return global_module_manager->FindByAppPC(pc);

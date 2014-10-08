@@ -245,6 +245,9 @@ class ModuleManager {
 // Initializes the module manager.
 void InitModuleManager(void);
 
+// Exits the module manager.
+void ExitModuleManager(void);
+
 #endif  // GRANARY_INTERNAL
 
 // Returns a pointer to the module containing some program counter.

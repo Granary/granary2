@@ -5,7 +5,7 @@
 
 namespace granary {
 
-enum ExitReason {
+enum ExitReason : int {
   EXIT_PROGRAM = 0,
   EXIT_DETACH = 1
 };
