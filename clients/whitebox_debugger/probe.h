@@ -3,43 +3,46 @@
 #ifndef CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_
 #define CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_
 
-#ifdef __cplusplus
-# include <cstdint>
-# include <cstddef>
-#else
-# include <stdint.h>
-# include <stddef.h>
-#endif  //  __cplusplus
+#include <granary.h>
 
-// Adds a watchpoint probe to the code.
-#define __ADD_WATCHPOINT(addr, size, func, category, kind) \
-  __asm__ __volatile__ (\
-    "leaq   %[alloc_addr],    %%r15 \n" \
-    "movq   %[alloc_size],    %%r14 \n" \
-    "movq   %[callback_func], %%r13 \n" \
-    "1: \n" \
-    ".pushsection .granary_probes,\"a\" \n" \
-    ".balign 8 \n" \
-    ".long " #category " \n" \
-    ".long " #kind " \n" \
-    ".quad 1b \n" \
-    ".popsection \n" \
-    "2: \n" \
-    "movq   %[alloc_addr],    %[new_alloc_addr] \n" \
-    : [new_alloc_addr] "=r"(addr) \
-    : [alloc_addr] "m"(addr), \
-      [alloc_size] "g"(size), \
-      [callback_func] "g"(func) \
-    : "%r15", "%r14", "%r13", "memory" \
-  )
+namespace wdb {
 
-#define ADD_READ_WATCHPOINT(addr, size, func) \
-  __ADD_WATCHPOINT(addr, size, func, 0, 1)
+// Different categories of probes used by whitebox debugging.
+enum ProbeCategory : int32_t {
+  PROBE_WATCHPOINT
+};
 
-#define ADD_WRITE_WATCHPOINT(addr, size, func) \
-  __ADD_WATCHPOINT(addr, size, func, 0, 2)
+// Different kinds of watchpoint probes.
+enum WatchpointKind : int32_t {
+  READ_WATCHPOINT       = 1 << 0,
+  WRITE_WATCHPOINT      = 1 << 1,
+  READ_WRITE_WATCHPOINT = READ_WATCHPOINT | WRITE_WATCHPOINT
+};
 
-#define ADD_RW_WATCHPOINT(addr, size, func) \
-  __ADD_WATCHPOINT(addr, size, func, 0, 3)
+// Defines a generic Granary probe used in whitebox debugging.
+struct Probe {
+  const ProbeCategory category;
+  union {
+    const WatchpointKind watchpoint;
+  };
+  const granary::AppPC callback;
+  const Probe * const next;
+};
+
+static_assert((2 * sizeof(int64_t)) == sizeof(Probe),
+    "Invalid structure packing of `struct Probe`.");
+
+// List of probes.
+typedef granary::LinkedListSlice<const Probe> ProbeList;
+
+// Tells WDB about some new probes.
+void AddProbes(ProbeList probes);
+
+// Returns a list of probes that should apply to the range `(prev_pc, pc]` of
+// program counters. A range is used to find probes because Granary will
+// sometimes elide certain instructions (e.g. NO-OPs).
+const ProbeList FindProbes(granary::AppPC prev_pc, granary::AppPC pc);
+
+}  // namespace wdb
 
 #endif  // CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_

@@ -8,6 +8,7 @@
 #include "granary/breakpoint.h"
 #include "granary/context.h"
 
+#include "os/elf.h"
 #include "os/module.h"
 
 namespace granary {
@@ -103,13 +104,15 @@ Module::Module(ModuleKind kind_, const char *name_, ContextInterface *context_)
       context(context_),
       kind(kind_),
       ranges(nullptr),
-      ranges_lock() {
+      ranges_lock(),
+      image(nullptr) {
   checked_memset(&(name[0]), 0, MAX_NAME_LEN);
   CopyString(&(name[0]), MAX_NAME_LEN, name_);
 }
 
 Module::~Module(void) {
   RemoveRanges();
+  if (image) delete image;
 }
 
 // Return a module offset object for a program counter (that is expected to
@@ -141,6 +144,11 @@ ModuleKind Module::Kind(void) const {
 // Returns the name of this module.
 const char *Module::Name(void) const {
   return &(name[0]);
+}
+
+// Returns a pointer to the ELF image associated with this module.
+const ELFImage *Module::Image(void) const {
+  return image;
 }
 
 // Add a range to a module. This will potentially split a single range into two

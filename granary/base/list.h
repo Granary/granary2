@@ -416,6 +416,29 @@ class ReverseLinkedListIterator {
   T *curr;
 };
 
+// Represents a slice of a linked list.
+template <typename T>
+class LinkedListSlice {
+ public:
+  LinkedListSlice(T *curr_, T *last_)
+      : curr(curr_),
+        last(last_) {}
+
+  inline LinkedListIterator<T> begin(void) const {
+    return LinkedListIterator<T>(curr);
+  }
+
+  inline LinkedListIterator<T> end(void) const {
+    return LinkedListIterator<T>(last);
+  }
+
+ private:
+  LinkedListSlice(void) = delete;
+
+  const T *curr;
+  const T *last;
+};
+
 // Forward declaration.
 template <typename T> class LinkedListZipper;
 

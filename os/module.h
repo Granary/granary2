@@ -20,6 +20,7 @@ class ContextInterface;
 namespace os {
 class ModuleManager;
 class Module;
+class ELFImage;
 
 // Represents a location in a module. Note that not all segments within modules
 // are necessarily contiguous, but in most cases they are.
@@ -110,6 +111,9 @@ class Module {
   // Returns the name of this module.
   const char *Name(void) const;
 
+  // Returns a pointer to the ELF image associated with this module.
+  const ELFImage *Image(void) const;
+
   // Add a range to a module. This will potentially split a single range into two
   // ranges, extend an existing range, add a new range, or do nothing if the new
   // range is fully subsumed by another one.
@@ -175,6 +179,9 @@ class Module {
 
   // Name/path of this module.
   GRANARY_INTERNAL_DEFINITION char name[MAX_NAME_LEN];
+
+  // ELF image associated with this module.
+  GRANARY_INTERNAL_DEFINITION ELFImage *image;
 
   // The address ranges of this module.
   GRANARY_INTERNAL_DEFINITION ModuleAddressRange *ranges;

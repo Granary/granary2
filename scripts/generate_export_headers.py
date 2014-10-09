@@ -44,6 +44,7 @@ EXPORT_HEADERS = [
   "granary/util.h",
 
   "os/abi.h",
+  "os/elf.h",
   "os/logging.h",
   "os/module.h",
 ]

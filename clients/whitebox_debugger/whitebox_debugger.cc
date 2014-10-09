@@ -15,58 +15,13 @@ using namespace granary;
 
 namespace {
 
-// Different categories of probes used by whitebox debugging.
-enum ProbeCategory : int32_t {
-  PROBE_WATCHPOINT
-};
-
-// Different kinds of watchpoints.
-enum WatchpointKind : int32_t {
-  READ_WATCHPOINT       = 1 << 0,
-  WRITE_WATCHPOINT      = 1 << 1,
-  READ_WRITE_WATCHPOINT = READ_WATCHPOINT | WRITE_WATCHPOINT
-};
-
-// Defines a generic Granary probe used in whitebox debugging.
-struct Probe {
-  ProbeCategory category;
-  union {
-    WatchpointKind watchpoint;
-  };
-  AppPC callback;
-};
-
-static_assert((2 * sizeof(int64_t)) == sizeof(Probe),
-    "Invalid structure packing of `struct Probe`.");
-
 // Tells the tool about a new set of probes to monitor.
 static void AddProbes(const Probe *probes, uint64_t num_probes) {
   os::Log(os::LogOutput, "Found %lu probes starting at %p!\n", num_probes,
           probes);
 }
 
-// Looks for Granary probes within an ELF file.
-static void FindGranaryProbes(const Elf64_Ehdr *header, uint64_t obj_size) {
-  GRANARY_ASSERT(header->e_shoff < obj_size);
-  GRANARY_ASSERT(sizeof(Elf64_Shdr) == header->e_shentsize);
-  GRANARY_ASSERT((header->e_ehsize + header->e_shentsize * header->e_shnum) <
-                 obj_size);
 
-  auto num_sections = static_cast<uint64_t>(header->e_shnum);
-  auto section_headers = ELF_OFFSET(header->e_shoff, Elf64_Shdr);
-
-  GRANARY_ASSERT(section_headers[header->e_shstrndx].sh_offset < obj_size);
-  auto header_names = ELF_OFFSET(section_headers[header->e_shstrndx].sh_offset,
-                                 const char);
-
-  for (auto i = 0UL; i < num_sections; ++i) {
-    auto section_name = header_names + section_headers[i].sh_name;
-    if (!StringsMatch(".granary_probes", section_name)) continue;
-    AddProbes(reinterpret_cast<Probe *>(section_headers[i].sh_addr),
-              section_headers[i].sh_size / sizeof(Probe));
-    break;
-  }
-}
 
 #ifdef GRANARY_WHERE_user
 
