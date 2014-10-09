@@ -3,6 +3,14 @@
 #ifndef CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
 #define CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
 
+#ifdef __cplusplus
+# include <cstdint>
+# include <cstddef>
+#else
+# include <stdint.h>
+# include <stddef.h>
+#endif  //  __cplusplus
+
 // Adds a watchpoint probe to the code.
 #define __ADD_WATCHPOINT(addr, size, func, category, kind) \
   __asm__ __volatile__ (\
@@ -26,12 +34,12 @@
   )
 
 #define ADD_READ_WATCHPOINT(addr, size, func) \
-  __ADD_WATCHPOINT(addr, size, func, 0, 0)
-
-#define ADD_WRITE_WATCHPOINT(addr, size, func) \
   __ADD_WATCHPOINT(addr, size, func, 0, 1)
 
-#define ADD_RW_WATCHPOINT(addr, size, func) \
+#define ADD_WRITE_WATCHPOINT(addr, size, func) \
   __ADD_WATCHPOINT(addr, size, func, 0, 2)
+
+#define ADD_RW_WATCHPOINT(addr, size, func) \
+  __ADD_WATCHPOINT(addr, size, func, 0, 3)
 
 #endif  // CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
