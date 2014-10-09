@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
-#define CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
+#ifndef CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_
+#define CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_
 
 #ifdef __cplusplus
 # include <cstdint>
@@ -42,4 +42,4 @@
 #define ADD_RW_WATCHPOINT(addr, size, func) \
   __ADD_WATCHPOINT(addr, size, func, 0, 3)
 
-#endif  // CLIENTS_WHITEBOX_DEBUGGER_PROBES_H_
+#endif  // CLIENTS_WHITEBOX_DEBUGGER_PROBE_H_
