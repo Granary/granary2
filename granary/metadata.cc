@@ -194,14 +194,16 @@ void MetaDataManager::Free(BlockMetaData *meta) {
 // of the packed meta-data structure.
 void MetaDataManager::Finalize(void) {
   is_finalized = true;
+  size_t max_align = alignof(BlockMetaData);
   for (auto desc : descriptions) {
     if (desc) {
+      max_align = std::max(desc->align, max_align);
       size += GRANARY_ALIGN_FACTOR(size, desc->align);
       desc->offset = size;
       size += desc->size;
     }
   }
-  size += GRANARY_ALIGN_FACTOR(size, alignof(BlockMetaData));
+  size += GRANARY_ALIGN_FACTOR(size, max_align);
 }
 
 // Initialize the allocator for meta-data managed by this manager.
