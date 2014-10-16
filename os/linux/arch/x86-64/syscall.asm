@@ -115,18 +115,33 @@ DEFINE_FUNC(getpid)
     ret
 END_FUNC(getpid)
 
+DEFINE_FUNC(sigaction)
+    mov r10, 65  // arg4 = `_NSIG / 8`.
+    jmp generic_sigaction
+END_FUNC(sigaction)
+
 DEFINE_FUNC(rt_sigaction)
-    mov     eax, 13  // `__NR_rt_sigaction`.
     mov     r10, rcx  // arg4.
+    jmp generic_sigaction
+END_FUNC(rt_sigaction)
+
+DEFINE_FUNC(generic_sigaction)
+    mov     eax, 13  // `__NR_rt_sigaction`.
     syscall
     ret
-END_FUNC(rt_sigaction)
+END_FUNC(generic_sigaction)
 
 DEFINE_FUNC(sigaltstack)
     mov     eax, 131  // `__NR_sigaltstack`.
     syscall
     ret
 END_FUNC(sigaltstack)
+
+DEFINE_FUNC(arch_prctl)
+    mov     eax, 158  // `__NR_arch_prctl`.
+    syscall
+    ret
+END_FUNC(arch_prctl)
 
 DECLARE_FUNC(granary_exit)
 DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.

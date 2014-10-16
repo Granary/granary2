@@ -1,17 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include <granary.h>
-#include <elf.h>
-
 #ifdef GRANARY_WHERE_user
-# include "clients/user/syscall.h"
-#endif  // GRANARY_WHERE_user
+#if 0
+#include <granary.h>
 
 using namespace granary;
-
-#define ELF_OFFSET(offset, dest_type) \
-  reinterpret_cast<dest_type *>( \
-      reinterpret_cast<uint64_t>(header) + offset)
 
 namespace {
 
@@ -24,7 +17,8 @@ enum ProbeCategory : int32_t {
 enum WatchpointKind : int32_t {
   READ_WATCHPOINT       = 1 << 0,
   WRITE_WATCHPOINT      = 1 << 1,
-  READ_WRITE_WATCHPOINT = READ_WATCHPOINT | WRITE_WATCHPOINT
+  READ_WRITE_WATCHPOINT = READ_WATCHPOINT | WRITE_WATCHPOINT,
+  REMOVE_WATCHPOINT     = 1 << 2
 };
 
 // Defines a generic Granary probe used in whitebox debugging.
@@ -33,67 +27,105 @@ struct Probe {
   union {
     WatchpointKind watchpoint;
   };
-  AppPC callback;
+  AppPC probe_pc;
+
+  bool operator<(const Probe &that) const {
+    return probe_pc < that.probe_pc;
+  }
 };
 
 static_assert((2 * sizeof(int64_t)) == sizeof(Probe),
     "Invalid structure packing of `struct Probe`.");
 
-// Tells the tool about a new set of probes to monitor.
-static void AddProbes(const Probe *probes, uint64_t num_probes) {
-  os::Log(os::LogOutput, "Found %lu probes starting at %p!\n", num_probes,
-          probes);
+enum {
+  MAX_NUM_PROBES = 1024
+};
+static struct Probe probes[MAX_NUM_PROBES];
+
+extern "C" {
+
+extern const Probe granary_begin_probes[] __attribute__((weak));
+extern const Probe granary_end_probes[] __attribute__((weak));
+
+}  // extern C
+
+union AddressWatchpoint {
+  struct {
+    AppPC read_callback;
+    AppPC write_callback;
+    uintptr_t base_address;
+    void *meta_data;
+  };
+  struct {
+    AddressWatchpoint *next;
+    uintptr_t index;
+  };
+};
+
+enum {
+  MAX_NUM_WATCHPOINTS = 0x7FFFU
+};
+
+// Next unallocated watchpoint. When this exceeds `MAX_NUM_WATCHPOINTS`, we
+// switch over to
+static std::atomic<uintptr_t> next_watchpoint_index(ATOMIC_VAR_INIT(0UL));
+
+// Free list (and associated lock) for allocating watchpoints.
+static AddressWatchpoint *free_list = nullptr;
+static SpinLock free_list_lock;
+
+// Global watchpoints table. Lazily allocated by Granary's allocators so that
+// it's hopefully close to the code cache.
+static AddressWatchpoint *watchpoints = nullptr;
+
+// Allocate a new watchpoint.
+static AddressWatchpoint *AllocateWatchpoint(uintptr_t *index) {
+  if (MAX_NUM_WATCHPOINTS >
+      next_watchpoint_index.load(std::memory_order_relaxed)) {
+    auto id = next_watchpoint_index.fetch_add(1);
+    if (MAX_NUM_WATCHPOINTS > id) {
+      *index = id;
+      return &(watchpoints[id]);
+    }
+  }
+
+  SpinLockedRegion locker(&free_list_lock);
+  auto wp = free_list;
+  if (wp) {
+    *index = wp->index;
+    free_list = wp->next;
+  }
+  return wp;
 }
 
-// Looks for Granary probes within an ELF file.
-static void FindGranaryProbes(const Elf64_Ehdr *header, uint64_t obj_size) {
-  GRANARY_ASSERT(header->e_shoff < obj_size);
-  GRANARY_ASSERT(sizeof(Elf64_Shdr) == header->e_shentsize);
-  GRANARY_ASSERT((header->e_ehsize + header->e_shentsize * header->e_shnum) <
-                 obj_size);
-
-  auto num_sections = static_cast<uint64_t>(header->e_shnum);
-  auto section_headers = ELF_OFFSET(header->e_shoff, Elf64_Shdr);
-
-  GRANARY_ASSERT(section_headers[header->e_shstrndx].sh_offset < obj_size);
-  auto header_names = ELF_OFFSET(section_headers[header->e_shstrndx].sh_offset,
-                                 const char);
-
-  for (auto i = 0UL; i < num_sections; ++i) {
-    auto section_name = header_names + section_headers[i].sh_name;
-    if (!StringsMatch(".granary_probes", section_name)) continue;
-    AddProbes(reinterpret_cast<Probe *>(section_headers[i].sh_addr),
-              section_headers[i].sh_size / sizeof(Probe));
-    break;
+static void AddWatchpoint(uintptr_t *addr_ptr, void *meta, AppPC callback) {
+  uintptr_t index(0);
+  if (auto wp = AllocateWatchpoint(&index)) {
+    wp->base_address = *addr;
+    wp->meta_data = meta;
+    wp->callback = callback;
   }
 }
 
-#ifdef GRANARY_WHERE_user
+// Free a watchpoint.
+static void FreeWatchpoint(uintptr_t *addr_ptr) {
 
-static __thread bool is_mmap = false;
-static __thread uint64_t mmap_size = 0;
-static const auto kBadMmapAddr = static_cast<uintptr_t>(-1L);
-
-static void FindMemoryMap(void *, SystemCallContext context) {
-  if ((is_mmap = __NR_mmap == context.Number())) {
-    mmap_size = context.Arg1();
-  }
 }
 
-static void FindELFMMap(void *, SystemCallContext context) {
-  if (!is_mmap) return;
-  is_mmap = false;
 
-  auto mmap_addr = context.ReturnValue();
-  if (kBadMmapAddr == mmap_addr) return;
-
-  auto str = reinterpret_cast<const char *>(mmap_addr);
-  if (0 != memcmp(ELFMAG, str, SELFMAG)) return;
-
-  FindGranaryProbes(reinterpret_cast<const Elf64_Ehdr *>(mmap_addr), mmap_size);
+static void InitWatchpoints(void) {
+  auto num_bytes = sizeof(AddressWatchpoint) * MAX_NUM_WATCHPOINTS;
+  auto num_pages = GRANARY_ALIGN_TO(num_bytes, arch::PAGE_SIZE_BYTES) /
+                   arch::PAGE_SIZE_BYTES;
+  watchpoints = AllocatePages();
 }
 
-#endif  // GRANARY_WHERE_user
+static void CopyProbes(void) {
+  auto begin = granary_begin_probes;
+  auto end = granary_end_probes;
+  memcpy(&(probes[0]), begin, static_cast<size_t>(end - begin));
+  std::sort(probes, probes + MAX_NUM_PROBES);
+}
 
 }  // namespace
 
@@ -102,25 +134,9 @@ class WhiteboxDebugger : public InstrumentationTool {
  public:
   virtual ~WhiteboxDebugger(void) = default;
   virtual void Init(InitReason) {
-#ifdef GRANARY_WHERE_user
-    AddSystemCallEntryFunction(FindMemoryMap);
-    AddSystemCallExitFunction(FindELFMMap);
-#endif  // GRANARY_WHERE_user
-
-    for (auto module : os::LoadedModules()) {
-      GRANARY_UNUSED(module);
-
-      // TODO(pag): Need a module->BaseAddress method. Perhaps need an
-      //            iterator over non-executable ranges of a module. That could
-      //            be easier, but then would require the iterator to hold
-      //            a read lock (not too bad with RAII).
-      // TODO(pag): Need a module->HasExecutableMemory method, as a quick
-      //            check?
-      // TODO(pag): Need to start *properly* tracking all module memory, not
-      //            just executable memory. That way, we can check if some
-      //            (non-executable) base address of a module looks like it's
-      //            an ELF, and we can find probes in already-loaded modules
-      //            (e.g. the main executable, the kernel, etc.).
+    if (granary_begin_probes) {
+      InitWatchpoints();
+      CopyProbes();
     }
   }
 };
@@ -131,4 +147,5 @@ GRANARY_CLIENT_INIT({
       "whitebox_debugger", {"watchpoints"});
 })
 
-
+#endif
+#endif  // GRANARY_WHERE_user

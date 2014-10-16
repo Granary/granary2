@@ -7,8 +7,6 @@
 #define SA_RESETHAND  0x80000000  // Reset to SIG_DFL on entry to handler.
 #define SA_ONSTACK    0x08000000  // Use signal stack by using `sa_restorer'.
 
-#define SS_ONSTACK    1
-
 // Illegal instruction (ANSI). In Granary, these would come up because of
 // failed assertions.
 #define SIGILL        4
@@ -32,41 +30,6 @@
 #define SIGSTKSZ      8192
 
 extern "C" {
-
-#ifndef _SIGSET_H_types
-typedef struct {
-  unsigned long int __val[(1024 / (8 * sizeof (unsigned long int)))];
-} __sigset_t;
-#endif  // _SIGSET_H_types
-
-// Get the kernel `sigaction` structure.
-typedef void (*__sighandler_t) (int);
-
-struct sigaction {
-  union {
-    __sighandler_t sa_handler;
-    void (*sa_sigaction)(int, /* siginfo_t */ void *, void *);
-  } __sigaction_handler;
-  __sigset_t sa_mask;
-  int sa_flags;
-  void (*sa_restorer)(void);
-};
-
-#define sa_handler __sigaction_handler.sa_handler
-#define sa_sigaction __sigaction_handler.sa_sigaction
-
-// Alternate, preferred interface.
-typedef struct sigaltstack {
-  void *ss_sp;
-  int ss_flags;
-  size_t ss_size;
-} stack_t;
-
-extern int rt_sigaction(int signum, const struct sigaction *act,
-                        struct sigaction *oldact, size_t sigsetsize);
-
-extern int sigaltstack(const struct sigaltstack *__restrict __ss,
-                       struct sigaltstack *__restrict __oss);
 
 }  // extern C
 

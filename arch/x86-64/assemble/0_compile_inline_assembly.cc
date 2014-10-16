@@ -177,11 +177,24 @@ class InlineAssemblyParser {
     auto var_num = ParseVar();
     GRANARY_ASSERT(scope->var_is_initialized[var_num]);
     auto &untyped_op(scope->vars[var_num].mem);  // Operand containers overlap.
+    auto seg = op->segment;
     memcpy(op, untyped_op->Extract(), sizeof *op);
+    if (op->IsMemory()) op->segment = seg;
   }
 
-  // TODO(pag): Only supports base form right now, i.e. `[%0]` and not the full
-  //            `segment:[disp + base + index * scale]` form.
+  // Parses a segment op.
+  void ParseSegmentOp(void) {
+    if (Peek('F')) {
+      Accept('F'); Accept('S'); Accept(':');
+      op->segment = XED_REG_FS;
+    } else if (Peek('G')) {
+      Accept('G'); Accept('S'); Accept(':');
+      op->segment = XED_REG_GS;
+    }
+  }
+
+  // TODO(pag): Only supports base form right now, i.e. `[%0]`, `FS:[%0]`, and
+  //            `GS:[%0]`, and not the full base/index/scale/displacement form.
   void ParseMemoryOp(void) {
     Accept('[');
     ConsumeWhiteSpace();
@@ -194,13 +207,14 @@ class InlineAssemblyParser {
       ParseArchReg();
       ConsumeWhiteSpace();
       if (Peek('+')) {
-        op->is_compound = true;
-        op->mem.reg_base = static_cast<xed_reg_enum_t>(op->reg.EncodeToNative());
-        op->mem.reg_index = XED_REG_INVALID;
-        op->mem.scale = 0;
-
         Accept('+');
         ConsumeWhiteSpace();
+
+        op->is_compound = true;
+        op->mem.reg_base = static_cast<xed_reg_enum_t>(
+            op->reg.EncodeToNative());
+        op->mem.reg_index = XED_REG_INVALID;
+        op->mem.scale = 0;
 
         char buff[20] = {'\0'};
         ParseWord(buff);
@@ -291,6 +305,7 @@ class InlineAssemblyParser {
       ConsumeWhiteSpace();
       switch (op_type) {
         case 'm':  // Memory.
+          ParseSegmentOp();
           if (Peek('%')) {
             ParseInPlaceOp();
           } else {

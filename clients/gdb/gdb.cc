@@ -57,9 +57,9 @@ static void AwaitAttachOnSignal(int signum) {
   struct sigaction new_sigaction;
   memset(&new_sigaction, 0, sizeof new_sigaction);
   memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.sa_sigaction = &AwaitAttach;
+  new_sigaction.__sigaction_handler.sa_sigaction = &AwaitAttach;
   new_sigaction.sa_flags = SA_SIGINFO;
-  rt_sigaction(signum, &new_sigaction, nullptr, _NSIG / 8);
+  sigaction(signum, &new_sigaction, nullptr);
 }
 
 // Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`

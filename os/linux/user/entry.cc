@@ -30,7 +30,7 @@ extern char ** __attribute__((weak)) environ;
 extern char granary_mmap_path[];
 
 // Defined in `os/linux/arch/*/syscall.asm`.
-extern void exit_group(int) __attribute__((noreturn));
+[[noreturn]] extern void exit_group(int);
 
 }  // extern C
 
