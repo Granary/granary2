@@ -62,6 +62,7 @@ typedef enum {
   XED_REG_CLASS_XCR,
   XED_REG_CLASS_XMM,
   XED_REG_CLASS_YMM,
+  XED_REG_CLASS_ZMM,
   XED_REG_CLASS_LAST
 } xed_reg_class_enum_t;
 

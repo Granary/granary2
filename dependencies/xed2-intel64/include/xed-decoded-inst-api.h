@@ -61,6 +61,7 @@ xed_decoded_inst_inst( const xed_decoded_inst_t* p) {
     return p->_inst;
 }
 
+
 /// @ingroup DEC
 /// Return the instruction #xed_category_enum_t enumeration
 static XED_INLINE xed_category_enum_t
@@ -205,7 +206,34 @@ XED_DLL_EXPORT xed_operand_element_type_enum_t
 xed_decoded_inst_operand_element_type(const xed_decoded_inst_t* p,
                                       unsigned int operand_index);
 
+/// Interpret the operand action in light of AVX512 masking and
+/// zeroing/merging.  If masking and merging are used together, the dest
+/// operand may also be read.  If masking and merging are used together,
+/// the elemnents of dest operand register may be conditionally written (so
+/// that input values live on in the output register).
+/// @ingroup DEC
+XED_DLL_EXPORT xed_operand_action_enum_t
+xed_decoded_inst_operand_action(const xed_decoded_inst_t* p,
+                                unsigned int operand_index);
 
+//@}
+
+/// @name xed_decoded_inst_t AVX512 Masking
+//@{
+/// Returns true if the instruction uses write-masking
+/// @ingroup DEC
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_masking(const xed_decoded_inst_t* p);
+
+/// Returns true if the instruction uses write-masking with merging
+/// @ingroup DEC
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_merging(const xed_decoded_inst_t* p);
+
+/// Returns true if the instruction uses write-masking with zeroing
+/// @ingroup DEC
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_zeroing(const xed_decoded_inst_t* p);
 //@}
 
 /// @name xed_decoded_inst_t Initialization
@@ -399,8 +427,8 @@ xed_decoded_inst_dump_xed_format(const xed_decoded_inst_t* p,
 /// @param out_buffer a buffer to write the disassembly in to.
 /// @param buffer_len maximum length of the disassembly buffer
 /// @param runtime_instruction_address the address of the instruction being disassembled. If zero, the offset is printed for relative branches. If nonzero, XED attempts to print the target address for relative branches.
-/// @param context A void* used only for the call back routine for symbolic disassembly if one is registered. Can be zero.
-/// @param symbolic_callback A function pointer for obtaining symbolic disassembly if one is registered. Can be zero.
+/// @param context A void* used only for the call back routine for symbolic disassembly if one is provided. Can be zero.
+/// @param symbolic_callback A function pointer for obtaining symbolic disassembly. Can be zero.
 /// @return Returns 0 if the disassembly fails, 1 otherwise.
 ///@ingroup PRINT
 XED_DLL_EXPORT xed_bool_t

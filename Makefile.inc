@@ -16,6 +16,7 @@ GRANARY_OS ?= linux
 GRANARY_TARGET ?= debug# release, debug, test
 GRANARY_WHERE ?= user# user, kernel
 GRANARY_TRIPLE := $(GRANARY_TARGET)_$(GRANARY_OS)_$(GRANARY_WHERE)
+GRANARY_DOUBLE := $(GRANARY_OS)_$(GRANARY_WHERE)
 GRANARY_DRIVER ?= xed2-intel64
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
@@ -77,6 +78,9 @@ GRANARY_GTEST_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googletest
 GRANARY_GMOCK_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/googlemock/trunk
 GRANARY_GMOCK_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googlemock
 
+# CParser dir.
+GRANARY_CPARSER_DIR := $(GRANARY_SRC_DIR)/dependencies/cparser
+
 # Convenient way to totally ignore output of a shell command that might fail.
 GRANARY_DEV_NULL = > /dev/null 2>&1 ||:
 
@@ -99,6 +103,7 @@ GRANARY_COMMON_WARN_FLAGS =
 GRANARY_DEBUG_FLAGS =
 GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_TRIPLE)
 GRANARY_HEADERS = $(GRANARY_HEADERS_DIR)/granary.h
+GRANARY_OS_TYPES = $(GRANARY_SRC_DIR)/generated/$(GRANARY_DOUBLE)/types.h
 
 ifdef GRANARY_CLIENT_NAME
 	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients

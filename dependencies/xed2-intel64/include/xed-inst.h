@@ -220,8 +220,8 @@ xed_operand_is_memory_addressing_register(xed_operand_enum_t name) {
 /// @name xed_inst_t Template Operand Read/Written
 //@{ 
 /// @ingroup DEC
-/// Returns the raw R/W action. There are many cases for conditional reads
-/// and writes.
+/// DEPRECATED: Returns the raw R/W action. There are many cases for conditional reads
+/// and writes. See #xed_decoded_inst_operand_action().
 static XED_INLINE xed_operand_action_enum_t
 xed_operand_rw(const xed_operand_t* p)  { 
     return p->_rw; 

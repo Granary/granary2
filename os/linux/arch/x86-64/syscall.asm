@@ -137,6 +137,10 @@ DEFINE_FUNC(sigaltstack)
     ret
 END_FUNC(sigaltstack)
 
+DEFINE_FUNC(prctl)
+    jmp arch_prctl
+END_FUNC(prctl)
+
 DEFINE_FUNC(arch_prctl)
     mov     eax, 158  // `__NR_arch_prctl`.
     syscall
@@ -148,6 +152,19 @@ DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.
     xor     rdi, rdi
     jmp     exit_group
 END_FUNC(exit_group_ok)
+
+DEFINE_FUNC(exit)
+    jmp exit_group
+END_FUNC(exit)
+
+DEFINE_FUNC(_exit)
+    jmp exit_group
+END_FUNC(_exit)
+
+DEFINE_FUNC(_Exit)
+    jmp exit_group
+END_FUNC(_Exit)
+
 DEFINE_FUNC(exit_group)
     push    rdi
     xor     rdi, rdi  // `ExitReason::EXIT_PROGRAM`.

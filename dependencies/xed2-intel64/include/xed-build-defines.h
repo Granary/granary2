@@ -39,9 +39,12 @@ END_LEGAL */
 #    define XED_AVX
 #  endif
 #  if !defined(XED_GIT_VERSION)
-#    define XED_GIT_VERSION "6.32.0 2014-07-14"
+#    define XED_GIT_VERSION "7.8.0-19-ga682447 2014-10-17"
 #  endif
 #  if !defined(XED_MPX)
 #    define XED_MPX
+#  endif
+#  if !defined(XED_SUPPORTS_AVX512)
+#    define XED_SUPPORTS_AVX512
 #  endif
 #endif

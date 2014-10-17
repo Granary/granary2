@@ -203,7 +203,6 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   }
 
   instr_op->segment = segment_reg;
-  instr_op->width = static_cast<int16_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
   instr_op->is_effective_address = XED_ICLASS_LEA == instr->iclass;
 }
@@ -216,26 +215,18 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 //       `xed_agen`.
 static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
                             const xed_decoded_inst_t *xedd, unsigned index) {
-  auto mem_op_width = static_cast<int16_t>(
+  instr_op->width = static_cast<int16_t>(
       xed3_operand_get_mem_width(xedd) * 8);
+  if (!instr_op->width && instr->effective_operand_width) {
+    instr_op->width = instr->effective_operand_width;
+  }
+
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
     instr_op->segment = XED_REG_DS;
-    instr_op->width = mem_op_width; // Width of addressed memory.
-
-    if (!instr_op->width) {
-      instr_op->width = instr->effective_operand_width;
-    }
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
-  }
-  if (GRANARY_UNLIKELY(!instr_op->width)) {
-    if (XED_ICLASS_LEA == instr->iclass) {
-      instr_op->width = instr->effective_operand_width;
-    } else if (mem_op_width) {
-      instr_op->width = mem_op_width;
-    }
   }
   GRANARY_ASSERT(0 != instr_op->width);
 }

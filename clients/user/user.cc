@@ -1,10 +1,11 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#include "clients/util/types.h"
+
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
 
-#include "clients/user/signal.h"
 #include "clients/user/syscall.h"
 #include "clients/util/closure.h"
 
@@ -26,19 +27,6 @@ GRANARY_DEFINE_bool(hook_syscalls, true,
 
     "user");
 
-extern "C" {
-
-#define MAP_SHARED    0x01
-#define MAP_PRIVATE   0x02
-#define MAP_FIXED     0x10
-#define MAP_ANONYMOUS 0x20
-#define MAP_32BIT     0x40
-
-extern void exit_group(int) __attribute__((noreturn));
-extern void munmap(void *mem, unsigned long size);
-extern void *mmap(void *__addr, size_t __len, int __prot, int __flags,
-                  int __fd, long __offset);
-}  // extern C
 namespace {
 
 // Invalidates any code cache blocks related to an mmap request.
@@ -65,7 +53,7 @@ static void InvalidateUnmappedMemory(SystemCallContext ctx) {
 // Use Granary's `exit_group` function to handle process exit. This will lead
 // to all tools exiting.
 static void ExitGranary(SystemCallContext ctx) {
-  exit_group(static_cast<int>(ctx.Arg0()));
+  exit(static_cast<int>(ctx.Arg0()));
 }
 
 // Hooks that other clients can use for interposing on system calls.

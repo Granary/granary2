@@ -1,13 +1,16 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#include "clients/util/types.h"
+
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
 
 #include <sys/mman.h>
 #include <asm/prctl.h>
 
-#include "clients/user/signal.h"
 #include "clients/user/syscall.h"
 
 using namespace granary;
@@ -18,11 +21,6 @@ GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
 
     "data_collider");
 
-extern "C" {
-[[noreturn]] extern void exit_group(int);
-extern int arch_prctl (int, ...);
-
-}  // extern C
 namespace {
 
 enum : uint64_t {
@@ -55,7 +53,7 @@ static void FindClone(void *, SystemCallContext context) {
 // the new thread and the old thread, but that doesn't matter.
 static void SetupShadowSegment(void *, SystemCallContext) {
   if (!is_clone) return;
-  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, begin_shadow_memory);
+  GRANARY_IF_DEBUG( auto ret = ) prctl(ARCH_SET_GS, begin_shadow_memory);
   GRANARY_ASSERT(!ret);
   is_clone = false;
 }
@@ -80,14 +78,14 @@ static void InitShadowMemory(void) {
 
   if (MAP_FAILED == begin_shadow_memory) {
     os::Log(os::LogDebug, "Failed to map shadow memory. Exiting.\n");
-    exit_group(1);
+    exit(EXIT_FAILURE);
   }
 
   end_shadow_memory = reinterpret_cast<char *>(begin_shadow_memory) +
                       shadow_mem_size;
 
   // Make it so that the `GS` segment points to our shadow memory.
-  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, begin_shadow_memory);
+  GRANARY_IF_DEBUG( auto ret = ) prctl(ARCH_SET_GS, begin_shadow_memory);
   GRANARY_ASSERT(!ret);
 
   // Interpose on clone system calls so that we can setup the shadow memory.
@@ -95,8 +93,29 @@ static void InitShadowMemory(void) {
   AddSystemCallExitFunction(SetupShadowSegment);
 }
 
-static void HangleSegFault(int sig, ) {
+// Handle a segfault by trying to page in the memory.
+static void HandleSegFault(int, siginfo_t *info, void *) {
+  auto fault_addr = info->si_addr;
 
+  if (begin_shadow_memory > fault_addr || end_shadow_memory <= fault_addr) {
+    GRANARY_ASSERT(false);
+    exit(EXIT_FAILURE);
+  }
+
+  uintptr_t page_mask = ~static_cast<uintptr_t>(arch::PAGE_SIZE_BYTES - 1);
+  auto fault_page = reinterpret_cast<uintptr_t>(fault_addr) & page_mask;
+
+  mprotect(reinterpret_cast<void *>(fault_page), arch::PAGE_SIZE_BYTES,
+           PROT_READ | PROT_WRITE);
+}
+
+static void InitShadowPageMapper(void) {
+  struct sigaction new_sigaction;
+  memset(&new_sigaction, 0, sizeof new_sigaction);
+  memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
+  new_sigaction.sa_sigaction = &HandleSegFault;
+  new_sigaction.sa_flags = SA_SIGINFO;
+  sigaction(SIGSEGV, &new_sigaction, nullptr);
 }
 
 }  // namespace
@@ -106,6 +125,7 @@ class DataReactor : public InstrumentationTool {
  public:
   virtual void Init(InitReason) {
     InitShadowMemory();
+    InitShadowPageMapper();
   }
 
   virtual ~DataReactor(void) = default;
@@ -189,4 +209,5 @@ GRANARY_CLIENT_INIT({
   RegisterInstrumentationTool<DataReactor>("data_reactor", {"gdb"});
 })
 
+#pragma clang diagnostic pop
 #endif  // GRANARY_WHERE_user

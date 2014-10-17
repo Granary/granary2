@@ -2,9 +2,10 @@
 
 #ifdef GRANARY_WHERE_user
 
+#include "clients/util/types.h"
+
 #include <granary.h>
 
-#include "clients/user/signal.h"
 #include "clients/user/syscall.h"
 
 using namespace granary;
@@ -15,12 +16,6 @@ GRANARY_DEFINE_bool(debug_gdb_prompt, true,
 
     "gdb");
 
-extern "C" {
-extern int getpid(void);
-extern long long write(int __fd, const void *__buf, size_t __n);
-extern long long read(int __fd, void *__buf, size_t __nbytes);
-
-}  // extern C
 namespace {
 
 // Initialize Granary for debugging by GDB. For example, if one is doing:
@@ -35,7 +30,7 @@ namespace {
 //
 // Then press the ENTER key in the origin terminal (where `grr ... ls` is) to
 // continue execution under GDB's supervision.
-extern "C" void AwaitAttach(int signum, void *siginfo, void *context) {
+extern "C" void AwaitAttach(int signum, siginfo_t *siginfo, void *context) {
   char buff[1024];
   auto num_bytes = Format(
       buff, sizeof buff,
@@ -57,7 +52,7 @@ static void AwaitAttachOnSignal(int signum) {
   struct sigaction new_sigaction;
   memset(&new_sigaction, 0, sizeof new_sigaction);
   memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.__sigaction_handler.sa_sigaction = &AwaitAttach;
+  new_sigaction.sa_sigaction = &AwaitAttach;
   new_sigaction.sa_flags = SA_SIGINFO;
   sigaction(signum, &new_sigaction, nullptr);
 }

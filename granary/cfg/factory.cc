@@ -95,13 +95,29 @@ void BlockFactory::RequestBlock(DirectBasicBlock *block,
 
 namespace {
 
+// Converts a LIR instruction into an application instruction, where the
+// PC associated with the instruction is `pc`.
+static Instruction *AsApp(std::unique_ptr<Instruction> instr, AppPC pc) {
+  auto ni = DynamicCast<NativeInstruction *>(instr.release());
+  ni->MakeAppInstruction(pc);
+  return ni;
+}
+
+// Converts a LIR instruction into an application instruction, where the
+// PC associated with the instruction is the application `start_pc` stored
+// in `meta`.
+static Instruction *AsApp(std::unique_ptr<Instruction> instr,
+                          BlockMetaData *meta) {
+  return AsApp(std::move(instr), MetaDataCast<AppMetaData *>(meta)->start_pc);
+}
+
 // Create an intermediate basic block that adapts one version of a block to
 // another version.
 static CompensationBasicBlock *AdaptToBlock(LocalControlFlowGraph *cfg,
                                             BlockMetaData *meta,
                                             BasicBlock *existing_block) {
   auto adapt_block = new CompensationBasicBlock(cfg, meta);
-  adapt_block->AppendInstruction(std::move(lir::Jump(existing_block)));
+  adapt_block->AppendInstruction(AsApp(lir::Jump(existing_block), meta));
   return adapt_block;
 }
 
@@ -169,7 +185,7 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
   if (request_fall_through || cfi->IsConditionalJump() || cfi->IsSystemCall()) {
     fall_through = new DirectBasicBlock(cfg,
                                         context->AllocateBlockMetaData(pc));
-    block->AppendInstruction(std::move(lir::Jump(fall_through)));
+    block->AppendInstruction(AsApp(lir::Jump(fall_through), pc));
 
   // Inherit the fall-through from the target.
   } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
@@ -216,7 +232,7 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBasicBlock *block,
         new AnnotationInstruction(IA_UNKNOWN_STACK_ABOVE));
   }
   if (changes_interrupt_state) {
-    block->AppendInstruction(lir::Jump(factory, next_pc));
+    block->AppendInstruction(AsApp(lir::Jump(factory, next_pc), next_pc));
   }
 }
 
@@ -244,7 +260,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     // there as well.
     if (!decoder.DecodeNext(&dinstr, &decode_pc) || dinstr.IsInterruptCall()) {
       auto native_block = new NativeBasicBlock(decoded_pc);
-      block->AppendInstruction(std::move(lir::Jump(native_block)));
+      block->AppendInstruction(AsApp(lir::Jump(native_block), decoded_pc));
       return;
     }
 
