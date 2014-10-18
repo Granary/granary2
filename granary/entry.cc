@@ -35,7 +35,7 @@ namespace arch {
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-extern void PatchEdge(ContextInterface *context, DirectEdge *edge);
+extern bool TryAtomicPatchEdge(ContextInterface *context, DirectEdge *edge);
 
 }  // namespace arch
 namespace {
@@ -85,8 +85,10 @@ void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
     return;
   }
   UpdateEdge(edge, Translate(context, meta));
+
   if (GRANARY_UNLIKELY(FLAG_unsafe_patch_edges)) {
-    arch::PatchEdge(context, edge);
+    arch::TryAtomicPatchEdge(context, edge);
+    // TODO(pag): Test the return value to increment some stats.
   }
 }
 

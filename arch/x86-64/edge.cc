@@ -503,35 +503,37 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-void PatchEdge(ContextInterface *context, DirectEdge *edge) {
+bool TryAtomicPatchEdge(ContextInterface *context, DirectEdge *edge) {
   Instruction ni;
   InstructionDecoder decoder;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT_ATOMIC);
 
   // If we fail to decode the instruction then don't patch it.
-  if (!decoder.Decode(&ni, edge->patch_instruction_pc)) return;
+  if (!decoder.Decode(&ni, edge->patch_instruction_pc)) return false;
   const auto decoded_length = ni.decoded_length;
 
   // If the decoded length is greater than 8 bytes then don't patch it.
-  if (8 < decoded_length) return;
+  if (8 < decoded_length) return false;
 
   // If the instruction crosses two cache lines then don't patch it.
   auto decode_addr = reinterpret_cast<uintptr_t>(edge->patch_instruction_pc);
   auto start_cl = decode_addr / CACHE_LINE_SIZE_BYTES;
   auto end_cl = (decode_addr + decoded_length - 1) / CACHE_LINE_SIZE_BYTES;
-  if (start_cl != end_cl) return;
+  if (start_cl != end_cl) return false;
 
   ni.SetBranchTarget(edge->exit_target_pc);
   stage_enc.Encode(&ni, edge->patch_instruction_pc);
 
   // If the instruction length changes then don't patch it.
-  if (ni.encoded_length != decoded_length) return;
+  if (ni.encoded_length != decoded_length) return false;
 
   CodeCacheTransaction transaction(context->BlockCodeCache(),
                                    edge->patch_instruction_pc,
                                    edge->patch_instruction_pc + decoded_length);
   commit_enc.Encode(&ni, edge->patch_instruction_pc);
+
+  return true;
 }
 
 }  // namespace arch
