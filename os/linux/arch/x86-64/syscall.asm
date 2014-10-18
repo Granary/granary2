@@ -115,13 +115,8 @@ DEFINE_FUNC(getpid)
     ret
 END_FUNC(getpid)
 
-DEFINE_FUNC(sigaction)
-    mov r10, 65  // arg4 = `_NSIG / 8`.
-    jmp generic_sigaction
-END_FUNC(sigaction)
-
 DEFINE_FUNC(rt_sigaction)
-    mov     r10, rcx  // arg4.
+    mov     r10, rcx  // arg4, `sigsetsize`.
     jmp generic_sigaction
 END_FUNC(rt_sigaction)
 

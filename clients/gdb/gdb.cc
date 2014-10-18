@@ -40,21 +40,24 @@ extern "C" void AwaitAttach(int signum, siginfo_t *siginfo, void *context) {
   read(0, buff, 1);
 
   // Useful for debugging purposes.
+  auto ucontext = reinterpret_cast<ucontext_t *>(context);
   GRANARY_USED(signum);
-  GRANARY_USED(siginfo);  // `siginfo_t *`.
-  GRANARY_USED(context);  // `ucontext *` on Linux.
+  GRANARY_USED(siginfo);
+  GRANARY_USED(ucontext);
 }
 
 // Used to attach a signal handler to an arbitrary signal, such that when the
 // signal is triggered, a message is printed to the screen that allows
 // Granary to be attached to the process.
 static void AwaitAttachOnSignal(int signum) {
-  struct sigaction new_sigaction;
+  struct kernel_sigaction new_sigaction;
   memset(&new_sigaction, 0, sizeof new_sigaction);
   memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.sa_sigaction = &AwaitAttach;
+  new_sigaction.handler.siginfo_handler = &AwaitAttach;
   new_sigaction.sa_flags = SA_SIGINFO;
-  sigaction(signum, &new_sigaction, nullptr);
+  GRANARY_IF_DEBUG( auto ret = ) rt_sigaction(signum, &new_sigaction, nullptr,
+                                              _NSIG / 8);
+  GRANARY_ASSERT(!ret);
 }
 
 // Prevents user-space code from replacing the `SIGSEGV` and `SIGILL`

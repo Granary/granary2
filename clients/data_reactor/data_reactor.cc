@@ -69,7 +69,7 @@ static void InitShadowMemory(void) {
   // record the mapped shadow memory in a simple data structure that GDB can
   // then inspect to choose taint targets.
   begin_shadow_memory = mmap(nullptr, shadow_mem_size,
-                             PROT_NONE,  // Fault on first access.
+                             PROT_READ | PROT_WRITE,  // Fault on first access.
                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
                              -1, 0);
 
@@ -89,32 +89,6 @@ static void InitShadowMemory(void) {
   AddSystemCallEntryFunction(FindClone);
   AddSystemCallExitFunction(SetupShadowSegment);
 }
-
-// Handle a segfault by trying to page in the memory.
-static void HandleSegFault(int, siginfo_t *info, void *) {
-  auto fault_addr = info->si_addr;
-
-  if (begin_shadow_memory > fault_addr || end_shadow_memory <= fault_addr) {
-    GRANARY_ASSERT(false);
-    exit(EXIT_FAILURE);
-  }
-
-  uintptr_t page_mask = ~static_cast<uintptr_t>(arch::PAGE_SIZE_BYTES - 1);
-  auto fault_page = reinterpret_cast<uintptr_t>(fault_addr) & page_mask;
-
-  mprotect(reinterpret_cast<void *>(fault_page), arch::PAGE_SIZE_BYTES,
-           PROT_READ | PROT_WRITE);
-}
-
-static void InitShadowPageMapper(void) {
-  struct sigaction new_sigaction;
-  memset(&new_sigaction, 0, sizeof new_sigaction);
-  memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.sa_sigaction = &HandleSegFault;
-  new_sigaction.sa_flags = SA_SIGINFO;
-  sigaction(SIGSEGV, &new_sigaction, nullptr);
-}
-
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
@@ -122,7 +96,6 @@ class DataReactor : public InstrumentationTool {
  public:
   virtual void Init(InitReason) {
     InitShadowMemory();
-    InitShadowPageMapper();
   }
 
   virtual ~DataReactor(void) = default;
