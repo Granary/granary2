@@ -7,6 +7,7 @@
 #include <granary.h>
 
 #include "clients/user/syscall.h"
+#include "generated/clients/gdb/offsets.h"
 
 using namespace granary;
 
@@ -112,12 +113,10 @@ class GDBDebuggerHelper : public InstrumentationTool {
     auto call_native = false;
 
     if (StringsMatch("ld", module_name)) {
-      // `__GI__dl_debug_state` (or just `_dl_debug_state`), which is just a
-      // simple return.
-      call_native = 0x10970 == offset.offset;
+      call_native = OFFSET__dl_debug_state == offset.offset;
     } else if (StringsMatch("libpthread", module_name)) {
-      // `__GI___nptl_create_event` and `__GI___nptl_death_event`.
-      call_native = 0x6f50 == offset.offset || 0x6f60 == offset.offset;
+      call_native = OFFSET_nptl_create_event == offset.offset ||
+                    OFFSET_nptl_death_event == offset.offset;
     }
 
     // GDB somtimes puts `int3`s on specific functions so that it knows when
@@ -149,7 +148,8 @@ class GDBDebuggerHelper : public InstrumentationTool {
         if (succ.cfi->HasIndirectTarget()) continue;
         if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
           DontInstrumentUndoDB(factory, direct_block);
-        } else if (!IsA<NativeBasicBlock *>(succ.block)) {
+        }
+        if (!IsA<NativeBasicBlock *>(succ.block)) {
           FixHiddenBreakpoints(factory, succ.cfi, succ.block);
         }
       }
