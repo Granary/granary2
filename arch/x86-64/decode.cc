@@ -214,9 +214,10 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 // Note: XED_OPERAND_AGEN's memory operand index is 0. See docs for function
 //       `xed_agen`.
 static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
-                            const xed_decoded_inst_t *xedd, unsigned index) {
+                            const xed_decoded_inst_t *xedd, unsigned index,
+                            unsigned op_num) {
   instr_op->width = static_cast<int16_t>(
-      xed3_operand_get_mem_width(xedd) * 8);
+      xed_decoded_inst_operand_length_bits(xedd, op_num));
   if (!instr_op->width && instr->effective_operand_width) {
     instr_op->width = instr->effective_operand_width;
   }
@@ -322,9 +323,9 @@ static bool ConvertDecodedOperand(Instruction *instr,
   } else if (XED_OPERAND_RELBR == op_name) {
     ConvertRelativeBranch(instr, instr_op, xedd);
   } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_AGEN == op_name) {
-    ConvertBaseDisp(instr, instr_op, xedd, 0);
+    ConvertBaseDisp(instr, instr_op, xedd, 0, op_num);
   } else if (XED_OPERAND_MEM1 == op_name) {
-    ConvertBaseDisp(instr, instr_op, xedd, 1);
+    ConvertBaseDisp(instr, instr_op, xedd, 1, op_num);
   } else if (XED_OPERAND_TYPE_IMM == op_type ||
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr, instr_op, xedd, op_name);

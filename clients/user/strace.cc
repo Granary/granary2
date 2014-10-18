@@ -2,6 +2,8 @@
 
 #ifdef GRANARY_WHERE_user
 
+#include "clients/util/types.h"
+
 #include <granary.h>
 
 GRANARY_DECLARE_bool(hook_syscalls);
@@ -327,9 +329,13 @@ static const char *syscall_names[] = {
   [__NR_process_vm_writev] = "process_vm_writev",  // 311
   [__NR_kcmp] = "kcmp",  // 312
   [__NR_finit_module] = "finit_module",  // 313
+#ifdef __NR_sched_setattr
   [__NR_sched_setattr] = "sched_setattr",  // 314
   [__NR_sched_getattr] = "sched_getattr",  // 315
+#endif
+#ifdef __NR_renameat2
   [__NR_renameat2] = "renameat2"  // 316
+#endif
 };
 
 static __thread uint64_t syscall_number = 0;

@@ -8,9 +8,6 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
 
-#include <sys/mman.h>
-#include <asm/prctl.h>
-
 #include "clients/user/syscall.h"
 
 using namespace granary;
@@ -53,7 +50,7 @@ static void FindClone(void *, SystemCallContext context) {
 // the new thread and the old thread, but that doesn't matter.
 static void SetupShadowSegment(void *, SystemCallContext) {
   if (!is_clone) return;
-  GRANARY_IF_DEBUG( auto ret = ) prctl(ARCH_SET_GS, begin_shadow_memory);
+  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, begin_shadow_memory);
   GRANARY_ASSERT(!ret);
   is_clone = false;
 }
@@ -85,7 +82,7 @@ static void InitShadowMemory(void) {
                       shadow_mem_size;
 
   // Make it so that the `GS` segment points to our shadow memory.
-  GRANARY_IF_DEBUG( auto ret = ) prctl(ARCH_SET_GS, begin_shadow_memory);
+  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, begin_shadow_memory);
   GRANARY_ASSERT(!ret);
 
   // Interpose on clone system calls so that we can setup the shadow memory.

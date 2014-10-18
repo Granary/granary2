@@ -137,10 +137,6 @@ DEFINE_FUNC(sigaltstack)
     ret
 END_FUNC(sigaltstack)
 
-DEFINE_FUNC(prctl)
-    jmp arch_prctl
-END_FUNC(prctl)
-
 DEFINE_FUNC(arch_prctl)
     mov     eax, 158  // `__NR_arch_prctl`.
     syscall

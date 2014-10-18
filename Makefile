@@ -44,7 +44,7 @@ $(GRANARY_HEADERS):
 # Generate rules for each Granary client.
 define GENRULE_BUILD_CLIENT
 .PHONY: build_client_$(1)
-build_client_$(1): $(GRANARY_HEADERS)
+build_client_$(1): $(GRANARY_HEADERS) build_os
 	@echo "Entering $(GRANARY_CLIENT_DIR)/$(1)"
 	$(MAKE) -C $(GRANARY_CLIENT_DIR)/$(1) \
 		$(MFLAGS) \

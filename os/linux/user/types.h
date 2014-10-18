@@ -47,6 +47,8 @@
 #include <unistd.h>
 #include <asm/unistd.h>
 
+extern int arch_prctl(int option, ...);
+
 #undef __restrict
 
 #endif  // OS_LINUX_USER_TYPES_H_
