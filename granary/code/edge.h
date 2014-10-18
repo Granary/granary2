@@ -31,14 +31,14 @@ class alignas(alignof(void *)) DirectEdge {
   // On entry to an edge, this address is targeted by an indirect jump. This
   // allows an edge to go right to the resolved block if the block address is
   // known and profiling is enabled.
-  CachePC entry_target;
+  CachePC entry_target_pc;
 
   // On exit from an edge, this is the address targeted by an indirect jump. By
   // default, this has the same value is `edge_code`, and so if two threads
   // execute the edge code, then one will end up in a busy loop that increments
   // `num_executions`. Eventually, when the target block is resolved, this is
   // changed to be the `cache_pc` of the target block.
-  CachePC exit_target;
+  CachePC exit_target_pc;
 
   // The number of executions. The edge entrypoint assembly routine
   // atomically increments this value by `2` each time, but when the edge is
@@ -60,7 +60,7 @@ class alignas(alignof(void *)) DirectEdge {
   // The stub code in an edge code cache that is used to context switch
   // into Granary and find/decode/instrument the block associated with
   // `dest_meta`.
-  const CachePC edge_code;
+  const CachePC edge_code_pc;
 
   // Instruction that is patched by this direct edge.
   CachePC patch_instruction_pc;
@@ -79,11 +79,11 @@ class alignas(alignof(void *)) DirectEdge {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectEdge);
 }  __attribute__((packed));
 
-static_assert(0 == offsetof(DirectEdge, entry_target),
+static_assert(0 == offsetof(DirectEdge, entry_target_pc),
     "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "
     "routines depend on this.");
 
-static_assert(8 == offsetof(DirectEdge, exit_target),
+static_assert(8 == offsetof(DirectEdge, exit_target_pc),
     "Field `DirectEdge::exit_target` must be at offset `8`, as assembly "
     "routines depend on this.");
 

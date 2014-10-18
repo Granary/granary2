@@ -315,6 +315,17 @@ static void EncodeSpecialCases(const Instruction *instr,
   }
 }
 
+// Try to atomically write an instruction into the code cache.
+static void AtomicCommit(CachePC pc, uint8_t itext[], uint8_t len) {
+  GRANARY_ASSERT(8 >= len);
+  uint64_t old_itext_val(0);
+  memcpy(&old_itext_val, pc, 8);
+  memcpy(&old_itext_val, itext, len);
+  std::atomic_thread_fence(std::memory_order_acquire);
+  *reinterpret_cast<uint64_t *>(pc) = old_itext_val;
+  std::atomic_thread_fence(std::memory_order_release);
+}
+
 }  // namespace
 
 // Encode a XED instruction intermediate representation into an x86
@@ -344,8 +355,6 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   InitEncoderInstruction(instr, &xede);
   EncodeOperands(instr, &xede, pc GRANARY_IF_DEBUG(, !is_stage_encoding));
   EncodeSpecialCases(instr, &xede);
-
-  auto old_encoded_pc = instr->encoded_pc;
 
   // Ensure that we're always stage-encoding before encoding. Stage encoding
   // is used to compute the length of every instruction, as well as to ensure
@@ -379,8 +388,9 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   if (InstructionEncodeKind::COMMIT == encode_kind) {
     memcpy(pc, &(itext[0]), instr->encoded_length);
+  } else if (InstructionEncodeKind::COMMIT_ATOMIC == encode_kind) {
+    AtomicCommit(pc, &(itext[0]), instr->encoded_length);
   }
-  GRANARY_USED(old_encoded_pc);
   return pc + instr->encoded_length;
 }
 

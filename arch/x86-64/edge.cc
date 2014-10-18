@@ -128,7 +128,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
-  auto pc = edge->edge_code;
+  auto pc = edge->edge_code_pc;
   auto target_stack_valid = TargetStackIsValid(edge);
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
@@ -141,8 +141,8 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // Another benefit to this approach is that if patching is not enabled, then
   // Granary's code cache is append-only, meaning that it can (in theory)
   // instrument itself without having to support SMC.
-  ENC(JMP_MEMv(&ni, &(edge->entry_target)));
-  edge->entry_target = pc;  // `pc` is the address of the next instruction.
+  ENC(JMP_MEMv(&ni, &(edge->entry_target_pc)));
+  edge->entry_target_pc = pc;  // `pc` is the address of the next instruction.
 
   if (REDZONE_SIZE_BYTES && !target_stack_valid) {
     ENC(SHIFT_REDZONE(&ni));
@@ -171,7 +171,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   // we'll observe is that one of them will "win" and the others will jump
   // back into the edge code because `edge->exit_target` is initialized
   // above to point to into the edge code.
-  ENC(JMP_MEMv(&ni, &(edge->exit_target)));
+  ENC(JMP_MEMv(&ni, &(edge->exit_target_pc)));
 
   GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
 }
@@ -498,6 +498,40 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
   GRANARY_ASSERT(nullptr != jrcxz_target);
   GRANARY_ASSERT(added_lea);
   GRANARY_ASSERT(found_jrcxz_target);
+}
+
+// Patch a direct edge.
+//
+// Note: This function has an architecture-specific implementation.
+void PatchEdge(ContextInterface *context, DirectEdge *edge) {
+  Instruction ni;
+  InstructionDecoder decoder;
+  InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
+  InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT_ATOMIC);
+
+  // If we fail to decode the instruction then don't patch it.
+  if (!decoder.Decode(&ni, edge->patch_instruction_pc)) return;
+  const auto decoded_length = ni.decoded_length;
+
+  // If the decoded length is greater than 8 bytes then don't patch it.
+  if (8 < decoded_length) return;
+
+  // If the instruction crosses two cache lines then don't patch it.
+  auto decode_addr = reinterpret_cast<uintptr_t>(edge->patch_instruction_pc);
+  auto start_cl = decode_addr / CACHE_LINE_SIZE_BYTES;
+  auto end_cl = (decode_addr + decoded_length - 1) / CACHE_LINE_SIZE_BYTES;
+  if (start_cl != end_cl) return;
+
+  ni.SetBranchTarget(edge->exit_target_pc);
+  stage_enc.Encode(&ni, edge->patch_instruction_pc);
+
+  // If the instruction length changes then don't patch it.
+  if (ni.encoded_length != decoded_length) return;
+
+  CodeCacheTransaction transaction(context->BlockCodeCache(),
+                                   edge->patch_instruction_pc,
+                                   edge->patch_instruction_pc + decoded_length);
+  commit_enc.Encode(&ni, edge->patch_instruction_pc);
 }
 
 }  // namespace arch

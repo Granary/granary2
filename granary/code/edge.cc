@@ -12,12 +12,12 @@
 namespace granary {
 
 DirectEdge::DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_)
-    : entry_target(nullptr),
-      exit_target(edge_code_),
+    : entry_target_pc(nullptr),
+      exit_target_pc(edge_code_),
       num_executions(0),
       next(nullptr),
       dest_meta(ATOMIC_VAR_INIT(dest_meta_)),
-      edge_code(edge_code_),
+      edge_code_pc(edge_code_),
       patch_instruction_pc(nullptr) {}
 
 DirectEdge::~DirectEdge(void) {

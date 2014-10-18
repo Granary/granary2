@@ -18,26 +18,40 @@ GRANARY_DEFINE_bool(profile_direct_edges, false,
     "      because there is one shared profile counter per edge data\n"
     "      structure.");
 
+GRANARY_DEFINE_bool(unsafe_patch_edges, false,
+    "Should Granary try to patch direct edges as soon as possible? This is "
+    "unsafe because Granary will not enforce proper barriers or other "
+    "architectural requirements to cross-modifying code, and as such, enabling "
+    "this option can result in spurious faults.");
+
 // TODO(pag): Add an option that says put edge code in for all blocks, even if
 //            not needed.
 
 // TODO(pag): Only do profiling on conditional edges?
 
 namespace granary {
+namespace arch {
+
+// Patch a direct edge.
+//
+// Note: This function has an architecture-specific implementation.
+extern void PatchEdge(ContextInterface *context, DirectEdge *edge);
+
+}  // namespace arch
 namespace {
 
 // Update the edge code to target the new block.
 static void UpdateEdge(DirectEdge *edge, CachePC target_pc) {
   std::atomic_thread_fence(std::memory_order_acquire);
   if (!FLAG_profile_direct_edges) {
-    edge->entry_target = target_pc;
+    edge->entry_target_pc = target_pc;
   }
 
   // TODO(pag): Might not yield correct behavior w.r.t. edge profiling
   //            increments in assembly routines on more relaxed memory
   //            models.
   edge->num_executions = 1;
-  edge->exit_target = target_pc;
+  edge->exit_target_pc = target_pc;
   std::atomic_thread_fence(std::memory_order_release);
 }
 
@@ -71,6 +85,9 @@ void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
     return;
   }
   UpdateEdge(edge, Translate(context, meta));
+  if (GRANARY_UNLIKELY(FLAG_unsafe_patch_edges)) {
+    arch::PatchEdge(context, edge);
+  }
 }
 
 // Enter into Granary to begin the translation process for an indirect edge.

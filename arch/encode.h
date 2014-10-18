@@ -22,7 +22,8 @@ class Instruction;
 
 enum class InstructionEncodeKind {
   STAGED,
-  COMMIT
+  COMMIT,
+  COMMIT_ATOMIC
 };
 
 // Manages encoding and decoding of instructions.

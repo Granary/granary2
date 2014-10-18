@@ -571,7 +571,7 @@ static void AddDirectBlockToFragList(FragmentBuilder *builder,
   auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
   auto edge = builder->context->AllocateDirectEdge(meta);
 
-  frag->encoded_pc = edge->edge_code;
+  frag->encoded_pc = edge->edge_code_pc;
   frag->block_meta = meta;
   frag->edge.kind = EDGE_KIND_DIRECT;
   frag->edge.direct = edge;
