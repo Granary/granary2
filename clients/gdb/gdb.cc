@@ -98,40 +98,44 @@ class GDBDebuggerHelper : public InstrumentationTool {
     if (!FLAG_debug_gdb_prompt) AddSystemCallEntryFunction(SuppressSigAction);
   }
 
-  // GDB inserts hidden breakpoints into programs, especially in programs
-  // using `pthreads`. When Granary comes across these breakpoints, it most
-  // likely will detach, which, when combined with the `transparent_returns`
-  // tool, results in full thread detaches. Here we try to handle these special
-  // cases in a completely non-portable way. The comments, however, give
-  // some guidance as to how to port this.
-  void FixHiddenBreakpoints(BlockFactory *factory, ControlFlowInstruction *cfi,
-                            BasicBlock *block) {
+  // Returns true if the target of a native basic block is known to be an
+  // internal GDB breakpoint location. Internal GDB breakpoints can be found
+  // by doing `maint info breakpoints` in GDB and looking at negative-numbered
+  // breakpoints.
+  //
+  // The specific `GDB_BP_OFFSET_*` macros are computed at compile time by the
+  // `gdb` client's Makefile, and are placed in
+  // `generated/clients/gdb/offsets.h`.
+  //
+  // TODO(pag): Need to handle the following as well:
+  //    r_debug_state
+  //    _r_debug_state
+  //    rtld_db_dlactivity
+  //    __dl_rtld_db_dlactivity
+  //    _rtld_debug_state
+  static bool IsInternalBreakpointLocation(NativeBasicBlock *block) {
     auto decoded_pc = block->StartAppPC();
     auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
     auto offset = module->OffsetOfPC(decoded_pc);
-    auto call_native = false;
-
     if (StringsMatch("ld", module_name)) {
-      call_native = OFFSET__dl_debug_state == offset.offset;
+      return GDB_BP_OFFSET__dl_debug_state == offset.offset;
     } else if (StringsMatch("libpthread", module_name)) {
-      call_native = OFFSET_nptl_create_event == offset.offset ||
-                    OFFSET_nptl_death_event == offset.offset;
+      return GDB_BP_OFFSET_nptl_create_event == offset.offset ||
+             GDB_BP_OFFSET_nptl_death_event == offset.offset;
+    } else {
+      return false;
     }
+  }
 
-    // GDB somtimes puts `int3`s on specific functions so that it knows when
-    // key events (e.g. thread creation) happen. Most of these functions are
-    // basically no-ops, so would can just manually call them recursively).
-    if (call_native) {
-      cfi->InsertBefore(lir::Call(factory, decoded_pc, REQUEST_NATIVE));
-      cfi->InsertBefore(lir::Return(factory));
-
-      Instruction::Unlink(cfi);
-
-    } else if (!StringsMatch("libundodb_autotracer_preload_x64", module_name)) {
-      os::Log(os::LogOutput, "code = %p\nmodule = %s\noffset = %lx\n\n",
-              decoded_pc, module_name, offset.offset);
-    }
+  // Fix an internal breakpoint by converting it into a function call then
+  // return. This is a fun hack ;-)
+  static void FixInternalBreakpoint(BlockFactory *factory,
+                                    NativeBasicBlock *block,
+                                    ControlFlowInstruction *cfi) {
+    cfi->InsertBefore(lir::Call(factory, block->StartAppPC(), REQUEST_NATIVE));
+    cfi->InsertBefore(lir::Return(factory));
+    Instruction::Unlink(cfi);
   }
 
   void DontInstrumentUndoDB(BlockFactory *factory, DirectBasicBlock *block) {
@@ -148,9 +152,12 @@ class GDBDebuggerHelper : public InstrumentationTool {
         if (succ.cfi->HasIndirectTarget()) continue;
         if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
           DontInstrumentUndoDB(factory, direct_block);
-        }
-        if (!IsA<NativeBasicBlock *>(succ.block)) {
-          FixHiddenBreakpoints(factory, succ.cfi, succ.block);
+        } else {
+          auto native_block = DynamicCast<NativeBasicBlock *>(succ.block);
+          if (IsInternalBreakpointLocation(native_block)) {
+            FixInternalBreakpoint(factory, native_block, succ.cfi);
+            break;
+          }
         }
       }
     }

@@ -22,10 +22,10 @@ class Instruction;
 #ifdef GRANARY_INTERNAL
 namespace arch {
 class InstructionDecoder;
-}
+}  // namespace arch
 #endif  // GRANARY_INTERNAL
 
-// Strategy for materlizing basic blocks. The number associated with each
+// Strategy for materializing basic blocks. The number associated with each
 // materialization strategy represents granularity. For example, of two
 // materialization requests are submitted for the same `DirectBasicBlock`, then
 // the chosen strategy will be the minimum of the two requests strategies.
@@ -66,7 +66,6 @@ enum BlockRequestKind : uint8_t {
   , REQUEST_CHECK_INDEX_AND_LCFG_ONLY
 #endif  // GRANARY_INTERNAL
 };
-
 
 // Basic block materializer.
 class BlockFactory {

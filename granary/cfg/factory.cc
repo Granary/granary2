@@ -311,6 +311,15 @@ void BlockFactory::RelinkCFIs(void) {
 //            it's worth it to actually do this kind of mark & sweep garbage
 //            collection of the blocks or not.
 void BlockFactory::RemoveOldBlocks(void) {
+
+  // First, make sure all blocks are added to the LCFG.
+  for (auto block : cfg->Blocks()) {
+    for (auto succ : block->Successors()) {
+      cfg->AddBlock(succ.block);
+    }
+  }
+
+  // Now mark all blocks, except the first block, as unreachable.
   auto first_block = cfg->first_block;
   auto second_block = first_block->list.GetNext(first_block);
   for (auto block = second_block; block; block = block->list.GetNext(block)) {
@@ -319,7 +328,8 @@ void BlockFactory::RemoveOldBlocks(void) {
 
   first_block->is_reachable = true;
 
-  // Propagate reachability.
+  // Transitively propagate reachability from the entry block. This is like
+  // the "mark" phase of a mark & sweep GC.
   for (auto changed = true, can_make_progess = true;
        changed && can_make_progess; ) {
     changed = false;
@@ -338,7 +348,8 @@ void BlockFactory::RemoveOldBlocks(void) {
     }
   }
 
-  // Garbage collect the unreachable blocks.
+  // Garbage collect the unreachable blocks. This is like the "sweep" phase of
+  // a mark & sweep GC.
   auto new_last_block = first_block;
   for (auto block = second_block, prev_block = first_block; block; ) {
     auto next_block = block->list.GetNext(block);

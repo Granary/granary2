@@ -61,6 +61,7 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
 std::unique_ptr<Instruction> Return(BlockFactory *factory) {
   arch::Instruction ni;
   RET_NEAR(&ni);
+  ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni, &ni));
 }
 
