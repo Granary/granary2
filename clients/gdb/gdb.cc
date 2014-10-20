@@ -113,7 +113,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
   //    rtld_db_dlactivity
   //    __dl_rtld_db_dlactivity
   //    _rtld_debug_state
-  static bool IsInternalBreakpointLocation(NativeBasicBlock *block) {
+  static bool IsInternalBreakpointLocation(DirectBasicBlock *block) {
     auto decoded_pc = block->StartAppPC();
     auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
@@ -131,10 +131,10 @@ class GDBDebuggerHelper : public InstrumentationTool {
   // Fix an internal breakpoint by converting it into a function call then
   // return. This is a fun hack ;-)
   static void FixInternalBreakpoint(BlockFactory *factory,
-                                    NativeBasicBlock *block,
                                     ControlFlowInstruction *cfi) {
-    cfi->InsertBefore(lir::Call(factory, block->StartAppPC(), REQUEST_NATIVE));
-    cfi->InsertBefore(lir::Return(factory));
+    GRANARY_ASSERT(cfi->DecodedPC() && cfi->DecodedLength());
+    cfi->InsertBefore(lir::Jump(factory, cfi->DecodedPC() +
+                                         cfi->DecodedLength()));
     Instruction::Unlink(cfi);
   }
 
@@ -150,15 +150,15 @@ class GDBDebuggerHelper : public InstrumentationTool {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->HasIndirectTarget()) continue;
-        if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
-          DontInstrumentUndoDB(factory, direct_block);
-        } else {
-          auto native_block = DynamicCast<NativeBasicBlock *>(succ.block);
-          if (IsInternalBreakpointLocation(native_block)) {
-            FixInternalBreakpoint(factory, native_block, succ.cfi);
-            break;
-          }
+        auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
+        if (!direct_block) continue;
+
+        if (IsInternalBreakpointLocation(direct_block)) {
+          FixInternalBreakpoint(factory, succ.cfi);
+          break;
         }
+
+        DontInstrumentUndoDB(factory, direct_block);
       }
     }
   }
