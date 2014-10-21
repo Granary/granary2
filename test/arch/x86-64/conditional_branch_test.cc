@@ -126,9 +126,7 @@ JCC_TEST(jrcxz)
       auto inst = Translate(&context, opcode ## _return_5); \
       EXPECT_EQ(5, opcode ## _return_5()); \
       auto inst_func = UnsafeCast<int(*)(void)>(inst); \
-      auto ret = inst_func(); \
-      if (5 != ret) granary_curiosity(); \
-      EXPECT_EQ(5, ret); \
+      EXPECT_EQ(5, inst_func()); \
     }
 
 LOOP_TEST(loop)

@@ -34,15 +34,15 @@ static void UnmapMemory(SystemCallContext ctx) {
   auto addr = ctx.Arg0();
   auto len = ctx.Arg1();
 
-  // Turn an `munmap` into an `mmap` and `madvise` pair that first makes
+  // Turn an `munmap` into an `mmap` and `mprotect` pair that first makes
   // the memory unusable, then hints to the OS that it no longer needs to be
   // backed.
 
   mmap(reinterpret_cast<void *>(addr), len, PROT_NONE,
        MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
 
-  ctx.Number() = __NR_madvise;
-  ctx.Arg3() = MADV_DONTNEED;
+  ctx.Number() = __NR_mprotect;
+  ctx.Arg2() = PROT_NONE;  // Should succeed.
 }
 
 // Use Granary's `exit_group` function to handle process exit. This will lead
