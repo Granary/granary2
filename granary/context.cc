@@ -76,7 +76,8 @@ extern void GenerateInterruptEnableCode(ContextInterface *, CachePC pc);
 // Generates the wrapper code for a context callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc);
+extern Callback *GenerateContextCallback(ContextInterface *, CodeCache *cache,
+                                         AppPC func_pc);
 
 // Generates the wrapper code for an outline callback.
 //
@@ -328,7 +329,7 @@ const arch::Callback *Context::ContextCallback(AppPC func_pc) {
   SpinLockedRegion locker(&arg_callbacks_lock);
   auto *&cb(context_callbacks[func_pc]);
   if (!cb) {
-    cb = arch::GenerateContextCallback(&edge_code_cache, func_pc);
+    cb = arch::GenerateContextCallback(this, &edge_code_cache, func_pc);
   }
   return cb;
 }

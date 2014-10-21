@@ -37,7 +37,7 @@ namespace arch {
 namespace {
 
 // Generates the wrapper code for a context callback.
-void GenerateContextCallCode(Callback *callback) {
+void GenerateContextCallCode(ContextInterface *context, Callback *callback) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -72,8 +72,9 @@ void GenerateContextCallCode(Callback *callback) {
   // Treat the pushed GPRs as `MachineContext`, and pass a pointer to them as
   // arg1.
   //
-  // TODO(pag): Remove ABI-specific use of RDI.
-  ENC(LEA_GPRv_AGEN(&ni, XED_REG_RDI, BaseDispMemOp(0, XED_REG_RSP,
+  // TODO(pag): Remove ABI-specific use of RDI and RSI.
+  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(context)));
+  ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSI, BaseDispMemOp(0, XED_REG_RSP,
                                                     ADDRESS_WIDTH_BITS)));
   // Call the callback.
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
@@ -112,12 +113,13 @@ void GenerateContextCallCode(Callback *callback) {
 }  // namespace
 
 // Generates the wrapper code for a context callback.
-Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
+Callback *GenerateContextCallback(ContextInterface *context, CodeCache *cache,
+                                  AppPC func_pc) {
   auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(func_pc, edge_code);
   CodeCacheTransaction transaction(
       cache, edge_code, edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
-  GenerateContextCallCode(callback);
+  GenerateContextCallCode(context, callback);
   return callback;
 }
 

@@ -31,10 +31,10 @@ std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc,
 }
 
 
-// Call to a client function that takes in an argument to an
-// `arch::MachineContext` pointer.
+// Call to a client function that takes in an argument to a granary context and
+// to an `arch::MachineContext` pointer.
 std::unique_ptr<Instruction> CallWithContext(
-    void (*func)(arch::MachineContext *)) {
+    void (*func)(void *, arch::MachineContext *)) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
       IA_CONTEXT_CALL, func));
 }
