@@ -13,10 +13,17 @@ extern "C" {
 #pragma clang diagnostic ignored "-Wshadow"
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wreserved-user-defined-literal"
+#pragma clang diagnostic ignored "-Wextern-c-compat"
+#pragma clang diagnostic ignored "-Wextra-semi"
 
 #ifdef GRANARY_OS_linux
 # ifdef GRANARY_WHERE_kernel
+
+typedef bool K_Bool;
+
 #   include "generated/linux_kernel/types.h"
+
 # else
 #   include "generated/linux_user/types.h"
 # endif

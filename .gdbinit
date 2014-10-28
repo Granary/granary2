@@ -718,7 +718,7 @@ define print-frag
   if &_ZTVN7granary12CodeFragmentE == (((char *) $__f->_vptr$Fragment) - 16)
     set $__cf = (granary::CodeFragment *) $__f
     printf "head=%d, ", $__cf->attr.is_block_head
-    printf "app=%d, ", granary::CODE_TYPE_APP == $__cf->type ? 1 : 0
+    printf "app=%d, ", granary::FRAG_TYPE_APP == $__cf->type ? 1 : 0
     printf "addsucc2p=%d, ", $__cf->attr.can_add_succ_to_partition
     printf "stack=%d, ", granary::STACK_VALID == $__cf->stack.status ? 1 : 0
     printf "meta=%p", $__cf->attr.block_meta

@@ -43,7 +43,7 @@ namespace {
 static void PropagateFragKinds(FragmentList *frags) {
   for (auto frag : ReverseFragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (CODE_TYPE_UNKNOWN != code_frag->type) continue;
+      if (FRAG_TYPE_UNKNOWN != code_frag->type) continue;
 
       // Try to copy it from any successor.
       auto has_code_succ = false;
@@ -54,20 +54,24 @@ static void PropagateFragKinds(FragmentList *frags) {
         }
       }
 
-      if (CODE_TYPE_UNKNOWN == code_frag->type) {
+      if (FRAG_TYPE_UNKNOWN == code_frag->type) {
         // Motivation: The previous fragment (if any) might be an
-        //             instrumentation fragment, so make this an instrumentation
-        //             fragment.
+        //             instrumentation fragment, so make this an
+        //             instrumentation fragment.
         if (has_code_succ) {
-          code_frag->type = CODE_TYPE_INST;
+          code_frag->type = FRAG_TYPE_INST;
 
         // Motivation: The only other option is that the next fragment is an
         //             `ExitFragment`, so make this fragment into an
         //             application fragment.
         } else {
-          code_frag->type = CODE_TYPE_APP;
+          code_frag->type = FRAG_TYPE_APP;
         }
       }
+    } else {
+      GRANARY_ASSERT(FRAG_TYPE_UNKNOWN == frag->type);
+
+      frag->type = FRAG_TYPE_APP;
     }
   }
 }
@@ -129,12 +133,14 @@ static void InitFlagsUse(FragmentList *frags) {
 
 // Returns `true` if any updates were made to what flags are live on entry/exit,
 // and what flags are read/written anywhere within the fragment.
-static bool TryUpdateFlagsUse(CodeFragment *frag) {
+static bool TryUpdateFlagsUse(Fragment *frag) {
+  GRANARY_ASSERT(FRAG_TYPE_UNKNOWN != frag->type);
+
   FlagUsageInfo *flags(nullptr);
   FlagUsageInfo new_flags;
   auto exit_flags = LiveFlagsOnExit(frag);
 
-  if (CODE_TYPE_APP == frag->type) {
+  if (FRAG_TYPE_APP == frag->type) {
     flags = &(frag->app_flags);
     new_flags = *flags;
     new_flags.exit_live_flags = exit_flags.app_flags;
@@ -153,7 +159,7 @@ static bool TryUpdateFlagsUse(CodeFragment *frag) {
 
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      VisitInstructionFlags(ninstr->instruction, &new_flags);
+      arch::VisitInstructionFlags(ninstr->instruction, &new_flags);
     }
   }
 
@@ -181,9 +187,7 @@ static void AnalyzeFlagsUse(FragmentList *frags) {
   for (auto changed = true; changed; ) {
     changed = false;
     for (auto frag : ReverseFragmentListIterator(frags)) {
-      if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-        changed = TryUpdateFlagsUse(code_frag) || changed;
-      }
+      changed = TryUpdateFlagsUse(frag) || changed;
     }
   }
 }
@@ -211,7 +215,7 @@ static void LabelFlagZones(LocalControlFlowGraph *cfg, FragmentList *frags) {
   UnionFlagZones(frags);
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (CODE_TYPE_APP == code_frag->type) continue;
+      if (FRAG_TYPE_APP == code_frag->type) continue;
 
       auto &flag_zone(frag->flag_zone.Value());
       if (!flag_zone) {
@@ -228,16 +232,26 @@ static void LabelFlagZones(LocalControlFlowGraph *cfg, FragmentList *frags) {
 // the flag zone.
 static void UpdateFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    auto &flag_zone(frag->flag_zone.Value());
-    if (flag_zone) {
+    if (FRAG_TYPE_INST != frag->type) continue;
+    if (auto flag_zone = frag->flag_zone.Value()) {
+#ifdef GRANARY_TARGET_debug
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        if (CODE_TYPE_APP != code->type) {
-          flag_zone->killed_flags |= code->inst_flags.all_written_flags;
-          flag_zone->live_flags |= code->app_flags.exit_live_flags;
-        }
+        GRANARY_ASSERT(code->attr.modifies_flags ==
+                       !!frag->inst_flags.all_written_flags);
       }
+#endif  // GRANARY_TARGET_debug
+      flag_zone->killed_flags |= frag->inst_flags.all_written_flags;
+      flag_zone->live_flags |= frag->app_flags.exit_live_flags;
     }
   }
+}
+
+// Returns `true` if `frag` is an instrumented fragment that belongs to a
+// flag zone where at least one of the flags is killed.
+static bool IsFlagInstCode(Fragment *frag) {
+  if (FRAG_TYPE_INST != frag->type) return false;
+  auto zone = frag->flag_zone.Value();
+  return zone->killed_flags;
 }
 
 // Returns true if the transition between `curr` and `next` represents a flags
@@ -247,20 +261,14 @@ static void UpdateFlagZones(FragmentList *frags) {
 // transition between partitions, or where we transition from application code
 // to instrumentation code.
 static bool IsFlagEntry(Fragment *curr, Fragment *next) {
-  if (IsA<ExitFragment *>(next)) return false;
-  if (IsA<PartitionEntryFragment *>(next)) return false;
   if (IsA<FlagEntryFragment *>(curr)) return false;
   if (IsA<FlagEntryFragment *>(next)) return false;
-  if (curr->flag_zone == next->flag_zone &&
-      !IsA<PartitionEntryFragment *>(curr)) {
-    GRANARY_ASSERT(curr->partition == next->partition);
+
+  if (curr->partition != next->partition || curr->type != next->type) {
+    return IsFlagInstCode(next);
+  } else {
     return false;
   }
-  auto next_zone = next->flag_zone.Value();
-  if (!next_zone) return false;
-  if (!next_zone->killed_flags) return false;
-  return true;
-  return  0 != (next_zone->killed_flags & curr->app_flags.exit_live_flags);
 }
 
 // Returns true if the transition between `curr` and `next` represents a flags
@@ -271,21 +279,14 @@ static bool IsFlagEntry(Fragment *curr, Fragment *next) {
 // application code fragment (or a flag entry, which will appear as non-equal
 // partitions).
 static bool IsFlagExit(Fragment *curr, Fragment *next) {
-  if (IsA<PartitionExitFragment *>(curr)) return false;
-  if (IsA<PartitionEntryFragment *>(next)) return false;
-  if (IsA<FlagEntryFragment *>(curr)) return false;
   if (IsA<FlagExitFragment *>(curr)) return false;
   if (IsA<FlagExitFragment *>(next)) return false;
-  if (curr->flag_zone == next->flag_zone &&
-      !IsA<PartitionExitFragment *>(next)) {
-    GRANARY_ASSERT(curr->partition == next->partition);
+
+  if (curr->partition != next->partition || curr->type != next->type) {
+    return IsFlagInstCode(curr);
+  } else {
     return false;
   }
-  auto curr_zone = curr->flag_zone.Value();
-  if (!curr_zone) return false;
-  if (!curr_zone->killed_flags) return false;
-  return true;
-  return  0 != (curr_zone->killed_flags & next->app_flags.entry_live_flags);
 }
 
 // Returns true if the transition between `curr` and `next` represents a
@@ -354,7 +355,7 @@ static void AddExitFragment(FragmentList *frags,
                             Fragment *(*make_frag)(Fragment *, Fragment *)) {
   auto succ = *succ_ptr;
   if (succ && is_end(curr, succ)) {
-    // Try to merge some of the exit fragments using the `transient_back_link`
+    // Try to merge some of the exit fragments using the `entry_exit_frag`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
     auto &back_link(succ->temp.entry_exit_frag);
@@ -391,7 +392,7 @@ static void AddEntryFragment(FragmentList *frags,
                              Fragment *(*make_frag)(Fragment *, Fragment *)) {
   auto succ = *succ_ptr;
   if (succ && is_end(curr, succ)) {
-    // Try to merge some of the entry fragments using the `transient_back_link`
+    // Try to merge some of the entry fragments using the `entry_exit_frag`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
     auto &back_link(succ->temp.entry_exit_frag);
@@ -411,7 +412,7 @@ template <typename T>
 static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
   Fragment *frag = new T;
 
-  frag->successors[0] = succ;
+  frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
   frag->partition.Union(frag, inherit);
   frag->flag_zone.Union(frag, inherit);
 
@@ -484,7 +485,7 @@ void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags) {
 
   ResetTempData(frags);
   AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
-
+  ResetTempData(frags);
   AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
 
   LabelPartitionsAndTrackFlagRegs(frags);

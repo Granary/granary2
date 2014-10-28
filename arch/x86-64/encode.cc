@@ -85,6 +85,7 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
   const auto brdisp_32 = static_cast<int32_t>(brdisp_64);
 
   GRANARY_ASSERT(!check_reachable || (brdisp_32 == brdisp_64));
+  GRANARY_ASSERT(!check_reachable || (0 <= brdisp_32 || -7 > brdisp_32));
 
   switch (iclass) {
     case XED_ICLASS_JRCXZ:

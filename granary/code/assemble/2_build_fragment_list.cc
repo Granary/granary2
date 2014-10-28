@@ -305,14 +305,14 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
   if (instr->IsAppInstruction() &&
       (instr->IsConditionalJump() ||
        instr->instruction.WritesToStackPointer())) {
-    if (CODE_TYPE_INST == frag->type) {
+    if (FRAG_TYPE_INST == frag->type) {
       auto frag_with_branch = new CodeFragment;
       frag_with_branch->attr.block_meta = frag->attr.block_meta;
       frag->successors[FRAG_SUCC_FALL_THROUGH] = frag_with_branch;
       builder->frags->InsertAfter(frag, frag_with_branch);
       frag = frag_with_branch;
     }
-    frag->type = CODE_TYPE_APP;
+    frag->type = FRAG_TYPE_APP;
   }
 
   frag->branch_instr = instr;
@@ -377,7 +377,7 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
 
   builder->frags->InsertAfter(pred_frag, frag);
 
-  frag->type = CODE_TYPE_APP;  // Force it to application code.
+  frag->type = FRAG_TYPE_APP;  // Force it to application code.
   frag->branch_instr = instr;
   frag->attr.block_meta = pred_frag->attr.block_meta;
   frag->attr.has_native_instrs = true;
@@ -454,19 +454,19 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
   auto writes_flags = instr->WritesConditionCodes();
   auto writes_stack_ptr = instr->instruction.WritesToStackPointer();
 
-  if (CODE_TYPE_UNKNOWN == frag->type) {
-    frag->type = is_app ? CODE_TYPE_APP : CODE_TYPE_INST;
+  if (FRAG_TYPE_UNKNOWN == frag->type) {
+    frag->type = is_app ? FRAG_TYPE_APP : FRAG_TYPE_INST;
 
   // Instrumentation instructions in an application fragment are allowed to
   // read but not write the flags.
-  } else if (CODE_TYPE_APP == frag->type && !is_app && writes_flags &&
+  } else if (FRAG_TYPE_APP == frag->type && !is_app && writes_flags &&
              !instr->instruction.CantSplitFragment()) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
 
   // Application instructions in an instrumentation fragment are not allowed
   // to read or write the flags, or to change the stack pointer.
-  } else if (CODE_TYPE_INST == frag->type && is_app &&
+  } else if (FRAG_TYPE_INST == frag->type && is_app &&
              (reads_flags || writes_flags || writes_stack_ptr)) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;

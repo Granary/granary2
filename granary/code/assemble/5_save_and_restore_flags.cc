@@ -117,7 +117,7 @@ static void UpdateFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto flag_zone = frag->flag_zone.Value()) {
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        if (CODE_TYPE_APP != code->type) {
+        if (FRAG_TYPE_APP != code->type) {
           UpdateUsedRegsInFlagZone(flag_zone, code);
         }
       } else if (auto flag_exit = DynamicCast<FlagExitFragment *>(frag)) {
