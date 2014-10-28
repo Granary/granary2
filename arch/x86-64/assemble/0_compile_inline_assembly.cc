@@ -198,11 +198,18 @@ class InlineAssemblyParser {
   void ParseMemoryOp(void) {
     Accept('[');
     ConsumeWhiteSpace();
+    int sub_size = arch::GPR_WIDTH_BITS;
+    if (Peek('r')) {
+      Accept('r');
+      sub_size = ParseWidth();
+      ConsumeWhiteSpace();
+    }
     if (Peek('%')) {
       auto var_num = ParseVar();
       GRANARY_ASSERT(scope->var_is_initialized[var_num]);
       auto &reg_op(scope->vars[var_num].reg);
       op->reg = reg_op->Register();
+      op->reg.Widen(sub_size / 8);
     } else {
       ParseArchReg();
       ConsumeWhiteSpace();
