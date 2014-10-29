@@ -127,30 +127,31 @@ static void InitIformFlags(void) {
   for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
     auto xedi = xed_inst_table_base() + sel;
 
-    auto &iform_flags(IFORM_FLAGS[xed_inst_iform_enum(xedi)]);
-
     xedd._inst = xedi;
-
-    if (auto flags = xed_decoded_inst_get_rflags_info(&xedd)) {
-      iform_flags.read.flat |= flags->read.flat;
-      iform_flags.written.flat |= flags->written.flat;
-
-      // Turns conditionally written flags into read flags.
-      if (flags->may_write) {
-        iform_flags.read.flat |= flags->written.flat;
-      }
+    auto &iform_flags(IFORM_FLAGS[xed_inst_iform_enum(xedi)]);
+    auto flags = xed_decoded_inst_get_rflags_info(&xedd);
 
     // Either there are no flags, or there are complex flags interactions. In
     // the case of complex flags interactions that depend on things like
     // prefixes or the values of immediates, we will simply be conservative and
     // assume all flags are read/written.
-    } else {
+    if (!flags || xedi->_flag_complex) {
       const auto actions = ICLASS_FLAG_ACTIONS[xed_inst_iclass(xedi)];
       if (actions.is_read) {
         iform_flags.read.flat |= all_flags;
       }
       if (actions.is_write) {
         iform_flags.written.flat |= all_flags;
+      }
+
+    // We've got precise flags information.
+    } else {
+      iform_flags.read.flat |= flags->read.flat;
+      iform_flags.written.flat |= flags->written.flat;
+
+      // Turns conditionally written flags into read flags.
+      if (flags->may_write) {
+        iform_flags.read.flat |= flags->written.flat;
       }
     }
   }
