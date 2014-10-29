@@ -62,7 +62,6 @@ class Watchpoints : public InstrumentationTool {
         "MOV r64 %0, r64 %1;"  // Copy the original (%1).
         "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
         GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
-        "  INT3;"
         "  SHL r64 %0, i8 16;"
         "  SAR r64 %0, i8 16;"_x86_64);
 
