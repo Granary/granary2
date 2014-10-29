@@ -125,6 +125,7 @@ Fragment::Fragment(void)
       encoded_order(0),
       encoded_size(0),
       encoded_pc(nullptr),
+      type(FRAG_TYPE_UNKNOWN),
       instrs(),
       partition(nullptr),
       flag_zone(nullptr),
@@ -145,8 +146,8 @@ SSAFragment::~SSAFragment(void) {}
 CodeFragment::CodeFragment(void)
     : SSAFragment(),
       attr(),
-      type(CODE_TYPE_UNKNOWN),
       stack() {}
+
 CodeFragment::~CodeFragment(void) {}
 
 PartitionEntryFragment::~PartitionEntryFragment(void) {}
@@ -304,7 +305,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
     auto partition = code->partition.Value();
-    Log(level, CODE_TYPE_APP == code->type ? "app " : "inst ");
+    Log(level, FRAG_TYPE_APP == code->type ? "app " : "inst ");
     if (partition) Log(level, "p%u ", partition->id);
     if (code->attr.is_in_edge_code) Log(level, "inedge ");
     if (code->attr.modifies_flags) Log(level, "mflags ");
@@ -317,6 +318,12 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     if (code->encoded_size) Log(level, "size=%d ", code->encoded_size);
     if (code->branch_instr) {
       Log(level, "binstr=%s ", code->branch_instr->OpCodeName());
+    }
+    if (code->app_flags.entry_live_flags) {
+      Log(level, "aflags=%x ", code->app_flags.entry_live_flags);
+    }
+    if (code->inst_flags.entry_live_flags) {
+      Log(level, "iflags=%x ", code->inst_flags.entry_live_flags);
     }
 
     if (code->attr.block_meta && code->attr.is_block_head) {

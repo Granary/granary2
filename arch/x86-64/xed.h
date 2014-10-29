@@ -21,6 +21,12 @@ extern "C" {
 namespace granary {
 namespace arch {
 
+struct FlagActions {
+  bool is_read:1;
+  bool is_write:1;
+  bool is_conditional_write:1;
+};
+
 struct FlagsSet {
   xed_flag_set_t read;
   xed_flag_set_t written;

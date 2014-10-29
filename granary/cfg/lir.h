@@ -46,15 +46,15 @@ std::unique_ptr<Instruction> Return(BlockFactory *factory);
 
 std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 
-// Call to a client function that takes in an argument to an
-// `arch::MachineContext` pointer.
+// Call to a client function that takes in an argument to a granary context and
+// to an `arch::MachineContext` pointer.
 //
 // A context call does not allow one to see intermediate virtual register
 // state. Therefore, context calls do not have access to virtual registers.
 // This limits there applicability to places where the instrumentation code
 // wants to see the native machine context as it would be without
 std::unique_ptr<Instruction> CallWithContext(
-    void (*func)(arch::MachineContext *));
+    void (*func)(void *, arch::MachineContext *));
 
 namespace detail {
 

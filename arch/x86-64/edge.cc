@@ -241,7 +241,7 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 
   // Don't surround this code in flag save fragments as we don't modify the
   // flags.
-  edge_frag->type = CODE_TYPE_APP;
+  edge_frag->type = FRAG_TYPE_APP;
 
   // Make sure that the edge code shares the same partition as the predecessor
   // so that virtual registers can be spread across both.

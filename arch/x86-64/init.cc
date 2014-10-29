@@ -33,8 +33,11 @@ const xed_inst_t *LAST_ICLASS_SELECTION = nullptr;
 
 // Table mapping each iclass/iform to the set of read and written flags by *any*
 // selection of that iclass/iform.
-FlagsSet ICLASS_FLAGS[XED_ICLASS_LAST];
+FlagActions ICLASS_FLAG_ACTIONS[XED_ICLASS_LAST];
 FlagsSet IFORM_FLAGS[XED_IFORM_LAST];
+
+// Returns a bitmap representing all arithmetic flags being live.
+extern uint32_t AllArithmeticFlags(void);
 
 namespace {
 
@@ -55,37 +58,94 @@ static void InitIclassTables(void) {
   }
 }
 
-// Initialize the table of iclass flags.
-static void InitIclassFlags(void) {
-  xed_decoded_inst_t xedd;
-  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
-    auto xedi = xed_inst_table_base() + sel;
-    auto iclass = xed_inst_iclass(xedi);
-    memset(&xedd, 0, sizeof xedd);
-    xedd._inst = xedi;
-    if (auto flags = xed_decoded_inst_get_rflags_info(&xedd)) {
-      auto &iclass_flags(ICLASS_FLAGS[iclass]);
-      iclass_flags.read.flat |= flags->read.flat;
-      iclass_flags.written.flat |= flags->written.flat;
+// Updates the flag actions for an iclass based on a xedi.
+static void UpdateFlagActions(const xed_inst_t *xedi,
+                              xed_iclass_enum_t iclass) {
+  if (auto num_ops = xed_inst_noperands(xedi)) {
+    auto last_op = xed_inst_operand(xedi, num_ops - 1);
+    auto last_op_type = xed_operand_type(last_op);
+    auto nt_name = xed_operand_nonterminal_name(last_op);
 
-      // Turns conditionally written flags into read flags.
-      if (flags->may_write) {
-        iclass_flags.read.flat |= flags->written.flat;
+    // Make sure that conditional writes of the flags are treated as reads.
+    if (XED_OPERAND_TYPE_NT_LOOKUP_FN == last_op_type &&
+        XED_NONTERMINAL_RFLAGS == nt_name) {
+      auto &actions(ICLASS_FLAG_ACTIONS[iclass]);
+      switch (xed_operand_rw(last_op)) {
+        case XED_OPERAND_ACTION_RW:
+        case XED_OPERAND_ACTION_RCW:
+
+        // Treated as a read so flags from below propagate through.
+        case XED_OPERAND_ACTION_CW:
+        case XED_OPERAND_ACTION_CRW:
+          actions.is_read = true;
+          actions.is_write = true;
+          break;
+
+        case XED_OPERAND_ACTION_R:
+        case XED_OPERAND_ACTION_CR:
+          actions.is_read = true;
+          break;
+
+        case XED_OPERAND_ACTION_W:
+          actions.is_write = true;
+          break;
+
+        default: break;
+      }
+
+      switch (xed_operand_rw(last_op)) {
+        case XED_OPERAND_ACTION_RCW:
+        case XED_OPERAND_ACTION_CW:
+          actions.is_conditional_write = true;
+          break;
+        default: break;
       }
     }
   }
 }
 
-// Initialize the table of iform flags.
-static void InitIformFlags(void) {
-  xed_decoded_inst_t xedd;
+// Initialize the table of iclass flags.
+static void InitIclassFlags(void) {
+  memset(&(ICLASS_FLAG_ACTIONS[0]), 0, sizeof ICLASS_FLAG_ACTIONS);
+
   for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
     auto xedi = xed_inst_table_base() + sel;
-    auto iform = xed_inst_iform_enum(xedi);
-    auto &iform_flags(IFORM_FLAGS[iform]);
-    memset(&xedd, 0, sizeof xedd);
+    auto iclass = xed_inst_iclass(xedi);
+
+    UpdateFlagActions(xedi, iclass);
+  }
+}
+
+// Initialize the table of iform flags.
+static void InitIformFlags(void) {
+  memset(&(IFORM_FLAGS[0]), 0, sizeof IFORM_FLAGS);
+
+  xed_decoded_inst_t xedd;
+  memset(&xedd, 0, sizeof xedd);
+  const auto all_flags = AllArithmeticFlags();
+
+  for (auto sel = 0; sel < XED_MAX_INST_TABLE_NODES; ++sel) {
+    auto xedi = xed_inst_table_base() + sel;
+
     xedd._inst = xedi;
-    if (auto flags = xed_decoded_inst_get_rflags_info(&xedd)) {
+    auto &iform_flags(IFORM_FLAGS[xed_inst_iform_enum(xedi)]);
+    auto flags = xed_decoded_inst_get_rflags_info(&xedd);
+
+    // Either there are no flags, or there are complex flags interactions. In
+    // the case of complex flags interactions that depend on things like
+    // prefixes or the values of immediates, we will simply be conservative and
+    // assume all flags are read/written.
+    if (!flags || xedi->_flag_complex) {
+      const auto actions = ICLASS_FLAG_ACTIONS[xed_inst_iclass(xedi)];
+      if (actions.is_read) {
+        iform_flags.read.flat |= all_flags;
+      }
+      if (actions.is_write) {
+        iform_flags.written.flat |= all_flags;
+      }
+
+    // We've got precise flags information.
+    } else {
       iform_flags.read.flat |= flags->read.flat;
       iform_flags.written.flat |= flags->written.flat;
 
@@ -94,28 +154,6 @@ static void InitIformFlags(void) {
         iform_flags.read.flat |= flags->written.flat;
       }
     }
-#if 0
-    // The little hack above doesn't tend to work for instructions that use the
-    // `_flag_complex` field of `xed_inst_t`, is it can lead to doing an actual
-    // lookup of the decoded operands (of which none are provided!). We fall
-    // back on hoping that we've managed to get some simple flags via the iclass
-    // in a prior step.
-    if (auto num_ops = xed_inst_noperands(xedi)) {
-      auto last_op = xed_inst_operand(xedi, num_ops - 1);
-      auto last_op_type = xed_operand_type(last_op);
-      auto nt_name = xed_operand_nonterminal_name(last_op);
-
-      // Make sure that conditional writes of the flags are treated as reads.
-      if (XED_OPERAND_TYPE_NT_LOOKUP_FN == last_op_type &&
-          XED_NONTERMINAL_RFLAGS == nt_name) {
-        iform_flags = ICLASS_FLAGS[xed_inst_iclass(xedi)];
-        auto rw = xed_operand_rw(last_op);
-        if (XED_OPERAND_ACTION_CW == rw || XED_OPERAND_ACTION_RCW == rw) {
-          iform_flags.read.flat |= iform_flags.written.flat;
-        }
-      }
-    }
-#endif
   }
 }
 

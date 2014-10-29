@@ -261,7 +261,7 @@ ConstModuleIterator LoadedModules(void);
 
 // Invalidate all cache code related belonging to some module code. Returns
 // true if any module code was invalidated as a result of this operation.
-bool InvalidateModuleCode(AppPC start_pc, int num_bytes);
+bool InvalidateModuleCode(void *context, AppPC start_pc, uintptr_t num_bytes);
 
 }  // namespace os
 }  // namespace granary

@@ -29,25 +29,20 @@ GRANARY_DEFINE_bool(hook_syscalls, true,
 
 namespace {
 
-// Invalidates any code cache blocks related to an mmap request.
-static void InvalidateUnmappedMemory(SystemCallContext ctx) {
+// Invalidates any code cache blocks related to an `mmap` request.
+static void UnmapMemory(SystemCallContext ctx) {
   auto addr = ctx.Arg0();
   auto len = ctx.Arg1();
-  if (os::InvalidateModuleCode(reinterpret_cast<AppPC>(addr),
-                               static_cast<int>(len))) {
-    // Turn an `munmap` into a `munmap+mmap(MAP_FIXED)` pair, such that the
-    // memory is relinquished, but the address space remains allocated.
-    //
-    // Note: There is a potential race between the `munmap` and `mmap`. If this
-    //       becomes a problem then we can synchronize `mmap`, `munmap` and
-    //       `mremap`.
-    munmap(reinterpret_cast<void *>(addr), len);
-    ctx.Number() = __NR_mmap;
-    ctx.Arg2() = 0;  // PROT_NONE.
-    ctx.Arg3() = MAP_SHARED | MAP_ANONYMOUS | MAP_FIXED;
-    ctx.Arg4() = std::numeric_limits<uintptr_t>::max();  // -1.
-    ctx.Arg5() = 0;  // offset.
-  }
+
+  // Turn an `munmap` into an `mmap` and `mprotect` pair that first makes
+  // the memory unusable, then hints to the OS that it no longer needs to be
+  // backed.
+
+  mmap(reinterpret_cast<void *>(addr), len, PROT_NONE,
+       MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+
+  ctx.Number() = __NR_mprotect;
+  ctx.Arg2() = PROT_NONE;  // Should succeed.
 }
 
 // Use Granary's `exit_group` function to handle process exit. This will lead
@@ -70,7 +65,7 @@ static void RemoveAllHooks(void) {
 }  // namespace
 
 // Handle a system call entrypoint.
-void HookSystemCallEntry(arch::MachineContext *context) {
+void HookSystemCallEntry(void *, arch::MachineContext *context) {
   SystemCallContext ctx(context);
   entry_hooks.ApplyAll(ctx);
 
@@ -85,12 +80,12 @@ void HookSystemCallEntry(arch::MachineContext *context) {
 
   // Manipulate certain kinds of memory operations.
   } else if (__NR_munmap == ctx.Number()) {
-    InvalidateUnmappedMemory(ctx);
+    UnmapMemory(ctx);
   }
 }
 
 // Handle a system call exit.
-void HookSystemCallExit(arch::MachineContext *context) {
+void HookSystemCallExit(void *, arch::MachineContext *context) {
   exit_hooks.ApplyAll(SystemCallContext(context));
 }
 
@@ -144,9 +139,10 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   // Adds in the hooks that allow other tools (including this tool) to hook
   // the system call handlers in high-level way.
   void InstrumentSyscall(ControlFlowInstruction *syscall) {
-    if (!entry_hooks.IsEmpty()) {
-      syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
-    }
+    // Unconditionally pre-instrument syscalls so we can see `munmap`s and
+    // `exit_group`s.
+    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
+
     if (!exit_hooks.IsEmpty()) {
       syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
     }

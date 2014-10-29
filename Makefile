@@ -77,6 +77,11 @@ target_test: where_common
 	$(MAKE) -C $(GRANARY_TEST_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
+setup:
+	@echo "Getting all depency code."
+	@$(GRANARY_SH) ./scripts/init_submodules.sh
+	@echo "Granary is ready to be compiled."
+
 all: target_$(GRANARY_TARGET)
 	@echo "Done."
 

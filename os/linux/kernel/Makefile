@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../../../Makefile.inc
+include ../Types.mk
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
@@ -38,7 +38,7 @@ lint:
 	@echo "Linting OS-specific Granary files."
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/os -type f -name '*.h' -or -name '*.cc')
 
-all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
+all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 
 # Create an `_shipped` file out of the existing granary objects in the main
 # binary dir.

@@ -16,9 +16,8 @@ extern const Operand * const IMPLICIT_OPERANDS[];
 // Number of implicit operands for each iclass.
 extern const int NUM_IMPLICIT_OPERANDS[];
 
-// Table mapping each iclass to the set of read and written flags by *any*
-// selection of that iclass.
-GRANARY_IF_DEBUG( extern const FlagsSet IFORM_FLAGS[]; )
+// Table telling us how flags are used by a particular iclass.
+extern const FlagActions ICLASS_FLAG_ACTIONS[];
 
 Instruction::Instruction(void) {
   memset(this, 0, sizeof *this);
@@ -231,34 +230,16 @@ int Instruction::ComputedOffsetBelowStackPointer(void) const {
 //
 // Note: the RFLAGS register is always the last implicit operand.
 bool Instruction::ReadsFlags(void) const {
-  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
-  GRANARY_ASSERT(0 != isel);
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[isel];
-  if (num_implicit_ops) {
-    const auto &op(IMPLICIT_OPERANDS[isel][num_implicit_ops - 1]);
-    return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
-           op.reg.IsFlags() && (op.IsRead() || op.IsConditionalWrite());
-  } else {
-    GRANARY_ASSERT(!iform || 0 == IFORM_FLAGS[iform].read.flat);
-    GRANARY_ASSERT(!has_prefix_rep && !has_prefix_repne);
-    return false;
-  }
+  GRANARY_ASSERT(XED_ICLASS_INVALID != iclass);
+  return ICLASS_FLAG_ACTIONS[iclass].is_read;
 }
 
 // Returns true if an instruction writes to the flags.
 //
 // Note: the RFLAGS register is always the last operand.
 bool Instruction::WritesFlags(void) const {
-  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
-  GRANARY_ASSERT(0 != isel);
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[isel];
-  if (num_implicit_ops) {
-    const auto &op(IMPLICIT_OPERANDS[isel][num_implicit_ops - 1]);
-    return XED_ENCODER_OPERAND_TYPE_REG == op.type &&
-           op.reg.IsFlags() && op.IsWrite();
-  } else {
-    return false;
-  }
+  GRANARY_ASSERT(XED_ICLASS_INVALID != iclass);
+  return ICLASS_FLAG_ACTIONS[iclass].is_write;
 }
 
 namespace {

@@ -84,6 +84,8 @@ static void SuppressSigAction(void *, SystemCallContext ctx) {
 
 }  // namespace
 
+GRANARY_DECLARE_bool(debug_log_fragments);
+
 // Tool that helps user-space instrumentation work.
 class GDBDebuggerHelper : public InstrumentationTool {
  public:
@@ -118,6 +120,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
     auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
     auto offset = module->OffsetOfPC(decoded_pc);
+
     if (StringsMatch("ld", module_name)) {
       return GDB_BP_OFFSET__dl_debug_state == offset.offset;
     } else if (StringsMatch("libpthread", module_name)) {

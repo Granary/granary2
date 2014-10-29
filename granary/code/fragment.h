@@ -174,6 +174,22 @@ enum FragmentSuccessorSelector {
   FRAG_SUCC_BRANCH = 1
 };
 
+enum FragmentType {
+  // The code type of this fragment hasn't (yet) been decided.
+  FRAG_TYPE_UNKNOWN,
+
+  // Fragment containing application instructions and/or instrumentation
+  // instructions that don't modify the flags state.
+  FRAG_TYPE_APP,
+
+  // Fragment containing instrumentation instructions, and/or application
+  // instructions that don't read/write the flags state.
+  //
+  // Note: The extra condition of app instructions not *reading* the flags
+  //       state is super important!
+  FRAG_TYPE_INST
+};
+
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
@@ -199,6 +215,11 @@ class Fragment {
   // Where was this fragment encoded?
   int encoded_size;
   CachePC encoded_pc;
+
+  // What kind of fragment is this? This is primarily used by `CodeFragment`
+  // fragments, but it helps to be able to recognize all other kinds of
+  // fragments as application fragments.
+  FragmentType type;
 
   // List of instructions in the fragment.
   InstructionList instrs;
@@ -325,22 +346,6 @@ struct StackUsageInfo {
   // Should forward propagation of stack validity be disallowed into this
   // block?
   StackStatusInheritanceConstraint inherit_constraint;
-};
-
-enum CodeType {
-  // The code type of this fragment hasn't (yet) been decided.
-  CODE_TYPE_UNKNOWN,
-
-  // Fragment containing application instructions and/or instrumentation
-  // instructions that don't modify the flags state.
-  CODE_TYPE_APP,
-
-  // Fragment containing instrumentation instructions, and/or application
-  // instructions that don't read/write the flags state.
-  //
-  // Note: The extra condition of app instructions not *reading* the flags
-  //       state is super important!
-  CODE_TYPE_INST
 };
 
 // Attributes about a block of code.
@@ -488,8 +493,6 @@ class CodeFragment : public SSAFragment {
 
   // Attributes relates to the code in this fragment.
   CodeAttributes attr;
-
-  CodeType type;
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;

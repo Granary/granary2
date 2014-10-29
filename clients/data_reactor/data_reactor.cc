@@ -116,7 +116,7 @@ class DataReactor : public InstrumentationTool {
   void InstrumentAddrMemOp(NativeInstruction *instr, const MemoryOperand &mloc,
                            const void *addr) {
     auto ptr = reinterpret_cast<uintptr_t>(addr);
-    ImmediateOperand shadow_offset(ptr >> shift_amount_long);
+    ImmediateOperand shadow_offset((ptr >> shift_amount_long) & 0xFFFFFFFFUL);
     lir::InlineAssembly asm_({&shadow_offset});
     asm_.InlineBefore(instr, "MOV r64 %2, i64 %0;");
     TouchShadow(instr, mloc, asm_);

@@ -189,20 +189,13 @@ uint64_t VarFormat(char * __restrict buffer, uint64_t len,
         } else if ('p' == format_ch) {
           base = 16;
           is_long = true;
+          buff.Write("0x");
         }
         uint64_t generic_uint(0);
         if (is_long) {
           generic_uint = va_arg(args, uint64_t);
         } else {
           generic_uint = static_cast<uint64_t>(va_arg(args, unsigned));
-        }
-        if ('p' == format_ch) {
-          if (!generic_uint) {
-            buff.Write("(nil)");
-            continue;  // Don't change the state.
-          } else {
-            buff.Write("0x");
-          }
         }
         FormatGenericInt(buff, generic_uint, base);
       } else {
