@@ -38,6 +38,12 @@ will be used for kernel space instrumentation.
 ./scripts/make_qemu_img_link.sh <path-to-QEMU-VM-image>
 ```
 
+Finally, make sure everything is set up for Granary. This does things like fetch dependencies.
+
+```
+make setup
+```
+
 ### Step 2: Compiling Granary.
 #### User Space
 If you are compiling Granary for user space, run:
