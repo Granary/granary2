@@ -206,6 +206,9 @@ class ModuleManager {
   // Find a module given a program counter.
   Module *FindByAppPC(AppPC pc);
 
+  // Find the module and offset associated with a given program counter.
+  ModuleOffset FindOffsetOfPC(AppPC pc);
+
   // Find a module given its name.
   Module *FindByName(const char *name);
 
@@ -252,6 +255,9 @@ void ExitModuleManager(void);
 
 // Returns a pointer to the module containing some program counter.
 const Module *ModuleContainingPC(AppPC pc);
+
+// Find the module and offset associated with a given program counter.
+ModuleOffset ModuleOffsetOfPC(AppPC pc);
 
 // Returns a pointer to the first module whose name matches `name`.
 const Module *ModuleByName(const char *name);

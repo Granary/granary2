@@ -268,6 +268,21 @@ GRANARY_CONST Module *ModuleManager::FindByAppPC(AppPC pc) {
   return nullptr;
 }
 
+// Find the module and offset associated with a given program counter.
+ModuleOffset ModuleManager::FindOffsetOfPC(AppPC pc) {
+  for (auto num_attempts = 0; num_attempts < 2; ++num_attempts) {
+    do {
+      ReadLockedRegion locker(&modules_lock);
+      for (auto module : ModuleIterator(modules)) {
+        auto offset = module->OffsetOfPC(pc);
+        if (offset.module == module) return offset;
+      }
+    } while (false);
+    if (!num_attempts) ReRegisterAllBuiltIn();
+  }
+  return ModuleOffset();
+}
+
 // Find a module given its name.
 GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
   ReadLockedRegion locker(&modules_lock);
@@ -329,6 +344,11 @@ void ExitModuleManager(void) {
 // Returns a pointer to the module containing some program counter.
 const Module *ModuleContainingPC(AppPC pc) {
   return global_module_manager->FindByAppPC(pc);
+}
+
+// Find the module and offset associated with a given program counter.
+ModuleOffset ModuleOffsetOfPC(AppPC pc) {
+  return global_module_manager->FindOffsetOfPC(pc);
 }
 
 // Returns a pointer to the first module whose name matches `name`.

@@ -8,7 +8,7 @@
 // Forward declaration.
 class Watchpoints;
 
-struct WatchedOperand {
+class WatchedOperand {
  protected:
   friend class Watchpoints;
 
