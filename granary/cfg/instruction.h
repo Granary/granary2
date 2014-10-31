@@ -94,14 +94,8 @@ class Instruction {
   virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
 
   // Unlink an instruction from an instruction list.
-  static std::unique_ptr<Instruction> Unlink(Instruction *);
-
-  // Unlink an instruction in an unsafe way. The normal unlink process exists
-  // for ensuring some amount of safety, whereas this is meant to be used only
-  // in internal cases where Granary is safely doing an "unsafe" thing (e.g.
-  // when it's stealing instructions for `Fragment`s.
   GRANARY_INTERNAL_DEFINITION
-  std::unique_ptr<Instruction> UnsafeUnlink(void);
+  static std::unique_ptr<Instruction> Unlink(Instruction *);
 
   // Used to put instructions into lists.
   GRANARY_INTERNAL_DEFINITION mutable ListHead list;

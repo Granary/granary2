@@ -95,7 +95,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
     RegisterOperand address(dst_addr);
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
 
-    lir::InlineAssembly asm_({&address, &address_mask, &value});
+    lir::InlineAssembly asm_(address, address_mask, value);
     if (FLAG_address_mask &&
         std::numeric_limits<uintptr_t>::max() != FLAG_address_mask) {
       asm_.InlineBefore(instr,
@@ -118,7 +118,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
     ImmediateOperand address_mask(FLAG_address_mask, arch::ADDRESS_WIDTH_BYTES);
     ImmediateOperand value_mask(FLAG_value_mask, arch::ADDRESS_WIDTH_BYTES);
 
-    lir::InlineAssembly asm_({&address, &address_mask, &value, &value_mask});
+    lir::InlineAssembly asm_(address, address_mask, value, value_mask);
 
     if (FLAG_address_mask &&
         std::numeric_limits<uintptr_t>::max() != FLAG_address_mask) {

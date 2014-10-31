@@ -1,43 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "clients/util/types.h"
-
-#include <granary.h>
-
-#include "clients/util/closure.h"
+#include "clients/wrap_func/wrap_func.h"
 
 using namespace granary;
 
 namespace {
-
-class FunctionWrapper {
- public:
-  FunctionWrapper *next;
-
-  // Name of the module to which the function being wrapped belongs.
-  const char *module_name;
-
-  // Offset of the function to be wrapped from within its module.
-  uint64_t module_offset;
-
-  // The wrapper function.
-  AppPC wrapper_func;
-
-  // Number of arguments that need to be passed along to the wrapped
-  // function.
-  uint8_t num_args;
-
-  // Do we want to be passed a function pointer to the instrumented version
-  // of the wrapped function?
-  bool pass_instrumented;
-
-  // Do we want to be passed a function pointer to the native version of
-  // the wrapped function?
-  bool pass_native;
-
- private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(FunctionWrapper);
-};
 
 typedef LinkedListIterator<FunctionWrapper> FunctionWrapperIterator;
 
@@ -47,12 +14,13 @@ static ReaderWriterLock wrappers_lock;
 
 // Returns the place in the wrappers linked list into which a wrapper will
 // be placed.
-FunctionWrapper **FunctionWrapperInsertPoint(const char *module_name,
-                                             uint64_t module_offset) {
+static FunctionWrapper **FunctionWrapperInsertPoint(const char *module_name,
+                                                    uint64_t module_offset) {
   auto prev = &wrappers;
   for (auto wrapper : FunctionWrapperIterator(wrappers)) {
     if (module_offset <= wrapper->module_offset &&
         StringsMatch(module_name, wrapper->module_name)) {
+      GRANARY_ASSERT(module_offset != wrapper->module_offset);
       break;
     }
     prev = &(wrapper->next);
@@ -60,12 +28,33 @@ FunctionWrapper **FunctionWrapperInsertPoint(const char *module_name,
   return prev;
 }
 
-enum FunctionWrapperKind {
-  WRAP_CALL,
-  WRAP_TAIL_CALL
-};
+// Find the wrapper associated with a given block.
+static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
+  auto offset = os::ModuleOffsetOfPC(block->StartAppPC());
+  if(!offset.module) return nullptr;
+
+  ReadLockedRegion locker(&wrappers_lock);
+  for (auto wrapper : FunctionWrapperIterator(wrappers)) {
+    if (offset.offset == wrapper->module_offset &&
+        StringsMatch(offset.module->Name(), wrapper->module_name)) {
+      return wrapper;
+    }
+  }
+
+  return nullptr;
+}
 
 }  // namespace
+
+// Register a function wrapper with the wrapper tool.
+void RegisterFunctionWrapper(FunctionWrapper *wrapper) {
+  GRANARY_ASSERT(!wrapper->next);
+  WriteLockedRegion locker(&wrappers_lock);
+  auto insert_point = FunctionWrapperInsertPoint(wrapper->module_name,
+                                                 wrapper->module_offset);
+  wrapper->next = *insert_point;
+  *insert_point = wrapper;
+}
 
 // Tool that helps instrument `malloc` and `free` functions.
 class FunctionWrapperInstrumenter : public InstrumentationTool {
@@ -74,15 +63,13 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
   virtual void Exit(ExitReason) {
     WriteLockedRegion locker(&wrappers_lock);
-    for (; wrappers;) {
+    for (; wrappers; ) {
       auto next_wrapper = wrappers->next;
-      delete wrappers;
+      wrappers->next = nullptr;
       wrappers = next_wrapper;
     }
   }
 
-  // Step 1: Find calls/jumps to stuff that we want to wrap, and make sure
-  //         that those things are not materialized.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
@@ -91,23 +78,14 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
         // Don't allow anyone to materialize blocks that represent code that
         // will be wrapped.
         auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
-        if (direct_block && FunctionWrapperFor(direct_block)) {
-          factory->RequestBlock(direct_block, REQUEST_DENIED);
-        }
-      }
-    }
-  }
+        if (!direct_block) continue;
 
-  // Step 2: For each wrappable target, add in the wrapping stuff.
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
-    for (auto succ : block->Successors()) {
-      if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
-        if (auto wrapper = FunctionWrapperFor(direct_block)) {
-          if (succ.cfi->IsJump()) {
-            WrapBlock(wrapper, succ.cfi, direct_block, WRAP_TAIL_CALL);
-          } else if (succ.cfi->IsFunctionCall()) {
-            WrapBlock(wrapper, succ.cfi, direct_block, WRAP_CALL);
-          }
+        auto wrapper = FunctionWrapperFor(direct_block);
+        if (!wrapper) continue;
+
+        if (!succ.cfi->IsConditionalJump()) {
+          WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
+                    succ.cfi, direct_block);
         }
       }
     }
@@ -115,30 +93,59 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
  protected:
 
-  // Find the wrapper associated with a given block.
-  FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
-    auto offset = os::ModuleOffsetOfPC(block->StartAppPC());
-    if(!offset.module) return nullptr;
+  // Note: We use `R10` for passing an extra argument to the wrapper because
+  //       the x86-64 Linux ABI has that as a scratch register.
 
-    ReadLockedRegion locker(&wrappers_lock);
-    for (auto wrapper : FunctionWrapperIterator(wrappers)) {
-      if (offset.offset == wrapper->module_offset &&
-          StringsMatch(offset.module->Name(), wrapper->module_name)) {
-        return wrapper;
-      }
-    }
+  void WrapNative(ControlFlowInstruction *cfi,
+                  DirectBasicBlock *target_block) {
+    ImmediateOperand native_addr(target_block->StartAppPC());
+    lir::InlineAssembly asm_(native_addr);
+    asm_.InlineBefore(cfi, "MOV r64 R10, i64 %0"_x86_64);
+  }
 
-    return nullptr;
+  void WrapInstrumented(BlockFactory *factory, DecodedBasicBlock *block,
+                        ControlFlowInstruction *cfi,
+                        DirectBasicBlock *target_block) {
+    auto label = new LabelInstruction;
+    LabelOperand instrumented_addr(label);
+    lir::InlineAssembly asm_(instrumented_addr);
+    asm_.InlineBefore(cfi, "LEA r64 R10, l %0"_x86_64);
+
+    // Make sure everyone can update the meta-data, but that no-one will
+    // actually be able to materialize the block.
+    factory->RequestBlock(target_block, REQUEST_DENIED);
+
+    // Move the original CFI to the end of the block.
+    block->AppendInstruction(label);
+    block->AppendInstruction(DecodedBasicBlock::Unlink(cfi));
+    if (cfi->IsFunctionCall()) lir::ConvertFunctionCallToJump(cfi);
   }
 
   // Try to wrap a block.
-  void WrapBlock(FunctionWrapper *wrapper, ControlFlowInstruction *cfi,
-                 DirectBasicBlock *block, FunctionWrapperKind kind) {
-    GRANARY_UNUSED(wrapper);
-    GRANARY_UNUSED(cfi);
-    GRANARY_UNUSED(block);
-    GRANARY_UNUSED(kind);
-    GRANARY_UNUSED(FunctionWrapperInsertPoint);
+  void WrapBlock(BlockFactory *factory, FunctionWrapper *wrapper,
+                 DecodedBasicBlock *block, ControlFlowInstruction *cfi,
+                 DirectBasicBlock *target_block) {
+
+    if (PASS_NATIVE_WRAPPED_FUNCTION == wrapper->action) {
+      WrapNative(cfi, target_block);
+    }
+
+    if (cfi->IsFunctionCall()) {
+      cfi->InsertAfter(lir::FunctionCall(factory, wrapper->wrapper_pc,
+                                         REQUEST_NATIVE));
+    } else if (!cfi->IsConditionalJump()) {
+      cfi->InsertAfter(lir::Jump(factory, wrapper->wrapper_pc,
+                                  REQUEST_NATIVE));
+    } else {
+      // TODO(pag): Handle a conditional jump that is a tail-call.
+      GRANARY_ASSERT(false);
+    }
+
+    if (PASS_INSTRUMENTED_WRAPPED_FUNCTION == wrapper->action) {
+      WrapInstrumented(factory, block, cfi, target_block);
+    } else {
+      DecodedBasicBlock::Unlink(cfi);
+    }
   }
 };
 

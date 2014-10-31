@@ -274,6 +274,15 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   void AppendInstruction(std::unique_ptr<Instruction> instr);
   void AppendInstruction(Instruction *instr);
 
+  // Remove and return single instruction. Some special kinds of instructions
+  // can't be removed.
+  static std::unique_ptr<Instruction> Unlink(Instruction *instr);
+
+  // Truncate a decoded basic block. This removes `instr` up until the end of
+  // the instruction list. In some cases, certain special instructions are not
+  // allowed to be truncated. This will not remove such special cases.
+  static void Truncate(Instruction *instr);
+
  private:
   friend class BlockFactory;
   friend class LocalControlFlowGraph;

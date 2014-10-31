@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"
@@ -42,7 +43,7 @@ std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
 }
 
 // Call to an existing basic block.
-std::unique_ptr<Instruction> Call(BasicBlock *target_block) {
+std::unique_ptr<Instruction> FunctionCall(BasicBlock *target_block) {
   arch::Instruction ni;
   CALL_NEAR_RELBRd(&ni, target_block->StartAppPC());
   return std::unique_ptr<Instruction>(
@@ -63,6 +64,37 @@ std::unique_ptr<Instruction> Return(BlockFactory *factory) {
   RET_NEAR(&ni);
   ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS;
   return std::unique_ptr<Instruction>(factory->MakeInstruction(&ni, &ni));
+}
+
+// Conversion functions.
+void ConvertFunctionCallToJump(ControlFlowInstruction *cfi) {
+  auto &ni(cfi->instruction);
+  if (ni.HasIndirectTarget()) {
+    if (ni.ops[0].IsRegister()) {
+      JMP_GPRv(&ni, ni.ops[0]);
+    } else {
+      JMP_MEMv(&ni, ni.ops[0]);
+    }
+  } else if (ni.ops[0].is_annotation_instr) {
+    JMP_RELBRd(&ni, ni.ops[0].annotation_instr);
+  } else {
+    JMP_RELBRd(&ni, ni.ops[0].branch_target.as_pc);
+  }
+}
+
+void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi) {
+  auto &ni(cfi->instruction);
+  if (ni.HasIndirectTarget()) {
+    if (ni.ops[0].IsRegister()) {
+      CALL_NEAR_GPRv(&ni, ni.ops[0]);
+    } else {
+      CALL_NEAR_MEMv(&ni, ni.ops[0]);
+    }
+  } else if (ni.ops[0].is_annotation_instr) {
+    CALL_NEAR_RELBRd(&ni, ni.ops[0].annotation_instr);
+  } else {
+    CALL_NEAR_RELBRd(&ni, ni.ops[0].branch_target.as_pc);
+  }
 }
 
 }  // namespace lir

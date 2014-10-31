@@ -5,6 +5,11 @@
 
 namespace granary {
 
+template <typename T>
+struct Identity {
+  typedef T Type;
+};
+
 class TrueType : public std::true_type {
  public:
   enum {

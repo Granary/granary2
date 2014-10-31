@@ -50,7 +50,7 @@ class TrapBadUserAccess : public InstrumentationTool {
     if (addr.IsSegmentOffset()) return;
 
     RegisterOperand addr_reg(addr);
-    lir::InlineAssembly asm_({&addr_reg});
+    lir::InlineAssembly asm_(addr_reg);
 
     asm_.InlineBefore(instr,
         // Test bit 47, which should be sign-extended to the value of all other

@@ -384,9 +384,9 @@ static void LogFragment(LogLevel level, const Fragment *frag) {
 // Log a list of fragments as a DOT digraph.
 void Log(LogLevel level, FragmentList *frags) {
   Log(level, "digraph {\n"
-             "node [fontname=courier shape=record"
-             " nojustify=false labeljust=l style=filled];\n"
-             "f0 [label=enter];\n");
+             "node [fontname=courier shape=record "
+             "nojustify=false labeljust=l style=filled];\n"
+             "f0x0 [label=enter];\n");
   LogFragmentEdge(level, nullptr, frags->First());
   for (auto frag : FragmentListIterator(frags)) {
     LogFragmentEdges(level, frag);
@@ -403,7 +403,7 @@ static void FreeInstructions(Fragment *frag) {
   auto instr = frag->instrs.First();
   for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
     next_instr = instr->Next();
-    instr->UnsafeUnlink();  // Will self-destruct.
+    Instruction::Unlink(instr);  // Will self-destruct.
   }
 }
 

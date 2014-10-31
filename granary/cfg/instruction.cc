@@ -64,32 +64,8 @@ Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> instr) {
 
 // Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-    if (IA_BEGIN_BASIC_BLOCK == annot->annotation ||
-        IA_END_BASIC_BLOCK == annot->annotation) {
-      return std::unique_ptr<Instruction>(nullptr);
-    }
-  }
-
   instr->list.Unlink();
-
-  // If we're unlinking a branch then make sure that the target itself does
-  // not continue to reference the branch.
-  if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-    GRANARY_ASSERT(1 <= branch->TargetLabel()->data);
-    branch->TargetLabel()->data -= 1;
-  }
-
   return std::unique_ptr<Instruction>(instr);
-}
-
-// Unlink an instruction in an unsafe way. The normal unlink process exists
-// for ensuring some amount of safety, whereas this is meant to be used only
-// in internal cases where Granary is safely doing an "unsafe" thing (e.g.
-// when it's stealing instructions for `Fragment`s.
-std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
-  list.Unlink();
-  return std::unique_ptr<Instruction>(this);
 }
 
 // Make it so that inserting an instruction before the designated first

@@ -21,6 +21,7 @@
 # include <memory>
 # include <new>
 # include <type_traits>
+typedef long int ssize_t;
 #endif
 
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
@@ -175,6 +176,11 @@
 #define GRANARY_NUM_PARAMS_(_0,_1,_2,_3,_4,_5,_6,_7,_8,_9,N,...) N
 #define GRANARY_NUM_PARAMS(...) \
   GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,9,8,7,6,5,4,3,2,1,0)
+
+// Splats out the arguments passed into the macro function. This assumes one
+// is doing something like: `GRANARY_SPLAT((x, y))`, then what you will get
+// is `x, y`.
+#define GRANARY_SPLAT(params) GRANARY_PARAMS params
 
 // Spits back out the arguments passed into the macro function.
 #define GRANARY_PARAMS(...) __VA_ARGS__

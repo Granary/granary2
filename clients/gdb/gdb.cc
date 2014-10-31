@@ -138,7 +138,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
     GRANARY_ASSERT(cfi->DecodedPC() && cfi->DecodedLength());
     cfi->InsertBefore(lir::Jump(factory, cfi->DecodedPC() +
                                          cfi->DecodedLength()));
-    Instruction::Unlink(cfi);
+    DecodedBasicBlock::Unlink(cfi);
   }
 
   void DontInstrumentUndoDB(BlockFactory *factory, DirectBasicBlock *block) {

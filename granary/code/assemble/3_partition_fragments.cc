@@ -79,7 +79,7 @@ static void FreeInstructions(Fragment *frag) {
   auto instr = frag->instrs.First();
   for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
     next_instr = instr->Next();
-    instr->UnsafeUnlink();  // Will self-destruct.
+    Instruction::Unlink(instr);  // Will self-destruct.
   }
 }
 

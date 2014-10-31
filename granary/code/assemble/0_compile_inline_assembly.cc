@@ -40,7 +40,7 @@ void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
                 annot->Data<void *>());
             arch::CompileInlineAssemblyBlock(cfg, dblock, instr, asm_block);
             delete asm_block;
-            instr->UnsafeUnlink();
+            Instruction::Unlink(instr);
           }
         }
       }

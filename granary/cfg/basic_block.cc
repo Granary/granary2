@@ -199,6 +199,43 @@ void DecodedBasicBlock::AppendInstruction(Instruction *instr) {
   LastInstruction()->InsertBefore(instr);
 }
 
+// Remove and return single instruction. Some special kinds of instructions
+// can't be removed.
+std::unique_ptr<Instruction> DecodedBasicBlock::Unlink(Instruction *instr) {
+  if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
+    switch (annot_instr->annotation) {
+      case IA_BEGIN_BASIC_BLOCK:
+      case IA_END_BASIC_BLOCK:
+      case IA_LABEL:
+      case IA_RETURN_ADDRESS:
+      case IA_INVALID_STACK:
+      case IA_UNKNOWN_STACK_ABOVE:
+      case IA_UNKNOWN_STACK_BELOW:
+      case IA_VALID_STACK:
+        return std::unique_ptr<Instruction>(nullptr);
+      default:
+        break;
+    }
+
+  // If we're unlinking a branch then make sure that the target itself does
+  // not continue to reference the branch.
+  } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
+    GRANARY_ASSERT(1 <= branch->TargetLabel()->data);
+    branch->TargetLabel()->data -= 1;
+  }
+  return Instruction::Unlink(instr);
+}
+
+// Truncate a decoded basic block. This removes `instr` up until the end of
+// the instruction list. In some cases, certain special instructions are not
+// allowed to be truncated. This will not remove such special cases.
+void DecodedBasicBlock::Truncate(Instruction *instr) {
+  for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
+    next_instr = instr->Next();
+    Unlink(instr);
+  }
+}
+
 CompensationBasicBlock::CompensationBasicBlock(LocalControlFlowGraph *cfg_,
                                                BlockMetaData *meta_)
     : DecodedBasicBlock(cfg_, meta_),

@@ -56,7 +56,7 @@ class Watchpoints : public InstrumentationTool {
     WatchedOperand client_op(bb, instr, mloc, unwatched_addr_reg,
                              watched_addr_reg);
 
-    lir::InlineAssembly asm_({&unwatched_addr_reg, &watched_addr_reg});
+    lir::InlineAssembly asm_(unwatched_addr_reg, watched_addr_reg);
 
     asm_.InlineBefore(instr,
         "MOV r64 %0, r64 %1;"  // Copy the original (%1).

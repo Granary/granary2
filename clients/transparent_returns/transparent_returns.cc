@@ -143,24 +143,6 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
 
   virtual ~TransparentRetsInstrumenterLate(void) = default;
 
-  // Remove all instructions starting from (and including) `search_instr`.
-  //
-  // TODO(pag): Refactor this into some kind of helper routine.
-  void RemoveTailInstructions(DecodedBasicBlock *block,
-                              const Instruction *search_instr) {
-    auto first_instr = block->FirstInstruction();
-    auto last_instr = block->LastInstruction();
-
-    if (search_instr == last_instr) return;
-
-    Instruction *instr(nullptr);
-    do {
-      instr = last_instr->Previous();
-      if (instr == first_instr) break;
-      Instruction::Unlink(instr);
-    } while (instr != search_instr);
-  }
-
   // Push on a return address for either of a direct or indirect function
   // call.
   void AddTransparentRetAddr(ControlFlowInstruction *cfi) {
@@ -172,24 +154,11 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
                               is_u32 ? 32 : arch::ADDRESS_WIDTH_BYTES);
 
     // Push on the native return address.
-    lir::InlineAssembly asm_({&ret_addr});
+    lir::InlineAssembly asm_(ret_addr);
     asm_.InlineBeforeIf(cfi, is_u32,  "PUSH i32 %0;"_x86_64);
     asm_.InlineBeforeIf(cfi, !is_u32, "MOV r64 %1, i64 %0;"
                                       "PUSH r64 %1;"_x86_64);
-
-    // Convert the (in)direct call into a jump.
-    //
-    // TODO(pag): Refactor the conversion of a function call into a tail-call
-    //            into a helper routine.
-    if (cfi->HasIndirectTarget()) {
-      RegisterOperand target_reg;
-      GRANARY_IF_DEBUG( auto matched = ) cfi->MatchOperands(
-          ReadFrom(target_reg));
-      GRANARY_ASSERT(matched);
-      cfi->InsertBefore(lir::IndirectJump(cfi->TargetBlock(), target_reg));
-    } else {
-      cfi->InsertBefore(lir::Jump(cfi->TargetBlock()));
-    }
+    lir::ConvertFunctionCallToJump(cfi);
   }
 
   // Add a return address to the
@@ -201,7 +170,7 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
 
       // Convert a function call into a `PUSH; JMP` combination.
       AddTransparentRetAddr(succ.cfi);
-      RemoveTailInstructions(block, succ.cfi);
+      DecodedBasicBlock::Truncate(succ.cfi->Next());
       factory->RequestBlock(succ.block);  // Walk into the call.
       break;  // Won't have any more successors.
     }

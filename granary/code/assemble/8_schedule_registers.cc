@@ -1231,7 +1231,8 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
 
   sched->frag->instrs.InsertAfter(
       instr, new AnnotationInstruction(IA_SSA_USELESS_INSTR, ssa_instr));
-  instr->UnsafeUnlink();
+
+  Instruction::Unlink(instr);  // Will self-destruct.
   return true;
 }
 

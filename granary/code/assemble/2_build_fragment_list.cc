@@ -26,12 +26,12 @@ namespace arch {
 // flow graph.
 //
 // At decode time, the local control-flow graph is formed of "true" basic
-// blocks. However, instrumentation tools might inject abitrary control-flow
+// blocks. However, instrumentation tools might inject arbitrary control-flow
 // into basic blocks (e.g. via inline assembly). By the time we get around to
 // wanting to convert instrumented blocks into machine code, we hit a wall
 // where we can't assume that control flows linearly through the instructions
 // of a `DecodedBasicBlock`, and this really complicates virtual register
-// allocation (which is a pre-requisite to encoding).
+// allocation (which is a prerequisite to encoding).
 //
 // Therefore, it's necessary to "re-split up" `DecodedBasicBlocks` into actual
 // basic blocks. However, we go further than the typical definition of a basic
@@ -175,6 +175,27 @@ static void AddBlockTailToWorkList(
   predecessor->successors[succ_sel] = tail_frag;
 }
 
+// Unreachable but referenced label. Most likely we have another mechanism of
+// reaching this label that isn't communicated by means of the normal control-
+// flow instructions. For example, the function wrapper tool will sometimes
+// want to pass a pointer to an instrumented version of the function being
+// wrapped.
+static void AddBlockStragglerToWorkList(FragmentBuilder *builder,
+                                        BlockMetaData *source_block_meta,
+                                        LabelInstruction *label) {
+  auto frag = new CodeFragment;
+  frag->attr.block_meta = source_block_meta;
+  label->fragment = frag;
+
+  auto elm = new FragmentInProgress;
+  elm->frag = frag;
+  elm->instr = label->Next();
+  elm->next = builder->next;
+
+  builder->next = elm;  // To head of work list.
+  builder->frags->Append(frag);  // Add to the end so it's not in-line.
+}
+
 // Process an annotation instruction. Returns `true` if iteration should
 // continue, and `false` otherwise.
 static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
@@ -254,13 +275,13 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case IA_RETURN_ADDRESS:
       GRANARY_ASSERT(!frag->attr.has_native_instrs);
       frag->attr.is_return_target = true;
-      frag->instrs.Append(instr->UnsafeUnlink().release());
+      frag->instrs.Append(Instruction::Unlink(instr).release());
       return true;
 
     // An annotation where, when encoded, will update a pointer to contain the
     // address at which this annotation is encoded.
     case IA_UPDATE_ENCODED_ADDRESS:
-      frag->instrs.Append(instr->UnsafeUnlink().release());
+      frag->instrs.Append(Instruction::Unlink(instr).release());
       return true;
 
     // The upcoming instruction can potentially enabled/disable interrupts.
@@ -337,7 +358,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
                            next_instr, StackUsageInfo());
   }
   // Append the branch to the fragment.
-  frag->instrs.Append(instr->UnsafeUnlink().release());
+  frag->instrs.Append(Instruction::Unlink(instr).release());
 }
 
 // Process a native instruction. Returns `true` if the instruction is added
@@ -442,7 +463,7 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   }
 
   // Add in the CFI.
-  frag->instrs.Append(instr->UnsafeUnlink().release());
+  frag->instrs.Append(Instruction::Unlink(instr).release());
 }
 
 // Process a native instruction. Returns `true` if the instruction is added
@@ -476,7 +497,7 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
   if (reads_flags) frag->attr.reads_flags = true;
   if (writes_flags) frag->attr.modifies_flags = true;
   frag->attr.has_native_instrs = true;
-  frag->instrs.Append(instr->UnsafeUnlink().release());
+  frag->instrs.Append(Instruction::Unlink(instr).release());
   return true;
 }
 
@@ -541,6 +562,33 @@ static void ProcessFragment(FragmentBuilder *builder, CodeFragment *frag,
 
     } else {
       granary_curiosity();
+    }
+  }
+}
+
+// Run ahead to see if there's anything that might be a useful instruction to
+// add to the the fragment graph.
+static bool HasUsefulInstruction(Instruction *instr_) {
+  for (auto instr : InstructionListIterator(instr_)) {
+    if (IsA<NativeInstruction *>(instr)) return true;
+  }
+  return false;
+}
+
+// Look for remaining, potentially reachable code in the LCFG, and add it in.
+static void AddStragglerFragments(FragmentBuilder *builder) {
+  for (auto block : builder->cfg->ReverseBlocks()) {
+    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
+    if (!decoded_block) continue;
+
+    for (auto instr : decoded_block->Instructions()) {
+      auto label = DynamicCast<LabelInstruction *>(instr);
+      if (!label) continue;
+      if (!label->data) continue;
+      if (label->fragment) continue;  // Already seen.
+      if (!HasUsefulInstruction(label->Next())) continue;
+      AddBlockStragglerToWorkList(builder, decoded_block->MetaData(), label);
+      break;
     }
   }
 }
@@ -661,6 +709,10 @@ void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
     delete item;
     ProcessFragment(&builder, frag, instr);
     GRANARY_IF_DEBUG(GRANARY_USED(pred));
+
+    if (!builder.next) {
+      AddStragglerFragments(&builder);
+    }
   }
 }
 

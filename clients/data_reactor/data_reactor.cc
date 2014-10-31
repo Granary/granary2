@@ -9,6 +9,9 @@
 #pragma clang diagnostic ignored "-Wold-style-cast"
 
 #include "clients/user/syscall.h"
+#include "clients/wrap_func/wrap_func.h"
+
+#include "generated/clients/data_reactor/offsets.h"
 
 using namespace granary;
 
@@ -89,6 +92,12 @@ static void InitShadowMemory(void) {
   AddSystemCallEntryFunction(FindClone);
   AddSystemCallExitFunction(SetupShadowSegment);
 }
+
+WRAP_INSTRUMENTED_FUNCTION("libc", malloc, (void *), (size_t num_bytes)) {
+  auto malloc = WRAPPED_FUNCTION;
+  return malloc(num_bytes);
+}
+
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
@@ -96,6 +105,7 @@ class DataReactor : public InstrumentationTool {
  public:
   virtual void Init(InitReason) {
     InitShadowMemory();
+    RegisterFunctionWrapper(&WRAP_malloc);
   }
 
   virtual ~DataReactor(void) = default;
@@ -117,7 +127,7 @@ class DataReactor : public InstrumentationTool {
                            const void *addr) {
     auto ptr = reinterpret_cast<uintptr_t>(addr);
     ImmediateOperand shadow_offset((ptr >> shift_amount_long) & 0xFFFFFFFFUL);
-    lir::InlineAssembly asm_({&shadow_offset});
+    lir::InlineAssembly asm_(shadow_offset);
     asm_.InlineBefore(instr, "MOV r64 %2, i64 %0;");
     TouchShadow(instr, mloc, asm_);
   }
@@ -128,7 +138,7 @@ class DataReactor : public InstrumentationTool {
                           VirtualRegister addr) {
     RegisterOperand reg(addr);
     ImmediateOperand shift(shift_amount);
-    lir::InlineAssembly asm_({&reg, &shift});
+    lir::InlineAssembly asm_(reg, shift);
     asm_.InlineBefore(instr, "MOV r64 %2, r64 %0;"
                              "SHR r64 %2, i8 %1;");
     TouchShadow(instr, mloc, asm_);
@@ -176,7 +186,8 @@ class DataReactor : public InstrumentationTool {
 
 // Initialize the `data_reactor` tool.
 GRANARY_CLIENT_INIT({
-  RegisterInstrumentationTool<DataReactor>("data_reactor", {"gdb"});
+  RegisterInstrumentationTool<DataReactor>("data_reactor",
+                                           {"gdb", "wrap_func"});
 })
 
 #pragma clang diagnostic pop

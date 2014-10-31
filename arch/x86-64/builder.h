@@ -144,6 +144,16 @@ class BranchTargetBuilder {
       : pc(nullptr),
         kind(BRANCH_TARGET_PC) {}
 
+  inline explicit BranchTargetBuilder(Operand op_) {
+    if (op_.is_annotation_instr) {
+      pc = op_.branch_target.as_pc;
+      kind = BRANCH_TARGET_PC;
+    } else {
+      label = op_.annotation_instr;
+      kind = BRANCH_TARGET_LABEL;
+    }
+  }
+
   inline explicit BranchTargetBuilder(PC pc_)
       : pc(pc_),
         kind(BRANCH_TARGET_PC) {}

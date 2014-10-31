@@ -19,6 +19,7 @@ class BasicBlock;
 class DecodedBasicBlock;
 class Instruction;
 class AnnotationInstruction;
+class ControlFlowInstruction;
 class Operand;
 
 namespace lir {
@@ -28,7 +29,7 @@ std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
                                           const Operand &op);
 
 // Call / jump to existing basic blocks.
-std::unique_ptr<Instruction> Call(BasicBlock *target_block);
+std::unique_ptr<Instruction> FunctionCall(BasicBlock *target_block);
 std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
 
 // Materialize a direct basic block and insert a direct jump to that
@@ -38,13 +39,18 @@ std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc,
 
 // Materialize a direct basic block and insert a direct call to that
 // basic block.
-std::unique_ptr<Instruction> Call(BlockFactory *factory, AppPC target_pc,
-                                  BlockRequestKind request=REQUEST_LATER);
+std::unique_ptr<Instruction> FunctionCall(
+    BlockFactory *factory, AppPC target_pc,
+    BlockRequestKind request=REQUEST_LATER);
 
 // Materialize a return from a function.
 std::unique_ptr<Instruction> Return(BlockFactory *factory);
 
 std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
+
+// Conversion functions.
+void ConvertFunctionCallToJump(ControlFlowInstruction *cfi);
+void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi);
 
 // Call to a client function that takes in an argument to a granary context and
 // to an `arch::MachineContext` pointer.
@@ -131,7 +137,15 @@ inline static std::unique_ptr<Instruction> CallWithArgs(
 // Represents a block of inline assembly.
 class InlineAssembly {
  public:
+  inline InlineAssembly(void)
+      : InlineAssembly({}) {}
+
+  template <typename... OperandTs>
+  inline explicit InlineAssembly(OperandTs&... ops)
+      : InlineAssembly({&ops...}) {}
+
   explicit InlineAssembly(std::initializer_list<Operand *> operands);
+
   ~InlineAssembly(void);
 
   // Inline some assembly code before `instr`, but only if `cond` is true.
@@ -184,8 +198,6 @@ class InlineAssembly {
   RegisterOperand &Register(DecodedBasicBlock *block, int reg_num) const;
 
  private:
-  InlineAssembly(void) = delete;
-
   GRANARY_POINTER(InlineAssemblyScope) *scope;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InlineAssembly);

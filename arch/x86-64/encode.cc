@@ -159,6 +159,10 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
   } else {
     xedo->u.mem.base = static_cast<xed_reg_enum_t>(op.reg.EncodeToNative());
   }
+  if (op.is_effective_address) {
+    xedo->width = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+                           xedo->width);
+  }
 }
 
 // Encode a pointer memory operand.
@@ -213,6 +217,10 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
       xedo->u.mem.base = XED_REG_RIP;
     }
   }
+  if (op.is_effective_address) {
+    xedo->width = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+                           xedo->width);
+  }
 }
 
 // Perform late-mangling of an LEA instruction.
@@ -266,11 +274,6 @@ static void EncodeOperands(const Instruction *instr,
         break;
       case XED_ENCODER_OPERAND_TYPE_MEM:
         EncodeMem(op, &xedo);
-        if (op.is_effective_address) {
-          xedo.width = std::min(
-              static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
-              xedo.width);
-        }
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
         // TODO(pag): Do reachability checks in `EncodePtr`, as is

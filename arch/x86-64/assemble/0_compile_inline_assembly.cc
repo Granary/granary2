@@ -296,44 +296,65 @@ class InlineAssemblyParser {
     op->imm.as_uint = num;
   }
 
+  void ParseLabelOperand(void) {
+    ConsumeWhiteSpace();
+    branch_target = GetLabel(ParseVar());
+    if (XED_ICLASS_LEA == data.iclass) {
+      op->type = XED_ENCODER_OPERAND_TYPE_PTR;
+      op->width = arch::ADDRESS_WIDTH_BITS;
+      op->is_effective_address = true;
+
+      // Increment the refcount manually. This is normally done by
+      // `BranchInstruction`, but this is not for a branch.
+      branch_target->data += 1;
+
+    } else {
+      op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
+    }
+    op->rw = XED_OPERAND_ACTION_R;
+    op->branch_target.as_app_pc = nullptr;
+    op->is_annotation_instr = true;
+    op->annotation_instr = branch_target;
+  }
+
+  void ParseMemoryOperand(void) {
+    ParseSegmentOp();
+    if (Peek('%')) {
+      ParseInPlaceOp();
+    } else {
+      ParseMemoryOp();
+    }
+  }
+
+  void ParseImmediateOperand(void) {
+    if (Peek('%')) {
+      ParseInPlaceOp();
+    } else {
+      ParseImmediate();
+    }
+  }
+
+  void ParseRegisterOperand(int width) {
+    if (Peek('%')) {
+      ParseRegOp();
+    } else {
+      ParseArchReg();
+    }
+    op->reg.Widen(width / 8);
+  }
+
   // Parse an inline assembly operand.
   bool ParseOperand(void) {
     auto op_type = *ch++;
     if ('l' == op_type) {  // Handle labels as special cases.
-      ConsumeWhiteSpace();
-      branch_target = GetLabel(ParseVar());
-      op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-      op->rw = XED_OPERAND_ACTION_R;
-      op->branch_target.as_app_pc = nullptr;
-      op->is_annotation_instr = true;
-      op->annotation_instr = branch_target;
+      ParseLabelOperand();
     } else if ('m' == op_type || 'i' == op_type || 'r' == op_type) {
       auto width = ParseWidth();
       ConsumeWhiteSpace();
       switch (op_type) {
-        case 'm':  // Memory.
-          ParseSegmentOp();
-          if (Peek('%')) {
-            ParseInPlaceOp();
-          } else {
-            ParseMemoryOp();
-          }
-          break;
-        case 'i':  // Immediate.
-          if (Peek('%')) {
-            ParseInPlaceOp();
-          } else {
-            ParseImmediate();
-          }
-          break;
-        case 'r':  // Register.
-          if (Peek('%')) {
-            ParseRegOp();
-          } else {
-            ParseArchReg();
-          }
-          op->reg.Widen(width / 8);
-          break;
+        case 'm': ParseMemoryOperand(); break;
+        case 'i': ParseImmediateOperand(); break;
+        case 'r': ParseRegisterOperand(width); break;
         default: break;
       }
       op->width = static_cast<decltype(op->width)>(width);
