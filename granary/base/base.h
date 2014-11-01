@@ -64,8 +64,10 @@ typedef long int ssize_t;
 # define alignas(...)
 # define alignof(...) 16
 # define GRANARY_ENABLE_IF(...) int
+# define GRANARY_IF_NOT_ECLIPSE(...)
 #else
 # define GRANARY_ENABLE_IF(...) __VA_ARGS__
+# define GRANARY_IF_NOT_ECLIPSE(...) __VA_ARGS__
 #endif
 
 #ifdef GRANARY_TARGET_debug

@@ -43,34 +43,70 @@ struct FunctionWrapper {
 // Register a function wrapper with the wrapper tool.
 void RegisterFunctionWrapper(FunctionWrapper *wrapper);
 
-#define WRAP_INSTRUMENTED_FUNCTION(lib_name, func_name, ret_type, param_types) \
-    struct GRANARY_CAT(WRAPPER_OF_, func_name) { \
-      static typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
-      wrap param_types; \
-      \
-      typedef decltype(wrap) WrappedFunctionType; \
-    }; \
-    static FunctionWrapper GRANARY_CAT(WRAP_, func_name) = { \
-        .next = nullptr, \
-        .function_name = GRANARY_TO_STRING(func_name), \
-        .module_name = lib_name, \
-        .module_offset = GRANARY_CAT(SYMBOL_OFFSET_, func_name), \
-        .wrapper_pc = reinterpret_cast<granary::AppPC>( \
-            GRANARY_CAT(WRAPPER_OF_, func_name)::wrap), \
-        .action = PASS_INSTRUMENTED_WRAPPED_FUNCTION \
-    }; \
-    \
-    typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
-    GRANARY_CAT(WRAPPER_OF_, func_name)::wrap param_types
-
+// Gives access to the function being wrapped. This assumes that the wrapper
+// action is either `PASS_INSTRUMENTED_WRAPPED_FUNCTION` or that it is
+// `PASS_NATIVE_WRAPPED_FUNCTION`.
 #define WRAPPED_FUNCTION \
   reinterpret_cast<WrappedFunctionType *>(({ \
       register uintptr_t __r10 asm("r10"); \
       asm("movq %%r10, %0;" : "=r"(__r10)); \
       __r10; }))
 
-#define WRAP_NATIVE_FUNCTION()
+// True definition of the wrappers. It is mostly designed to be easy on the
+// eyes and the macro expander, and so goes extra far to allow the function
+// body of the wrapper to be *outside* of the wrapper.
+//
+// What we do here:
+//    1)  Define a struct that has a single static method (the wrapper) and
+//        a typedef for `WrappedFunctionType`, that will be visible from within
+//        the static method, thus allowing our `WRAPPED_FUNCTION` macro to
+//        do the right type cast when we want access to the native/instrumented
+//        function being wrapped.
+//    2)  Define a static `WRAP_FUNC_foo` for function `foo` variable that
+//        represents our wrapper.
+//
+//        Note: Eclipse has trouble syntax highlighting the inline definition
+//              of the struct so we elide that in the IDE.
+//
+//    3)  Defines the beginning of the implementation of the static method
+//        of the struct declared in (1). The body of the function has to
+//        appear immediately after the macro.
+//
+// Note: `granary::Identity` is used for return types in the event that a
+//       function being wrapped returns a function pointer.
+#define __WRAP_FUNCTION(act, lib_name, func_name, ret_type, param_types) \
+    struct GRANARY_CAT(WRAPPER_OF_, func_name) { \
+      static typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
+      wrap param_types; \
+      \
+      typedef decltype(wrap) WrappedFunctionType; \
+    }; \
+    \
+    static FunctionWrapper GRANARY_CAT(WRAP_FUNC_, func_name) \
+    GRANARY_IF_NOT_ECLIPSE( = { \
+        .next = nullptr, \
+        .function_name = GRANARY_TO_STRING(func_name), \
+        .module_name = lib_name, \
+        .module_offset = GRANARY_CAT(SYMBOL_OFFSET_, func_name), \
+        .wrapper_pc = reinterpret_cast<granary::AppPC>( \
+            GRANARY_CAT(WRAPPER_OF_, func_name)::wrap), \
+        .action = act \
+    }); \
+    \
+    typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
+    GRANARY_CAT(WRAPPER_OF_, func_name)::wrap param_types
 
-#define WRAP_REPLACE_FUNCTION()
+// Action-specific wrapper macros.
+#define WRAP_REPLACE_FUNCTION() \
+    __WRAP_FUNCTION(REPLACE_WRAPPED_FUNCTION, lib_name, \
+                    func_name, ret_type, param_types)
+
+#define WRAP_INSTRUMENTED_FUNCTION(lib_name, func_name, ret_type, param_types) \
+    __WRAP_FUNCTION(PASS_INSTRUMENTED_WRAPPED_FUNCTION, lib_name, \
+                    func_name, ret_type, param_types)
+
+#define WRAP_NATIVE_FUNCTION() \
+    __WRAP_FUNCTION(PASS_NATIVE_WRAPPED_FUNCTION, lib_name, \
+                    func_name, ret_type, param_types)
 
 #endif  // CLIENTS_WRAP_FUNC_WRAP_FUNC_H_

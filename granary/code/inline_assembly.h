@@ -142,6 +142,7 @@ class InlineFunctionCall {
     return ret; \
   }
 
+#ifndef GRANARY_ECLIPSE
 GRANARY_DEFINE_ASM_OP(x86, , nullptr)  // 32-bit x86.
 GRANARY_DEFINE_ASM_OP(x86_64, lines, lines)  // 64-bit x86.
 GRANARY_DEFINE_ASM_OP(arm, , nullptr)
@@ -150,6 +151,7 @@ GRANARY_DEFINE_ASM_OP(thumb, , nullptr)
 GRANARY_DEFINE_ASM_OP(mips, , nullptr)
 GRANARY_DEFINE_ASM_OP(sparc, , nullptr)
 GRANARY_DEFINE_ASM_OP(ppc, , nullptr)
+#endif  // GRANARY_ECLIPSE
 }  // namespace granary
 
 // Fake user defined literals, needed until this Eclipse syntax highlighting

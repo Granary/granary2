@@ -93,8 +93,17 @@ static void InitShadowMemory(void) {
   AddSystemCallExitFunction(SetupShadowSegment);
 }
 
+// Wrap `malloc` so that we can associate "types" with shadow memory. The idea
+// here is that we want to apply watchpoints uniformly across the heap. This
+// is challenging in practice because what we really mean is that we want to
+// apply them uniformly across objects, with an understand of object types.
+// Therefore, if 90% of all heap memory has one type, we will still apply
+// watchpoints evenly across those objects that belong to the 90%, as well as
+// those that don't, and not just accidentally add 90% of all watchpoints to
+// the 90% of objects.
 WRAP_INSTRUMENTED_FUNCTION("libc", malloc, (void *), (size_t num_bytes)) {
   auto malloc = WRAPPED_FUNCTION;
+  granary_curiosity();
   return malloc(num_bytes);
 }
 
@@ -105,7 +114,7 @@ class DataReactor : public InstrumentationTool {
  public:
   virtual void Init(InitReason) {
     InitShadowMemory();
-    RegisterFunctionWrapper(&WRAP_malloc);
+    RegisterFunctionWrapper(&WRAP_FUNC_malloc);
   }
 
   virtual ~DataReactor(void) = default;
