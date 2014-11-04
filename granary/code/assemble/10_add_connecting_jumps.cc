@@ -104,6 +104,16 @@ static void OrderFragment(FragmentWorkList *work_list, Fragment *frag) {
   }
 }
 
+// Enqueues straggler fragments.
+static void EnqueueStragglerFragments(FragmentList *frags,
+                                      FragmentWorkList *work_list) {
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (IsA<NonLocalEntryFragment *>(frag)) {
+      work_list->Enqueue(frag);
+    }
+  }
+}
+
 static void OrderFragments(FragmentWorkList *work_list) {
   while (auto curr = work_list->next) {
     work_list->next = curr->next;
@@ -122,11 +132,14 @@ static void OrderFragments(FragmentWorkList *work_list) {
 void AddConnectingJumps(FragmentList *frags) {
   FragmentWorkList work_list;
   auto first = frags->First();
-  first->encoded_order = 1;
 
-  work_list.next = first;
+  work_list.next = nullptr;
+  work_list.next_ptr = nullptr;
+  work_list.order = 1;
+
+  EnqueueStragglerFragments(frags, &work_list);
+  work_list.Enqueue(first);
   work_list.next_ptr = &(first->next);
-  work_list.order = 2;
 
   OrderFragments(&work_list);
 

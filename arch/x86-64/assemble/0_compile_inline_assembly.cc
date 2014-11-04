@@ -299,18 +299,20 @@ class InlineAssemblyParser {
   void ParseLabelOperand(void) {
     ConsumeWhiteSpace();
     branch_target = GetLabel(ParseVar());
+
     if (XED_ICLASS_LEA == data.iclass) {
       op->type = XED_ENCODER_OPERAND_TYPE_PTR;
       op->width = arch::ADDRESS_WIDTH_BITS;
       op->is_effective_address = true;
 
-      // Increment the refcount manually. This is normally done by
+      // Increment the reference count manually. This is normally done by
       // `BranchInstruction`, but this is not for a branch.
       branch_target->data += 1;
 
     } else {
       op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
     }
+
     op->rw = XED_OPERAND_ACTION_R;
     op->branch_target.as_app_pc = nullptr;
     op->is_annotation_instr = true;

@@ -6,22 +6,58 @@ using namespace granary;
 
 namespace {
 
+// Allows us to select which wrapper to apply when instrumenting this code.
+// This prevents infinite recursion in the case of using
+// `PASS_INSTRUMENTED_WRAPPED_FUNCTION` to wrap a function, then calling the
+// wrapped function.
+struct NextWrapperId : public IndexableMetaData<NextWrapperId> {
+  NextWrapperId(void)
+      : next_wrapper_id(0) {}
+
+  bool Equals(const NextWrapperId *that) const {
+    return next_wrapper_id == that->next_wrapper_id;
+  }
+
+  // The Id of the next thing to wrap.
+  uint8_t next_wrapper_id;
+};
+
 typedef LinkedListIterator<FunctionWrapper> FunctionWrapperIterator;
 
 // Linked list of wrappers.
 static FunctionWrapper *wrappers = nullptr;
 static ReaderWriterLock wrappers_lock;
 
+// Returns true if two wrappers wrap the same function.
+static bool WrappingSameFunction(FunctionWrapper *a, FunctionWrapper *b) {
+  return b &&
+         a->module_offset == b->module_offset &&
+         StringsMatch(a->module_name, b->module_name);
+}
+
 // Returns the place in the wrappers linked list into which a wrapper will
 // be placed.
-static FunctionWrapper **FunctionWrapperInsertPoint(const char *module_name,
-                                                    uint64_t module_offset) {
+static FunctionWrapper **FunctionWrapperInsertPoint(
+    FunctionWrapper *new_wrapper) {
   auto prev = &wrappers;
   for (auto wrapper : FunctionWrapperIterator(wrappers)) {
-    if (module_offset <= wrapper->module_offset &&
-        StringsMatch(module_name, wrapper->module_name)) {
-      GRANARY_ASSERT(module_offset != wrapper->module_offset);
-      break;
+    if (new_wrapper->module_offset <= wrapper->module_offset &&
+        StringsMatch(new_wrapper->module_name, wrapper->module_name)) {
+
+      // Common case: different functions.
+      if (GRANARY_LIKELY(new_wrapper->module_offset !=
+                         wrapper->module_offset)) {
+        break;
+      }
+
+      // Uncommon case: two or more wrappers for the same function.
+      while (WrappingSameFunction(wrapper, wrapper->next)) {
+        wrapper = wrapper->next;
+      }
+
+      // Moves to the next wrapper id.
+      new_wrapper->id = wrapper->id + 1;
+      return &(wrapper->next);
     }
     prev = &(wrapper->next);
   }
@@ -33,9 +69,12 @@ static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
   auto offset = os::ModuleOffsetOfPC(block->StartAppPC());
   if(!offset.module) return nullptr;
 
+  auto id = GetMetaData<NextWrapperId>(block)->next_wrapper_id;
+
   ReadLockedRegion locker(&wrappers_lock);
   for (auto wrapper : FunctionWrapperIterator(wrappers)) {
     if (offset.offset == wrapper->module_offset &&
+        id == wrapper->id &&
         StringsMatch(offset.module->Name(), wrapper->module_name)) {
       return wrapper;
     }
@@ -50,16 +89,20 @@ static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
 void RegisterFunctionWrapper(FunctionWrapper *wrapper) {
   GRANARY_ASSERT(!wrapper->next);
   WriteLockedRegion locker(&wrappers_lock);
-  auto insert_point = FunctionWrapperInsertPoint(wrapper->module_name,
-                                                 wrapper->module_offset);
+  auto insert_point = FunctionWrapperInsertPoint(wrapper);
   wrapper->next = *insert_point;
   *insert_point = wrapper;
+  GRANARY_ASSERT(nullptr != wrappers);
 }
 
 // Tool that helps instrument `malloc` and `free` functions.
 class FunctionWrapperInstrumenter : public InstrumentationTool {
  public:
   virtual ~FunctionWrapperInstrumenter(void) = default;
+
+  virtual void Init(InitReason) {
+    RegisterMetaData<NextWrapperId>();
+  }
 
   virtual void Exit(ExitReason) {
     WriteLockedRegion locker(&wrappers_lock);
@@ -72,6 +115,8 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
+    if (!wrappers) return;
+
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
 
@@ -100,7 +145,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
                   DirectBasicBlock *target_block) {
     ImmediateOperand native_addr(target_block->StartAppPC());
     lir::InlineAssembly asm_(native_addr);
-    asm_.InlineBefore(cfi, "MOV r64 R10, i64 %0"_x86_64);
+    asm_.InlineBefore(cfi, "MOV r64 R10, i64 %0;"_x86_64);
   }
 
   void WrapInstrumented(BlockFactory *factory, DecodedBasicBlock *block,
@@ -109,7 +154,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     auto label = new LabelInstruction;
     LabelOperand instrumented_addr(label);
     lir::InlineAssembly asm_(instrumented_addr);
-    asm_.InlineBefore(cfi, "LEA r64 R10, l %0"_x86_64);
+    asm_.InlineBefore(cfi, "LEA r64 R10, l %0;"_x86_64);
 
     // Make sure everyone can update the meta-data, but that no-one will
     // actually be able to materialize the block.
@@ -119,6 +164,9 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     block->AppendInstruction(label);
     block->AppendInstruction(DecodedBasicBlock::Unlink(cfi));
     if (cfi->IsFunctionCall()) lir::ConvertFunctionCallToJump(cfi);
+
+    auto meta = GetMetaData<NextWrapperId>(target_block);
+    meta->next_wrapper_id += 1;
   }
 
   // Try to wrap a block.

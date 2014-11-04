@@ -40,7 +40,8 @@ GRANARY_DECLARE_CLASS_HEIRARCHY(
         (FlagExitFragment, 2 * 3 * 11),
       (PartitionEntryFragment, 2 * 13),
       (PartitionExitFragment, 2 * 17),
-      (ExitFragment, 2 * 19))
+      (NonLocalEntryFragment, 2 * 19),
+      (ExitFragment, 2 * 23))
 
 GRANARY_DEFINE_BASE_CLASS(Fragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, SSAFragment)
@@ -49,6 +50,7 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
+GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 
 PartitionInfo::PartitionInfo(int id_)
@@ -126,6 +128,7 @@ Fragment::Fragment(void)
       encoded_size(0),
       encoded_pc(nullptr),
       type(FRAG_TYPE_UNKNOWN),
+      entry_label(nullptr),
       instrs(),
       partition(nullptr),
       flag_zone(nullptr),
@@ -154,6 +157,7 @@ PartitionEntryFragment::~PartitionEntryFragment(void) {}
 PartitionExitFragment::~PartitionExitFragment(void) {}
 FlagEntryFragment::~FlagEntryFragment(void) {}
 FlagExitFragment::~FlagExitFragment(void) {}
+NonLocalEntryFragment::~NonLocalEntryFragment(void) {}
 ExitFragment::~ExitFragment(void) {}
 
 FlagZone::FlagZone(VirtualRegister flag_save_reg_,

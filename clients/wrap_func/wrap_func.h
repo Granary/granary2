@@ -20,6 +20,11 @@ struct FunctionWrapper {
  public:
   FunctionWrapper *next;
 
+  // The IF of this wrapper. This exists to distinguish between multiple
+  // wrappers of the same instrumented function. Wrapper IDs are not unique
+  // across different functions.
+  uint8_t id;
+
   // Name of the symbol being wrapped.
   const char * const function_name;
 
@@ -85,6 +90,7 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
     static FunctionWrapper GRANARY_CAT(WRAP_FUNC_, func_name) \
     GRANARY_IF_NOT_ECLIPSE( = { \
         .next = nullptr, \
+        .id = 0, \
         .function_name = GRANARY_TO_STRING(func_name), \
         .module_name = lib_name, \
         .module_offset = GRANARY_CAT(SYMBOL_OFFSET_, func_name), \
@@ -93,6 +99,7 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
         .action = act \
     }); \
     \
+    GRANARY_EXPORT_TO_INSTRUMENTATION \
     typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
     GRANARY_CAT(WRAPPER_OF_, func_name)::wrap param_types
 

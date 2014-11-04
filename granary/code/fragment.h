@@ -222,6 +222,7 @@ class Fragment {
   FragmentType type;
 
   // List of instructions in the fragment.
+  LabelInstruction *entry_label;
   InstructionList instrs;
 
   // The partition to which this fragment belongs.
@@ -576,6 +577,22 @@ enum ExitFragmentKind {
   FRAG_EXIT_FUTURE_BLOCK_DIRECT,
   FRAG_EXIT_FUTURE_BLOCK_INDIRECT,
   FRAG_EXIT_EXISTING_BLOCK
+};
+
+// Special class of fragment for "straggler" fragments / instructions.
+class NonLocalEntryFragment : public Fragment {
+ public:
+  NonLocalEntryFragment(void) = default;
+  virtual ~NonLocalEntryFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(NonLocalEntryFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(NonLocalEntryFragment);
 };
 
 // A fragment representing either a native basic block, a future basic block

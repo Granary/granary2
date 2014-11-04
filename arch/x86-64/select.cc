@@ -95,12 +95,17 @@ bool MatchOperandTypes(const Instruction *instr, const xed_inst_t *xedi) {
 // of the returned selection is that the types of the operands match
 // (independent of the sizes of operands).
 const xed_inst_t *SelectInstruction(const Instruction *instr) {
-  for (auto xedi = ICLASS_SELECTIONS[instr->iclass];
-      xedi < LAST_ICLASS_SELECTION; ++xedi) {
-    auto iclass = xed_inst_iclass(xedi);
-    if (iclass != instr->iclass) {
+  auto xedi = ICLASS_SELECTIONS[instr->iclass];
+
+  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == instr->iclass)) {
+    goto select_xedi;
+  }
+
+  for (; xedi < LAST_ICLASS_SELECTION; ++xedi) {
+    if (xed_inst_iclass(xedi) != instr->iclass) {
       return nullptr;
     } else if (MatchOperandTypes(instr, xedi)) {
+    select_xedi:
       instr->iform = xed_inst_iform_enum(xedi);  // Update in-place.
       instr->isel = static_cast<unsigned>(xedi - xed_inst_table_base());
       return xedi;

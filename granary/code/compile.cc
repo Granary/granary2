@@ -61,15 +61,22 @@ extern void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
 }  // namespace arch
 namespace {
 
+// Set the encoded address for a label or return address instruction.
+static void SetEncodedPC(AnnotationInstruction *instr, CachePC pc) {
+  if (IA_LABEL == instr->annotation || IA_RETURN_ADDRESS == instr->annotation) {
+    instr->data = reinterpret_cast<uintptr_t>(pc);
+  }
+}
+
 // Mark an estimated encode address on all labels/return address annotations.
 // This is so that stage encoding is able to guage an accurate size for things.
 static void StageEncodeLabels(Fragment *frag, CachePC estimated_encode_pc) {
+  if (frag->entry_label) {
+    SetEncodedPC(frag->entry_label, estimated_encode_pc);
+  }
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (IA_LABEL == annot->annotation ||
-          IA_RETURN_ADDRESS == annot->annotation) {
-        annot->data = reinterpret_cast<uintptr_t>(estimated_encode_pc);
-      }
+      SetEncodedPC(annot, estimated_encode_pc);
     }
   }
 }
@@ -117,21 +124,24 @@ int StageEncode(FragmentList *frags, CachePC estimated_encode_pc) {
 // Relativize the instructions of a fragment.
 static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
                                    bool *update_encode_addresses) {
+  if (frag->entry_label) {
+    SetEncodedPC(frag->entry_label, curr_pc);
+  }
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->instruction.SetEncodedPC(curr_pc);
       curr_pc += ninstr->instruction.EncodedLength();
 
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      // Make labels and return addresses aware of their encoded addresses.
-      if (IA_LABEL == annot->annotation ||
-          IA_RETURN_ADDRESS == annot->annotation) {
-        annot->data = reinterpret_cast<uintptr_t>(curr_pc);
 
       // Record the `curr_pc` for later updating by `UpdateEncodeAddresses`.
-      } else if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
+      if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
         SetMetaData(annot, curr_pc);
         *update_encode_addresses = true;
+
+      // Make labels and return addresses aware of their encoded addresses.
+      } else {
+        SetEncodedPC(annot, curr_pc);
       }
     }
   }

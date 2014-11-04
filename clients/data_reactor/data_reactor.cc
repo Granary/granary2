@@ -5,8 +5,6 @@
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wold-style-cast"
 
 #include "clients/user/syscall.h"
 #include "clients/wrap_func/wrap_func.h"
@@ -58,6 +56,9 @@ static void SetupShadowSegment(void *, SystemCallContext) {
   is_clone = false;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+
 static void InitShadowMemory(void) {
   shift_amount_long = static_cast<uint64_t>(__builtin_ctzl(
       static_cast<uint64_t>(FLAG_shadow_granularity)));
@@ -93,6 +94,8 @@ static void InitShadowMemory(void) {
   AddSystemCallExitFunction(SetupShadowSegment);
 }
 
+#pragma clang diagnostic pop
+
 // Wrap `malloc` so that we can associate "types" with shadow memory. The idea
 // here is that we want to apply watchpoints uniformly across the heap. This
 // is challenging in practice because what we really mean is that we want to
@@ -112,12 +115,12 @@ WRAP_INSTRUMENTED_FUNCTION("libc", malloc, (void *), (size_t num_bytes)) {
 // Simple tool for static and dynamic basic block counting.
 class DataReactor : public InstrumentationTool {
  public:
+  virtual ~DataReactor(void) = default;
+
   virtual void Init(InitReason) {
     InitShadowMemory();
     RegisterFunctionWrapper(&WRAP_FUNC_malloc);
   }
-
-  virtual ~DataReactor(void) = default;
 
   // Implements the actual touching (reading or writing) of shadow memory.
   void TouchShadow(NativeInstruction *instr, const MemoryOperand &mloc,
@@ -195,9 +198,9 @@ class DataReactor : public InstrumentationTool {
 
 // Initialize the `data_reactor` tool.
 GRANARY_CLIENT_INIT({
+  granary_curiosity();
   RegisterInstrumentationTool<DataReactor>("data_reactor",
                                            {"gdb", "wrap_func"});
 })
 
-#pragma clang diagnostic pop
 #endif  // GRANARY_WHERE_user

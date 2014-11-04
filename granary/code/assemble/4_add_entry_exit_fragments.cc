@@ -296,10 +296,17 @@ static bool IsFlagExit(Fragment *curr, Fragment *next) {
 //            1)  CodeFragment
 //            2)  ExitFragment
 //            3)  PartitionEntryFragment
+//            4)  NonLocalEntryFragment.
 static bool IsPartitionEntry(Fragment * const curr, Fragment * const next) {
   if (IsA<PartitionEntryFragment *>(curr)) return false;
   if (IsA<PartitionEntryFragment *>(next)) return false;
   if (IsA<ExitFragment *>(next)) return false;
+
+  // Special case.
+  if (IsA<NonLocalEntryFragment *>(curr)) {
+    return !IsA<ControlFlowInstruction *>(next->branch_instr);
+  }
+
   GRANARY_ASSERT(!IsA<ExitFragment *>(curr));
 
   const auto next_code = DynamicCast<CodeFragment *>(next);

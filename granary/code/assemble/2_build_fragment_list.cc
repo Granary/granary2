@@ -153,7 +153,10 @@ static void AddBlockTailToWorkList(
     builder->next = elm;  // To head of work list.
     builder->frags->InsertAfter(predecessor, frag);  // Depth-first order.
 
-    if (label) label->fragment = frag;  // Cache for branches / fall-throughs.
+    if (label) {
+      frag->entry_label = label;
+      label->fragment = frag;  // Cache for branches / fall-throughs.
+    }
 
     tail_frag = frag;
   }
@@ -183,17 +186,26 @@ static void AddBlockTailToWorkList(
 static void AddBlockStragglerToWorkList(FragmentBuilder *builder,
                                         BlockMetaData *source_block_meta,
                                         LabelInstruction *label) {
-  auto frag = new CodeFragment;
-  frag->attr.block_meta = source_block_meta;
+  // We have a distinguished non-local entry fragment here because we don't
+  // want to allow our labels to get lost inside partition entry/flag entry
+  // fragments and allow control to jump into weird places.
+  auto frag = new NonLocalEntryFragment;
+  frag->entry_label = label;
   label->fragment = frag;
 
+  auto cfrag = new CodeFragment;
+  cfrag->attr.block_meta = source_block_meta;
+
+  frag->successors[FRAG_SUCC_FALL_THROUGH] = cfrag;
+
   auto elm = new FragmentInProgress;
-  elm->frag = frag;
+  elm->frag = cfrag;
   elm->instr = label->Next();
   elm->next = builder->next;
 
   builder->next = elm;  // To head of work list.
   builder->frags->Append(frag);  // Add to the end so it's not in-line.
+  builder->frags->Append(cfrag);  // Add to the end so it's not in-line.
 }
 
 // Process an annotation instruction. Returns `true` if iteration should

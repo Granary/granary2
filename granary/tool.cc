@@ -14,6 +14,7 @@
 #include "granary/context.h"
 #include "granary/tool.h"
 
+#include "os/logging.h"
 #include "os/module.h"
 
 GRANARY_DEFINE_string(tools, "",
@@ -42,8 +43,6 @@ static ToolDescription *registered_tools[MAX_NUM_TOOLS] = {nullptr};
 
 // Find a tool's ID given its name. Returns -1 if a tool
 static int ToolId(const char *name) {
-  //auto descs = descriptions.load(std::memory_order_acquire);
-  //for (auto desc : ToolDescriptionIterator(descs)) {
   for (auto i = 0; i < MAX_NUM_TOOLS; ++i) {
     if (StringsMatch(name, tool_names[i])) {
       return i;
@@ -138,9 +137,7 @@ InstrumentationManager::~InstrumentationManager(void) {
 void InstrumentationManager::Register(const char *name) {
   GRANARY_ASSERT(!is_finalized);
   if (auto desc = registered_tools[ToolId(name)]) {
-    is_registered[desc->id] = true;
     Register(desc);
-    descriptions[num_registered++] = desc;
     max_size = GRANARY_MAX(max_size, desc->size);
     max_align = GRANARY_MAX(max_align, desc->align);
   }
@@ -230,7 +227,8 @@ void RegisterInstrumentationTool(
   // descriptions that have yet to be loaded. This is because the initialization
   // order of the static constructors is a priori undefined.
   for (auto tool_name : required_tools) {
-    if (auto required_id = ToolId(tool_name)) {
+    if (tool_name) {
+      auto required_id = ToolId(tool_name);
       GRANARY_ASSERT(!depends_on[required_id][id]);
       depends_on[id][required_id] = true;
     }
