@@ -1,7 +1,8 @@
 Granary
 =======
 
-Check out the [Wiki](https://github.com/Granary/granary2/wiki)!
+Check out the [Wiki](https://github.com/Granary/granary2/wiki)! It describes
+in more detail how to build the Linux kernel, set up a VM, and more.
 
 Setup
 -----
@@ -34,8 +35,9 @@ build and virtual machine image. This initial setup is only needed if Granary
 will be used for kernel space instrumentation.
 
 ```
-./scripts/make_vmlinux_link.sh <path-to-kernel-vmlinux>
-./scripts/make_qemu_img_link.sh <path-to-QEMU-VM-image>
+./scripts/make_linux_build_link.sh /path/to/kernel
+./scripts/make_vmlinux_link.sh /path/to/kernel/vmlinux
+./scripts/make_qemu_img_link.sh /path/to/qmeu/vm.img
 ```
 
 Finally, make sure everything is set up for Granary. This does things like fetch dependencies.
@@ -45,12 +47,19 @@ make setup
 ```
 
 ### Step 2: Compiling Granary.
+#### Test Cases
+Be sure to run Granary through its paces first. These tests are definitely not
+exhaustive, but can help to determine if things are generally in working order:
+
+```
+make clean test GRANARY_TARGET=test
+```
+
 #### User Space
 If you are compiling Granary for user space, run:
 
 ```
-make clean
-make all -j
+make clean all
 ```
 
 You can use Granary's "injector" (called `grr`) to inject Granary into a
@@ -88,5 +97,5 @@ make clean all GRANARY_WHERE=kernel
 If you are compiling Granary against a custom kernel, run:
 
 ```
-make clean all GRANARY_WHERE=kernel GRANARY_KERNEL_DIR=<path-to-kernel-source>
+make clean all GRANARY_WHERE=kernel
 ```
