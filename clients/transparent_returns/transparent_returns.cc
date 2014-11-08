@@ -138,9 +138,6 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
 
 class TransparentRetsInstrumenterLate : public InstrumentationTool {
  public:
-  TransparentRetsInstrumenterLate(void)
-      : InstrumentationTool() {}
-
   virtual ~TransparentRetsInstrumenterLate(void) = default;
 
   // Push on a return address for either of a direct or indirect function
@@ -180,6 +177,7 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
   // instructions.
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
+    if (!FLAG_transparent_returns) return;
     for (auto block : cfg->NewBlocks()) {
       AddRetAddrToBlock(factory, DynamicCast<DecodedBasicBlock *>(block));
     }
@@ -191,8 +189,6 @@ GRANARY_CLIENT_INIT({
   RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
       "transparent_returns_early");
 
-  if (FLAG_transparent_returns) {
-    RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
-        "transparent_returns_late", {"transparent_returns_early"});
-  }
+  RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
+      "transparent_returns_late", {"transparent_returns_early"});
 })

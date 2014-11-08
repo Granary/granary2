@@ -160,6 +160,8 @@ void AddConnectingJumps(FragmentList *frags) {
       // jump itself won't be encoded.
       GRANARY_ASSERT(!(frag->branch_instr && frag_next != frag_branch &&
                        !frag->branch_instr->instruction.WillBeEncoded()));
+
+      // TODO(pag): Does this handle issues with `NonLocalEntryFragment`s?
       continue;
 
     // Last fragment in the list, but it has a fall-through.

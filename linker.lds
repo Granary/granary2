@@ -5,6 +5,7 @@ SECTIONS
   . = ALIGN(16);
   .text :
   {
+    granary_begin_text = .;
     *(.text)
 
     /* Defines the boundaries of Granary / client code that is exported to
@@ -14,6 +15,7 @@ SECTIONS
     granary_begin_inst_exports = .;
     KEEP(*(.text.inst_exports))
     granary_end_inst_exports = .;
+    granary_end_text = .;
   }
   
   . = ALIGN(16);

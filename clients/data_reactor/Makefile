@@ -13,14 +13,14 @@ CLIENT_GEN_FILE := $(CLIENT_GEN_DIR)/offsets.h
 $(CLIENT_GEN_FILE):
 	@mkdir -p $(@D)
 	@-rm $(@) $(GRANARY_DEV_NULL)
-	@$(GRANARY_SH) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.sh \
-		malloc /lib/x86_64-linux-gnu/libc.so.6 >> $(@)
-	@$(GRANARY_SH) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.sh \
-		calloc /lib/x86_64-linux-gnu/libc.so.6 >> $(@)
-	@$(GRANARY_SH) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.sh \
-		realloc /lib/x86_64-linux-gnu/libc.so.6 >> $(@)
-	@$(GRANARY_SH) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.sh \
-		free /lib/x86_64-linux-gnu/libc.so.6 >> $(@)
+	@$(GRANARY_PYTHON) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.py \
+		malloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.py \
+		calloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.py \
+		realloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(GRANARY_CLIENT_DIR)/user/find_symbol_offset.py \
+		free libc >> $(@)
 	
 $(CLIENT_OBJ): $(CLIENT_SRC_DIR)/$(CLIENT_NAME).cc $(CLIENT_GEN_FILE)
 	@echo "Building CXX object $@"

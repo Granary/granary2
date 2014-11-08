@@ -24,6 +24,10 @@
 namespace granary {
 extern "C" {
 
+// Address range of Granary/client-specific code.
+extern uint8_t granary_begin_text;
+extern uint8_t granary_end_text;
+
 // Address range of Granary/client-specific code that has been explicitly
 // exported to instrumented code.
 //
@@ -488,22 +492,24 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
   auto target_pc = app_meta->start_pc;
 
   if (auto module = os::ModuleContainingPC(app_meta->start_pc)) {
-    // Aagh! Indirect jump to some already cached code. For the time being,
-    // give up and just go to the target and ignore the meta-data.
-    if (os::ModuleKind::GRANARY_CODE_CACHE == module->Kind()) {
-      granary_curiosity();  // TODO(pag): Issue #42.
-      return MaterializeToExistingBlock(cfg, meta, target_pc);
-
-    } else if (os::ModuleKind::GRANARY == module->Kind()) {
+    if (os::ModuleKind::GRANARY == module->Kind()) {
+      if (&granary_begin_text <= target_pc && target_pc < &granary_end_text) {
 #ifdef GRANARY_WHERE_user
-      // If we try to go to `_fini`, then redirect execution to `exit_group`.
-      if (&_fini == target_pc) {
-        target_pc = &exit_group_ok;
-        app_meta->start_pc = &exit_group_ok;
-      }
+        // If we try to go to `_fini`, then redirect execution to `exit_group`.
+        if (&_fini == target_pc) {
+          target_pc = &exit_group_ok;
+          app_meta->start_pc = &exit_group_ok;
+        }
 #endif
-      GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
-                     target_pc < &granary_end_inst_exports);
+        GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
+                       target_pc < &granary_end_inst_exports);
+
+      // Aagh! Indirect jump to some already cached code. For the time being,
+      // give up and just go to the target and ignore the meta-data.
+      } else {
+        granary_curiosity();  // TODO(pag): Issue #42.
+        return MaterializeToExistingBlock(cfg, meta, target_pc);
+      }
     }
 
   // TODO(pag): In release builds, module tracking is basically ignored.

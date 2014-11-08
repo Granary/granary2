@@ -111,7 +111,9 @@ static void InitMetaData(MetaDataManager *metadata_manager) {
 // Create a module for a Granary code cache.
 static os::Module *MakeCodeCacheMod(ContextInterface *context,
                                     const char *name) {
-  return new os::Module(os::ModuleKind::GRANARY_CODE_CACHE, name, context);
+  // TODO(pag): For the time being, treat code cache as Granary as well, and
+  //            disambiguate via other means. See issue #24.
+  return new os::Module(os::ModuleKind::GRANARY, name, context);
 }
 
 // Free a linked list of edges.
