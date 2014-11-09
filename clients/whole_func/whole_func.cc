@@ -23,6 +23,6 @@ class WholeFunctionDecoder : public InstrumentationTool {
 };
 
 // Initialize the `whole_func` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<WholeFunctionDecoder>("whole_func");
-})
+}

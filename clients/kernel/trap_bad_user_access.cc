@@ -80,8 +80,8 @@ class TrapBadUserAccess : public InstrumentationTool {
 };
 
 // Initialize the `trap_bad_user_access` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<TrapBadUserAccess>("trap_bad_user_access");
-})
+}
 
 #endif   // GRANARY_WHERE_kernel

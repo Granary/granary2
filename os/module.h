@@ -61,7 +61,7 @@ class ModuleOffset {
 // about modules that contain executable code.
 enum class ModuleKind {
   GRANARY,
-  GRANARY_CODE_CACHE,
+  GRANARY_CODE_CACHE = GRANARY,
   KERNEL,
   PROGRAM = KERNEL,
   KERNEL_MODULE,

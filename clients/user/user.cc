@@ -150,8 +150,8 @@ class UserSpaceInstrumenter : public InstrumentationTool {
 };
 
 // Initialize the `user` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<UserSpaceInstrumenter>("user");
-})
+}
 
 #endif  // GRANARY_WHERE_user

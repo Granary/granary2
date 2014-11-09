@@ -27,6 +27,6 @@ class OnlyFunctionDecoder : public InstrumentationTool {
 };
 
 // Initialize the `whole_func` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<OnlyFunctionDecoder>("only_func");
-})
+}

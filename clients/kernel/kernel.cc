@@ -50,7 +50,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
 };
 
 // Initialize the `kernel` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
 
   // TODO(pag): Distinguish between client load and tool init.
   if (HAS_FLAG_attach_to_syscalls) {
@@ -67,6 +67,6 @@ GRANARY_CLIENT_INIT({
         });
   }
   RegisterInstrumentationTool<KernelSpaceInstrumenter>("kernel");
-})
+}
 
 #endif  // GRANARY_WHERE_kernel

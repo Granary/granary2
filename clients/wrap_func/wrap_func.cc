@@ -4,6 +4,8 @@
 
 using namespace granary;
 
+GRANARY_DECLARE_bool(transparent_returns);
+
 namespace {
 
 // Allows us to select which wrapper to apply when instrumenting this code.
@@ -198,6 +200,8 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 };
 
 // Initialize the `wrap_func` tool.
-GRANARY_CLIENT_INIT({
-  RegisterInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
-})
+GRANARY_ON_CLIENT_INIT() {
+  if (!FLAG_transparent_returns) {
+    RegisterInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
+  }
+}

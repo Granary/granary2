@@ -197,10 +197,9 @@ class DataReactor : public InstrumentationTool {
 };
 
 // Initialize the `data_reactor` tool.
-GRANARY_CLIENT_INIT({
-  granary_curiosity();
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<DataReactor>("data_reactor",
                                            {"gdb", "wrap_func"});
-})
+}
 
 #endif  // GRANARY_WHERE_user

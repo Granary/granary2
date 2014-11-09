@@ -168,7 +168,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
 };
 
 // Initialize the `gdb` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   if (FLAG_debug_gdb_prompt) {
     AwaitAttach(-1, nullptr, nullptr);
   } else {
@@ -178,6 +178,6 @@ GRANARY_CLIENT_INIT({
     AwaitAttachOnSignal(SIGTRAP);
   }
   RegisterInstrumentationTool<GDBDebuggerHelper>("gdb");
-})
+}
 
 #endif  // GRANARY_WHERE_user

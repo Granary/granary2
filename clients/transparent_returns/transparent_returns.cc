@@ -185,10 +185,10 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
 };
 
 // Initialize the `transparent_rets` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
       "transparent_returns_early");
 
   RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
       "transparent_returns_late", {"transparent_returns_early"});
-})
+}

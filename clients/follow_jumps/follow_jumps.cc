@@ -38,6 +38,6 @@ class JumpFollower : public InstrumentationTool {
 };
 
 // Initialize the `follow_jumps` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   RegisterInstrumentationTool<JumpFollower>("follow_jumps");
-})
+}

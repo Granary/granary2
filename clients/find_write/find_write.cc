@@ -171,8 +171,8 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
 };
 
 // Initialize the `find_write` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   if (HAS_FLAG_address_mask && !FLAG_address_mask) return;
   if (HAS_FLAG_value_mask && !FLAG_value_mask) return;
   RegisterInstrumentationTool<MemoryWriteInstrumenter>("find_write");
-})
+}

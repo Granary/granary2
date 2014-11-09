@@ -386,10 +386,10 @@ class SystemCallTracer : public InstrumentationTool {
 };
 
 // Initialize the `strace` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
   if (FLAG_hook_syscalls) {
     RegisterInstrumentationTool<SystemCallTracer>("strace");
   }
-})
+}
 
 #endif  // GRANARY_WHERE_user
