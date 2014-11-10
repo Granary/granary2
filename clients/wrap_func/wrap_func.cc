@@ -118,33 +118,38 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     if (!wrappers) return;
-
     for (auto block : cfg->NewBlocks()) {
-      for (auto succ : block->Successors()) {
-
-        // Don't allow anyone to materialize blocks that represent code that
-        // will be wrapped.
-        auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
-        if (!direct_block) continue;
-
-        auto wrapper = FunctionWrapperFor(direct_block);
-        if (!wrapper) continue;
-
-        if (!succ.cfi->IsConditionalJump()) {
-          WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
-                    succ.cfi, direct_block);
-        }
+      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+        WrapDecodedBlock(factory, decoded_block);
       }
     }
   }
 
  protected:
+  void WrapDecodedBlock(BlockFactory *factory, DecodedBasicBlock *block) {
+    for (auto succ : block->Successors()) {
+
+      // Don't allow anyone to materialize blocks that represent code that
+      // will be wrapped.
+      auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
+      if (!direct_block) continue;
+
+      auto wrapper = FunctionWrapperFor(direct_block);
+      if (!wrapper) continue;
+
+      if (!succ.cfi->IsConditionalJump()) {
+        WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
+                  succ.cfi, direct_block);
+      }
+    }
+  }
 
   // Note: We use `R10` for passing an extra argument to the wrapper because
   //       the x86-64 Linux ABI has that as a scratch register.
 
   void WrapNative(ControlFlowInstruction *cfi,
                   DirectBasicBlock *target_block) {
+
     ImmediateOperand native_addr(target_block->StartAppPC());
     lir::InlineAssembly asm_(native_addr);
     asm_.InlineBefore(cfi, "MOV r64 R10, i64 %0;"_x86_64);
@@ -171,11 +176,33 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     meta->next_wrapper_id += 1;
   }
 
+  void WrapJump(BlockFactory *factory, FunctionWrapper *wrapper,
+                ControlFlowInstruction *cfi) {
+    if (!FLAG_transparent_returns) {
+      cfi->InsertAfter(lir::Jump(factory, wrapper->wrapper_pc,
+                                 REQUEST_NATIVE));
+
+    // If we're using transparent return addresses, then we inject a "shim"
+    // in between a tail-call and its destination that does a real call. This
+    // lets us return into the code cache directly with the "right" version
+    // information (meta-data).
+    //
+    // Note: We add in a new block so that the `transparent_returns` tool
+    //       picks up on this and specializes it accordingly.
+    } else {
+      auto target_block = factory->MaterializeEmptyBlock(wrapper->wrapper_pc);
+      target_block->AppendInstruction(lir::FunctionCall(factory,
+                                                        wrapper->wrapper_pc,
+                                                        REQUEST_NATIVE));
+      target_block->AppendInstruction(lir::Return(factory));
+      cfi->InsertAfter(lir::Jump(target_block));
+    }
+  }
+
   // Try to wrap a block.
   void WrapBlock(BlockFactory *factory, FunctionWrapper *wrapper,
                  DecodedBasicBlock *block, ControlFlowInstruction *cfi,
                  DirectBasicBlock *target_block) {
-
     if (PASS_NATIVE_WRAPPED_FUNCTION == wrapper->action) {
       WrapNative(cfi, target_block);
     }
@@ -184,8 +211,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
       cfi->InsertAfter(lir::FunctionCall(factory, wrapper->wrapper_pc,
                                          REQUEST_NATIVE));
     } else if (!cfi->IsConditionalJump()) {
-      cfi->InsertAfter(lir::Jump(factory, wrapper->wrapper_pc,
-                                  REQUEST_NATIVE));
+      WrapJump(factory, wrapper, cfi);
     } else {
       // TODO(pag): Handle a conditional jump that is a tail-call.
       GRANARY_ASSERT(false);
@@ -201,7 +227,5 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
 // Initialize the `wrap_func` tool.
 GRANARY_ON_CLIENT_INIT() {
-  if (!FLAG_transparent_returns) {
-    RegisterInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
-  }
+  RegisterInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
 }

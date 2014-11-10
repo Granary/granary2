@@ -31,11 +31,10 @@ std::unique_ptr<Instruction> FunctionCall(BlockFactory *factory,
   return FunctionCall(block);
 }
 
-
 // Call to a client function that takes in an argument to a granary context and
 // to an `arch::MachineContext` pointer.
-std::unique_ptr<Instruction> CallWithContext(
-    void (*func)(void *, arch::MachineContext *)) {
+std::unique_ptr<Instruction> ContextFunctionCall(
+    void (*func)(TranslationContext, arch::MachineContext *)) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
       IA_CONTEXT_CALL, func));
 }
@@ -44,10 +43,10 @@ namespace detail {
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> CallWithArgs(DecodedBasicBlock *block,
+std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
                                           AppPC func_addr, Operand *ops) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_OUTLINE_CALL, new InlineFunctionCall(block, func_addr, ops)));
+      IA_OUTLINE_CALL, new granary::InlineFunctionCall(block, func_addr, ops)));
 }
 
 }  // namespace detail

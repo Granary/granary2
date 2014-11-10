@@ -52,6 +52,10 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 void ConvertFunctionCallToJump(ControlFlowInstruction *cfi);
 void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi);
 
+struct TranslationContext {
+  GRANARY_POINTER(ContextInterface) *granary_context;
+};
+
 // Call to a client function that takes in an argument to a granary context and
 // to an `arch::MachineContext` pointer.
 //
@@ -59,8 +63,8 @@ void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi);
 // state. Therefore, context calls do not have access to virtual registers.
 // This limits there applicability to places where the instrumentation code
 // wants to see the native machine context as it would be without
-std::unique_ptr<Instruction> CallWithContext(
-    void (*func)(void *, arch::MachineContext *));
+std::unique_ptr<Instruction> ContextFunctionCall(
+    void (*func)(TranslationContext, arch::MachineContext *));
 
 namespace detail {
 
@@ -115,8 +119,8 @@ inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> CallWithArgs(DecodedBasicBlock *block,
-                                          AppPC func_addr, Operand *ops);
+std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
+                                                AppPC func_addr, Operand *ops);
 
 }  // namespace detail
 
@@ -124,11 +128,11 @@ std::unique_ptr<Instruction> CallWithArgs(DecodedBasicBlock *block,
 // virtual registers by means of its arguments. At least one argument is
 // required.
 template <typename FuncT, typename... Args>
-inline static std::unique_ptr<Instruction> CallWithArgs(
+inline static std::unique_ptr<Instruction> InlineFunctionCall(
     DecodedBasicBlock *block, FuncT func, Args... args) {
   Operand ops[MAX_NUM_FUNC_OPERANDS];
   detail::InitInlineOps(ops, 0UL, sizeof...(args), args...);
-  return detail::CallWithArgs(block, UnsafeCast<AppPC>(func), ops);
+  return detail::InlineFunctionCall(block, UnsafeCast<AppPC>(func), ops);
 }
 
 // TODO(pag): InlineCall, inline the code of a function directly into the

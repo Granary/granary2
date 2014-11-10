@@ -106,6 +106,7 @@ static void InitShadowMemory(void) {
 // the 90% of objects.
 WRAP_INSTRUMENTED_FUNCTION("libc", malloc, (void *), (size_t num_bytes)) {
   auto malloc = WRAPPED_FUNCTION;
+  os::Log(os::LogOutput, "malloc(%lu)\n", num_bytes);
   granary_curiosity();
   return malloc(num_bytes);
 }

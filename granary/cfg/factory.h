@@ -15,6 +15,7 @@ class LocalControlFlowGraph;
 class BasicBlock;
 class DirectBasicBlock;
 class InstrumentedBasicBlock;
+class CompensationBasicBlock;
 class BlockMetaData;
 class HashFunction;
 class Instruction;
@@ -108,9 +109,7 @@ class BlockFactory {
 
   // Returns true if there are any pending materialization requests.
   GRANARY_INTERNAL_DEFINITION
-  inline bool HasPendingMaterializationRequest(void) const {
-    return has_pending_request;
-  }
+  bool HasPendingMaterializationRequest(void) const;
 
   // Materialize the initial basic block.
   GRANARY_INTERNAL_DEFINITION
@@ -125,6 +124,9 @@ class BlockFactory {
   // of it. This can be achieved by targeting this newly created basic block
   // with a CTI.
   DirectBasicBlock *Materialize(AppPC start_pc);
+
+  // Request that an empty basic block be created and added to the LCFG.
+  CompensationBasicBlock *MaterializeEmptyBlock(AppPC start_pc=nullptr);
 
   // Convert a decoded instruction into the internal Granary instruction IR.
   GRANARY_INTERNAL_DEFINITION
@@ -153,6 +155,9 @@ class BlockFactory {
 
   // Remove blocks that are now unnecessary.
   GRANARY_INTERNAL_DEFINITION void RemoveOldBlocks(void);
+
+  // Swap between the current and next round of new blocks.
+  GRANARY_INTERNAL_DEFINITION void SwapBlocks(void);
 
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION

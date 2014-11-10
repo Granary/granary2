@@ -358,8 +358,8 @@ void BlockFactory::RemoveOldBlocks(void) {
   for (auto block = second_block, prev_block = first_block; block; ) {
     auto next_block = block->list.GetNext(block);
     if (!block->is_reachable) {
-      if (cfg->first_new_block == block) {
-        cfg->first_new_block = next_block;
+      if (cfg->next_new_block == block) {
+        cfg->next_new_block = next_block;
       }
       block->list.Unlink();
       delete block;
@@ -370,6 +370,12 @@ void BlockFactory::RemoveOldBlocks(void) {
     block = next_block;
   }
   cfg->last_block = new_last_block;
+}
+
+// Swap between the current and next round of new blocks.
+void BlockFactory::SwapBlocks(void) {
+  cfg->first_new_block = cfg->next_new_block;
+  cfg->next_new_block = nullptr;
 }
 
 // Search an LCFG for a block whose meta-data matches the meta-data of
@@ -508,7 +514,9 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
       // give up and just go to the target and ignore the meta-data.
       } else {
         granary_curiosity();  // TODO(pag): Issue #42.
-        return MaterializeToExistingBlock(cfg, meta, target_pc);
+        auto adapt_block = MaterializeToExistingBlock(cfg, meta, target_pc);
+        SwapBlocks();
+        return adapt_block;
       }
     }
 
@@ -526,6 +534,7 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
   adapt_block->is_comparable = false;
   cfg->AddBlock(adapt_block);
   RequestBlock(direct_block, REQUEST_CHECK_INDEX_AND_LCFG);
+  SwapBlocks();
   return adapt_block;
 }
 
@@ -585,13 +594,18 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
 
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
-  cfg->first_new_block = nullptr;
   has_pending_request = false;
   ++generation;
   if (MaterializeDirectBlocks()) {
     RelinkCFIs();
     RemoveOldBlocks();
   }
+  SwapBlocks();
+}
+
+// Returns true if there are any pending materialization requests.
+bool BlockFactory::HasPendingMaterializationRequest(void) const {
+  return has_pending_request || cfg->next_new_block;
 }
 
 // Materialize the initial basic block.
@@ -603,6 +617,7 @@ DecodedBasicBlock *BlockFactory::MaterializeDirectEntryBlock(
   DecodeInstructionList(decoded_block);
   for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
   decoded_block->generation = generation;
+  SwapBlocks();
   return decoded_block;
 }
 
@@ -613,6 +628,7 @@ InstrumentedBasicBlock *BlockFactory::RequestDirectEntryBlock(
     cfg->AddBlock(entry_block);
     return entry_block;
   }
+  SwapBlocks();
   return nullptr;
 }
 
@@ -620,6 +636,16 @@ InstrumentedBasicBlock *BlockFactory::RequestDirectEntryBlock(
 DirectBasicBlock *BlockFactory::Materialize(AppPC start_pc) {
   auto meta = context->AllocateBlockMetaData(start_pc);
   auto block = new DirectBasicBlock(cfg, meta);
+  block->generation = generation + 1;
+  cfg->AddBlock(block);
+  return block;
+}
+
+// Request that an empty basic block be created and added to the LCFG.
+CompensationBasicBlock *BlockFactory::MaterializeEmptyBlock(AppPC start_pc) {
+  auto meta = context->AllocateBlockMetaData(start_pc);
+  auto block = new CompensationBasicBlock(cfg, meta);
+  block->generation = generation + 1;
   cfg->AddBlock(block);
   return block;
 }

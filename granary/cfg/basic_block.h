@@ -308,8 +308,7 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
 class CompensationBasicBlock : public DecodedBasicBlock {
  public:
   GRANARY_INTERNAL_DEFINITION
-  CompensationBasicBlock(LocalControlFlowGraph *cfg_,
-                                BlockMetaData *meta_);
+  CompensationBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
 
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CompensationBasicBlock)

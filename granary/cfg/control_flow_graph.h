@@ -28,14 +28,7 @@ GRANARY_INTERNAL_DEFINITION class ContextInterface;
 class LocalControlFlowGraph final {
  public:
   GRANARY_INTERNAL_DEFINITION
-  inline explicit LocalControlFlowGraph(ContextInterface *context_)
-      : context(context_),
-        entry_block(nullptr),
-        first_block(nullptr),
-        last_block(nullptr),
-        first_new_block(nullptr),
-        num_virtual_regs(0),
-        num_basic_blocks(0) {}
+  explicit LocalControlFlowGraph(ContextInterface *context_);
 
   // Destroy the CFG and all basic blocks in the CFG.
   ~LocalControlFlowGraph(void);
@@ -90,6 +83,7 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_new_block;
+  GRANARY_INTERNAL_DEFINITION BasicBlock *next_new_block;
 
   // Counter of how many virtual registers were allocated within this LCFG.
   GRANARY_INTERNAL_DEFINITION int num_virtual_regs;

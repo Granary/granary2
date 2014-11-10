@@ -15,6 +15,16 @@
 
 namespace granary {
 
+LocalControlFlowGraph::LocalControlFlowGraph(ContextInterface *context_)
+    : context(context_),
+      entry_block(nullptr),
+      first_block(nullptr),
+      last_block(nullptr),
+      first_new_block(nullptr),
+      next_new_block(nullptr),
+      num_virtual_regs(0),
+      num_basic_blocks(0) {}
+
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
   for (BasicBlock *block(first_block), *next(nullptr); block; block = next) {
@@ -68,8 +78,8 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
 
   last_block = block;
 
-  if (!first_new_block) {
-    first_new_block = block;
+  if (!next_new_block) {
+    next_new_block = block;
   }
 
   for (auto succ : block->Successors()) {  // Add the successors.

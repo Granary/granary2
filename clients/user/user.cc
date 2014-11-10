@@ -65,7 +65,8 @@ static void RemoveAllHooks(void) {
 }  // namespace
 
 // Handle a system call entrypoint.
-void HookSystemCallEntry(void *, arch::MachineContext *context) {
+void HookSystemCallEntry(lir::TranslationContext,
+                         arch::MachineContext *context) {
   SystemCallContext ctx(context);
   entry_hooks.ApplyAll(ctx);
 
@@ -85,7 +86,8 @@ void HookSystemCallEntry(void *, arch::MachineContext *context) {
 }
 
 // Handle a system call exit.
-void HookSystemCallExit(void *, arch::MachineContext *context) {
+void HookSystemCallExit(lir::TranslationContext,
+                        arch::MachineContext *context) {
   exit_hooks.ApplyAll(SystemCallContext(context));
 }
 
@@ -141,10 +143,10 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   void InstrumentSyscall(ControlFlowInstruction *syscall) {
     // Unconditionally pre-instrument syscalls so we can see `munmap`s and
     // `exit_group`s.
-    syscall->InsertBefore(lir::CallWithContext(HookSystemCallEntry));
+    syscall->InsertBefore(lir::ContextFunctionCall(HookSystemCallEntry));
 
     if (!exit_hooks.IsEmpty()) {
-      syscall->InsertAfter(lir::CallWithContext(HookSystemCallExit));
+      syscall->InsertAfter(lir::ContextFunctionCall(HookSystemCallExit));
     }
   }
 };

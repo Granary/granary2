@@ -57,8 +57,8 @@ class TrapBadUserAccess : public InstrumentationTool {
         // bits.
         "BT r64 %0, i8 47;"
         "JB l %1;"_x86_64);
-    instr->InsertBefore(lir::CallWithArgs(bb, TrapOnBadUserAccess, addr_reg,
-                                          instr->DecodedPC()));
+    instr->InsertBefore(lir::InlineFunctionCall(bb, TrapOnBadUserAccess,
+                                                addr_reg, instr->DecodedPC()));
     asm_.InlineBefore(instr,
         "LABEL %1:"_x86_64);
   }

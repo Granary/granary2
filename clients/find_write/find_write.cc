@@ -103,9 +103,9 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %4, r64 %0;"
           "JZ l %3;"_x86_64);
     }
-    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(mloc),
-                                          loc.module->Name(), loc.offset,
-                                          address, value));
+    instr->InsertBefore(lir::InlineFunctionCall(block, GetWriteReporter(mloc),
+                                                loc.module->Name(), loc.offset,
+                                                address, value));
 
     asm_.InlineBefore(instr, "LABEL %3:"_x86_64);
   }
@@ -134,9 +134,9 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
           "TEST r64 %5, r64 %2;"
           "JZ l %4;"_x86_64);
     }
-    instr->InsertBefore(lir::CallWithArgs(block, GetWriteReporter(mloc),
-                                          loc.module->Name(), loc.offset,
-                                          address, value));
+    instr->InsertBefore(lir::InlineFunctionCall(block, GetWriteReporter(mloc),
+                                                loc.module->Name(), loc.offset,
+                                                address, value));
     asm_.InlineBefore(instr, "LABEL %4:");
   }
 
