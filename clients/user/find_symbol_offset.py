@@ -19,9 +19,9 @@ def main(sym_name, lib_name):
   for lib in get_files():
     if r.match(lib):
       possibles.append(lib)
-
+  nice_lib_name = lib_name.replace("+", "x")
   for lib in possibles:
-    ret = os.popen("../user/find_symbol_offset.sh %s %s" % (sym_name, lib)).read()
+    ret = os.popen("../user/find_symbol_offset.sh %s %s %s" % (sym_name, lib, nice_lib_name)).read()
     ret = ret.strip()
     if ret:
       print ret

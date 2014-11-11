@@ -104,7 +104,7 @@ static void InitShadowMemory(void) {
 // watchpoints evenly across those objects that belong to the 90%, as well as
 // those that don't, and not just accidentally add 90% of all watchpoints to
 // the 90% of objects.
-WRAP_INSTRUMENTED_FUNCTION("libc", malloc, (void *), (size_t num_bytes)) {
+WRAP_INSTRUMENTED_FUNCTION(libc, malloc, (void *), (size_t num_bytes)) {
   auto malloc = WRAPPED_FUNCTION;
   os::Log(os::LogOutput, "malloc(%lu)\n", num_bytes);
   granary_curiosity();
@@ -120,7 +120,7 @@ class DataReactor : public InstrumentationTool {
 
   virtual void Init(InitReason) {
     InitShadowMemory();
-    RegisterFunctionWrapper(&WRAP_FUNC_malloc);
+    RegisterFunctionWrapper(&WRAP_FUNC_libc_malloc);
   }
 
   // Implements the actual touching (reading or writing) of shadow memory.

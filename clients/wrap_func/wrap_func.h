@@ -57,6 +57,13 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
       asm("movq %%r10, %0;" : "=r"(__r10)); \
       __r10; }))
 
+// Gives access to the return (native) address associated with the function
+// being wrapped.
+#define NATIVE_RETURN_ADDRESS \
+  (({ register uintptr_t __r11 asm("r11"); \
+      asm("movq %%r11, %0;" : "=r"(__r11)); \
+      __r11; }))
+
 // True definition of the wrappers. It is mostly designed to be easy on the
 // eyes and the macro expander, and so goes extra far to allow the function
 // body of the wrapper to be *outside* of the wrapper.
@@ -80,28 +87,28 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
 // Note: `granary::Identity` is used for return types in the event that a
 //       function being wrapped returns a function pointer.
 #define __WRAP_FUNCTION(act, lib_name, func_name, ret_type, param_types) \
-    struct GRANARY_CAT(WRAPPER_OF_, func_name) { \
+    struct WRAPPER_OF_ ## lib_name ## _ ## func_name { \
       static typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
       wrap param_types; \
       \
       typedef decltype(wrap) WrappedFunctionType; \
     }; \
     \
-    static FunctionWrapper GRANARY_CAT(WRAP_FUNC_, func_name) \
+    static FunctionWrapper WRAP_FUNC_ ## lib_name ## _ ## func_name \
     GRANARY_IF_NOT_ECLIPSE( = { \
         .next = nullptr, \
         .id = 0, \
         .function_name = GRANARY_TO_STRING(func_name), \
-        .module_name = lib_name, \
-        .module_offset = GRANARY_CAT(SYMBOL_OFFSET_, func_name), \
+        .module_name = GRANARY_TO_STRING(lib_name), \
+        .module_offset = SYMBOL_OFFSET_ ## lib_name ## _ ## func_name, \
         .wrapper_pc = reinterpret_cast<granary::AppPC>( \
-            GRANARY_CAT(WRAPPER_OF_, func_name)::wrap), \
+            WRAPPER_OF_ ## lib_name ## _ ## func_name::wrap), \
         .action = act \
     }); \
     \
     GRANARY_EXPORT_TO_INSTRUMENTATION \
     typename granary::Identity<GRANARY_SPLAT(ret_type)>::Type \
-    GRANARY_CAT(WRAPPER_OF_, func_name)::wrap param_types
+    WRAPPER_OF_ ## lib_name ## _ ## func_name::wrap param_types
 
 // Action-specific wrapper macros.
 #define WRAP_REPLACE_FUNCTION() \
@@ -112,7 +119,7 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
     __WRAP_FUNCTION(PASS_INSTRUMENTED_WRAPPED_FUNCTION, lib_name, \
                     func_name, ret_type, param_types)
 
-#define WRAP_NATIVE_FUNCTION() \
+#define WRAP_NATIVE_FUNCTION(lib_name, func_name, ret_type, param_types) \
     __WRAP_FUNCTION(PASS_NATIVE_WRAPPED_FUNCTION, lib_name, \
                     func_name, ret_type, param_types)
 
