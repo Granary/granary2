@@ -30,7 +30,7 @@ GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
-	@$(GRANARY_LD) -r $^ -o $(GRANARY_OS_OBJ)
+	@$(GRANARY_LD) -g -r $^ -o $@
 
 # Lint all Granary OS code, independent of the OS, and independent of user or
 # kernel space.
@@ -45,9 +45,7 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 $(GRANARY_SHIPPED_BIN): $(GRANARY_OBJS)
 	@mkdir -p $(GRANARY_MOD_BIN_DIR)
 	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
-	@$(GRANARY_LD) \
-		-r $(GRANARY_OBJS) \
-		-o $(GRANARY_SHIPPED_BIN)
+	@$(GRANARY_LD) -g -r $^ -o $@
 	# Make a `.cmd` file for the shipped object file.
 	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)
 

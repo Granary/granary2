@@ -28,7 +28,7 @@ GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
-	@$(GRANARY_LD) -g -r $^ -o $(GRANARY_OS_OBJ)
+	@$(GRANARY_LD) -g -r $^ -o $@
 
 # Lint all Granary OS code, independent of the OS, and independent of user or
 # kernel space.
@@ -40,7 +40,7 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 
 # Makes `grr`, the user-space injector if `libgranary.so`.
 $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
-	@echo "Compiling injector $(GRANARY_INJECTOR)"
+	@echo "Compiling injector $@"
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
 	    -c $(GRANARY_WHERE_SRC_DIR)/inject.c \
 	    -o $(GRANARY_WHERE_BIN_DIR)/inject.o
@@ -53,12 +53,11 @@ $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
 # stage where it will have the desired effect, while also not causing any later
 # load-time issues due to R_386_RELATIVE (0x08) PLT relocation types.
 $(GRANARY_LIBRARY_OBJ): $(GRANARY_OBJS)
-	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
-	@$(GRANARY_LD) -g \
+	@echo "Building object $@."
+	@$(GRANARY_LD) \
 	    -z initfirst -z interpose -z nodelete -z noexecstack -z now \
 	    -T $(GRANARY_SRC_DIR)/linker.lds \
-	    -r $(GRANARY_OBJS) \
-	    -o $(GRANARY_LIBRARY_OBJ)
+	    -g -r $^ -o $@
 
 # Makes `libgranary.so`, the user-space shared library version of Granary.
 $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
@@ -66,9 +65,9 @@ $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 	@$(GRANARY_CC) $(GRANARY_DEBUG_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS) \
 	    $(GRANARY_LD_FLAGS) \
 	    -nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
-	    $(GRANARY_LIBRARY_OBJ) \
+	    $^ \
 	    $(GRANARY_LD_FLAGS_LATE) \
-	    -o $(GRANARY_LIBRARY)
+	    -o $@
 
 # Make the final granary executables.
 exec: $(GRANARY_INJECTOR) $(GRANARY_LIBRARY)
