@@ -67,9 +67,6 @@ class Watchpoints : public InstrumentationTool {
   virtual void InstrumentBlock(DecodedBasicBlock *bb) {
     MemoryOperand mloc1, mloc2;
     for (auto instr : bb->AppInstructions()) {
-      if (StringsMatch("STOSQ", instr->OpCodeName())) {
-        granary_curiosity();
-      }
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
                                                      ReadOrWriteTo(mloc2));
       if (2 == num_matched) {
