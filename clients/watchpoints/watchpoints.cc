@@ -2,10 +2,11 @@
 
 #include <granary.h>
 
+#include "clients/user/syscall.h"
 #include "clients/util/closure.h"
 #include "clients/watchpoints/watchpoints.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 namespace {
 
@@ -13,16 +14,34 @@ namespace {
 // be instrumented for watchpoints.
 static ClosureList<WatchedOperand *> watchpoint_hooks GRANARY_GLOBAL;
 
+#ifdef GRANARY_WHERE_user
+
+static void UnwatchSyscallArg(uint64_t &arg) {
+  if (IsTaintedAddress(arg)) {
+    arg = UntaintAddress(arg);
+  }
+}
+
+// Prevent watched addresses from being passed to system calls.
+static void UnwatchSyscallArgs(void *, SystemCallContext ctx) {
+  UnwatchSyscallArg(ctx.Arg0());
+  UnwatchSyscallArg(ctx.Arg1());
+  UnwatchSyscallArg(ctx.Arg2());
+  UnwatchSyscallArg(ctx.Arg3());
+  UnwatchSyscallArg(ctx.Arg4());
+  UnwatchSyscallArg(ctx.Arg5());
+}
+
+#endif  // GRANARY_WHERE_user
+
 }  // namespace
 
-// TODO(pag): Generic allocators (similar to with meta-data) but for allowing
-//            multiple tools to register descriptor info.
-// TODO(pag): Eventually handle user space syscalls to avoid EFAULTs.
-// TODO(pag): Eventually handle user space signals.
-// TODO(pag): Eventually handle kernel space bit waitqueues.
-// TODO(pag): Eventually handle kernel space interrupts.
-// TODO(pag): Eventually handle user space addresses being de-referenced in
-//            kernel space.
+// Registers a function that can hook into the watchpoints system to instrument
+// code.
+void AddWatchpointInstrumenter(void (*func)(void *, WatchedOperand *),
+                               void *data, void (*delete_data)(void *)) {
+  watchpoint_hooks.Add(func, data, delete_data);
+}
 
 // Implements the instrumentation needed to do address watchpoints.
 //
@@ -36,6 +55,33 @@ class Watchpoints : public InstrumentationTool {
  public:
   virtual ~Watchpoints(void) = default;
 
+  virtual void Init(InitReason) {
+    GRANARY_IF_USER(AddSystemCallEntryFunction(UnwatchSyscallArgs));
+  }
+
+  virtual void Exit(ExitReason) {
+    watchpoint_hooks.Reset();
+  }
+
+  // Instrument a basic block.
+  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+    MemoryOperand mloc1, mloc2;
+    for (auto instr : bb->AppInstructions()) {
+      if (StringsMatch("STOSQ", instr->OpCodeName())) {
+        granary_curiosity();
+      }
+      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
+                                                     ReadOrWriteTo(mloc2));
+      if (2 == num_matched) {
+        InstrumentMemOp(bb, instr, mloc1);
+        InstrumentMemOp(bb, instr, mloc2);
+      } else if (1 == num_matched) {
+        InstrumentMemOp(bb, instr, mloc1);
+      }
+    }
+  }
+
+ private:
   void InstrumentMemOp(DecodedBasicBlock *bb, NativeInstruction *instr,
                        const MemoryOperand &mloc) {
     // Doesn't read from or write to memory.
@@ -58,8 +104,16 @@ class Watchpoints : public InstrumentationTool {
 
     lir::InlineAssembly asm_(unwatched_addr_reg, watched_addr_reg);
 
+    // Copy the original (%1).
     asm_.InlineBefore(instr,
-        "MOV r64 %0, r64 %1;"  // Copy the original (%1).
+        "MOV r64 %0, r64 %1;"_x86_64);
+
+    // Might be accessing user space data.
+    asm_.InlineBeforeIf(instr, IsA<ExceptionalControlFlowInstruction *>(instr),
+        "BT r64 %0, i8 47;"
+        "JNB l %2;"_x86_64);
+
+    asm_.InlineBefore(instr,
         "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
         GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
         "  SHL r64 %0, i8 16;"
@@ -94,24 +148,44 @@ class Watchpoints : public InstrumentationTool {
           "BSWAP r64 %1;"_x86_64);
     }
   }
-
-  // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    MemoryOperand mloc1, mloc2;
-    for (auto instr : bb->AppInstructions()) {
-      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
-                                                     ReadOrWriteTo(mloc2));
-      if (2 == num_matched) {
-        InstrumentMemOp(bb, instr, mloc1);
-        InstrumentMemOp(bb, instr, mloc2);
-      } else if (1 == num_matched) {
-        InstrumentMemOp(bb, instr, mloc1);
-      }
-    }
-  }
 };
+
+namespace {
+enum : uintptr_t {
+  TAINT_BIT = GRANARY_IF_USER_ELSE(1ul, 0ul),
+  TAINT_MASK = 0xFFFEull
+};
+}  // namespace
+
+// Taints an address `addr` using the low 15 bits of the taint index `index`.
+uintptr_t TaintAddress(uintptr_t addr, uintptr_t index) {
+  if (!addr) return addr;
+  auto taint = (((index << 1U) & TAINT_MASK) | TAINT_BIT) << 48UL;
+  return ((addr << 16) >> 16) | taint;
+}
+
+// Untaints an address `addr`.
+uintptr_t UntaintAddress(uintptr_t addr) {
+  if (!(1UL & (addr >> 47))) {  // User space address.
+    return addr & 0xFFFFFFFFFFFFULL;
+  } else {
+    return addr | (0xFFFFULL << 48);
+  }
+}
+
+// Returns true if an address is tainted.
+bool IsTaintedAddress(uintptr_t addr) {
+  auto bit_47 = (addr >> 47U) & 1U;
+  auto bit_48 = (addr >> 48U) & 1U;
+  return bit_47 != bit_48;
+}
+
+// Returns the taint for an address.
+uint16_t ExtractTaint(uintptr_t addr) {
+  return static_cast<uint16_t>(addr >> 49);
+}
 
 // Initialize the `watchpoints` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<Watchpoints>("watchpoints");
+  AddInstrumentationTool<Watchpoints>("watchpoints");
 }

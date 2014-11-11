@@ -1,7 +1,7 @@
 
 .PHONY: all
 
-include ../../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 XED_SRC_DIR = $(GRANARY_SRC_DIR)/dependencies/xed2-intel64
 XED_BIN_DIR = $(GRANARY_BIN_DIR)/dependencies/xed2-intel64

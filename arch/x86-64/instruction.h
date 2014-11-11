@@ -202,7 +202,7 @@ class Instruction : public InstructionInterface {
 
   // Operand matcher for multiple arguments. Returns the number of matched
   // arguments, starting from the first argument.
-  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
+  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> matchers);
 
   // Does this instruction enable interrupts?
   inline bool EnablesInterrupts(void) const {

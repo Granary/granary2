@@ -80,18 +80,18 @@ class InstrumentationTool {
  GRANARY_PUBLIC:
 
   // Register some meta-data with Granary that will be used with this tool.
-  // This is a convenience method around the `RegisterMetaData` method that
+  // This is a convenience method around the `AddMetaData` method that
   // operates directly on a meta-data description.
   template <typename T>
-  inline void RegisterMetaData(void) {
-    RegisterMetaData(GetMetaDataDescription<T>::Get());
+  inline void AddMetaData(void) {
+    AddMetaData(GetMetaDataDescription<T>::Get());
   }
 
  GRANARY_PUBLIC:
 
   // Register some meta-data with the meta-data manager associated with this
   // tool.
-  void RegisterMetaData(const MetaDataDescription *desc);
+  void AddMetaData(const MetaDataDescription *desc);
 
   // Next tool used to instrument code.
   GRANARY_POINTER(InstrumentationTool) *next;
@@ -201,22 +201,22 @@ class InstrumentationManager {
 #endif  // GRANARY_INTERNAL
 
 // Register a tool with Granary given its description.
-void RegisterInstrumentationTool(
+void AddInstrumentationTool(
     ToolDescription *desc, const char *name,
     std::initializer_list<const char *> required_tools);
 
 // Register a binary instrumenter with Granary.
 template <typename T>
-inline static void RegisterInstrumentationTool(const char *tool_name) {
-  RegisterInstrumentationTool(&(ToolDescriptor<T>::kDescription),
+inline static void AddInstrumentationTool(const char *tool_name) {
+  AddInstrumentationTool(&(ToolDescriptor<T>::kDescription),
                               tool_name, {});
 }
 
 // Register a binary instrumenter with Granary.
 template <typename T>
-inline static void RegisterInstrumentationTool(
+inline static void AddInstrumentationTool(
     const char *tool_name, std::initializer_list<const char *> required_tools) {
-  RegisterInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
+  AddInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
                              required_tools);
 }
 

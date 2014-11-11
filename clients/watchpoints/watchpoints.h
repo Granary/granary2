@@ -42,4 +42,48 @@ class WatchedOperand {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(WatchedOperand);
 };
 
+// Registers a function that can hook into the watchpoints system to instrument
+// code.
+void AddWatchpointInstrumenter(void (*func)(void *, WatchedOperand *),
+                               void *data=nullptr,
+                               void (*delete_data)(void *)=nullptr);
+
+// Taints an address `addr` using the low 15 bits of the taint index `index`.
+uintptr_t TaintAddress(uintptr_t addr, uintptr_t index);
+
+// Untaints an address `addr`.
+uintptr_t UntaintAddress(uintptr_t addr);
+
+// Returns true if an address is tainted.
+bool IsTaintedAddress(uintptr_t addr);
+
+// Returns the taint for an address.
+uint16_t ExtractTaint(uintptr_t addr);
+
+// Taints an pointer `ptr` using the low 15 bits of the taint index `index`.
+template <typename T, typename I>
+inline static T *TaintAddress(T *ptr, I taint) {
+  return reinterpret_cast<T *>(TaintAddress(
+      reinterpret_cast<uintptr_t>(ptr), static_cast<uintptr_t>(taint)));
+}
+
+// Untaints a pointer `ptr`.
+template <typename T>
+inline static T *UntaintAddress(T *ptr) {
+  return reinterpret_cast<T *>(UntaintAddress(
+      reinterpret_cast<uintptr_t>(ptr)));
+}
+
+// Returns true if a pointer `ptr` is tainted.
+template <typename T>
+inline static bool IsTaintedAddress(T *ptr) {
+  return IsTaintedAddress(reinterpret_cast<uintptr_t>(ptr));
+}
+
+// Returns the taint for an address. This assumes the address is tainted.
+template <typename T>
+inline static uint16_t ExtractTaint(T *ptr) {
+  return ExtractTaint(reinterpret_cast<uintptr_t>(ptr));
+}
+
 #endif  // CLIENTS_WATCHPOINTS_WATCHPOINTS_H_

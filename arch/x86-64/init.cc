@@ -323,6 +323,7 @@ static void InitImplicitOperand(const xed_inst_t *instr,
   } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_MEM1 == op_name) {
     auto base01_op = xed_inst_operand(instr, i + 1);
     ConvertNonTerminalOperand(instr_op, base01_op);
+    instr_op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   } else {
     GRANARY_ASSERT(false);
   }

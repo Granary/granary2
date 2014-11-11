@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_mask(address_mask, std::numeric_limits<uintptr_t>::max(),
     "Mask that is used to filter addresses. If all bits are set then all "
@@ -174,5 +174,5 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
 GRANARY_ON_CLIENT_INIT() {
   if (HAS_FLAG_address_mask && !FLAG_address_mask) return;
   if (HAS_FLAG_value_mask && !FLAG_value_mask) return;
-  RegisterInstrumentationTool<MemoryWriteInstrumenter>("find_write");
+  AddInstrumentationTool<MemoryWriteInstrumenter>("find_write");
 }

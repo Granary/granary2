@@ -21,8 +21,8 @@
       "" __VA_ARGS__ \
   }; \
   __attribute__((constructor(101), used)) \
-  static void GRANARY_CAT(RegisterOption_, name)(void) { \
-    granary::detail::RegisterOption(&GRANARY_CAT(OPTION_, name)); \
+  static void GRANARY_CAT(AddOption_, name)(void) { \
+    granary::detail::AddOption(&GRANARY_CAT(OPTION_, name)); \
   }
 
 #define GRANARY_DEFINE_string(name, default_value, docstring, ...) \
@@ -113,7 +113,7 @@ GRANARY_INTERNAL_DEFINITION void PrintAllOptions(void);
 namespace detail {
 
 // Initialize an option.
-void RegisterOption(Option *option);
+void AddOption(Option *option);
 
 // Parse an option that is a string.
 void ParseStringOption(Option *option);

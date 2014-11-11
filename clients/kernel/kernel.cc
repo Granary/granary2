@@ -4,7 +4,7 @@
 
 #ifdef GRANARY_WHERE_kernel
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_string(attach_to_syscalls, "*",
     "Comma-separated list of specific system call numbers "
@@ -66,7 +66,7 @@ GRANARY_ON_CLIENT_INIT() {
           }
         });
   }
-  RegisterInstrumentationTool<KernelSpaceInstrumenter>("kernel");
+  AddInstrumentationTool<KernelSpaceInstrumenter>("kernel");
 }
 
 #endif  // GRANARY_WHERE_kernel

@@ -299,6 +299,8 @@ const char *Instruction::ISelName(void) const {
 }
 
 // Get the names of the prefixes.
+//
+// TODO(pag): `XACQUIRE` and `XRELEASE` prefixes?
 const char *Instruction::PrefixNames(void) const {
   if (has_prefix_rep) {
     return "REP";
@@ -373,38 +375,36 @@ namespace {
 
 // Returns true if the action of the operand in the instruction matches
 // the expected action in the operand matcher.
-static bool OperandMatchesAction(const OperandMatcher &matcher,
-                                 const Operand &op) {
-  auto is_read = op.IsRead();
-  auto is_write = op.IsWrite();
+static bool OperandMatchesAction(const OperandMatcher &m, const Operand &op) {
+  const auto is_read = op.IsRead();
+  const auto is_write = op.IsWrite();
   if (is_read && is_write) {
-    if (OperandAction::READ_ONLY == matcher.action ||
-        OperandAction::WRITE_ONLY == matcher.action) {
-      return false;
-    }
+    return OperandAction::READ_ONLY != m.action &&
+           OperandAction::WRITE_ONLY != m.action;
+
   } else if (is_read) {
-    if (OperandAction::ANY != matcher.action &&
-        OperandAction::READ != matcher.action &&
-        OperandAction::READ_ONLY != matcher.action) {
-      return false;
-    }
+    return OperandAction::WRITE != m.action &&
+           OperandAction::WRITE_ONLY != m.action &&
+           OperandAction::READ_AND_WRITE != m.action;
+
   } else if (is_write) {
-    if (OperandAction::ANY != matcher.action &&
-        OperandAction::WRITE != matcher.action &&
-        OperandAction::WRITE_ONLY != matcher.action) {
-      return false;
-    }
+    return OperandAction::READ != m.action &&
+           OperandAction::READ_ONLY != m.action &&
+           OperandAction::READ_AND_WRITE != m.action;
+
+  } else {
+    GRANARY_ASSERT(false);
+    return false;
   }
-  return true;
 }
 
 // Returns true of the operand is matched and bound to the operand in the
 // matcher.
-static bool BindOperand(OperandMatcher matcher, Operand *op) {
-  if ((op->IsRegister() && IsA<RegisterOperand *>(matcher.op)) ||
-      (op->IsMemory() && IsA<MemoryOperand *>(matcher.op)) ||
-      (op->IsImmediate() && IsA<ImmediateOperand *>(matcher.op))) {
-    matcher.op->UnsafeReplace(op);
+static bool BindOperand(const OperandMatcher &m, Operand *op) {
+  if ((op->IsRegister() && IsA<RegisterOperand *>(m.op)) ||
+      (op->IsMemory() && IsA<MemoryOperand *>(m.op)) ||
+      (op->IsImmediate() && IsA<ImmediateOperand *>(m.op))) {
+    m.op->UnsafeReplace(op);
     return true;
   } else {
     return false;
@@ -414,21 +414,14 @@ static bool BindOperand(OperandMatcher matcher, Operand *op) {
 // Returns true of the operand is matched.
 //
 // TODO(pag): Extend matching beyond register operands.
-static bool MatchOperand(OperandMatcher matcher, const Operand &op) {
-  auto reg_op = DynamicCast<RegisterOperand *>(matcher.op);
+static bool MatchOperand(const OperandMatcher &m, const Operand &op) {
+  auto reg_op = DynamicCast<RegisterOperand *>(m.op);
   return (op.IsRegister() && reg_op && op.reg == reg_op->Register());
 }
 
-struct MatchState {
-  size_t num_matched;
-  bool was_matched[Instruction::MAX_NUM_OPERANDS];
-};
-
 // Try to match an operand, and update the `MatchState` accordingly.
-bool TryMatchOperand(MatchState *state, OperandMatcher m, Operand *op, int i) {
-  if (state->was_matched[i] || !OperandMatchesAction(m, *op)) {
-    return false;
-  }
+bool TryMatchOperand(const OperandMatcher &m, Operand *op) {
+  if (!OperandMatchesAction(m, *op)) return false;
   if (GRANARY_LIKELY(OperandConstraint::BIND == m.constraint)) {
     if (!BindOperand(m, op)) {
       return false;
@@ -436,9 +429,6 @@ bool TryMatchOperand(MatchState *state, OperandMatcher m, Operand *op, int i) {
   } else if (!MatchOperand(m, *op)) {
     return false;
   }
-
-  state->was_matched[i] = true;
-  ++state->num_matched;
   return true;
 }
 
@@ -447,36 +437,29 @@ bool TryMatchOperand(MatchState *state, OperandMatcher m, Operand *op, int i) {
 // Operand matcher for multiple arguments. Returns the number of matched
 // arguments, starting from the first argument.
 size_t Instruction::CountMatchedOperands(
-    std::initializer_list<OperandMatcher> &&matchers) {
-  MatchState state = {0, {false}};
+    std::initializer_list<OperandMatcher> matchers) {
   GRANARY_ASSERT(XED_IFORM_INVALID != iform);
   GRANARY_ASSERT(0 != isel);
   const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[isel];
   const auto implicit_ops = IMPLICIT_OPERANDS[isel];
-  for (auto m : matchers) {
-    int op_num = 0;
-    auto matched = false;
-    for (auto &op : ops) {
-      if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-        break;
-      }
-      if ((matched = TryMatchOperand(&state, m, &op, op_num++))) {
-        break;
-      }
+  auto matcher_array = matchers.begin();
+  auto i = 0UL;
+  uint8_t op_num = 0;
+
+  for (const auto max_i = matchers.size(); i < max_i; ++op_num) {
+    Operand *op(nullptr);
+    if (op_num < num_explicit_ops) {
+      op = &(ops[op_num]);
+    } else if ((op_num - num_explicit_ops) < num_implicit_ops) {
+      op = const_cast<Operand *>(&(implicit_ops[op_num - num_explicit_ops]));
+    } else {
+      break;
     }
-    if (!matched) {  // Try to match against implicit operands.
-      for (auto i = 0; i < num_implicit_ops; ++i) {
-        auto op = const_cast<Operand *>(&(implicit_ops[i]));
-        if ((matched = TryMatchOperand(&state, m, op, op_num++))) {
-          break;
-        }
-      }
-      if (!matched) {  // Didn't match against anything; give up.
-        return state.num_matched;
-      }
+    if (TryMatchOperand(matcher_array[i], op)) {
+      ++i;
     }
   }
-  return state.num_matched;
+  return i;
 }
 
 }  // namespace arch

@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_bool(count_execs, false,
     "Count the number of times each block is executed. This option is only "
@@ -32,7 +32,7 @@ class BBCount : public InstrumentationTool {
  public:
   virtual void Init(InitReason) {
     if (FLAG_count_execs) {
-      RegisterMetaData<BlockCounter>();
+      AddMetaData<BlockCounter>();
     }
   }
 
@@ -57,5 +57,5 @@ class BBCount : public InstrumentationTool {
 
 // Initialize the `count_bbs` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<BBCount>("count_bbs");
+  AddInstrumentationTool<BBCount>("count_bbs");
 }

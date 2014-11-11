@@ -228,8 +228,8 @@ void NativeInstruction::ForEachOperandImpl(
 // Try to match and bind one or more operands from this instruction. Returns
 // the number of operands matched, starting from the first operand.
 size_t NativeInstruction::CountMatchedOperandsImpl(
-    std::initializer_list<OperandMatcher> &&matchers) {
-  return instruction.CountMatchedOperands(std::move(matchers));
+    std::initializer_list<OperandMatcher> matchers) {
+  return instruction.CountMatchedOperands(matchers);
 }
 
 BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,

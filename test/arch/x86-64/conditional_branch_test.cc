@@ -97,7 +97,7 @@ class ConditionalBranchTest : public Test {
 
   static void SetUpTestCase(void) {
     SimpleInitGranary();
-    RegisterInstrumentationTool<AllFuncBlocks>("all_func_blocks");
+    AddInstrumentationTool<AllFuncBlocks>("all_func_blocks");
   }
 
  protected:

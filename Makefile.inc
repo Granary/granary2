@@ -55,8 +55,9 @@ GRANARY_KERNEL_DIR ?= $(GRANARY_SRC_DIR)/dependencies/linux
 GRANARY_SRC_DIR ?= $(shell pwd)
 
 # Find all of Granary's clients.
-GRANARY_CLIENT_DIR ?= $(GRANARY_SRC_DIR)/clients
-GRANARY_CLIENTS ?= $(notdir $(shell find $(GRANARY_CLIENT_DIR) -mindepth 1 -maxdepth 1 -type d))
+GRANARY_CLIENTS_SRC_DIR ?= $(GRANARY_SRC_DIR)/clients
+GRANARY_CLIENTS_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
+GRANARY_CLIENTS ?= $(notdir $(shell find $(GRANARY_CLIENTS_SRC_DIR) -mindepth 1 -maxdepth 1 -type d))
 
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
@@ -106,11 +107,6 @@ GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_TRIPLE)
 GRANARY_HEADERS = $(GRANARY_HEADERS_DIR)/granary.h
 GRANARY_OS_TYPES = $(GRANARY_SRC_DIR)/generated/$(GRANARY_DOUBLE)/types.h
 
-ifdef GRANARY_CLIENT_NAME
-	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
-	GRANARY_LD_FLAGS_EARLY += -shared
-endif
-
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
 GRANARY_COMMON_FLAGS += -I$(GRANARY_SRC_DIR) -DGRANARY_NAME=$(GRANARY_NAME)
@@ -158,7 +154,7 @@ else  # debug, test
 	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS_LATE += "-Wl,-g"
+	GRANARY_LD_FLAGS_LATE += "-Wl,-g" $(GRANARY_DEBUG_FLAGS)
 endif
 
 # Make sure certain architectural features are disabled.
@@ -241,11 +237,11 @@ GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary.o
 GRANARY_DRIVER_OBJ = $(GRANARY_BIN_DIR)/driver.o
 GRANARY_ARCH_OBJ = $(GRANARY_BIN_DIR)/arch.o
 GRANARY_OS_OBJ = $(GRANARY_BIN_DIR)/os.o
-GRANARY_CLIENT_OBJS = $(addsuffix _client.o,$(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_CLIENTS)))
+GRANARY_CLIENT_OBJ = $(GRANARY_BIN_DIR)/clients.o
 
 # Objects that must be combined into the final Granary executable.
 GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DRIVER_OBJ)
-GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJS)
+GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJ)
 
 GRANARY_LINT_TARGET =
 
@@ -280,6 +276,14 @@ $(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.c
 	@echo "Building C object $@"
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+
+# Compile a simple, single-file client to an object.
+#
+# Note: This enables link-time optimization.
+$(GRANARY_BIN_DIR)/%_client.bc :: $(GRANARY_CLIENTS_SRC_DIR)/%/client.cc
+	@echo "Building CXX object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 
 # Compile C++ files to LLVM bitcode.
 #

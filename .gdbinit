@@ -264,6 +264,11 @@ define log-exec-entries
   dont-repeat
 end
 
+python None ; \
+  FIND_CONSTRUCT = re.compile(r"granary::Construct<([^>]+)>") ; \
+  FIND_TPL_ASSIGNS = re.compile(r"<(<(.*?)>|std::(.*?))> = ") ; \
+  EMPTY_BRACES = re.compile(r"\{[, ]*\}") ; \
+  MANY_BRACES = re.compile(r"\{\{(.*)\}\}") ;
 
 # print-block-meta
 #
@@ -281,16 +286,32 @@ define print-block-meta
     set $__bytes = ((char *) $__m) + $__offset
     python None ; \
       dstr = gdb.execute("p *$__desc\n", from_tty=True, to_string=True) ; \
-      m = re.search(r"granary::Construct<([^>]+)>", dstr) ; \
+      m = FIND_CONSTRUCT.search(dstr) ; \
       cls = m.group(1) ; \
       ms = gdb.execute("p *((%s *)$__bytes)" % cls, \
         from_tty=True, to_string=True) ; \
-      ms = re.sub(r"^\$[0-9]+ = \{.*, <No data fields>},", "{", ms) ; \
+      ms = ms.replace("<No data fields>", "") ; \
+      ms = ms.replace("granary::", "") ; \
+      ms = ms.replace("MutableMetaData", "") ; \
+      ms = ms.replace("IndexableMetaData", "") ; \
+      ms = ms.replace("UnifiableMetaData", "") ; \
+      ms = ms.replace("ToolMetaData", "") ; \
+      ms = FIND_TPL_ASSIGNS.sub("", ms) ; \
+      ms = EMPTY_BRACES.sub("", ms) ; \
+      ms = EMPTY_BRACES.sub("", ms) ; \
+      ms = ms.replace("{, ", "{") ; \
+      ms = ms.replace(", }", "}") ; \
+      ms = MANY_BRACES.sub(r"\1", ms) ; \
       gdb.write("   %s = %s" % (cls, ms)) ;
     set $__i = $__i + 1
   end
   dont-repeat
 end
+
+
+#      
+#      ms = FIND_TPL_ASSIGNS.sub("", ms) ; \
+#      ms = re.sub(r"^\$[0-9]+ = \{.*, <No data fields>[}]+,", "{", ms) ; \
 
 
 # print-meta-entry
@@ -386,6 +407,8 @@ define find-meta-entry
   dont-repeat
 end
 
+python None ; \
+  REG_NAME = re.compile(r"^\$.*= XED_REG_") 
 
 # print-xed-reg
 #
@@ -394,7 +417,7 @@ define print-xed-reg
   set $__r = (xed_reg_enum_t) $arg0
   python None ; \
     m = gdb.execute("p $__r", from_tty=True, to_string=True) ; \
-    m = re.sub(r"^\$.*= XED_REG_", "", m) ; \
+    m = REG_NAME.sub("", m) ; \
     gdb.write(m.strip("\n")) ;
 end
 

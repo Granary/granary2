@@ -11,8 +11,8 @@
 #include "granary/metadata.h"
 
 GRANARY_DEFINE_bool(debug_trace_meta, false,
-    "Trace the meta-data that is committed to the code cache index. The default "
-    "is `no`.\n"
+    "Trace the meta-data that is committed to the code cache index. The "
+    "default is `no`.\n"
     "\n"
     "The meta-data trace can be inspected from GDB by issuing the "
     "`print-meta-entry` command. For example, `print-meta-entry 0` will print "

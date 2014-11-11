@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 // Simple tool decoding all blocks in a function.
 class WholeFunctionDecoder : public InstrumentationTool {
@@ -24,5 +24,5 @@ class WholeFunctionDecoder : public InstrumentationTool {
 
 // Initialize the `whole_func` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<WholeFunctionDecoder>("whole_func");
+  AddInstrumentationTool<WholeFunctionDecoder>("whole_func");
 }

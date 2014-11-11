@@ -67,7 +67,7 @@ class ContextInterface {
   virtual BlockMetaData *AllocateEmptyBlockMetaData(void) = 0;
 
   // Register some meta-data with Granary.
-  virtual void RegisterMetaData(const MetaDataDescription *desc) = 0;
+  virtual void AddMetaData(const MetaDataDescription *desc) = 0;
 
   // Allocate instances of the tools that will be used to instrument blocks.
   virtual InstrumentationTool *AllocateTools(void) = 0;
@@ -150,7 +150,7 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
 
   // Register some meta-data with Granary.
   GRANARY_TEST_VIRTUAL
-  void RegisterMetaData(const MetaDataDescription *desc);
+  void AddMetaData(const MetaDataDescription *desc);
 
   // Allocate instances of the tools that will be used to instrument blocks.
   GRANARY_TEST_VIRTUAL

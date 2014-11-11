@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../Types.mk
+include $(GRANARY_SRC_DIR)/os/linux/Types.mk
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
@@ -24,8 +24,7 @@ GRANARY_SHIPPED_BIN = $(GRANARY_MOD_BIN_DIR)/granary_bin.o_shipped
 GRANARY_SHIPPED_CMD = $(GRANARY_MOD_BIN_DIR)/.granary_bin.o.cmd
 
 # All objects that need to be put together to form the library.
-GRANARY_O_FILES = os.o granary.o arch.o driver.o
-GRANARY_O_FILES += $(addsuffix _client.o,$(GRANARY_CLIENTS))
+GRANARY_O_FILES = os.o granary.o arch.o driver.o clients.o
 GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)

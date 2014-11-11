@@ -9,7 +9,7 @@
 #include "clients/user/syscall.h"
 #include "clients/util/closure.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_bool(early_attach, true,
     "Should Granary attach to the user program when Granary is first "
@@ -153,7 +153,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
 
 // Initialize the `user` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<UserSpaceInstrumenter>("user");
+  AddInstrumentationTool<UserSpaceInstrumenter>("user");
 }
 
 #endif  // GRANARY_WHERE_user
