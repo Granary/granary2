@@ -250,7 +250,7 @@ BlockMetaData *Context::AllocateEmptyBlockMetaData(void) {
 }
 
 // Register some meta-data with Granary.
-void Context::RegisterMetaData(const MetaDataDescription *desc) {
+void Context::AddMetaData(const MetaDataDescription *desc) {
   metadata_manager.Register(const_cast<MetaDataDescription *>(desc));
 }
 

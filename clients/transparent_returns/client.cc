@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "Enable transparent return addresses? The default is `"
@@ -20,6 +20,8 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
 
     "transparent_returns");
 
+// Meta-data that tracks whether or not the return address of a function likely
+// points into the code cache.
 class RetAddrInCodeCache : public IndexableMetaData<RetAddrInCodeCache> {
  public:
   RetAddrInCodeCache(void)
@@ -56,24 +58,13 @@ class RetAddrInCodeCache : public IndexableMetaData<RetAddrInCodeCache> {
 //    4)  Improves the attach/detach story, because it makes it so that a detach
 //        is really a full detach, and doesn't require that the instrumented
 //        code be given time to quiesce to some kind of native state.
-//
-// TODO(pag): Its not clear if the best implementation of this is as a tool, as
-//            an internal feature, or as some combination thereof. For example,
-//            in some cases, we might want transparent return addresses on all
-//            but a few calls that actually do go native, but for which we want
-//            execution to return to instrumented code.
-//
-//            It's not clear how to nicely handle this case, except to just
-//            have a purpose-built tool that re-implements selective transparent
-//            return addresses, and requires that use user manually specifies
-//            `--transparent_returns=no` at the command-line.
 
 class TransparentRetsInstrumenterEarly : public InstrumentationTool {
  public:
   virtual ~TransparentRetsInstrumenterEarly(void) = default;
 
   virtual void Init(InitReason) {
-    RegisterMetaData<RetAddrInCodeCache>();
+    AddMetaData<RetAddrInCodeCache>();
   }
 
   // Should the return be specialized?
@@ -158,7 +149,7 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
     lir::ConvertFunctionCallToJump(cfi);
   }
 
-  // Add a return address to the
+  // Add a transparent return address to an application function call.
   void AddRetAddrToBlock(BlockFactory *factory, DecodedBasicBlock *block) {
     if (!block) return;
     for (auto succ : block->Successors()) {
@@ -186,9 +177,9 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
 
 // Initialize the `transparent_rets` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<TransparentRetsInstrumenterEarly>(
+  AddInstrumentationTool<TransparentRetsInstrumenterEarly>(
       "transparent_returns_early");
 
-  RegisterInstrumentationTool<TransparentRetsInstrumenterLate>(
+  AddInstrumentationTool<TransparentRetsInstrumenterLate>(
       "transparent_returns_late", {"transparent_returns_early"});
 }

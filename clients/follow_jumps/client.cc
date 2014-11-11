@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 // Simple tool for tracing direct control-flow instructions into traces.
 class JumpFollower : public InstrumentationTool {
@@ -39,5 +39,5 @@ class JumpFollower : public InstrumentationTool {
 
 // Initialize the `follow_jumps` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<JumpFollower>("follow_jumps");
+  AddInstrumentationTool<JumpFollower>("follow_jumps");
 }

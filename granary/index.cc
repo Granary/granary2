@@ -17,7 +17,7 @@ namespace granary {
 namespace {
 
 // Tombstone pointer representing the last meta-data block in a meta-data array.
-static BlockMetaData * const META_ARRAY_END = \
+static BlockMetaData * const kMetaArrayEnd = \
     reinterpret_cast<BlockMetaData *>(1ULL);
 
 }  // namespace
@@ -41,7 +41,7 @@ class MetaDataArray : public IndexArrayMem {
   // Deletes all meta-data linked into this array.
   ~MetaDataArray(void) {
     for (auto meta : metas) {
-      while (meta && meta != META_ARRAY_END) {
+      while (meta && kMetaArrayEnd != meta) {
         auto index_meta = MetaDataCast<IndexMetaData *>(meta);
         auto next_meta = index_meta->next;
         delete meta;
@@ -106,6 +106,8 @@ static AppPC GetAppPC(BlockMetaData *meta) {
   return meta ? MetaDataCast<AppMetaData *>(meta)->start_pc : nullptr;
 }
 
+typedef MetaDataLinkedListIterator<IndexMetaData> IndexMetaDataIterator;
+
 // Match some meta-data that we are search for (`search`) against a linked
 // list of potential meta-data.
 static IndexFindResponse MatchMetaData(BlockMetaData *ls,
@@ -114,19 +116,19 @@ static IndexFindResponse MatchMetaData(BlockMetaData *ls,
     UnificationStatus::REJECT,
     nullptr
   };
-  while (ls != META_ARRAY_END) {
-    GRANARY_ASSERT(nullptr != ls);
-    if (search->Equals(ls)) {
+  for (auto meta : IndexMetaDataIterator(ls)) {
+    if (kMetaArrayEnd == meta) break;
+    if (search->Equals(meta)) {
       switch (search->CanUnifyWith(ls)) {
         case UnificationStatus::ACCEPT:
           response.status = UnificationStatus::ACCEPT;
-          response.meta = ls;
+          response.meta = meta;
           return response;
 
         case UnificationStatus::ADAPT:
           if (UnificationStatus::ADAPT != response.status) {
             response.status = UnificationStatus::ADAPT;
-            response.meta = ls;
+            response.meta = meta;
           }
           break;
 
@@ -134,7 +136,6 @@ static IndexFindResponse MatchMetaData(BlockMetaData *ls,
           break;
       }
     }
-    ls = MetaDataCast<IndexMetaData *>(ls)->next;
   }
   return response;
 }
@@ -148,7 +149,7 @@ static BlockMetaData *UnlinkMetaData(BlockMetaData **prev_ptr,
                                      BlockMetaData *removed,
                                      AppPC begin, AppPC end) {
   auto meta = *prev_ptr;
-  while (meta && meta != META_ARRAY_END) {
+  while (meta && kMetaArrayEnd != meta) {
     auto index_meta = MetaDataCast<IndexMetaData *>(meta);
     auto next_meta = index_meta->next;
     auto meta_pc = GetAppPC(meta);
@@ -207,7 +208,7 @@ void Index::Insert(BlockMetaData *meta) {
   if (GRANARY_UNLIKELY(!array)) array = new internal::MetaDataArray;
 
   auto &metas(array->metas[index.second]);
-  if (GRANARY_UNLIKELY(!metas)) metas = META_ARRAY_END;
+  if (GRANARY_UNLIKELY(!metas)) metas = kMetaArrayEnd;
 
   index_meta->next = metas;  // Add it in.
   metas = meta;

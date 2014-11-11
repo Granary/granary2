@@ -9,7 +9,7 @@
 #include "clients/user/syscall.h"
 #include "generated/clients/gdb/offsets.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_bool(debug_gdb_prompt, true,
     "Should a GDB process attacher helper be printed out on startup? Default "
@@ -177,7 +177,7 @@ GRANARY_ON_CLIENT_INIT() {
     AwaitAttachOnSignal(SIGBUS);
     AwaitAttachOnSignal(SIGTRAP);
   }
-  RegisterInstrumentationTool<GDBDebuggerHelper>("gdb");
+  AddInstrumentationTool<GDBDebuggerHelper>("gdb");
 }
 
 #endif  // GRANARY_WHERE_user

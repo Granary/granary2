@@ -4,7 +4,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 // Callback that is invoked when a user space address is accessed when it
 // shouldn't be.
@@ -81,7 +81,7 @@ class TrapBadUserAccess : public InstrumentationTool {
 
 // Initialize the `trap_bad_user_access` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<TrapBadUserAccess>("trap_bad_user_access");
+  AddInstrumentationTool<TrapBadUserAccess>("trap_bad_user_access");
 }
 
 #endif   // GRANARY_WHERE_kernel

@@ -1,6 +1,6 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-include ../../../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 GRANARY_OS_TYPE_FLAGS :=
 

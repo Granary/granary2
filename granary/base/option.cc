@@ -240,7 +240,7 @@ void PrintAllOptions(void) {
 namespace detail {
 
 // Initialize an option.
-void RegisterOption(Option *option) {
+void AddOption(Option *option) {
   if (OPTIONS_INITIALIZED) {
     option->parse(option);  // Client/tool options.
   }

@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 # Find assembly files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_ASM_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.asm')

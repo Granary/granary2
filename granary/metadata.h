@@ -355,6 +355,62 @@ void TraceMetaData(uint64_t group, const BlockMetaData *meta);
 
 #endif  // GRANARY_INTERNAL
 
+// Useful for linked lists of meta-data.
+template <typename T>
+class MetaDataLinkedListIterator {
+ public:
+  typedef MetaDataLinkedListIterator<T> Iterator;
+
+  MetaDataLinkedListIterator(void)
+      : curr(nullptr) {}
+
+  MetaDataLinkedListIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  MetaDataLinkedListIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  explicit MetaDataLinkedListIterator(BlockMetaData *first)
+      : curr(first) {}
+
+  inline Iterator begin(void) const {
+    return *this;
+  }
+
+  inline Iterator end(void) const {
+    return Iterator(static_cast<BlockMetaData *>(nullptr));
+  }
+
+  inline void operator++(void) {
+    curr = MetaDataCast<T *>(curr)->next;
+  }
+
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
+
+  inline BlockMetaData *operator*(void) const {
+    return curr;
+  }
+
+  // Returns the last valid element from an iterator.
+  static BlockMetaData *Last(Iterator elems) {
+    BlockMetaData *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline BlockMetaData *Last(BlockMetaData *elems_ptr) {
+    return Last(Iterator(elems_ptr));
+  }
+
+ private:
+  BlockMetaData *curr;
+};
+
 }  // namespace granary
 
 #endif  // GRANARY_METADATA_H_

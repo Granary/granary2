@@ -392,7 +392,7 @@ class NativeInstruction : public Instruction {
   // Try to match and bind one or more operands from this instruction. Returns
   // the number of operands matched, starting from the first operand.
   size_t CountMatchedOperandsImpl(
-      std::initializer_list<OperandMatcher> &&matchers);
+      std::initializer_list<OperandMatcher> matchers);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeInstruction);
 };

@@ -16,7 +16,7 @@
 // system call numbers, arguments, and return values.
 class SystemCallContext {
  public:
-  inline SystemCallContext(granary::arch::MachineContext *context_)
+  inline explicit SystemCallContext(granary::arch::MachineContext *context_)
       : context(context_) {}
 
   inline uint64_t &Arg0(void) const {
@@ -44,6 +44,8 @@ class SystemCallContext {
     return *granary::os::abi::SystemCallNumber(context);
   }
  private:
+  SystemCallContext(void) = delete;
+
   granary::arch::MachineContext * const context;
 };
 
@@ -70,4 +72,4 @@ void AddSystemCallExitFunction(SystemCallHook *hook,
                                CleanUpData *delete_data=nullptr);
 #endif  // GRANARY_WHERE_user
 
-#endif /* CLIENTS_USER_SYSCALL_H_ */
+#endif  // CLIENTS_USER_SYSCALL_H_

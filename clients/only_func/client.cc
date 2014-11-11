@@ -2,7 +2,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 // Simple tool for (almost) ensuring that only one function is ever
 // instrumented. The way this tool works is that it prevents Granary from
@@ -28,5 +28,5 @@ class OnlyFunctionDecoder : public InstrumentationTool {
 
 // Initialize the `whole_func` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<OnlyFunctionDecoder>("only_func");
+  AddInstrumentationTool<OnlyFunctionDecoder>("only_func");
 }

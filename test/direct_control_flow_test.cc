@@ -173,7 +173,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
       \
       static void SetUpTestCase(void) { \
         SimpleInitGranary(); \
-        RegisterInstrumentationTool<tool_name>(#tool_name); \
+        AddInstrumentationTool<tool_name>(#tool_name); \
       } \
       \
      protected: \

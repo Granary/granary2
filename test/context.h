@@ -43,7 +43,7 @@ class MockContext : public granary::ContextInterface {
                granary::BlockMetaData *());
 
   // Register some meta-data with Granary.
-  MOCK_METHOD1(RegisterMetaData,
+  MOCK_METHOD1(AddMetaData,
                void (const granary::MetaDataDescription *));
 
   // Compile some code into one of the code caches.

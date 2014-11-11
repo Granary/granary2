@@ -15,6 +15,8 @@ namespace granary {
 template <typename T, uintptr_t kMinSize>
 class TinySet {
  public:
+  typedef TinySet<T, kMinSize> SelfType;
+
   TinySet(void)
       : elems() {}
 
@@ -26,6 +28,11 @@ class TinySet {
       if (e == elem) return true;
     }
     return false;
+  }
+
+  inline SelfType &operator=(const SelfType &that) {
+    elems = that.elems;
+    return *this;
   }
 
   unsigned long Size(void) const {

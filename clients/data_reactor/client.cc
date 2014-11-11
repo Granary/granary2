@@ -7,11 +7,11 @@
 #ifdef GRANARY_WHERE_user
 
 #include "clients/user/syscall.h"
-#include "clients/wrap_func/wrap_func.h"
+#include "clients/wrap_func/client.h"
 
 #include "generated/clients/data_reactor/offsets.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
     "The granularity (in bytes) of shadow memory. This must be a power of two. "
@@ -120,7 +120,7 @@ class DataReactor : public InstrumentationTool {
 
   virtual void Init(InitReason) {
     InitShadowMemory();
-    RegisterFunctionWrapper(&WRAP_FUNC_libc_malloc);
+    AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
   }
 
   // Implements the actual touching (reading or writing) of shadow memory.
@@ -199,8 +199,7 @@ class DataReactor : public InstrumentationTool {
 
 // Initialize the `data_reactor` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<DataReactor>("data_reactor",
-                                           {"gdb", "wrap_func"});
+  AddInstrumentationTool<DataReactor>("data_reactor", {"gdb", "wrap_func"});
 }
 
 #endif  // GRANARY_WHERE_user

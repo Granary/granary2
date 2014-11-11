@@ -35,9 +35,9 @@ class ClosureList {
   typedef detail::Closure ClosureType;
   typedef granary::LinkedListIterator<ClosureType> ClosureTypeIterator;
 
-  ClosureList(void) {
-    Reset();
-  }
+  ClosureList(void)
+      : first(nullptr),
+        next_ptr(&first) {}
 
   ~ClosureList(void) {
     FreeAll();

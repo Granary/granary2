@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef CLIENTS_WRAP_FUNC_WRAP_FUNC_H_
-#define CLIENTS_WRAP_FUNC_WRAP_FUNC_H_
+#ifndef CLIENTS_WRAP_FUNC_CLIENT_H_
+#define CLIENTS_WRAP_FUNC_CLIENT_H_
 
 #include <granary.h>
 
@@ -46,7 +46,7 @@ struct FunctionWrapper {
 };
 
 // Register a function wrapper with the wrapper tool.
-void RegisterFunctionWrapper(FunctionWrapper *wrapper);
+void AddFunctionWrapper(FunctionWrapper *wrapper);
 
 // Gives access to the function being wrapped. This assumes that the wrapper
 // action is either `PASS_INSTRUMENTED_WRAPPED_FUNCTION` or that it is
@@ -123,4 +123,4 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper);
     __WRAP_FUNCTION(PASS_NATIVE_WRAPPED_FUNCTION, lib_name, \
                     func_name, ret_type, param_types)
 
-#endif  // CLIENTS_WRAP_FUNC_WRAP_FUNC_H_
+#endif  // CLIENTS_WRAP_FUNC_CLIENT_H_

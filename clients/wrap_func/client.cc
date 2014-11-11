@@ -1,12 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "clients/wrap_func/wrap_func.h"
+#include "clients/wrap_func/client.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DECLARE_bool(transparent_returns);
-
-namespace {
 
 // Allows us to select which wrapper to apply when instrumenting this code.
 // This prevents infinite recursion in the case of using
@@ -23,6 +21,8 @@ struct NextWrapperId : public IndexableMetaData<NextWrapperId> {
   // The Id of the next thing to wrap.
   uint8_t next_wrapper_id;
 };
+
+namespace {
 
 typedef LinkedListIterator<FunctionWrapper> FunctionWrapperIterator;
 
@@ -69,7 +69,7 @@ static FunctionWrapper **FunctionWrapperInsertPoint(
 // Find the wrapper associated with a given block.
 static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
   auto offset = os::ModuleOffsetOfPC(block->StartAppPC());
-  if(!offset.module) return nullptr;
+  if (!offset.module) return nullptr;
 
   auto id = GetMetaData<NextWrapperId>(block)->next_wrapper_id;
 
@@ -88,7 +88,7 @@ static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
 }  // namespace
 
 // Register a function wrapper with the wrapper tool.
-void RegisterFunctionWrapper(FunctionWrapper *wrapper) {
+void AddFunctionWrapper(FunctionWrapper *wrapper) {
   GRANARY_ASSERT(!wrapper->next);
   WriteLockedRegion locker(&wrappers_lock);
   auto insert_point = FunctionWrapperInsertPoint(wrapper);
@@ -97,13 +97,13 @@ void RegisterFunctionWrapper(FunctionWrapper *wrapper) {
   GRANARY_ASSERT(nullptr != wrappers);
 }
 
-// Tool that helps instrument `malloc` and `free` functions.
+// Tool that helps to wrap other functions, e.g. `malloc` and `free`.
 class FunctionWrapperInstrumenter : public InstrumentationTool {
  public:
   virtual ~FunctionWrapperInstrumenter(void) = default;
 
   virtual void Init(InitReason) {
-    RegisterMetaData<NextWrapperId>();
+    AddMetaData<NextWrapperId>();
   }
 
   virtual void Exit(ExitReason) {
@@ -254,5 +254,5 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
 // Initialize the `wrap_func` tool.
 GRANARY_ON_CLIENT_INIT() {
-  RegisterInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
+  AddInstrumentationTool<FunctionWrapperInstrumenter>("wrap_func");
 }

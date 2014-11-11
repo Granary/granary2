@@ -2,7 +2,7 @@
 
 #include "clients/watchpoints/type_id.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 namespace {
 
@@ -35,13 +35,13 @@ static_assert(2 * sizeof(uint64_t) == sizeof(Type),
 
 // Array of `Type` lists, with locks protecting each list.
 struct TypeList {
-  ReaderWriterLock lock;
+  ReaderWriterLock type_lock;
   Type *type;
 } sizes[MAX_SET_BIT + 1];
 
 // Search the type lists for the matching type.
 static Type *FindType(TypeList *ls, uint64_t value_mask) {
-  ReadLockedRegion locker(&(ls->lock));
+  ReadLockedRegion locker(&(ls->type_lock));
   for (auto type : TypeIterator(ls->type)) {
     if (!(value_mask & type->as_value)) {
       return type;
@@ -64,7 +64,7 @@ static uint64_t AllocateTypeId(void) {
 static Type *CreateType(TypeList *ls, uint64_t value_mask) {
   auto type = new Type;
   type->ret_address = value_mask;
-  WriteLockedRegion locker(&(ls->lock));
+  WriteLockedRegion locker(&(ls->type_lock));
 
   // Simplistic but incomplete check to detect races.
   if (!ls->type || 0 != (value_mask & ls->type->as_value)) {

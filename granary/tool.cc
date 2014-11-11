@@ -113,8 +113,8 @@ void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 
 // Register some meta-data with the meta-data manager associated with this
 // tool.
-void InstrumentationTool::RegisterMetaData(const MetaDataDescription *desc) {
-  context->RegisterMetaData(desc);
+void InstrumentationTool::AddMetaData(const MetaDataDescription *desc) {
+  context->AddMetaData(desc);
 }
 
 // Initialize an empty tool manager.
@@ -212,7 +212,7 @@ void InstrumentationManager::InitAllocator(void) {
 // Registers a tool description with Granary. This assigns the tool an ID if
 // it hasn't already got an ID, and then adds the tool into the global list of
 // all registered tools.
-void RegisterInstrumentationTool(
+void AddInstrumentationTool(
     ToolDescription *desc, const char *name,
     std::initializer_list<const char *> required_tools) {
   auto &id(desc->id);

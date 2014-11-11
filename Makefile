@@ -8,6 +8,19 @@ include Makefile.inc
 .PHONY: target_debug target_release target_test
 .PHONY: build_driver build_dbt build_arch build_os
 
+# Make a header file that external clients can use to define clients.
+$(GRANARY_HEADERS):
+	@mkdir -p $(GRANARY_HEADERS_DIR)
+	# Make the combined C++ header file (granary.h) used by clients.
+	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
+		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
+		"$(GRANARY_HEADER_MACRO_DEFS)"
+	
+	# Copy some arch-specific headers to clients so they can use assembly
+	# routines.
+	@cp $(GRANARY_ARCH_SRC_DIR)/asm/include.asm.inc \
+		$(GRANARY_HEADERS_DIR)/include.asm.inc
+
 build_driver:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
@@ -28,42 +41,20 @@ build_os: build_driver
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-# Make a header file that external clients can use to define clients.
-$(GRANARY_HEADERS):
-	@mkdir -p $(GRANARY_HEADERS_DIR)
-	# Make the combined C++ header file (granary.h) used by clients.
-	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
-		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
-		"$(GRANARY_HEADER_MACRO_DEFS)"
-	
-	# Copy some arch-specific headers to clients so they can use assembly
-	# routines.
-	@cp $(GRANARY_ARCH_SRC_DIR)/asm/include.asm.inc \
-		$(GRANARY_HEADERS_DIR)/include.asm.inc
+build_clients: build_os $(GRANARY_HEADERS)
+	@echo "Entering $(GRANARY_SRC_DIR)/clients"
+	$(MAKE) -C $(GRANARY_SRC_DIR)/clients \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-# Generate rules for each Granary client.
-define GENRULE_BUILD_CLIENT
-.PHONY: build_client_$(1)
-build_client_$(1): $(GRANARY_HEADERS) build_os
-	@echo "Entering $(GRANARY_CLIENT_DIR)/$(1)"
-	$(MAKE) -C $(GRANARY_CLIENT_DIR)/$(1) \
-		$(MFLAGS) \
-		GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
-		GRANARY_BIN_DIR=$(GRANARY_BIN_DIR) all
-endef
-
-$(foreach client,$(GRANARY_CLIENTS),$(eval $(call GENRULE_BUILD_CLIENT,$(client))))
-
-build_clients: $(addprefix build_client_,$(GRANARY_CLIENTS))
-
-GRANARY_CLIENTS_TARGET = build_clients
+# Used to figure out if we should build clients or not.
+BUILD_CLIENTS = build_clients
 ifeq (test,$(GRANARY_TARGET))
-	GRANARY_CLIENTS_TARGET :=
+	BUILD_CLIENTS :=
 endif
 
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_driver build_arch build_dbt build_os $(GRANARY_CLIENTS_TARGET)
+where_common: build_driver build_arch build_dbt build_os $(BUILD_CLIENTS)
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 

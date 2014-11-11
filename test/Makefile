@@ -4,7 +4,7 @@
 
 GRANARY_IN_TEST_DIR := 1
 
-include ../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 GRANARY_TEST_SRC_FILES = $(shell find $(GRANARY_TEST_SRC_DIR) -type f -name '*.cc')
 GRANARY_TEST_OBJ_FILES = $(subst $(GRANARY_TEST_SRC_DIR),$(GRANARY_TEST_BIN_DIR),$(GRANARY_TEST_SRC_FILES:.cc=.o))

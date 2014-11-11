@@ -19,7 +19,7 @@ namespace arch {
 // Table of all implicit operands.
 extern const Operand * const IMPLICIT_OPERANDS[];
 
-// Number of implicit operands for each iclass.
+// Number of implicit operands for each `iclass`.
 extern const int NUM_IMPLICIT_OPERANDS[];
 
 }  // namespace arch

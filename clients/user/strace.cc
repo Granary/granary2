@@ -10,7 +10,7 @@ GRANARY_DECLARE_bool(hook_syscalls);
 
 #include "clients/user/syscall.h"
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 namespace {
 
@@ -388,7 +388,7 @@ class SystemCallTracer : public InstrumentationTool {
 // Initialize the `strace` tool.
 GRANARY_ON_CLIENT_INIT() {
   if (FLAG_hook_syscalls) {
-    RegisterInstrumentationTool<SystemCallTracer>("strace");
+    AddInstrumentationTool<SystemCallTracer>("strace");
   }
 }
 
