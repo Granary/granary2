@@ -52,13 +52,27 @@ static Instruction *FindNextSuccessorInstruction(Instruction *instr) {
 
 namespace detail {
 
+SuccessorBlockIterator::SuccessorBlockIterator(Instruction *instr_)
+    : cursor(instr_),
+      next_cursor(nullptr) {
+  if (cursor) {
+    next_cursor = cursor->Next();
+  }
+}
+
 BasicBlockSuccessor SuccessorBlockIterator::operator*(void) const {
   auto cti(DynamicCast<ControlFlowInstruction *>(cursor));
   return BasicBlockSuccessor(cti, cti->TargetBlock());
 }
 
 void SuccessorBlockIterator::operator++(void) {
-  cursor = internal::FindNextSuccessorInstruction(cursor);
+  if (next_cursor && next_cursor->Previous() != cursor) {
+    cursor = next_cursor;
+  }
+  next_cursor = nullptr;
+  if ((cursor = internal::FindNextSuccessorInstruction(cursor))) {
+    next_cursor = cursor->Next();
+  }
 }
 
 }  // namespace detail

@@ -499,14 +499,14 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
 
   if (auto module = os::ModuleContainingPC(app_meta->start_pc)) {
     if (os::ModuleKind::GRANARY == module->Kind()) {
-      if (&granary_begin_text <= target_pc && target_pc < &granary_end_text) {
 #ifdef GRANARY_WHERE_user
-        // If we try to go to `_fini`, then redirect execution to `exit_group`.
-        if (&_fini == target_pc) {
-          target_pc = &exit_group_ok;
-          app_meta->start_pc = &exit_group_ok;
-        }
+      // If we try to go to `_fini`, then redirect execution to `exit_group`.
+      if (&_fini == target_pc) {
+        target_pc = &exit_group_ok;
+        app_meta->start_pc = &exit_group_ok;
+      }
 #endif
+      if (&granary_begin_text <= target_pc && target_pc < &granary_end_text) {
         GRANARY_ASSERT(&granary_begin_inst_exports <= target_pc &&
                        target_pc < &granary_end_inst_exports);
 

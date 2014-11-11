@@ -138,15 +138,32 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
       if (!wrapper) continue;
 
       if (!succ.cfi->IsConditionalJump()) {
+
         WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
                   succ.cfi, direct_block);
       }
     }
   }
 
-  // Note: We use `R10` for passing an extra argument to the wrapper because
-  //       the x86-64 Linux ABI has that as a scratch register.
+  // Note: We use `R10` and `R11` for passing an extra arguments to the
+  //       wrappers because the x86-64 Linux ABI has them as a scratch
+  //       registers.
 
+  // Used to pass the native return address (through `R11`) to the wrapper.
+  void WrapReturnAddress(ControlFlowInstruction *cfi) {
+    GRANARY_ASSERT(cfi->IsAppInstruction());
+
+    ImmediateOperand ret_addr(cfi->DecodedPC());
+    lir::InlineAssembly asm_(ret_addr);
+    if (cfi->IsFunctionCall()) {
+      asm_.InlineBefore(cfi, "MOV r64 R11, i64 %0;"_x86_64);
+    } else {
+      asm_.InlineBefore(cfi, "MOV r64 R11, m64 [RSP];"_x86_64);
+    }
+  }
+
+  // Pass the native address of the function being wrapped (through `R10`)
+  // to the wrapper.
   void WrapNative(ControlFlowInstruction *cfi,
                   DirectBasicBlock *target_block) {
 
@@ -155,6 +172,11 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     asm_.InlineBefore(cfi, "MOV r64 R10, i64 %0;"_x86_64);
   }
 
+  // Pass the instrumented address of the function being wrapped (through `R10`)
+  // to the wrapper.
+  //
+  // This is careful to preserve the expected meta-data by passing the address
+  // of a label that leads to a jump to the instrumented function.
   void WrapInstrumented(BlockFactory *factory, DecodedBasicBlock *block,
                         ControlFlowInstruction *cfi,
                         DirectBasicBlock *target_block) {
@@ -176,6 +198,9 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     meta->next_wrapper_id += 1;
   }
 
+  // Wrap a jump instruction. We need to be careful when using transparent
+  // return addresses because we want our wrapper to return to the code cache
+  // and not detach from the current thread.
   void WrapJump(BlockFactory *factory, FunctionWrapper *wrapper,
                 ControlFlowInstruction *cfi) {
     if (!FLAG_transparent_returns) {
@@ -203,6 +228,8 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   void WrapBlock(BlockFactory *factory, FunctionWrapper *wrapper,
                  DecodedBasicBlock *block, ControlFlowInstruction *cfi,
                  DirectBasicBlock *target_block) {
+    WrapReturnAddress(cfi);
+
     if (PASS_NATIVE_WRAPPED_FUNCTION == wrapper->action) {
       WrapNative(cfi, target_block);
     }

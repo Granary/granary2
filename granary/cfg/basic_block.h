@@ -89,14 +89,15 @@ class SuccessorBlockIterator {
   friend class granary::DecodedBasicBlock;
 
   inline SuccessorBlockIterator(void)
-      : cursor(nullptr) {}
+      : cursor(nullptr),
+        next_cursor(nullptr) {}
 
   GRANARY_INTERNAL_DEFINITION
-  inline explicit SuccessorBlockIterator(Instruction *instr_)
-      : cursor(instr_) {}
+  explicit SuccessorBlockIterator(Instruction *instr_);
 
   // The next instruction that we will look at for
   GRANARY_POINTER(Instruction) *cursor;
+  GRANARY_POINTER(Instruction) *next_cursor;
 };
 
 }  // namespace detail

@@ -122,10 +122,10 @@ class GDBDebuggerHelper : public InstrumentationTool {
     auto offset = module->OffsetOfPC(decoded_pc);
 
     if (StringsMatch("ld", module_name)) {
-      return SYMBOL_OFFSET__dl_debug_state == offset.offset;
+      return SYMBOL_OFFSET_ld__dl_debug_state == offset.offset;
     } else if (StringsMatch("libpthread", module_name)) {
-      return SYMBOL_OFFSET___nptl_create_event == offset.offset ||
-             SYMBOL_OFFSET___nptl_death_event == offset.offset;
+      return SYMBOL_OFFSET_libpthread___nptl_create_event == offset.offset ||
+             SYMBOL_OFFSET_libpthread___nptl_death_event == offset.offset;
     } else {
       return false;
     }
