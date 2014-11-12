@@ -28,7 +28,7 @@ GRANARY_O_FILES = os.o granary.o arch.o driver.o clients.o
 GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
-	@echo "Building object $(GRANARY_OS_OBJ)."
+	@echo "Building object $@."
 	@$(GRANARY_LD) -g -r $^ -o $@
 
 # Lint all Granary OS code, independent of the OS, and independent of user or
@@ -41,12 +41,12 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 
 # Create an `_shipped` file out of the existing granary objects in the main
 # binary dir.
-$(GRANARY_SHIPPED_BIN): $(GRANARY_OBJS)
+$(GRANARY_SHIPPED_BIN) $(GRANARY_SHIPPED_CMD) : $(GRANARY_OBJS)
+	@echo "Building shipped object $@."
 	@mkdir -p $(GRANARY_MOD_BIN_DIR)
-	@echo "Building shipped object $(GRANARY_SHIPPED_BIN)."
-	@$(GRANARY_LD) -g -r $^ -o $@
+	@$(GRANARY_LD) -z noexecstack -g -r $^ -o $@
 	# Make a `.cmd` file for the shipped object file.
-	@echo "cmd_$(GRANARY_SHIPPED_BIN) := " > $(GRANARY_SHIPPED_CMD)
+	@echo "cmd_$@ := " > $(GRANARY_SHIPPED_CMD)
 
 # Create the `granary.ko` file. The steps are as follows:
 #	1) Merge all main granary `.o` files together into a "shipped" `.o` file,
@@ -56,11 +56,12 @@ $(GRANARY_SHIPPED_BIN): $(GRANARY_OBJS)
 #	   directory.
 #	3) Invoke kbuild on `bin/<triple>/module/Makefile`.
 $(GRANARY_MODULE): $(GRANARY_SHIPPED_BIN)
+	@echo "Building kernel object $@."
 	@cp -arp $(GRANARY_WHERE_SRC_DIR)/module $(GRANARY_BIN_DIR)
 	$(MAKE) -C $(GRANARY_KERNEL_DIR) \
 		M=$(GRANARY_MOD_BIN_DIR) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) \
 		modules
-	
+
 # Make the final granary executables.
 exec: $(GRANARY_MODULE)
 	

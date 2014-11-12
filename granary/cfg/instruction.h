@@ -272,7 +272,7 @@ class LabelInstruction final : public AnnotationInstruction {
   LabelInstruction(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-  GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(LabelInstruction, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(LabelInstruction, {
     SHARED = false,
     ALIGNMENT = 1
   })
