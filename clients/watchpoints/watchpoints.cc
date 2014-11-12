@@ -2,37 +2,18 @@
 
 #include <granary.h>
 
-#include "clients/user/syscall.h"
 #include "clients/util/closure.h"
 #include "clients/watchpoints/watchpoints.h"
 
 GRANARY_USING_NAMESPACE granary;
+
+extern void InitUserWatchpoints(void);
 
 namespace {
 
 // Hooks that other tools can use for interposing on memory operands that will
 // be instrumented for watchpoints.
 static ClosureList<WatchedOperand *> watchpoint_hooks GRANARY_GLOBAL;
-
-#ifdef GRANARY_WHERE_user
-
-static void UnwatchSyscallArg(uint64_t &arg) {
-  if (IsTaintedAddress(arg)) {
-    arg = UntaintAddress(arg);
-  }
-}
-
-// Prevent watched addresses from being passed to system calls.
-static void UnwatchSyscallArgs(void *, SystemCallContext ctx) {
-  UnwatchSyscallArg(ctx.Arg0());
-  UnwatchSyscallArg(ctx.Arg1());
-  UnwatchSyscallArg(ctx.Arg2());
-  UnwatchSyscallArg(ctx.Arg3());
-  UnwatchSyscallArg(ctx.Arg4());
-  UnwatchSyscallArg(ctx.Arg5());
-}
-
-#endif  // GRANARY_WHERE_user
 
 }  // namespace
 
@@ -56,7 +37,7 @@ class Watchpoints : public InstrumentationTool {
   virtual ~Watchpoints(void) = default;
 
   virtual void Init(InitReason) {
-    GRANARY_IF_USER(AddSystemCallEntryFunction(UnwatchSyscallArgs));
+    InitUserWatchpoints();
   }
 
   virtual void Exit(ExitReason) {

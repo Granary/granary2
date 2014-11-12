@@ -13,37 +13,28 @@ enum {
 
 // Uses a combination of (return address, log2 size) to identify a type.
 struct Type {
-  Type *next;
-  union {
-    struct {
-      uint64_t id:16;
-      uint64_t ret_address:48;
-    };
-    uint64_t as_value;
-  };
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(Type, {
-    ALIGNMENT = 8,
-    SHARED = false
-  });
+  const Type *next;
+  uintptr_t ret_address;
 } __attribute__((packed));
 
-typedef LinkedListIterator<Type> TypeIterator;
+typedef LinkedListIterator<const Type> ConstTypeIterator;
 
 static_assert(2 * sizeof(uint64_t) == sizeof(Type),
     "Invalid structure packing for type `struct Type`.");
 
+// Array of types for serving type allocations.
+Type types[MAX_TYPE_ID + 1];
+
 // Array of `Type` lists, with locks protecting each list.
 struct TypeList {
   ReaderWriterLock type_lock;
-  Type *type;
+  const Type *type;
 } sizes[MAX_SET_BIT + 1];
 
 // Search the type lists for the matching type.
-static Type *FindType(TypeList *ls, uint64_t value_mask) {
-  ReadLockedRegion locker(&(ls->type_lock));
-  for (auto type : TypeIterator(ls->type)) {
-    if (!(value_mask & type->as_value)) {
+static const Type *FindType(TypeList *ls, uint64_t ret_address) {
+  for (auto type : ConstTypeIterator(ls->type)) {
+    if (type->ret_address == ret_address) {
       return type;
     }
   }
@@ -60,36 +51,40 @@ static uint64_t AllocateTypeId(void) {
   return id;
 }
 
-// Create a new type.
-static Type *CreateType(TypeList *ls, uint64_t value_mask) {
-  auto type = new Type;
-  type->ret_address = value_mask;
-  WriteLockedRegion locker(&(ls->type_lock));
+static uint16_t IdOf(const Type *type) {
+  return static_cast<uint16_t>(type - &(types[0]));
+}
 
-  // Simplistic but incomplete check to detect races.
-  if (!ls->type || 0 != (value_mask & ls->type->as_value)) {
-    type->id = AllocateTypeId();
-    type->next = ls->type;
-    ls->type = type;
-  } else {
-    delete type;  // Found (at least one) race.
+// Create a new type.
+static const Type *CreateType(TypeList *ls, uint64_t ret_address) {
+  if (auto type = FindType(ls, ret_address)) {
+    return type;  // Double check to resolve a race.
   }
-  return ls->type;
+  auto new_type = &(types[AllocateTypeId()]);
+  new_type->ret_address = ret_address;
+  new_type->next = ls->type;
+  ls->type = new_type;
+  return new_type;
 }
 
 }  // namespace
 
 // Returns the type id for some `(return address, allocation size)` pair.
 uint64_t TypeIdFor(uintptr_t ret_address, size_t num_bytes) {
-  const auto value_mask = ret_address & 0xFFFFFFFFFFFFULL;
   const auto type_list = &(sizes[63 - __builtin_clzl(num_bytes)]);
-  auto type = FindType(type_list, value_mask);
-  if (!type) {
-    type = CreateType(type_list, value_mask);
+  const Type *type(nullptr);
+  {
+    ReadLockedRegion locker(&(type_list->type_lock));
+    type = FindType(type_list, ret_address);
   }
-  return type->id;
+  if (!type) {
+    WriteLockedRegion locker(&(type_list->type_lock));
+    type = CreateType(type_list, ret_address);
+  }
+  return IdOf(type);
 }
 
 GRANARY_ON_CLIENT_INIT() {
+  memset(types, 0, sizeof types);
   memset(sizes, 0, sizeof sizes);
 }

@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_DEFINE_EXTERNAL_NEW
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/cfg/basic_block.h"
