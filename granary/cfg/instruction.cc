@@ -1,7 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
-#define GRANARY_DEFINE_EXTERNAL_NEW
 #define GRANARY_ARCH_INTERNAL
 
 #include "granary/cfg/basic_block.h"
@@ -26,6 +25,8 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
+
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
 
 Instruction *Instruction::Next(void) {
   return list.GetNext(this);

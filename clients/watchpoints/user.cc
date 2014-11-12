@@ -1,8 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifdef GRANARY_WHERE_user
-
 #include "clients/util/types.h"  // Needs to go first.
+
+#include <granary.h>
+
+#ifdef GRANARY_WHERE_user
 #include "clients/user/syscall.h"
 #include "clients/watchpoints/watchpoints.h"
 

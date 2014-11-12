@@ -10,62 +10,59 @@
 
 namespace granary {
 
-// Used to force there to be a definition of the `new` allocators in the
-// appropriate translation unit.
-#ifdef GRANARY_DEFINE_EXTERNAL_NEW
-# define GRANARY_EXTERNAL_INLINE __attribute__((noinline, used))
-#else
-# define GRANARY_EXTERNAL_INLINE
-#endif  // GRANARY_DEFINE_EXTERNAL_NEW
-
-// Defines a global new allocator for a specific class.
+// Defines an in-line global new allocator for a specific class.
 #define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
   friend class granary::OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
-  GRANARY_EXTERNAL_INLINE \
   static void *operator new(std::size_t, void *address) { \
     return address; \
   } \
-  GRANARY_EXTERNAL_INLINE \
   static void *operator new(std::size_t) { \
     return granary::OperatorNewAllocator<class_name>::Allocate(); \
   } \
-  GRANARY_EXTERNAL_INLINE \
   static void operator delete(void *address) { \
     return granary::OperatorNewAllocator<class_name>::Free(address); \
   } \
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
 
-#define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_(class_name, ...) \
-    static void *operator new(std::size_t, void *); \
-    static void *operator new(std::size_t); \
-    static void operator delete(void *address); \
-    static void *operator new[](std::size_t) = delete; \
-    static void operator delete[](void *) = delete;
-
-// Allow us to distinguish between internal and external `new` alloctors.
-//
-// With these, we also need to use `GRANARY_DEFINE_EXTERNAL_NEW` in one of the
-// `*.cc` files, so that external things (i.e. clients) can resolve the
-// symbol name.
+// Internal-only definition of new allocators. When seen externally, the
+// symbols are deleted.
 #ifdef GRANARY_INTERNAL
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_NEW_ALLOCATOR
-# ifdef GRANARY_DEFINE_EXTERNAL_NEW
-#   define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
-      GRANARY_DEFINE_NEW_ALLOCATOR
-# else
-#   define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
-      GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_
-# endif  // GRANARY_DEFINE_EXTERNAL_NEW
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR GRANARY_DEFINE_NEW_ALLOCATOR
 #else
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(class_name, ...)
-# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(...)
 #endif
+
+// Declares an out-of-line global new allocator for a specific class. This
+// is useful for exporting allocators from granary to clients without actually
+// exposing the size of the class.
+#define GRANARY_DECLARE_NEW_ALLOCATOR(class_name, ...) \
+ private: \
+  GRANARY_INTERNAL_DEFINITION \
+  friend class granary::OperatorNewAllocator<class_name>; \
+  \
+  enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
+ public: \
+  static void *operator new(std::size_t, void *); \
+  static void *operator new(std::size_t); \
+  static void operator delete(void *address); \
+  static void *operator new[](std::size_t) = delete; \
+  static void operator delete[](void *) = delete;
+
+// Defines an out-of-line global new allocator for a specific class.
+#define GRANARY_IMPLEMENT_NEW_ALLOCATOR(class_name) \
+  void *class_name::operator new(std::size_t, void *address) { \
+    return address; \
+  } \
+  void *class_name::operator new(std::size_t) { \
+    return granary::OperatorNewAllocator<class_name>::Allocate(); \
+  } \
+  void class_name::operator delete(void *address) { \
+    return granary::OperatorNewAllocator<class_name>::Free(address); \
+  }
 
 namespace internal {
 

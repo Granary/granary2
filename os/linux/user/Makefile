@@ -42,11 +42,11 @@ all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
 	@echo "Compiling injector $@"
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
-	    -c $(GRANARY_WHERE_SRC_DIR)/inject.c \
-	    -o $(GRANARY_WHERE_BIN_DIR)/inject.o
+		-c $(GRANARY_WHERE_SRC_DIR)/inject.c \
+		-o $(GRANARY_WHERE_BIN_DIR)/inject.o
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
-	    $(GRANARY_WHERE_BIN_DIR)/inject.o \
-	    -o $(GRANARY_INJECTOR)
+		$(GRANARY_WHERE_BIN_DIR)/inject.o \
+		-o $(GRANARY_INJECTOR)
 
 # Makes a `libgranary.o` file that is the combination of all the other `.o`
 # files. We have this extra step so that we can add in the linker script at a
@@ -55,19 +55,19 @@ $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
 $(GRANARY_LIBRARY_OBJ): $(GRANARY_OBJS)
 	@echo "Building object $@."
 	@$(GRANARY_LD) \
-	    -z initfirst -z interpose -z nodelete -z noexecstack -z now \
-	    -T $(GRANARY_SRC_DIR)/linker.lds \
-	    -g -r $^ -o $@
+		-z initfirst -z interpose -z nodelete -z noexecstack -z now \
+		-T $(GRANARY_SRC_DIR)/linker.lds \
+		-g -r $^ -o $@
 
 # Makes `libgranary.so`, the user-space shared library version of Granary.
 $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 	@echo "Compiling library $(GRANARY_LIBRARY)"
 	@$(GRANARY_CC) $(GRANARY_DEBUG_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS) \
-	    $(GRANARY_LD_FLAGS) \
-	    -nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
-	    $^ \
-	    $(GRANARY_LD_FLAGS_LATE) \
-	    -o $@
+		$(GRANARY_LD_FLAGS) \
+		-nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
+		$^ \
+		$(GRANARY_LD_FLAGS_LATE) \
+		-o $@
 
 # Make the final granary executables.
 exec: $(GRANARY_INJECTOR) $(GRANARY_LIBRARY)
