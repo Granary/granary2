@@ -34,15 +34,36 @@ static void GenericWrapSyscallArgs(SystemCallContext ctx) {
   }
 
 #define WRAP_STRUCT(type_name, ...) \
-  static void UnwatchStructFields(type_name *&s) { \
+  static void UnwatchStructFields(type_name *s) { \
     if (IsTaintedAddress(s)) { \
       s = UntaintAddress(s); \
     } \
     __VA_ARGS__ ; \
+  } \
+  __attribute__((used)) \
+  static void UnwatchStruct(type_name *&s) { \
+    if (IsTaintedAddress(s)) { \
+      s = UntaintAddress(s); \
+    } \
+    UnwatchStructFields(s); \
   }
 
 #define WRAP_SYSCALL_ARG_PSTRUCT(i, type_name) \
-  UnwatchStructFields(reinterpret_cast<type_name *&>(ctx.Arg ## i()))
+  UnwatchStruct(reinterpret_cast<type_name *&>(ctx.Arg ## i()))
+
+#define WRAP_SYSCALL_ARG_ASTRUCT(i, j, type_name, counter_type_name) \
+  do { \
+    counter_type_name index = 0; \
+    auto max_index = static_cast<counter_type_name>(ctx.Arg ## j()); \
+    auto &base_addr(ctx.Arg ## i()); \
+    if (IsTaintedAddress(base_addr)) { \
+      base_addr = UntaintAddress(base_addr); \
+    } \
+    auto &base(reinterpret_cast<type_name *&>(base_addr)); \
+    for (; index < max_index; ++index) { \
+      UnwatchStructFields(&(base[index])); \
+    } \
+  } while (0)
 
 #define WRAP_SYSCALL_ARG_POINTER(i) \
   UnwatchSyscallArg(ctx.Arg ## i())
@@ -59,6 +80,7 @@ static void GenericWrapSyscallArgs(SystemCallContext ctx) {
 #undef WRAP_STRUCT_PFIELD
 #undef WRAP_STRUCT
 #undef WRAP_SYSCALL_ARG_PSTRUCT
+#undef WRAP_SYSCALL_ARG_ASTRUCT
 #undef WRAP_SYSCALL_ARG_POINTER
 #undef NO_WRAP_SYSCALL
 #undef GENERIC_WRAP_SYSCALL

@@ -10,7 +10,20 @@ from dependencies.cparser.cparser import *
 from dependencies.cparser.cprinter import pretty_print_type
 
 SYSCALL_NAME = re.compile(r"__NR_([a-zA-Z0-9_]+)")
-TYPE_WRAPPERS = {}
+STRUCT_WRAPPERS = {}
+
+# Maps (system call names, type names) to relative offset of the array length
+# argument. So, in the case of:
+#   `ssize_t readv(int , const struct iovec *__iovec, int __count)`
+#
+# We have `(readv, struct iovec) => 1` because the `__count` is at position
+# `2`, which is a `1`-displaced from the position of the `__iovec` parameter. 
+ARRAY_CTYPES = {
+  ("readv", "struct iovec"): 1,
+  ("writev", "struct iovec"): 1,
+  ("preadv", "struct iovec"): 1,
+  ("pwritev", "struct iovec"): 1,
+}
 
 # This system call has no pointer arguments, so don't wrap it.
 def dont_wrap_syscall(var):
@@ -32,17 +45,17 @@ def is_function_pointer(ctype):
     return isinstance(ctype.ctype.base_type(), CTypeFunction)
   return False
 
-# Generates a system call structure wrapper. If this is the first call, then
-# this will print out a wrapper macro for the structure itself. All calls
-# return a string that tells the system call wrapper how to wrap this
-# structure.
-def wrap_struct(i, ctype):
-  ctype_printed = pretty_print_type(ctype)
-  ret = "WRAP_SYSCALL_ARG_PSTRUCT(%d, %s)" % (i, ctype_printed)
+def wrap_array_of_struct(ctype_printed, counter_ctype_printed, i, j):
+  return "WRAP_SYSCALL_ARG_ASTRUCT(%d,%d,%s,%s)" % (i, j, ctype_printed,
+                                                    counter_ctype_printed)
 
-  global TYPE_WRAPPERS
-  if ctype in TYPE_WRAPPERS:
-    return TYPE_WRAPPERS[ctype]
+# Generates a structure wrapper. Returns `True` if a structure wrapper is
+# generated, and `False` otherwise. Structure wrappers aren't generated if all
+# we have is a forward declaration of the structure.
+def make_struct_wrapper(ctype, ctype_printed):
+  global STRUCT_WRAPPERS
+  if ctype in STRUCT_WRAPPERS:
+    return STRUCT_WRAPPERS[ctype]
 
   actions = []
   for (field_ctype, field_name) in ctype.fields():
@@ -51,16 +64,32 @@ def wrap_struct(i, ctype):
     and not is_function_pointer(field_ctype):
       actions.append("WRAP_STRUCT_PFIELD(%s)" % field_name)
 
-  # If we only have a forward declaration of the structure, then we can't
-  # generate a wrapper for it. Similarly, if the structure has no pointer
-  # fields, then we also don't wrap it.
-  if not len(actions):
-    ret = wrap_pointer(i)
-  else:
+  if actions:
     print "WRAP_STRUCT(%s,%s)" % (ctype_printed, ";".join(actions))
+    STRUCT_WRAPPERS[ctype] = True
+    return True
+  else:
+    STRUCT_WRAPPERS[ctype] = False
+    return False
 
-  TYPE_WRAPPERS[ctype] = ret
-  return ret
+# If this is the first call, then this will print out a wrapper macro for the
+# structure itself. All calls return a string that tells the system call wrapper
+# how to wrap this structure.
+def wrap_struct(syscall_name, i, ctype, param_ctypes):
+  global STRUCT_WRAPPERS
+  global ARRAY_CTYPES
+
+  ctype_printed = pretty_print_type(ctype)
+  if make_struct_wrapper(ctype, ctype_printed):
+    array_key = (syscall_name, ctype.name)
+    if array_key in ARRAY_CTYPES:
+      j = ARRAY_CTYPES[array_key] + i
+      return wrap_array_of_struct(ctype_printed,
+                                  pretty_print_type(param_ctypes[j]), i, j)
+    else:
+      return "WRAP_SYSCALL_ARG_PSTRUCT(%d, %s)" % (i,ctype_printed)
+  else:
+    return wrap_pointer(i)
 
 # Wrap a system call named `var`, where the have the function prototype `ctype`
 # of the system call.
@@ -82,7 +111,8 @@ def wrap_syscall(var, ctype):
     
     pointed_ctype = param_ctype.ctype.base_type()
     if isinstance(pointed_ctype, CTypeStruct):
-      actions.append(wrap_struct(arg_num, pointed_ctype))
+      actions.append(wrap_struct(var, arg_num, pointed_ctype,
+                                 ctype.param_types))
     else:
       actions.append(wrap_pointer(arg_num))
 
