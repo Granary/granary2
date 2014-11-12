@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "clients/util/types.h"
+#include "clients/util/types.h"  // Needs to go first.
 
 #include <granary.h>
 

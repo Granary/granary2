@@ -10,37 +10,61 @@
 
 namespace granary {
 
+// Used to force there to be a definition of the `new` allocators in the
+// appropriate translation unit.
+#ifdef GRANARY_DEFINE_EXTERNAL_NEW
+# define GRANARY_EXTERNAL_INLINE __attribute__((noinline, used))
+#else
+# define GRANARY_EXTERNAL_INLINE
+#endif  // GRANARY_DEFINE_EXTERNAL_NEW
+
 // Defines a global new allocator for a specific class.
 #define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
   friend class granary::OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
+  GRANARY_EXTERNAL_INLINE \
   static void *operator new(std::size_t, void *address) { \
     return address; \
   } \
+  GRANARY_EXTERNAL_INLINE \
   static void *operator new(std::size_t) { \
     return granary::OperatorNewAllocator<class_name>::Allocate(); \
   } \
+  GRANARY_EXTERNAL_INLINE \
   static void operator delete(void *address) { \
     return granary::OperatorNewAllocator<class_name>::Free(address); \
   } \
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
 
-#ifdef GRANARY_INTERNAL
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_NEW_ALLOCATOR
-# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_NEW_ALLOCATOR
-#else
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(class_name, ...)
-# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(class_name, ...) \
+#define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_(class_name, ...) \
     static void *operator new(std::size_t, void *); \
     static void *operator new(std::size_t); \
     static void operator delete(void *address); \
     static void *operator new[](std::size_t) = delete; \
     static void operator delete[](void *) = delete;
+
+// Allow us to distinguish between internal and external `new` alloctors.
+//
+// With these, we also need to use `GRANARY_DEFINE_EXTERNAL_NEW` in one of the
+// `*.cc` files, so that external things (i.e. clients) can resolve the
+// symbol name.
+#ifdef GRANARY_INTERNAL
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR \
+    GRANARY_DEFINE_NEW_ALLOCATOR
+# ifdef GRANARY_DEFINE_EXTERNAL_NEW
+#   define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
+      GRANARY_DEFINE_NEW_ALLOCATOR
+# else
+#   define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
+      GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_
+# endif  // GRANARY_DEFINE_EXTERNAL_NEW
+#else
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(class_name, ...)
+# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
+    GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR_
 #endif
 
 namespace internal {

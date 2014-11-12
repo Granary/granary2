@@ -1,10 +1,10 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifdef GRANARY_WHERE_user
-
-#include "clients/util/types.h"
+#include "clients/util/types.h"  // Needs to go first.
 
 #include <granary.h>
+
+#ifdef GRANARY_WHERE_user
 
 GRANARY_DECLARE_bool(hook_syscalls);
 
@@ -14,7 +14,7 @@ GRANARY_USING_NAMESPACE granary;
 
 namespace {
 
-static const char *syscall_names[] = {
+static const char *kSystemCallNames[] = {
   [__NR_read] = "read",  // 0
   [__NR_write] = "write",  // 1
   [__NR_open] = "open",  // 2
@@ -338,6 +338,10 @@ static const char *syscall_names[] = {
 #endif
 };
 
+enum {
+  NUM_SYSCALLS = sizeof kSystemCallNames / sizeof kSystemCallNames[0]
+};
+
 static __thread uint64_t syscall_number = 0;
 static __thread uint64_t syscall_arg0 = 0;
 static __thread uint64_t syscall_arg1 = 0;
@@ -345,7 +349,6 @@ static __thread uint64_t syscall_arg2 = 0;
 static __thread uint64_t syscall_arg3 = 0;
 static __thread uint64_t syscall_arg4 = 0;
 static __thread uint64_t syscall_arg5 = 0;
-static __thread char syscall_buffer[256];
 
 static void TraceSyscallEntry(void *, SystemCallContext ctx) {
   syscall_number = ctx.Number();
@@ -358,12 +361,12 @@ static void TraceSyscallEntry(void *, SystemCallContext ctx) {
 }
 
 static void TraceSyscallExit(void *, SystemCallContext ctx) {
-  Format(syscall_buffer, sizeof syscall_buffer,
-         "%s\t%lx\t%lx\t%lx\t%lx\t%lx\t%lx\t= %lx\n",
-         syscall_names[syscall_number], syscall_arg0, syscall_arg1,
-         syscall_arg2, syscall_arg3, syscall_arg4, syscall_arg5,
-         ctx.ReturnValue());
-  os::Log(os::LogDebug, "%s", syscall_buffer);
+  if (syscall_number < NUM_SYSCALLS) {
+    os::Log("%s\t%lx\t%lx\t%lx\t%lx\t%lx\t%lx\t= %lx\n",
+            kSystemCallNames[syscall_number], syscall_arg0, syscall_arg1,
+            syscall_arg2, syscall_arg3, syscall_arg4, syscall_arg5,
+            ctx.ReturnValue());
+  }
   syscall_number = 0;
   syscall_arg0 = 0;
   syscall_arg1 = 0;
