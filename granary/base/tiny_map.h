@@ -18,9 +18,8 @@ template <typename K, typename V, unsigned long kMinMapSize>
 class TinyMap {
  public:
   struct MapPair {
-    inline MapPair(void)
-        : key(),
-          value() {}
+    MapPair(void) = default;
+    ~MapPair(void) = default;
 
     inline explicit MapPair(K key_)
         : key(key_),

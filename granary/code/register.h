@@ -191,9 +191,13 @@ union alignas(alignof(void *)) VirtualRegister {
 
   // Widen this virtual register to a specific bit width.
   //
+  // Note: This operates in place.
+  //
   // Note: This has an architecture-specific implementation.
   void Widen(int dest_byte_width);
 
+  // Return a copy of this virtual register, but where the new register has
+  // the specified bit width.
   inline VirtualRegister WidenedTo(int dest_byte_width) const {
     auto widened = *this;
     widened.Widen(dest_byte_width);

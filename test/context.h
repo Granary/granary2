@@ -93,7 +93,7 @@ class MockContext : public granary::ContextInterface {
 
   // Returns a pointer to the code cache code associated with some outline-
   // callable function at `func_addr`.
-  MOCK_METHOD1(OutlineCallback,
+  MOCK_METHOD1(InlineCallback,
                const granary::arch::Callback *(granary::InlineFunctionCall *));
 
  private:

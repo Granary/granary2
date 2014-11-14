@@ -80,9 +80,9 @@ extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
 // virtual register system for the rest.
 //
 // Note: This function has an architecture-specific implementation.
-extern void ExtendFragmentWithOutlineCall(ContextInterface *context,
-                                          CodeFragment *frag,
-                                          InlineFunctionCall *call);
+extern void ExtendFragmentWithInlineCall(ContextInterface *context,
+                                         CodeFragment *frag,
+                                         InlineFunctionCall *call);
 
 // Process an exceptional control-flow instruction.
 //
@@ -318,8 +318,8 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // Calls out to some client code, but the call has access to the existing
     // virtual register state.
-    case IA_OUTLINE_CALL:
-      arch::ExtendFragmentWithOutlineCall(builder->context, frag,
+    case IA_INLINE_CALL:
+      arch::ExtendFragmentWithInlineCall(builder->context, frag,
                                           instr->Data<InlineFunctionCall *>());
       return true;
 
@@ -492,8 +492,7 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
 
   // Instrumentation instructions in an application fragment are allowed to
   // read but not write the flags.
-  } else if (FRAG_TYPE_APP == frag->type && !is_app && writes_flags &&
-             !instr->instruction.CantSplitFragment()) {
+  } else if (FRAG_TYPE_APP == frag->type && !is_app && writes_flags) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
 

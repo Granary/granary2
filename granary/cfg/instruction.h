@@ -177,6 +177,12 @@ enum InstructionAnnotation {
   IA_SSA_FRAG_BEGIN_LOCAL,
   IA_SSA_FRAG_BEGIN_GLOBAL,
 
+  // Save and restore instructions for a register into a slot.
+  //
+  // Note: Saves and restores only operate on architectural GPRs.
+  IA_SSA_SAVE_REG,
+  IA_SSA_RESTORE_REG,
+
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
   IA_UPDATE_ENCODED_ADDRESS,
@@ -196,7 +202,7 @@ enum InstructionAnnotation {
 
   // Represents a call to a client function that passes along some arguments
   // as well.
-  IA_OUTLINE_CALL
+  IA_INLINE_CALL
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -253,7 +259,17 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
+  inline void SetData(T new_data) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
+    data = UnsafeCast<uintptr_t>(new_data);
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
   inline T *DataPtr(void) const {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
     return UnsafeCast<T *>(&data);
   }
 

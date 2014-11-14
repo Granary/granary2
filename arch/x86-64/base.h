@@ -24,6 +24,7 @@ enum {
 
   // Size of the code to do a context call.
   CONTEXT_CALL_CODE_SIZE_BYTES = 80,
+  INLINE_CALL_CODE_SIZE_BYTES = 128,
 
   // Upper bound on the size of edge-specific direct edge code. Ideally this
   // should be as small as possible.

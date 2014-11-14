@@ -33,11 +33,14 @@ static void GenericWrapSyscallArgs(SystemCallContext ctx) {
     s->field_name = UntaintAddress(s->field_name); \
   }
 
+#define WRAP_STRUCT_ASTRUCT(field_name,length_name) \
+  WRAP_STRUCT_PFIELD(field_name) \
+  for (decltype(s->length_name) i__ = 0; i__ < s->length_name; ++i__) { \
+    UnwatchStructFields(&(s->field_name[i__])); \
+  }
+
 #define WRAP_STRUCT(type_name, ...) \
   static void UnwatchStructFields(type_name *s) { \
-    if (IsTaintedAddress(s)) { \
-      s = UntaintAddress(s); \
-    } \
     __VA_ARGS__ ; \
   } \
   __attribute__((used)) \
@@ -78,6 +81,7 @@ static void GenericWrapSyscallArgs(SystemCallContext ctx) {
 #include "generated/clients/watchpoints/syscall.h"
 
 #undef WRAP_STRUCT_PFIELD
+#undef WRAP_STRUCT_ASTRUCT
 #undef WRAP_STRUCT
 #undef WRAP_SYSCALL_ARG_PSTRUCT
 #undef WRAP_SYSCALL_ARG_ASTRUCT

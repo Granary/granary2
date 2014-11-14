@@ -216,34 +216,39 @@ static void InitEntryNodesFromLiveExitRegs(FragmentList *frags) {
   }
 }
 
+// Returns the `SSANode` that should be associated with a write to register
+// `reg` by instruction `instr`.
+static SSANode *LVNWrite(SSAFragment *frag, SSANode *node,
+                         VirtualRegister reg) {
+  // Some later (in this fragment) instruction reads from this register,
+  // and so it created an `SSAControlPhiNode` for that use so that it could
+  // signal that a concrete definition of that use was missing. We now have
+  // a concrete definition, so convert the existing memory into a register
+  // node.
+  if (node) {
+    GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
+    auto storage = node->id;
+    node = new (node) SSARegisterNode(frag, reg);
+    node->id = storage;
+
+  // No use (in the current fragment) depends on this register, but when
+  // we later to global value numbering, we might need to forward-propagate
+  // this definition to a use in a successor fragment.
+  } else {
+    node = new SSARegisterNode(frag, reg);
+  }
+  return node;
+}
+
 // Perform local value numbering for definitions.
-static void LVNDefs(SSAFragment *frag, NativeInstruction *instr,
-                    SSAInstruction *ssa_instr) {
+static void LVNDefs(SSAFragment *frag, SSAInstruction *ssa_instr) {
   // Update any existing nodes on writes to be `SSARegisterNode`s, and share
   // the register nodes with `CLEAR`ed operands.
   for (auto &op : ssa_instr->defs) {
     auto reg = arch::GetRegister(op);
     auto &node(frag->ssa.entry_nodes[reg]);
     if (SSAOperandAction::WRITE == op.action) {
-
-      // Some later (in this fragment) instruction reads from this register,
-      // and so it created an `SSAControlPhiNode` for that use so that it could
-      // signal that a concrete definition of that use was missing. We now have
-      // a concrete definition, so convert the existing memory into a register
-      // node.
-      if (node) {
-        GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-        auto storage = node->id;
-        node = new (node) SSARegisterNode(frag, instr, reg);
-        node->id = storage;
-
-      // No use (in the current fragment) depends on this register, but when
-      // we later to global value numbering, we might need to forward-propagate
-      // this definition to a use in a successor fragment.
-      } else {
-        node = new SSARegisterNode(frag, instr, reg);
-      }
-
+      node = LVNWrite(frag, node, reg);
     } else {  // `SSAOperandAction::CLEAR`.
       GRANARY_ASSERT(IsA<SSARegisterNode *>(node));
     }
@@ -332,16 +337,52 @@ static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
   }
 }
 
+// Create an `SSANode` for a save.
+//
+// Note: Save and restore registers must be native so that we don't end up with
+//       the case where virtual registers get back-propagated to the head of a
+//       partition and end up missing definitions.
+static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
+  auto reg = instr->Data<VirtualRegister>();
+  GRANARY_ASSERT(reg.IsGeneralPurpose());
+  GRANARY_ASSERT(reg.IsNative());
+  auto &node(frag->ssa.entry_nodes[reg]);
+  if (!node) {
+    node = new SSAControlPhiNode(frag, reg);
+  }
+  instr->SetData<SSANode *>(node);
+}
+
+// Create an `SSANode` for a restore.
+static void LVNRestore(SSAFragment *frag, AnnotationInstruction *instr) {
+  auto reg = instr->Data<VirtualRegister>();
+  GRANARY_ASSERT(reg.IsGeneralPurpose());
+  GRANARY_ASSERT(reg.IsNative());
+
+  auto &node(frag->ssa.entry_nodes[reg]);
+  auto ret_node = LVNWrite(frag, node, reg);
+
+  // Update `entry_nodes` in place to contain a new, dummy node.
+  node = new SSAControlPhiNode(frag, reg);
+  instr->SetData(ret_node);
+}
+
 // Perform a local-value numbering of all general-purpose register uses
 // within an `SSAFragment` fragment.
 static void LocalValueNumbering(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
-        if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (IsA<NativeInstruction *>(instr)) {
           if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
-            LVNDefs(ssa_frag, ninstr, ssa_instr);
+            LVNDefs(ssa_frag, ssa_instr);
             LVNUses(ssa_frag, ssa_instr);
+          }
+        } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+          if (IA_SSA_SAVE_REG == ainstr->annotation) {
+            LVNSave(ssa_frag, ainstr);
+          } else if (IA_SSA_RESTORE_REG == ainstr->annotation) {
+            LVNRestore(ssa_frag, ainstr);
           }
         }
       }

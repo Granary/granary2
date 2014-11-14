@@ -32,6 +32,8 @@
     frag->instrs.Append(new NativeInstruction(&ni)); \
   } while (0)
 
+#define APP_INSTR(i) frag->instrs.Append(i)
+
 namespace granary {
 namespace arch {
 namespace {
@@ -46,7 +48,7 @@ enum : bool {
 };
 
 // Generates the wrapper code for a context callback.
-void GenerateOutlineCallCode(Callback *callback, int num_args) {
+void GenerateInlineCallCode(Callback *callback, int num_args) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -63,39 +65,46 @@ void GenerateOutlineCallCode(Callback *callback, int num_args) {
 
   // Save the GPRs.
   ENC(PUSH_GPRv_50(&ni, XED_REG_RAX); );
-  if (4 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_RCX); );
-  if (3 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_RDX); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_RBX); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_RBP); );
-  if (2 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_RSI); );
-  if (1 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_RDI); );
-  if (5 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R8); );
-  if (6 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R9); );
-  ENC(PUSH_GPRv_50(&ni, XED_REG_R10); );
-  ENC(PUSH_GPRv_50(&ni, XED_REG_R11); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_R12); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_R13); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_R14); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(PUSH_GPRv_50(&ni, XED_REG_R15); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RCX); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RDX); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RBX); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RBP); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RSI); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_RDI); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_R8); );
+  ENC(PUSH_GPRv_50(&ni, XED_REG_R9); );
+  if (6 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R10); );
+  if (5 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R11); );
+  if (4 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R12); );
+  if (3 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R13); );
+  if (2 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R14); );
+  if (1 > num_args) ENC(PUSH_GPRv_50(&ni, XED_REG_R15); );
+
+  if (1 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_RDI, XED_REG_R15));
+  if (2 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_RSI, XED_REG_R14));
+  if (3 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_RDX, XED_REG_R13));
+  if (4 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, XED_REG_R12));
+  if (5 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_R8, XED_REG_R11));
+  if (6 <= num_args) ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_R9, XED_REG_R10));
 
   // Call the callback.
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
 
   // Restore the GPRs.
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_R15); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_R14); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_R13); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_R12); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R11); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R10); );
-  if (6 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R9); );
-  if (5 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R8); );
-  if (1 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RDI); );
-  if (2 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RSI); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_RBP); );
-  if (!USING_LINUX_ITANIUM_ABI) ENC(POP_GPRv_51(&ni, XED_REG_RBX); );
-  if (3 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RDX); );
-  if (4 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RCX); );
+  if (1 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R15); );
+  if (2 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R14); );
+  if (3 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R13); );
+  if (4 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R12); );
+  if (5 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R11); );
+  if (6 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R10); );
+  ENC(POP_GPRv_51(&ni, XED_REG_R9); );
+  ENC(POP_GPRv_51(&ni, XED_REG_R8); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RDI); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RSI); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RBP); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RBX); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RDX); );
+  ENC(POP_GPRv_51(&ni, XED_REG_RCX); );
   ENC(POP_GPRv_51(&ni, XED_REG_RAX); );
 
   // Swap back to the application stack.
@@ -108,7 +117,7 @@ void GenerateOutlineCallCode(Callback *callback, int num_args) {
 
   ENC(RET_NEAR(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
-  GRANARY_ASSERT(CONTEXT_CALL_CODE_SIZE_BYTES >=
+  GRANARY_ASSERT(INLINE_CALL_CODE_SIZE_BYTES >=
                  (pc - callback->wrapped_callback));
 }
 
@@ -154,19 +163,18 @@ static void CopyOperand(CodeFragment *frag, Instruction &ni,
 }  // namespace
 
 // Generates the wrapper code for an outline callback.
-Callback *GenerateOutlineCallback(CodeCache *cache, InlineFunctionCall *call) {
-  auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
+Callback *GenerateInlineCallback(CodeCache *cache, InlineFunctionCall *call) {
+  auto edge_code = cache->AllocateBlock(INLINE_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(call->target_app_pc, edge_code);
   CodeCacheTransaction transaction(
-      cache, edge_code, edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
-  GenerateOutlineCallCode(callback, call->NumArguments());
+      cache, edge_code, edge_code + INLINE_CALL_CODE_SIZE_BYTES);
+  GenerateInlineCallCode(callback, call->NumArguments());
   return callback;
 }
 
 #define SAVE_ARG(arg, reg) \
   if (arg < num_args) \
-    APP(MOV_GPRv_GPRv_89(&ni, call->saved_regs[arg], reg); \
-        ni.is_save_restore = false; )
+    APP_INSTR(new AnnotationInstruction(IA_SSA_SAVE_REG, reg))
 
 #define COPY_ARG(arg) \
   if (arg < num_args) CopyOperand(frag, ni, call->arg_regs[arg], \
@@ -179,18 +187,17 @@ Callback *GenerateOutlineCallback(CodeCache *cache, InlineFunctionCall *call) {
 
 #define RESTORE_ARG(arg, reg) \
   if (arg < num_args) \
-    APP(MOV_GPRv_GPRv_89(&ni, reg, call->saved_regs[arg]); \
-        ni.is_save_restore = false; ) \
+    APP_INSTR(new AnnotationInstruction(IA_SSA_RESTORE_REG, reg))
 
 // Generates some code to target some client function. The generated code tries
 // to minimize the amount of saved/restored machine state, and punts on the
 // virtual register system for the rest.
-void ExtendFragmentWithOutlineCall(ContextInterface *context,
-                                   CodeFragment *frag,
-                                   InlineFunctionCall *call) {
-  auto oc = context->OutlineCallback(call);
+void ExtendFragmentWithInlineCall(ContextInterface *context,
+                                  CodeFragment *frag,
+                                  InlineFunctionCall *call) {
+  auto ic = context->InlineCallback(call);
   auto num_args = call->NumArguments();
-  GRANARY_ASSERT(nullptr != oc->wrapped_callback);
+  GRANARY_ASSERT(nullptr != ic->wrapped_callback);
 
   Instruction ni;
 
@@ -201,34 +208,41 @@ void ExtendFragmentWithOutlineCall(ContextInterface *context,
   //       overwritten when storing the args. The extra redundancies are cleaned
   //       out by copy propagation + register scheduling.
 
-  SAVE_ARG(0, XED_REG_RDI);
-  SAVE_ARG(1, XED_REG_RSI);
-  SAVE_ARG(2, XED_REG_RDX);
-  SAVE_ARG(3, XED_REG_RCX);
-  SAVE_ARG(4, XED_REG_R8);
-  SAVE_ARG(5, XED_REG_R9);
+  auto r15 = VirtualRegister::FromNative(XED_REG_R15);
+  auto r14 = VirtualRegister::FromNative(XED_REG_R14);
+  auto r13 = VirtualRegister::FromNative(XED_REG_R13);
+  auto r12 = VirtualRegister::FromNative(XED_REG_R12);
+  auto r11 = VirtualRegister::FromNative(XED_REG_R11);
+  auto r10 = VirtualRegister::FromNative(XED_REG_R10);
+
+  SAVE_ARG(0, r15);
+  SAVE_ARG(1, r14);
+  SAVE_ARG(2, r13);
+  SAVE_ARG(3, r12);
+  SAVE_ARG(4, r11);
+  SAVE_ARG(5, r10);
   COPY_ARG(0);
   COPY_ARG(1);
   COPY_ARG(2);
   COPY_ARG(3);
   COPY_ARG(4);
   COPY_ARG(5);
-  MOVE_ARG(0, XED_REG_RDI);
-  MOVE_ARG(1, XED_REG_RSI);
-  MOVE_ARG(2, XED_REG_RDX);
-  MOVE_ARG(3, XED_REG_RCX);
-  MOVE_ARG(4, XED_REG_R8);
-  MOVE_ARG(5, XED_REG_R9);
+  MOVE_ARG(0, r15);
+  MOVE_ARG(1, r14);
+  MOVE_ARG(2, r13);
+  MOVE_ARG(3, r12);
+  MOVE_ARG(4, r11);
+  MOVE_ARG(5, r10);
 
-  APP(CALL_NEAR_RELBRd(&ni, oc->wrapped_callback);
+  APP(CALL_NEAR_RELBRd(&ni, ic->wrapped_callback);
       ni.is_stack_blind = true;);
 
-  RESTORE_ARG(5, XED_REG_R9);
-  RESTORE_ARG(4, XED_REG_R8);
-  RESTORE_ARG(3, XED_REG_RCX);
-  RESTORE_ARG(2, XED_REG_RDX);
-  RESTORE_ARG(1, XED_REG_RSI);
-  RESTORE_ARG(0, XED_REG_RDI);
+  RESTORE_ARG(5, r10);
+  RESTORE_ARG(4, r11);
+  RESTORE_ARG(3, r12);
+  RESTORE_ARG(2, r13);
+  RESTORE_ARG(1, r14);
+  RESTORE_ARG(0, r15);
 
   delete call;
 }

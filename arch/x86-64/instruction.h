@@ -175,12 +175,6 @@ class Instruction : public InstructionInterface {
   // Get the names of the prefixes.
   const char *PrefixNames(void) const;
 
-  // Is this a specially inserted virtual register save or restore instruction?
-  inline bool IsVirtualRegSaveRestore(void) const {
-    return false;
-    //return is_save_restore;  // TODO(pag): Fix issue #41.
-  }
-
   // Mark this instruction as not encodable.
   inline void DontEncode(void) {
     dont_encode = true;
@@ -189,12 +183,6 @@ class Instruction : public InstructionInterface {
   // Will this instruction be encoded?
   inline bool WillBeEncoded(void) const {
     return !dont_encode;
-  }
-
-  // Can this instruction not be the cause of a fragment split? This has to
-  // do with `granary/code/assemble/2_build_fragment_list.cc`.
-  inline bool CantSplitFragment(void) {
-    return dont_split_fragment;
   }
 
   // Apply a function on every operand.
@@ -210,18 +198,23 @@ class Instruction : public InstructionInterface {
   }
 
   // Does this instruction disable interrupts?
-  bool DisablesInterrupts(void) const {
+  inline bool DisablesInterrupts(void) const {
     return XED_ICLASS_CLI == iclass;
   }
 
   // Can this instruction change the interrupt status to either of enabled or
   // disabled?
-  bool CanEnableOrDisableInterrupts(void) const {
+  inline bool CanEnableOrDisableInterrupts(void) const {
     // `FWAIT` doesn't actually enable/disable interrupts, but it can cause
     // pending FP exceptions to be raised, so it is nicer if we don't
     // accidentally disable interrupts around the `FWAIT`.
     return XED_ICLASS_POPF == iclass || XED_ICLASS_WRMSR == iclass ||
            XED_ICLASS_FWAIT == iclass;
+  }
+
+  // Does this instruction perform an atomic read/modify/write?
+  inline bool IsAtomic(void) const {
+    return is_atomic;
   }
 
   // Where was this instruction encoded/decoded. When debugging, it's helpful
@@ -262,10 +255,6 @@ class Instruction : public InstructionInterface {
     mutable bool reads_from_stack_pointer:1;
     mutable bool writes_to_stack_pointer:1;
     mutable bool analyzed_stack_usage:1;
-
-    // Should we force this instruction to *not* split the fragment, even if
-    // other indicators make it seem like we should split the fragment?
-    bool dont_split_fragment:1;
 
     // Is this an atomic operation?
     bool is_atomic:1;

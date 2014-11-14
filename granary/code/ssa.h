@@ -139,8 +139,7 @@ class SSADataPhiNode : public SSANode {
 class SSARegisterNode : public SSANode {
  public:
   virtual ~SSARegisterNode(void) = default;
-  SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
-                  VirtualRegister reg_);
+  SSARegisterNode(SSAFragment *frag_, VirtualRegister reg_);
 
   // Allocate and free.
   static void *operator new(std::size_t);
@@ -148,10 +147,6 @@ class SSARegisterNode : public SSANode {
   static void operator delete(void *address);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(SSANode, SSARegisterNode)
-
-  // Instruction that defines this register. We use this in combination with
-  // `frag` when doing copy-propagation.
-  Instruction *instr;
 
  private:
   SSARegisterNode(void) = delete;

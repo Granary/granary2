@@ -77,7 +77,7 @@ class DisjointSet {
   }
 
   // Returns true if two disjoint sets are different.
-  bool operator!=(SelfT &that) {
+  bool operator!=(const SelfT &that) const {
     return Find() != that.Find();
   }
 
