@@ -142,11 +142,10 @@ bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
 namespace {
 // Match the next register in the compound memory operand.
 static void MatchNextRegister(xed_reg_enum_t reg,
-                              std::initializer_list<VirtualRegister *> regs,
+                              VirtualRegister * const *regs,
                               size_t *next) {
-  if (XED_REG_INVALID != reg && *next < regs.size()) {
-    regs.begin()[*next]->DecodeFromNative(static_cast<int>(reg));
-    *next += 1;
+  if (XED_REG_INVALID != reg) {
+    regs[*next++]->DecodeFromNative(static_cast<int>(reg));
   }
 }
 }  // namespace
@@ -154,14 +153,16 @@ static void MatchNextRegister(xed_reg_enum_t reg,
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.
 size_t MemoryOperand::CountMatchedRegisters(
-    std::initializer_list<VirtualRegister *> regs) const {
+    std::initializer_list<VirtualRegister *> regs_) const {
+  GRANARY_ASSERT(2 <= regs_.size());
   size_t num_matched(0);
+  auto regs = regs_.begin();
   if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
     if (op->is_compound) {
       MatchNextRegister(op->mem.reg_base, regs, &num_matched);
       MatchNextRegister(op->mem.reg_index, regs, &num_matched);
-    } else if (0 < regs.size()) {
-      *(regs.begin()[0]) = op->reg;
+    } else {
+      *(regs[0]) = op->reg;
       num_matched = 1;
     }
   }

@@ -17,13 +17,25 @@ STRUCT_WRAPPERS = {}
 #   `ssize_t readv(int , const struct iovec *__iovec, int __count)`
 #
 # We have `(readv, struct iovec) => 1` because the `__count` is at position
-# `2`, which is a `1`-displaced from the position of the `__iovec` parameter. 
+# `2`, which is a `1`-displaced from the position of the `__iovec` parameter.
+#
+# Also maps structure fields to array length fields.
 ARRAY_CTYPES = {
+  # (syscall name, type name) -> array count argument offset
   ("readv", "struct iovec"): 1,
   ("writev", "struct iovec"): 1,
   ("preadv", "struct iovec"): 1,
   ("pwritev", "struct iovec"): 1,
+
+  # (structure name, field name) -> array count field name
+  ("struct msghdr", "msg_iov"): "msg_iovlen",
 }
+
+# Returns true if `ctype` represents a function pointer.
+def is_function_pointer(ctype):
+  if isinstance(ctype, CTypePointer):
+    return isinstance(ctype.ctype.base_type(), CTypeFunction)
+  return False
 
 # This system call has no pointer arguments, so don't wrap it.
 def dont_wrap_syscall(var):
@@ -39,12 +51,9 @@ def generic_wrap_syscall(var):
 def wrap_pointer(i):
   return "WRAP_SYSCALL_ARG_POINTER(%d)" % i
 
-# Returns true if `ctype` represents a function pointer.
-def is_function_pointer(ctype):
-  if isinstance(ctype, CTypePointer):
-    return isinstance(ctype.ctype.base_type(), CTypeFunction)
-  return False
-
+# This system call argument, when combined with another argument, represent
+# an fixed-length array of structures, all of which should themselves be
+# wrapped.
 def wrap_array_of_struct(ctype_printed, counter_ctype_printed, i, j):
   return "WRAP_SYSCALL_ARG_ASTRUCT(%d,%d,%s,%s)" % (i, j, ctype_printed,
                                                     counter_ctype_printed)
@@ -54,6 +63,8 @@ def wrap_array_of_struct(ctype_printed, counter_ctype_printed, i, j):
 # we have is a forward declaration of the structure.
 def make_struct_wrapper(ctype, ctype_printed):
   global STRUCT_WRAPPERS
+  global ARRAY_CTYPES
+
   if ctype in STRUCT_WRAPPERS:
     return STRUCT_WRAPPERS[ctype]
 
@@ -62,11 +73,28 @@ def make_struct_wrapper(ctype, ctype_printed):
     field_ctype = field_ctype.base_type()
     if isinstance(field_ctype, CTypePointer) \
     and not is_function_pointer(field_ctype):
-      actions.append("WRAP_STRUCT_PFIELD(%s)" % field_name)
+      # Establish a base case, just in case we get `A.x -> ... -> A` and loop
+      # infinitely when trying to generate a struct wrapper for `A`.
+      STRUCT_WRAPPERS[ctype] = True
+
+      # Try to see if we explicitly recognize this structure field as being
+      # a pointer to an array of structures, where the size of the array is
+      # defined by another field in `ctype`.
+      array_key = (ctype_printed, field_name)
+      if array_key in ARRAY_CTYPES:
+        len_field = ARRAY_CTYPES[array_key]
+        field_ptype = field_ctype.ctype.base_type()
+        is_struct = make_struct_wrapper(field_ptype,
+                                        pretty_print_type(field_ptype))
+        assert is_struct
+        actions.append("WRAP_STRUCT_ASTRUCT(%s,%s)" % (field_name,len_field))
+
+      # Just a regular pointer field.
+      else:
+        actions.append("WRAP_STRUCT_PFIELD(%s)" % field_name)
 
   if actions:
     print "WRAP_STRUCT(%s,%s)" % (ctype_printed, ";".join(actions))
-    STRUCT_WRAPPERS[ctype] = True
     return True
   else:
     STRUCT_WRAPPERS[ctype] = False

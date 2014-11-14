@@ -82,7 +82,7 @@ extern Callback *GenerateContextCallback(ContextInterface *, CodeCache *cache,
 // Generates the wrapper code for an outline callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateOutlineCallback(CodeCache *cache,
+extern Callback *GenerateInlineCallback(CodeCache *cache,
                                          InlineFunctionCall *call);
 
 }  // namespace arch
@@ -338,11 +338,11 @@ const arch::Callback *Context::ContextCallback(AppPC func_pc) {
 
 // Returns a pointer to the code cache code associated with some outline-
 // callable function at `func_addr`.
-const arch::Callback *Context::OutlineCallback(InlineFunctionCall *call) {
+const arch::Callback *Context::InlineCallback(InlineFunctionCall *call) {
   SpinLockedRegion locker(&arg_callbacks_lock);
   auto &cb(outline_callbacks[call->target_app_pc]);
   if (!cb) {
-    cb = arch::GenerateOutlineCallback(&edge_code_cache, call);
+    cb = arch::GenerateInlineCallback(&edge_code_cache, call);
   }
   return cb;
 }

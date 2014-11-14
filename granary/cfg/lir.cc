@@ -46,7 +46,7 @@ namespace detail {
 std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
                                           AppPC func_addr, Operand *ops) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_OUTLINE_CALL, new granary::InlineFunctionCall(block, func_addr, ops)));
+      IA_INLINE_CALL, new granary::InlineFunctionCall(block, func_addr, ops)));
 }
 
 }  // namespace detail

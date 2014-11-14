@@ -22,7 +22,7 @@ LocalControlFlowGraph::LocalControlFlowGraph(ContextInterface *context_)
       last_block(nullptr),
       first_new_block(nullptr),
       next_new_block(nullptr),
-      num_virtual_regs(0),
+      num_virtual_regs(512),
       num_basic_blocks(0) {}
 
 // Destroy the CFG and all basic blocks in the CFG.

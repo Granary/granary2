@@ -99,7 +99,7 @@ class ContextInterface {
 
   // Returns a pointer to the code cache code associated with some outline-
   // callable function at `func_addr`.
-  virtual const arch::Callback *OutlineCallback(InlineFunctionCall *call) = 0;
+  virtual const arch::Callback *InlineCallback(InlineFunctionCall *call) = 0;
 
 # ifdef GRANARY_WHERE_kernel
   // Returns a pointer to the code that can disable interrupts.
@@ -194,7 +194,7 @@ class Context GRANARY_IF_TEST( : public ContextInterface ) {
   // Returns a pointer to the code cache code associated with some outline-
   // callable function at `func_addr`.
   GRANARY_TEST_VIRTUAL
-  const arch::Callback *OutlineCallback(InlineFunctionCall *call);
+  const arch::Callback *InlineCallback(InlineFunctionCall *call);
 
 #ifdef GRANARY_WHERE_kernel
   // Returns a pointer to the code that can disable interrupts.

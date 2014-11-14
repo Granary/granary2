@@ -23,10 +23,8 @@ SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
   if (!ssa_instr->uses.Size()) return nullptr;
 
   const auto &ainstr(instr->instruction);
-  if (ainstr.is_save_restore) return nullptr;
-
-  GRANARY_IF_DEBUG( const auto &op0(ainstr.ops[0]);)
   const auto &op1(ainstr.ops[1]);
+  GRANARY_IF_DEBUG( const auto &op0(ainstr.ops[0]);)
 
   // We don't allow copy propagation of the stack pointer, and we require that
   // catch issues like `MOV r16, r16` not being copy-propagatable because the

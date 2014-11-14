@@ -357,6 +357,14 @@ define save-meta-pcs
 end
 
 
+# clear-log
+#
+# Clears the contents of Granary's log.
+define clear-log
+  set granary_log_buffer_index = 0
+end
+
+
 # save-log
 #
 # Saves the kernel log to the file name specified by `$arg0`.

@@ -66,26 +66,6 @@ void SSAControlPhiNode::AddOperand(SSANode *node) {
 
 namespace {
 
-// Finds the annotation instruction that "defines" the PHI node.
-static Instruction *FindDefiningInstruction(SSAControlPhiNode *phi) {
-  for (auto instr : InstructionListIterator(phi->frag->instrs)) {
-    if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (IA_SSA_NODE_DEF == ainstr->annotation) {
-        if (ainstr->Data<SSANode *>() == phi) return instr;
-        continue;
-      }
-    }
-
-    // If we reach here then it's either not an annotation instruction, or not
-    // the right kind of annotation. `6_track_ssa_vars` ensures that all of
-    // the annotations are prepended to the fragments, so don't do useless
-    // searching.
-    break;
-  }
-  GRANARY_ASSERT(false);
-  return nullptr;
-}
-
 // Try to recursively trivialize the operands of a trivial PHI node.
 //
 // Note: The `phi_operand` will never be an `SSAAliasNode` node.
@@ -110,9 +90,7 @@ static void UnsafeTrivializePhiNode(SSAControlPhiNode *phi,
   // initial write. In this case we synthesize the operand as-if it's an
   // `SSARegisterNode`.
   if (!phi_operand) {
-    auto reg = new (phi) SSARegisterNode(phi->frag,
-                                         FindDefiningInstruction(phi),
-                                         phi->reg);
+    auto reg = new (phi) SSARegisterNode(phi->frag, phi->reg);
     reg->id = storage;
 
   // Happens if we have a def that reaches to a cycle of uses, where within the
@@ -154,10 +132,8 @@ SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
     : SSANode(frag_, incoming_node_->reg),
       dependent_node(incoming_node_) {}
 
-SSARegisterNode::SSARegisterNode(SSAFragment *frag_, Instruction *instr_,
-                                 VirtualRegister reg_)
-    : SSANode(frag_, reg_),
-      instr(instr_) {}
+SSARegisterNode::SSARegisterNode(SSAFragment *frag_, VirtualRegister reg_)
+    : SSANode(frag_, reg_) {}
 
 // Enough memory to hold an arbitrary `SSANode`.
 union SSANodeMemory {
@@ -237,8 +213,9 @@ static SSANode *DefinedNodeForReg(NativeInstruction *instr,
 // within a fragment's instruction list.
 static SSANode *DefinedNodeForReg(AnnotationInstruction *instr,
                                   VirtualRegister reg) {
-  if (IA_SSA_NODE_DEF == instr->annotation) {
-    auto node = instr->Data<SSANode *>();
+  auto node = instr->Data<SSANode *>();
+  if (IA_SSA_NODE_DEF == instr->annotation ||
+      IA_SSA_RESTORE_REG == instr->annotation) {
     if (node->reg == reg) {
       return node;
     }

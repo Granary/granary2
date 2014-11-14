@@ -50,12 +50,6 @@ extern granary::Instruction *SwapGPRWithGPR(VirtualRegister gpr1,
 extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
                                              VirtualRegister slot);
 
-// Performs some minor peephole optimization on the scheduled registers.
-extern void PeepholeOptimize(Fragment *frag);
-
-// Disable peephole optimization in a particular instruction.
-extern void DisablePeepholeOptimization(NativeInstruction *instr);
-
 }  // namespace arch
 namespace {
 
@@ -69,7 +63,10 @@ static void FreeSSAData(FragmentList *frags) {
           ClearMetaData(instr);
         }
       } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-        if (IA_SSA_NODE_DEF == ainstr->annotation) {
+        if (IA_SSA_NODE_DEF == ainstr->annotation ||
+            IA_SSA_RESTORE_REG == ainstr->annotation) {
+          // Note: `IA_SSA_SAVE_REG` have corresponding `IA_SSA_NODE_DEF` if
+          //       the scope of the save/restore is partition-local.
           delete ainstr->Data<SSANode *>();
         } else if (IA_SSA_USELESS_INSTR == ainstr->annotation) {
           delete ainstr->Data<SSAInstruction *>();
@@ -87,13 +84,6 @@ static void FreeFlagZones(FragmentList *frags) {
       delete flag_zone;
       flag_zone = nullptr;
     }
-  }
-}
-
-// Optimizes saves and restores of registers, where possible.
-static void OptimizeSavesAndRestores(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    arch::PeepholeOptimize(frag);
   }
 }
 
@@ -593,27 +583,43 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     SSAInstruction *ssa_instr(nullptr);
     auto is_defined = false;
     auto is_used = false;
-
     auto &vr_home(part_sched->Loc(vr));
 
     // Annotation instructions can define/kill VRs.
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       auto node = ainstr->Data<const SSANode *>();
+      // Note: `IA_SSA_NODE_DEF` is not considered definitions because they
+      //       are added by the local value numbering stage of SSA construction
+      //       for the sake of making it easier to reclaim `SSANode` objects.
       if (IA_SSA_NODE_UNDEF == ainstr->annotation) {
         if (node->id == node_id) {
+          // This node can't be homed to a register because the meaning of
+          // this is to say that the node was live in a predecessor, but is not
+          // live in a successor (of this compensation fragment), and therefore
+          // we should not expect and uses of the node to follow this
+          // instruction.
           GRANARY_ASSERT(RegLocationType::GPR != vr_home.type);
-          is_used = true;  // Fake a kill as a use.
+
+          // Fake a kill as a use. The meaning here is that we expect that this
+          // register will start being used, and in fact it's exported from
+          // a predecessor fragment's `exit_nodes` into this frag's
+          // `entry_nodes`, so we need to have it as a use so that the slot
+          // matching happens.
+          is_used = true;
         }
+
+      // Don't allow save/restore regs to span more than one fragment.
+      } else if (IA_SSA_SAVE_REG == ainstr->annotation ||
+                 IA_SSA_RESTORE_REG == ainstr->annotation) {
+        GRANARY_ASSERT(node->id != node_id);
+        continue;
+      // We can stop here.
       } else if (IA_SSA_FRAG_BEGIN_GLOBAL == ainstr->annotation) {
         first_instr = instr;
         break;
       } else {
         continue;
       }
-
-      // Note: `IA_SSA_NODE_DEF` are not considered definitions because they
-      //       are added by the local value numbering stage of SSA construction
-      //       for the sake of making it easier to reclaim `SSANode` objects.
 
     // Its a native instruction, need to look to see if the VR is used and/or
     // defined. We also need to see if the current location of the VR is used.
@@ -623,7 +629,8 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
       used_regs.Visit(ninstr);
       used_regs.ReviveRestrictedRegisters(ninstr);
 
-      // Need to re-home the register.
+      // The register we want to use for scheduling `vr` is used in this
+      // instruction, therefore we need to re-home the register.
       if (vr_home.loc.IsNative() && used_regs.IsLive(vr_home.loc)) {
         GRANARY_ASSERT(RegLocationType::GPR == vr_home.type);
         auto agpr = GetGPR(reg_sched, pgpr, used_regs);
@@ -640,8 +647,6 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
         vr_home.loc = agpr;  // Updates `Loc` by ref.
       }
       FindDefUse(ssa_instr, node_id, &is_defined, &is_used);
-
-      if (is_used || is_defined) arch::DisablePeepholeOptimization(ninstr);
     }
 
     if (!is_used && !is_defined) continue;
@@ -945,10 +950,13 @@ struct FragmentScheduler {
                   arch::NUM_GENERAL_PURPOSE_REGISTERS>
           RegLocationMap;
 
+  typedef TinyMap<SSANodeId, VirtualRegister, 4> SaveRestorLocationMap;
+
   FragmentScheduler(void) = delete;
 
   explicit FragmentScheduler(SSAFragment *frag_)
       : vr_locations(),
+        save_restore_slots(),
         invalid_location{VirtualRegister(), RegLocationType::GPR},
         frag(frag_),
         reg_counts() {
@@ -1056,6 +1064,9 @@ struct FragmentScheduler {
   // Location of all currently live / interfering virtual registers.
   RegLocationMap vr_locations;
 
+  // Slots for register save/restore.
+  SaveRestorLocationMap save_restore_slots;
+
   // Dummy location.
   RegLocation invalid_location;
 
@@ -1073,10 +1084,10 @@ struct FragmentScheduler {
 static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
                                      SSAOperand &op,
                                      NativeInstruction *instr,
-                                     const UsedRegisterSet &used_regs,
-                                     SSAFragment *frag) {
+                                     const UsedRegisterSet &used_regs) {
   auto node = op.nodes[0];
   auto vr = node->reg;
+  auto frag = sched->frag;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
   if (NODE_SCHEDULED == node->id.Value()) return;
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
@@ -1089,8 +1100,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
     VirtualRegister slot;
 
     // Case 3. We can share this VR's spill slot with another.
-    if (!instr->instruction.IsVirtualRegSaveRestore() &&
-        sched->TryGetSharedGPR(used_regs, &agpr)) {
+    if (sched->TryGetSharedGPR(used_regs, &agpr)) {
       auto &agpr_home(sched->Loc(agpr));
       GRANARY_ASSERT(RegLocationType::LIVE_SLOT == agpr_home.type);
       slot = agpr_home.loc;
@@ -1102,7 +1112,6 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
       agpr = sched->GetGPR(used_regs);
       slot = sched->AllocateSlot();
       GRANARY_ASSERT(sched->InverseLoc(agpr).loc == agpr);
-
       frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(agpr, slot));
     }
 
@@ -1117,13 +1126,12 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
 
 // Case 5: Schedule a fragment-local register definition. This enables slot
 // sharing within the fragment.
-static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
-                                     SSAOperand &op, NativeInstruction *instr,
-                                     SSAFragment *frag) {
+static void ScheduleFragmentLocalDef(FragmentScheduler *sched, SSAOperand &op) {
   auto node = op.nodes[0];
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
   if (NODE_SCHEDULED == node->id.Value()) return;
+  GRANARY_IF_DEBUG( auto frag = sched->frag; )
   GRANARY_ASSERT(!IsLive(frag->ssa.entry_nodes, vr, node->id));
   GRANARY_ASSERT(!IsLive(frag->ssa.exit_nodes, vr, node->id));
 
@@ -1143,24 +1151,13 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched,
   vr_home = {VirtualRegister(), RegLocationType::GPR}; // Reset.
   sched->DeleteLoc(vr);  // Kill `vr_home`.
 
-  // Need to be "greedy" about virtual save/restore regs, so that the peephole
-  // optimizer recognizes opportunities.
-  if (!SHARE_SPILL_SLOTS || instr->instruction.IsVirtualRegSaveRestore()) {
-    frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(gpr_homed_by_vr,
-                                                         gpr_home.loc));
-    gpr_home.loc = gpr_homed_by_vr;
-    gpr_home.type = RegLocationType::GPR;
-    inv_gpr_home = {gpr_homed_by_vr, RegLocationType::GPR};
-
   // Enable slot sharing (default).
-  } else {
-    gpr_home.type = RegLocationType::LIVE_SLOT;  // Enables slot-sharing.
-    inv_gpr_home.loc = VirtualRegister();  // Will help signal an error.
-    inv_gpr_home.type = RegLocationType::GPR;
-  }
+  gpr_home.type = RegLocationType::LIVE_SLOT;  // Enables slot-sharing.
+  inv_gpr_home.loc = VirtualRegister();  // Will help signal an error.
+  inv_gpr_home.type = RegLocationType::GPR;
 }
 
-static void HomeUsedRegs(FragmentScheduler *sched, NativeInstruction *instr,
+static void HomeUsedRegs(FragmentScheduler *sched, Instruction *instr,
                          const UsedRegisterSet &used_regs) {
   auto frag = sched->frag;
   for (auto gpr : used_regs) {
@@ -1236,6 +1233,58 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
   return true;
 }
 
+// Schedule registers defs/uses that are local to a fragment and contained
+// in a specific native instruction.
+static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
+                                      NativeInstruction *instr) {
+  auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
+  if (!ssa_instr) return;
+  if (TryRemoveCopyInstruction(sched, instr, ssa_instr)) return;
+
+  UsedRegisterSet used_regs;
+  used_regs.Visit(instr);
+  used_regs.ReviveRestrictedRegisters(instr);
+  HomeUsedRegs(sched, instr, used_regs);
+
+  for (auto &use_op : ssa_instr->uses) {
+    ScheduleFragmentLocalUse(sched, use_op, instr, used_regs);
+  }
+  for (auto &def_op : ssa_instr->defs) {
+    ScheduleFragmentLocalUse(sched, def_op, instr, used_regs);
+  }
+  for (auto &def_op : ssa_instr->defs) {
+    ScheduleFragmentLocalDef(sched, def_op);
+  }
+}
+
+// Schedule fragment local registers for a register save-to-spill or
+// restore-from-spill instruction.
+static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
+                                      AnnotationInstruction *instr,
+                                      bool is_save) {
+  auto node = instr->Data<SSANode *>();
+  auto gpr = node->reg;
+  auto frag = sched->frag;
+  if (NODE_SCHEDULED == node->id.Value()) return;
+  GRANARY_ASSERT(gpr.IsNative());
+  UsedRegisterSet used_regs;
+  used_regs.Revive(gpr);
+  HomeUsedRegs(sched, instr, used_regs);
+
+  auto &slot(sched->save_restore_slots[node->id]);
+  if (is_save) {
+    GRANARY_ASSERT(slot.IsVirtualSlot());
+    frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(gpr, slot));
+    GRANARY_IF_DEBUG( slot = VirtualRegister(); )
+    sched->save_restore_slots.Remove(node->id);
+  } else {
+    GRANARY_ASSERT(!slot.IsValid());
+    slot = sched->AllocateSlot();
+    frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(gpr, slot));
+  }
+}
+
+// Schedule registers defs/uses that are local to a fragment.
 static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
   FragmentScheduler sched(frag);
   Instruction *first_instr(nullptr);
@@ -1248,31 +1297,13 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
       if (IA_SSA_FRAG_BEGIN_LOCAL == ainstr->annotation) {
         first_instr = instr;
         break;
+      } else if (IA_SSA_SAVE_REG == ainstr->annotation) {
+        ScheduleFragmentLocalRegs(&sched, ainstr, true);
+      } else if (IA_SSA_RESTORE_REG == ainstr->annotation) {
+        ScheduleFragmentLocalRegs(&sched, ainstr, false);
       }
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      UsedRegisterSet used_regs;
-      auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
-      if (!ssa_instr) continue;
-
-      if (TryRemoveCopyInstruction(&sched, ninstr, ssa_instr)) {
-        continue;
-      }
-
-      used_regs.Visit(ninstr);
-      used_regs.ReviveRestrictedRegisters(ninstr);
-      HomeUsedRegs(&sched, ninstr, used_regs);
-
-      for (auto &use_op : ssa_instr->uses) {
-        ScheduleFragmentLocalUse(&sched, use_op, ninstr, used_regs, frag);
-      }
-      for (auto &def_op : ssa_instr->defs) {
-        ScheduleFragmentLocalUse(&sched, def_op, ninstr, used_regs, frag);
-      }
-      for (auto &def_op : ssa_instr->defs) {
-        ScheduleFragmentLocalDef(&sched, def_op, ninstr, frag);
-      }
-    } else {
-      continue;
+      ScheduleFragmentLocalRegs(&sched, ninstr);
     }
   }
 
@@ -1329,14 +1360,24 @@ static Instruction *FirstSSAInstruction(SSAFragment *frag) {
         return ninstr;
       }
     } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (IA_SSA_NODE_UNDEF == ainstr->annotation) {
-        return ainstr;
+      switch (ainstr->annotation) {
+        case IA_SSA_NODE_DEF:
+        case IA_SSA_NODE_UNDEF:
+        case IA_SSA_SAVE_REG:
+        case IA_SSA_RESTORE_REG:
+          return ainstr;
+        default:
+          break;
       }
     }
   }
   return candidate;
 }
 
+// Add annotations to the fragment that marks the "beginning" of the fragment
+// to the register scheduler. This is so that we can know where the first
+// spills need to be placed, as well as knowing how to order local and global
+// spills.
 static void AddFragBeginAnnotations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
@@ -1363,9 +1404,6 @@ void ScheduleRegisters(FragmentList *frags) {
   ScheduleFragmentLocalRegs(frags);
   FreeSSAData(frags);
   FreeFlagZones(frags);
-
-  // TODO(pag): Fix me, slots get shared somehow.
-  if (false) OptimizeSavesAndRestores(frags);
 }
 
 }  // namespace granary
