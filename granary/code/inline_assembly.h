@@ -113,9 +113,9 @@ class InlineAssemblyBlock {
 class InlineFunctionCall {
  public:
   InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
-                     Operand ops[MAX_NUM_FUNC_OPERANDS]);
+                     Operand ops[MAX_NUM_FUNC_OPERANDS], size_t num_args_);
 
-  inline int NumArguments(void) const {
+  inline size_t NumArguments(void) const {
     return num_args;
   }
 
@@ -125,9 +125,8 @@ class InlineFunctionCall {
   })
 
   AppPC target_app_pc;
-  int num_args;
+  size_t num_args;
   Operand args[MAX_NUM_FUNC_OPERANDS];
-  VirtualRegister saved_regs[MAX_NUM_FUNC_OPERANDS];
   VirtualRegister arg_regs[MAX_NUM_FUNC_OPERANDS];
 
  private:

@@ -44,9 +44,11 @@ namespace detail {
 // virtual registers by means of its arguments. At least one argument is
 // required.
 std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
-                                          AppPC func_addr, Operand *ops) {
+                                                AppPC func_addr, Operand *ops,
+                                                size_t num_args) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_INLINE_CALL, new granary::InlineFunctionCall(block, func_addr, ops)));
+      IA_INLINE_CALL,
+      new granary::InlineFunctionCall(block, func_addr, ops, num_args)));
 }
 
 }  // namespace detail

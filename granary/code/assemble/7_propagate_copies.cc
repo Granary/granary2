@@ -125,8 +125,9 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
 static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
   // Inherit this definition from a predecessor fragment.
   if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-    if (IA_SSA_NODE_DEF == ainstr->annotation) {
-      UpdateAnnotationDefs(defs, ainstr->Data<SSANode *>());
+    if (IA_SSA_NODE_DEF == ainstr->annotation ||
+        IA_SSA_RESTORE_REG == ainstr->annotation) {
+      UpdateAnnotationDefs(defs, GetMetaData<SSANode *>(ainstr));
     }
   } else if (auto ninstr = DynamicCast<const NativeInstruction *>(instr)) {
     if (auto ssa_instr = GetMetaData<SSAInstruction *>(ninstr)) {

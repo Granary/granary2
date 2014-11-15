@@ -37,13 +37,13 @@ Instruction *Instruction::Previous(void) {
 }
 
 // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-uintptr_t Instruction::MetaData(void) const {
-  return transient_meta;
+uint64_t Instruction::MetaData(void) const {
+  return static_cast<uint64_t>(transient_meta);
 }
 
 // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
-void Instruction::SetMetaData(uintptr_t meta) {
-  transient_meta = meta;
+void Instruction::SetMetaData(uint64_t meta) {
+  transient_meta = UnsafeCast<UntypedData>(meta);
 }
 
 Instruction *Instruction::InsertBefore(Instruction *instr) {
@@ -81,7 +81,7 @@ Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
     this->Instruction::InsertBefore(new_first);
     *block_first_ptr = new_first;
     annotation = IA_NOOP;
-    data = 0;
+    data = DEFAULT_UNTYPED_DATA;
   }
   return this->Instruction::InsertBefore(instr);
 }
@@ -101,7 +101,7 @@ Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
     this->Instruction::InsertAfter(new_last);
     *block_last_ptr = new_last;
     annotation = IA_NOOP;
-    data = 0;
+    data = DEFAULT_UNTYPED_DATA;
   }
   return this->Instruction::InsertAfter(instr);
 }
@@ -242,7 +242,7 @@ BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 
   // Mark this label as being targeted by some instruction.
-  target->data += 1;
+  target->DataRef<uintptr_t>() += 1;
 }
 
 // Return the targeted instruction of this branch.
@@ -252,8 +252,8 @@ LabelInstruction *BranchInstruction::TargetLabel(void) const {
 
 // Modify this branch to target a different label.
 void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
-  *target->DataPtr<uint64_t>() -= 1;
-  *label->DataPtr<uint64_t>() += 1;
+  target->DataRef<uint64_t>() -= 1;
+  label->DataRef<uint64_t>() += 1;
   target = label;
 }
 

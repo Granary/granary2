@@ -120,7 +120,8 @@ inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
 // virtual registers by means of its arguments. At least one argument is
 // required.
 std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
-                                                AppPC func_addr, Operand *ops);
+                                                AppPC func_addr, Operand *ops,
+                                                size_t num_args);
 
 }  // namespace detail
 
@@ -131,8 +132,10 @@ template <typename FuncT, typename... Args>
 inline static std::unique_ptr<Instruction> InlineFunctionCall(
     DecodedBasicBlock *block, FuncT func, Args... args) {
   Operand ops[MAX_NUM_FUNC_OPERANDS];
-  detail::InitInlineOps(ops, 0UL, sizeof...(args), args...);
-  return detail::InlineFunctionCall(block, UnsafeCast<AppPC>(func), ops);
+  auto num_args = sizeof...(args);
+  detail::InitInlineOps(ops, 0UL, num_args, args...);
+  return detail::InlineFunctionCall(block, UnsafeCast<AppPC>(func), ops,
+                                    num_args);
 }
 
 // TODO(pag): InlineCall, inline the code of a function directly into the

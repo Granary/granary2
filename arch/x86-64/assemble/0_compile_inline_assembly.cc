@@ -307,7 +307,7 @@ class InlineAssemblyParser {
 
       // Increment the reference count manually. This is normally done by
       // `BranchInstruction`, but this is not for a branch.
-      branch_target->data += 1;
+      branch_target->DataRef<uint64_t>() += 1;
 
     } else {
       op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;

@@ -64,7 +64,7 @@ namespace {
 // Set the encoded address for a label or return address instruction.
 static void SetEncodedPC(AnnotationInstruction *instr, CachePC pc) {
   if (IA_LABEL == instr->annotation || IA_RETURN_ADDRESS == instr->annotation) {
-    instr->data = reinterpret_cast<uintptr_t>(pc);
+    instr->SetData(pc);
   }
 }
 
@@ -216,7 +216,8 @@ static void RelativizeBranch(Fragment *frag, BranchInstruction *branch) {
     auto target = branch->TargetLabel();
     auto target_pc = target->Data<CachePC>();
     GRANARY_ASSERT(nullptr != target_pc);
-    GRANARY_ASSERT(4096UL < target->data);  // Doesn't look like a refcount.
+    // Doesn't look like a refcount.
+    GRANARY_ASSERT(4096UL < target->Data<uintptr_t>());
     branch->instruction.SetBranchTarget(target_pc);
   }
 }

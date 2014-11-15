@@ -170,6 +170,18 @@ static SSAInstruction *BuildSSAInstr(SSAOperandPack &operands) {
   return instr;
 }
 
+// Create an `SSAInstruction` for a `NativeInstruction`.
+static void CreateSSAInstruction(NativeInstruction *instr
+                                 _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
+  SSAOperandPack operands;
+  instr->ForEachOperand([&] (Operand *op) {
+    AddSSAOperand(operands, op _GRANARY_IF_DEBUG(partition));
+  });
+  ConvertOperandActions(operands);  // Generic.
+  arch::ConvertOperandActions(instr, operands);  // Arch-specific.
+  SetMetaData(instr, BuildSSAInstr(operands));
+}
+
 // Create the `SSAOperandPack`s for every native instruction in `SSAFragment`
 // fragments.
 static void CreateSSAInstructions(FragmentList *frags) {
@@ -178,13 +190,7 @@ static void CreateSSAInstructions(FragmentList *frags) {
       GRANARY_IF_DEBUG( auto partition = frag->partition.Value(); )
       for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-          SSAOperandPack operands;
-          ninstr->ForEachOperand([&] (Operand *op) {
-            AddSSAOperand(operands, op _GRANARY_IF_DEBUG(partition));
-          });
-          ConvertOperandActions(operands);  // Generic.
-          arch::ConvertOperandActions(ninstr, operands);  // Arch-specific.
-          SetMetaData(ninstr, BuildSSAInstr(operands));
+          CreateSSAInstruction(ninstr _GRANARY_IF_DEBUG(partition));
         }
       }
     }
@@ -333,7 +339,9 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
 static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
   for (auto node : frag->ssa.entry_nodes.Values()) {
     GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-    frag->instrs.Prepend(new AnnotationInstruction(IA_SSA_NODE_DEF, node));
+    auto instr = new AnnotationInstruction(IA_SSA_NODE_DEF, node->reg);
+    SetMetaData(instr, node);
+    frag->instrs.Prepend(instr);
   }
 }
 
@@ -350,7 +358,7 @@ static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
   if (!node) {
     node = new SSAControlPhiNode(frag, reg);
   }
-  instr->SetData<SSANode *>(node);
+  SetMetaData(instr, node);
 }
 
 // Create an `SSANode` for a restore.
@@ -364,7 +372,7 @@ static void LVNRestore(SSAFragment *frag, AnnotationInstruction *instr) {
 
   // Update `entry_nodes` in place to contain a new, dummy node.
   node = new SSAControlPhiNode(frag, reg);
-  instr->SetData(ret_node);
+  SetMetaData(instr, ret_node);
 }
 
 // Perform a local-value numbering of all general-purpose register uses
@@ -505,7 +513,9 @@ static void SimplifyControlPhiNodes(FragmentList *frags) {
 
 static void AddCompensationRegKills(CodeFragment *frag) {
   for (auto node : frag->ssa.entry_nodes.Values()) {
-    frag->instrs.Append(new AnnotationInstruction(IA_SSA_NODE_UNDEF, node));
+    auto instr = new AnnotationInstruction(IA_SSA_NODE_UNDEF, node->reg);
+    SetMetaData(instr, node);
+    frag->instrs.Append(instr);
   }
 }
 

@@ -413,6 +413,9 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   };
 };
 
+static_assert(sizeof(RegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
+
 namespace detail {
 template <bool kIsLive>
 void RegisterSetIterator<kIsLive>::Advance(void) {
@@ -473,6 +476,9 @@ class UsedRegisterSet : public RegisterSet {
   }
 };
 
+static_assert(sizeof(UsedRegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
+
 // A class that tracks conservatively live, general-purpose registers within a
 // straight-line sequence of instructions.
 //
@@ -521,6 +527,9 @@ class LiveRegisterSet : public RegisterSet {
     Union(that);
   }
 };
+
+static_assert(sizeof(LiveRegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
 
 }  // namespace granary
 

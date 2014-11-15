@@ -24,6 +24,9 @@ class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class Fragment;
+GRANARY_INTERNAL_DEFINITION enum alignas(16) UntypedData : uint64_t {
+  DEFAULT_UNTYPED_DATA = 0
+};
 
 // Represents an abstract instruction.
 class Instruction {
@@ -32,7 +35,7 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
-        transient_meta(0) {}
+        transient_meta(DEFAULT_UNTYPED_DATA) {}
 
   virtual ~Instruction(void) = default;
 
@@ -43,41 +46,43 @@ class Instruction {
 
   // Used to get around issues with Eclipse's indexer.
 #ifdef GRANARY_ECLIPSE
-  uintptr_t MetaData(void);  // Fake, non-const.
+  UntypedData MetaData(void);  // Fake, non-const.
   template <typename T> T MetaData(void) const;
   template <typename T> void SetMetaData(T);
 #else
   // Get the transient, tool-specific instruction meta-data as an arbitrary,
-  // `uintptr_t`-sized type.
+  // `uint64_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uint64_t>::RESULT>::Type=0
   >
   inline T MetaData(void) const {
-    static_assert(sizeof(T) <= sizeof(uintptr_t),
+    GRANARY_INTERNAL_DEFINITION
+    static_assert(sizeof(uint64_t) >= sizeof(T),
         "Transient meta-data type is too big. Client tools can only store "
-        "a pointer-sized object as meta-data inside of an instruction.");
+        "a `uint64_t`-sized object as meta-data inside of an instruction.");
     return UnsafeCast<T>(MetaData());
   }
 
   // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-  uintptr_t MetaData(void) const;
+  uint64_t MetaData(void) const;
 
   // Set the transient, tool-specific instruction meta-data as an arbitrary,
-  // `uintptr_t`-sized type.
+  // `uint64_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uint64_t>::RESULT>::Type=0
   >
   inline void SetMetaData(T meta) {
-    static_assert(sizeof(T) <= sizeof(uintptr_t),
+    GRANARY_INTERNAL_DEFINITION
+    static_assert(sizeof(T) <= sizeof(uint64_t),
         "Transient meta-data type is too big. Client tools can only store "
-        "a pointer-sized object as meta-data inside of an instruction.");
-    return SetMetaData(UnsafeCast<uintptr_t>(meta));
+        "a `uint64_t`-sized object as meta-data inside of an instruction.");
+    return SetMetaData(UnsafeCast<uint64_t>(meta));
   }
 
   // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
-  void SetMetaData(uintptr_t meta);
+  void SetMetaData(uint64_t meta);
 #endif
 
   // Clear out the meta-data. This should be done by tools using instruction-
@@ -107,7 +112,7 @@ class Instruction {
   // meta-data is the backing storage for tools to temporarily attach small
   // amounts of data (e.g. pointers to data structures, bit sets of live regs)
   // to instructions for a short period of time. 
-  GRANARY_INTERNAL_DEFINITION uintptr_t transient_meta;
+  GRANARY_INTERNAL_DEFINITION UntypedData transient_meta;
 
  private:
 
@@ -161,30 +166,46 @@ enum InstructionAnnotation {
 
   // Represents the definition of some `SSANode`, used in later assembly stages
   // so that all nodes are owned by some `Fragment`.
+  //
+  // The data associated with this annotation is a `VirtualRegister`.
   IA_SSA_NODE_DEF,
 
   // An "undefinition" of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
+  //
+  // The data associated with this annotation is a `VirtualRegister`.
   IA_SSA_NODE_UNDEF,
 
   // A "removed" or junk `SSAInstruction`. We keep some useless
   // `SSAInstruction`s around because pointers from outside `SSANode`s might
   // point to nodes that the `SSAInstruction` owns.
-  IA_SSA_USELESS_INSTR,
+  //
+  // The data associated with this annotation is a `VirtualRegister`.
+  IA_SSA_ELIDED_COPY,
 
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
   IA_SSA_FRAG_BEGIN_LOCAL,
   IA_SSA_FRAG_BEGIN_GLOBAL,
 
-  // Save and restore instructions for a register into a slot.
+  // Save and restore instructions for a register into a slot. The data
+  // associated with this annotation is a `VirtualRegister`.
   //
   // Note: Saves and restores only operate on architectural GPRs.
   IA_SSA_SAVE_REG,
   IA_SSA_RESTORE_REG,
 
+  // Force some registers to be live. This is useful for specifying that the
+  // native values of some arch GPRs *must* be passed to something like an
+  // inline call.
+  //
+  // The data associated with this annotation is a `UsedRegisterSet`.
+  IA_SSA_MARK_USED_REGS,
+
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
+  //
+  // The data associated with this annotation is a pointer to a pointer.
   IA_UPDATE_ENCODED_ADDRESS,
 
   // Represents a point between two logical instructions. This exists to
@@ -198,10 +219,15 @@ enum InstructionAnnotation {
 
   // Represents a call to a client function that saves and restores the
   // entire machine context.
+  //
+  // The data associated with this annotation is a function pointer.
   IA_CONTEXT_CALL,
 
   // Represents a call to a client function that passes along some arguments
   // as well.
+  //
+  // The data associated with this annotation is a pointer to a
+  // `InlineFunctionCall`.
   IA_INLINE_CALL
 };
 
@@ -218,14 +244,14 @@ class AnnotationInstruction : public Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline explicit AnnotationInstruction(InstructionAnnotation annotation_)
       : annotation(annotation_),
-        data(0) {}
+        data(DEFAULT_UNTYPED_DATA) {}
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
   inline AnnotationInstruction(InstructionAnnotation annotation_,
                                T data_)
       : annotation(annotation_),
-        data(UnsafeCast<uintptr_t>(data_)) {}
+        data(UnsafeCast<UntypedData>(data_)) {}
 
   virtual Instruction *InsertBefore(Instruction *) override;
   virtual Instruction *InsertAfter(Instruction *) override;
@@ -243,7 +269,7 @@ class AnnotationInstruction : public Instruction {
   InstructionAnnotation annotation;
 
   GRANARY_INTERNAL_DEFINITION GRANARY_CONST
-  uintptr_t data;
+  UntypedData data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
@@ -262,15 +288,23 @@ class AnnotationInstruction : public Instruction {
   inline void SetData(T new_data) {
     static_assert(sizeof(T) <= sizeof(uintptr_t),
                   "Cannot store data inside of annotation.");
-    data = UnsafeCast<uintptr_t>(new_data);
+    data = UnsafeCast<UntypedData>(new_data);
   }
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
-  inline T *DataPtr(void) const {
+  inline T *DataPtr(void) {
     static_assert(sizeof(T) <= sizeof(uintptr_t),
                   "Cannot store data inside of annotation.");
     return UnsafeCast<T *>(&data);
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline T &DataRef(void) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
+    return *UnsafeCast<T *>(&data);
   }
 
  private:

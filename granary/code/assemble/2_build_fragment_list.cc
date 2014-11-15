@@ -363,7 +363,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
     auto next_instr = instr->Next();
     auto fall_through_label = DynamicCast<LabelInstruction *>(next_instr);
     if (fall_through_label) {
-      fall_through_label->data += 1; // Hold a refcount.
+      fall_through_label->DataRef<uintptr_t>() += 1; // Hold a refcount.
       next_instr = fall_through_label->Next();
     }
     AddBlockTailToWorkList(builder, frag, fall_through_label,
