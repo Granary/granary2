@@ -235,8 +235,12 @@ void ExtendFragmentWithInlineCall(ContextInterface *context,
     APP_INSTR(new AnnotationInstruction(IA_SSA_MARK_USED_REGS, arg_regs));
   }
 
+  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_OFF_STACK));
+
   APP(CALL_NEAR_RELBRd(&ni, ic->wrapped_callback);
       ni.is_stack_blind = true);
+
+  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_ON_STACK));
 
   RESTORE_ARG(5);
   RESTORE_ARG(4);

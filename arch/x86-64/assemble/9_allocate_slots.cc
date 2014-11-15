@@ -18,13 +18,50 @@
     instrs->Append(new NativeInstruction(&ni)); \
   } while (0)
 
+#define BEFORE(...) \
+  do { \
+    __VA_ARGS__ ; \
+    instrs->InsertBefore(instr, new NativeInstruction(&ni)); \
+  } while (0)
+
 namespace granary {
 namespace arch {
+
+// Inserts code before `instr` in `instrs` to switch off of the native stack.
+//
+// Note: This function has an architecture-specific implementation.
+void SwitchOffStack(InstructionList *instrs, granary::Instruction *instr) {
+  if (REDZONE_SIZE_BYTES) {
+    Instruction ni;
+    BEFORE(SHIFT_REDZONE(&ni);
+           ni.is_stack_blind = true;
+           ni.analyzed_stack_usage = false; );
+  } else {
+    // TODO(pag): Should we do stack switching here??
+    granary_curiosity();
+  }
+}
+
+// Inserts code before `instr` in `instrs` to switch on to the native stack.
+//
+// Note: This function has an architecture-specific implementation.
+void SwitchOnStack(InstructionList *instrs, granary::Instruction *instr) {
+  if (REDZONE_SIZE_BYTES) {
+    Instruction ni;
+    BEFORE(UNSHIFT_REDZONE(&ni);
+           ni.is_stack_blind = true;
+           ni.analyzed_stack_usage = false; );
+  } else {
+    // TODO(pag): Should we do stack switching here??
+    granary_curiosity();
+  }
+}
+
+#ifdef GRANARY_WHERE_kernel
 
 // Returns a new instruction that will "allocate" the spill slots by disabling
 // interrupts.
 void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
-  GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
       CALL_NEAR_RELBRd(&ni, GlobalContext()->DisableInterruptCode())));
@@ -33,11 +70,12 @@ void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
 // Returns a new instruction that will "allocate" the spill slots by enabling
 // interrupts.
 void AllocateEnableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
-  GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
       CALL_NEAR_RELBRd(&ni, GlobalContext()->EnableInterruptCode())));
 }
+
+#endif  // GRANARY_WHERE_kernel
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -381,9 +419,19 @@ void AllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
       auto partition = frag->partition.Value();
+
+      // Only do stack switching if the stack isn't valid. Same thing with
+      // slot allocation
       if (partition->analyze_stack_frame) continue;
+
       for (auto instr : InstructionListIterator(frag->instrs)) {
-        if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+          if (IA_LATE_SWITCH_OFF_STACK == ainstr->annotation) {
+            SwitchOffStack(&(frag->instrs), instr);
+          } else if (IA_LATE_SWITCH_ON_STACK == ainstr->annotation) {
+            SwitchOnStack(&(frag->instrs), instr);
+          }
+        } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           AllocateSlots(ninstr);
         }
       }

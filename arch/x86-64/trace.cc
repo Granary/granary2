@@ -68,11 +68,14 @@ uint64_t granary_extra_rip_offset = 0;
 
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
+GRANARY_IF_USER(__thread)
 RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
-alignas(CACHE_LINE_SIZE_BYTES) unsigned granary_block_log_index = 0;
+alignas(CACHE_LINE_SIZE_BYTES)
+GRANARY_IF_USER(__thread)
+unsigned granary_block_log_index = 0;
 
 // Record an entry in Granary's trace log.
 void granary_trace_block_regs(const RegisterState *regs) {
