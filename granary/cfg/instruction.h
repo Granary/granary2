@@ -202,6 +202,13 @@ enum InstructionAnnotation {
   // The data associated with this annotation is a `UsedRegisterSet`.
   IA_SSA_MARK_USED_REGS,
 
+  // Inject a "late" stack switch instruction if the stack is not safe. Before
+  // we do the stack analysis, we can realize that some things (e.g. inline/
+  // context calls) might need to swap stacks, but not necessarily. These are
+  // a hint for injecting stack switches later when we have verified things.
+  IA_LATE_SWITCH_OFF_STACK,
+  IA_LATE_SWITCH_ON_STACK,
+
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
   //

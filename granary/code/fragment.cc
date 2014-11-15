@@ -313,6 +313,12 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@undef";
   } else if (IA_SSA_MARK_USED_REGS == instr->annotation) {
     return LogUsedRegs(level, instr);
+  } else if (IA_LATE_SWITCH_OFF_STACK == instr->annotation) {
+    Log(level, FONT_BLUE "@offstack" END_FONT NEW_LINE);
+    return;
+  } else if (IA_LATE_SWITCH_ON_STACK == instr->annotation) {
+    Log(level, FONT_BLUE "@onstack" END_FONT NEW_LINE);
+    return;
   } else {
     return;
   }

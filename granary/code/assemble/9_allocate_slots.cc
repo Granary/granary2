@@ -13,6 +13,8 @@
 namespace granary {
 namespace arch {
 
+#ifdef GRANARY_WHERE_kernel
+
 // Returns a new instruction that will "allocate" the spill slots by disabling
 // interrupts.
 //
@@ -24,6 +26,8 @@ extern void AllocateDisableInterrupts(InstructionList *);
 //
 // Note: This function has an architecture-specific implementation.
 extern void AllocateEnableInterrupts(InstructionList *);
+
+#endif  // GRANARY_WHERE_kernel
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -74,6 +78,11 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
       partition->analyze_stack_frame = true;
     }
   }
+
+  // TODO(pag): What about initialization of fragments without partition
+  //            entry/exit? They might have `IA_LATE_SWITCH_OFF_STACK` or
+  //            `IA_LATE_SWITCH_ON_STACK` annotations.
+
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
       if (STACK_VALID != code_frag->stack.status) {
@@ -273,7 +282,7 @@ static void AllocateStackSlots(FragmentList *frags) {
       GRANARY_IF_DEBUG( VerifyAllSlotsScheduled(frag); )
       continue;
     }
-    if (!partition->analyze_stack_frame)  {
+    if (!partition->analyze_stack_frame) {
       GRANARY_IF_KERNEL( AllocateSlotsStackInvalid(frag); )
     } else {
       AllocateStackSlotsStackValid(partition, frag);

@@ -320,9 +320,15 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // virtual register state.
     case IA_INLINE_CALL:
       arch::ExtendFragmentWithInlineCall(builder->context, frag,
-                                          instr->Data<InlineFunctionCall *>());
+                                         instr->Data<InlineFunctionCall *>());
       return true;
 
+    // Used to hint at late stack switching.
+    case IA_LATE_SWITCH_OFF_STACK:
+    case IA_LATE_SWITCH_ON_STACK:
+      frag->instrs.Append(Instruction::Unlink(instr).release());
+
+    [[clang::fallthrough]];
     default: return true;
   }
 }

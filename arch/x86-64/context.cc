@@ -32,6 +32,8 @@
     call_frag->instrs.Append(new NativeInstruction(&ni)); \
   } while (0)
 
+#define APP_INSTR(i) call_frag->instrs.Append(i)
+
 namespace granary {
 namespace arch {
 namespace {
@@ -150,14 +152,16 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
 
   Instruction ni;
 
-  if (REDZONE_SIZE_BYTES) APP(SHIFT_REDZONE(&ni));
+  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_OFF_STACK));
+
   GRANARY_ASSERT(nullptr != cc->wrapped_callback);
   CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
   ni.is_stack_blind = true;
   auto call = new NativeInstruction(&ni);
   call_frag->instrs.Append(call);
   call_frag->branch_instr = call;
-  if (REDZONE_SIZE_BYTES) APP(UNSHIFT_REDZONE(&ni));
+
+  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_ON_STACK));
 
   return call_frag;
 }
