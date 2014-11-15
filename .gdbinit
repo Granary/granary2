@@ -811,10 +811,26 @@ define print-frags
 end
 
 
+# xdot-frags
+#
+# Treat `$arg0` as a pointer to a `FragmentList` and use a `granary::Log` to
+# write the fragments to the log, then output the log to a file, then visualize
+# that file with `xdot`.
+define xdot-frags
+  set language c++
+  set $__frags = (granary::FragmentList *) $arg0
+  clear-log
+  log-frags $__frags
+  shell rm -f /tmp/graph.dot
+  save-log /tmp/graph.dot
+  shell xdot /tmp/graph.dot &
+end
+
+
 # log-frags
 #
 # Treat `$arg0` as a pointer to a `FragmentList` and use `granary::Log` to log
-# the fragments to `stdout` or `stderr`. 
+# the fragments to Granary's internal log.
 define log-frags
   set language c++
   set granary_log_buffer_index = 0

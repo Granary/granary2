@@ -82,7 +82,6 @@ RegisterSet &RegisterSet::operator=(const RegisterSet &that) {
   return *this;
 }
 
-
 // Update this register tracker by marking all registers that appear in an
 // instruction as used.
 void UsedRegisterSet::Visit(const NativeInstruction *instr) {

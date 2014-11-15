@@ -234,8 +234,8 @@ std::unique_ptr<Instruction> DecodedBasicBlock::Unlink(Instruction *instr) {
   // If we're unlinking a branch then make sure that the target itself does
   // not continue to reference the branch.
   } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-    GRANARY_ASSERT(1 <= branch->TargetLabel()->data);
-    branch->TargetLabel()->data -= 1;
+    GRANARY_ASSERT(1 <= branch->TargetLabel()->Data<uintptr_t>());
+    branch->TargetLabel()->DataRef<uintptr_t>() -= 1;
   }
   return Instruction::Unlink(instr);
 }

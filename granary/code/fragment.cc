@@ -220,65 +220,118 @@ static const char *FragmentBackground(const Fragment *frag) {
   return "white";
 }
 
-// Log the input-only operands.
-static void LogInputOperands(LogLevel level, NativeInstruction *instr) {
-  auto sep = " ";
-  instr->ForEachOperand([&] (Operand *op) {
-    if (!op->IsWrite()) {
-      OperandString op_str;
-      op->EncodeToString(&op_str);
-      auto prefix = op->IsConditionalRead() ? "cr " : "";
-      Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
-      sep = ", ";
+// Log an instruction operand.
+static void LogOperand(LogLevel level, const Operand *op, const char *sep) {
+  auto read_prefix = "";
+  auto write_prefix = "";
+  if (IsA<RegisterOperand *>(op) || IsA<MemoryOperand *>(op)) {
+    if (op->IsRead()) {
+      read_prefix = op->IsConditionalRead() ? "cr" : "r";
     }
-  });
+    if (op->IsWrite()) {
+      write_prefix = op->IsConditionalWrite() ? "cw" : "w";
+    }
+  }
+  OperandString op_str;
+  op->EncodeToString(&op_str);
+  Log(level, "%s%s%s %s", sep, read_prefix, write_prefix,
+      static_cast<const char *>(op_str));
 }
 
-// Log the output operands. Some of these operands might also be inputs.
-static void LogOutputOperands(LogLevel level, NativeInstruction *instr) {
-  auto sep = " -&gt; ";
-  instr->ForEachOperand([&] (Operand *op) {
-    if (op->IsWrite()) {
-      auto prefix = op->IsRead() ?
-                    (op->IsConditionalWrite() ? "rcw " : "rw ") :
-                    (op->IsConditionalWrite() ? "cw " : "");
-      OperandString op_str;
-      op->EncodeToString(&op_str);
-      Log(level, "%s%s%s", sep, prefix, static_cast<const char *>(op_str));
-      sep = ", ";
+static void LogRegister(LogLevel level, VirtualRegister reg, const char *sep) {
+  RegisterOperand op(reg);
+  OperandString op_str;
+  op.EncodeToString(&op_str);
+  Log(level, "%s%s", sep, static_cast<const char *>(op_str));
+}
+
+#define NEW_LINE "<BR ALIGN=\"LEFT\"/>"
+#define FONT_BLUE "<FONT COLOR=\"blue\">"
+#define END_FONT "</FONT>"
+#define STRIKE "<S>"
+#define END_STRIKE "</S>"
+
+#ifdef GRANARY_TARGET_debug
+static void LogInstructionNote(LogLevel level, const arch::Instruction *instr) {
+  if (FLAG_debug_log_instr_note) {
+    if (instr->note_create) {
+      Log(level, "cnote: %p " NEW_LINE, instr->note_create);
     }
+    if (instr->note_alter) {
+      Log(level, "anote: %p " NEW_LINE, instr->note_alter);
+    }
+  }
+}
+#endif  // GRANARY_TARGET_debug
+
+static void LogInstruction(LogLevel level, NativeInstruction *instr) {
+  auto &ainstr(instr->instruction);
+  if (ainstr.IsNoOp()) return;  // Skip no-ops.
+  if (!ainstr.WillBeEncoded()) {
+    Log(level, STRIKE);
+  }
+  auto op_sep = " ";
+  auto prefix_names = instr->PrefixNames();
+  if (prefix_names && prefix_names[0]) Log(level, "%s ", prefix_names);
+  Log(level, "%s", instr->ISelName());
+  instr->ForEachOperand([&] (Operand *op) {
+    LogOperand(level, op, op_sep);
+    op_sep = ", ";
   });
+  if (!ainstr.WillBeEncoded()) {
+    Log(level, END_STRIKE);
+  }
+  Log(level, NEW_LINE);  // Keep instructions left-aligned.
+  GRANARY_IF_DEBUG(LogInstructionNote(level, &ainstr);)
+}
+
+static void LogInstruction(LogLevel level, LabelInstruction *instr) {
+  Log(level, FONT_BLUE "@label %lx:" END_FONT NEW_LINE,
+      reinterpret_cast<uintptr_t>(instr));
+}
+
+static void LogUsedRegs(LogLevel level, AnnotationInstruction *instr) {
+  Log(level, FONT_BLUE "@used");
+  auto sep = " ";
+  auto used_regs = instr->Data<UsedRegisterSet>();
+  for (auto gpr : used_regs) {
+    LogRegister(level, gpr, sep);
+    sep = ", ";
+  }
+  Log(level, END_FONT NEW_LINE);
+}
+
+static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
+  auto kind = "";
+  if (IA_SSA_SAVE_REG == instr->annotation) {
+    kind = "@save";
+  } else if (IA_SSA_RESTORE_REG == instr->annotation) {
+    kind = "@restore";
+  } else if (IA_SSA_ELIDED_COPY == instr->annotation) {
+    kind = "@elided_copy";
+  } else if (IA_SSA_NODE_UNDEF == instr->annotation) {
+    kind = "@undef";
+  } else if (IA_SSA_MARK_USED_REGS == instr->annotation) {
+    return LogUsedRegs(level, instr);
+  } else {
+    return;
+  }
+  OperandString op_str;
+  RegisterOperand op(instr->Data<VirtualRegister>());
+  op.EncodeToString(&op_str);
+  Log(level, FONT_BLUE "%s %s" END_FONT NEW_LINE, kind,
+      static_cast<const char *>(op_str));
 }
 
 // Log the instructions of a fragment.
 static void LogInstructions(LogLevel level, const Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      auto &ainstr(ninstr->instruction);
-      if (ainstr.IsNoOp()) continue;  // Skip no-ops.
-
-      if (!ainstr.WillBeEncoded()) {
-        Log(level, "N/E! ");
-      }
-      auto prefix_names = ninstr->PrefixNames();
-      if (prefix_names && prefix_names[0]) Log(level, "%s ", prefix_names);
-      Log(level, "%s", ninstr->ISelName());
-      LogInputOperands(level, ninstr);
-      LogOutputOperands(level, ninstr);
-      Log(level, "<BR ALIGN=\"LEFT\"/>");  // Keep instructions left-aligned.
-#ifdef GRANARY_TARGET_debug
-      if (FLAG_debug_log_instr_note) {
-        if (ainstr.note_create) {
-          Log(level, "cnote: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_create);
-        }
-        if (ainstr.note_alter) {
-          Log(level, "anote: %p <BR ALIGN=\"LEFT\"/>", ainstr.note_alter);
-        }
-      }
-#endif  // GRANARY_TARGET_debug
-    } else if (IsA<LabelInstruction *>(instr)) {
-      Log(level, "LABEL %lx:<BR ALIGN=\"LEFT\"/>",
-          reinterpret_cast<uintptr_t>(instr));
+      LogInstruction(level, ninstr);
+    } else if (auto linstr = DynamicCast<LabelInstruction *>(instr)) {
+      LogInstruction(level, linstr);
+    } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+      LogInstruction(level, ainstr);
     }
   }
 }
@@ -339,21 +392,6 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   }
 }
 
-static void LogLiveRegisters(LogLevel level, const Fragment *frag) {
-  auto sep = "";
-  auto logged = false;
-  for (auto reg : frag->regs.live_on_entry) {
-    RegisterOperand op(reg);
-    OperandString op_str;
-    if (!logged) Log(level, "|");
-    op.EncodeToString(&op_str);
-    Log(level, "%s%s", sep, op_str.Buffer());
-    sep = ",";
-    logged = true;
-  }
-
-}
-
 static void LogLiveVRs(LogLevel level , const Fragment *frag) {
   auto ssa_frag = DynamicCast<SSAFragment *>(frag);
   if (!ssa_frag) return;
@@ -361,10 +399,12 @@ static void LogLiveVRs(LogLevel level , const Fragment *frag) {
   auto sep = "";
   for (auto vr : ssa_frag->ssa.entry_nodes.Keys()) {
     if (vr.IsVirtual()) {
-      if (!logged) Log(level, "|");
-      Log(level, "%s%%%d", sep, vr.Number());
+      if (!logged) {
+        Log(level, "|");
+        logged = true;
+      }
+      LogRegister(level, vr, sep);
       sep = ",";
-      logged = true;
     }
   }
 }
@@ -374,7 +414,6 @@ static void LogFragment(LogLevel level, const Fragment *frag) {
   Log(level, "f%p [fillcolor=%s label=<{", reinterpret_cast<const void *>(frag),
       FragmentBackground(frag));
   LogBlockHeader(level, frag);
-  LogLiveRegisters(level, frag);
   LogLiveVRs(level, frag);
   if (frag->instrs.First()) {
     Log(level, "|");

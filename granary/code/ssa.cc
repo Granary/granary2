@@ -213,7 +213,7 @@ static SSANode *DefinedNodeForReg(NativeInstruction *instr,
 // within a fragment's instruction list.
 static SSANode *DefinedNodeForReg(AnnotationInstruction *instr,
                                   VirtualRegister reg) {
-  auto node = instr->Data<SSANode *>();
+  auto node = GetMetaData<SSANode *>(instr);
   if (IA_SSA_NODE_DEF == instr->annotation ||
       IA_SSA_RESTORE_REG == instr->annotation) {
     if (node->reg == reg) {

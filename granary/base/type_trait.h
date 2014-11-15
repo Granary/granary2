@@ -116,7 +116,7 @@ struct IsPointer<const volatile A *> : public TrueType {};
 GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
 
 template <typename A>
-struct IsInteger : public FalseType {};
+struct IsInteger : public std::is_enum<A> {};
 
 template <typename A>
 struct IsSignedInteger : public FalseType {};
