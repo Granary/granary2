@@ -13,6 +13,14 @@ $(CLIENT_GEN_DIR)/offsets.h:
 	@$(GRANARY_PYTHON) $(FIND_SYM) calloc libc >> $(@)
 	@$(GRANARY_PYTHON) $(FIND_SYM) realloc libc >> $(@)
 	@$(GRANARY_PYTHON) $(FIND_SYM) free libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _ZdlPv libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _ZdaPv libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znwm libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znam libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _ZdlPv libc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _ZdaPv libc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znwm libc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znam libc++ >> $(@)
 
 all: $(CLIENT_OBJ)
 generated: $(CLIENT_GEN_DIR)/offsets.h

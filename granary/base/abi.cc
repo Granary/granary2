@@ -26,10 +26,10 @@ void _ZSt25__throw_bad_function_callv(void) { __builtin_trap(); }
 void __cxa_pure_virtual(void) { __builtin_trap(); }
 
 // C++ allocators.
-void _ZdlPv(void) { __builtin_trap(); }  // `operator new`.
-void _Znam(void) { __builtin_trap(); }  // `operator new[]`.
-void _Znwm(void) { __builtin_trap(); }  // `operator delete`.
+void _ZdlPv(void) { __builtin_trap(); }  // `operator delete`.
 void _ZdaPv(void) { __builtin_trap(); } // `operator delete[]`.
+void _Znwm(void) { __builtin_trap(); }  // `operator new`.
+void _Znam(void) { __builtin_trap(); }  // `operator new[]`.
 
 // Used by XED.
 void fprintf(void) { __builtin_trap(); }
