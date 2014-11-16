@@ -11,15 +11,22 @@ import os
 def get_files():
   a = list(glob.glob("/lib64/*"))
   b = list(glob.glob("/lib/x86_64-linux-gnu/*"))
-  return a + b
+  c = list(glob.glob("/usr/lib/x86_64-linux-gnu/*"))
+  return a + b + c
 
 def main(sym_name, lib_name):
-  r = re.compile("^.*/" + lib_name + "(\.|-).*so(\.[0-9]+)*$")
+  lib_name = lib_name.replace("+", "\\+")
+  lib_name = lib_name.replace("*", "\\*")
+  lib_name = lib_name.replace(".", "\\.")
+  r = re.compile("^.*/" + lib_name + "(\.|-).*so(\.[0-9]+)*@?$")
   possibles = []
   for lib in get_files():
     if r.match(lib):
       possibles.append(lib)
-  nice_lib_name = lib_name.replace("+", "x")
+  nice_lib_name = lib_name
+  nice_lib_name = nice_lib_name.replace("+", "x")
+  nice_lib_name = nice_lib_name.replace("*", "x")
+  nice_lib_name = nice_lib_name.replace(".", "_")
   for lib in possibles:
     ret = os.popen("../user/find_symbol_offset.sh %s %s %s" % (sym_name, lib, nice_lib_name)).read()
     ret = ret.strip()

@@ -40,11 +40,9 @@ namespace granary {
 // is useful for exporting allocators from granary to clients without actually
 // exposing the size of the class.
 #define GRANARY_DECLARE_NEW_ALLOCATOR(class_name, ...) \
- private: \
-  GRANARY_INTERNAL_DEFINITION \
+ GRANARY_IF_INTERNAL( private: \
   friend class granary::OperatorNewAllocator<class_name>; \
-  \
-  enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
+  enum class OperatorNewProperties : size_t __VA_ARGS__ ; ) \
  public: \
   static void *operator new(std::size_t, void *); \
   static void *operator new(std::size_t); \

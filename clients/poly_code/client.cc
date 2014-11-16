@@ -33,13 +33,20 @@ class BlockTypeInfo : public MutableMetaData<BlockTypeInfo> {
 
 namespace {
 
-// Associate types with memory.
-WRAP_NATIVE_FUNCTION(libc, malloc, (void *), (size_t num_bytes)) {
-  auto malloc = WRAPPED_FUNCTION;
-  auto ret_address = NATIVE_RETURN_ADDRESS;
-  if (!num_bytes) return nullptr;
-  return TaintAddress(malloc(num_bytes), TypeIdFor(ret_address, num_bytes));
-}
+// Make a wrapper for an allocator
+#define ALLOC_WRAPPER(lib, name) \
+    WRAP_NATIVE_FUNCTION(lib, name, (void *), (size_t num_bytes)) { \
+      auto name = WRAPPED_FUNCTION; \
+      auto ret_address = NATIVE_RETURN_ADDRESS; \
+      if (!num_bytes) return nullptr; \
+      return TaintAddress(name(num_bytes), TypeIdFor(ret_address, num_bytes)); \
+    }
+
+ALLOC_WRAPPER(libc, malloc)
+ALLOC_WRAPPER(libstdcxx, _Znwm)
+ALLOC_WRAPPER(libstdcxx, _Znam)
+ALLOC_WRAPPER(libcxx, _Znwm)
+ALLOC_WRAPPER(libcxx, _Znam)
 
 // Associate types with memory.
 WRAP_NATIVE_FUNCTION(libc, calloc, (void *), (size_t count, size_t eltsize)) {
@@ -49,11 +56,18 @@ WRAP_NATIVE_FUNCTION(libc, calloc, (void *), (size_t count, size_t eltsize)) {
   return TaintAddress(calloc(count, eltsize), TypeIdFor(ret_address, eltsize));
 }
 
-// Associate types with memory.
-WRAP_NATIVE_FUNCTION(libc, free, (void), (void *ptr)) {
-  auto free = WRAPPED_FUNCTION;
-  free(UntaintAddress(ptr));
-}
+// Deallocate some memory.
+#define FREE_WRAPPER(lib, name) \
+    WRAP_NATIVE_FUNCTION(lib, name, (void), (void *ptr)) { \
+      auto name = WRAPPED_FUNCTION; \
+      name(UntaintAddress(ptr)); \
+    }
+
+FREE_WRAPPER(libc, free)
+FREE_WRAPPER(libstdcxx, _ZdlPv)
+FREE_WRAPPER(libstdcxx, _ZdaPv)
+FREE_WRAPPER(libcxx, _ZdlPv)
+FREE_WRAPPER(libcxx, _ZdaPv)
 
 // Associate types with memory.
 WRAP_NATIVE_FUNCTION(libc, realloc, (void *), (void *ptr, size_t new_size)) {
@@ -82,7 +96,6 @@ static void TaintBlock(BlockTypeInfo *meta, void *address) {
     if (meta->type_ids.Contains(type_id)) return;
   }
   {
-    os::Log("Tainting block %p with type id %u\n", meta, type_id);
     WriteLockedRegion locker(&(meta->type_ids_lock));
     meta->type_ids.Add(type_id);
   }
@@ -104,10 +117,24 @@ class PolyCode : public InstrumentationTool {
   virtual ~PolyCode(void) = default;
 
   virtual void Init(InitReason) {
+    // Wrap libc.
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_calloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_realloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_free);
+
+    // Wrap GNU's C++ standard library.
+    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znwm);
+    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znam);
+    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdlPv);
+    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdaPv);
+
+    // Wrap clang's C++ standard library.
+    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
+    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
+    AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdlPv);
+    AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdaPv);
+
     AddWatchpointInstrumenter(TaintBlockMeta);
     AddMetaData<BlockTypeInfo>();
   }
