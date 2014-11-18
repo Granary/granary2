@@ -333,8 +333,8 @@ void BlockFactory::RemoveOldBlocks(void) {
 
   // Now mark all blocks, except the first block, as unreachable.
   auto first_block = cfg->first_block;
-  auto second_block = first_block->list.GetNext(first_block);
-  for (auto block = second_block; block; block = block->list.GetNext(block)) {
+  auto second_block = first_block->list.Next();
+  for (auto block = second_block; block; block = block->list.Next()) {
     block->is_reachable = false;  // Mark all blocks as unreachable.
   }
 
@@ -346,7 +346,7 @@ void BlockFactory::RemoveOldBlocks(void) {
        changed && can_make_progess; ) {
     changed = false;
     can_make_progess = false;
-    for (auto block = first_block; block; block = block->list.GetNext(block)) {
+    for (auto block = first_block; block; block = block->list.Next()) {
       if (!block->is_reachable) {
         can_make_progess = true;
         continue;
@@ -364,7 +364,7 @@ void BlockFactory::RemoveOldBlocks(void) {
   // a mark & sweep GC.
   auto new_last_block = first_block;
   for (auto block = second_block, prev_block = first_block; block; ) {
-    auto next_block = block->list.GetNext(block);
+    auto next_block = block->list.Next();
     if (!block->is_reachable) {
       if (cfg->next_new_block == block) {
         cfg->next_new_block = next_block;

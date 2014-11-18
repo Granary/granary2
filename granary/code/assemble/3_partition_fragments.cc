@@ -51,11 +51,6 @@ static Fragment *UnlinkUselessFrag(FragmentList *frags, Fragment *prev,
   return prev;
 }
 
-// Returns `true` if `frag` is linked in to a larger list of fragments.
-static bool IsLinked(Fragment *frag) {
-  return frag->list.GetNext(frag) || frag->list.GetPrevious(frag);
-}
-
 // Assuming that `frag` is not linked to a fragment list, this function returns
 // a pointer to the next linked fragment that is reachable by following one or
 // more fall-through branches.
@@ -70,7 +65,7 @@ static Fragment *NextLinkedFallThrough(Fragment *frag) {
     } else {
       frag = frag->successors[FRAG_SUCC_BRANCH];
     }
-  } while (!IsLinked(frag));
+  } while (!frag->list.IsLinked());
   return frag;
 }
 
@@ -88,7 +83,7 @@ static void FreeInstructions(Fragment *frag) {
 // otherwise empty fragment.
 static void RemoveUselessFrags(FragmentList *frags) {
   auto prev = frags->First();
-  auto curr = prev->list.GetNext(prev);
+  auto curr = prev->list.Next();
   Fragment *removed_list(nullptr);
 
   // Find the fragments that we want to remove, and unlink them from the
@@ -107,7 +102,7 @@ static void RemoveUselessFrags(FragmentList *frags) {
       break;
     }
     prev = curr;
-    curr = prev->list.GetNext(prev);
+    curr = prev->list.Next();
   }
 
   if (!removed_list) return;
@@ -115,7 +110,7 @@ static void RemoveUselessFrags(FragmentList *frags) {
   // Unlink the fragments that we want to remove from the control-flow graph.
   for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
-      if (!IsA<CodeFragment *>(succ) || IsLinked(succ)) continue;
+      if (!IsA<CodeFragment *>(succ) || succ->list.IsLinked()) continue;
       succ = NextLinkedFallThrough(succ);
     }
   }

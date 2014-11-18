@@ -60,7 +60,7 @@ void ReverseAppInstructionIterator::operator++(void) {
 
 // Move the iterator to the next basic block.
 void BasicBlockIterator::operator++(void) {
-  cursor = cursor->list.GetNext(cursor);
+  cursor = cursor->list.Next();
 }
 
 // Get a basic block out of the iterator.
@@ -71,7 +71,7 @@ BasicBlock *BasicBlockIterator::operator*(void) const {
 
 // Move the iterator to the previous basic block.
 void ReverseBasicBlockIterator::operator++(void) {
-  cursor = cursor->list.GetPrevious(cursor);
+  cursor = cursor->list.Previous();
 }
 
 // Get a basic block out of the iterator.

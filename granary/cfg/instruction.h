@@ -31,7 +31,6 @@ GRANARY_INTERNAL_DEFINITION enum alignas(16) UntypedData : uint64_t {
 // Represents an abstract instruction.
 class Instruction {
  public:
-
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
@@ -95,15 +94,21 @@ class Instruction {
   // (unowned) pointer to the inserted instruction.
   virtual Instruction *InsertBefore(Instruction *);
   virtual Instruction *InsertAfter(Instruction *);
-  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
-  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
+
+  inline Instruction *InsertBefore(std::unique_ptr<Instruction> instr) {
+    return InsertBefore(instr.release());
+  }
+
+  inline Instruction *InsertAfter(std::unique_ptr<Instruction> instr) {
+    return InsertAfter(instr.release());
+  }
 
   // Unlink an instruction from an instruction list.
   GRANARY_INTERNAL_DEFINITION
   static std::unique_ptr<Instruction> Unlink(Instruction *);
 
   // Used to put instructions into lists.
-  GRANARY_INTERNAL_DEFINITION mutable ListHead list;
+  GRANARY_INTERNAL_DEFINITION mutable ListHead<Instruction> list;
 
  protected:
   // Transient, tool-specific meta-data stored in this instruction. The lifetime
@@ -124,8 +129,10 @@ class Instruction {
 // mostly used later during the code assembly process.
 GRANARY_INTERNAL_DEFINITION
 typedef ListOfListHead<Instruction> InstructionList;
+
 GRANARY_INTERNAL_DEFINITION
 typedef ListHeadIterator<Instruction> InstructionListIterator;
+
 GRANARY_INTERNAL_DEFINITION
 typedef ReverseListHeadIterator<Instruction> ReverseInstructionListIterator;
 
