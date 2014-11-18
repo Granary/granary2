@@ -112,12 +112,11 @@ class BlockMangler {
   }
 
   void MangleFunctionCall(ControlFlowInstruction *cfi) {
-
-    // Always add in an `IA_RETURN_ADDRESS` annotation. In a later stage,
+    // Always add in an `kAnnotReturnAddressLabel` annotation. In a later stage,
     // we ensure that this annotation is placed in the correct location, even
     // if instructions are inserted between it and the function.
     auto ret_address = new AnnotationInstruction(
-        IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
+        kAnnotReturnAddressLabel, cfi->DecodedPC() + cfi->DecodedLength());
     cfi->InsertAfter(ret_address);
     cfi->return_address = ret_address;
 

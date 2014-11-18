@@ -37,14 +37,14 @@ static void FindBlockEntrypointFragments(FragmentList *frags) {
 
 }  // namespace
 
-// Makes sure that all `IA_RETURN_ADDRESS` annotations are in the correct
-// position.
+// Makes sure that all `kAnnotReturnAddressLabel` annotations are in the
+// correct position.
 void FixupReturnAddresses(FragmentList *frags) {
   FindBlockEntrypointFragments(frags);
   for (auto frag : FragmentListIterator(frags)) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
-        if (IA_RETURN_ADDRESS == annot_instr->annotation) {
+        if (kAnnotReturnAddressLabel == annot_instr->annotation) {
           auto entry_frag = frag->partition.Value()->entry_frag;
           frag->instrs.Remove(instr);
           entry_frag->instrs.Prepend(instr);

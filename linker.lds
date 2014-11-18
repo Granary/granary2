@@ -41,11 +41,20 @@ SECTIONS
     KEEP (*(.init_array))
     granary_end_init_array = .;
   }
+  
+  . = ALIGN(8);
+  .granary_fini_array :
+  {
+    /* Defines boundaries for arrays of destructor functions. */
+    granary_begin_fini_array = .;
+    KEEP (*(.fini_array.*))
+    KEEP (*(.fini_array))
+    granary_end_fini_array = .;
+  }
 
   /DISCARD/ :
   {
-    *(.fini_array.*)
-    *(.fini_array)
+    *(.ctors)
     *(.dtors)
   }
 }

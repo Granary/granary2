@@ -6,11 +6,12 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include "test/util/simple_init.h"
-
 #include "arch/driver.h"
 
 #include "granary/base/cast.h"
+
+#include "granary/exit.h"
+#include "granary/init.h"
 
 extern "C" {
   extern void TestDecode_Instructions(void);
@@ -19,7 +20,7 @@ extern "C" {
 
 TEST(DecodeTest, DecodeCommonInstructions) {
   using namespace granary;
-  SimpleInitGranary();
+  Init(kInitTestCase);
 
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);
@@ -39,4 +40,6 @@ TEST(DecodeTest, DecodeCommonInstructions) {
     EXPECT_TRUE(XED_IFORM_INVALID != instr.iform);
     if (XED_IFORM_INVALID == instr.iform) break;
   }
+
+  Exit(kExitTestCase);
 }

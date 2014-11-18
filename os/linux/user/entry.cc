@@ -25,10 +25,6 @@ extern "C" {
 // Dynamically imported from `libc`.
 extern char ** __attribute__((weak)) environ;
 
-// Path to the loaded Granary library. Code cache `mmap`s are associated with
-// this file.
-extern char granary_mmap_path[];
-
 // Defined in `os/linux/arch/*/syscall.asm`.
 [[noreturn]] extern void exit_group(int);
 
@@ -63,8 +59,8 @@ static const char *GetEnv(const char *var_name) {
 // pass-through to `granary_init`.
 static void Attach(AppPC *start_pc_ptr) {
   if (auto context = GlobalContext()) {
-    auto meta = context->AllocateBlockMetaData(*start_pc_ptr);
-    *start_pc_ptr = TranslateEntryPoint(context, meta, ENTRYPOINT_USER_LOAD);
+    *start_pc_ptr = TranslateEntryPoint(context, *start_pc_ptr,
+                                        kEntryPointUserAttach);
   }
 
   // TODO(pag): Attach to signals.
@@ -87,13 +83,12 @@ extern "C" {
 void granary_init(granary::AppPC *attach_pc_ptr) {
   GRANARY_USING_NAMESPACE granary;
   PreInit();
-  strncpy(&(granary_mmap_path[0]), GetEnv("GRANARY_PATH"), 1023);
   InitOptions(GetEnv("GRANARY_OPTIONS"));
   if (FLAG_help) {
     DisplayHelpMessage();
     GRANARY_ASSERT(false);  // Not reached.
   }
-  Init(INIT_PROGRAM);
+  Init(kInitProgram);
   Attach(attach_pc_ptr);
 }
 }  // extern "C"

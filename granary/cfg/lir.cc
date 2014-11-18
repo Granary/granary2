@@ -36,7 +36,7 @@ std::unique_ptr<Instruction> FunctionCall(BlockFactory *factory,
 std::unique_ptr<Instruction> ContextFunctionCall(
     void (*func)(TranslationContext, arch::MachineContext *)) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_CONTEXT_CALL, func));
+      kAnnotContextFunctionCall, func));
 }
 
 namespace detail {
@@ -47,7 +47,7 @@ std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
                                                 AppPC func_addr, Operand *ops,
                                                 size_t num_args) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
-      IA_INLINE_CALL,
+      kAnnotInlineFunctionCall,
       new granary::InlineFunctionCall(block, func_addr, ops, num_args)));
 }
 
@@ -68,7 +68,7 @@ namespace {
 static Instruction *MakeInlineAssembly(InlineAssemblyScope *scope,
                                        const char *line) {
   auto block = new InlineAssemblyBlock(scope, line);
-  return new AnnotationInstruction(IA_INLINE_ASSEMBLY, block);
+  return new AnnotationInstruction(kAnnotInlineAssembly, block);
 }
 }  // namespace
 

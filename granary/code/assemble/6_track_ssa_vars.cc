@@ -339,7 +339,7 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
 static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
   for (auto node : frag->ssa.entry_nodes.Values()) {
     GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-    auto instr = new AnnotationInstruction(IA_SSA_NODE_DEF, node->reg);
+    auto instr = new AnnotationInstruction(kAnnotSSANodeOwner, node->reg);
     SetMetaData(instr, node);
     frag->instrs.Prepend(instr);
   }
@@ -387,9 +387,9 @@ static void LocalValueNumbering(FragmentList *frags) {
             LVNUses(ssa_frag, ssa_instr);
           }
         } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-          if (IA_SSA_SAVE_REG == ainstr->annotation) {
+          if (kAnnotSSASaveRegister == ainstr->annotation) {
             LVNSave(ssa_frag, ainstr);
-          } else if (IA_SSA_RESTORE_REG == ainstr->annotation) {
+          } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
             LVNRestore(ssa_frag, ainstr);
           }
         }
@@ -513,7 +513,7 @@ static void SimplifyControlPhiNodes(FragmentList *frags) {
 
 static void AddCompensationRegKills(CodeFragment *frag) {
   for (auto node : frag->ssa.entry_nodes.Values()) {
-    auto instr = new AnnotationInstruction(IA_SSA_NODE_UNDEF, node->reg);
+    auto instr = new AnnotationInstruction(kAnnotSSANodeKill, node->reg);
     SetMetaData(instr, node);
     frag->instrs.Append(instr);
   }

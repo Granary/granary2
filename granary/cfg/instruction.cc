@@ -75,12 +75,12 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
 // issue of maintaining a designated first instruction, whilst also avoiding the
 // issue of multiple `InsertBefore`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
-  if (GRANARY_UNLIKELY(IA_BEGIN_BASIC_BLOCK == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotBeginBasicBlock == annotation)) {
     auto new_first = new AnnotationInstruction(annotation, data);
     auto block_first_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertBefore(new_first);
     *block_first_ptr = new_first;
-    annotation = IA_NOOP;
+    annotation = kAnnotNoOp;
     data = DEFAULT_UNTYPED_DATA;
   }
   return this->Instruction::InsertBefore(instr);
@@ -95,12 +95,12 @@ Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
 // issue of maintaining a designated last instruction, whilst also avoiding the
 // issue of multiple `InsertAfter`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
-  if (GRANARY_UNLIKELY(IA_END_BASIC_BLOCK == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotEndBasicBlock == annotation)) {
     auto new_last = new AnnotationInstruction(annotation, data);
     auto block_last_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertAfter(new_last);
     *block_last_ptr = new_last;
-    annotation = IA_NOOP;
+    annotation = kAnnotNoOp;
     data = DEFAULT_UNTYPED_DATA;
   }
   return this->Instruction::InsertAfter(instr);
@@ -108,21 +108,21 @@ Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
 
 // Returns true if this instruction is a label.
 bool AnnotationInstruction::IsLabel(void) const {
-  return IA_LABEL == annotation;
+  return kAnnotationLabel == annotation;
 }
 
 // Returns true if this instruction is targeted by any branches.
 bool AnnotationInstruction::IsBranchTarget(void) const {
-  return IA_LABEL == annotation && 0 != data;
+  return kAnnotationLabel == annotation && 0 != data;
 }
 
 // Returns true if this represents the beginning of a new logical instruction.
 bool AnnotationInstruction::IsInstructionBoundary(void) const {
-  return IA_BEGIN_LOGICAL_INSTRUCTION == annotation;
+  return kAnnotLogicalInstructionBoundary == annotation;
 }
 
 LabelInstruction::LabelInstruction(void)
-    : AnnotationInstruction(IA_LABEL),
+    : AnnotationInstruction(kAnnotationLabel),
       fragment(nullptr) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)

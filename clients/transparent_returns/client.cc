@@ -2,6 +2,8 @@
 
 #include <granary.h>
 
+#ifndef GRANARY_TARGET_test
+
 GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
@@ -94,11 +96,13 @@ class TransparentRetsInstrumenterEarly : public InstrumentationTool {
   virtual void InstrumentEntryPoint(BlockFactory *,
                                     CompensationBasicBlock *entry_block,
                                     EntryPointKind kind, int) {
-    if (ENTRYPOINT_USER_LOAD == kind) {
+    if (kEntryPointUserAttach == kind) {
       GetMetaData<RetAddrInCodeCache>(entry_block)->returns_to_cache = false;
-      for (auto succ : entry_block->Successors()) {
-        SetRetAddrLocation(entry_block, succ);
-      }
+    } else {
+      GetMetaData<RetAddrInCodeCache>(entry_block)->returns_to_cache = true;
+    }
+    for (auto succ : entry_block->Successors()) {
+      SetRetAddrLocation(entry_block, succ);
     }
   }
 
@@ -183,3 +187,9 @@ GRANARY_ON_CLIENT_INIT() {
   AddInstrumentationTool<TransparentRetsInstrumenterLate>(
       "transparent_returns_late", {"transparent_returns_early"});
 }
+
+#else
+
+GRANARY_DEFINE_bool(transparent_returns, false, "");
+
+#endif  // GRANARY_TARGET_test

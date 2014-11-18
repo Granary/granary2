@@ -8,70 +8,83 @@
 
 #include "os/memory.h"
 
+extern "C" {
+extern granary::CachePC granary_block_cache_begin;
+}  // extern C
 namespace granary {
+namespace internal {
+
+class CodeSlab {
+ public:
+  CodeSlab(CachePC begin_, CodeSlab *next_);
+
+  size_t offset;
+  CachePC begin;
+  const CodeSlab *next;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(CodeSlab, {
+    SHARED = true,
+    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+  })
+
+ private:
+  CodeSlab(void) = delete;
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeSlab);
+};
+
+// Initialize the metadata about a generic code slab.
+CodeSlab::CodeSlab(CachePC begin_, CodeSlab *next_)
+    : offset(0),
+      begin(begin_),
+      next(next_) {}
+
+}  // namespace internal
 namespace {
-static CachePC cache_pc_estimate = nullptr;
-}
 
-CodeCache::CodeCache(os::Module *module_, int slab_size)
-    : lock(),
-      allocator(slab_size),
-      module(module_) {
-
-  if (!cache_pc_estimate) {
-    cache_pc_estimate = allocator.Allocate(module, 1, 0);
-  }
-}
-
-// Allocate a block of code from this code cache.
-CachePC CodeCache::AllocateBlock(int size) {
-  if (0 >= size) {
-    // Staged allocation, which is typically used to get an "estimator" PC
-    // within the code cache. The estimator PC is then used as a guide during
-    // the relativization step of instruction encoding, which needs to ensure
-    // that PC-relative references in application code to application data
-    // continue to work.
-    return allocator.Allocate(module, 1, 0);
+static internal::CodeSlab *AllocateSlab(size_t num_pages, CodeCacheKind kind,
+                                        internal::CodeSlab *next) {
+  CachePC addr(nullptr);
+  if (kBlockCodeCache == kind) {
+    addr = os::AllocateBlockCachePages(num_pages);
   } else {
-    return allocator.Allocate(module, arch::CODE_ALIGN_BYTES, size);
+    addr = os::AllocateEdgeCachePages(num_pages);
   }
+  return new internal::CodeSlab(addr, next);
 }
-
-namespace {
-#if defined(GRANARY_WHERE_user) && defined(GRANARY_TARGET_debug)
-# define PAGE_DOWN(x) ((reinterpret_cast<uintptr_t>(x) >> 12) << 12)
-# define PAGE_UP(x) PAGE_DOWN(x + 4095)
-
-void EnableWritesToCode(CachePC begin, CachePC end) {
-  auto begin_addr = PAGE_DOWN(begin);
-  auto end_addr = PAGE_UP(end);
-  auto num_pages = (end_addr - begin_addr) / arch::PAGE_SIZE_BYTES;
-  os::ProtectPages(reinterpret_cast<void *>(begin_addr),
-                   static_cast<int>(num_pages),
-                   os::MemoryProtection::PATCHABLE_EXECUTABLE);
-}
-
-void DisableWritesToCode(CachePC begin, CachePC end) {
-  auto begin_addr = PAGE_DOWN(begin);
-  auto end_addr = PAGE_UP(end);
-  auto num_pages = (end_addr - begin_addr) / arch::PAGE_SIZE_BYTES;
-  os::ProtectPages(reinterpret_cast<void *>(begin_addr),
-                   static_cast<int>(num_pages),
-                   os::MemoryProtection::EXECUTABLE);
-}
-
-#else
-static inline void EnableWritesToCode(CachePC, CachePC) {}
-static inline void DisableWritesToCode(CachePC, CachePC) {}
-#endif  // GRANARY_WHERE_user && GRANARY_TARGET_debug
 
 }  // namespace
+
+CodeCache::CodeCache(size_t slab_size_, CodeCacheKind kind_)
+    : slab_num_pages(slab_size_),
+      slab_num_bytes(slab_size_ * arch::PAGE_SIZE_BYTES),
+      kind(kind_),
+      slab_list_lock(),
+      slab_list(AllocateSlab(slab_num_pages, kind, nullptr)),
+      code_lock() {}
+
+// Allocate a block of code from this code cache.
+CachePC CodeCache::AllocateBlock(size_t size) {
+  SpinLockedRegion locker(&slab_list_lock);
+  auto old_offset = slab_list->offset;
+  auto aligned_offset = GRANARY_ALIGN_TO(old_offset, arch::CODE_ALIGN_BYTES);
+  auto new_offset = aligned_offset + size;
+  if (GRANARY_UNLIKELY(new_offset >= slab_num_bytes)) {
+    slab_list = AllocateSlab(slab_num_pages, kind, slab_list);
+    aligned_offset = GRANARY_ALIGN_TO(slab_list->offset,
+                                      arch::CODE_ALIGN_BYTES);
+    new_offset = aligned_offset + size;
+    GRANARY_ASSERT(new_offset < slab_num_bytes);
+  }
+  auto addr = &(slab_list->begin[aligned_offset]);
+  slab_list->offset = new_offset;
+  return addr;
+}
 
 // Provides a good estimation of the location of the code cache. This is used
 // by all code that computes whether or not an address is too far away from the
 // code cache.
 CachePC EstimatedCachePC(void) {
-  return cache_pc_estimate;
+  return granary_block_cache_begin;
 }
 
 // Begin a transaction that will read or write to the code cache.
@@ -79,15 +92,13 @@ CachePC EstimatedCachePC(void) {
 // Note: Transactions are distinct from allocations. Therefore, many threads/
 //       cores can simultaneously allocate from a code cache, but only one
 //       should be able to read/write data to the cache at a given time.
-void CodeCache::BeginTransaction(CachePC begin, CachePC end) {
-  lock.Acquire();
-  EnableWritesToCode(begin, end);
+void CodeCache::BeginTransaction(CachePC, CachePC) {
+  code_lock.Acquire();
 }
 
 // End a transaction that will read or write to the code cache.
-void CodeCache::EndTransaction(CachePC begin, CachePC end) {
-  DisableWritesToCode(begin, end);
-  lock.Release();
+void CodeCache::EndTransaction(CachePC, CachePC) {
+  code_lock.Release();
 }
 
 // Initialize Granary's internal translation cache meta-data.

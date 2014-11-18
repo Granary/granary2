@@ -213,7 +213,7 @@ class Fragment {
   int encoded_order;
 
   // Where was this fragment encoded?
-  int encoded_size;
+  size_t encoded_size;
   CachePC encoded_pc;
 
   // What kind of fragment is this? This is primarily used by `CodeFragment`

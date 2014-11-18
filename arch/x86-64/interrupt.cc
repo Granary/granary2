@@ -27,7 +27,7 @@ namespace granary {
 namespace arch {
 
 // Generates code that disables interrupts.
-void GenerateInterruptDisableCode(ContextInterface *, CachePC pc) {
+void GenerateInterruptDisableCode(Context *, CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -67,7 +67,7 @@ static NativeAddress *interrupts_enabled_addr = nullptr;
 
 // Generates code that re-enables interrupts (if they were disabled by the
 // interrupt disabling routine).
-void GenerateInterruptEnableCode(ContextInterface *, CachePC pc) {
+void GenerateInterruptEnableCode(Context *, CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);

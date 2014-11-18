@@ -22,7 +22,6 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-GRANARY_INTERNAL_DEFINITION class MetaDataManager;
 
 // All types of meta-data.
 template <typename T>
@@ -141,7 +140,7 @@ class GetMetaDataDescription {
  public:
   static_assert(IsMetaData<T>::RESULT, "Type `T` must be a meta-data type.");
 
-  inline static const MetaDataDescription *Get(void) {
+  inline static MetaDataDescription *Get(void) {
     return &(MetaDataDescriptor<
       T,
       IsIndexableMetaData<T>::RESULT,
@@ -245,11 +244,9 @@ MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
 // Meta-data about a basic block.
 class BlockMetaData {
  public:
-  BlockMetaData(void) = delete;
-
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  GRANARY_INTERNAL_DEFINITION BlockMetaData(MetaDataManager *manager_);
+  GRANARY_INTERNAL_DEFINITION BlockMetaData(void);
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
@@ -271,11 +268,12 @@ class BlockMetaData {
   GRANARY_INTERNAL_DEFINITION
   void JoinWith(const BlockMetaData *meta);
 
-  // Free this metadata.
+  // Allocate and free this block meta-data.
+  GRANARY_INTERNAL_DEFINITION static void *operator new(size_t);
   GRANARY_INTERNAL_DEFINITION static void operator delete(void *address);
 
-  // Manager for this meta-data instance.
-  GRANARY_INTERNAL_DEFINITION MetaDataManager * const manager;
+ private:
+  GRANARY_IF_EXTERNAL( BlockMetaData(void) = delete; )
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
@@ -288,72 +286,28 @@ inline static T MetaDataCast(BlockMetaData *meta) {
                              GetMetaDataDescription<M>::Get()->offset);
 }
 
-#ifdef GRANARY_INTERNAL
-// Manages all metadata within a particular environment.
-class MetaDataManager {
- public:
-  // Initialize an empty meta-data manager.
-  MetaDataManager(void);
+// Initialize the global meta-data manager.
+GRANARY_INTERNAL_DEFINITION
+void InitMetaData(void);
 
-  ~MetaDataManager(void);
+// Destroy the global meta-data manager.
+GRANARY_INTERNAL_DEFINITION
+void ExitMetaData(void);
 
-  // Register some meta-data with Granary. This is a convenience method around
-  // the `Register` method that operates directly on a meta-data description.
-  template <typename T>
-  inline void Register(void) {
-    Register(const_cast<MetaDataDescription *>(
-        GetMetaDataDescription<T>::Get()));
-  }
+// Register some meta-data with Granary that will be used with this tool.
+// This is a convenience method around the `AddMetaData` method that
+// operates directly on a meta-data description.
+template <typename T>
+inline static void AddMetaData(void) {
+  AddMetaData(GetMetaDataDescription<T>::Get());
+}
 
-  // Register some meta-data with Granary.
-  void Register(MetaDataDescription *desc);
-
-  // Allocate some meta-data. If the manager hasn't been finalized then this
-  // returns nullptr.
-  BlockMetaData *Allocate(void);
-
-  // Free some metadata.
-  void Free(BlockMetaData *meta);
-
-  inline size_t Size(void) const {
-    return size;
-  }
-
- private:
-  friend class BlockMetaData;
-
-  enum {
-    // Upper bound on the number of registerable meta-data instances.
-    MAX_NUM_MANAGED_METADATAS = 32
-  };
-
-  // Finalizes the meta-data structures, which determines the runtime layout
-  // of the packed meta-data structure. Once
-  void Finalize(void);
-
-  // Initialize the allocator for meta-data managed by this manager.
-  void InitAllocator(void);
-
-  // Size of the overall metadata structure managed by this manager.
-  size_t size;
-
-  // Whether or not this metadata has been finalized.
-  bool is_finalized;
-
-  // Info on all registered meta-data within this manager. These are indexed
-  // by the `MetaDataDescription::id` field.
-  MetaDataDescription *descriptions[MAX_NUM_MANAGED_METADATAS];
-
-  // Slab allocator for allocating meta-data objects.
-  Container<internal::SlabAllocator> allocator;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(MetaDataManager);
-};
+// Register some meta-data with the meta-data manager.
+void AddMetaData(MetaDataDescription *desc);
 
 // Adds this meta-data to a trace log of recently translated meta-data blocks.
+GRANARY_INTERNAL_DEFINITION
 void TraceMetaData(uint64_t group, const BlockMetaData *meta);
-
-#endif  // GRANARY_INTERNAL
 
 // Useful for linked lists of meta-data.
 template <typename T>

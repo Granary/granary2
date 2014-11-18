@@ -137,9 +137,9 @@ DecodedBasicBlock::~DecodedBasicBlock(void) {
 DecodedBasicBlock::DecodedBasicBlock(LocalControlFlowGraph *cfg_,
                                      BlockMetaData *meta_)
     : InstrumentedBasicBlock(cfg_, meta_),
-      first(new AnnotationInstruction(IA_BEGIN_BASIC_BLOCK,
+      first(new AnnotationInstruction(kAnnotBeginBasicBlock,
                                       reinterpret_cast<void *>(&first))),
-      last(new AnnotationInstruction(IA_END_BASIC_BLOCK,
+      last(new AnnotationInstruction(kAnnotEndBasicBlock,
                                      reinterpret_cast<void *>(&last))) {
   first->InsertAfter(last);
 }
@@ -218,14 +218,14 @@ void DecodedBasicBlock::AppendInstruction(Instruction *instr) {
 std::unique_ptr<Instruction> DecodedBasicBlock::Unlink(Instruction *instr) {
   if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
     switch (annot_instr->annotation) {
-      case IA_BEGIN_BASIC_BLOCK:
-      case IA_END_BASIC_BLOCK:
-      case IA_LABEL:
-      case IA_RETURN_ADDRESS:
-      case IA_INVALID_STACK:
-      case IA_UNKNOWN_STACK_ABOVE:
-      case IA_UNKNOWN_STACK_BELOW:
-      case IA_VALID_STACK:
+      case kAnnotBeginBasicBlock:
+      case kAnnotEndBasicBlock:
+      case kAnnotationLabel:
+      case kAnnotReturnAddressLabel:
+      case kAnnotInvalidStack:
+      case kAnnotUnknownStackAbove:
+      case kAnnotUnknownStackBelow:
+      case kAnnotValidStack:
         return std::unique_ptr<Instruction>(nullptr);
       default:
         break;
@@ -261,12 +261,10 @@ DirectBasicBlock::~DirectBasicBlock(void) {
 
 // Initialize a future basic block.
 DirectBasicBlock::DirectBasicBlock(LocalControlFlowGraph *cfg_,
-                                   BlockMetaData *meta_,
-                                   AppPC non_transparent_pc_)
+                                   BlockMetaData *meta_)
     : InstrumentedBasicBlock(cfg_, meta_),
       materialized_block(nullptr),
-      materialize_strategy(REQUEST_LATER),
-      non_transparent_pc(non_transparent_pc_) {}
+      materialize_strategy(kRequestBlockLater) {}
 
 // Returns the starting PC of this basic block.
 AppPC IndirectBasicBlock::StartAppPC(void) const {

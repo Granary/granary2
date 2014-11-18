@@ -14,26 +14,29 @@
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
-#include "granary/code/allocate.h"
-
 #include "metadata.h"
 
 namespace granary {
-namespace os {
-class Module;
-}  // namespace os
+namespace internal {
+class CodeSlab;
+}  // namespace internal
 
 // Forward declaration.
 class CodeCacheTransaction;
 
+enum CodeCacheKind {
+  kBlockCodeCache,
+  kEdgeCodeCache
+};
+
 // Implementation of Granary's code caches.
 class CodeCache {
  public:
-  CodeCache(os::Module *module_, int slab_size);
+  CodeCache(size_t slab_size_, CodeCacheKind kind_);
   ~CodeCache(void) = default;
 
   // Allocate a block of code from this code cache.
-  CachePC AllocateBlock(int size);
+  CachePC AllocateBlock(size_t size);
 
   // Begin a transaction that will read or write to the code cache.
   //
@@ -51,16 +54,22 @@ class CodeCache {
   })
 
  private:
+  // The size of a slab.
+  const size_t slab_num_pages;
+  const size_t slab_num_bytes;
+
+  // What type of code cache is this?
+  const CodeCacheKind kind;
+
   // Lock around the whole code cache, which prevents multiple people from
   // reading/writing to the cache at once.
-  SpinLock lock;
+  SpinLock slab_list_lock;
 
   // Allocator used to allocate blocks from this code cache.
-  CodeAllocator allocator;
+  internal::CodeSlab *slab_list;
 
-  // Module that represents the slabs of the allocator as ranges of mapped
-  // executable memory.
-  os::Module * const module;
+  // Lock around writes to the code cache.
+  SpinLock code_lock;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
 };

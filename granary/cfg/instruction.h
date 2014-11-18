@@ -134,18 +134,18 @@ GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {
   // Used when we "kill" off meaningful annotations but want to leave the
   // associated instructions around.
-  IA_NOOP,
+  kAnnotNoOp,
 
   // Dummy annotations representing the beginning and end of a given basic
   // block.
-  IA_BEGIN_BASIC_BLOCK,
-  IA_END_BASIC_BLOCK,
+  kAnnotBeginBasicBlock,
+  kAnnotEndBasicBlock,
 
   // Represents an inline assembly instruction.
-  IA_INLINE_ASSEMBLY,
+  kAnnotInlineAssembly,
 
   // Target of a branch instruction.
-  IA_LABEL,
+  kAnnotationLabel,
 
   // A special label that refers to the location of a return address after
   // a function call instruction. This is primarily used during late mangling
@@ -156,86 +156,86 @@ enum InstructionAnnotation {
   //
   // When compiling / encoding instructions, the value of this annotation
   // becomes the address at which this annotation is logically encoded.
-  IA_RETURN_ADDRESS,
+  kAnnotReturnAddressLabel,
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
-  IA_INVALID_STACK,
-  IA_UNKNOWN_STACK_ABOVE,
-  IA_UNKNOWN_STACK_BELOW,
-  IA_VALID_STACK,
+  kAnnotInvalidStack,
+  kAnnotUnknownStackAbove,
+  kAnnotUnknownStackBelow,
+  kAnnotValidStack,
 
   // Represents the definition of some `SSANode`, used in later assembly stages
   // so that all nodes are owned by some `Fragment`.
   //
   // The data associated with this annotation is a `VirtualRegister`.
-  IA_SSA_NODE_DEF,
+  kAnnotSSANodeOwner,
 
-  // An "undefinition" of a node that appears in a compensating fragment.
+  // An kill of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
   //
   // The data associated with this annotation is a `VirtualRegister`.
-  IA_SSA_NODE_UNDEF,
+  kAnnotSSANodeKill,
 
   // A "removed" or junk `SSAInstruction`. We keep some useless
   // `SSAInstruction`s around because pointers from outside `SSANode`s might
   // point to nodes that the `SSAInstruction` owns.
   //
   // The data associated with this annotation is a `VirtualRegister`.
-  IA_SSA_ELIDED_COPY,
+  kAnnotSSAElidedInstruction,
 
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
-  IA_SSA_FRAG_BEGIN_LOCAL,
-  IA_SSA_FRAG_BEGIN_GLOBAL,
+  kAnnotSSAFragLocalBegin,
+  kAnnotSSAPartitionLocalBegin,
 
   // Save and restore instructions for a register into a slot. The data
   // associated with this annotation is a `VirtualRegister`.
   //
   // Note: Saves and restores only operate on architectural GPRs.
-  IA_SSA_SAVE_REG,
-  IA_SSA_RESTORE_REG,
+  kAnnotSSASaveRegister,
+  kAnnotSSARestoreRegister,
 
   // Force some registers to be live. This is useful for specifying that the
   // native values of some arch GPRs *must* be passed to something like an
   // inline call.
   //
   // The data associated with this annotation is a `UsedRegisterSet`.
-  IA_SSA_MARK_USED_REGS,
+  kAnnotSSAReviveRegisters,
 
   // Inject a "late" stack switch instruction if the stack is not safe. Before
   // we do the stack analysis, we can realize that some things (e.g. inline/
   // context calls) might need to swap stacks, but not necessarily. These are
   // a hint for injecting stack switches later when we have verified things.
-  IA_LATE_SWITCH_OFF_STACK,
-  IA_LATE_SWITCH_ON_STACK,
+  kAnnotCondLeaveNativeStack,
+  kAnnotCondEnterNativeStack,
 
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
   //
   // The data associated with this annotation is a pointer to a pointer.
-  IA_UPDATE_ENCODED_ADDRESS,
+  kAnnotUpdateAddressWhenEncoded,
 
   // Represents a point between two logical instructions. This exists to
   // document the logical boundaries between native instructions.
-  IA_BEGIN_LOGICAL_INSTRUCTION,
+  kAnnotLogicalInstructionBoundary,
 
   // Represents a definite change in the interrupt delivery state. If this
   // happens then we must break a fragment and isolate the instruction that
   // is changing the interrupt state.
-  IA_CHANGES_INTERRUPT_STATE,
+  kAnnotInterruptDeliveryStateChange,
 
   // Represents a call to a client function that saves and restores the
   // entire machine context.
   //
   // The data associated with this annotation is a function pointer.
-  IA_CONTEXT_CALL,
+  kAnnotContextFunctionCall,
 
   // Represents a call to a client function that passes along some arguments
   // as well.
   //
   // The data associated with this annotation is a pointer to a
   // `InlineFunctionCall`.
-  IA_INLINE_CALL
+  kAnnotInlineFunctionCall
 };
 
 // An annotation instruction is an environment-specific and implementation-

@@ -135,7 +135,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
       MoveStackPointerToGPR(instr);
       if (REDZONE_SIZE_BYTES) {
         block->AppendInstruction(
-            new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
+            new AnnotationInstruction(kAnnotUnknownStackBelow));
       }
     } else if (XED_ICLASS_LEA == instr->iclass) {
       return;  // Mangling would be redundant.
@@ -446,7 +446,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
-  block->AppendInstruction(new AnnotationInstruction(IA_VALID_STACK));
+  block->AppendInstruction(new AnnotationInstruction(kAnnotValidStack));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
   instr->effective_operand_width = arch::GPR_WIDTH_BITS;
@@ -490,7 +490,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     if (instr->ShiftsStackPointer()) {
       if (XED_ICLASS_ADD != instr->iclass && XED_ICLASS_SUB != instr->iclass) {
         block->AppendInstruction(
-            new AnnotationInstruction(IA_VALID_STACK));
+            new AnnotationInstruction(kAnnotValidStack));
       }
     } else {
       switch (instr->iclass) {
@@ -500,7 +500,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         case XED_ICLASS_CALL_FAR:
         case XED_ICLASS_IRET:
           block->AppendInstruction(
-             new AnnotationInstruction(IA_VALID_STACK));
+             new AnnotationInstruction(kAnnotValidStack));
           break;
 
         // An instruction like `LEAVE` is first caught here, then later mangled
@@ -508,7 +508,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         //      `<unknown stack>; MOV RSP, RBP; <valid stack>; POP RBP`
         default:
           block->AppendInstruction(
-              new AnnotationInstruction(IA_INVALID_STACK));
+              new AnnotationInstruction(kAnnotInvalidStack));
       }
     }
   }
@@ -523,7 +523,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
         // this point the copied stack pointer might be used to access
         // memory in the redzone.
         block->AppendInstruction(
-            new AnnotationInstruction(IA_UNKNOWN_STACK_BELOW));
+            new AnnotationInstruction(kAnnotUnknownStackBelow));
       }
       break;
     case XED_ICLASS_PUSH:
@@ -553,7 +553,7 @@ void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
     case XED_ICLASS_CLI:
     case XED_ICLASS_STI:
       block->AppendInstruction(
-          new AnnotationInstruction(IA_CHANGES_INTERRUPT_STATE));
+          new AnnotationInstruction(kAnnotInterruptDeliveryStateChange));
       break;
 
     default:

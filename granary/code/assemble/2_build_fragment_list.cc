@@ -70,7 +70,7 @@ extern CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags,
 // manipulation.
 //
 // Note: This function has an architecture-specific implementation.
-extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
+extern CodeFragment *CreateContextCallFragment(Context *context,
                                                FragmentList *frags,
                                                CodeFragment *pred,
                                                AppPC func_pc);
@@ -80,7 +80,7 @@ extern CodeFragment *CreateContextCallFragment(ContextInterface *context,
 // virtual register system for the rest.
 //
 // Note: This function has an architecture-specific implementation.
-extern void ExtendFragmentWithInlineCall(ContextInterface *context,
+extern void ExtendFragmentWithInlineCall(Context *context,
                                          CodeFragment *frag,
                                          InlineFunctionCall *call);
 
@@ -123,7 +123,7 @@ struct FragmentBuilder {
   FragmentInProgress *next;
   FragmentList *frags;
   LocalControlFlowGraph *cfg;
-  ContextInterface *context;
+  Context *context;
 };
 
 // Enqueue a new fragment to be created to the work list. This fragment
@@ -214,14 +214,14 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
                               AnnotationInstruction *instr) {
   auto next_instr = instr->Next();
   switch (instr->annotation) {
-    case IA_END_BASIC_BLOCK: granary_curiosity(); return false;
+    case kAnnotEndBasicBlock: granary_curiosity(); return false;
 
-    // Should not have an `AnnotationInstruction` with `IA_LABEL` that is not
-    // also a `LabelInstruction`.
-    case IA_LABEL: GRANARY_ASSERT(false); return true;
+    // Should not have an `AnnotationInstruction` with `kAnnotLabel` that is
+    // not also a `LabelInstruction`.
+    case kAnnotationLabel: GRANARY_ASSERT(false); return true;
 
     // An upcoming instruction makes this stack valid.
-    case IA_VALID_STACK:
+    case kAnnotValidStack:
       if (STACK_INVALID == frag->stack.status) {
         AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                                StackUsageInfo(STACK_VALID));
@@ -234,7 +234,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // The stack pointer is changed by an indeterminate amount, e.g. replaced
     // by the value stored in a register, or displaced by the value stored in
     // a register.
-    case IA_INVALID_STACK:
+    case kAnnotInvalidStack:
       if (STACK_VALID == frag->stack.status || frag->attr.has_native_instrs) {
         frag->attr.can_add_succ_to_partition = false;
         AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
@@ -252,9 +252,9 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // arrange for the fragment following the current fragment (whose stack
     // should be invalid) to potentially have the opportunity to be marked as
     // valid. For example:
-    //          <IA_INVALID_STACK> -----------.
-    //          MOV RSP, [X]  <-- caused by --+
-    //          <IA_UNKNOWN_STACK_ABOVE> -----'
+    //          <kAnnotInvalidStack> -----------.
+    //          MOV RSP, [X]    <-- caused by --+
+    //          <kAnnotUnknownStackAbove> ------'
     //          MOV Y, [Z]
     //          POP [Y]
     // Then we'll split that into two fragments:
@@ -264,7 +264,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //          POP [Y]
     // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
     // by the stack undefinedness of the `MOV RSP, [X]`.
-    case IA_UNKNOWN_STACK_ABOVE:
+    case kAnnotUnknownStackAbove:
       frag->attr.can_add_succ_to_partition = false;
       frag->stack.status = STACK_INVALID;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
@@ -272,19 +272,19 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
       return false;
 
     // Here we've got something like:
-    //          <IA_VALID_STACK> -------.
-    //          PUSH RBP <--- cause by -'
-    //          <IA_UNKNOWN_STACK_BELOW> ------.
-    //          MOV RBP, RSP   <-- caused by --'
+    //          <kAnnotValidStack> -------.
+    //          PUSH RBP <--- cause by ---'
+    //          <kAnnotUnknownStackBelow> ------.
+    //          MOV RBP, RSP   <-- caused by ---'
     //          MOV [RBP - 8], RDI   <-- accesses redzone (below RSP).
-    case IA_UNKNOWN_STACK_BELOW:
+    case kAnnotUnknownStackBelow:
       frag->stack.inherit_constraint = STACK_STATUS_INHERIT_PRED;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                              StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
       return false;
 
     // Function return address. Used when mangling indirect function calls.
-    case IA_RETURN_ADDRESS:
+    case kAnnotReturnAddressLabel:
       GRANARY_ASSERT(!frag->attr.has_native_instrs);
       frag->attr.is_return_target = true;
       frag->instrs.Append(Instruction::Unlink(instr).release());
@@ -292,7 +292,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // An annotation where, when encoded, will update a pointer to contain the
     // address at which this annotation is encoded.
-    case IA_UPDATE_ENCODED_ADDRESS:
+    case kAnnotUpdateAddressWhenEncoded:
       frag->instrs.Append(Instruction::Unlink(instr).release());
       return true;
 
@@ -300,7 +300,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //
     // Note: We'll assume that for such instructions, the stack is guaranteed
     //       to be valid.
-    case IA_CHANGES_INTERRUPT_STATE:
+    case kAnnotInterruptDeliveryStateChange:
       frag->attr.can_add_succ_to_partition = false;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                              StackUsageInfo(GRANARY_IF_KERNEL(STACK_VALID)));
@@ -308,7 +308,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // Calls out to some client code. This creates a new fragment that cannot
     // be added to any existing partition.
-    case IA_CONTEXT_CALL: {
+    case kAnnotContextFunctionCall: {
       auto context_frag = arch::CreateContextCallFragment(
           builder->context, builder->frags, frag, instr->Data<AppPC>());
       AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr,
@@ -318,14 +318,14 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // Calls out to some client code, but the call has access to the existing
     // virtual register state.
-    case IA_INLINE_CALL:
+    case kAnnotInlineFunctionCall:
       arch::ExtendFragmentWithInlineCall(builder->context, frag,
                                          instr->Data<InlineFunctionCall *>());
       return true;
 
     // Used to hint at late stack switching.
-    case IA_LATE_SWITCH_OFF_STACK:
-    case IA_LATE_SWITCH_ON_STACK:
+    case kAnnotCondLeaveNativeStack:
+    case kAnnotCondEnterNativeStack:
       frag->instrs.Append(Instruction::Unlink(instr).release());
 
     [[clang::fallthrough]];
@@ -709,7 +709,7 @@ static void InitializeFragAndWorklist(FragmentBuilder *builder) {
 }  // namespace
 
 // Build a fragment list out of a set of basic blocks.
-void BuildFragmentList(ContextInterface *context, LocalControlFlowGraph *cfg,
+void BuildFragmentList(Context *context, LocalControlFlowGraph *cfg,
                        FragmentList *frags) {
   FragmentBuilder builder = {
     nullptr,

@@ -46,15 +46,9 @@ build_clients: build_os $(GRANARY_HEADERS)
 	$(MAKE) -C $(GRANARY_SRC_DIR)/clients \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-# Used to figure out if we should build clients or not.
-BUILD_CLIENTS = build_clients
-ifeq (test,$(GRANARY_TARGET))
-	BUILD_CLIENTS :=
-endif
-
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_driver build_arch build_dbt build_os $(BUILD_CLIENTS)
+where_common: build_driver build_arch build_dbt build_os build_clients
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 

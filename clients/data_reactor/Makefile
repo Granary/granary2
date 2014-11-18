@@ -4,17 +4,22 @@
 
 include $(GRANARY_SRC_DIR)/Makefile.inc
 
-$(CLIENT_GEN_DIR)/offsets.h:
+FIND_SYM := $(GRANARY_CLIENTS_SRC_DIR)/user/find_symbol_offset.py
+
+$(CLIENT_GEN_DIR)/offsets.h: Makefile
 	@mkdir -p $(@D)
 	@-rm $(@) $(GRANARY_DEV_NULL)
-	@$(GRANARY_PYTHON) $(GRANARY_CLIENTS_SRC_DIR)/user/find_symbol_offset.py \
-		malloc libc >> $(@)
-	@$(GRANARY_PYTHON) $(GRANARY_CLIENTS_SRC_DIR)/user/find_symbol_offset.py \
-		calloc libc >> $(@)
-	@$(GRANARY_PYTHON) $(GRANARY_CLIENTS_SRC_DIR)/user/find_symbol_offset.py \
-		realloc libc >> $(@)
-	@$(GRANARY_PYTHON) $(GRANARY_CLIENTS_SRC_DIR)/user/find_symbol_offset.py \
-		free libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) malloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) valloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) pvalloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) calloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) aligned_alloc libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) memalign libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) posix_memalign libc >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znwm libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znam libstdc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znwm libc++ >> $(@)
+	@$(GRANARY_PYTHON) $(FIND_SYM) _Znam libc++ >> $(@)
 
 all: $(CLIENT_OBJ)
 generated: $(CLIENT_GEN_DIR)/offsets.h

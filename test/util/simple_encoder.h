@@ -7,12 +7,11 @@
 
 #include "arch/init.h"
 
-#include "granary/index.h"
-#include "granary/metadata.h"
+#include "granary/base/cast.h"
+#include "granary/base/pc.h"
 
-#include "os/module.h"
-
-#include "test/context.h"
+#include "granary/context.h"
+#include "granary/translate.h"
 
 // Test fixture that can be used for simple instrumenting and encoding test
 // cases.
@@ -24,24 +23,10 @@ class SimpleEncoderTest : public testing::Test {
   SimpleEncoderTest(void);
   virtual ~SimpleEncoderTest(void) = default;
 
-  template <typename R, typename... Args>
-  R (*InstrumentAndEncode(R (*native_pc)(Args...)))(Args...) {
-    auto pc = granary::UnsafeCast<granary::AppPC>(native_pc);
-    auto encoded_pc = InstrumentAndEncode(pc);
-    return granary::UnsafeCast<R (*)(Args...)>(encoded_pc);
-  }
+  static void SetUpTestCase(void);
+  static void TearDownTestCase(void);
 
- protected:
-  granary::BlockMetaData *AllocateMeta(granary::AppPC pc);
-  granary::CachePC InstrumentAndEncode(granary::AppPC pc);
-
-  MockContext context;
-  granary::os::Module code_cache_mod;
-  granary::os::Module edge_cache_mod;
-  granary::CodeCache code_cache;
-  granary::CodeCache edge_cache;
-  granary::MetaDataManager meta_manager;
-  granary::LockedIndex locked_index;
+  granary::Context *context;
 };
 
 #endif  // TEST_UTIL_SIMPLE_ENCODER_H_

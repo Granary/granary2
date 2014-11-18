@@ -333,8 +333,7 @@ class DirectBasicBlock final : public InstrumentedBasicBlock {
  public:
   virtual ~DirectBasicBlock(void);
   GRANARY_INTERNAL_DEFINITION DirectBasicBlock(
-      LocalControlFlowGraph *cfg_, BlockMetaData *meta_,
-      AppPC non_transparent_pc_=nullptr);
+      LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DirectBasicBlock, {
@@ -352,19 +351,6 @@ class DirectBasicBlock final : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION BasicBlock *materialized_block;
   GRANARY_INTERNAL_DEFINITION BlockRequestKind materialize_strategy;
 
-  // If we have something like a specialized return or an indirect jump/call to
-  // a non-transparent code cache address (i.e. some PC in the code cache) then
-  // we keep a record of that PC so that if the tool decides to materialize the
-  // block into a native block then we can direct it to the `non_transparent_pc`
-  // as opposed to the associated native PC, as that will most likely break
-  // things.
-  //
-  // TODO(pag): This is a decision that is worth revisiting, as it is plausible
-  //            that going to the native (transparent) address will work, at
-  //            least up until the next implicit attach through a non-
-  //            transparent (return) address.
-  GRANARY_INTERNAL_DEFINITION AppPC non_transparent_pc;
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectBasicBlock);
 };
 
@@ -378,11 +364,11 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
   using InstrumentedBasicBlock::InstrumentedBasicBlock;
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppPC StartAppPC(void) const override;
+  virtual AppPC StartAppPC(void) const override final;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CachePC StartCachePC(void) const override;
+  virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(IndirectBasicBlock, {
@@ -410,14 +396,14 @@ class ReturnBasicBlock final : public InstrumentedBasicBlock {
 
   // Return this basic block's meta-data. Accessing a return basic block's meta-
   // data will "create" it for the block.
-  virtual BlockMetaData *MetaData(void) override;
+  virtual BlockMetaData *MetaData(void) override final;
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppPC StartAppPC(void) const override;
+  virtual AppPC StartAppPC(void) const override final;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CachePC StartCachePC(void) const override;
+  virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ReturnBasicBlock, {
@@ -447,11 +433,11 @@ class NativeBasicBlock final : public BasicBlock {
   explicit NativeBasicBlock(AppPC native_pc_);
 
   // Returns the starting PC of this basic block in the (native) application.
-  virtual AppPC StartAppPC(void) const override;
+  virtual AppPC StartAppPC(void) const override final;
 
   // Returns the starting PC of this basic block in the (instrumented) code
   // cache.
-  virtual CachePC StartCachePC(void) const override;
+  virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeBasicBlock, {

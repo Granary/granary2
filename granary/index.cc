@@ -28,12 +28,12 @@ enum {
 };
 
 void *IndexArrayMem::operator new(std::size_t) {
-  return memset(os::AllocatePages(1), 0, arch::PAGE_SIZE_BYTES);
+  return memset(os::AllocateDataPages(1), 0, arch::PAGE_SIZE_BYTES);
 }
 
 void IndexArrayMem::operator delete(void *address) {
   memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
-  return os::FreePages(address, 1);
+  return os::FreeDataPages(address, 1);
 }
 
 class MetaDataArray : public IndexArrayMem {

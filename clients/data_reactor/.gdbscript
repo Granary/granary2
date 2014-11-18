@@ -5,5 +5,21 @@ commands
 
 end
 
+# Initialize shadow memory
+set $__shadow_base = 0
+set $__shadow_limit = 0
+b gdb_init_shadow_mem
+commands
+  set $__shadow_base = (unsigned long) $rdi
+  set $__shadow_limit = (unsigned long) $rsi
+end
+
+# Initialize the sample sources array
+set 
+b gdb_init_sample_sources
+commands
+
+end
+
 r
 q

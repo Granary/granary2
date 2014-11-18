@@ -12,6 +12,7 @@
 
 #include "granary/breakpoint.h"
 #include "granary/context.h"
+#include "granary/metadata.h"
 #include "granary/tool.h"
 
 #include "os/logging.h"
@@ -29,30 +30,30 @@ typedef LinkedListIterator<ToolDescription> ToolDescriptionIterator;
 namespace {
 
 // Unique ID assigned to a tool.
-static std::atomic<int> next_tool_id(ATOMIC_VAR_INIT(0));
+static std::atomic<int> gNextToolId(ATOMIC_VAR_INIT(0));
 
 // Dependency graph between tools. If `depends_on[t1][t2]` is `true` then `t2`
 // must be run before `t1` when instrumenting code.
-static bool depends_on[MAX_NUM_TOOLS][MAX_NUM_TOOLS] = {{false}};
+static bool gDependsOn[MAX_NUM_TOOLS][MAX_NUM_TOOLS] = {{false}};
 
 // Tools names.
-static char tool_names[MAX_NUM_TOOLS][MAX_TOOL_NAME_LEN] = {{'\0'}};
+static char gToolName[MAX_NUM_TOOLS][MAX_TOOL_NAME_LEN] = {{'\0'}};
 
 // Registered tools, indexed by ID.
-static ToolDescription *registered_tools[MAX_NUM_TOOLS] = {nullptr};
+static ToolDescription *gRegisteredTools[MAX_NUM_TOOLS] = {nullptr};
 
 // Find a tool's ID given its name. Returns -1 if a tool
 static int ToolId(const char *name) {
   for (auto i = 0; i < MAX_NUM_TOOLS; ++i) {
-    if (StringsMatch(name, tool_names[i])) {
+    if (StringsMatch(name, gToolName[i])) {
       return i;
     }
   }
 
   // Allocate a new ID for this tool, even if it isn't registered yet.
-  auto id = next_tool_id.fetch_add(1);
+  auto id = gNextToolId.fetch_add(1);
   GRANARY_ASSERT(MAX_NUM_TOOLS > id);
-  CopyString(&(tool_names[id][0]), MAX_TOOL_NAME_LEN, name);
+  CopyString(&(gToolName[id][0]), MAX_TOOL_NAME_LEN, name);
   return id;
 }
 
@@ -111,14 +112,8 @@ void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // instrumentation session.
 void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
 
-// Register some meta-data with the meta-data manager associated with this
-// tool.
-void InstrumentationTool::AddMetaData(const MetaDataDescription *desc) {
-  context->AddMetaData(desc);
-}
-
 // Initialize an empty tool manager.
-InstrumentationManager::InstrumentationManager(ContextInterface *context_)
+InstrumentationManager::InstrumentationManager(Context *context_)
     : max_align(0),
       max_size(0),
       is_finalized(false),
@@ -134,9 +129,9 @@ InstrumentationManager::~InstrumentationManager(void) {
 }
 
 // Register a tool given its name.
-void InstrumentationManager::Register(const char *name) {
+void InstrumentationManager::Add(const char *name) {
   GRANARY_ASSERT(!is_finalized);
-  if (auto desc = registered_tools[ToolId(name)]) {
+  if (auto desc = gRegisteredTools[ToolId(name)]) {
     Register(desc);
     max_size = GRANARY_MAX(max_size, desc->size);
     max_align = GRANARY_MAX(max_align, desc->align);
@@ -148,8 +143,8 @@ void InstrumentationManager::Register(const ToolDescription *desc) {
   if (!is_registered[desc->id]) {
     is_registered[desc->id] = true;
     for (auto required_id = 0; required_id < MAX_NUM_TOOLS; ++required_id) {
-      if (depends_on[desc->id][required_id]) {
-        if (auto required_desc = registered_tools[required_id]) {
+      if (gDependsOn[desc->id][required_id]) {
+        if (auto required_desc = gRegisteredTools[required_id]) {
           Register(required_desc);
         }
       }
@@ -202,8 +197,7 @@ void InstrumentationManager::InitAllocator(void) {
     auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
     auto remaining_size = arch::PAGE_SIZE_BYTES - offset;
     auto max_num_allocs = remaining_size / size;
-    allocator.Construct(max_num_allocs, offset, size, size);
-
+    allocator.Construct(max_num_allocs, offset, max_align, size, size);
     is_finalized = true;
   }
 }
@@ -220,7 +214,10 @@ void AddInstrumentationTool(
     id = ToolId(name);
     desc->id = id;
     desc->name = name;
-    registered_tools[id] = desc;
+    gRegisteredTools[id] = desc;
+  } else {
+    GRANARY_ASSERT(id == desc->id);
+    GRANARY_ASSERT(StringsMatch(desc->name, name));
   }
 
   // Add in the dependencies. This might end up allocating ids for tool
@@ -229,15 +226,10 @@ void AddInstrumentationTool(
   for (auto tool_name : required_tools) {
     if (tool_name) {
       auto required_id = ToolId(tool_name);
-      GRANARY_ASSERT(!depends_on[required_id][id]);
-      depends_on[id][required_id] = true;
+      GRANARY_ASSERT(!gDependsOn[required_id][id]);
+      gDependsOn[id][required_id] = true;
     }
   }
-}
-
-// Initialize all Granary tools for the active Granary context.
-void InitTools(InitReason reason) {
-  GlobalContext()->InitTools(reason, FLAG_tools);
 }
 
 }  // namespace granary

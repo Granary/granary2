@@ -1,2 +1,6 @@
 _init
 environ
+malloc
+free
+__libc_argv
+__libc_argc

@@ -18,13 +18,17 @@ using namespace granary;
 extern "C" {
 extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
 
+// Useful debugging aid to "break" on the first difference using a hardware
+// watchpoint.
 int watchpoint = 0;
+
 }  // extern "C"
 
 namespace {
-static char signal_stack[SIGSTKSZ];
+static char signal_stack[SIGSTKSZ] = {'\0'};
 static stack_t alternate_stack = {
   .ss_size = SIGSTKSZ,
+  .ss_flags = SS_ONSTACK,
   .ss_sp = &(signal_stack[0])
 };
 

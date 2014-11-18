@@ -5,7 +5,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "test/util/simple_init.h"
+#include "test/util/simple_encoder.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
@@ -19,19 +19,12 @@
 using namespace granary;
 using namespace testing;
 
-class VariadicArgsTest : public Test {
+class VariadicArgsTest : public SimpleEncoderTest {
  public:
   virtual ~VariadicArgsTest(void) = default;
-  VariadicArgsTest(void)
-      : context() {}
-
-  static void SetUpTestCase(void) {
-    SimpleInitGranary();
-  }
- protected:
-  Context context;
 };
 
+GRANARY_TEST_CASE
 static int va_sum(int n, ...) {
   va_list ls;
   va_start(ls, n);
@@ -42,6 +35,7 @@ static int va_sum(int n, ...) {
   return total;
 }
 
+GRANARY_TEST_CASE
 static int va_sum_list(int n, va_list ls) {
   auto total = 0;
   for (auto i = 0; i < n; ++i) {
@@ -50,6 +44,7 @@ static int va_sum_list(int n, va_list ls) {
   return total;
 }
 
+GRANARY_TEST_CASE
 static int va_sum2(int n, ...) {
   va_list ls;
   va_start(ls, n);
@@ -58,22 +53,27 @@ static int va_sum2(int n, ...) {
 
 static auto va_summer = va_sum;
 
+GRANARY_TEST_CASE
 static int sum_0(void) {
   return va_summer(0);
 }
 
+GRANARY_TEST_CASE
 static int sum_1_0(void) {
   return va_summer(1, 0);
 }
 
+GRANARY_TEST_CASE
 static int sum_1_1(void) {
   return va_summer(1, 1);
 }
 
+GRANARY_TEST_CASE
 static int sum_1_10(void) {
   return va_summer(1, 10);
 }
 
+GRANARY_TEST_CASE
 static int sum_3_3_3_3(void) {
   return va_summer(3, 3, 3, 3);
 }
@@ -81,7 +81,7 @@ static int sum_3_3_3_3(void) {
 // Hopefully this will go through the PLT and GOT.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-extra-args"
-__attribute__((noinline))
+GRANARY_TEST_CASE __attribute__((noinline))
 static int do_fprintf(void) {
   asm("":::"memory");
   return fprintf(fopen("/dev/null", "w"),
@@ -92,7 +92,7 @@ static int do_fprintf(void) {
 #pragma clang diagnostic pop
 
 TEST_F(VariadicArgsTest, TestDirectVariadic) {
-  auto inst_va_sum = Translate(&context, va_sum);
+  auto inst_va_sum = TranslateEntryPoint(context, va_sum, kEntryPointTestCase);
   auto va_summer = UnsafeCast<int(*)(...)>(inst_va_sum);
   EXPECT_EQ(0, va_summer(0));
   EXPECT_EQ(0, va_summer(1, 0));
@@ -107,7 +107,7 @@ TEST_F(VariadicArgsTest, TestDirectVariadic) {
 }
 
 TEST_F(VariadicArgsTest, TestDirectRecursiveVariadic) {
-  auto inst_va_sum = Translate(&context, va_sum2);
+  auto inst_va_sum = TranslateEntryPoint(context, va_sum2, kEntryPointTestCase);
   auto va_summer = UnsafeCast<int(*)(...)>(inst_va_sum);
   EXPECT_EQ(0, va_summer(0));
   EXPECT_EQ(0, va_summer(1, 0));
@@ -124,7 +124,8 @@ TEST_F(VariadicArgsTest, TestDirectRecursiveVariadic) {
 TEST_F(VariadicArgsTest, TestIndirectVariadic) {
   auto summers = {sum_0, sum_1_0, sum_1_1, sum_1_10, sum_3_3_3_3};
   for (auto summer : summers) {
-    auto inst_summer = Translate(&context, summer);
+    auto inst_summer = TranslateEntryPoint(context, summer,
+                                           kEntryPointTestCase);
     auto va_summer = UnsafeCast<int(*)(void)>(inst_summer);
     auto expected_result = summer();
     EXPECT_EQ(expected_result, va_summer());
@@ -132,7 +133,8 @@ TEST_F(VariadicArgsTest, TestIndirectVariadic) {
 }
 
 TEST_F(VariadicArgsTest, TestPLTAndGOT) {
-  auto inst_do_fprintf = Translate(&context, do_fprintf);
+  auto inst_do_fprintf = TranslateEntryPoint(context, do_fprintf,
+                                             kEntryPointTestCase);
   auto inst_fprintf = UnsafeCast<int(*)(void)>(inst_do_fprintf);
   EXPECT_EQ(49, inst_fprintf());
 }

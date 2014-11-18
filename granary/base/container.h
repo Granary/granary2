@@ -20,11 +20,13 @@ class Container {
   void Destroy(void) {
     operator->()->~T();
     memset(storage, 0x7A, sizeof(T));
+    VALGRIND_MAKE_MEM_UNDEFINED(storage, sizeof(T));
   }
 
   // Construct the contained object.
   template <typename... Args>
   void Construct(Args&&... args) {
+    VALGRIND_MAKE_MEM_UNDEFINED(storage, sizeof(T));
     new (operator->()) T(std::forward<Args>(args)...);
   }
 

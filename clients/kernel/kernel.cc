@@ -36,7 +36,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
       return;
     }
     for (auto succ : block->Successors()) {
-      factory->RequestBlock(succ.block, REQUEST_NATIVE);
+      factory->RequestBlock(succ.block, kRequestBlockExecuteNatively);
     }
   }
 

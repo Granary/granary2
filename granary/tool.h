@@ -28,7 +28,7 @@ class LocalControlFlowGraph;
 class InstrumentationTool;
 class Operand;
 
-GRANARY_INTERNAL_DEFINITION class ContextInterface;
+GRANARY_INTERNAL_DEFINITION class Context;
 GRANARY_INTERNAL_DEFINITION class InlineAssembly;
 
 GRANARY_INTERNAL_DEFINITION enum {
@@ -79,25 +79,11 @@ class InstrumentationTool {
 
  GRANARY_PUBLIC:
 
-  // Register some meta-data with Granary that will be used with this tool.
-  // This is a convenience method around the `AddMetaData` method that
-  // operates directly on a meta-data description.
-  template <typename T>
-  inline void AddMetaData(void) {
-    AddMetaData(GetMetaDataDescription<T>::Get());
-  }
-
- GRANARY_PUBLIC:
-
-  // Register some meta-data with the meta-data manager associated with this
-  // tool.
-  void AddMetaData(const MetaDataDescription *desc);
-
   // Next tool used to instrument code.
   GRANARY_POINTER(InstrumentationTool) *next;
 
   // Context into which this tool has been instantiated.
-  GRANARY_POINTER(ContextInterface) *context;
+  GRANARY_POINTER(Context) *context;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationTool);
@@ -145,12 +131,12 @@ typedef LinkedListIterator<InstrumentationTool> ToolIterator;
 class InstrumentationManager {
  public:
   // Initialize an empty tool manager.
-  explicit InstrumentationManager(ContextInterface *context);
+  explicit InstrumentationManager(Context *context);
   ~InstrumentationManager(void);
 
   // Register a tool with this manager using the tool's name. This will look
   // up the tool in the global list of all registered Granary tools.
-  void Register(const char *name);
+  void Add(const char *name);
 
   // Allocate all the tools managed by this `ToolManager` instance, and chain
   // then into a linked list. The returns list can be used to instrument code.
@@ -193,7 +179,7 @@ class InstrumentationManager {
   Container<internal::SlabAllocator> allocator;
 
   // Context to which thios tool manager belongs.
-  ContextInterface *context;
+  Context *context;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationManager);
 };
@@ -208,8 +194,7 @@ void AddInstrumentationTool(
 // Register a binary instrumenter with Granary.
 template <typename T>
 inline static void AddInstrumentationTool(const char *tool_name) {
-  AddInstrumentationTool(&(ToolDescriptor<T>::kDescription),
-                              tool_name, {});
+  AddInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name, {});
 }
 
 // Register a binary instrumenter with Granary.
@@ -217,11 +202,8 @@ template <typename T>
 inline static void AddInstrumentationTool(
     const char *tool_name, std::initializer_list<const char *> required_tools) {
   AddInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
-                             required_tools);
+                         required_tools);
 }
-
-// Initialize all Granary tools for the active Granary context.
-GRANARY_INTERNAL_DEFINITION void InitTools(InitReason reason);
 
 }  // namespace granary
 

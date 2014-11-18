@@ -18,7 +18,7 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-class ContextInterface;
+class Context;
 
 // Used to resolve direct control-flow transfers between the code cache and
 // Granary.
@@ -108,7 +108,7 @@ class IndirectEdge {
   //        indirect edge entrypoint.
   //    2)  At edge code compile time, the value is changed to be the address
   //        of the first instruction in the "miss" case of indirect edge
-  //        lookup. This is achieved via an `IA_UPDATE_ENCODED_ADDRESS`
+  //        lookup. This is achieved via an `kAnnotUpdateAddressWhenEncoded`
   //        annotation instruction. The "miss" code transfers control to
   //        the indirect edge entrypoint (1).
   //    3)  After the first edge lookup is performed, this value is changed
@@ -131,7 +131,7 @@ class IndirectEdge {
   // a template for out edges.
   //
   // Note: These pointers are updated at JIT-compile time via an annotation
-  //       instruction using `IA_UPDATE_ENCODED_ADDRESS`.
+  //       instruction using `kAnnotUpdateAddressWhenEncoded`.
   AppPC out_edge_template;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {

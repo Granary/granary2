@@ -18,7 +18,7 @@
 namespace granary {
 
 // Initialize a binary instrumenter.
-BinaryInstrumenter::BinaryInstrumenter(ContextInterface *context_,
+BinaryInstrumenter::BinaryInstrumenter(Context *context_,
                                        LocalControlFlowGraph *cfg_,
                                        BlockMetaData **meta_)
     : context(context_),
@@ -83,7 +83,7 @@ static bool FinalizeControlFlow(BlockFactory *factory,
                                 LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
     for (auto succ : block->Successors()) {
-      factory->RequestBlock(succ.block, REQUEST_CHECK_INDEX_AND_LCFG_ONLY);
+      factory->RequestBlock(succ.block, kRequestBlockFromIndexOrCFGOnly);
     }
   }
   return factory->HasPendingMaterializationRequest();

@@ -5,6 +5,7 @@
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
+#ifndef GRANARY_WITH_VALGRIND
 
 #include "clients/user/syscall.h"
 #include "generated/clients/gdb/offsets.h"
@@ -74,8 +75,7 @@ static void SuppressSigAction(void *, SystemCallContext ctx) {
 
   // Turn this `sigaction` into a no-op (that will likely return `-EINVAL`)
   auto signum = ctx.Arg0();
-  if (SIGILL == signum || SIGTRAP == signum ||
-      SIGBUS == signum || SIGSEGV == signum) {
+  if (SIGTRAP == signum || SIGBUS == signum || SIGSEGV == signum) {
     ctx.Arg0() = SIGUNUSED;
     ctx.Arg1() = 0;
     ctx.Arg2() = 0;
@@ -144,7 +144,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
   void DontInstrumentUndoDB(BlockFactory *factory, DirectBasicBlock *block) {
     auto module = os::ModuleContainingPC(block->StartAppPC());
     if (StringsMatch("libundodb_autotracer_preload_x64", module->Name())) {
-      factory->RequestBlock(block, REQUEST_NATIVE);
+      factory->RequestBlock(block, kRequestBlockExecuteNatively);
     }
   }
 
@@ -173,11 +173,11 @@ GRANARY_ON_CLIENT_INIT() {
     AwaitAttach(-1, nullptr, nullptr);
   } else {
     AwaitAttachOnSignal(SIGSEGV);
-    AwaitAttachOnSignal(SIGILL);
     AwaitAttachOnSignal(SIGBUS);
     AwaitAttachOnSignal(SIGTRAP);
   }
   AddInstrumentationTool<GDBDebuggerHelper>("gdb");
 }
 
+#endif  // GRANARY_WITH_VALGRIND
 #endif  // GRANARY_WHERE_user

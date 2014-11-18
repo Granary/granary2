@@ -63,14 +63,15 @@ namespace {
 
 // Set the encoded address for a label or return address instruction.
 static void SetEncodedPC(AnnotationInstruction *instr, CachePC pc) {
-  if (IA_LABEL == instr->annotation || IA_RETURN_ADDRESS == instr->annotation) {
+  if (kAnnotationLabel == instr->annotation || kAnnotReturnAddressLabel == instr->annotation) {
     instr->SetData(pc);
   }
 }
 
 // Mark an estimated encode address on all labels/return address annotations.
 // This is so that stage encoding is able to guage an accurate size for things.
-static void StageEncodeLabels(Fragment *frag, CachePC estimated_encode_pc) {
+static void StageEncodeLabels(Fragment *frag) {
+  auto estimated_encode_pc = EstimatedCachePC();
   if (frag->entry_label) {
     SetEncodedPC(frag->entry_label, estimated_encode_pc);
   }
@@ -83,8 +84,8 @@ static void StageEncodeLabels(Fragment *frag, CachePC estimated_encode_pc) {
 
 // Stage encode an individual fragment. Returns the number of bytes needed to
 // encode all native instructions in this fragment.
-static int StageEncodeNativeInstructions(Fragment *frag,
-                                         const CachePC estimated_encode_pc) {
+static size_t StageEncodeNativeInstructions(Fragment *frag) {
+  auto estimated_encode_pc = EstimatedCachePC();
   auto encode_pc = estimated_encode_pc;
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::STAGED);
   for (auto instr : InstructionListIterator(frag->instrs)) {
@@ -95,7 +96,7 @@ static int StageEncodeNativeInstructions(Fragment *frag,
       GRANARY_ASSERT(encoded);
     }
   }
-  auto size = static_cast<int>(encode_pc - estimated_encode_pc);
+  auto size = static_cast<size_t>(encode_pc - estimated_encode_pc);
   GRANARY_ASSERT(0 <= size);
   return size;
 }
@@ -103,19 +104,18 @@ static int StageEncodeNativeInstructions(Fragment *frag,
 // Performs stage encoding of a fragment list. This determines the size of each
 // fragment and returns the size (in bytes) of the block-specific and edge-
 // specific instructions.
-int StageEncode(FragmentList *frags, CachePC estimated_encode_pc) {
+static size_t StageEncode(FragmentList *frags) {
   auto first_frag = frags->First();
-  auto num_bytes = 0;
+  auto num_bytes = 0UL;
 
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
     // Don't omit `ExitFragment`s in case they contain labels.
-    StageEncodeLabels(frag, estimated_encode_pc);
+    StageEncodeLabels(frag);
   }
 
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
     if (frag->encoded_pc) continue;
-    frag->encoded_size = StageEncodeNativeInstructions(frag,
-                                                       estimated_encode_pc);
+    frag->encoded_size = StageEncodeNativeInstructions(frag);
     num_bytes += frag->encoded_size;
   }
   return num_bytes;
@@ -135,7 +135,7 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
 
       // Record the `curr_pc` for later updating by `UpdateEncodeAddresses`.
-      if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
+      if (kAnnotUpdateAddressWhenEncoded == annot->annotation) {
         SetMetaData(annot, curr_pc);
         *update_encode_addresses = true;
 
@@ -147,7 +147,7 @@ static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
   }
 }
 
-// Update the pointers associated with all `IA_UPDATE_ENCODED_ADDRESS`
+// Update the pointers associated with all `kAnnotUpdateAddressWhenEncoded`
 // annotation instructions. This needs to be done *after* encoded to avoid
 // a nasty race where one thread does an indirect jump based on the updated
 // pointer and jumps into some incomplete code sequence.
@@ -157,7 +157,7 @@ static void UpdateEncodeAddresses(FragmentList *frags) {
       if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
         // Update some pointer somewhere with the encoded address of this
         // instruction.
-        if (IA_UPDATE_ENCODED_ADDRESS == annot->annotation) {
+        if (kAnnotUpdateAddressWhenEncoded == annot->annotation) {
           auto cache_pc_ptr = reinterpret_cast<CachePC *>(annot->data);
           *cache_pc_ptr = GetMetaData<CachePC>(annot);
         }
@@ -255,7 +255,8 @@ static void Encode(FragmentList *frags) {
 
 // Adds in additional "tracing" instructions to the entrypoints of basic
 // blocks.
-static void AddBlockTracers(FragmentList *frags, CachePC estimated_encode_pc) {
+static void AddBlockTracers(FragmentList *frags) {
+  auto estimated_encode_pc = EstimatedCachePC();
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
@@ -309,11 +310,10 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 
 // Encodes the fragments into the specified code caches.
 static void Encode(FragmentList *frags, CodeCache *block_cache) {
-  auto estimated_addr = EstimatedCachePC();
   if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) {
-    AddBlockTracers(frags, estimated_addr);
+    AddBlockTracers(frags);
   }
-  if (auto num_bytes = StageEncode(frags, estimated_addr)) {
+  if (auto num_bytes = StageEncode(frags)) {
     auto cache_code = block_cache->AllocateBlock(num_bytes);
     auto cache_code_end = cache_code + num_bytes;
     auto update_addresses = false;
@@ -336,14 +336,14 @@ static void Encode(FragmentList *frags, CodeCache *block_cache) {
 }  // namespace
 
 // Compile some instrumented code.
-void Compile(ContextInterface *context, LocalControlFlowGraph *cfg) {
+void Compile(Context *context, LocalControlFlowGraph *cfg) {
   auto frags = Assemble(context, cfg);
   Encode(&frags, context->BlockCodeCache());
   FreeFragments(&frags);
 }
 
 // Compile some instrumented code for an indirect edge.
-void Compile(ContextInterface *context, LocalControlFlowGraph *cfg,
+void Compile(Context *context, LocalControlFlowGraph *cfg,
              IndirectEdge *edge, AppPC target_app_pc) {
   auto frags = Assemble(context, cfg);
   do {

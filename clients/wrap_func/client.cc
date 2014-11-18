@@ -187,7 +187,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
     // Make sure everyone can update the meta-data, but that no-one will
     // actually be able to materialize the block.
-    factory->RequestBlock(target_block, REQUEST_DENIED);
+    factory->RequestBlock(target_block, kRequestBlockInFuture);
 
     // Move the original CFI to the end of the block.
     block->AppendInstruction(label);
@@ -205,7 +205,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
                 ControlFlowInstruction *cfi) {
     if (!FLAG_transparent_returns) {
       cfi->InsertAfter(lir::Jump(factory, wrapper->wrapper_pc,
-                                 REQUEST_NATIVE));
+                                 kRequestBlockExecuteNatively));
 
     // If we're using transparent return addresses, then we inject a "shim"
     // in between a tail-call and its destination that does a real call. This
@@ -218,7 +218,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
       auto target_block = factory->MaterializeEmptyBlock(wrapper->wrapper_pc);
       target_block->AppendInstruction(lir::FunctionCall(factory,
                                                         wrapper->wrapper_pc,
-                                                        REQUEST_NATIVE));
+                                                        kRequestBlockExecuteNatively));
       target_block->AppendInstruction(lir::Return(factory));
       cfi->InsertAfter(lir::Jump(target_block));
     }
@@ -236,7 +236,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
     if (cfi->IsFunctionCall()) {
       cfi->InsertAfter(lir::FunctionCall(factory, wrapper->wrapper_pc,
-                                         REQUEST_NATIVE));
+                                         kRequestBlockExecuteNatively));
     } else if (!cfi->IsConditionalJump()) {
       WrapJump(factory, wrapper, cfi);
     } else {

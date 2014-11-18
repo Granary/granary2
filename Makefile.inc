@@ -95,8 +95,7 @@ GRANARY_GEN_BIN_DIR = $(GRANARY_BIN_DIR)/generated
 GRANARY_EXTRA_CXX_FLAGS ?=
 GRANARY_EXTRA_CC_FLAGS ?=
 
-GRANARY_LD_FLAGS =
-GRANARY_LD_FLAGS_EARLY =
+GRANARY_LD_FLAGS = -nostartfiles
 GRANARY_LD_FLAGS_LATE =
 GRANARY_CC_FLAGS = $(GRANARY_EXTRA_CC_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
 GRANARY_CXX_FLAGS = $(GRANARY_EXTRA_CXX_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
@@ -128,6 +127,11 @@ GRANARY_COMMON_CXX_FLAGS = -std=$(GRANARY_CXX_STD) -stdlib=$(GRANARY_CXX_LIB)
 ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_COMMON_MACROS += -DGRANARY_WITH_VALGRIND
 	GRANARY_CXX_FLAGS += -fno-inline
+	GRANARY_DEBUG_FLAGS += -g3
+else
+	GRANARY_LD_FLAGS += -nodefaultlibs
+	GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -nostdlib
+	GRANARY_DEBUG_FLAGS += -g3
 endif
 
 # Enable recursive instrumentation (Granary instrumenting Granary).
@@ -149,18 +153,16 @@ endif
 # Enable/disable features based on whether or not this is a debug or release
 # build.
 ifeq (release,$(GRANARY_TARGET))  # release
-	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
 else  # debug, test
-	GRANARY_DEBUG_FLAGS += -g3
 	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
 	GRANARY_LD_FLAGS_LATE += "-Wl,-g" $(GRANARY_DEBUG_FLAGS)
 endif
 
 # Make sure certain architectural features are disabled.
-GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
+GRANARY_COMMON_ARCH_FLAGS += -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
 GRANARY_COMMON_ARCH_FLAGS += -minline-all-stringops
@@ -171,9 +173,8 @@ ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-sse4.1 -mno-sse4.2 -mno-sse4 -mno-sse4a
 	GRANARY_COMMON_ARCH_FLAGS += -mno-avx -mno-3dnow
 endif
+
 ifeq (kernel,$(GRANARY_WHERE))
-	GRANARY_COMMON_ARCH_FLAGS += -nostdlib
-	GRANARY_LD_FLAGS_EARLY += -nodefaultlibs
 	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
 endif
 
@@ -223,10 +224,14 @@ GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 
+# Figure out the name of the symbol versions file.
+GRANARY_VERSIONS_FILE := $(GRANARY_SRC_DIR)/symbol.versions
+GRANARY_EXPORTS_FILE := $(GRANARY_SRC_DIR)/symbol.exports
+
 # Mask some of the libc and libc++ symbols with Granary equivalents.
-GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symbol.versions"
+GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_VERSIONS_FILE)"
 ifeq (release,$(GRANARY_TARGET))
-	GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/symbol.exports"
+	GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_EXPORTS_FILE)"
 endif
 
 # Code linting.

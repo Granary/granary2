@@ -16,7 +16,7 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-class ContextInterface;
+class Context;
 class InstrumentationTool;
 
 // Instrument some initial code (described by `meta`) and fills a LCFG `cfg`
@@ -28,7 +28,7 @@ class InstrumentationTool;
 //       meta-data hereafter.
 class BinaryInstrumenter {
  public:
-  BinaryInstrumenter(ContextInterface *context_, LocalControlFlowGraph *cfg_,
+  BinaryInstrumenter(Context *context_, LocalControlFlowGraph *cfg_,
                      BlockMetaData **meta_);
   ~BinaryInstrumenter(void);
 
@@ -57,7 +57,7 @@ class BinaryInstrumenter {
   //       block before moving on to the next block in the LCFG.
   void InstrumentBlock(void);
 
-  ContextInterface *context;
+  Context *context;
   InstrumentationTool *tools;
   BlockMetaData **meta;
 
