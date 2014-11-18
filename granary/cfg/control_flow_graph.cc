@@ -28,7 +28,7 @@ LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
   for (BasicBlock *block(first_block), *next(nullptr); block; block = next) {
-    next = block->list.GetNext(block);
+    next = block->list.Next();
     delete block;
   }
   memset(this, 0, sizeof *this);
@@ -57,7 +57,7 @@ BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
 // Add a block to the CFG. If the block has successors that haven't yet been
 // added, then add those too.
 void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
-  if (block->list.IsAttached()) {
+  if (block->list.IsLinked()) {
     GRANARY_ASSERT(-1 != block->Id());
     return;  // Already in the CFG.
   }
@@ -73,7 +73,7 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
       entry_block = decoded_block;
     }
   } else {
-    last_block->list.SetNext(last_block, block);
+    last_block->list.SetNext(block);
   }
 
   last_block = block;

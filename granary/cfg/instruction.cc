@@ -29,11 +29,11 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
 GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
 
 Instruction *Instruction::Next(void) {
-  return list.GetNext(this);
+  return list.Next();
 }
 
 Instruction *Instruction::Previous(void) {
-  return list.GetPrevious(this);
+  return list.Previous();
 }
 
 // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
@@ -47,21 +47,13 @@ void Instruction::SetMetaData(uint64_t meta) {
 }
 
 Instruction *Instruction::InsertBefore(Instruction *instr) {
-  list.SetPrevious(this, instr);
+  list.SetPrevious(instr);
   return instr;
 }
 
 Instruction *Instruction::InsertAfter(Instruction *instr) {
-  list.SetNext(this, instr);
+  list.SetNext(instr);
   return instr;
-}
-
-Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> instr) {
-  return InsertBefore(instr.release());
-}
-
-Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> instr) {
-  return InsertAfter(instr.release());
 }
 
 // Unlink an instruction from an instruction list.

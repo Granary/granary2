@@ -206,7 +206,7 @@ class Fragment {
   })
 
   // Connects together fragments into a `FragmentList`.
-  ListHead list;
+  ListHead<Fragment> list;
 
   // Connects together fragments into an `EncodeOrderedFragmentList`.
   Fragment *next;

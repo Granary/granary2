@@ -134,6 +134,7 @@ class BasicBlock {
   GRANARY_DECLARE_BASE_CLASS(BasicBlock)
 
  protected:
+  template <typename> friend class ListHead;
   template <typename> friend class ListOfListHead;
   friend class BasicBlockIterator;
   friend class ReverseBasicBlockIterator;
@@ -144,7 +145,7 @@ class BasicBlock {
   GRANARY_IF_EXTERNAL( BasicBlock(void) = delete; )
 
   // Connects together lists of basic blocks in the LCFG.
-  GRANARY_INTERNAL_DEFINITION ListHead list;
+  GRANARY_INTERNAL_DEFINITION ListHead<BasicBlock> list;
 
   // Unique ID for this block within its local control-flow graph. Defaults to
   // `-1` if the block does not belong to an LCFG.
