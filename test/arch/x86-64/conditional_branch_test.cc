@@ -4,7 +4,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "test/util/simple_init.h"
+#include "granary/base/option.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
@@ -14,6 +14,13 @@
 #include "granary/context.h"
 #include "granary/tool.h"
 #include "granary/translate.h"
+
+#include "test/util/simple_encoder.h"
+
+using namespace granary;
+using namespace testing;
+
+GRANARY_DECLARE_string(tools);
 
 // For each jump type, expand some macro with enough info to generate test
 // code.
@@ -70,9 +77,6 @@ extern int loope_return_5(void);
 extern int loopne_return_5(void);
 }
 
-using namespace granary;
-using namespace testing;
-
 // Decodes all blocks in the function, but doesn't look in the cache for them.
 class AllFuncBlocks : public InstrumentationTool {
  public:
@@ -81,33 +85,29 @@ class AllFuncBlocks : public InstrumentationTool {
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        factory->RequestBlock(succ.block, BlockRequestKind::REQUEST_CHECK_LCFG);
+        factory->RequestBlock(succ.block, BlockRequestKind::kRequestBlockFromCFG);
       }
     }
   }
 };
 
-class ConditionalBranchTest : public Test {
+class ConditionalBranchTest : public SimpleEncoderTest {
  public:
   virtual ~ConditionalBranchTest(void) = default;
-  ConditionalBranchTest(void)
-      : context() {
-    context.InitTools(INIT_ATTACH, "all_func_blocks");
-  }
 
   static void SetUpTestCase(void) {
-    SimpleInitGranary();
     AddInstrumentationTool<AllFuncBlocks>("all_func_blocks");
+    FLAG_tools = "all_func_blocks";
+    SimpleEncoderTest::SetUpTestCase();
   }
-
- protected:
-  Context context;
 };
 
 #define JCC_TEST(opcode, ...) \
     TEST_F(ConditionalBranchTest, jCC_ ## opcode) { \
-      auto inst_true = Translate(&context, jcc_ ## opcode ## _true); \
-      auto inst_false = Translate(&context, jcc_ ## opcode ## _false); \
+      auto inst_true = TranslateEntryPoint(context, jcc_ ## opcode ## _true, \
+                                           kEntryPointTestCase); \
+      auto inst_false = TranslateEntryPoint(context, jcc_ ## opcode ## _false, \
+                                            kEntryPointTestCase); \
       EXPECT_TRUE(jcc_ ## opcode ## _true()); \
       EXPECT_TRUE(jcc_ ## opcode ## _false()); \
       auto inst_true_func = UnsafeCast<bool(*)(void)>(inst_true); \
@@ -123,7 +123,8 @@ JCC_TEST(jrcxz)
 
 #define LOOP_TEST(opcode, ...) \
     TEST_F(ConditionalBranchTest, opcode) { \
-      auto inst = Translate(&context, opcode ## _return_5); \
+      auto inst = TranslateEntryPoint(context, opcode ## _return_5, \
+                                      kEntryPointTestCase); \
       EXPECT_EQ(5, opcode ## _return_5()); \
       auto inst_func = UnsafeCast<int(*)(void)>(inst); \
       EXPECT_EQ(5, inst_func()); \

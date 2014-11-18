@@ -39,7 +39,7 @@ namespace arch {
 namespace {
 
 // Generates the wrapper code for a context callback.
-void GenerateContextCallCode(ContextInterface *context, Callback *callback) {
+void GenerateContextCallCode(Context *context, Callback *callback) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -115,7 +115,7 @@ void GenerateContextCallCode(ContextInterface *context, Callback *callback) {
 }  // namespace
 
 // Generates the wrapper code for a context callback.
-Callback *GenerateContextCallback(ContextInterface *context, CodeCache *cache,
+Callback *GenerateContextCallback(Context *context, CodeCache *cache,
                                   AppPC func_pc) {
   auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(func_pc, edge_code);
@@ -128,7 +128,7 @@ Callback *GenerateContextCallback(ContextInterface *context, CodeCache *cache,
 // Generates some code to target some client function. The generated code saves
 // the machine context and passes it directly to the client function for direct
 // manipulation.
-CodeFragment *CreateContextCallFragment(ContextInterface *context,
+CodeFragment *CreateContextCallFragment(Context *context,
                                         FragmentList *frags, CodeFragment *pred,
                                         AppPC func_pc) {
   auto call_frag = new CodeFragment;
@@ -152,7 +152,7 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
 
   Instruction ni;
 
-  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_OFF_STACK));
+  APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
 
   GRANARY_ASSERT(nullptr != cc->wrapped_callback);
   CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
@@ -161,7 +161,7 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
   call_frag->instrs.Append(call);
   call_frag->branch_instr = call;
 
-  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_ON_STACK));
+  APP_INSTR(new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   return call_frag;
 }

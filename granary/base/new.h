@@ -96,10 +96,9 @@ class SlabList {
 // the (potentially) allocated data on the page.
 class SlabAllocator {
  public:
-  explicit SlabAllocator(size_t num_allocations_per_slab_,
-                         size_t start_offset_,
-                         size_t unaligned_size_,
-                         size_t aligned_size_);
+  SlabAllocator(size_t num_allocations_per_slab_, size_t start_offset_,
+                size_t alignment_, size_t unaligned_size_,
+                size_t aligned_size_);
 
   void *Allocate(void);
   void Free(void *address);
@@ -115,6 +114,7 @@ class SlabAllocator {
 
   const size_t num_allocations_per_slab;
   const size_t start_offset;
+  const size_t alignment;
   const size_t aligned_size;
   const size_t unaligned_size;
   const SlabList slab_list_tail;
@@ -160,7 +160,8 @@ class OperatorNewAllocator {
   typedef typename T::OperatorNewProperties Properties;
 
   enum : size_t {
-    MIN_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
+    REQ_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
+    MIN_ALIGNMENT = GRANARY_MAX(REQ_ALIGNMENT, sizeof(void *)),
     ALIGNMENT = GRANARY_MAX(MIN_ALIGNMENT, alignof(T)),
     OBJECT_SIZE = sizeof(T),
     MIN_OBJECT_SIZE = GRANARY_MAX(OBJECT_SIZE, sizeof(internal::FreeList *)),
@@ -201,6 +202,7 @@ template <typename T>
 internal::SlabAllocator OperatorNewAllocator<T>::allocator(
     OperatorNewAllocator<T>::NUM_ALLOCS_PER_SLAB,
     OperatorNewAllocator<T>::ALGINED_SLAB_LIST_SIZE,
+    OperatorNewAllocator<T>::ALIGNMENT,
     OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE,
     OperatorNewAllocator<T>::OBJECT_SIZE);
 

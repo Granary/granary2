@@ -81,7 +81,7 @@ static bool TargetStackIsValid(const DirectEdge *edge) {
 // This code takes a pointer to the context so that the code generated will
 // be able to pass the context pointer directly to `granary::EnterGranary`.
 // This allows us to avoid saving the context pointer in the `DirectEdge`.
-void GenerateDirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
+void GenerateDirectEdgeEntryCode(Context *context, CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -182,7 +182,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
 // This code takes a pointer to the context so that the code generated will
 // be able to pass the context pointer directly to `granary::EnterGranary`.
 // This allows us to avoid saving the context pointer in the `IndirectEdge`.
-void GenerateIndirectEdgeEntryCode(ContextInterface *context, CachePC pc) {
+void GenerateIndirectEdgeEntryCode(Context *context, CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -353,7 +353,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // For the fall-through; want to make sure no weird register allocation
   // stuff gets in the way.
-  auto miss_addr = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
+  auto miss_addr = new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
                                              &(edge->out_edge_pc));
   in_edge->instrs.Append(miss_addr);
 
@@ -370,7 +370,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   APP(go_to_granary, UD2(&ni));
 
   auto begin_template = new AnnotationInstruction(
-      IA_UPDATE_ENCODED_ADDRESS, &(edge->out_edge_template));
+      kAnnotUpdateAddressWhenEncoded, &(edge->out_edge_template));
   go_to_granary->instrs.Append(begin_template);
 
   // --------------------- compare_target --------------------------------
@@ -453,7 +453,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 
   // Replace the `IndirectEdge::out_edge_pc` with the out edge that we're
   // creating, and make our new out edge point to the old one.
-  auto new_out_edge_pc = new AnnotationInstruction(IA_UPDATE_ENCODED_ADDRESS,
+  auto new_out_edge_pc = new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
                                                    &(edge->out_edge_pc));
   frag->instrs.Append(new_out_edge_pc);
 
@@ -503,7 +503,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-bool TryAtomicPatchEdge(ContextInterface *context, DirectEdge *edge) {
+bool TryAtomicPatchEdge(Context *context, DirectEdge *edge) {
   Instruction ni;
   InstructionDecoder decoder;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);

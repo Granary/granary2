@@ -13,13 +13,6 @@
 namespace granary {
 namespace internal {
 
-// Constants that define how we will initialize various chunks of memory.
-enum {
-  UNALLOCATED_MEMORY_POISON = 0xAB,
-  DEALLOCATED_MEMORY_POISON = 0xCD,
-  UNINITIALIZED_MEMORY_POISON = 0xEF,
-};
-
 // Initialize a new slab list. Once initialized, slab lists are never changed.
 SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
                    size_t slab_number_)
@@ -32,10 +25,12 @@ SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
 // checks.
 SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
                              size_t start_offset_,
+                             size_t alignment_,
                              size_t aligned_size_,
                              size_t unaligned_size_)
     : num_allocations_per_slab(num_allocations_per_slab_),
       start_offset(start_offset_),
+      alignment(alignment_),
       aligned_size(aligned_size_),
       unaligned_size(unaligned_size_),
       slab_list_tail(nullptr, num_allocations_per_slab_, 0),
@@ -45,15 +40,37 @@ SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
       next_slab_number(1),
       next_allocation_number(num_allocations_per_slab_) {
 
+  // Sanity check the inputs.
+  GRANARY_ASSERT(0 == (aligned_size_ % alignment_));
+  GRANARY_ASSERT(aligned_size_ >= unaligned_size_);
   GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >=
                  (aligned_size_ * num_allocations_per_slab_ + start_offset_));
+
+  // Used only when `GRANARY_WITH_VALGRIND` is set.
   GRANARY_UNUSED(unaligned_size);
+  GRANARY_UNUSED(alignment);
+
+  // Used only when `GRANARY_WITH_VALGRIND` isn't set.
+  GRANARY_UNUSED(num_allocations_per_slab);
+  GRANARY_UNUSED(start_offset);
+  GRANARY_UNUSED(aligned_size);
+  GRANARY_UNUSED(next_slab_number);
+  GRANARY_UNUSED(next_allocation_number);
 }
+
+#ifndef GRANARY_WITH_VALGRIND
+
+// Constants that define how we will initialize various chunks of memory.
+enum {
+  UNALLOCATED_MEMORY_POISON = 0xAB,
+  DEALLOCATED_MEMORY_POISON = 0xCD,
+  UNINITIALIZED_MEMORY_POISON = 0xEF,
+};
 
 // Allocate a new slab of memory for this object. The backing memory of the
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
 const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
-  void *slab_memory(os::AllocatePages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
+  void *slab_memory(os::AllocateDataPages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
   checked_memset(slab_memory, UNALLOCATED_MEMORY_POISON,
                  SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
   VALGRIND_MAKE_MEM_NOACCESS(slab_memory, SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
@@ -130,8 +147,8 @@ void SlabAllocator::Destroy(void) {
   const SlabList *next_slab(nullptr);
   for (; slab; slab = next_slab) {
     next_slab = slab->next;
-    os::FreePages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
-                  SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
+    os::FreeDataPages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
+                      SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
   }
 }
 
@@ -155,6 +172,41 @@ void *SlabAllocator::AllocateFromFreeList(void) {
 #endif  // GRANARY_TARGET_debug
   return head;
 }
+
+#else
+
+const SlabList *SlabAllocator::AllocateSlab(const SlabList *) {
+  return nullptr;
+}
+
+const SlabList *SlabAllocator::GetOrAllocateSlab(size_t) {
+  return nullptr;
+}
+
+extern "C" {
+
+void *malloc(size_t size);
+void free(void *);
+
+}  // extern C
+
+// Allocate some memory from the slab allocator.
+void *SlabAllocator::Allocate(void) {
+  return malloc(unaligned_size);
+}
+
+// Free some memory that was allocated from the slab allocator.
+void SlabAllocator::Free(void *address) {
+  free(address);
+}
+
+void SlabAllocator::Destroy(void) {}
+void *SlabAllocator::AllocateFromFreeList(void) {
+  return nullptr;
+}
+
+
+#endif  // GRANARY_WITH_VALGRIND
 
 }  // namespace internal
 }  // namespace granary

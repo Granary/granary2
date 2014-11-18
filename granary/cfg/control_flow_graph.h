@@ -22,13 +22,13 @@ class LocalControlFlowGraph;
 class BlockFactory;
 GRANARY_INTERNAL_DEFINITION class DirectEdge;
 GRANARY_INTERNAL_DEFINITION class IndirectEdge;
-GRANARY_INTERNAL_DEFINITION class ContextInterface;
+GRANARY_INTERNAL_DEFINITION class Context;
 
 // A control flow graph of basic blocks to instrument.
 class LocalControlFlowGraph final {
  public:
   GRANARY_INTERNAL_DEFINITION
-  explicit LocalControlFlowGraph(ContextInterface *context_);
+  explicit LocalControlFlowGraph(Context *context_);
 
   // Destroy the CFG and all basic blocks in the CFG.
   ~LocalControlFlowGraph(void);
@@ -76,7 +76,7 @@ class LocalControlFlowGraph final {
 
   // Context to which this LCFG belongs. This is needed so that we can allocate
   // edge code data structures.
-  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
+  GRANARY_INTERNAL_DEFINITION Context *context;
 
   // List of basic blocks known to this control-flow graph.
   GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *entry_block;

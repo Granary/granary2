@@ -35,13 +35,13 @@ std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
 // Materialize a direct basic block and insert a direct jump to that
 // basic block.
 std::unique_ptr<Instruction> Jump(BlockFactory *factory, AppPC target_pc,
-                                  BlockRequestKind request=REQUEST_LATER);
+                                  BlockRequestKind request=kRequestBlockLater);
 
 // Materialize a direct basic block and insert a direct call to that
 // basic block.
 std::unique_ptr<Instruction> FunctionCall(
     BlockFactory *factory, AppPC target_pc,
-    BlockRequestKind request=REQUEST_LATER);
+    BlockRequestKind request=kRequestBlockLater);
 
 // Materialize a return from a function.
 std::unique_ptr<Instruction> Return(BlockFactory *factory);
@@ -53,7 +53,7 @@ void ConvertFunctionCallToJump(ControlFlowInstruction *cfi);
 void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi);
 
 struct TranslationContext {
-  GRANARY_POINTER(ContextInterface) *granary_context;
+  GRANARY_POINTER(Context) *granary_context;
 };
 
 // Call to a client function that takes in an argument to a granary context and

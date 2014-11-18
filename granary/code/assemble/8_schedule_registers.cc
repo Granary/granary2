@@ -63,13 +63,14 @@ static void FreeSSAData(FragmentList *frags) {
           ClearMetaData(instr);
         }
       } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-        if (IA_SSA_NODE_DEF == ainstr->annotation ||
-            IA_SSA_RESTORE_REG == ainstr->annotation) {
-          // Note: `IA_SSA_SAVE_REG` have corresponding `IA_SSA_NODE_DEF` if
-          //       the scope of the save/restore is partition-local.
+        if (kAnnotSSANodeOwner == ainstr->annotation ||
+            kAnnotSSARestoreRegister == ainstr->annotation) {
+          // Note: `kAnnotSaveRegister`s will have corresponding
+          //       `kAnnotSSANodeOwner`s if the scope of the save/restore is
+          //       partition-local.
           delete GetMetaData<SSANode *>(instr);
           ClearMetaData(instr);
-        } else if (IA_SSA_ELIDED_COPY == ainstr->annotation) {
+        } else if (kAnnotSSAElidedInstruction == ainstr->annotation) {
           delete GetMetaData<SSAInstruction *>(instr);
           ClearMetaData(instr);
         }
@@ -178,7 +179,7 @@ static VirtualRegister NthSpillSlot(int n) {
 //                      missing compensation fragment, as otherwise `Assert1`
 //                      would have triggered the issue in advance. This
 //                      shouldn't be possible because compensation fragments
-//                      have `IA_SSA_NODE_UNDEF` instructions to kill VRs.
+//                      have `kAnnotSSANodeKill` instructions to kill VRs.
 //              If Loc(VR) != PGPR:
 //                Apply Case 4.
 //                Let Loc(Loc(VR)) = Loc(VR).
@@ -617,10 +618,10 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     // Annotation instructions can define/kill VRs.
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       auto node = GetMetaData<const SSANode *>(ainstr);
-      // Note: `IA_SSA_NODE_DEF` is not considered definitions because they
+      // Note: `kAnnotSSANodeOwner` is not considered definitions because they
       //       are added by the local value numbering stage of SSA construction
       //       for the sake of making it easier to reclaim `SSANode` objects.
-      if (IA_SSA_NODE_UNDEF == ainstr->annotation) {
+      if (kAnnotSSANodeKill == ainstr->annotation) {
         if (node->id == node_id) {
           // This node can't be homed to a register because the meaning of
           // this is to say that the node was live in a predecessor, but is not
@@ -638,20 +639,20 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
         }
 
       // Don't allow save/restore regs to span more than one fragment.
-      } else if (IA_SSA_SAVE_REG == ainstr->annotation ||
-                 IA_SSA_RESTORE_REG == ainstr->annotation) {
+      } else if (kAnnotSSASaveRegister == ainstr->annotation ||
+                 kAnnotSSARestoreRegister == ainstr->annotation) {
         GRANARY_ASSERT(node->id != node_id);
         used_regs.Revive(ainstr->Data<VirtualRegister>());
         HomeUsedReg(part_sched, reg_sched, frag, instr, used_regs, &vr_home);
         continue;
 
-      } else if (IA_SSA_MARK_USED_REGS == ainstr->annotation) {
+      } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
         used_regs = ainstr->Data<UsedRegisterSet>();
         HomeUsedReg(part_sched, reg_sched, frag, instr, used_regs, &vr_home);
         continue;
 
       // We can stop here.
-      } else if (IA_SSA_FRAG_BEGIN_GLOBAL == ainstr->annotation) {
+      } else if (kAnnotSSAPartitionLocalBegin == ainstr->annotation) {
         first_instr = instr;
         break;
 
@@ -1252,7 +1253,7 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
     GRANARY_ASSERT(RegLocationType::LIVE_SLOT != vr_home.type);
   }
 
-  auto ainstr = new AnnotationInstruction(IA_SSA_ELIDED_COPY, dest_reg);
+  auto ainstr = new AnnotationInstruction(kAnnotSSAElidedInstruction, dest_reg);
   SetMetaData(ainstr, ssa_instr);
   sched->frag->instrs.InsertAfter(instr, ainstr);
 
@@ -1335,14 +1336,14 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
     prev_instr = instr->Previous();
 
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (IA_SSA_FRAG_BEGIN_LOCAL == ainstr->annotation) {
+      if (kAnnotSSAFragLocalBegin == ainstr->annotation) {
         first_instr = instr;
         break;
-      } else if (IA_SSA_SAVE_REG == ainstr->annotation) {
+      } else if (kAnnotSSASaveRegister == ainstr->annotation) {
         ScheduleFragmentLocalRegs(&sched, ainstr, true);
-      } else if (IA_SSA_RESTORE_REG == ainstr->annotation) {
+      } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
         ScheduleFragmentLocalRegs(&sched, ainstr, false);
-      } else if (IA_SSA_MARK_USED_REGS == ainstr->annotation) {
+      } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
         HomeUsedRegs(&sched, ainstr, ainstr->Data<UsedRegisterSet>());
       }
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
@@ -1404,10 +1405,10 @@ static Instruction *FirstSSAInstruction(SSAFragment *frag) {
       }
     } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       switch (ainstr->annotation) {
-        case IA_SSA_NODE_DEF:
-        case IA_SSA_NODE_UNDEF:
-        case IA_SSA_SAVE_REG:
-        case IA_SSA_RESTORE_REG:
+        case kAnnotSSANodeOwner:
+        case kAnnotSSANodeKill:
+        case kAnnotSSASaveRegister:
+        case kAnnotSSARestoreRegister:
           return ainstr;
         default:
           break;
@@ -1424,8 +1425,8 @@ static Instruction *FirstSSAInstruction(SSAFragment *frag) {
 static void AddFragBeginAnnotations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-      auto local_annot = new AnnotationInstruction(IA_SSA_FRAG_BEGIN_LOCAL);
-      auto global_annot = new AnnotationInstruction(IA_SSA_FRAG_BEGIN_GLOBAL);
+      auto local_annot = new AnnotationInstruction(kAnnotSSAFragLocalBegin);
+      auto global_annot = new AnnotationInstruction(kAnnotSSAPartitionLocalBegin);
       if (auto first = FirstSSAInstruction(ssa_frag)) {
         frag->instrs.InsertBefore(first, global_annot);
         frag->instrs.InsertBefore(first, local_annot);

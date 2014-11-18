@@ -1,6 +1,9 @@
 granary {
     global:
-        environ; _init;
+        environ;
+        _init;
+        __libc_argv;
+        __libc_argc;
     local:
         *;
 };

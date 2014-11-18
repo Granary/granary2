@@ -34,6 +34,14 @@
     x: @N@\
     .cfi_startproc
 
+#define DEFINE_TEST_FUNC(x) \
+    .section .text.test_cases @N@\
+    .align 16 @N@\
+    .globl SYMBOL(x) @N@\
+    .type SYMBOL(x), @function @N@\
+    x: @N@\
+    .cfi_startproc
+
 #define END_FUNC(x) \
     ud2 @N@\
     .cfi_endproc @N@

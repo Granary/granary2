@@ -10,7 +10,7 @@
 namespace granary {
 
 // Forward declarations.
-class ContextInterface;
+class Context;
 class LocalControlFlowGraph;
 class BasicBlock;
 class DirectBasicBlock;
@@ -33,39 +33,37 @@ class InstructionDecoder;
 enum BlockRequestKind : uint8_t {
 
   // Don't materialize this basic block. This is the default.
-  REQUEST_LATER,
+  kRequestBlockLater,
 
   // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
   // already been cached (at the time of lookup) and if we haven't already
   // materialized it into our local control-flow graph.
-  REQUEST_CHECK_INDEX_AND_LCFG,
+  kRequestBlockFromIndexOrCFG,
 
   // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
   // already been materialized into the CFG.
-  REQUEST_CHECK_LCFG,
+  kRequestBlockFromCFG,
 
   // Always materialize this block into an `DecodedBasicBlock`, even if it's
   // indexed in the cache or if already in the `LocalControlFlowGraph`.
-  REQUEST_NOW,
+  kRequestBlockDecodeNow,
 
   // Materialize to the native target.
-  REQUEST_NATIVE,
+  kRequestBlockExecuteNatively,
 
   // Materialization request cannot be satisfied. In practice, this is useful
   // for when you want to prevent some other tool from requesting the block
   // during this instrumentation session (e.g. to guarantee certain code
   // layout).
-  REQUEST_DENIED
+  kRequestBlockInFuture
 
-#ifdef GRANARY_INTERNAL
   // Internal request that looks for a block in either the code cache index or
   // in the LCFG, but does *not* decode any blocks. This internal request is
   // submitted for each `DirectBasicBlock` in the LCFG when no other pending
   // requests are outstanding. This can result in extra compensation fragments
   // being added, and therefore a new invocation of
   // `Tool::InstrumentControlFlow`.
-  , REQUEST_CHECK_INDEX_AND_LCFG_ONLY
-#endif  // GRANARY_INTERNAL
+  _GRANARY_IF_INTERNAL(kRequestBlockFromIndexOrCFGOnly)
 };
 
 // Basic block materializer.
@@ -76,21 +74,21 @@ class BlockFactory {
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit BlockFactory(ContextInterface *context_,
+  explicit BlockFactory(Context *context_,
                         LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
   void RequestBlock(
       BasicBlock *block,
-      BlockRequestKind strategy=REQUEST_CHECK_INDEX_AND_LCFG);
+      BlockRequestKind strategy=kRequestBlockFromIndexOrCFG);
 
   // Request that a `block` be materialized according to strategy `strategy`.
   // If multiple requests are made, then the most fine-grained strategy is
   // chosen.
   void RequestBlock(
       DirectBasicBlock *block,
-      BlockRequestKind strategy=REQUEST_CHECK_INDEX_AND_LCFG);
+      BlockRequestKind strategy=kRequestBlockFromIndexOrCFG);
 
   // Request a block from the code cache index. If an existing block can be
   // adapted, then we will use that.
@@ -100,7 +98,8 @@ class BlockFactory {
   // Request a block that is the target of an indirect control-flow instruction.
   // To provide maximum flexibility (e.g. allow selective going native of
   // targets), we generate a dummy compensation fragment that jumps to a direct
-  // basic block with a default non-`REQUEST_LATER` materialization strategy.
+  // basic block with a default non-`kRequestBlockInFuture` materialization
+  // strategy.
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock *MaterializeIndirectEntryBlock(BlockMetaData *meta);
 
@@ -172,7 +171,7 @@ class BlockFactory {
   bool MaterializeBlock(DirectBasicBlock *block);
 
   // Then environment in which we're decoding.
-  GRANARY_INTERNAL_DEFINITION ContextInterface *context;
+  GRANARY_INTERNAL_DEFINITION Context *context;
 
   // The LCFG into which blocks are materialized.
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;

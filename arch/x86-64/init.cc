@@ -39,10 +39,13 @@ FlagsSet IFORM_FLAGS[XED_IFORM_LAST];
 // Returns a bitmap representing all arithmetic flags being live.
 extern uint32_t AllArithmeticFlags(void);
 
+// Initialize the block tracer.
+extern void InitBlockTracer(void);
+
 namespace {
 
 // Number of pages allocates to hold the table of implicit operands.
-static int num_implicit_operand_pages = 0;
+static size_t num_implicit_operand_pages = 0;
 
 // Initialize the table of iclass categories.
 static void InitIclassTables(void) {
@@ -157,10 +160,9 @@ static void InitIformFlags(void) {
   }
 }
 
-// Invoke a function one every implicit operand of each iclass.
-static void ForEachImplicitOperand(
-    const std::function<void(const xed_inst_t *, const xed_operand_t *,
-                             unsigned, unsigned)> &cb) {
+// Invoke a function one every implicit operand of each `iclass`.
+template <typename FuncT>
+static void ForEachImplicitOperand(FuncT func) {
   for (auto isel = 0U; isel < XED_MAX_INST_TABLE_NODES; ++isel) {
     auto instr = xed_inst_table_base() + isel;
     auto iform = xed_inst_iform_enum(instr);
@@ -172,7 +174,7 @@ static void ForEachImplicitOperand(
       auto op = xed_inst_operand(instr, i);
       if (XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(op) &&
           !IsAmbiguousOperand(iclass, iform, i)) {
-        cb(instr, op, i, isel);
+        func(instr, op, i, isel);
       }
     }
   }
@@ -187,7 +189,7 @@ static size_t CountImplicitOperands(void) {
     GRANARY_ASSERT(11 >= new_num_ops);  // Max case is `PUSHAD`.
     ++num_implicit_ops;
   };
-  ForEachImplicitOperand(std::cref(func));
+  ForEachImplicitOperand(func);
   return num_implicit_ops;
 }
 
@@ -195,11 +197,9 @@ static size_t CountImplicitOperands(void) {
 static Operand *AllocateImplicitOperands(void) {
   auto num_implicit_ops = CountImplicitOperands();
   auto ops_mem_size = num_implicit_ops * sizeof(Operand);
-  auto aligned_ops_mem_size = GRANARY_ALIGN_TO(ops_mem_size,
-                                               arch::PAGE_SIZE_BYTES);
-  num_implicit_operand_pages = static_cast<int>(
-      aligned_ops_mem_size / arch::PAGE_SIZE_BYTES);
-  auto ops_mem_raw = os::AllocatePages(num_implicit_operand_pages);
+  auto aligned_ops_mem_size = ops_mem_size + arch::PAGE_SIZE_BYTES - 1;
+  num_implicit_operand_pages = aligned_ops_mem_size / arch::PAGE_SIZE_BYTES;
+  auto ops_mem_raw = os::AllocateDataPages(num_implicit_operand_pages);
   return reinterpret_cast<Operand *>(ops_mem_raw);
 }
 
@@ -345,7 +345,7 @@ static void InitImplicitOperands(Operand *op) {
     }
     op++;
   };
-  ForEachImplicitOperand(std::cref(func));
+  ForEachImplicitOperand(func);
 }
 
 // Initialize a table of implicit operands.
@@ -354,18 +354,16 @@ static void InitImplicitOperands(Operand *op) {
 static void InitOperandTables(void) {
   auto ops = AllocateImplicitOperands();
   InitImplicitOperands(ops);
-  os::ProtectPages(ops, num_implicit_operand_pages,
-                   os::MemoryProtection::READ_ONLY);
 }
 
-static bool arch_is_initialized = false;
+static bool gArchIsInitialized = false;
 
 }  // namespace
 
 // Initialize the driver (instruction encoder/decoder).
 void Init(void) {
-  if (!arch_is_initialized) {
-    arch_is_initialized = true;
+  if (!gArchIsInitialized) {
+    gArchIsInitialized = true;
     xed_tables_init();
     xed_state_zero(&XED_STATE);
     xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
@@ -375,6 +373,7 @@ void Init(void) {
     InitIformFlags();
     InitOperandTables();
   }
+  InitBlockTracer();
 }
 
 }  // namespace arch

@@ -121,9 +121,9 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   virtual void InstrumentEntrypoint(BlockFactory *factory,
                                     CompensationBasicBlock *entry_block,
                                     EntryPointKind kind, int) {
-    if (ENTRYPOINT_USER_LOAD == kind && !FLAG_early_attach) {
+    if (kEntryPointUserAttach == kind && !FLAG_early_attach) {
       for (auto succ : entry_block->Successors()) {
-        factory->RequestBlock(succ.block, REQUEST_NATIVE);
+        factory->RequestBlock(succ.block, kRequestBlockExecuteNatively);
       }
     }
   }

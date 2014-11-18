@@ -13,12 +13,12 @@
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
-#include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/index.h"
+#include "granary/metadata.h"
 
 #include "os/module.h"
 
@@ -32,6 +32,8 @@ GRANARY_DEFINE_positive_int(edge_cache_slab_size, 256,
     "context maintains its own edge code allocator. The default value is "
     "`256` pages per slab (1MiB).");
 
+GRANARY_DECLARE_string(tools);
+
 namespace granary {
 namespace arch {
 
@@ -43,7 +45,7 @@ namespace arch {
 // This allows us to avoid saving the context pointer in the `DirectEdge`.
 //
 // Note: This has an architecture-specific implementation.
-extern void GenerateDirectEdgeEntryCode(ContextInterface *context,
+extern void GenerateDirectEdgeEntryCode(Context *context,
                                         CachePC edge);
 
 // Generates the direct edge code for a given `DirectEdge` structure.
@@ -59,24 +61,24 @@ extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
 // This allows us to avoid saving the context pointer in the `IndirectEdge`.
 //
 // Note: This has an architecture-specific implementation.
-extern void GenerateIndirectEdgeEntryCode(ContextInterface *context,
+extern void GenerateIndirectEdgeEntryCode(Context *context,
                                           CachePC edge);
 
 // Generates code that disables interrupts.
 //
 // Note: This has an architecture-specific implementation.
-extern void GenerateInterruptDisableCode(ContextInterface *, CachePC pc);
+extern void GenerateInterruptDisableCode(Context *, CachePC pc);
 
 // Generates code that re-enables interrupts (if they were disabled by the
 // interrupt disabling routine).
 //
 // Note: This has an architecture-specific implementation.
-extern void GenerateInterruptEnableCode(ContextInterface *, CachePC pc);
+extern void GenerateInterruptEnableCode(Context *, CachePC pc);
 
 // Generates the wrapper code for a context callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateContextCallback(ContextInterface *, CodeCache *cache,
+extern Callback *GenerateContextCallback(Context *, CodeCache *cache,
                                          AppPC func_pc);
 
 // Generates the wrapper code for an outline callback.
@@ -86,34 +88,15 @@ extern Callback *GenerateInlineCallback(CodeCache *cache,
                                          InlineFunctionCall *call);
 
 }  // namespace arch
-namespace os {
-extern Container<ModuleManager> global_module_manager;
-}  // namespace os
 namespace {
 
 template <typename T>
-static CachePC GenerateCode(ContextInterface *context,
-                            CodeCache *cache, T generator, int size) {
+static CachePC GenerateCode(Context *context, CodeCache *cache,
+                            T generator, size_t size) {
   auto code = cache->AllocateBlock(size);
   CodeCacheTransaction transaction(cache, code, code + size);
   generator(context, code);
   return code;
-}
-
-// Register internal meta-data.
-static void InitMetaData(MetaDataManager *metadata_manager) {
-  metadata_manager->Register<AppMetaData>();
-  metadata_manager->Register<CacheMetaData>();
-  metadata_manager->Register<IndexMetaData>();
-  metadata_manager->Register<StackMetaData>();
-}
-
-// Create a module for a Granary code cache.
-static os::Module *MakeCodeCacheMod(ContextInterface *context,
-                                    const char *name) {
-  // TODO(pag): For the time being, treat code cache as Granary as well, and
-  //            disambiguate via other means. See issue #24.
-  return new os::Module(os::ModuleKind::GRANARY, name, context);
 }
 
 // Free a linked list of edges.
@@ -135,17 +118,12 @@ static void FreeCallbacks(T &callback_map) {
 
 }  // namespace
 
-#ifdef GRANARY_TARGET_test
-ContextInterface::~ContextInterface(void) {}
-#endif  // GRANARY_TARGET_test
-
 Context::Context(void)
-    : metadata_manager(),
-      tool_manager(this),
-      block_code_cache_mod(MakeCodeCacheMod(this, "[block cache]")),
-      block_code_cache(block_code_cache_mod, FLAG_block_cache_slab_size),
-      edge_code_cache_mod(MakeCodeCacheMod(this, "[edge cache]")),
-      edge_code_cache(edge_code_cache_mod, FLAG_edge_cache_slab_size),
+    : tool_manager(this),
+      block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size),
+                       kBlockCodeCache),
+      edge_code_cache(static_cast<size_t>(FLAG_edge_cache_slab_size),
+                      kEdgeCodeCache),
       direct_edge_entry_code(
           GenerateCode(this, &edge_code_cache,
                        arch::GenerateDirectEdgeEntryCode,
@@ -171,13 +149,7 @@ Context::Context(void)
       context_callbacks_lock(),
       context_callbacks(),
       arg_callbacks_lock(),
-      outline_callbacks() {
-  InitMetaData(&metadata_manager);
-
-  // Tell this environment about all loaded modules.
-  os::global_module_manager->Register(block_code_cache_mod);
-  os::global_module_manager->Register(edge_code_cache_mod);
-}
+      outline_callbacks() {}
 
 Context::~Context(void) {
   FreeEdgeList(patched_edge_list);
@@ -188,24 +160,33 @@ Context::~Context(void) {
 }
 
 // Initialize all tools from a comma-separated list of tools.
-void Context::InitTools(InitReason reason, const char *tool_names) {
+void Context::InitTools(InitReason reason) {
 
   // Force register some tools that should get priority over all others.
-  tool_manager.Register(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
+  tool_manager.Add(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
 
   // Registered early so that all returns start off specialized by default.
-  tool_manager.Register("transparent_returns_early");
+  tool_manager.Add("transparent_returns_early");
 
-  // Register tools specified at the command-line.
-  ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
-      tool_names,
-      [&] (const char *tool_name) {
-        tool_manager.Register(tool_name);
-      });
+#ifdef GRANARY_WITH_VALGRIND
+  // Auto-registered so that `aligned_alloc` and `free` are always wrapped to
+  // execute natively (and so are ideally instrumented by Valgrind to help
+  // catch memory access bugs).
+  tool_manager.Add("valgrind");
+#endif  // GRANARY_WITH_VALGRIND
+
+  if (FLAG_tools) {
+    // Register tools specified at the command-line.
+    ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+        FLAG_tools,
+        [&] (const char *tool_name) {
+          tool_manager.Add(tool_name);
+        });
+  }
 
   // Registered last so that transparent returns applies to all control-flow
   // after every other tool has made control-flow decisions.
-  tool_manager.Register("transparent_returns_late");
+  tool_manager.Add("transparent_returns_late");
 
   // Initialize all tools. Tool initialization is typically where tools will
   // register their specific their block meta-data, therefore it is important
@@ -230,7 +211,7 @@ void Context::ExitTools(ExitReason reason) {
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
 // `AppMetaData` within the `BlockMetaData`.
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
-  auto meta = AllocateEmptyBlockMetaData();
+  auto meta = new BlockMetaData;
   MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
   return meta;
 }
@@ -242,16 +223,6 @@ BlockMetaData *Context::AllocateBlockMetaData(
   auto meta = meta_template->Copy();
   MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
   return meta;
-}
-
-// Allocate and initialize some empty `BlockMetaData`.
-BlockMetaData *Context::AllocateEmptyBlockMetaData(void) {
-  return metadata_manager.Allocate();
-}
-
-// Register some meta-data with Granary.
-void Context::AddMetaData(const MetaDataDescription *desc) {
-  metadata_manager.Register(const_cast<MetaDataDescription *>(desc));
 }
 
 // Allocate instances of the tools that will be used to instrument blocks.
@@ -267,8 +238,6 @@ void Context::FreeTools(InstrumentationTool *tools) {
 // Allocates a direct edge data structure, as well as the code needed to
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
-  GRANARY_ASSERT(dest_block_meta->manager == &metadata_manager);
-
   auto edge_code = edge_code_cache.AllocateBlock(
       arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   auto edge = new DirectEdge(dest_block_meta, edge_code);
@@ -292,8 +261,6 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
 // Allocates an indirect edge data structure.
 IndirectEdge *Context::AllocateIndirectEdge(
     const BlockMetaData *dest_block_meta) {
-  GRANARY_ASSERT(dest_block_meta->manager == &metadata_manager);
-
   auto edge = new IndirectEdge(dest_block_meta, indirect_edge_entry_code);
   SpinLockedRegion locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;
@@ -363,23 +330,25 @@ namespace {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wglobal-constructors"
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
-GRANARY_EARLY_GLOBAL static Container<Context> context;
+GRANARY_EARLY_GLOBAL static Container<Context> gContext;
 #pragma clang diagnostic pop
 }  // namespace
 
 // Initializes a new active context.
-void InitContext(void) {
-  context.Construct();
+void InitContext(InitReason reason) {
+  gContext.Construct();
+  gContext->InitTools(reason);
 }
 
 // Destroys the active context.
-void ExitContext(void) {
-  context.Destroy();
+void ExitContext(ExitReason reason) {
+  gContext->ExitTools(reason);
+  gContext.Destroy();
 }
 
 // Loads the active context.
-ContextInterface *GlobalContext(void) {
-  return context.AddressOf();
+Context *GlobalContext(void) {
+  return gContext.AddressOf();
 }
 
 }  // namespace granary

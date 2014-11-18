@@ -12,11 +12,11 @@
 namespace granary {
 
 // Forward declarations.
-class ContextInterface;
+class Context;
 class LocalControlFlowGraph;
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(ContextInterface *context, LocalControlFlowGraph *cfg);
+FragmentList Assemble(Context *context, LocalControlFlowGraph *cfg);
 }  // namespace granary
 
 #endif  // GRANARY_CODE_ASSEMBLE_H_

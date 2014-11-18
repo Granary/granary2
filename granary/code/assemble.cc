@@ -33,7 +33,7 @@ GRANARY_DEFINE_unsigned(num_copy_propagations, 2,
 namespace granary {
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(ContextInterface *context, LocalControlFlowGraph *cfg) {
+FragmentList Assemble(Context *context, LocalControlFlowGraph *cfg) {
 
   // Compile all inline assembly instructions by parsing the inline assembly
   // instructions and doing code generation for them.
@@ -90,7 +90,7 @@ FragmentList Assemble(ContextInterface *context, LocalControlFlowGraph *cfg) {
   // successor fragments.
   AddConnectingJumps(&frags);
 
-  // Move all `IA_RETURN_ADDRESS` annotations to the beginning of their
+  // Move all `kAnnotReturnAddressLabel` annotations to the beginning of their
   // partitions.
   FixupReturnAddresses(&frags);
 

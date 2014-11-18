@@ -15,7 +15,7 @@
 
 namespace granary {
 
-LocalControlFlowGraph::LocalControlFlowGraph(ContextInterface *context_)
+LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
     : context(context_),
       entry_block(nullptr),
       first_block(nullptr),

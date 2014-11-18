@@ -6,8 +6,9 @@
 namespace granary {
 
 enum InitReason {
-  INIT_PROGRAM = 0,
-  INIT_ATTACH
+  kInitProgram = 0,
+  kInitAttach = 1,
+  kInitTestCase
 };
 
 // Runs the constructors from the initialization array.

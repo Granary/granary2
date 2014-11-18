@@ -167,7 +167,7 @@ Callback *GenerateInlineCallback(CodeCache *cache, InlineFunctionCall *call) {
 
 #define SAVE_ARG(arg) \
   if (arg < num_args) { \
-    APP_INSTR(new AnnotationInstruction(IA_SSA_SAVE_REG, r ## arg)); \
+    APP_INSTR(new AnnotationInstruction(kAnnotSSASaveRegister, r ## arg)); \
     arg_regs.Revive(r ## arg); \
   }
 
@@ -183,12 +183,12 @@ Callback *GenerateInlineCallback(CodeCache *cache, InlineFunctionCall *call) {
 
 #define RESTORE_ARG(arg) \
   if (arg < num_args) \
-    APP_INSTR(new AnnotationInstruction(IA_SSA_RESTORE_REG, r ## arg))
+    APP_INSTR(new AnnotationInstruction(kAnnotSSARestoreRegister, r ## arg))
 
 // Generates some code to target some client function. The generated code tries
 // to minimize the amount of saved/restored machine state, and punts on the
 // virtual register system for the rest.
-void ExtendFragmentWithInlineCall(ContextInterface *context,
+void ExtendFragmentWithInlineCall(Context *context,
                                   CodeFragment *frag,
                                   InlineFunctionCall *call) {
   auto ic = context->InlineCallback(call);
@@ -232,15 +232,15 @@ void ExtendFragmentWithInlineCall(ContextInterface *context,
   MOVE_ARG(5);
 
   if (num_args) {
-    APP_INSTR(new AnnotationInstruction(IA_SSA_MARK_USED_REGS, arg_regs));
+    APP_INSTR(new AnnotationInstruction(kAnnotSSAReviveRegisters, arg_regs));
   }
 
-  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_OFF_STACK));
+  APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
 
   APP(CALL_NEAR_RELBRd(&ni, ic->wrapped_callback);
       ni.is_stack_blind = true);
 
-  APP_INSTR(new AnnotationInstruction(IA_LATE_SWITCH_ON_STACK));
+  APP_INSTR(new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   RESTORE_ARG(5);
   RESTORE_ARG(4);

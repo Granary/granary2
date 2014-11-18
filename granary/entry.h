@@ -6,13 +6,14 @@
 namespace granary {
 
 enum EntryPointKind : unsigned {
-  ENTRYPOINT_KERNEL_SYSCALL = 0,
-  ENTRYPOINT_KERNEL_INTERRUPT,
-  ENTRYPOINT_MODULE_INIT,
-  ENTRYPOINT_MODULE_EXIT,
-  ENTRYPOINT_MODULE_CALLBACK,
-  ENTRYPOINT_USER_SIGNAL,
-  ENTRYPOINT_USER_LOAD
+  kEntryPointKernelSyscall = 0,
+  kEntryPointKernelInterrupt,
+  kEntryPointKernelModuleInit,
+  kEntryPointKernelModuleExit,
+  kEntryPointKernelModuleCallback,
+  kEntryPointUserSignalHandler,
+  kEntryPointUserAttach,
+  kEntryPointTestCase
 };
 
 }  // namespace granary

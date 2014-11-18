@@ -60,7 +60,7 @@ void AddFunctionWrapper(FunctionWrapper *wrapper);
 // Gives access to the return (native) address associated with the function
 // being wrapped.
 #define NATIVE_RETURN_ADDRESS \
-  (({ register uintptr_t __r11 asm("r11"); \
+  reinterpret_cast<granary::AppPC>(({ register uintptr_t __r11 asm("r11"); \
       asm("movq %%r11, %0;" : "=r"(__r11)); \
       __r11; }))
 

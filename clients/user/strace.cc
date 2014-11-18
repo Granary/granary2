@@ -342,38 +342,38 @@ enum {
   NUM_SYSCALLS = sizeof kSystemCallNames / sizeof kSystemCallNames[0]
 };
 
-static __thread uint64_t syscall_number = 0;
-static __thread uint64_t syscall_arg0 = 0;
-static __thread uint64_t syscall_arg1 = 0;
-static __thread uint64_t syscall_arg2 = 0;
-static __thread uint64_t syscall_arg3 = 0;
-static __thread uint64_t syscall_arg4 = 0;
-static __thread uint64_t syscall_arg5 = 0;
+static __thread uint64_t tSyscallNumber = 0;
+static __thread uint64_t tSyscallArg0 = 0;
+static __thread uint64_t tSyscallArg1 = 0;
+static __thread uint64_t tSyscallArg2 = 0;
+static __thread uint64_t tSyscallArg3 = 0;
+static __thread uint64_t tSyscallArg4 = 0;
+static __thread uint64_t tSyscallArg5 = 0;
 
 static void TraceSyscallEntry(void *, SystemCallContext ctx) {
-  syscall_number = ctx.Number();
-  syscall_arg0 = ctx.Arg0();
-  syscall_arg1 = ctx.Arg1();
-  syscall_arg2 = ctx.Arg2();
-  syscall_arg3 = ctx.Arg3();
-  syscall_arg4 = ctx.Arg4();
-  syscall_arg5 = ctx.Arg5();
+  tSyscallNumber = ctx.Number();
+  tSyscallArg0 = ctx.Arg0();
+  tSyscallArg1 = ctx.Arg1();
+  tSyscallArg2 = ctx.Arg2();
+  tSyscallArg3 = ctx.Arg3();
+  tSyscallArg4 = ctx.Arg4();
+  tSyscallArg5 = ctx.Arg5();
 }
 
 static void TraceSyscallExit(void *, SystemCallContext ctx) {
-  if (syscall_number < NUM_SYSCALLS) {
+  if (tSyscallNumber < NUM_SYSCALLS) {
     os::Log("%s\t%lx\t%lx\t%lx\t%lx\t%lx\t%lx\t= %lx\n",
-            kSystemCallNames[syscall_number], syscall_arg0, syscall_arg1,
-            syscall_arg2, syscall_arg3, syscall_arg4, syscall_arg5,
+            kSystemCallNames[tSyscallNumber], tSyscallArg0, tSyscallArg1,
+            tSyscallArg2, tSyscallArg3, tSyscallArg4, tSyscallArg5,
             ctx.ReturnValue());
   }
-  syscall_number = 0;
-  syscall_arg0 = 0;
-  syscall_arg1 = 0;
-  syscall_arg2 = 0;
-  syscall_arg3 = 0;
-  syscall_arg4 = 0;
-  syscall_arg5 = 0;
+  tSyscallNumber = 0;
+  tSyscallArg0 = 0;
+  tSyscallArg1 = 0;
+  tSyscallArg2 = 0;
+  tSyscallArg3 = 0;
+  tSyscallArg4 = 0;
+  tSyscallArg5 = 0;
 }
 
 }  // namespace

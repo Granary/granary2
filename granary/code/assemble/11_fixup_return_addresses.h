@@ -9,8 +9,8 @@
 
 namespace granary {
 
-// Makes sure that all `IA_RETURN_ADDRESS` annotations are in the correct
-// position.
+// Makes sure that all `kAnnotReturnAddressLabel` annotations are in the
+// correct position.
 void FixupReturnAddresses(FragmentList *frags);
 
 }  // namespace granary

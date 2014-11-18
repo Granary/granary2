@@ -35,7 +35,7 @@ namespace arch {
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-extern bool TryAtomicPatchEdge(ContextInterface *context, DirectEdge *edge);
+extern bool TryAtomicPatchEdge(Context *context, DirectEdge *edge);
 
 }  // namespace arch
 namespace {
@@ -74,7 +74,7 @@ static inline bool OnGranaryStack(void) {
 extern "C" {
 
 // Enter into Granary to begin the translation process for a direct edge.
-void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
+void granary_enter_direct_edge(DirectEdge *edge, Context *context) {
   GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
 
   auto meta = edge->dest_meta.exchange(nullptr, std::memory_order_seq_cst);
@@ -97,10 +97,11 @@ void granary_enter_direct_edge(DirectEdge *edge, ContextInterface *context) {
 //      1) We need to make a compensation fragment that directly jumps to
 //         `target_app_pc`.
 //      2) We need to set up the compensation fragment such that the direct
-//         jump has a default non-`REQUEST_LATER` materialization strategy.
+//         jump has a default non-`kRequestBlockInFuture` materialization
+//         strategy.
 //      3) We need to prepend the out-edge code to the resulting code (by
 //         "instantiating" the out edge into a fragment).
-void granary_enter_indirect_edge(IndirectEdge *edge, ContextInterface *context,
+void granary_enter_indirect_edge(IndirectEdge *edge, Context *context,
                                  AppPC target_app_pc) {
   Translate(context, edge, target_app_pc);
 }

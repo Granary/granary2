@@ -214,8 +214,8 @@ static SSANode *DefinedNodeForReg(NativeInstruction *instr,
 static SSANode *DefinedNodeForReg(AnnotationInstruction *instr,
                                   VirtualRegister reg) {
   auto node = GetMetaData<SSANode *>(instr);
-  if (IA_SSA_NODE_DEF == instr->annotation ||
-      IA_SSA_RESTORE_REG == instr->annotation) {
+  if (kAnnotSSANodeOwner == instr->annotation ||
+      kAnnotSSARestoreRegister == instr->annotation) {
     if (node->reg == reg) {
       return node;
     }

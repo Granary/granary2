@@ -31,12 +31,15 @@ class Client {
     virtual void Init(void) override { \
       OnClientInit(); \
     } \
-  } static client GRANARY_EARLY_GLOBAL; \
+  } static GRANARY_CAT(client,__LINE__) GRANARY_EARLY_GLOBAL; \
   } \
   static void OnClientInit(void)
 
 // Initializes the clients.
 GRANARY_INTERNAL_DEFINITION void InitClients(void);
+
+// Exits the clients.
+GRANARY_INTERNAL_DEFINITION void ExitClients(void);
 
 }  // namespace granary
 

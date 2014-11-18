@@ -34,6 +34,7 @@ typedef long int ssize_t;
 #   include <valgrind/valgrind.h>
 #   include <valgrind/memcheck.h>
 #   define GRANARY_IF_VALGRIND(...) __VA_ARGS__
+#   define GRANARY_IF_NOT_VALGRIND(...)
 # else
 #   define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
 #   define VALGRIND_FREELIKE_BLOCK(addr, rzB)
@@ -45,6 +46,7 @@ typedef long int ssize_t;
 #   define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
 #   define VALGRIND_CHECK_MEM_IS_DEFINED(addr,size)
 #   define GRANARY_IF_VALGRIND(...)
+#   define GRANARY_IF_NOT_VALGRIND(...) __VA_ARGS__
 # endif
 #endif
 
@@ -75,7 +77,8 @@ typedef long int ssize_t;
 # define GRANARY_IF_DEBUG_(...) __VA_ARGS__ ,
 # define _GRANARY_IF_DEBUG(...) , __VA_ARGS__
 # define GRANARY_IF_DEBUG_ELSE(a, b) a
-# define GRANARY_ASSERT(...) granary_break_on_fault_if(!(__VA_ARGS__))
+# define GRANARY_ASSERT(...) \
+  granary_break_on_fault_if(!(__VA_ARGS__),#__VA_ARGS__)
 #else
 # define GRANARY_IF_DEBUG(...)
 # define GRANARY_IF_DEBUG_(...)
@@ -85,16 +88,13 @@ typedef long int ssize_t;
 #endif  // GRANARY_TARGET_debug
 
 #ifdef GRANARY_TARGET_test
-# define GRANARY_TEST_VIRTUAL virtual
 # define GRANARY_IF_TEST(...) __VA_ARGS__
+# define GRANARY_IF_NOT_TEST(...)
 # define _GRANARY_IF_TEST(...) , __VA_ARGS__
 #else
-# define GRANARY_TEST_VIRTUAL
 # define GRANARY_IF_TEST(...)
+# define GRANARY_IF_NOT_TEST(...) __VA_ARGS__
 # define _GRANARY_IF_TEST(...)
-# ifndef ContextInterface
-#   define ContextInterface Context  // Minor hack!
-# endif
 #endif  // GRANARY_TARGET_test
 
 #ifdef GRANARY_ARCH_INTERNAL
@@ -198,6 +198,10 @@ typedef long int ssize_t;
 //       code *is not* instrumented.
 #define GRANARY_EXPORT_TO_INSTRUMENTATION \
   __attribute__((noinline, used, section(".text.inst_exports")))
+
+// Granary function that is to be instrumented as part of a test case.
+#define GRANARY_TEST_CASE \
+  __attribute__((noinline, used, section(".text.test_cases")))
 
 // Determine how much should be added to a value `x` in order to align `x` to
 // an `align`-byte boundary.

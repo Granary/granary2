@@ -303,20 +303,20 @@ static void LogUsedRegs(LogLevel level, AnnotationInstruction *instr) {
 
 static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
   auto kind = "";
-  if (IA_SSA_SAVE_REG == instr->annotation) {
+  if (kAnnotSSASaveRegister == instr->annotation) {
     kind = "@save";
-  } else if (IA_SSA_RESTORE_REG == instr->annotation) {
+  } else if (kAnnotSSARestoreRegister == instr->annotation) {
     kind = "@restore";
-  } else if (IA_SSA_ELIDED_COPY == instr->annotation) {
+  } else if (kAnnotSSAElidedInstruction == instr->annotation) {
     kind = "@elided_copy";
-  } else if (IA_SSA_NODE_UNDEF == instr->annotation) {
+  } else if (kAnnotSSANodeKill == instr->annotation) {
     kind = "@undef";
-  } else if (IA_SSA_MARK_USED_REGS == instr->annotation) {
+  } else if (kAnnotSSAReviveRegisters == instr->annotation) {
     return LogUsedRegs(level, instr);
-  } else if (IA_LATE_SWITCH_OFF_STACK == instr->annotation) {
+  } else if (kAnnotCondLeaveNativeStack == instr->annotation) {
     Log(level, FONT_BLUE "@offstack" END_FONT NEW_LINE);
     return;
-  } else if (IA_LATE_SWITCH_ON_STACK == instr->annotation) {
+  } else if (kAnnotCondEnterNativeStack == instr->annotation) {
     Log(level, FONT_BLUE "@onstack" END_FONT NEW_LINE);
     return;
   } else {
@@ -378,7 +378,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
     if (code->attr.follows_cfi) Log(level, "cfi~&gt; ");
     if (STACK_INVALID == code->stack.status) Log(level, "badstack ");
-    if (code->encoded_size) Log(level, "size=%d ", code->encoded_size);
+    if (code->encoded_size) Log(level, "size=%lu ", code->encoded_size);
     if (code->branch_instr) {
       Log(level, "binstr=%s ", code->branch_instr->OpCodeName());
     }

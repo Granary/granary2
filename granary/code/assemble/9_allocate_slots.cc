@@ -80,8 +80,8 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
   }
 
   // TODO(pag): What about initialization of fragments without partition
-  //            entry/exit? They might have `IA_LATE_SWITCH_OFF_STACK` or
-  //            `IA_LATE_SWITCH_ON_STACK` annotations.
+  //            entry/exit? They might have `kAnnotCondLeaveNativeStack` or
+  //            `kAnnotCondEnterNativeStack` annotations.
 
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {

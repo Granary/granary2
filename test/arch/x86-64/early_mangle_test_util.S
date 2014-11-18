@@ -6,7 +6,7 @@
 
 UINT64(deadbeef, 0xDEADBEEF)
 
-    .text
+    .section .text.test_cases
 
 BEGIN_FUNC(TestEarlyMangle_PushMem_GPR)
     pushq (%rdi);

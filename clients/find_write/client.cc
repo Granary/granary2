@@ -39,25 +39,25 @@ namespace {
 // Report an 8-bit memory write.
 static void ReportWrite8(const char *mod_name, uint64_t offset,
                          void *addr, uint8_t value) {
-  os::Log(os::LogDebug, "1,%s,%lx,%p,%x\n", mod_name, offset, addr, value);
+  os::Log("W 1 %p %x B %s %lx\n", addr, value, mod_name, offset);
 }
 
 // Report a 16-bit memory write.
 static void ReportWrite16(const char *mod_name, uint64_t offset,
                           void *addr, uint16_t value) {
-  os::Log(os::LogDebug, "2,%s,%lx,%p,%x\n", mod_name, offset, addr, value);
+  os::Log("W 2 %p %x B %s %lx\n", addr, value, mod_name, offset);
 }
 
 // Report a 32-bit memory write.
 static void ReportWrite32(const char *mod_name, uint64_t offset,
                           void *addr, uint32_t value) {
-  os::Log(os::LogDebug, "4,%s,%lx,%p,%x\n", mod_name, offset, addr, value);
+  os::Log("W 4 %p %x B %s %lx\n", addr, value, mod_name, offset);
 }
 
 // Report a 64-bit memory write.
 static void ReportWrite64(const char *mod_name, uint64_t offset,
                           void *addr, uint64_t value) {
-  os::Log(os::LogDebug, "8,%s,%lx,%p,%lx\n",  mod_name, offset, addr, value);
+  os::Log("W 8 %p %lx B %s %lx\n", addr, value, mod_name, offset);
 }
 
 // Choose what function to use to log the memory write.

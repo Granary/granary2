@@ -59,13 +59,6 @@ $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o: $(GRANARY_GMOCK_SRCS)
         -c $(GRANARY_GMOCK_SRC_DIR)/src/gmock-all.cc \
 		-o $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o
 
-$(GRANARY_GMOCK_BIN_DIR)/gmock_main.o: $(GRANARY_GMOCK_SRCS)
-	@echo "Building CXX object $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o"
-	@mkdir -p $(@D)
-	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) \
-        -c $(GRANARY_GMOCK_SRC_DIR)/src/gmock_main.cc \
-        -o $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o
-
 $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.S
 	@echo "Building ASM object $@"
 	@mkdir -p $(@D)
@@ -81,7 +74,6 @@ $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
 				$(GRANARY_TEST_ASM_OBJ_FILES) \
                 $(GRANARY_GTEST_BIN_DIR)/gtest-all.o \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o \
-                $(GRANARY_GMOCK_BIN_DIR)/gmock_main.o \
                 $(GRANARY_BIN_DIR)/libgranary.o
 	@echo "Compiling $@"
 	@mkdir -p $(@D)

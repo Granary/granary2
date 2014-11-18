@@ -6,9 +6,12 @@
 namespace granary {
 
 enum ExitReason : int {
-  EXIT_PROGRAM = 0,
-  EXIT_DETACH = 1
+  kExitProgram = 0,
+  kExitDetach = 1,
+  kExitTestCase
 };
+
+void Exit(ExitReason reason);
 
 }  // namespace granary
 

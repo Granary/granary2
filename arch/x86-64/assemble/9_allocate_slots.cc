@@ -426,9 +426,9 @@ void AllocateSlots(FragmentList *frags) {
 
       for (auto instr : InstructionListIterator(frag->instrs)) {
         if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-          if (IA_LATE_SWITCH_OFF_STACK == ainstr->annotation) {
+          if (kAnnotCondLeaveNativeStack == ainstr->annotation) {
             SwitchOffStack(&(frag->instrs), instr);
-          } else if (IA_LATE_SWITCH_ON_STACK == ainstr->annotation) {
+          } else if (kAnnotCondEnterNativeStack == ainstr->annotation) {
             SwitchOnStack(&(frag->instrs), instr);
           }
         } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {

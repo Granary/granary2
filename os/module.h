@@ -15,7 +15,7 @@
 namespace granary {
 
 // Forward declarations.
-class ContextInterface;
+class Context;
 
 namespace os {
 class ModuleManager;
@@ -91,7 +91,7 @@ class Module {
   // Initialize a new module with no ranges.
   GRANARY_INTERNAL_DEFINITION
   Module(ModuleKind kind_, const char *name_,
-         ContextInterface *context_=nullptr);
+         Context *context_=nullptr);
 
   GRANARY_INTERNAL_DEFINITION ~Module(void);
 
@@ -168,7 +168,7 @@ class Module {
   // Context to which this module belongs.
   //
   // Note: We say that a module is shared if and only if `context` is null.
-  GRANARY_INTERNAL_DEFINITION ContextInterface * const context;
+  GRANARY_INTERNAL_DEFINITION Context * const context;
 
   // The kind of this module (e.g. granary, client, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
