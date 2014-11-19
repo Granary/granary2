@@ -5,6 +5,7 @@
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
+#ifndef GRANARY_TARGET_test
 #ifndef GRANARY_WITH_VALGRIND
 
 #include "clients/user/syscall.h"
@@ -180,4 +181,5 @@ GRANARY_ON_CLIENT_INIT() {
 }
 
 #endif  // GRANARY_WITH_VALGRIND
+#endif  // GRANARY_TARGET_test
 #endif  // GRANARY_WHERE_user

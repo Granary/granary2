@@ -47,8 +47,9 @@ static void ProcessInit(const char *options) {
   printk("[granary] Initialized.\n");
 }
 
+extern void _ZN7granary4ExitENS_10ExitReasonE(int);
 static void ProcessExit(void) {
-  granary_exit_slow(1 /* kExitDetach */);
+  _ZN7granary4ExitENS_10ExitReasonE(1 /* kExitDetach */);
   printk("[granary] Exited.\n");
 }
 
