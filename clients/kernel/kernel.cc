@@ -43,7 +43,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
   virtual void InstrumentEntryPoint(BlockFactory *factory,
                                     CompensationBasicBlock *block,
                                     EntryPointKind kind, int category) {
-    if (ENTRYPOINT_KERNEL_SYSCALL == kind) {
+    if (kEntryPointKernelSyscall == kind) {
       InstrumentSyscall(factory, block, category);
     }
   }
