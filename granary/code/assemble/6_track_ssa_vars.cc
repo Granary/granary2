@@ -653,7 +653,7 @@ static void AddCompensatingFragments(FragmentList *frags) {
   }
 }
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 // Verify that the sets of virtual registers used in each partition are
 // disjoint.
 static void VerifyVRUsage(FragmentList *frags) {
@@ -677,7 +677,7 @@ static void VerifyVRUsage(FragmentList *frags) {
     }
   }
 }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 }  // namespace
 
 // Build a graph for the SSA definitions associated with the fragments.

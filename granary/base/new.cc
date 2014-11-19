@@ -96,7 +96,7 @@ const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
   return slab;
 }
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 namespace {
 static bool MemoryNotInUse(void *mem, size_t num_bytes) {
   auto bytes = reinterpret_cast<uint8_t *>(mem);
@@ -109,7 +109,7 @@ static bool MemoryNotInUse(void *mem, size_t num_bytes) {
   return true;
 }
 }  // namespace
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {

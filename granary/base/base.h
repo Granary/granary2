@@ -72,7 +72,7 @@ typedef long int ssize_t;
 # define GRANARY_IF_NOT_ECLIPSE(...) __VA_ARGS__
 #endif
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 # define GRANARY_IF_DEBUG(...) __VA_ARGS__
 # define GRANARY_IF_DEBUG_(...) __VA_ARGS__ ,
 # define _GRANARY_IF_DEBUG(...) , __VA_ARGS__

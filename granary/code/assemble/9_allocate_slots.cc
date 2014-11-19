@@ -225,7 +225,7 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
   }
 }
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 // Very that no instructions in this region use virtual registers.
 static void VerifyAllSlotsScheduled(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
@@ -244,7 +244,7 @@ static void VerifyAllSlotsScheduled(Fragment *frag) {
     }
   }
 }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 #ifdef GRANARY_WHERE_kernel
 #ifdef GRANARY_TARGET_debug

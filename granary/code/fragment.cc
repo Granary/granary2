@@ -16,7 +16,7 @@
 
 #include "os/logging.h"
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 # include "granary/base/option.h"
 GRANARY_DEFINE_bool(debug_log_instr_note, false,
     "Should the note field, if present, be logged along with the instructions? "
@@ -28,7 +28,7 @@ GRANARY_DEFINE_bool(debug_log_instr_note, false,
     "source of an instruction.\n"
     "\n"
     "Note: This is only meaningful if `--debug_log_fragments` is used.");
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 namespace granary {
 
@@ -251,7 +251,7 @@ static void LogRegister(LogLevel level, VirtualRegister reg, const char *sep) {
 #define STRIKE "<S>"
 #define END_STRIKE "</S>"
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 static void LogInstructionNote(LogLevel level, const arch::Instruction *instr) {
   if (FLAG_debug_log_instr_note) {
     if (instr->note_create) {
@@ -262,7 +262,7 @@ static void LogInstructionNote(LogLevel level, const arch::Instruction *instr) {
     }
   }
 }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 static void LogInstruction(LogLevel level, NativeInstruction *instr) {
   auto &ainstr(instr->instruction);
