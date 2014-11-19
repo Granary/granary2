@@ -59,6 +59,7 @@ void SaveStateForExceptionCFI(DecodedBasicBlock *block,
 
 }  // namespace arch
 enum {
+  kMaxNumDecodedInstructions = 16,
   kMaxNumMaterializationRequests = 256
 };
 
@@ -173,21 +174,20 @@ NativeInstruction *BlockFactory::MakeInstruction(
 void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
                                              Instruction *last_instr,
                                              AppPC pc) {
-  auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (!cfi) return;
-
   BasicBlock *fall_through(nullptr);
+  auto request_fall_through = true;
+  auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
+  if (cfi) {
+    GRANARY_ASSERT(!cfi->IsInterruptCall());
 
-  GRANARY_ASSERT(!cfi->IsInterruptCall());
-
-  // If we're doing a function call or a direct jump, then always
-  // materialize the next block. In the case of function calls, this
-  // lets us avoid issues related to `setjmp` and `longjmp`. In both
-  // cases, this allows us to avoid unnecessary edge code when we know
-  // ahead of time that we will reach the desired code.
-  auto request_fall_through = cfi->IsFunctionCall() ||
-                              IsA<ExceptionalControlFlowInstruction *>(cfi);
-
+    // If we're doing a function call or a direct jump, then always
+    // materialize the next block. In the case of function calls, this
+    // lets us avoid issues related to `setjmp` and `longjmp`. In both
+    // cases, this allows us to avoid unnecessary edge code when we know
+    // ahead of time that we will reach the desired code.
+    request_fall_through = cfi->IsFunctionCall() ||
+                           IsA<ExceptionalControlFlowInstruction *>(cfi);
+  }
   if (request_fall_through || cfi->IsConditionalJump() || cfi->IsSystemCall()) {
     auto meta = context->AllocateBlockMetaData(pc);
     fall_through = new DirectBasicBlock(cfg, meta);
@@ -198,7 +198,6 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
     fall_through = cfi->TargetBlock();
     request_fall_through = true;
   }
-
   if (request_fall_through) {
     RequestBlock(fall_through, kRequestBlockFromIndexOrCFG);
   }
@@ -258,6 +257,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   arch::Instruction dinstr;
   arch::Instruction ainstr;
   Instruction *instr(nullptr);
+  int num_instrs = kMaxNumDecodedInstructions;
   do {
     auto decoded_pc = decode_pc;
     auto before_instr = new AnnotationInstruction(
@@ -285,7 +285,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     AnnotateInstruction(this, block, before_instr, decode_pc);
 
     instr = block->LastInstruction()->Previous();
-  } while (!IsA<ControlFlowInstruction *>(instr));
+  } while (!IsA<ControlFlowInstruction *>(instr) && 0 < --num_instrs);
   AddFallThroughInstruction(block , instr, decode_pc);
 }
 
