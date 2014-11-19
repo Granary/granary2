@@ -5,10 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/type_trait.h"
-
-#ifdef GRANARY_TARGET_debug
-# include "granary/breakpoint.h"
-#endif
+#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -22,23 +19,23 @@ class ListHead {
       : next(nullptr),
         prev(nullptr) {}
 
-  T *Last(void) {
+  T *Last(void) const {
     auto curr = this;
     for (; curr->next; curr = &(curr->next->list)) {}
     return ContainerOf(curr);
   }
 
-  T *First(void) {
+  T *First(void) const {
     auto curr = this;
     for (; curr->prev; curr = &(curr->prev->list)) {}
     return ContainerOf(curr);
   }
 
-  T *Next(void) {
+  T *Next(void) const {
     return next;
   }
 
-  T *Previous(void) {
+  T *Previous(void) const {
     return prev;
   }
 
@@ -46,12 +43,14 @@ class ListHead {
     GRANARY_ASSERT(nullptr != new_next);
     if (next) Chain(new_next->list.Last(), next);
     Chain(ContainerOf(this), new_next->list.First());
+    GRANARY_ASSERT(next != ContainerOf(this));
   }
 
   void SetPrevious(T *new_prev) {
     GRANARY_ASSERT(nullptr != new_prev);
     if (prev) Chain(prev, new_prev->list.First());
     Chain(new_prev->list.Last(), ContainerOf(this));
+    GRANARY_ASSERT(prev != ContainerOf(this));
   }
 
   void Unlink(void) {
@@ -75,7 +74,7 @@ class ListHead {
   }
 
   // Return the object associated with this list head.
-  inline static T *ContainerOf(ListHead<T> *list) {
+  inline static T *ContainerOf(const ListHead<T> *list) {
     GRANARY_ASSERT(nullptr != list);
     enum {
       kListHeadOffset = offsetof(T, list)
