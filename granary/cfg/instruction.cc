@@ -29,10 +29,12 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
 GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
 
 Instruction *Instruction::Next(void) {
+  GRANARY_ASSERT(nullptr != this);
   return list.Next();
 }
 
 Instruction *Instruction::Previous(void) {
+  GRANARY_ASSERT(nullptr != this);
   return list.Previous();
 }
 

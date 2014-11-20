@@ -164,7 +164,7 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     }
     next = head->next;
   } while (!free_list.compare_exchange_strong(head, next));
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
   if (head) {
     // Maintain the invariant that is checked by `MemoryNotInUse`.
     memset(head, DEALLOCATED_MEMORY_POISON, sizeof (void *));

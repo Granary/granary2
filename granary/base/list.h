@@ -41,16 +41,22 @@ class ListHead {
 
   void SetNext(T *new_next) {
     GRANARY_ASSERT(nullptr != new_next);
-    if (next) Chain(new_next->list.Last(), next);
-    Chain(ContainerOf(this), new_next->list.First());
-    GRANARY_ASSERT(next != ContainerOf(this));
+    auto new_next_first = new_next->list.First();
+    auto new_next_last = new_next->list.Last();
+    Chain(new_next_last, next);
+    Chain(ContainerOf(this), new_next_first);
+    GRANARY_ASSERT(ContainerOf(this) != next);
+    GRANARY_ASSERT(nullptr != next);
   }
 
   void SetPrevious(T *new_prev) {
     GRANARY_ASSERT(nullptr != new_prev);
-    if (prev) Chain(prev, new_prev->list.First());
-    Chain(new_prev->list.Last(), ContainerOf(this));
-    GRANARY_ASSERT(prev != ContainerOf(this));
+    auto new_prev_first = new_prev->list.First();
+    auto new_prev_last = new_prev->list.Last();
+    Chain(prev, new_prev_first);
+    Chain(new_prev_last, ContainerOf(this));
+    GRANARY_ASSERT(ContainerOf(this) != prev);
+    GRANARY_ASSERT(nullptr != prev);
   }
 
   void Unlink(void) {
