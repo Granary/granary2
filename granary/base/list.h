@@ -41,26 +41,29 @@ class ListHead {
 
   void SetNext(T *new_next) {
     GRANARY_ASSERT(nullptr != new_next);
-    auto new_next_first = new_next->list.First();
-    auto new_next_last = new_next->list.Last();
-    Chain(new_next_last, next);
-    Chain(ContainerOf(this), new_next_first);
-    GRANARY_ASSERT(ContainerOf(this) != next);
-    GRANARY_ASSERT(nullptr != next);
+    GRANARY_ASSERT(!new_next->list.IsLinked());
+    auto self = ContainerOf(this);
+
+    new_next->list.next = next;
+    new_next->list.prev = self;
+    if (next) next->list.prev = new_next;
+    next = new_next;
   }
 
   void SetPrevious(T *new_prev) {
     GRANARY_ASSERT(nullptr != new_prev);
-    auto new_prev_first = new_prev->list.First();
-    auto new_prev_last = new_prev->list.Last();
-    Chain(prev, new_prev_first);
-    Chain(new_prev_last, ContainerOf(this));
-    GRANARY_ASSERT(ContainerOf(this) != prev);
-    GRANARY_ASSERT(nullptr != prev);
+    GRANARY_ASSERT(!new_prev->list.IsLinked());
+    auto self = ContainerOf(this);
+
+    new_prev->list.next = self;
+    new_prev->list.prev = prev;
+    if (prev) prev->list.next = new_prev;
+    prev = new_prev;
   }
 
   void Unlink(void) {
-    Chain(prev, next);
+    if (prev) prev->list.next = next;
+    if (next) next->list.prev = prev;
     next = nullptr;
     prev = nullptr;
   }
@@ -73,15 +76,8 @@ class ListHead {
  private:
   GRANARY_EXTERNAL_FRIEND class ListOfListHead<T>;
 
-  // Chain together two list heads.
-  inline static void Chain(T *first, T *second) {
-    if (first) first->list.next = second;
-    if (second) second->list.prev = first;
-  }
-
   // Return the object associated with this list head.
   inline static T *ContainerOf(const ListHead<T> *list) {
-    GRANARY_ASSERT(nullptr != list);
     enum {
       kListHeadOffset = offsetof(T, list)
     };
@@ -114,16 +110,18 @@ class ListOfListHead {
 
   void Prepend(T *elm) {
     GRANARY_ASSERT(nullptr != elm);
-    if (first) elm->list.SetNext(first);
-    if (!last) last = elm->list.Last();
-    first = elm->list.First();
+    GRANARY_ASSERT(!elm->list.IsLinked());
+    if (first) first->list.SetPrevious(elm);
+    if (!last) last = elm;
+    first = elm;
   }
 
   void Append(T *elm) {
     GRANARY_ASSERT(nullptr != elm);
-    if (last) elm->list.SetPrevious(last);
-    if (!first) first = elm->list.First();
-    last = elm->list.Last();
+    GRANARY_ASSERT(!elm->list.IsLinked());
+    if (last) last->list.SetNext(elm);
+    if (!first) first = elm;
+    last = elm;
   }
 
   void InsertBefore(T *before_elm, T *new_elm) {

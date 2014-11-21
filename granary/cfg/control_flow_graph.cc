@@ -18,8 +18,7 @@ namespace granary {
 LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
     : context(context_),
       entry_block(nullptr),
-      first_block(nullptr),
-      last_block(nullptr),
+      blocks(),
       first_new_block(nullptr),
       next_new_block(nullptr),
       num_virtual_regs(512),
@@ -27,26 +26,25 @@ LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
 
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
-  for (BasicBlock *block(first_block), *next(nullptr); block; block = next) {
+  for (BasicBlock *block(blocks.First()), *next(nullptr); block; block = next) {
     next = block->list.Next();
     delete block;
   }
-  memset(this, 0, sizeof *this);
 }
 
 // Return the entry basic block of this control-flow graph.
 DecodedBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
-  return entry_block;
+  return DynamicCast<DecodedBasicBlock *>(entry_block);
 }
 
 // Returns an object that can be used inside of a range-based for loop.
 BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
-  return BasicBlockIterator(first_block);
+  return BasicBlockIterator(blocks.First());
 }
 
 // Returns an object that can be used inside of a range-based for loop.
 ReverseBasicBlockIterator LocalControlFlowGraph::ReverseBlocks(void) const {
-  return ReverseBasicBlockIterator(last_block);
+  return ReverseBasicBlockIterator(blocks.Last());
 }
 
 // Returns an object that can be used inside of a range-based for loop.
@@ -59,32 +57,22 @@ BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
 void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   if (block->list.IsLinked()) {
     GRANARY_ASSERT(-1 != block->Id());
-    return;  // Already in the CFG.
-  }
-  block->id = num_basic_blocks++;
-
-  if (GRANARY_UNLIKELY(!first_block)) {
-    GRANARY_ASSERT(IsA<DecodedBasicBlock *>(block) ||
-                   IsA<CachedBasicBlock *>(block));
-    first_block = block;
-    // We assume that the first added block is one of a `DecodedBasicBlock`
-    // (and by extension a `CompensationBasicBlock`) or a `CachedBasicBlock`.
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      entry_block = decoded_block;
-    }
   } else {
-    last_block->list.SetNext(block);
+    block->id = num_basic_blocks++;
+    blocks.Append(block);
+    if (!next_new_block) next_new_block = block;
   }
-
-  last_block = block;
-
-  if (!next_new_block) {
-    next_new_block = block;
-  }
-
   for (auto succ : block->Successors()) {  // Add the successors.
     AddBlock(succ.block);
   }
+}
+
+// Add a block to the LCFG as the entry block.
+void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
+  entry_block = block;
+  AddBlock(block);
+  first_new_block = block;
+  next_new_block = nullptr;
 }
 
 // Allocate a new virtual register.
