@@ -40,7 +40,7 @@ static ModuleKind ModuleKind(LinuxKernelModule *mod) {
 }
 
 // Update a module manager with a new module.
-static void UpdateModule(ModuleManager *manager, LinuxKernelModule *mod) {
+static void UpdateModule(LinuxKernelModule *mod) {
   auto module = reinterpret_cast<Module *>(mod->module);
   if (!module) {
     GRANARY_ASSERT(nullptr == ModuleByName(mod->name));
@@ -82,7 +82,7 @@ void ModuleManager::ReRegisterAllBuiltIn(void) {
 
 extern "C" {
 void NotifyModuleStateChange(LinuxKernelModule *mod) {
-  UpdateModule(global_module_manager.AddressOf(), mod);
+  UpdateModule(mod);
 }
 }  // extern C
 }  // namespace os

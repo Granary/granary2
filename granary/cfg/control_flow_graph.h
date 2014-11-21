@@ -9,6 +9,7 @@
 #endif
 
 #include "granary/base/base.h"
+#include "granary/base/list.h"
 #include "granary/base/pc.h"
 #include "granary/cfg/iterator.h"
 
@@ -64,6 +65,7 @@ class LocalControlFlowGraph final {
   // Add a block to the CFG. If the block has successors that haven't yet been
   // added, then add those too.
   GRANARY_INTERNAL_DEFINITION void AddBlock(BasicBlock *block);
+  GRANARY_INTERNAL_DEFINITION void AddEntryBlock(BasicBlock *block);
 
   // Allocate a new virtual register.
   GRANARY_INTERNAL_DEFINITION
@@ -79,9 +81,8 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION Context *context;
 
   // List of basic blocks known to this control-flow graph.
-  GRANARY_INTERNAL_DEFINITION DecodedBasicBlock *entry_block;
-  GRANARY_INTERNAL_DEFINITION BasicBlock *first_block;
-  GRANARY_INTERNAL_DEFINITION BasicBlock *last_block;
+  GRANARY_INTERNAL_DEFINITION BasicBlock *entry_block;
+  GRANARY_INTERNAL_DEFINITION ListOfListHead<BasicBlock> blocks;
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_new_block;
   GRANARY_INTERNAL_DEFINITION BasicBlock *next_new_block;
 

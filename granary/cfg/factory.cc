@@ -331,13 +331,13 @@ void BlockFactory::RemoveOldBlocks(void) {
     }
   }
 
-  // Now mark all blocks, except the first block, as unreachable.
-  auto first_block = cfg->first_block;
-  auto second_block = first_block->list.Next();
-  for (auto block = second_block; block; block = block->list.Next()) {
-    block->is_reachable = false;  // Mark all blocks as unreachable.
+  // Mark all blocks as unreachable.
+  for (auto block : cfg->Blocks()) {
+    block->is_reachable = false;
   }
 
+  // Make sure the entry block remains reachable.
+  auto first_block = cfg->entry_block;
   first_block->is_reachable = true;
 
   // Transitively propagate reachability from the entry block. This is like
@@ -346,7 +346,9 @@ void BlockFactory::RemoveOldBlocks(void) {
        changed && can_make_progess; ) {
     changed = false;
     can_make_progess = false;
-    for (auto block = first_block; block; block = block->list.Next()) {
+
+    // TODO(pag): This could easily be improved to not be O(n^2).
+    for (auto block : cfg->Blocks()) {
       if (!block->is_reachable) {
         can_make_progess = true;
         continue;
@@ -362,22 +364,17 @@ void BlockFactory::RemoveOldBlocks(void) {
 
   // Garbage collect the unreachable blocks. This is like the "sweep" phase of
   // a mark & sweep GC.
-  auto new_last_block = first_block;
-  for (auto block = second_block, prev_block = first_block; block; ) {
+  for (auto block = cfg->blocks.First(); block; ) {
     auto next_block = block->list.Next();
     if (!block->is_reachable) {
       if (cfg->next_new_block == block) {
         cfg->next_new_block = next_block;
       }
-      block->list.Unlink();
+      cfg->blocks.Remove(block);
       delete block;
-    } else {
-      new_last_block = block;
-      prev_block = block;
     }
     block = next_block;
   }
-  cfg->last_block = new_last_block;
 }
 
 // Swap between the current and next round of new blocks.
@@ -553,9 +550,8 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
   // can materialize against this block.
   auto adapt_block = AdaptToBlock(cfg, meta, target_block);
   adapt_block->is_comparable = false;
-  cfg->AddBlock(adapt_block);
   RequestBlock(target_block, request_kind);
-  SwapBlocks();
+  cfg->AddEntryBlock(adapt_block);
   return adapt_block;
 }
 
@@ -612,7 +608,9 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
 void BlockFactory::MaterializeRequestedBlocks(void) {
   has_pending_request = false;
   ++generation;
+  GRANARY_ASSERT(!cfg->next_new_block);
   if (MaterializeDirectBlocks()) {
+    GRANARY_ASSERT(nullptr != cfg->next_new_block);
     RelinkCFIs();
     RemoveOldBlocks();
   }
@@ -629,11 +627,11 @@ DecodedBasicBlock *BlockFactory::MaterializeDirectEntryBlock(
     BlockMetaData *meta) {
   GRANARY_ASSERT(nullptr != meta);
   auto decoded_block = new DecodedBasicBlock(cfg, meta);
-  cfg->AddBlock(decoded_block);
+
   DecodeInstructionList(decoded_block);
   for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
   decoded_block->generation = generation;
-  SwapBlocks();
+  cfg->AddEntryBlock(decoded_block);
   return decoded_block;
 }
 
