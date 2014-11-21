@@ -50,6 +50,7 @@ void BinaryInstrumenter::InstrumentDirect(void) {
     InstrumentControlFlow();
     InstrumentBlocks();
     InstrumentBlock();
+    factory.RemoveUnreachableBlocks();
   }
 
   *meta = entry_block->UnsafeMetaData();
@@ -61,6 +62,7 @@ void BinaryInstrumenter::InstrumentIndirect(void) {
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
+  factory.RemoveUnreachableBlocks();
 }
 
 // Instrument some code as-if it is targeted by a native entrypoint. These
@@ -76,6 +78,7 @@ void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
+  factory.RemoveUnreachableBlocks();
 }
 
 namespace {

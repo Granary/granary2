@@ -130,6 +130,9 @@ class BlockFactory {
   NativeInstruction *MakeInstruction(arch::Instruction *instr,
                                      const arch::Instruction *orig_instr);
 
+  // Remove blocks that are now unnecessary.
+  GRANARY_INTERNAL_DEFINITION void RemoveUnreachableBlocks(void);
+
  private:
   BlockFactory(void) = delete;
 
@@ -149,9 +152,6 @@ class BlockFactory {
   // Unlink old blocks from the control-flow graph by changing the targets of
   // CTIs going to now-materialized `DirectBasicBlock`s.
   GRANARY_INTERNAL_DEFINITION void RelinkCFIs(void);
-
-  // Remove blocks that are now unnecessary.
-  GRANARY_INTERNAL_DEFINITION void RemoveOldBlocks(void);
 
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION

@@ -315,11 +315,7 @@ void BlockFactory::RelinkCFIs(void) {
 }
 
 // Remove blocks that are now unnecessary.
-//
-// TODO(pag): This might be a bit heavyweight. That is, it's not clear if
-//            it's worth it to actually do this kind of mark & sweep garbage
-//            collection of the blocks or not.
-void BlockFactory::RemoveOldBlocks(void) {
+void BlockFactory::RemoveUnreachableBlocks(void) {
 
   // First, make sure all blocks are added to the LCFG.
   for (auto block : cfg->Blocks()) {
@@ -609,7 +605,7 @@ void BlockFactory::MaterializeRequestedBlocks(void) {
   cfg->first_new_block = nullptr;
   if (MaterializeDirectBlocks()) {
     RelinkCFIs();
-    RemoveOldBlocks();
+    RemoveUnreachableBlocks();
   }
 }
 
