@@ -116,6 +116,7 @@ typedef long int ssize_t;
 # define _GRANARY_IF_EXTERNAL(...)
 # define GRANARY_IF_INTERNAL(...) __VA_ARGS__
 # define _GRANARY_IF_INTERNAL(...) , __VA_ARGS__
+# define GRANARY_IF_INTERNAL_(...) __VA_ARGS__ ,
 # define GRANARY_EXTERNAL_DELETE
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
@@ -133,6 +134,7 @@ typedef long int ssize_t;
 # define _GRANARY_IF_EXTERNAL(...) , __VA_ARGS__
 # define GRANARY_IF_INTERNAL(...)
 # define _GRANARY_IF_INTERNAL(...)
+# define GRANARY_IF_INTERNAL_(...)
 # define GRANARY_EXTERNAL_DELETE = delete
 #endif
 

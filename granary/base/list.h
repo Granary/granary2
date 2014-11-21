@@ -31,11 +31,11 @@ class ListHead {
     return ContainerOf(curr);
   }
 
-  T *Next(void) const {
+  inline T *Next(void) const {
     return next;
   }
 
-  T *Previous(void) const {
+  inline T *Previous(void) const {
     return prev;
   }
 
@@ -109,16 +109,12 @@ class ListOfListHead {
   }
 
   void Prepend(T *elm) {
-    GRANARY_ASSERT(nullptr != elm);
-    GRANARY_ASSERT(!elm->list.IsLinked());
     if (first) first->list.SetPrevious(elm);
     if (!last) last = elm;
     first = elm;
   }
 
   void Append(T *elm) {
-    GRANARY_ASSERT(nullptr != elm);
-    GRANARY_ASSERT(!elm->list.IsLinked());
     if (last) last->list.SetNext(elm);
     if (!first) first = elm;
     last = elm;
@@ -150,6 +146,28 @@ class ListOfListHead {
     elm->list.Unlink();
     if (last == elm) last = elm_prev;
     if (first == elm) first = elm_next;
+  }
+
+  ListOfListHead<T> &operator=(const ListOfListHead<T> &that) {
+    if (this != &that) {
+      GRANARY_ASSERT(!first);
+      first = that.first;
+      last = that.last;
+    }
+    return *this;
+  }
+
+  void Extend(ListOfListHead<T> &that) {
+    if (!first) {
+      first = that.first;
+      last = that.last;
+    } else if (that.first) {
+      last->list.next = that.first;
+      that.first->list.prev = last;
+      last = that.last;
+    }
+    that.first = nullptr;
+    that.last = nullptr;
   }
 
  private:

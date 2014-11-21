@@ -151,7 +151,7 @@ class BasicBlock {
   // `-1` if the block does not belong to an LCFG.
   GRANARY_INTERNAL_DEFINITION int id;
 
-  // The generation number for where this block can be materialized.
+  // The generation number for where this block was materialized.
   GRANARY_INTERNAL_DEFINITION int generation;
 
   // Is this block reachable from the entry node of the LCFG?

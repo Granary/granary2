@@ -3,6 +3,7 @@
 #define GRANARY_INTERNAL
 
 #include "granary/base/base.h"
+#include "granary/base/option.h"
 
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
@@ -14,6 +15,11 @@
 #include "granary/context.h"
 #include "granary/metadata.h"
 #include "granary/tool.h"
+
+GRANARY_DEFINE_positive_int(max_num_control_flow_iterations, 8,
+    "The maximum number of iterations of the control-flow instrumentation "
+    "pass per trace request. The default value is `8`, which--despite being "
+    "small--could result in a massive blowup of code.");
 
 namespace granary {
 
@@ -66,9 +72,7 @@ void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentEntryPoint(&factory, entry_block, kind, category);
   }
-  if (factory.HasPendingMaterializationRequest()) {
-    factory.MaterializeRequestedBlocks();
-  }
+  factory.MaterializeRequestedBlocks();
   InstrumentControlFlow();
   InstrumentBlocks();
   InstrumentBlock();
@@ -76,14 +80,14 @@ void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
 
 namespace {
 
-// Try to finalize the control-flow bt converting any remaining
+// Try to finalize the control-flow by converting any remaining
 // `DirectBasicBlock`s into `CachedBasicBlock`s (which are potentially preceded
 // by `CompensationBasicBlock`.
 static bool FinalizeControlFlow(BlockFactory *factory,
                                 LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
-    for (auto succ : block->Successors()) {
-      factory->RequestBlock(succ.block, kRequestBlockFromIndexOrCFGOnly);
+    if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+      factory->RequestBlock(direct_block, kRequestBlockFromIndexOrCFGOnly);
     }
   }
   return factory->HasPendingMaterializationRequest();
@@ -95,22 +99,16 @@ static bool FinalizeControlFlow(BlockFactory *factory,
 // allowed to materialize direct basic blocks into other forms of basic
 // blocks.
 void BinaryInstrumenter::InstrumentControlFlow(void) {
-  for (auto finalized = false; ; factory.MaterializeRequestedBlocks()) {
+  for (auto num_iterations = 0; ; factory.MaterializeRequestedBlocks()) {
     for (auto tool : ToolIterator(tools)) {
       tool->InstrumentControlFlow(&factory, cfg);
     }
-    if (!factory.HasPendingMaterializationRequest()) {
-      if (finalized) {
-        return;
-
-      // Try to force one more round of control-flow requests so that we can
-      // submit requests to look into the code cache index.
-      } else {
-        finalized = true;
-        if (!FinalizeControlFlow(&factory, cfg)) return;
+    if (++num_iterations >= FLAG_max_num_control_flow_iterations ||
+        !factory.HasPendingMaterializationRequest()) {
+      if (FinalizeControlFlow(&factory, cfg)) {
+        factory.MaterializeRequestedBlocks();
       }
-    } else {
-      finalized = false;
+      break;
     }
   }
 }

@@ -20,9 +20,9 @@ LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
       entry_block(nullptr),
       blocks(),
       first_new_block(nullptr),
-      next_new_block(nullptr),
       num_virtual_regs(512),
-      num_basic_blocks(0) {}
+      num_basic_blocks(0),
+      generation(0) {}
 
 // Destroy the CFG and all basic blocks in the CFG.
 LocalControlFlowGraph::~LocalControlFlowGraph(void) {
@@ -58,12 +58,17 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   if (block->list.IsLinked()) {
     GRANARY_ASSERT(-1 != block->Id());
   } else {
-    block->id = num_basic_blocks++;
+    // We might already have a block id if this block inherits the id of the
+    // `DirectBasicBlock` that led to its materialization.
+    if (-1 == block->id) block->id = num_basic_blocks++;
+
+    // Distinguishes old from new blocks across iterations of
+    // `InstrumentControlFlow`.
+    block->generation = generation;
     blocks.Append(block);
-    if (!next_new_block) next_new_block = block;
-  }
-  for (auto succ : block->Successors()) {  // Add the successors.
-    AddBlock(succ.block);
+    for (auto succ : block->Successors()) {  // Add the successors.
+      AddBlock(succ.block);
+    }
   }
 }
 
@@ -71,8 +76,11 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
 void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
   entry_block = block;
   AddBlock(block);
+  if (blocks.First() != block) {
+    blocks.Remove(block);
+    blocks.Prepend(block);
+  }
   first_new_block = block;
-  next_new_block = nullptr;
 }
 
 // Allocate a new virtual register.

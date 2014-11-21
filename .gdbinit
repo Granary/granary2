@@ -660,11 +660,8 @@ end
 define get-next-instr
   set language c++
   set $__i = (granary::Instruction *) $arg0
-  set $__nil = $__i->list.next
-  if $__nil
-    set $__i = (granary::Instruction *) (((char *) $__nil) - 8)
-  else
-    set $__i = (granary::Instruction *) 0
+  if $__i
+    set $__i = $__i->list.next
   end
 end
 
@@ -676,10 +673,8 @@ end
 define get-next-frag
   set language c++
   set $__f = (granary::Fragment *) $arg0
-  if $__f->list.next
-    set $__f = (granary::Fragment *) (((char *) $__f->list.next) - 8)
-  else
-    set $__f = (granary::Fragment *) 0
+  if $__f
+    set $__f = $__f->list.next
   end
 end
 
@@ -834,7 +829,7 @@ end
 define log-frags
   set language c++
   set granary_log_buffer_index = 0
-  p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) frags)
+  p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) $arg0)
   dont-repeat
 end
 
@@ -845,12 +840,9 @@ end
 # to point to the next basic block in the list to which `$arg0` belongs.
 define get-next-block
   set language c++
-  set $__bl = (granary::ListHead *) (((unsigned long) $arg0) + 8)
-  set $__nb = $__bl->next
-  if $__nb
-    set $__b = (granary::BasicBlock *) (((unsigned long) $__nb) - 8)
-  else
-    set $__b = (granary::BasicBlock *) 0
+  set $__b = (granary::BasicBlock *) $arg0
+  if $__b
+    set $__b = $__b->list.next
   end
 end
 

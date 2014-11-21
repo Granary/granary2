@@ -80,7 +80,7 @@ void SuccessorBlockIterator::operator++(void) {
 BasicBlock::BasicBlock(void)
     : list(),
       id(-1),
-      generation(-1),
+      generation(0),
       is_reachable(false),
       fragment(nullptr) {}
 

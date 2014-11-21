@@ -44,6 +44,8 @@ static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
   auto reap_unreachable = false;
   for (auto block : cfg->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      // TODO(pag): Should we omit non-comparable compensation basic blocks
+      //            from the index?
       if (decoded_block->StartCachePC()) {
         auto meta = decoded_block->MetaData();
         TraceMetaData(trace_group, meta);

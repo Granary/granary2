@@ -33,29 +33,7 @@ class InstructionDecoder;
 enum BlockRequestKind : uint8_t {
 
   // Don't materialize this basic block. This is the default.
-  kRequestBlockLater,
-
-  // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
-  // already been cached (at the time of lookup) and if we haven't already
-  // materialized it into our local control-flow graph.
-  kRequestBlockFromIndexOrCFG,
-
-  // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
-  // already been materialized into the CFG.
-  kRequestBlockFromCFG,
-
-  // Always materialize this block into an `DecodedBasicBlock`, even if it's
-  // indexed in the cache or if already in the `LocalControlFlowGraph`.
-  kRequestBlockDecodeNow,
-
-  // Materialize to the native target.
-  kRequestBlockExecuteNatively,
-
-  // Materialization request cannot be satisfied. In practice, this is useful
-  // for when you want to prevent some other tool from requesting the block
-  // during this instrumentation session (e.g. to guarantee certain code
-  // layout).
-  kRequestBlockInFuture
+  kRequestBlockLater = 0,
 
   // Internal request that looks for a block in either the code cache index or
   // in the LCFG, but does *not* decode any blocks. This internal request is
@@ -63,19 +41,39 @@ enum BlockRequestKind : uint8_t {
   // requests are outstanding. This can result in extra compensation fragments
   // being added, and therefore a new invocation of
   // `Tool::InstrumentControlFlow`.
-  _GRANARY_IF_INTERNAL(kRequestBlockFromIndexOrCFGOnly)
+  GRANARY_IF_INTERNAL_(kRequestBlockFromIndexOrCFGOnly = 5 )
+
+  // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
+  // already been cached (at the time of lookup) and if we haven't already
+  // materialized it into our local control-flow graph.
+  kRequestBlockFromIndexOrCFG = 10,
+
+  // Materialize this basic block into an `DecodedBasicBlock` if it hasn't
+  // already been materialized into the CFG.
+  kRequestBlockFromCFG = 20,
+
+  // Always materialize this block into an `DecodedBasicBlock`, even if it's
+  // indexed in the cache or if already in the `LocalControlFlowGraph`.
+  kRequestBlockDecodeNow = 30,
+
+  // Materialize to the native target.
+  kRequestBlockExecuteNatively = 40,
+
+  // Materialization request cannot be satisfied. In practice, this is useful
+  // for when you want to prevent some other tool from requesting the block
+  // during this instrumentation session (e.g. to guarantee certain code
+  // layout).
+  kRequestBlockInFuture = 50
 };
 
 // Basic block materializer.
 class BlockFactory {
  public:
-
   // Initialize the materializer with an environment and a local control-flow
   // graph. The environment is needed for lookups in the code cache index, and
   // the LCFG is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  explicit BlockFactory(Context *context_,
-                        LocalControlFlowGraph *cfg_);
+  BlockFactory(Context *context_, LocalControlFlowGraph *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBasicBlock`.
@@ -155,9 +153,6 @@ class BlockFactory {
   // Remove blocks that are now unnecessary.
   GRANARY_INTERNAL_DEFINITION void RemoveOldBlocks(void);
 
-  // Swap between the current and next round of new blocks.
-  GRANARY_INTERNAL_DEFINITION void SwapBlocks(void);
-
   // Try to find an already materialized version of `exclude` within the LCFG.
   GRANARY_INTERNAL_DEFINITION
   InstrumentedBasicBlock *MaterializeFromLCFG(DirectBasicBlock *exclude);
@@ -177,8 +172,6 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph *cfg;
 
   GRANARY_INTERNAL_DEFINITION bool has_pending_request;
-
-  GRANARY_INTERNAL_DEFINITION int generation;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockFactory);
 };
