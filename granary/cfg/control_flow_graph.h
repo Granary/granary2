@@ -84,7 +84,6 @@ class LocalControlFlowGraph final {
   GRANARY_INTERNAL_DEFINITION BasicBlock *entry_block;
   GRANARY_INTERNAL_DEFINITION ListOfListHead<BasicBlock> blocks;
   GRANARY_INTERNAL_DEFINITION BasicBlock *first_new_block;
-  GRANARY_INTERNAL_DEFINITION BasicBlock *next_new_block;
 
   // Counter of how many virtual registers were allocated within this LCFG.
   //
@@ -92,10 +91,13 @@ class LocalControlFlowGraph final {
   // never conflict with actual register numbers. This is convenient for
   // virtual register save/restore slots.
   GRANARY_INTERNAL_DEFINITION int num_virtual_regs;
-public:
+
   // Counter of how many basic blocks were added to this LCFG. This does not
   // necessarily track the exact number of blocks present at any one time.
   GRANARY_INTERNAL_DEFINITION int num_basic_blocks;
+
+  // Current block generation counter.
+  GRANARY_INTERNAL_DEFINITION int generation;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(LocalControlFlowGraph);
 };

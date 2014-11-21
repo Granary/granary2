@@ -216,9 +216,8 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     //       picks up on this and specializes it accordingly.
     } else {
       auto target_block = factory->MaterializeEmptyBlock(wrapper->wrapper_pc);
-      target_block->AppendInstruction(lir::FunctionCall(factory,
-                                                        wrapper->wrapper_pc,
-                                                        kRequestBlockExecuteNatively));
+      target_block->AppendInstruction(lir::FunctionCall(
+          factory, wrapper->wrapper_pc, kRequestBlockExecuteNatively));
       target_block->AppendInstruction(lir::Return(factory));
       cfi->InsertAfter(lir::Jump(target_block));
     }

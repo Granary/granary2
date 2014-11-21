@@ -4,6 +4,8 @@
 
 #include "arch/driver.h"
 
+#include "granary/base/option.h"
+
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
@@ -20,6 +22,10 @@
 
 #include "os/exception.h"
 #include "os/module.h"
+
+GRANARY_DEFINE_positive_int(max_decoded_instructions_per_block, 16,
+    "The maximum number of instructions to decode per basic block. The default "
+    "value is `16`.");
 
 namespace granary {
 extern "C" {
@@ -58,10 +64,6 @@ void SaveStateForExceptionCFI(DecodedBasicBlock *block,
                               granary::Instruction *before_instr);
 
 }  // namespace arch
-enum {
-  kMaxNumDecodedInstructions = 16,
-  kMaxNumMaterializationRequests = 256
-};
 
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the LCFG
@@ -70,8 +72,7 @@ BlockFactory::BlockFactory(Context *context_,
                            LocalControlFlowGraph *cfg_)
     : context(context_),
       cfg(cfg_),
-      has_pending_request(false),
-      generation(0) {}
+      has_pending_request(false) {}
 
 // Request that a block be materialized. This does nothing if the block is
 // not a `DirectBasicBlock`.
@@ -90,10 +91,6 @@ void BlockFactory::RequestBlock(BasicBlock *block, BlockRequestKind strategy) {
 //       loop, and it makes it easier to request blocks ahead of time.
 void BlockFactory::RequestBlock(DirectBasicBlock *block,
                                 BlockRequestKind strategy) {
-  if (kRequestBlockLater == strategy) return;
-  if (-1 == block->generation) {
-    block->generation = generation + 1;
-  }
   auto old_strategy = block->materialize_strategy;
   block->materialize_strategy = GRANARY_MAX(block->materialize_strategy,
                                             strategy);
@@ -257,7 +254,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
   arch::Instruction dinstr;
   arch::Instruction ainstr;
   Instruction *instr(nullptr);
-  int num_instrs = kMaxNumDecodedInstructions;
+  auto num_instrs = FLAG_max_decoded_instructions_per_block;
   do {
     auto decoded_pc = decode_pc;
     auto before_instr = new AnnotationInstruction(
@@ -309,7 +306,7 @@ void BlockFactory::RelinkCFIs(void) {
     for (auto succ : block->Successors()) {
       if (auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block)) {
         if (auto materialized_block = direct_block->materialized_block) {
-          cfg->AddBlock(materialized_block);
+          GRANARY_ASSERT(materialized_block->list.IsLinked());
           succ.cfi->ChangeTarget(materialized_block);
         }
       }
@@ -331,56 +328,50 @@ void BlockFactory::RemoveOldBlocks(void) {
     }
   }
 
-  // Mark all blocks as unreachable.
+  // Then, mark all blocks as unreachable.
   for (auto block : cfg->Blocks()) {
     block->is_reachable = false;
   }
 
   // Make sure the entry block remains reachable.
-  auto first_block = cfg->entry_block;
-  first_block->is_reachable = true;
+  cfg->entry_block->is_reachable = true;
 
-  // Transitively propagate reachability from the entry block. This is like
-  // the "mark" phase of a mark & sweep GC.
-  for (auto changed = true, can_make_progess = true;
-       changed && can_make_progess; ) {
-    changed = false;
-    can_make_progess = false;
+  ListOfListHead<BasicBlock> old_blocks;
+  ListOfListHead<BasicBlock> new_blocks;
+  ListOfListHead<BasicBlock> work_list;
 
-    // TODO(pag): This could easily be improved to not be O(n^2).
-    for (auto block : cfg->Blocks()) {
-      if (!block->is_reachable) {
-        can_make_progess = true;
-        continue;
-      }
-      for (auto succ : block->Successors()) {
-        auto succ_block = succ.block;
-        if (succ_block->is_reachable) continue;
-        changed = true;
-        succ_block->is_reachable = true;
-      }
+  cfg->blocks.Remove(cfg->entry_block);
+  work_list.Append(cfg->entry_block);
+  auto new_gen = cfg->generation;
+
+  while (auto block = work_list.First()) {
+    work_list.Remove(block);
+
+    // Process blocks off the work list as either being old or new blocks.
+    if (block->generation < new_gen) {
+      old_blocks.Append(block);
+    } else {
+      new_blocks.Append(block);
+    }
+
+    // Add successors to the work list.
+    for (auto succ : block->Successors()) {
+      if (succ.block->is_reachable) continue;
+      succ.block->is_reachable = true;
+      cfg->blocks.Remove(succ.block);
+      work_list.Append(succ.block);
     }
   }
 
-  // Garbage collect the unreachable blocks. This is like the "sweep" phase of
-  // a mark & sweep GC.
-  for (auto block = cfg->blocks.First(); block; ) {
-    auto next_block = block->list.Next();
-    if (!block->is_reachable) {
-      if (cfg->next_new_block == block) {
-        cfg->next_new_block = next_block;
-      }
-      cfg->blocks.Remove(block);
-      delete block;
-    }
-    block = next_block;
+  // Any remaining blocks are unreachable.
+  while (auto block = cfg->blocks.First()) {
+    cfg->blocks.Remove(block);
+    delete block;
   }
-}
 
-// Swap between the current and next round of new blocks.
-void BlockFactory::SwapBlocks(void) {
-  cfg->first_new_block = cfg->next_new_block;
-  cfg->next_new_block = nullptr;
+  cfg->blocks = old_blocks;
+  cfg->first_new_block = new_blocks.First();
+  cfg->blocks.Extend(new_blocks);
 }
 
 // Search an LCFG for a block whose meta-data matches the meta-data of
@@ -439,12 +430,9 @@ InstrumentedBasicBlock *BlockFactory::MaterializeFromLCFG(
 // Returns true if we can try to materialize this block. Requires that the
 // block has not already been materialized.
 bool BlockFactory::CanMaterializeBlock(DirectBasicBlock *block) {
-  if (block->materialized_block ||
-      kRequestBlockLater == block->materialize_strategy ||
-      kRequestBlockInFuture == block->materialize_strategy) {
-    return false;
-  }
-  return -1 != block->generation && block->generation <= generation;
+  return !(block->materialized_block ||
+           kRequestBlockLater == block->materialize_strategy ||
+           kRequestBlockInFuture == block->materialize_strategy);
 }
 
 // Request a block from the code cache index. If an existing block can be
@@ -489,7 +477,7 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
   // Execution should never go to the code cache.
   } else if (granary_edge_cache_begin <= target_pc &&
              target_pc < granary_edge_cache_begin) {
-    granary_unreachable();
+    granary_unreachable("Fatal error: Trying to jump into edge cache.");
 
   // Target is an instrumentation-exported Granary function. These run
   // natively.
@@ -505,12 +493,14 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
   // Execution should never target Granary itself.
   } else if (&granary_begin_text <= target_pc &&
              target_pc < &granary_end_text) {
-    granary_unreachable();
+    granary_unreachable("Fatal error: Trying to jump into "
+                        "non-exported Granary function.");
 
   // All remaining targets should always be associated with valid module code.
   } else if (auto module = os::ModuleContainingPC(target_pc)) {
      if (os::ModuleKind::GRANARY == module->Kind()) {
-       GRANARY_IF_NOT_TEST( granary_unreachable(); )
+       GRANARY_IF_NOT_TEST( granary_unreachable(
+           "Fatal error: Trying to jump into non-exported Granary function."); )
 
      // Everything looks good! Take the input materialization kind.
      } else {
@@ -519,7 +509,8 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
 
   // Trying to translate non-executable code.
   } else {
-    granary_unreachable();
+    granary_unreachable("Fatal error: Trying to instrument non-"
+                        "executable code.");
   }
 
   return request_kind;
@@ -544,13 +535,14 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
   } else {
     auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
     target_block = new DirectBasicBlock(cfg, dest_meta);
+    RequestBlock(target_block, request_kind);
+    GRANARY_ASSERT(has_pending_request);
   }
 
   // Default to having a materialization strategy, and make it so that no one
   // can materialize against this block.
   auto adapt_block = AdaptToBlock(cfg, meta, target_block);
   adapt_block->is_comparable = false;
-  RequestBlock(target_block, request_kind);
   cfg->AddEntryBlock(adapt_block);
   return adapt_block;
 }
@@ -558,17 +550,16 @@ InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
 // Materialize a basic block if there is a pending request.
 bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   if (!CanMaterializeBlock(block)) return false;
-  if (kMaxNumMaterializationRequests < cfg->num_basic_blocks &&
-      kRequestBlockDecodeNow > block->materialize_strategy) {
-    block->materialize_strategy = kRequestBlockInFuture;
-    return false;
-  }
 
   // Make sure that code exported to instrumented application code is never
   // actually instrumented.
   auto start_pc = block->StartAppPC();
   auto request_kind = RequestKindForTargetPC(start_pc,
                                              block->materialize_strategy);
+
+  // Don't allow us to re-materialize.
+  block->materialize_strategy = kRequestBlockInFuture;
+
   switch (request_kind) {
     case kRequestBlockFromIndexOrCFG:
     case kRequestBlockFromIndexOrCFGOnly:
@@ -586,9 +577,7 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       auto decoded_block = new DecodedBasicBlock(cfg, block->meta);
       block->meta = nullptr;  // Steal.
       block->materialized_block = decoded_block;
-      cfg->AddBlock(decoded_block);
       DecodeInstructionList(decoded_block);
-      for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
       break;
     }
     case kRequestBlockExecuteNatively: {
@@ -598,28 +587,35 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
       block->meta = nullptr;  // No longer needed.
       break;
     }
-    case kRequestBlockLater: break;
+    case kRequestBlockLater:
     case kRequestBlockInFuture: break;
   }
-  return nullptr != block->materialized_block;
+  if (auto materialized_block = block->materialized_block) {
+
+    // Inherit the block id.
+    if (-1 == materialized_block->id) materialized_block->id = block->id;
+
+    cfg->AddBlock(materialized_block);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
   has_pending_request = false;
-  ++generation;
-  GRANARY_ASSERT(!cfg->next_new_block);
+  ++cfg->generation;
+  cfg->first_new_block = nullptr;
   if (MaterializeDirectBlocks()) {
-    GRANARY_ASSERT(nullptr != cfg->next_new_block);
     RelinkCFIs();
     RemoveOldBlocks();
   }
-  SwapBlocks();
 }
 
 // Returns true if there are any pending materialization requests.
 bool BlockFactory::HasPendingMaterializationRequest(void) const {
-  return has_pending_request || cfg->next_new_block;
+  return has_pending_request;
 }
 
 // Materialize the initial basic block.
@@ -627,30 +623,24 @@ DecodedBasicBlock *BlockFactory::MaterializeDirectEntryBlock(
     BlockMetaData *meta) {
   GRANARY_ASSERT(nullptr != meta);
   auto decoded_block = new DecodedBasicBlock(cfg, meta);
-
   DecodeInstructionList(decoded_block);
-  for (auto succ : decoded_block->Successors()) cfg->AddBlock(succ.block);
-  decoded_block->generation = generation;
   cfg->AddEntryBlock(decoded_block);
+  has_pending_request = false;
   return decoded_block;
 }
 
 // Try to request the initial entry block from the code cache index.
 InstrumentedBasicBlock *BlockFactory::RequestDirectEntryBlock(
     BlockMetaData **meta) {
-  if (auto entry_block = RequestIndexedBlock(meta)) {
-    cfg->AddBlock(entry_block);
-    return entry_block;
-  }
-  SwapBlocks();
-  return nullptr;
+  auto entry_block = RequestIndexedBlock(meta);
+  if (entry_block) cfg->AddEntryBlock(entry_block);
+  return entry_block;
 }
 
 // Create a new (future) basic block.
 DirectBasicBlock *BlockFactory::Materialize(AppPC start_pc) {
   auto meta = context->AllocateBlockMetaData(start_pc);
   auto block = new DirectBasicBlock(cfg, meta);
-  block->generation = generation + 1;
   cfg->AddBlock(block);
   return block;
 }
@@ -659,7 +649,6 @@ DirectBasicBlock *BlockFactory::Materialize(AppPC start_pc) {
 CompensationBasicBlock *BlockFactory::MaterializeEmptyBlock(AppPC start_pc) {
   auto meta = context->AllocateBlockMetaData(start_pc);
   auto block = new CompensationBasicBlock(cfg, meta);
-  block->generation = generation + 1;
   cfg->AddBlock(block);
   return block;
 }
