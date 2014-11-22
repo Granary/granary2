@@ -118,23 +118,22 @@ static IndexFindResponse MatchMetaData(BlockMetaData *ls,
   };
   for (auto meta : IndexMetaDataIterator(ls)) {
     if (kMetaArrayEnd == meta) break;
-    if (search->Equals(meta)) {
-      switch (search->CanUnifyWith(ls)) {
-        case UnificationStatus::ACCEPT:
-          response.status = UnificationStatus::ACCEPT;
+    if (!search->Equals(meta)) continue;
+    switch (search->CanUnifyWith(ls)) {
+      case UnificationStatus::ACCEPT:
+        response.status = UnificationStatus::ACCEPT;
+        response.meta = meta;
+        return response;
+
+      case UnificationStatus::ADAPT:
+        if (UnificationStatus::ADAPT != response.status) {
+          response.status = UnificationStatus::ADAPT;
           response.meta = meta;
-          return response;
+        }
+        break;
 
-        case UnificationStatus::ADAPT:
-          if (UnificationStatus::ADAPT != response.status) {
-            response.status = UnificationStatus::ADAPT;
-            response.meta = meta;
-          }
-          break;
-
-        case UnificationStatus::REJECT:
-          break;
-      }
+      case UnificationStatus::REJECT:
+        break;
     }
   }
   return response;

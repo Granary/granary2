@@ -346,11 +346,14 @@ void Compile(Context *context, LocalControlFlowGraph *cfg) {
 void Compile(Context *context, LocalControlFlowGraph *cfg,
              IndirectEdge *edge, AppPC target_app_pc) {
   auto frags = Assemble(context, cfg);
-  do {
+  {
+    // Note: Need to acquire the `out_edge_pc_lock` around edge instantiation
+    //       and fragment encoding because that's where `out_edge_pc` is read
+    //       and then updated.
     SpinLockedRegion locker(&(edge->out_edge_pc_lock));
     arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
     Encode(&frags, context->BlockCodeCache());
-  } while (false);
+  }
   FreeFragments(&frags);
 }
 
