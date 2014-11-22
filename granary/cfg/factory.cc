@@ -362,9 +362,12 @@ void BlockFactory::RemoveUnreachableBlocks(void) {
   // Any remaining blocks are unreachable.
   while (auto block = cfg->blocks.First()) {
     cfg->blocks.Remove(block);
+    if (auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
+      auto meta = inst_block->UnsafeMetaData();
+      if (meta && !IsA<CachedBasicBlock *>(block)) delete meta;
+    }
     delete block;
   }
-
   cfg->blocks = old_blocks;
   cfg->first_new_block = new_blocks.First();
   cfg->blocks.Extend(new_blocks);
