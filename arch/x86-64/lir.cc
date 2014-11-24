@@ -80,6 +80,7 @@ void ConvertFunctionCallToJump(ControlFlowInstruction *cfi) {
   } else {
     JMP_RELBRd(&ni, ni.ops[0].branch_target.as_pc);
   }
+  ni.is_tail_call = true;
 }
 
 void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi) {

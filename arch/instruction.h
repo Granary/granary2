@@ -42,6 +42,8 @@ class InstructionInterface {
 
   bool IsFunctionCall(void) const;
 
+  bool IsFunctionTailCall(void) const;
+
   bool IsFunctionReturn(void) const;
 
   bool IsInterruptCall(void) const;

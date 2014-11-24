@@ -270,7 +270,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
   auto exit_to_block = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
-  auto is_call_ret = cfi->IsFunctionCall() ||
+  auto is_call_ret = cfi->IsFunctionCall() || cfi->IsFunctionTailCall() ||
                      IsA<ReturnBasicBlock *>(cfi->TargetBlock());
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
@@ -411,10 +411,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   if (REDZONE_SIZE_BYTES && !is_call_ret) {
     APP(compare_target,
-        LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                           BaseDispMemOp(REDZONE_SIZE_BYTES,
-                                         XED_REG_RSP,
-                                         ADDRESS_WIDTH_BITS));
+        UNSHIFT_REDZONE(&ni);
         ni.is_stack_blind = true;
         ni.analyzed_stack_usage = false; );
   }
