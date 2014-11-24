@@ -23,27 +23,40 @@ extern void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
                                        DecodedBasicBlock *block,
                                        granary::Instruction *instr,
                                        InlineAssemblyBlock *asm_block);
-
 }  // namespace arch
+namespace {
+
+static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
+                                  DecodedBasicBlock *block,
+                                  AnnotationInstruction *instr) {
+  auto asm_block = instr->Data<InlineAssemblyBlock *>();
+  instr->SetData(0UL);
+  arch::CompileInlineAssemblyBlock(cfg, block, instr, asm_block);
+  delete asm_block;
+  Instruction::Unlink(instr);
+}
+
+static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
+                                  DecodedBasicBlock *block) {
+  auto instr = block->FirstInstruction();
+  for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
+    next_instr = instr->Next();
+    if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (kAnnotInlineAssembly == annot_instr->annotation) {
+        CompileInlineAssembly(cfg, block, annot_instr);
+      }
+    }
+  }
+}
+
+}  // namespace
 
 // Compile all inline assembly instructions by parsing the inline assembly
 // instructions and doing code generation for them.
 void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
   for (auto block : cfg->Blocks()) {
-    if (auto dblock = DynamicCast<DecodedBasicBlock *>(block)) {
-      auto instr = dblock->FirstInstruction();
-      for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
-        next_instr = instr->Next();
-        if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-          if (kAnnotInlineAssembly == annot->annotation) {
-            auto asm_block = reinterpret_cast<InlineAssemblyBlock *>(
-                annot->Data<void *>());
-            arch::CompileInlineAssemblyBlock(cfg, dblock, instr, asm_block);
-            delete asm_block;
-            Instruction::Unlink(instr);
-          }
-        }
-      }
+    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      CompileInlineAssembly(cfg, decoded_block);
     }
   }
 }
