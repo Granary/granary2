@@ -318,10 +318,13 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // Calls out to some client code, but the call has access to the existing
     // virtual register state.
-    case kAnnotInlineFunctionCall:
-      arch::ExtendFragmentWithInlineCall(builder->context, frag,
-                                         instr->Data<InlineFunctionCall *>());
+    case kAnnotInlineFunctionCall: {
+      auto call = instr->Data<InlineFunctionCall *>();
+      arch::ExtendFragmentWithInlineCall(builder->context, frag, call);
+      delete call;
+      instr->SetData(0UL);
       return true;
+    }
 
     // Used to hint at late stack switching.
     case kAnnotCondLeaveNativeStack:

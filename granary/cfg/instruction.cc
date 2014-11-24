@@ -5,6 +5,9 @@
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/instruction.h"
+
+#include "granary/code/inline_assembly.h"
+
 #include "granary/breakpoint.h"
 
 namespace granary {
@@ -62,6 +65,21 @@ Instruction *Instruction::InsertAfter(Instruction *instr) {
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
   instr->list.Unlink();
   return std::unique_ptr<Instruction>(instr);
+}
+
+// Clean up special annotation instructions if there is other data lying
+// around.
+AnnotationInstruction::~AnnotationInstruction(void) {
+  if (!data) return;
+  switch (annotation) {
+    case kAnnotInlineAssembly:
+      delete reinterpret_cast<InlineAssemblyBlock *>(data);
+      break;
+    case kAnnotInlineFunctionCall:
+      delete reinterpret_cast<InlineFunctionCall *>(data);
+      break;
+    default: break;
+  }
 }
 
 // Make it so that inserting an instruction before the designated first
