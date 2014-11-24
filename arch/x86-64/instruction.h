@@ -86,6 +86,10 @@ class Instruction : public InstructionInterface {
     return XED_CATEGORY_CALL == category;
   }
 
+  inline bool IsFunctionTailCall(void) const {
+    return is_tail_call;
+  }
+
   inline bool IsFunctionReturn(void) const {
     return XED_ICLASS_RET_FAR == iclass || XED_ICLASS_RET_NEAR == iclass;
   }
@@ -296,6 +300,9 @@ class Instruction : public InstructionInterface {
     // likely restricts the usage of REX prefixes, and therefore restricts the
     // virtual register scheduler to only the original 8 GPRs.
     bool uses_legacy_registers:1;
+
+    // Was this a function call that was converted into a jump?
+    bool is_tail_call:1;
 
     // Number of explicit operands.
     uint8_t num_explicit_ops:4;

@@ -174,6 +174,10 @@ bool NativeInstruction::IsFunctionCall(void) const {
   return instruction.IsFunctionCall();
 }
 
+bool NativeInstruction::IsFunctionTailCall(void) const {
+  return instruction.IsFunctionTailCall();
+}
+
 bool NativeInstruction::IsFunctionReturn(void) const {
   return instruction.IsFunctionReturn();
 }

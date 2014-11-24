@@ -380,6 +380,7 @@ class NativeInstruction : public Instruction {
   bool ReadsConditionCodes(void) const;
   bool WritesConditionCodes(void) const;
   bool IsFunctionCall(void) const;
+  bool IsFunctionTailCall(void) const;  // A call converted into a jump.
   bool IsFunctionReturn(void) const;
   bool IsInterruptCall(void) const;
   bool IsInterruptReturn(void) const;
