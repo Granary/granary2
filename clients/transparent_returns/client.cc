@@ -155,7 +155,6 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
 
   // Add a transparent return address to an application function call.
   void AddRetAddrToBlock(BlockFactory *factory, DecodedBasicBlock *block) {
-    if (!block) return;
     for (auto succ : block->Successors()) {
       if (!succ.cfi->IsFunctionCall()) continue;
       if (!succ.cfi->IsAppInstruction()) continue;
@@ -174,7 +173,9 @@ class TransparentRetsInstrumenterLate : public InstrumentationTool {
                                      LocalControlFlowGraph *cfg) {
     if (!FLAG_transparent_returns) return;
     for (auto block : cfg->NewBlocks()) {
-      AddRetAddrToBlock(factory, DynamicCast<DecodedBasicBlock *>(block));
+      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+        AddRetAddrToBlock(factory, decoded_block);
+      }
     }
   }
 };

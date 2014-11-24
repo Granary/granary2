@@ -248,8 +248,6 @@ void ExtendFragmentWithInlineCall(Context *context,
   RESTORE_ARG(2);
   RESTORE_ARG(1);
   RESTORE_ARG(0);
-
-  delete call;
 }
 
 }  // namespace arch

@@ -14,49 +14,20 @@ namespace granary {
 namespace internal {
 
 // Initialize a new slab list. Once initialized, slab lists are never changed.
-SlabList::SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
-                   size_t slab_number_)
-    : next(next_slab_),
-      min_allocation_number(min_allocation_number_),
-      number(slab_number_) {}
+SlabList::SlabList(const SlabList *next_slab_)
+    : next(next_slab_) {}
 
-// Initialize the slab allocator. The slab allocator starts off having the slab
-// list head point to a dummy slab, so that the allocator itself can avoid NULL
-// checks.
-SlabAllocator::SlabAllocator(size_t num_allocations_per_slab_,
-                             size_t start_offset_,
-                             size_t alignment_,
-                             size_t aligned_size_,
-                             size_t unaligned_size_)
-    : num_allocations_per_slab(num_allocations_per_slab_),
+// Initialize the slab allocator.
+SlabAllocator::SlabAllocator(size_t start_offset_, size_t max_offset_,
+                             size_t allocation_size_)
+    : offset(max_offset_),
       start_offset(start_offset_),
-      alignment(alignment_),
-      aligned_size(aligned_size_),
-      unaligned_size(unaligned_size_),
-      slab_list_tail(nullptr, num_allocations_per_slab_, 0),
-      slab_list_head(ATOMIC_VAR_INIT(&slab_list_tail)),
-      free_list(ATOMIC_VAR_INIT(nullptr)),
-      slab_lock(),
-      next_slab_number(1),
-      next_allocation_number(num_allocations_per_slab_) {
-
-  // Sanity check the inputs.
-  GRANARY_ASSERT(0 == (aligned_size_ % alignment_));
-  GRANARY_ASSERT(aligned_size_ >= unaligned_size_);
-  GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >=
-                 (aligned_size_ * num_allocations_per_slab_ + start_offset_));
-
-  // Used only when `GRANARY_WITH_VALGRIND` is set.
-  GRANARY_UNUSED(unaligned_size);
-  GRANARY_UNUSED(alignment);
-
-  // Used only when `GRANARY_WITH_VALGRIND` isn't set.
-  GRANARY_UNUSED(num_allocations_per_slab);
-  GRANARY_UNUSED(start_offset);
-  GRANARY_UNUSED(aligned_size);
-  GRANARY_UNUSED(next_slab_number);
-  GRANARY_UNUSED(next_allocation_number);
-}
+      max_offset(max_offset_),
+      allocation_size(allocation_size_),
+      slab_list_lock(),
+      slab_list(nullptr),
+      free_list_lock(),
+      free_list(nullptr) {}
 
 #ifndef GRANARY_WITH_VALGRIND
 
@@ -69,31 +40,20 @@ enum {
 
 // Allocate a new slab of memory for this object. The backing memory of the
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
-const SlabList *SlabAllocator::AllocateSlab(const SlabList *prev_slab) {
+const SlabList *SlabAllocator::AllocateSlab(const SlabList *next_slab) {
   void *slab_memory(os::AllocateDataPages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
   checked_memset(slab_memory, UNALLOCATED_MEMORY_POISON,
                  SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
-  VALGRIND_MAKE_MEM_NOACCESS(slab_memory, SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
-  return new (slab_memory) SlabList(
-      prev_slab,
-      next_slab_number * num_allocations_per_slab,
-      next_slab_number);
+  return new (slab_memory) SlabList(next_slab);
 }
 
 // Get a pointer into the slab list. This potentially allocates a new slab.
-// The slab pointer returned might not be the exact slab for the particular
-// allocation.
-const SlabList *SlabAllocator::GetOrAllocateSlab(size_t slab_number) {
-  auto slab = slab_list_head.load(std::memory_order_acquire);
-  if (GRANARY_UNLIKELY(!slab) || slab_number > slab->number) {
-    GRANARY_ASSERT(next_slab_number == slab_number);
-    slab = AllocateSlab(slab);
-    GRANARY_ASSERT(slab->number == slab_number);
-    next_slab_number += 1;
-    slab_list_head.store(slab, std::memory_order_release);
+const SlabList *SlabAllocator::SlabForAllocation(void) {
+  if (GRANARY_UNLIKELY(offset >= max_offset)) {
+    offset = start_offset;
+    slab_list = AllocateSlab(slab_list);
   }
-  for (; slab->number > slab_number; slab = slab->next) {}
-  return slab;
+  return slab_list;
 }
 
 #if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
@@ -113,17 +73,16 @@ static bool MemoryNotInUse(void *mem, size_t num_bytes) {
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
-  void *address(AllocateFromFreeList());
+  auto address = AllocateFromFreeList();
   if (!address) {
-    SpinLockedRegion locker(&slab_lock);
-    auto slab_number = next_allocation_number / num_allocations_per_slab;
-    auto slab = GetOrAllocateSlab(slab_number);
-    auto index = next_allocation_number - slab->min_allocation_number;
-    address = UnsafeCast<char *>(slab) + start_offset + (index * aligned_size);
-    next_allocation_number += 1;
+    SpinLockedRegion locker(&slab_list_lock);
+    auto slab = SlabForAllocation();
+    auto addr = reinterpret_cast<uintptr_t>(slab) + offset;
+    offset += allocation_size;
+    address = reinterpret_cast<void *>(addr);
   }
-  GRANARY_ASSERT(MemoryNotInUse(address, aligned_size));
-  checked_memset(address, UNINITIALIZED_MEMORY_POISON, aligned_size);
+  GRANARY_ASSERT(MemoryNotInUse(address, allocation_size));
+  checked_memset(address, UNINITIALIZED_MEMORY_POISON, allocation_size);
   VALGRIND_MALLOCLIKE_BLOCK(address, unaligned_size, 0, 1);
   return address;
 }
@@ -131,44 +90,40 @@ void *SlabAllocator::Allocate(void) {
 // Free some memory that was allocated from the slab allocator.
 void SlabAllocator::Free(void *address) {
   VALGRIND_FREELIKE_BLOCK(address, unaligned_size);
-  checked_memset(address, DEALLOCATED_MEMORY_POISON, aligned_size);
+  checked_memset(address, DEALLOCATED_MEMORY_POISON, allocation_size);
 
-  FreeList *list(reinterpret_cast<FreeList *>(address));
-  FreeList *next(nullptr);
-  do {
-    next = free_list.load(std::memory_order_relaxed);
-    list->next = next;
-  } while (!free_list.compare_exchange_strong(next, list));
+  SpinLockedRegion locker(&free_list_lock);
+  auto list = reinterpret_cast<FreeList *>(address);
+  list->next = free_list;
+  free_list = list;
 }
 
 // For those cases where a slab allocator is non-global.
 void SlabAllocator::Destroy(void) {
-  const SlabList *slab = slab_list_head.exchange(nullptr);
-  const SlabList *next_slab(nullptr);
-  for (; slab; slab = next_slab) {
+  auto slab = slab_list;
+  for (const SlabList *next_slab(nullptr); slab; slab = next_slab) {
     next_slab = slab->next;
-    os::FreeDataPages(const_cast<void *>(reinterpret_cast<const void *>(slab)),
-                      SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
+    auto slab_addr = const_cast<void *>(
+        reinterpret_cast<const void *>(slab_list));
+    os::FreeDataPages(slab_addr, SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
   }
+  slab_list = nullptr;
 }
 
 // Allocate an object from the free list, if possible. Returns `nullptr` if
 // no object can be allocated.
 void *SlabAllocator::AllocateFromFreeList(void) {
-  FreeList *head(nullptr);
-  FreeList *next(nullptr);
-  do {
-    head = free_list.load(std::memory_order_relaxed);
-    if (!head) {
-      return nullptr;
-    }
-    next = head->next;
-  } while (!free_list.compare_exchange_strong(head, next));
-#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
-  if (head) {
-    // Maintain the invariant that is checked by `MemoryNotInUse`.
-    memset(head, DEALLOCATED_MEMORY_POISON, sizeof (void *));
+  void *head(nullptr);
+  {
+    SpinLockedRegion locker(&free_list_lock);
+    if (!free_list) return nullptr;
+    auto list = free_list;
+    free_list = list->next;
+    head = list;
   }
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
+  // Maintain the invariant that is checked by `MemoryNotInUse`.
+  memset(head, DEALLOCATED_MEMORY_POISON, sizeof (FreeList *));
 #endif  // GRANARY_TARGET_debug
   return head;
 }
@@ -179,15 +134,13 @@ const SlabList *SlabAllocator::AllocateSlab(const SlabList *) {
   return nullptr;
 }
 
-const SlabList *SlabAllocator::GetOrAllocateSlab(size_t) {
+const SlabList *SlabAllocator::SlabForAllocation(void) {
   return nullptr;
 }
 
 extern "C" {
-
 void *malloc(size_t size);
 void free(void *);
-
 }  // extern C
 
 // Allocate some memory from the slab allocator.

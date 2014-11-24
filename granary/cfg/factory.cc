@@ -171,32 +171,34 @@ NativeInstruction *BlockFactory::MakeInstruction(
 void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
                                              Instruction *last_instr,
                                              AppPC pc) {
-  BasicBlock *fall_through(nullptr);
-  auto request_fall_through = true;
+  BasicBlock *fall_through_block(nullptr);
+
+  // If the last instruction isn't a CFI, then we need to add a fall-through.
+  auto add_fall_through_block = true;
+
+  // Should we auto-submit a request to look up the fall-through block?
+  auto request_fall_through_block = false;
+
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
   if (cfi) {
     GRANARY_ASSERT(!cfi->IsInterruptCall());
 
-    // If we're doing a function call or a direct jump, then always
-    // materialize the next block. In the case of function calls, this
-    // lets us avoid issues related to `setjmp` and `longjmp`. In both
-    // cases, this allows us to avoid unnecessary edge code when we know
-    // ahead of time that we will reach the desired code.
-    request_fall_through = cfi->IsFunctionCall() ||
-                           IsA<ExceptionalControlFlowInstruction *>(cfi);
+    // Force us to request the fall through if we have an exceptional
+    // control-flow instruction (kernel space faultable instruction) that is
+    // otherwise not explicitly a control-flow instruction).
+    add_fall_through_block = IsA<ExceptionalControlFlowInstruction *>(cfi);
+    request_fall_through_block = add_fall_through_block;
   }
-  if (request_fall_through || cfi->IsConditionalJump() || cfi->IsSystemCall()) {
-    auto meta = context->AllocateBlockMetaData(pc);
-    fall_through = new DirectBasicBlock(cfg, meta);
-    block->AppendInstruction(AsApp(lir::Jump(fall_through), pc));
 
-  // Inherit the fall-through from the target.
-  } else if (cfi->IsUnconditionalJump() && !cfi->HasIndirectTarget()) {
-    fall_through = cfi->TargetBlock();
-    request_fall_through = true;
+  if (add_fall_through_block || cfi->IsFunctionCall() ||
+      cfi->IsConditionalJump() || cfi->IsSystemCall()) {
+    auto meta = context->AllocateBlockMetaData(pc);
+    fall_through_block = new DirectBasicBlock(cfg, meta);
+    block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
   }
-  if (request_fall_through) {
-    RequestBlock(fall_through, kRequestBlockFromIndexOrCFG);
+
+  if (request_fall_through_block) {
+    RequestBlock(fall_through_block, kRequestBlockFromIndexOrCFG);
   }
 }
 
@@ -362,9 +364,12 @@ void BlockFactory::RemoveUnreachableBlocks(void) {
   // Any remaining blocks are unreachable.
   while (auto block = cfg->blocks.First()) {
     cfg->blocks.Remove(block);
+    if (auto inst_block = DynamicCast<InstrumentedBasicBlock *>(block)) {
+      auto meta = inst_block->UnsafeMetaData();
+      if (meta && !IsA<CachedBasicBlock *>(block)) delete meta;
+    }
     delete block;
   }
-
   cfg->blocks = old_blocks;
   cfg->first_new_block = new_blocks.First();
   cfg->blocks.Extend(new_blocks);

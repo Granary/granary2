@@ -148,9 +148,6 @@ enum InstructionAnnotation {
   kAnnotBeginBasicBlock,
   kAnnotEndBasicBlock,
 
-  // Represents an inline assembly instruction.
-  kAnnotInlineAssembly,
-
   // Target of a branch instruction.
   kAnnotationLabel,
 
@@ -231,6 +228,12 @@ enum InstructionAnnotation {
   // is changing the interrupt state.
   kAnnotInterruptDeliveryStateChange,
 
+  // Represents an inline assembly instruction.
+  //
+  // The data associated with this instruction is a pointer to a
+  // `InlineAssemblyBlock`.
+  kAnnotInlineAssembly,
+
   // Represents a call to a client function that saves and restores the
   // entire machine context.
   //
@@ -253,7 +256,7 @@ enum InstructionAnnotation {
 // Annotation instructions should not be removed by instrumentation.
 class AnnotationInstruction : public Instruction {
  public:
-  virtual ~AnnotationInstruction(void) = default;
+  virtual ~AnnotationInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
   inline explicit AnnotationInstruction(InstructionAnnotation annotation_)

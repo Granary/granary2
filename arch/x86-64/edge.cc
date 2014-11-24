@@ -450,8 +450,8 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 
   // Replace the `IndirectEdge::out_edge_pc` with the out edge that we're
   // creating, and make our new out edge point to the old one.
-  auto new_out_edge_pc = new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
-                                                   &(edge->out_edge_pc));
+  auto new_out_edge_pc = new AnnotationInstruction(
+      kAnnotUpdateAddressWhenEncoded, &(edge->out_edge_pc));
   frag->instrs.Append(new_out_edge_pc);
 
   BranchInstruction *jrcxz(nullptr);

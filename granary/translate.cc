@@ -23,39 +23,49 @@ namespace {
 // Records the number of context switches into Granary.
 std::atomic<uint64_t> gNumContextSwitches(ATOMIC_VAR_INIT(0));
 
-// In some cases, some blocks can become completely unreachable (via control
-// flow). In these cases, no code is generated for these blocks, and so delete
-// their meta-datas.
-static void ReapUnreachableBlocks(LocalControlFlowGraph *cfg) {
-  for (auto block : cfg->Blocks()) {
+enum IndexConstraint {
+  // Index all basic blocks in the control-flow graph.
+  kIndexAll,
+
+  // Index all blocks except for the entry block. This is used for indirect
+  // edges because we expect those to be `CompensationBasicBlocks` that
+  // are likely to be edge-specific, and we also don't want to pollute the
+  // cache with such blocks because then we'll see one compensation block
+  // pointing to another pointing to another... and then eventually getting
+  // to the intended destination block.
+  kIndexAllButEntry
+};
+
+// Add the decoded blocks to the code cache index.
+static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg,
+                        IndexConstraint constraint=kIndexAll) {
+  const auto entry_block = cfg->EntryBlock();
+  GRANARY_ASSERT(nullptr != entry_block);
+
+  LockedIndexTransaction transaction(index);
+  auto trace_group = gNumContextSwitches.fetch_add(1);
+  for (auto block : cfg->ReverseBlocks()) {
+    if (kIndexAllButEntry == constraint && entry_block == block) continue;
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      if (!decoded_block->StartCachePC()) {
-        delete decoded_block->meta;
-        decoded_block->meta = nullptr;
-      }
+      GRANARY_ASSERT(nullptr != decoded_block->StartAppPC());
+      auto meta = decoded_block->MetaData();
+      transaction.Insert(meta);
+      TraceMetaData(trace_group, meta);
     }
   }
 }
 
-// Add the decoded blocks to the code cache index.
-static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
-  LockedIndexTransaction transaction(index);
-  auto trace_group = gNumContextSwitches.fetch_add(1);
-  auto reap_unreachable = false;
-  for (auto block : cfg->Blocks()) {
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      // TODO(pag): Should we omit non-comparable compensation basic blocks
-      //            from the index?
-      if (decoded_block->StartCachePC()) {
-        auto meta = decoded_block->MetaData();
-        TraceMetaData(trace_group, meta);
-        transaction.Insert(meta);
-      } else {
-        reap_unreachable = true;
-      }
-    }
+// Compile and index blocks. This is used for direct edges and entrypoints.
+static CachePC CompileAndIndex(Context *context, LocalControlFlowGraph *cfg,
+                               BlockMetaData *meta) {
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+    auto index = context->CodeCacheIndex();
+    Compile(context, cfg);
+    IndexBlocks(index, cfg, kIndexAll);
   }
-  if (reap_unreachable) ReapUnreachableBlocks(cfg);
+  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
+  return cache_meta->start_pc;
 }
 
 static void MarkStack(BlockMetaData *meta, TargetStackValidity stack_valid) {
@@ -79,15 +89,7 @@ CachePC Translate(Context *context, BlockMetaData *meta) {
   LocalControlFlowGraph cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentDirect();
-
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
-    auto index = context->CodeCacheIndex();
-    Compile(context, &cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
-  return cache_meta->start_pc;
+  return CompileAndIndex(context, &cfg, meta);
 }
 
 // Instrument, compile, and index some basic blocks, where the entry block
@@ -103,7 +105,7 @@ CachePC Translate(Context *context, IndirectEdge *edge, AppPC target_app_pc) {
   if (!cache_meta->start_pc) {
     auto index = context->CodeCacheIndex();
     Compile(context, &cfg, edge, target_app_pc);
-    IndexBlocks(index, &cfg);
+    IndexBlocks(index, &cfg, kIndexAllButEntry);
   }
   GRANARY_ASSERT(nullptr != cache_meta->start_pc);
   return cache_meta->start_pc;
@@ -118,15 +120,7 @@ CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
   BinaryInstrumenter inst(context, &cfg, &meta);
   MarkStack(meta, stack_valid);
   inst.InstrumentEntryPoint(kind, category);
-
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {
-    auto index = context->CodeCacheIndex();
-    Compile(context, &cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
-  return cache_meta->start_pc;
+  return CompileAndIndex(context, &cfg, meta);
 }
 
 // Instrument, compile, and index some basic blocks that are the entrypoints
