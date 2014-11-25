@@ -102,16 +102,22 @@ static bool FinalizeControlFlow(BlockFactory *factory,
 // allowed to materialize direct basic blocks into other forms of basic
 // blocks.
 void BinaryInstrumenter::InstrumentControlFlow(void) {
-  for (auto num_iterations = 0; ; factory.MaterializeRequestedBlocks()) {
+  auto stop = false;
+  for (auto num_iterations = 1; ; factory.MaterializeRequestedBlocks()) {
     for (auto tool : ToolIterator(tools)) {
       tool->InstrumentControlFlow(&factory, cfg);
     }
-    if (++num_iterations >= FLAG_max_num_control_flow_iterations ||
-        !factory.HasPendingMaterializationRequest()) {
+    if (stop) break;
+    if (!factory.HasPendingMaterializationRequest()) {
       if (FinalizeControlFlow(&factory, cfg)) {
         factory.MaterializeRequestedBlocks();
+        stop = true;
+      } else {
+        break;
       }
-      break;
+    } else if (++num_iterations >= FLAG_max_num_control_flow_iterations) {
+      FinalizeControlFlow(&factory, cfg);
+      stop = true;
     }
   }
 }
