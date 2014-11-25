@@ -20,12 +20,6 @@ GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
 
     "data_collider");
 
-extern "C" {
-
-GRANARY_DISABLE_OPTIMIZER
-void gdb_data_reactor_change_sample_address(uintptr_t) {}
-
-}  // extern C
 namespace {
 
 enum : uint64_t {
@@ -206,8 +200,7 @@ static void ChangeSampleSource(int) {
   for (int num_attempts = NUM_SAMPLE_SOURCES; num_attempts-- > 0; ) {
     auto type_id = gCurrSourceTypeId++ % NUM_SAMPLE_SOURCES;
     if (auto addr = GetSampleAddress(type_id)) {
-      os::Log("Sampling address %lx\n", addr);
-      gdb_data_reactor_change_sample_address(addr);
+      granary_gdb_event1(addr);
       break;
     }
   }

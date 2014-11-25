@@ -2,8 +2,16 @@
 
 set $__wp = 1
 
+# sample
+#
+# Run the DataReactor sampler on the process with PID `$arg0`. This will dump
+# the recorded traces to `/tmp/$arg0.trace`.
 define sample
   set language c++
+  set backtrace limit 20
+  set logging file /tmp/$arg0.pid
+  set logging on
+  set logging redirect on
 
   # Make it so that if a watchpoint is hit in one thread, other threads
   # continue to execute.
@@ -12,7 +20,7 @@ define sample
   # Attach to the process.
   attach $arg0
 
-  b gdb_data_reactor_change_sample_address 
+  b granary_gdb_event1 
   commands
 
     # Delete the last added watchpoint.
@@ -35,8 +43,21 @@ define sample
       bt
       c
     end
+
+    c
   end
 
   # Continue the program after attaching.
   c
+end
+
+
+# end-sample
+#
+# End DataReactor sampling. 
+define end-sample
+  set logging off
+  set logging redirect off
+  clear
+  q
 end

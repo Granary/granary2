@@ -38,6 +38,18 @@ void granary_curiosity(void) {
   GRANARY_INLINE_ASSEMBLY("" ::: "memory");
 }
 
+void granary_gdb_event1(uintptr_t) {
+  GRANARY_INLINE_ASSEMBLY("" ::: "memory");
+}
+
+void granary_gdb_event2(uintptr_t, uintptr_t) {
+  GRANARY_INLINE_ASSEMBLY("" ::: "memory");
+}
+
+void granary_gdb_event3(uintptr_t, uintptr_t, uintptr_t) {
+  GRANARY_INLINE_ASSEMBLY("" ::: "memory");
+}
+
 void granary_interrupts_enabled(void) {
   GRANARY_INLINE_ASSEMBLY("" ::: "memory");
 }
