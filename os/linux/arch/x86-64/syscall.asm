@@ -115,6 +115,18 @@ DEFINE_FUNC(getpid)
     ret
 END_FUNC(getpid)
 
+DEFINE_FUNC(alarm)
+    mov    eax, 37  // `__NR_alarm`.
+    syscall
+    ret
+END_FUNC(alarm)
+
+DEFINE_FUNC(setitimer)
+    mov    eax, 38  // `__NR_setitimer`.
+    syscall
+    ret
+END_FUNC(setitimer)
+
 DEFINE_FUNC(rt_sigaction)
     mov     r10, rcx  // arg4, `sigsetsize`.
     jmp generic_sigaction
@@ -167,7 +179,6 @@ END_FUNC(exit_group)
 
 DEFINE_INST_FUNC(rt_sigreturn)
     mov     eax, 15  // `__NR_rt_sigreturn`.
-    mov     r10, rcx  // arg4.
     syscall
 END_FUNC(rt_sigreturn)
 

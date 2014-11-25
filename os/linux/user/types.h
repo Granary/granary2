@@ -42,23 +42,35 @@
 
 extern int arch_prctl(int option, ...);
 
+
+#ifndef HAVE_SA_RESTORER
+# define HAVE_SA_RESTORER
+#endif
+
+#ifndef SA_RESTORER
+# define SA_RESTORER 0x04000000
+#endif
+
+// This is the sigaction structure from the Linux 2.1.20 kernel.
+struct old_kernel_sigaction {
+  __sighandler_t k_sa_handler;
+  unsigned long sa_mask;
+  unsigned long sa_flags;
+  void (*sa_restorer) (void);
+};
+
+// This is the sigaction structure from the Linux 2.1.68 kernel.
 struct kernel_sigaction {
-  union {
-    __sighandler_t handler;
-    void (*siginfo_handler)(int, siginfo_t *, void *);
-  } handler;
-  /* `sa_flags` and `sa_mask` are reversed in the kernel as compared with
-   * glibc.
-   *
-   * http://code.woboq.org/linux/linux/include/linux/signal.h.html#sigaction
-   */
-  int sa_flags;
-  __sigset_t sa_mask;
-  void (*sa_restorer)(void);
+  __sighandler_t k_sa_handler;
+  unsigned long sa_flags;
+  void (*sa_restorer) (void);
+  sigset_t sa_mask;
 };
 
 extern int rt_sigaction(int sig, const struct kernel_sigaction *new_act,
                         struct kernel_sigaction *old_act, size_t sigsetsize);
+
+extern void rt_sigreturn(void);
 
 #undef __restrict
 

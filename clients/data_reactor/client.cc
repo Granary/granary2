@@ -22,22 +22,15 @@ GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
 
 extern "C" {
 
-struct SampleSource {
-  // Number of additional shadow memory slots the sample object occupies.
-  size_t num_additional_slots:16;
-
-  // Shadow address of the sample object.
-  uintptr_t address:48;
-} __attribute__((packed));
-
-void gdb_init_shadow_mem(void *, void *) {}
-void gdb_init_sample_sources(SampleSource *, SampleSource *) {}
+GRANARY_DISABLE_OPTIMIZER
+void gdb_data_reactor_change_sample_address(uintptr_t) {}
 
 }  // extern C
 namespace {
 
 enum : uint64_t {
-  ADDRESS_SPACE_SIZE = 1ULL << 47U
+  ADDRESS_SPACE_SIZE = 1ULL << 47U,
+  NUM_SAMPLE_SOURCES = MAX_TYPE_ID + 1
 };
 
 // Amount by which addresses should be shifted.
@@ -59,9 +52,20 @@ static void FindClone(void *, SystemCallContext context) {
   tIsClone = __NR_clone == context.Number();
 }
 
+struct SampleSource {
+  // Number of additional shadow memory slots the sample object occupies.
+  size_t num_additional_slots:16;
+
+  // Shadow address of the sample object.
+  uintptr_t address:48;
+} __attribute__((packed));
+
+static_assert(sizeof(SampleSource) == sizeof(uintptr_t),
+    "Bad structure packing for type `SampleSource`.");
+
 // Set of all addresses that can be sampled.
-SampleSource gSampleSources[MAX_TYPE_ID + 1] = {{0,0}};
-SpinLock gSampleSourcesLock;
+static SampleSource gSampleSources[NUM_SAMPLE_SOURCES] = {{0,0}};
+static SpinLock gSampleSourcesLock;
 
 // After a `clone` system call, set the `GS` segment base to point to shadow
 // memory.
@@ -190,6 +194,40 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 // TODO(pag): Don't handle `realloc` at the moment because we have no idea what
 //            type id it should be associated with.
 
+static auto gCurrSourceTypeId = 0UL;
+
+static uintptr_t GetSampleAddress(uintptr_t type_id) {
+  SpinLockedRegion locker(&gSampleSourcesLock);
+  return gSampleSources[type_id].address;
+}
+
+// Try to change what proxy memory address gets sampled.
+static void ChangeSampleSource(int) {
+  for (int num_attempts = NUM_SAMPLE_SOURCES; num_attempts-- > 0; ) {
+    auto type_id = gCurrSourceTypeId++ % NUM_SAMPLE_SOURCES;
+    if (auto addr = GetSampleAddress(type_id)) {
+      os::Log("Sampling address %lx\n", addr);
+      gdb_data_reactor_change_sample_address(addr);
+      break;
+    }
+  }
+  alarm(1);
+}
+
+// Add a `SIGALRM` handler, then start an alarm.
+static void InitSampler(void) {
+  struct kernel_sigaction sig;
+  memset(&sig, 0, sizeof sig);
+  memset(&(sig.sa_mask), 0xFF, sizeof sig.sa_mask);
+  sig.k_sa_handler = &ChangeSampleSource;
+  sig.sa_restorer = &rt_sigreturn;
+  sig.sa_flags = SA_INTERRUPT | SA_RESTORER | SA_RESTART;
+  GRANARY_IF_DEBUG( auto ret = ) rt_sigaction(SIGALRM, &sig, nullptr,
+                                              _NSIG / 8);
+  GRANARY_ASSERT(!ret);
+  alarm(1);
+}
+
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
@@ -217,10 +255,7 @@ class DataReactor : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
-    // Notify gdb about the initialization of shadow memory.
-    gdb_init_shadow_mem(gBeginShadowMem, gEndShadowMem);
-    gdb_init_sample_sources(&(gSampleSources[0]),
-                            &(gSampleSources[MAX_TYPE_ID + 1]));
+    InitSampler();
   }
 
   // Implements the actual touching (reading or writing) of shadow memory.

@@ -56,7 +56,7 @@ static void AwaitAttachOnSignal(int signum) {
   struct kernel_sigaction new_sigaction;
   memset(&new_sigaction, 0, sizeof new_sigaction);
   memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
-  new_sigaction.handler.siginfo_handler = &AwaitAttach;
+  new_sigaction.k_sa_handler = UnsafeCast<__sighandler_t>(&AwaitAttach);
   new_sigaction.sa_flags = SA_SIGINFO;
   GRANARY_IF_DEBUG( auto ret = ) rt_sigaction(signum, &new_sigaction, nullptr,
                                               _NSIG / 8);
