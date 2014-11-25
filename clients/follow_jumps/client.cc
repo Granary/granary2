@@ -11,9 +11,6 @@ class JumpFollower : public InstrumentationTool {
   virtual void InstrumentControlFlow(BlockFactory *factory,
                                      LocalControlFlowGraph *cfg) {
     for (auto block : cfg->NewBlocks()) {
-      if (!IsA<DecodedBasicBlock *>(block)) {
-        continue;
-      }
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsConditionalJump()) {
           // Expand the target of a conditional jump only if it's a back-edge.

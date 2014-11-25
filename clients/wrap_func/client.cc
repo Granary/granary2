@@ -213,7 +213,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     // information (meta-data).
     //
     // Note: We add in a new block so that the `transparent_returns` tool
-    //       picks up on this and specializes it accordingly.
+    //       picks up on this and specialize it accordingly.
     } else {
       auto target_block = factory->MaterializeEmptyBlock(wrapper->wrapper_pc);
       target_block->AppendInstruction(lir::FunctionCall(

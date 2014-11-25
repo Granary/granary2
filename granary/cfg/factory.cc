@@ -606,12 +606,12 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
   has_pending_request = false;
-  ++cfg->generation;
   cfg->first_new_block = nullptr;
   if (MaterializeDirectBlocks()) {
     RelinkCFIs();
     RemoveUnreachableBlocks();
   }
+  ++cfg->generation;
 }
 
 // Returns true if there are any pending materialization requests.
@@ -650,6 +650,7 @@ DirectBasicBlock *BlockFactory::Materialize(AppPC start_pc) {
 CompensationBasicBlock *BlockFactory::MaterializeEmptyBlock(AppPC start_pc) {
   auto meta = context->AllocateBlockMetaData(start_pc);
   auto block = new CompensationBasicBlock(cfg, meta);
+  has_pending_request = true;
   cfg->AddBlock(block);
   return block;
 }

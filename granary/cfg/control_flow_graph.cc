@@ -81,6 +81,7 @@ void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
     blocks.Prepend(block);
   }
   first_new_block = block;
+  ++generation;
 }
 
 // Allocate a new virtual register.
