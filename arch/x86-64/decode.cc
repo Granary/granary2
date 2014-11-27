@@ -11,6 +11,7 @@
 #include "granary/cfg/instruction.h"
 
 #include "arch/decode.h"
+#include "arch/x86-64/builder.h"
 #include "arch/x86-64/early_mangle.h"
 #include "arch/x86-64/instruction.h"
 
@@ -88,11 +89,7 @@ static void ConvertRegisterOperand(Instruction *instr, Operand *instr_op,
   auto reg = xed_decoded_inst_get_reg(xedd, op_name);
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int16_t>(xed_get_register_width_bits64(reg));
-
-  if (XED_REG_AH <= reg && reg <= XED_REG_BH) {
-    instr->uses_legacy_registers = true;
-  }
+  instr_op->width = static_cast<uint16_t>(xed_get_register_width_bits64(reg));
 
   // Update the stack pointer tracking.
   if (GRANARY_UNLIKELY(instr_op->reg.IsStackPointer())) {
@@ -216,7 +213,7 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
                             const xed_decoded_inst_t *xedd, unsigned index,
                             unsigned op_num) {
-  instr_op->width = static_cast<int16_t>(
+  instr_op->width = static_cast<uint16_t>(
       xed_decoded_inst_operand_length_bits(xedd, op_num));
   if (!instr_op->width && instr->effective_operand_width) {
     instr_op->width = instr->effective_operand_width;
@@ -255,7 +252,7 @@ static void ConvertImmediateOperand(Instruction *instr,
   } else {
     GRANARY_ASSERT(false);
   }
-  instr_op->width = static_cast<int16_t>(
+  instr_op->width = static_cast<uint16_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
 
   // Ensure that we reflect the size of the stack pointer change in the size of
@@ -340,10 +337,9 @@ static bool ConvertDecodedOperand(Instruction *instr,
 
 // Convert the operands of a `xed_decoded_inst_t` to `Operand` types.
 static void ConvertDecodedOperands(Instruction *instr,
-                                   const xed_decoded_inst_t *xedd,
-                                   unsigned num_ops) {
-  for (auto o = 0U; o < num_ops; ++o) {
-    if (!ConvertDecodedOperand(instr, xedd, o)) {
+                                   const xed_decoded_inst_t *xedd) {
+  for (uint8_t o = 0; o < instr->num_ops; ++o) {
+    if (!ConvertDecodedOperand(instr, xedd, static_cast<unsigned>(o))) {
       break;
     }
   }
@@ -381,10 +377,11 @@ static void ConvertDecodedInstruction(Instruction *instr,
   ConvertDecodedPrefixes(instr, xedd);
   instr->is_atomic = xed_operand_values_get_atomic(xedd) ||
                      instr->has_prefix_lock;
-  instr->effective_operand_width = static_cast<int16_t>(
+  instr->effective_operand_width = static_cast<uint16_t>(
       xed_decoded_inst_get_operand_width(xedd));
-  ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
-  instr->AnalyzeStackUsage();
+  instr->num_ops = static_cast<uint8_t>(xed_inst_noperands(xedi));
+  ConvertDecodedOperands(instr, xedd);
+  FinalizeInstruction(instr);
   GRANARY_IF_DEBUG( instr->note_create = __builtin_return_address(0); )
 }
 }  // namespace

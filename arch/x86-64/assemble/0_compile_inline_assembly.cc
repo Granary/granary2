@@ -11,7 +11,7 @@
 
 #include "granary/code/inline_assembly.h"
 
-#include "arch/x86-64/instruction.h"
+#include "arch/x86-64/builder.h"
 #include "arch/x86-64/select.h"
 
 #include "granary/breakpoint.h"
@@ -90,14 +90,13 @@ class InlineAssemblyParser {
           data.has_prefix_lock = is_locked;
           data.has_prefix_rep = is_rep;
           data.has_prefix_repne = is_repne;
-          FinalizeInstruction();
+          MakeInstruction();
         }
       }
     }
   }
 
  private:
-
   bool Peek(char next) {
     return *ch == next;
   }
@@ -374,41 +373,39 @@ class InlineAssemblyParser {
   // the assembled operands.
   void FixupOperands(void) {
     auto xedi = SelectInstruction(&data);
-    int16_t op_size = 0;
     GRANARY_ASSERT(nullptr != xedi);
-    auto i = 0U;
-    for (auto &instr_op : data.ops) {
-      if (XED_ENCODER_OPERAND_TYPE_INVALID == instr_op.type) {
-        break;
-      } else {
-        auto xedi_op = xed_inst_operand(xedi, i++);
-        instr_op.rw = xed_operand_rw(xedi_op);
-        instr_op.is_explicit = true;
-        if (instr_op.IsRegister() && instr_op.reg.IsNative() &&
-            !instr_op.reg.IsGeneralPurpose()) {
-          instr_op.is_sticky = true;
-        }
-        op_size = std::max(op_size, instr_op.width);
-      }
+
+    FinalizeInstruction(&data);
+    uint16_t op_size = 0;
+
+    for (auto i = 0U; i < data.num_explicit_ops; ++i) {
+      auto &instr_op(data.ops[i]);
+      GRANARY_ASSERT(XED_ENCODER_OPERAND_TYPE_INVALID != instr_op.type);
+
+      auto xedi_op = xed_inst_operand(xedi, i);
+      instr_op.rw = xed_operand_rw(xedi_op);
+      instr_op.is_explicit = true;
+      instr_op.is_sticky = instr_op.IsRegister() && instr_op.reg.IsNative() &&
+                           !instr_op.reg.IsGeneralPurpose();
+
+      // Note: Things like label operands won't have a width.
+      op_size = std::max(op_size, instr_op.width);
     }
-    if (XED_CATEGORY_PUSH == data.category) {
-      op_size = arch::ADDRESS_WIDTH_BITS;
+
+    // TODO(pag): This is not right in all cases, e.g. PUSHFW, but then we'll
+    //            likely detect it and solve it when it's an issue.
+    if (XED_CATEGORY_PUSH == data.category ||
+        XED_CATEGORY_POP == data.category) {
+      op_size = arch::STACK_WIDTH_BITS;
     }
     data.effective_operand_width = op_size;
   }
 
   // Finalize the instruction by adding it to the basic block's instruction
   // list.
-  void FinalizeInstruction(void) {
+  void MakeInstruction(void) {
     Instruction *new_instr(nullptr);
     FixupOperands();
-
-    // TODO(pag): For the time being, I allow instrumentation instructions to
-    //            read/write from the stack pointer; however, this is valid
-    //            if and only if these instructions do not operate within a
-    //            loop. If they do get put inside a loop then step 9 in
-    //            `9_allocate_slots.cc` likely will not terminate.
-    data.AnalyzeStackUsage();
 
     // Ensure that instrumentation instructions do not alter the direction
     // flag! This is because we have no reliable way of saving and restoring

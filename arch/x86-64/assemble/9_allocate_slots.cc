@@ -84,7 +84,6 @@ NativeInstruction *AllocateStackSpace(int num_bytes) {
   arch::LEA_GPRv_AGEN(
       &ni, XED_REG_RSP,
       arch::BaseDispMemOp(num_bytes, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
-  ni.AnalyzeStackUsage();
   return new NativeInstruction(&ni);
 }
 
@@ -229,7 +228,8 @@ static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
   }
   if (mem_op) {  // Found a spill slot.
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
+        mem_op->reg.Number() * arch::GPR_WIDTH_BYTES,
+        XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
     return;
@@ -255,7 +255,8 @@ static void MangleXchg(NativeInstruction *instr, int adjusted_offset) {
 
   if (IsSpillSlot(ainstr.ops[0])) {
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
+        mem_op->reg.Number() * arch::GPR_WIDTH_BYTES,
+        XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
   } else  {

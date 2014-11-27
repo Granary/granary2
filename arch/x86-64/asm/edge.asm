@@ -2,7 +2,6 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-    .file "edge.asm"
 START_FILE_INTEL
 
 DECLARE_FUNC(granary_enter_direct_edge)

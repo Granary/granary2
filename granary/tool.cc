@@ -34,17 +34,17 @@ static std::atomic<int> gNextToolId(ATOMIC_VAR_INIT(0));
 
 // Dependency graph between tools. If `depends_on[t1][t2]` is `true` then `t2`
 // must be run before `t1` when instrumenting code.
-static bool gDependsOn[MAX_NUM_TOOLS][MAX_NUM_TOOLS] = {{false}};
+static bool gDependsOn[kMaxNumTools][kMaxNumTools] = {{false}};
 
 // Tools names.
-static char gToolName[MAX_NUM_TOOLS][MAX_TOOL_NAME_LEN] = {{'\0'}};
+static char gToolName[kMaxNumTools][kMaxToolNameLength] = {{'\0'}};
 
 // Registered tools, indexed by ID.
-static ToolDescription *gRegisteredTools[MAX_NUM_TOOLS] = {nullptr};
+static ToolDescription *gRegisteredTools[kMaxNumTools] = {nullptr};
 
 // Find a tool's ID given its name. Returns -1 if a tool
 static int ToolId(const char *name) {
-  for (auto i = 0; i < MAX_NUM_TOOLS; ++i) {
+  for (auto i = 0; i < kMaxNumTools; ++i) {
     if (StringsMatch(name, gToolName[i])) {
       return i;
     }
@@ -52,8 +52,8 @@ static int ToolId(const char *name) {
 
   // Allocate a new ID for this tool, even if it isn't registered yet.
   auto id = gNextToolId.fetch_add(1);
-  GRANARY_ASSERT(MAX_NUM_TOOLS > id);
-  CopyString(&(gToolName[id][0]), MAX_TOOL_NAME_LEN, name);
+  GRANARY_ASSERT(kMaxNumTools > id);
+  CopyString(&(gToolName[id][0]), kMaxToolNameLength, name);
   return id;
 }
 
@@ -142,7 +142,7 @@ void InstrumentationManager::Add(const char *name) {
 void InstrumentationManager::Register(const ToolDescription *desc) {
   if (!is_registered[desc->id]) {
     is_registered[desc->id] = true;
-    for (auto required_id = 0; required_id < MAX_NUM_TOOLS; ++required_id) {
+    for (auto required_id = 0; required_id < kMaxNumTools; ++required_id) {
       if (gDependsOn[desc->id][required_id]) {
         if (auto required_desc = gRegisteredTools[required_id]) {
           Register(required_desc);
@@ -198,7 +198,7 @@ void InstrumentationManager::InitAllocator(void) {
     auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
     auto max_num_allocs = (remaining_size - size + 1) / size;
     auto max_offset = offset + max_num_allocs * size;
-    allocator.Construct(offset, max_offset, size);
+    allocator.Construct(offset, max_offset, size, size);
     is_finalized = true;
   }
 }

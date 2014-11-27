@@ -155,6 +155,12 @@ union alignas(alignof(void *)) VirtualRegister {
     return VR_KIND_VIRTUAL_SLOT == kind;
   }
 
+  // Is this a "legacy" register? These registers come from older versions of
+  // the ISA.
+  inline bool IsLegacy(void) const {
+    return is_legacy;
+  }
+
   // Is this the stack pointer?
   //
   // Note: This has an architecture-specific implementation.
@@ -262,7 +268,10 @@ union alignas(alignof(void *)) VirtualRegister {
     //
     // Note: This is architecture-specific. If the architecture does not
     //       support memory segmentation then this is always false.
-    bool is_segment_offset;
+    bool is_segment_offset:1;
+
+    // Is this register a legacy register?
+    bool is_legacy:1;
   } __attribute__((packed));
 #pragma clang diagnostic pop
   uint64_t value;

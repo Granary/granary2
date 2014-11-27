@@ -32,8 +32,8 @@ GRANARY_INTERNAL_DEFINITION class Context;
 GRANARY_INTERNAL_DEFINITION class InlineAssembly;
 
 GRANARY_INTERNAL_DEFINITION enum {
-  MAX_NUM_TOOLS = 32,
-  MAX_TOOL_NAME_LEN = 32
+  kMaxNumTools = 64,
+  kMaxToolNameLength = 32
 };
 
 // Describes the structure of tools that are used to instrument binary code.
@@ -107,7 +107,8 @@ struct ToolDescription {
   void (* const initialize)(void *);
 };
 
-// Creates a description for a tool.
+// Creates a description for a tool. Tool descriptions are treated as being
+// constant after their `id`, `next`, and `name` fields are initialized.
 template <typename T>
 struct ToolDescriptor {
   static ToolDescription kDescription;
@@ -168,8 +169,8 @@ class InstrumentationManager {
 
   // All tools registered with this manager.
   int num_registered;
-  bool is_registered[MAX_NUM_TOOLS];
-  const ToolDescription *descriptions[MAX_NUM_TOOLS];
+  bool is_registered[kMaxNumTools];
+  const ToolDescription *descriptions[kMaxNumTools];
 
   // TODO(pag): Have an ordered array of tool descriptions that represent the
   //            tools ordered according to how they are specified at the command

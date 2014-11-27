@@ -229,24 +229,37 @@ class Instruction : public InstructionInterface {
     CachePC encoded_pc;
   };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpacked"
-
   // Instruction class. This roughly corresponds to an opcode.
-  alignas(alignof(uint64_t)) struct {
+  alignas(Operand) struct {
+    xed_iclass_enum_t iclass;
+    mutable xed_iform_enum_t iform;  // Original `iform` at decode time.
+    mutable unsigned isel;  // Instruction selection at decode time.
+    xed_category_enum_t category;
 
-    xed_iclass_enum_t iclass:16;
-    mutable xed_iform_enum_t iform:16;  // Original iform at decode time.
-    mutable unsigned isel:16;  // Instruction selection at decode time.
-    xed_category_enum_t category:8;
+    // The effective operand width (in bits) at decode time, or 0 if unknown.
+    uint16_t effective_operand_width;
 
     // Decoded length of this instruction, or 0 if it wasn't decoded.
     uint8_t decoded_length;
     uint8_t encoded_length;
 
-  } __attribute__((packed));
+    // Number of explicit and total operands.
+    uint8_t num_explicit_ops;
+    uint8_t num_ops;
+  };
 
-  alignas(alignof(uint16_t)) struct {
+  // All operands that Granary can make sense of. This includes implicit and
+  // suppressed operands. The order between these and those referenced via
+  // `xed_inst_t` is maintained.
+  Operand ops[MAX_NUM_OPERANDS];
+
+  // Useful for debugging the creation location of an instruction and the
+  // alteration location of an instruction.
+  GRANARY_IF_DEBUG( void *note_create, *note_alter; )
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpacked"
+  alignas(uint16_t) struct {
     // Instruction prefixes.
     //
     // TODO(pag): Remove branch hints? Might be needed for special non-
@@ -296,32 +309,12 @@ class Instruction : public InstructionInterface {
     // schedule, but never actually be encoded.
     bool dont_encode:1;
 
-    // Does this instruction use legacy registers (e.g. `AH`)? If so, then this
-    // likely restricts the usage of REX prefixes, and therefore restricts the
-    // virtual register scheduler to only the original 8 GPRs.
-    bool uses_legacy_registers:1;
-
     // Was this a function call that was converted into a jump?
     bool is_tail_call:1;
-
-    // Number of explicit operands.
-    uint8_t num_explicit_ops:4;
 
   } __attribute__((packed));
 
 #pragma clang diagnostic pop
-
-  // The effective operand width (in bits) at decode time, or -1 if unknown.
-  int16_t effective_operand_width;
-
-  // All operands that Granary can make sense of. This includes implicit and
-  // suppressed operands. The order between these and those referenced via
-  // `xed_inst_t` is maintained.
-  Operand ops[MAX_NUM_EXPLICIT_OPERANDS];
-
-  // Useful for debugging the creation location of an instruction and the
-  // alteration location of an instruction.
-  GRANARY_IF_DEBUG( void *note_create, *note_alter; )
 };
 
 }  // namespace arch

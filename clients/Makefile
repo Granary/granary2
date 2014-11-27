@@ -47,4 +47,8 @@ lint:
 	@$(GRANARY_LINT) \
 		$(shell find $(GRANARY_SRC_DIR)/clients -type f -name '*.h' -or -name '*.cc')
 
+ifeq ($(strip $(GRANARY_CLIENTS)),)
+all: $(GRANARY_LINT_TARGET)
+else
 all: $(GRANARY_LINT_TARGET) $(GRANARY_CLIENT_OBJ)
+endif

@@ -51,16 +51,16 @@ bool Operand::IsExplicit(void) const {
   return op_ptr->is_explicit;
 }
 
-// Return the width (in bits) of this operand, or -1 if its width is not
+// Return the width (in bits) of this operand, or 0 if its width is not
 // known.
 int Operand::BitWidth(void) const {
   return op->width;
 }
 
-// Return the width (in bytes) of this operand, or -1 if its width is not
+// Return the width (in bytes) of this operand, or 0 if its width is not
 // known.
 int Operand::ByteWidth(void) const {
-  return -1 != op->width ? op->width / 8 : op->width;
+  return op->width / 8;
 }
 
 bool RegisterOperand::IsNative(void) const {
@@ -79,8 +79,9 @@ VirtualRegister RegisterOperand::Register(void) const {
 // Initialize a new memory operand from a virtual register, where the
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
+  GRANARY_ASSERT(0 <= num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<uint16_t>(num_bytes * arch::BYTE_WIDTH_BITS);
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -91,8 +92,9 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
 // Initialize a new memory operand from a pointer, where the
 // referenced memory has a width of `num_bytes`.
 MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
+  GRANARY_ASSERT(0 <= num_bytes);
   op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<uint16_t>(num_bytes * arch::BYTE_WIDTH_BITS);
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -173,7 +175,7 @@ size_t MemoryOperand::CountMatchedRegisters(
 RegisterOperand::RegisterOperand(const VirtualRegister reg)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  op->width = static_cast<int16_t>(reg.BitWidth());
+  op->width = static_cast<uint16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -185,7 +187,7 @@ RegisterOperand::RegisterOperand(const VirtualRegister reg)
 ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
-  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->width = static_cast<uint16_t>(width_bytes * arch::BYTE_WIDTH_BITS);
   op->imm.as_int = imm;
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
@@ -197,7 +199,7 @@ ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
 ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->width = static_cast<uint16_t>(width_bytes * arch::BYTE_WIDTH_BITS);
   op->imm.as_uint = imm;
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
@@ -218,7 +220,7 @@ int64_t ImmediateOperand::Int(void) {
 LabelOperand::LabelOperand(LabelInstruction *label)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  op->width = -1;
+  op->width = 0;
   op->annotation_instr = label;
   op->is_annotation_instr = true;
   op->rw = XED_OPERAND_ACTION_R;
@@ -246,7 +248,7 @@ Operand &Operand::operator=(const Operand &that) {
     const auto old_is_ea = is_effective_address;
     const auto old_segment = segment;
     memcpy(this, &that, sizeof that);
-    if (-1 != old_width) width = old_width;
+    if (old_width) width = old_width;
     rw = old_rw;
     is_effective_address = old_is_ea;
     is_explicit = true;

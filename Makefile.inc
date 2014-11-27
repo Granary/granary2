@@ -21,6 +21,7 @@ GRANARY_DOUBLE := $(GRANARY_OS)_$(GRANARY_WHERE)
 GRANARY_DRIVER ?= xed2-intel64
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
+GRANARY_WITH_MSAN ?= 0# 0, 1
 GRANARY_LINT_CODE ?= 1# 0, 1
 GRANARY_HEADER_MACRO_DEFS =
 GRANARY_RECURSIVE ?= 0
@@ -123,10 +124,17 @@ GRANARY_COMMON_MACROS += -DGRANARY_OS_$(GRANARY_OS)
 GRANARY_CC_FLAGS += -std=$(GRANARY_CC_STD)
 GRANARY_COMMON_CXX_FLAGS = -std=$(GRANARY_CXX_STD) -stdlib=$(GRANARY_CXX_LIB)
 
-# Enable valgrind checking of code.
+# If we're checking with MSan, then assume we're also checking with Valgrind.
+ifeq (1,$(GRANARY_WITH_MSAN))
+	GRANARY_WITH_VALGRIND := 1 
+	GRANARY_COMMON_CXX_FLAGS += -fsanitize=memory
+	GRANARY_CC_FLAGS += -fsanitize=memory
+endif
+
+# Enable Valgrind checking of code.
 ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_COMMON_MACROS += -DGRANARY_WITH_VALGRIND
-	GRANARY_CXX_FLAGS += -fno-inline
+	GRANARY_COMMON_CXX_FLAGS += -fno-inline
 	GRANARY_DEBUG_FLAGS += -g3
 else
 	GRANARY_LD_FLAGS += -nodefaultlibs

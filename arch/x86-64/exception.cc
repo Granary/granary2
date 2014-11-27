@@ -184,9 +184,9 @@ static void UnspillRegsOnFailure(CodeFragment *frag,  Instruction &ni,
   if (!num_pushed_ops) return;
   // Restore RSP if there was a fault.
   APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                  BaseDispMemOp(num_pushed_ops * 8,
-                                                XED_REG_RSP,
-                                                ADDRESS_WIDTH_BITS)));
+                                  BaseDispMemOp(
+                                      num_pushed_ops * GPR_WIDTH_BYTES,
+                                      XED_REG_RSP, ADDRESS_WIDTH_BITS)));
 }
 
 // Restore the stack pointer back to where it was supposed to be. This also
@@ -201,8 +201,9 @@ static void UnspillRegsOnSuccess(CodeFragment *frag, Instruction &ni,
                         ni.effective_operand_width = GPR_WIDTH_BITS;);
     } else {
       APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                      BaseDispMemOp(8, XED_REG_RSP,
-                                                    ADDRESS_WIDTH_BITS)));
+                                      BaseDispMemOp(
+                                          GPR_WIDTH_BYTES, XED_REG_RSP,
+                                          ADDRESS_WIDTH_BITS)));
     }
   }
 }

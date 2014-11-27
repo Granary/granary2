@@ -31,6 +31,7 @@ class alignas(16) OperandInterface {
   bool IsMemory(void) const;
   bool IsPointer(void) const;
   bool IsImmediate(void) const;
+  bool IsBranchTarget(void) const;
 
   void EncodeToString(OperandString *str) const;
 };

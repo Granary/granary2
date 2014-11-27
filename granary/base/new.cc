@@ -19,15 +19,24 @@ SlabList::SlabList(const SlabList *next_slab_)
 
 // Initialize the slab allocator.
 SlabAllocator::SlabAllocator(size_t start_offset_, size_t max_offset_,
-                             size_t allocation_size_)
+                             size_t allocation_size_, size_t object_size_)
     : offset(max_offset_),
       start_offset(start_offset_),
       max_offset(max_offset_),
       allocation_size(allocation_size_),
+      object_size(object_size_),
       slab_list_lock(),
       slab_list(nullptr),
       free_list_lock(),
-      free_list(nullptr) {}
+      free_list(nullptr) {
+  GRANARY_UNUSED(object_size);
+  GRANARY_UNUSED(offset);
+  GRANARY_UNUSED(start_offset);
+  GRANARY_UNUSED(max_offset);
+  GRANARY_UNUSED(allocation_size);
+  GRANARY_UNUSED(slab_list);
+  GRANARY_UNUSED(free_list);
+}
 
 #ifndef GRANARY_WITH_VALGRIND
 
@@ -145,7 +154,7 @@ void free(void *);
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
-  return malloc(unaligned_size);
+  return malloc(object_size);
 }
 
 // Free some memory that was allocated from the slab allocator.

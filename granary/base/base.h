@@ -48,6 +48,8 @@ typedef long int ssize_t;
 #   define VALGRIND_CHECK_MEM_IS_DEFINED(addr,size)
 #   define GRANARY_IF_VALGRIND(...)
 #   define GRANARY_IF_NOT_VALGRIND(...) __VA_ARGS__
+#   define VALGRIND_ENABLE_ERROR_REPORTING
+#   define VALGRIND_DISABLE_ERROR_REPORTING
 # endif
 #endif
 
@@ -63,6 +65,8 @@ typedef long int ssize_t;
 
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
+#define IF_ECLIPSE_alignas(...)
+#define IF_ECLIPSE_alignof(...)
 #ifdef GRANARY_ECLIPSE
 # define alignas(...)
 # define alignof(...) 16

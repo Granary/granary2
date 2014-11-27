@@ -42,7 +42,7 @@ static void InitEncoderInstruction(const Instruction *instr,
   xede->mode = XED_STATE;
   xede->iclass = instr->iclass;
   xede->effective_operand_width = 0;
-  if (-1 < instr->effective_operand_width) {
+  if (instr->effective_operand_width) {
     xede->effective_operand_width = static_cast<uint32_t>(
         instr->effective_operand_width);
   }
@@ -253,10 +253,9 @@ static void EncodeOperands(const Instruction *instr,
                            xed_encoder_instruction_t *xede, CachePC pc
                            GRANARY_IF_DEBUG(, bool check_reachable)) {
   auto op_width = 0U;
-  auto op_index = 0;
-
-  for (auto &op : instr->ops) {
-    auto &xedo(xede->operands[op_index++]);
+  for (uint16_t op_index = 0; op_index < instr->num_explicit_ops; ++op_index) {
+    const auto &op(instr->ops[op_index]);
+    auto &xedo(xede->operands[op_index]);
     xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
 
     switch (op.type) {
@@ -288,7 +287,7 @@ static void EncodeOperands(const Instruction *instr,
   }
 
   // Make sure that we've got an effective operand width.
-  if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
+  if (GRANARY_UNLIKELY(!instr->effective_operand_width && op_width)) {
     xede->effective_operand_width = op_width;
   }
 }
@@ -370,12 +369,11 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
     GRANARY_ASSERT(0 < instr->encoded_length);
   }
 
-  xed_state_t dstate;
   xed_encoder_request_t enc_req;
 
   // Step 2: Convert XED encoder IR into XED decoder IR.
-  dstate = XED_STATE;
-  xed_encoder_request_zero_set_mode(&enc_req, &dstate);
+  memset(&enc_req, 0, sizeof enc_req);
+  xed_encoder_request_zero_set_mode(&enc_req, &XED_STATE);
 
   GRANARY_IF_DEBUG( auto ret = ) xed_convert_to_encoder_request(
       &enc_req, &xede);

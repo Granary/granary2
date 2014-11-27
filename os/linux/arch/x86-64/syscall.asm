@@ -150,6 +150,19 @@ DEFINE_FUNC(arch_prctl)
     ret
 END_FUNC(arch_prctl)
 
+DEFINE_FUNC(sys_clone)
+    mov     r10, rcx  // arg4, `child_tidptr`.
+    mov     eax, 56  // `__NR_clone`.
+    syscall
+    ret
+END_FUNC(sys_clone)
+
+DEFINE_FUNC(nanosleep)
+    mov     eax, 35  // `__NR_nanosleep`.
+    syscall
+    ret
+END_FUNC(nanosleep)
+
 DECLARE_FUNC(granary_exit)
 DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.
     xor     rdi, rdi

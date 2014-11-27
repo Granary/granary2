@@ -11,6 +11,12 @@
 namespace granary {
 namespace arch {
 
+// Table of all implicit operands.
+extern const Operand * const IMPLICIT_OPERANDS[];
+
+// Number of implicit operands for each iclass.
+extern const uint8_t NUM_IMPLICIT_OPERANDS[];
+
 // Initialize an emptry Granary `arch::Instruction` from a XED iclass,
 // category, and the number of explicit operands.
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
@@ -56,13 +62,23 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                      XED_CATEGORY_SEMAPHORE == category;
 }
 
+// Copy implicit operands into the instruction.
+void FinalizeInstruction(Instruction *instr) {
+  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[instr->isel];
+  auto *implicit_ops = IMPLICIT_OPERANDS[instr->isel];
+  memcpy(&(instr->ops[instr->num_explicit_ops]), implicit_ops,
+         sizeof(Operand) * num_implicit_ops);
+  instr->num_ops = num_implicit_ops + instr->num_explicit_ops;
+  instr->AnalyzeStackUsage();
+}
+
 // Add this register as an operand to the instruction `instr`.
 void RegisterBuilder::Build(Instruction *instr) {
   auto &op(instr->ops[instr->num_explicit_ops++]);
   op.type = XED_ENCODER_OPERAND_TYPE_REG;
   op.reg = reg;
   op.rw = action;
-  op.width = static_cast<int16_t>(reg.BitWidth());
+  op.width = static_cast<uint16_t>(reg.BitWidth());
   op.is_explicit = true;
 
   // Registers AH through BH are tricky to handle due to their location, so we
@@ -71,7 +87,6 @@ void RegisterBuilder::Build(Instruction *instr) {
     auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
     if (XED_REG_AH <= arch_reg && arch_reg <= XED_REG_BH) {
       op.is_sticky = true;
-      instr->uses_legacy_registers = true;
     }
   }
 }
@@ -82,10 +97,10 @@ void ImmediateBuilder::Build(Instruction *instr) {
   op.imm.as_uint = as_uint;
   op.type = type;
   op.rw = XED_OPERAND_ACTION_R;
-  if (-1 == width) {
-    op.width = static_cast<int16_t>(ImmediateWidthBits(as_uint));
+  if (0 >= width) {
+    op.width = static_cast<uint16_t>(ImmediateWidthBits(as_uint));
   } else {
-    op.width = static_cast<int16_t>(width);
+    op.width = static_cast<uint16_t>(width);
   }
   op.is_explicit = true;
 }
@@ -93,7 +108,7 @@ void ImmediateBuilder::Build(Instruction *instr) {
 // Add this memory as an operand to the instruction `instr`.
 void MemoryBuilder::Build(Instruction *instr) {
   auto &instr_op(instr->ops[instr->num_explicit_ops++]);
-  instr_op.width = -1;  // Unknown.
+  instr_op.width = 0;  // Unknown.
   instr_op.is_compound = false;
   switch (kind) {
     case BUILD_POINTER:

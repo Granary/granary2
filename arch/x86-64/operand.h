@@ -26,7 +26,7 @@ class AnnotationInstruction;
 namespace arch {
 
 // Represents an operand to an x86-64 instruction.
-class alignas(16) Operand : public OperandInterface {
+class Operand : public OperandInterface {
  public:
   Operand(void)
       : type(XED_ENCODER_OPERAND_TYPE_INVALID),
@@ -70,9 +70,7 @@ class alignas(16) Operand : public OperandInterface {
   }
 
   inline bool IsRegister(void) const {
-    return XED_ENCODER_OPERAND_TYPE_REG == type ||
-           XED_ENCODER_OPERAND_TYPE_SEG0 == type ||
-           XED_ENCODER_OPERAND_TYPE_SEG1 == type;
+    return XED_ENCODER_OPERAND_TYPE_REG == type;
   }
 
   inline bool IsMemory(void) const {
@@ -85,18 +83,25 @@ class alignas(16) Operand : public OperandInterface {
   }
 
   inline bool IsImmediate(void) const {
+    // TODO(pag): Where do we assume that BRDISP can be an immediate???
+
     return XED_ENCODER_OPERAND_TYPE_BRDISP == type ||
            XED_ENCODER_OPERAND_TYPE_IMM0 == type ||
            XED_ENCODER_OPERAND_TYPE_SIMM0 == type ||
            XED_ENCODER_OPERAND_TYPE_IMM1 == type;
   }
 
+  inline bool IsBranchTarget(void) const {
+    return XED_ENCODER_OPERAND_TYPE_BRDISP == type;
+  }
+
+
   inline bool IsExplicit(void) const {
     return is_explicit;
   }
 
   inline int ByteWidth(void) const {
-    return -1 == width ? -1 : width / 8;
+    return width / 8;
   }
 
   inline int BitWidth(void) const {
@@ -108,9 +113,9 @@ class alignas(16) Operand : public OperandInterface {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpacked"
 
-  alignas(GRANARY_MIN(alignof(void *), alignof(VirtualRegister))) union {
+  union {
     // Branch target.
-    alignas(alignof(void *)) union {
+    union {
       intptr_t as_int;
       uintptr_t as_uint;
       PC as_pc;
@@ -125,7 +130,7 @@ class alignas(16) Operand : public OperandInterface {
     } imm;
 
     // Direct memory address.
-    alignas(alignof(void *)) union {
+    union {
       const void *as_ptr;
       intptr_t as_int;
       uintptr_t as_uint;
@@ -147,12 +152,11 @@ class alignas(16) Operand : public OperandInterface {
     // Annotation instruction representing the location of a return address or
     // the target of a jump.
     AnnotationInstruction *annotation_instr;
-
-  } __attribute__((packed));
+  };
 
   alignas(alignof(uint64_t)) struct {
     xed_encoder_operand_type_t type:8;
-    int16_t width;  // Operand width in bits.
+    uint16_t width;  // Operand width in bits.
     xed_operand_action_enum_t rw:8;  // Readable, writable, etc.
     xed_reg_enum_t segment:8;  // Used for memory operations.
 

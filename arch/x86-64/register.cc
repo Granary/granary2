@@ -14,15 +14,6 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
-namespace arch {
-
-// Table of all implicit operands.
-extern const Operand * const IMPLICIT_OPERANDS[];
-
-// Number of implicit operands for each `iclass`.
-extern const int NUM_IMPLICIT_OPERANDS[];
-
-}  // namespace arch
 
 // See `http://sandpile.org/x86/gpr.htm` for more details on general-purpose
 // registers in x86-64.
@@ -63,6 +54,11 @@ void VirtualRegister::DecodeFromNative(int reg_) {
   if (XED_REG_RSP <= widest_reg) {
     reg_num -= 1;  // Directly map registers to indexes.
   }
+
+  // Mark this as potentially being a legacy register. This affects register
+  // scheduling.
+  is_legacy = XED_REG_AH <= reg && reg <= XED_REG_BH;
+
   switch (reg) {
     case XED_REG_AX: case XED_REG_CX: case XED_REG_DX: case XED_REG_BX:
     case XED_REG_BP: case XED_REG_SI: case XED_REG_DI: case XED_REG_R8W:
@@ -203,12 +199,10 @@ bool VirtualRegister::IsFlags(void) const {
 // Update this register tracker by marking all registers that appear in an
 // instruction as used.
 void UsedRegisterSet::Visit(const arch::Instruction *instr) {
-  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+  GRANARY_ASSERT(XED_IFORM_INVALID != instr->iform);
+  GRANARY_ASSERT(0 != instr->isel);
+  for (auto i = 0; i < instr->num_ops; ++i) {
     Visit(&(instr->ops[i]));
-  }
-  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
-      i < num_ops; ++i) {
-    Visit(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
   }
 }
 
@@ -227,15 +221,31 @@ void UsedRegisterSet::Visit(const arch::Operand *op) {
   }
 }
 
+namespace {
+
+// Does this instruction use legacy registers (e.g. `AH`)? If so, then this
+// likely restricts the usage of REX prefixes, and therefore restricts the
+// virtual register scheduler to only the original 8 GPRs.
+static bool UsesLegacyRegisters(const arch::Instruction *instr) {
+  for (auto &op : instr->ops) {
+    if (op.IsRegister() && op.reg.IsLegacy()) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 // Update this register tracker by marking some registers as used (i.e.
 // restricted). This allows us to communicate some architecture-specific
 // encoding constraints to the register scheduler.
 void UsedRegisterSet::ReviveRestrictedRegisters(
     const arch::Instruction *instr) {
+  GRANARY_ASSERT(XED_IFORM_INVALID != instr->iform);
+  GRANARY_ASSERT(0 != instr->isel);
 
   // If legacy registers are used, then we likely can't use the extra 8
   // registers introduced by x86-64 as they require a REX prefix.
-  if (GRANARY_UNLIKELY(instr->uses_legacy_registers)) {
+  if (GRANARY_UNLIKELY(UsesLegacyRegisters(instr))) {
     Revive(14);  // XED_REG_R15
     Revive(13);
     Revive(12);
@@ -247,12 +257,8 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
   }
 
   // Now: Revive all registers that are part of *sticky* operands.
-  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+  for (auto i = 0; i < instr->num_ops; ++i) {
     ReviveRestrictedRegisters(&(instr->ops[i]));
-  }
-  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
-       i < num_ops; ++i) {
-    ReviveRestrictedRegisters(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
   }
 }
 
@@ -278,12 +284,10 @@ void UsedRegisterSet::ReviveRestrictedRegisters(const arch::Operand *op) {
 // Note: This treats conditional writes to a register as reviving that
 //       register.
 void LiveRegisterSet::Visit(const arch::Instruction *instr) {
-  for (auto i = 0; i < instr->num_explicit_ops; ++i) {
+  GRANARY_ASSERT(XED_IFORM_INVALID != instr->iform);
+  GRANARY_ASSERT(0 != instr->isel);
+  for (auto i = 0; i < instr->num_ops; ++i) {
     Visit(&(instr->ops[i]));
-  }
-  for (auto i = 0, num_ops = arch::NUM_IMPLICIT_OPERANDS[instr->isel];
-      i < num_ops; ++i) {
-    Visit(&(arch::IMPLICIT_OPERANDS[instr->isel][i]));
   }
 }
 

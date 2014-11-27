@@ -118,13 +118,13 @@ class Operand {
   // Note: This has a driver-specific implementation.
   bool IsExplicit(void) const;
 
-  // Return the width (in bits) of this operand, or -1 if its width is not
+  // Return the width (in bits) of this operand, or 0 if its width is not
   // known.
   //
   // Note: This has a driver-specific implementation.
   int BitWidth(void) const;
 
-  // Return the width (in bytes) of this operand, or -1 if its width is not
+  // Return the width (in bytes) of this operand, or 0 if its width is not
   // known.
   //
   // Note: This has a driver-specific implementation.

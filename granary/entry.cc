@@ -75,6 +75,7 @@ extern "C" {
 
 // Enter into Granary to begin the translation process for a direct edge.
 void granary_enter_direct_edge(DirectEdge *edge, Context *context) {
+  VALGRIND_ENABLE_ERROR_REPORTING;
   GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
 
   auto meta = edge->dest_meta.exchange(nullptr, std::memory_order_seq_cst);
@@ -90,6 +91,7 @@ void granary_enter_direct_edge(DirectEdge *edge, Context *context) {
     arch::TryAtomicPatchEdge(context, edge);
     // TODO(pag): Test the return value to increment some stats.
   }
+  VALGRIND_DISABLE_ERROR_REPORTING;
 }
 
 // Enter into Granary to begin the translation process for an indirect edge.
@@ -103,7 +105,9 @@ void granary_enter_direct_edge(DirectEdge *edge, Context *context) {
 //         "instantiating" the out edge into a fragment).
 void granary_enter_indirect_edge(IndirectEdge *edge, Context *context,
                                  AppPC target_app_pc) {
+  VALGRIND_ENABLE_ERROR_REPORTING;
   Translate(context, edge, target_app_pc);
+  VALGRIND_DISABLE_ERROR_REPORTING;
 }
 }  // extern C
 }  // namespace granary

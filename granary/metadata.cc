@@ -177,7 +177,7 @@ void MetaDataManager::InitAllocator(void) {
   auto max_num_allocs = (remaining_size - size + 1) / size;
   auto max_offset = offset + max_num_allocs * size;
   GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >= max_offset);
-  allocator.Construct(offset, max_offset, size);
+  allocator.Construct(offset, max_offset, size, size);
 }
 
 namespace {

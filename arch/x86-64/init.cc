@@ -18,11 +18,11 @@ namespace arch {
 // Decoder state that sets the mode to 64-bit.
 xed_state_t XED_STATE;
 
-// Table of all implicit operands.
+// Table of all implicit operands for each `isel`.
 const Operand *IMPLICIT_OPERANDS[XED_MAX_INST_TABLE_NODES] = {nullptr};
 
-// Number of implicit operands for each iform.
-int NUM_IMPLICIT_OPERANDS[XED_MAX_INST_TABLE_NODES] = {0};
+// Number of implicit operands for each `isel`.
+uint8_t NUM_IMPLICIT_OPERANDS[XED_MAX_INST_TABLE_NODES] = {0};
 
 // Categories of every iclass.
 xed_category_enum_t ICLASS_CATEGORIES[XED_ICLASS_LAST] = {XED_CATEGORY_INVALID};
@@ -95,7 +95,6 @@ static void UpdateFlagActions(const xed_inst_t *xedi,
 
         default: break;
       }
-
       switch (xed_operand_rw(last_op)) {
         case XED_OPERAND_ACTION_RCW:
         case XED_OPERAND_ACTION_CW:
@@ -207,7 +206,7 @@ static Operand *AllocateImplicitOperands(void) {
 static void FillRegisterOperand(Operand *instr_op, xed_reg_enum_t reg) {
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int16_t>(instr_op->reg.BitWidth());
+  instr_op->width = static_cast<uint16_t>(instr_op->reg.BitWidth());
   instr_op->is_sticky = true;
 }
 

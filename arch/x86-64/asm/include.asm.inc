@@ -2,8 +2,10 @@
 #include "granary/base/base.h"
 
 #define START_FILE \
+    .file __FILE__ @N@\
     .text
 #define START_FILE_INTEL \
+    .file __FILE__ @N@\
     .intel_syntax noprefix @N@\
     .text
     

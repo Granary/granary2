@@ -93,7 +93,7 @@ enum {
 class SlabAllocator {
  public:
   SlabAllocator(size_t start_offset_, size_t max_offset_,
-                size_t allocation_size_);
+                size_t allocation_size_, size_t object_size_);
 
   void *Allocate(void);
   void Free(void *address);
@@ -111,6 +111,7 @@ class SlabAllocator {
   const size_t start_offset;
   const size_t max_offset;
   const size_t allocation_size;
+  const size_t object_size;
 
   alignas(arch::CACHE_LINE_SIZE_BYTES) SpinLock slab_list_lock;
   const SlabList *slab_list;
@@ -185,7 +186,8 @@ template <typename T>
 internal::SlabAllocator OperatorNewAllocator<T>::allocator(
     OperatorNewAllocator<T>::START_OFFSET,
     OperatorNewAllocator<T>::END_OFFSET,
-    OperatorNewAllocator<T>::ALIGNED_SIZE);
+    OperatorNewAllocator<T>::ALIGNED_SIZE,
+    sizeof(T));
 
 #pragma clang diagnostic pop
 

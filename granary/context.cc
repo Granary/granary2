@@ -177,7 +177,7 @@ void Context::InitTools(InitReason reason) {
 
   if (FLAG_tools) {
     // Register tools specified at the command-line.
-    ForEachCommaSeparatedString<MAX_TOOL_NAME_LEN>(
+    ForEachCommaSeparatedString<kMaxToolNameLength>(
         FLAG_tools,
         [&] (const char *tool_name) {
           tool_manager.Add(tool_name);

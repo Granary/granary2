@@ -4,7 +4,6 @@
 
 #ifndef GRANARY_RECURSIVE
 
-    .file "trace.asm"
 START_FILE_INTEL
 
 DECLARE_FUNC(granary_trace_block_regs)

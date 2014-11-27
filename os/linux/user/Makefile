@@ -20,7 +20,10 @@ GRANARY_LIBRARY_OBJ = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).o
 GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
 
 # All objects that need to be put together to form the library.
-GRANARY_O_FILES = os.o granary.o arch.o driver.o clients.o
+GRANARY_O_FILES = os.o granary.o arch.o driver.o
+ifneq ($(strip $(GRANARY_CLIENTS)),)
+	GRANARY_O_FILES += clients.o
+endif
 GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)

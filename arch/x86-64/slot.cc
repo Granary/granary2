@@ -22,7 +22,7 @@ arch::Operand SlotMemOp(os::SlotCategory category, int sub_category,
   op.segment = GRANARY_IF_USER_ELSE(XED_REG_FS, XED_REG_GS);  // Linux-specific.
   op.is_compound = true;
   op.addr.as_int = os::Slot(category, sub_category);
-  op.width = static_cast<int16_t>(0 >= width ? arch::GPR_WIDTH_BITS : width);
+  op.width = static_cast<uint16_t>(!width ? arch::GPR_WIDTH_BITS : width);
   return op;
 }
 

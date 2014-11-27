@@ -59,13 +59,13 @@ class ImmediateBuilder {
   inline ImmediateBuilder(T as_uint_, xed_encoder_operand_type_t type_)
       : as_uint(static_cast<uintptr_t>(as_uint_)),
         type(type_),
-        width(sizeof(T) * 8) {}
+        width(static_cast<uint16_t>(sizeof(T) * arch::BYTE_WIDTH_BITS)) {}
 
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_int_, xed_encoder_operand_type_t type_)
       : as_int(static_cast<intptr_t>(as_int_)),
         type(type_),
-        width(sizeof(T) * 8) {}
+        width(static_cast<uint16_t>(sizeof(T) * arch::BYTE_WIDTH_BITS)) {}
 
   inline ImmediateBuilder(const Operand &that, xed_encoder_operand_type_t type_)
       : as_uint(that.imm.as_uint),
@@ -81,7 +81,7 @@ class ImmediateBuilder {
     intptr_t as_int;
   };
   xed_encoder_operand_type_t type;
-  int width;
+  uint16_t width;
 };
 
 // Builder for a memory operand.
@@ -187,6 +187,8 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, unsigned isel,
                       xed_category_enum_t category);
 
+void FinalizeInstruction(Instruction *instr);
+
 // TODO(pag): These must be manually checked/updated any time XED is updated.
 //
 // These numbers can be found by running XED's tables example.
@@ -207,6 +209,7 @@ inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
   RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom LEA instruction builder for source immediate operands.
@@ -216,6 +219,7 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCN instruction builder for source immediate operands.
@@ -225,6 +229,7 @@ inline static void BNDCN_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCN_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCU instruction builder for source immediate operands.
@@ -234,6 +239,7 @@ inline static void BNDCU_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCU_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCL instruction builder for source immediate operands.
@@ -243,6 +249,7 @@ inline static void BNDCL_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCL_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDMK instruction builder for source immediate operands.
@@ -252,11 +259,12 @@ inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDMK_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    int width=-1) {
+                                    int width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
@@ -267,20 +275,20 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
   }
-  op.width = static_cast<int16_t>(width);
+  op.width = static_cast<uint16_t>(width);
   return op;
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    xed_reg_enum_t index_reg, int width=-1) {
+                                    xed_reg_enum_t index_reg, int width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
   op.mem.disp = disp;
   op.mem.reg_base = base_reg;
   op.mem.reg_index = index_reg;
-  op.width = static_cast<int16_t>(width);
+  op.width = static_cast<uint16_t>(width);
   return op;
 }
 

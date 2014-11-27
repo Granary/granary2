@@ -20,7 +20,6 @@ namespace arch {
 #define APP(...) \
   do { \
     __VA_ARGS__; \
-    ni.AnalyzeStackUsage(); \
     block->AppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
@@ -30,7 +29,6 @@ namespace arch {
     __VA_ARGS__; \
     ni.decoded_pc = instr->decoded_pc; \
     ni.effective_operand_width = instr->effective_operand_width; \
-    ni.AnalyzeStackUsage(); \
     block->AppendInstruction(new NativeInstruction(&ni)); \
   } while (0)
 
@@ -197,19 +195,20 @@ static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
                            instr->WritesToStackPointer();
   GRANARY_ASSERT(XED_ICLASS_LEA != instr->iclass);
 
-  for (auto &op : instr->ops) {
-    if (op.is_explicit) {
-      if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
-        MangleExplicitMemOp(block, op);
+  for (uint16_t i = 0; i < instr->num_explicit_ops; ++i) {
+    auto &op(instr->ops[i]);
+    GRANARY_ASSERT(op.is_explicit);
 
-      } else if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
-        if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
-          MangleSegmentOffset(block, op);
-        }
+    if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
+      MangleExplicitMemOp(block, op);
 
-      } else if (op.IsRegister() && op.reg.IsStackPointer()) {
-        MangleExplicitStackPointerRegOp(block, instr, op);
+    } else if (XED_ENCODER_OPERAND_TYPE_PTR == op.type) {
+      if (XED_REG_INVALID != op.segment && XED_REG_DS != op.segment) {
+        MangleSegmentOffset(block, op);
       }
+
+    } else if (op.IsRegister() && op.reg.IsStackPointer()) {
+      MangleExplicitStackPointerRegOp(block, instr, op);
     }
   }
 
@@ -232,7 +231,7 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
 // we might hit the situation where we need to do a memory-to-memory move, but
 // can't pull it off with just a `MOV`.
 static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
-  GRANARY_ASSERT(-1 != instr->effective_operand_width);
+  GRANARY_ASSERT(0 != instr->effective_operand_width);
   auto op = instr->ops[0];
   auto stack_shift = instr->effective_operand_width / 8;
   auto vr = block->AllocateVirtualRegister(stack_shift);
@@ -294,10 +293,12 @@ static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
 
 // Mangle a `POP_MEMv` instruction.
 static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
-  auto op = instr->ops[0];
+  GRANARY_ASSERT(0 < instr->effective_operand_width);
+  auto stack_shift = instr->effective_operand_width / arch::BYTE_WIDTH_BITS;
+  GRANARY_ASSERT(instr->StackPointerShiftAmount() == stack_shift);
+
   Instruction ni;
-  GRANARY_ASSERT(-1 != instr->effective_operand_width);
-  auto stack_shift = instr->effective_operand_width / 8;
+  auto op = instr->ops[0];
   auto vr = block->AllocateVirtualRegister(stack_shift);
   auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
                                     instr->effective_operand_width);
@@ -320,7 +321,7 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
 // Mangle a `POP_GPRv` instruction, where the popped GPR is the stack pointer.
 static void ManglePopStackPointer(DecodedBasicBlock *block,
                                   Instruction *instr) {
-  GRANARY_ASSERT(-1 != instr->effective_operand_width);
+  GRANARY_ASSERT(0 < instr->effective_operand_width);
   auto decoded_pc = instr->decoded_pc;
   auto op_size = instr->effective_operand_width;
   auto stack_mem_op = BaseDispMemOp(0, XED_REG_RSP,
@@ -338,8 +339,11 @@ static void ManglePopStackPointer(DecodedBasicBlock *block,
 //
 // Note: Need to do the proper zero-extension of the 16 bit value.
 static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
-  Instruction ni;
+  GRANARY_ASSERT(0 < instr->effective_operand_width);
   auto stack_shift = instr->effective_operand_width / 8;
+  GRANARY_ASSERT(instr->StackPointerShiftAmount() == stack_shift);
+
+  Instruction ni;
   auto vr = block->AllocateVirtualRegister(stack_shift);
   auto vr_16 = vr.WidenedTo(2);
   auto seg_reg = instr->ops[0].reg;

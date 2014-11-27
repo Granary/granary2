@@ -232,8 +232,7 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   cfi->InsertBefore(new NativeInstruction(&ni));
   PUSH_GPRv_50(&ni, ret_address_reg);
   ni.decoded_pc = decoded_pc;  // Mark as application.
-  ni.effective_operand_width = ADDRESS_WIDTH_BITS;
-  ni.AnalyzeStackUsage();
+  ni.effective_operand_width = GPR_WIDTH_BITS;
   cfi->InsertBefore(new NativeInstruction(&ni));
 }
 

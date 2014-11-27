@@ -10,13 +10,7 @@
 namespace granary {
 namespace arch {
 
-// Table of all implicit operands.
-extern const Operand * const IMPLICIT_OPERANDS[];
-
-// Number of implicit operands for each iclass.
-extern const int NUM_IMPLICIT_OPERANDS[];
-
-// Table telling us how flags are used by a particular iclass.
+// Table telling us how flags are used by a particular `iclass`.
 extern const FlagActions ICLASS_FLAG_ACTIONS[];
 
 Instruction::Instruction(void) {
@@ -43,17 +37,13 @@ bool Instruction::HasIndirectTarget(void) const {
 
 // Returns true if an instruction reads from the stack pointer.
 bool Instruction::ReadsFromStackPointer(void) const {
-  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) {
-    AnalyzeStackUsage();
-  }
+  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) AnalyzeStackUsage();
   return reads_from_stack_pointer;
 }
 
 // Returns true if an instruction writes to the stack pointer.
 bool Instruction::WritesToStackPointer(void) const {
-  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) {
-    AnalyzeStackUsage();
-  }
+  if (GRANARY_UNLIKELY(!analyzed_stack_usage)) AnalyzeStackUsage();
   return writes_to_stack_pointer;
 }
 
@@ -94,7 +84,7 @@ bool Instruction::ShiftsStackPointer(void) const {
              ops[1].IsMemory() && !ops[1].IsPointer() && ops[1].is_compound &&
              XED_REG_RSP == ops[1].mem.reg_base &&
              XED_REG_INVALID == ops[1].mem.reg_index &&
-             0 != ops[1].mem.disp;
+             1 >= ops[1].mem.scale;
 
     // Things that appear, but aren't, constant stack pointer shifts that fall
     // into this category are: `IRET`, `CALL_FAR`, `RET_FAR`, and `LEAVE`.
@@ -103,7 +93,7 @@ bool Instruction::ShiftsStackPointer(void) const {
   }
 }
 
-// Returns the statically know amount by which an instruction shifts the
+// Returns the statically known amount by which an instruction shifts the
 // stack pointer.
 //
 // Note: This should only be used after early mangling, as it assumes an
@@ -113,49 +103,62 @@ int Instruction::StackPointerShiftAmount(void) const {
   int mult = -1;
   switch (iclass) {
     case XED_ICLASS_PUSHA:
+      return -8 * arch::WORD_WIDTH_BYTES;
+
     case XED_ICLASS_POPA:
+      return 8 * arch::WORD_WIDTH_BYTES;
+
     case XED_ICLASS_PUSHAD:
+      return -8 * arch::DOUBLEWORD_WIDTH_BYTES;
+
     case XED_ICLASS_POPAD:
+      return 8 * arch::DOUBLEWORD_WIDTH_BYTES;
+
     case XED_ICLASS_PUSHFD:
+      return -arch::DOUBLEWORD_WIDTH_BYTES;
+
     case XED_ICLASS_POPFD:
-      GRANARY_ASSERT(false);  // Not allowed in 64-bit mode.
-      return 0;
+      return arch::DOUBLEWORD_WIDTH_BYTES;
+
     case XED_ICLASS_PUSHF:
-      return -2;
+      return -arch::WORD_WIDTH_BYTES;
+
     case XED_ICLASS_POPF:
-      return 2;
+      return arch::WORD_WIDTH_BYTES;
+
     case XED_ICLASS_PUSHFQ:
-      return -8;
+      return -arch::QUADWORD_WIDTH_BYTES;
+
     case XED_ICLASS_POPFQ:
-      return 8;
+      return arch::QUADWORD_WIDTH_BYTES;
+
     case XED_ICLASS_POP:
-      if (!(ops[0].IsRegister() && ops[0].reg.IsStackPointer())) {
-        if (-1 != effective_operand_width) {
-          return effective_operand_width / 8;
-        } else {
-          return 8;
-        }
-      }
-      break;
+      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) break;
+      GRANARY_ASSERT(0 != effective_operand_width);
+      return effective_operand_width / arch::BYTE_WIDTH_BITS;
+      // TODO(pag): `return 8;` if not `effective_operand_width`?
+
     case XED_ICLASS_PUSH:
-      if (-1 != effective_operand_width) {
-        return -effective_operand_width / 8;
-      } else {
-        return -8;
-      }
+      GRANARY_ASSERT(0 != effective_operand_width);
+      return effective_operand_width / -arch::BYTE_WIDTH_BITS;
+      // TODO(pag): `return -8;` if not `effective_operand_width`?
+
     case XED_ICLASS_CALL_NEAR:
-      return -8;
+      return -arch::ADDRESS_WIDTH_BYTES;
+
     case XED_ICLASS_RET_NEAR:
       if (ops[0].IsImmediate()) {
-        return 8 + static_cast<int>(ops[0].imm.as_uint);
+        return arch::ADDRESS_WIDTH_BYTES + static_cast<int>(ops[0].imm.as_uint);
       } else {
-        return 8;
+        return arch::ADDRESS_WIDTH_BYTES;
       }
 
     // Assume that this is caught by early mangling, and that no `ENTER`
     // instructions make it into the instruction stream. `LEAVE` does not shift
     // the stack by a constant amount; however, this is a good spot to verify
     // its absence (it should also be early mangled).
+    //
+    // TODO(pag): Might have some enter's or leaves injected by instrumentation.
     case XED_ICLASS_ENTER:
     case XED_ICLASS_LEAVE:
       GRANARY_ASSERT(false);
@@ -166,30 +169,32 @@ int Instruction::StackPointerShiftAmount(void) const {
 
     [[clang::fallthrough]];
     case XED_ICLASS_SUB:
-      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
-          ops[1].IsImmediate()) {
-        return static_cast<int>(ops[1].imm.as_int) * mult;
-      }
-      break;
+      if (!ops[0].IsRegister()) break;
+      if (!ops[0].reg.IsStackPointer()) break;
+      if (!ops[1].IsImmediate()) break;
+      return static_cast<int>(ops[1].imm.as_int) * mult;
 
     case XED_ICLASS_INC:
       mult = 1;
 
     [[clang::fallthrough]];
     case XED_ICLASS_DEC:
-      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer()) {
-        return mult;
-      }
-      break;
+      if (!ops[0].IsRegister()) break;
+      if (!ops[0].reg.IsStackPointer()) break;
+      return mult;
 
     case XED_ICLASS_LEA:
-      if (ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
-          ops[1].IsMemory() && !ops[1].IsPointer() && ops[1].is_compound &&
-          XED_REG_RSP == ops[1].mem.reg_base &&
-          XED_REG_INVALID == ops[1].mem.reg_index &&
-          0 != ops[1].mem.disp) {
-        return static_cast<int>(ops[1].mem.disp);
-      }
+      if (!ops[0].IsRegister()) break;
+      if (!ops[0].reg.IsStackPointer()) break;
+      if (!ops[1].IsMemory()) break;
+      if (ops[1].IsPointer()) break;
+      if (!ops[1].is_compound) break;
+
+      // TODO(pag): For non-64-bit, allow for ESP/SP.
+      if (XED_REG_RSP != ops[1].mem.reg_base) break;
+      if (XED_REG_INVALID != ops[1].mem.reg_index) break;
+      if (1 < ops[1].mem.scale) break;
+      return static_cast<int>(ops[1].mem.disp);
       break;
 
     default:
@@ -266,6 +271,10 @@ static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
 
 // Analyze this instruction's use of the stack pointer.
 void Instruction::AnalyzeStackUsage(void) const {
+  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
+  GRANARY_ASSERT(0 != isel);
+  GRANARY_ASSERT(num_ops >= num_explicit_ops);
+
   analyzed_stack_usage = true;
   reads_from_stack_pointer = false;
   writes_to_stack_pointer = false;
@@ -273,16 +282,9 @@ void Instruction::AnalyzeStackUsage(void) const {
 
   auto self = const_cast<Instruction *>(this);
   for (auto &op : ops) {
-    if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-      break;
+    if (XED_ENCODER_OPERAND_TYPE_INVALID != op.type) {
+      AnalyzeOperandStackUsage(self, op);
     }
-    AnalyzeOperandStackUsage(self, op);
-  }
-
-  GRANARY_ASSERT(XED_IFORM_INVALID != iform);
-  GRANARY_ASSERT(0 != isel);
-  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[isel]; ++i) {
-    AnalyzeOperandStackUsage(self, IMPLICIT_OPERANDS[isel][i]);
   }
 }
 
@@ -356,18 +358,13 @@ void Instruction::WithBranchTargetOperand(
 // Invoke a function on every operand.
 void Instruction::ForEachOperand(
     const std::function<void(granary::Operand *)> &func) {
-  for (auto &op : ops) {
-    if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) {
-      break;
-    }
-    CallWithOperand(&op, func);
-  }
   GRANARY_ASSERT(XED_IFORM_INVALID != iform);
   GRANARY_ASSERT(0 != isel);
-  auto implicit_ops = IMPLICIT_OPERANDS[isel];
-  for (auto i = 0; i < NUM_IMPLICIT_OPERANDS[isel]; ++i) {
-    auto implicit_op = const_cast<Operand *>(&(implicit_ops[i]));
-    CallWithOperand(implicit_op, func);
+  GRANARY_ASSERT(num_ops >= num_explicit_ops);
+  for (auto &op : ops) {
+    if (XED_ENCODER_OPERAND_TYPE_INVALID != op.type) {
+      CallWithOperand(&op, func);
+    }
   }
 }
 
@@ -440,22 +437,16 @@ size_t Instruction::CountMatchedOperands(
     std::initializer_list<OperandMatcher> matchers) {
   GRANARY_ASSERT(XED_IFORM_INVALID != iform);
   GRANARY_ASSERT(0 != isel);
-  const auto num_implicit_ops = NUM_IMPLICIT_OPERANDS[isel];
-  const auto implicit_ops = IMPLICIT_OPERANDS[isel];
+  GRANARY_ASSERT(num_ops >= num_explicit_ops);
+
   auto matcher_array = matchers.begin();
   auto i = 0UL;
-  uint8_t op_num = 0;
+  auto op_num = 0;
 
   for (const auto max_i = matchers.size(); i < max_i; ++op_num) {
-    Operand *op(nullptr);
-    if (op_num < num_explicit_ops) {
-      op = &(ops[op_num]);
-    } else if ((op_num - num_explicit_ops) < num_implicit_ops) {
-      op = const_cast<Operand *>(&(implicit_ops[op_num - num_explicit_ops]));
-    } else {
-      break;
-    }
-    if (TryMatchOperand(matcher_array[i], op)) {
+    auto &op(ops[op_num]);
+    if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) break;
+    if (TryMatchOperand(matcher_array[i], &op)) {
       ++i;
     }
   }

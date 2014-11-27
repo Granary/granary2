@@ -9,20 +9,6 @@
 class Watchpoints;
 
 class WatchedOperand {
- protected:
-  friend class Watchpoints;
-
-  inline WatchedOperand(granary::DecodedBasicBlock *block_,
-                        granary::NativeInstruction *instr_,
-                        const granary::MemoryOperand &mem_op_,
-                        const granary::RegisterOperand &unwatched_reg_op_,
-                        const granary::RegisterOperand &watched_reg_op_)
-      : block(block_),
-        instr(instr_),
-        mem_op(mem_op_),
-        unwatched_reg_op(unwatched_reg_op_),
-        watched_reg_op(watched_reg_op_) {}
-
  public:
   granary::DecodedBasicBlock * const block;
 
@@ -37,6 +23,20 @@ class WatchedOperand {
 
   // Register operand, where the register will contain the watched address.
   const granary::RegisterOperand &watched_reg_op;
+
+ protected:
+  friend class Watchpoints;
+
+  inline WatchedOperand(granary::DecodedBasicBlock *block_,
+                        granary::NativeInstruction *instr_,
+                        const granary::MemoryOperand &mem_op_,
+                        const granary::RegisterOperand &unwatched_reg_op_,
+                        const granary::RegisterOperand &watched_reg_op_)
+      : block(block_),
+        instr(instr_),
+        mem_op(mem_op_),
+        unwatched_reg_op(unwatched_reg_op_),
+        watched_reg_op(watched_reg_op_) {}
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(WatchedOperand);
