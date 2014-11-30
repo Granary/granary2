@@ -15,18 +15,22 @@ class SpinLock {
       : is_locked(ATOMIC_VAR_INIT(false)) {}
 
   // Blocks execution by spinning until the lock has been acquired.
-  void Acquire(void);
-
-  // Tries to acquire the lock, knowing that the lock is currently contended.
-  void ContendedAcquire(void);
-
-  // Returns true if the lock was acquired.
   bool TryAcquire(void);
+
+  // Blocks execution by spinning until the lock has been acquired.
+  inline void Acquire(void) {
+    if (TryAcquire()) return;
+    ContendedAcquire();
+  }
 
   // Release the lock. Assumes that the lock is acquired.
   void Release(void);
 
  private:
+
+  // Acquires the lock, knowing that the lock is currently contended.
+  void ContendedAcquire(void);
+
   std::atomic<bool> is_locked;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SpinLock);

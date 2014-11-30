@@ -33,8 +33,7 @@ CachePC Translate(Context *context, BlockMetaData *meta);
 
 // Instrument, compile, and index some basic blocks, where the entry block
 // is targeted by an indirect control-transfer instruction.
-CachePC Translate(Context *context, IndirectEdge *edge,
-                  AppPC target_pc);
+CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta);
 
 // Instrument, compile, and index some basic blocks.
 template <typename T>

@@ -40,6 +40,10 @@
 #include <unistd.h>
 #include <asm/unistd.h>
 
+#include <semaphore.h>
+
+#include <linux/futex.h>
+
 extern int arch_prctl(int option, ...);
 
 

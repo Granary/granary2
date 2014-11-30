@@ -157,6 +157,13 @@ DEFINE_FUNC(sys_clone)
     ret
 END_FUNC(sys_clone)
 
+DEFINE_FUNC(sys_futex)
+    mov     r10, rcx  // arg4, `utime`.
+    mov     eax, 202  // `__NR_futex`.
+    syscall
+    ret
+END_FUNC(sys_futex)
+
 DEFINE_FUNC(nanosleep)
     mov     eax, 35  // `__NR_nanosleep`.
     syscall

@@ -59,22 +59,21 @@ static int ToolId(const char *name) {
 
 }  // namespace
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wuninitialized"
 // Dummy implementations of the tool API, so that tools don't need to define
 // every API function.
-//
-// Note: This uses a hack to make sure that the `metadata_manager` field is
-//       initialized with whatever its current value is. The
-//       `ToolManager::Allocate` makes sure these field is initialized before
-//       a `Tool` derived class constructor is invoked, so that the derived
-//       tool class can register tool-specific meta-data.
 InstrumentationTool::InstrumentationTool(void)
     : next(nullptr),
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wuninitialized"
+      // Note: This uses a hack to make sure that the `metadata_manager`
+      //       field is initialized with whatever its current value is. The
+      //       `ToolManager::Allocate` makes sure these field is initialized
+      //       before a `Tool` derived class constructor is invoked, so that
+      //       the derived tool class can register tool-specific meta-data.
       context(context) {
+#pragma clang diagnostic pop
   GRANARY_ASSERT(nullptr != context);
 }
-#pragma clang diagnostic pop
 
 // Closes any open inline assembly scopes.
 InstrumentationTool::~InstrumentationTool(void) {}

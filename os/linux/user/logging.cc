@@ -10,6 +10,7 @@
 #include "granary/base/string.h"
 
 #include "os/logging.h"
+#include "os/lock.h"
 
 GRANARY_DEFINE_string(output_log_file, "/dev/stdout",
     "The log file used by Granary for otuputting messages to "
@@ -47,7 +48,7 @@ static int OUTPUT_FD[] = {
   -1
 };
 
-static SpinLock log_buffer_lock;
+static os::Lock log_buffer_lock;
 static int log_buffer_fd = -1;
 
 }  // namespace
@@ -62,7 +63,7 @@ void InitLog(void) {
 
 // Exit the log.
 void ExitLog(void) {
-  SpinLockedRegion locker(&log_buffer_lock);
+  os::LockedRegion locker(&log_buffer_lock);
   if (granary_log_buffer_index && -1 != log_buffer_fd) {
     write(log_buffer_fd, granary_log_buffer, granary_log_buffer_index);
     granary_log_buffer_index = 0;
@@ -76,7 +77,7 @@ int Log(LogLevel level, const char *format, ...) {
   va_start(args, format);
   const auto fd = OUTPUT_FD[level];
 
-  SpinLockedRegion locker(&log_buffer_lock);
+  os::LockedRegion locker(&log_buffer_lock);
 
   // Flush the buffer.
   if (granary_log_buffer_index &&
@@ -87,9 +88,9 @@ int Log(LogLevel level, const char *format, ...) {
   }
 
   // Fill the buffer.
-  auto ret = VarFormat(&(granary_log_buffer[granary_log_buffer_index]),
-                       sizeof granary_log_buffer - granary_log_buffer_index - 1,
-                       format, args);
+  auto ret = VFormat(&(granary_log_buffer[granary_log_buffer_index]),
+                     sizeof granary_log_buffer - granary_log_buffer_index - 1,
+                     format, args);
 
   granary_log_buffer_index += ret;
   log_buffer_fd = fd;

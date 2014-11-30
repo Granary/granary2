@@ -35,7 +35,7 @@ union InlineAssemblyVariable {
   InlineAssemblyVariable(void) = default;
 
   // Initialize the inline assembly variable with a particular operand.
-  explicit InlineAssemblyVariable(Operand *op);
+  explicit InlineAssemblyVariable(const Operand *op);
 
   Container<RegisterOperand> reg;
   Container<MemoryOperand> mem;
@@ -60,7 +60,7 @@ static_assert(0 == offsetof(InlineAssemblyVariable, label),
 class InlineAssemblyScope : public UnownedCountedObject {
  public:
   // Initialize the input variables to the scope.
-  explicit InlineAssemblyScope(std::initializer_list<Operand *> inputs);
+  explicit InlineAssemblyScope(std::initializer_list<const Operand *> inputs);
   virtual ~InlineAssemblyScope(void);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {

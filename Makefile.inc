@@ -216,7 +216,7 @@ GRANARY_COMMON_WARN_FLAGS += -Wuninitialized -Wsometimes-uninitialized
 GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
-GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast
+GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast -Wnull-conversion
 GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 
 # Disable various warnings and errors.

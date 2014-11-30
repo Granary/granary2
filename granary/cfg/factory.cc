@@ -513,7 +513,6 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
     granary_unreachable("Fatal error: Trying to instrument non-"
                         "executable code.");
   }
-
   return request_kind;
 }
 
@@ -526,15 +525,15 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
 // strategy.
 InstrumentedBasicBlock *BlockFactory::MaterializeIndirectEntryBlock(
     BlockMetaData *meta) {
-  auto app_meta = MetaDataCast<AppMetaData *>(meta);
-  auto request_kind = RequestKindForTargetPC(app_meta->start_pc,
-                                             kRequestBlockFromIndexOrCFG);
+  auto start_pc = MetaDataCast<AppMetaData *>(meta)->start_pc;
+  auto request_kind = RequestKindForTargetPC(
+      start_pc, kRequestBlockFromIndexOrCFG);
 
   BasicBlock *target_block(nullptr);
   if (kRequestBlockExecuteNatively == request_kind) {
-    target_block = new NativeBasicBlock(app_meta->start_pc);
+    target_block = new NativeBasicBlock(start_pc);
   } else {
-    auto dest_meta = context->AllocateBlockMetaData(app_meta->start_pc);
+    auto dest_meta = context->AllocateBlockMetaData(start_pc);
     target_block = new DirectBasicBlock(cfg, dest_meta);
     RequestBlock(target_block, request_kind);
     GRANARY_ASSERT(has_pending_request);

@@ -12,14 +12,14 @@
 
 namespace granary {
 
-InlineAssemblyVariable::InlineAssemblyVariable(Operand *op) {
-  if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+InlineAssemblyVariable::InlineAssemblyVariable(const Operand *op) {
+  if (auto reg_op = DynamicCast<const RegisterOperand *>(op)) {
     reg.Construct(*reg_op);
-  } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+  } else if (auto mem_op = DynamicCast<const MemoryOperand *>(op)) {
     mem.Construct(*mem_op);
-  } else if (auto imm_op = DynamicCast<ImmediateOperand *>(op)) {
+  } else if (auto imm_op = DynamicCast<const ImmediateOperand *>(op)) {
     imm.Construct(*imm_op);
-  } else if (auto label_op = DynamicCast<LabelOperand *>(op)) {
+  } else if (auto label_op = DynamicCast<const LabelOperand *>(op)) {
     label = label_op->Target();
   } else {
     GRANARY_ASSERT(false);  // E.g. Passing in a `nullptr`.
@@ -28,7 +28,7 @@ InlineAssemblyVariable::InlineAssemblyVariable(Operand *op) {
 
 // Initialize this inline assembly scope.
 InlineAssemblyScope::InlineAssemblyScope(
-    std::initializer_list<Operand *> inputs)
+    std::initializer_list<const Operand *> inputs)
     : UnownedCountedObject(),
       vars() {
   memset(&vars, 0, sizeof vars);

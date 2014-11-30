@@ -22,7 +22,7 @@ int Log(LogLevel, const char *, ...) __attribute__ ((format (printf, 2, 3)));
 
 // Log without specifying a log level (i.e. default to `os::LogOutput`).
 template <typename... Args>
-static inline int Log(const char *format, Args...args) {
+static inline int Log(const char *format, Args... args) {
   return Log(os::LogOutput, format, args...);
 }
 
