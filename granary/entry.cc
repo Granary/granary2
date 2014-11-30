@@ -46,6 +46,13 @@ static inline bool OnGranaryStack(void) {
 }
 #endif  // GRANARY_WHERE_kernel && GRANARY_WHERE_debug
 
+// Returns true if this edge has already been translated.
+static bool EdgeHasTranslation(const DirectEdge *edge) {
+  const auto begin = edge->edge_code_pc;
+  const auto end = begin + arch::DIRECT_EDGE_CODE_SIZE_BYTES;
+  return edge->entry_target_pc < begin || edge->entry_target_pc >= end;
+}
+
 }  // namespace
 extern "C" {
 
@@ -53,12 +60,15 @@ extern "C" {
 GRANARY_ENTRYPOINT void granary_enter_direct_edge(DirectEdge *edge) {
   VALGRIND_ENABLE_ERROR_REPORTING; {
     GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    os::LockedRegion locker(&edge->entry_target_pc_lock);
-    auto context = GlobalContext();
-    edge->entry_target_pc = Translate(context, edge->dest_meta);
-    edge->dest_meta = nullptr;
-    if (!FLAG_unsafe_patch_edges || !arch::TryAtomicPatchEdge(context, edge)) {
-      context->PreparePatchDirectEdge(edge);
+    os::LockedRegion locker(&edge->lock);
+    if (!EdgeHasTranslation(edge)) {
+      auto context = GlobalContext();
+      edge->entry_target_pc = Translate(context, edge->dest_meta);
+      edge->dest_meta = nullptr;
+      if (!FLAG_unsafe_patch_edges ||
+          !arch::TryAtomicPatchEdge(context, edge)) {
+        context->PreparePatchDirectEdge(edge);
+      }
     }
   } VALGRIND_DISABLE_ERROR_REPORTING;
 }
@@ -68,14 +78,15 @@ GRANARY_ENTRYPOINT void granary_enter_indirect_edge(IndirectEdge *edge,
                                                     AppPC target_app_pc) {
   VALGRIND_ENABLE_ERROR_REPORTING; {
     GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    os::LockedRegion locker(&(edge->out_edge_pc_lock));
-    if (edge->out_edges[target_app_pc]) return;
-    auto context = GlobalContext();
-    auto meta = context->InstantiateBlockMetaData(edge->meta_template,
-                                                  target_app_pc);
-    auto encoded_pc = Translate(context, edge, meta);
-    edge->out_edge_pc = encoded_pc;
-    edge->out_edges[target_app_pc] = encoded_pc;
+    os::LockedRegion locker(&(edge->lock));
+    auto &encoded_pc(edge->out_edges[target_app_pc]);
+    if (!encoded_pc) {
+      auto context = GlobalContext();
+      auto meta = context->InstantiateBlockMetaData(edge->meta_template,
+                                                    target_app_pc);
+      encoded_pc = Translate(context, edge, meta);
+      edge->out_edge_pc = encoded_pc;
+    }
   } VALGRIND_DISABLE_ERROR_REPORTING;
 }
 }  // extern C

@@ -128,7 +128,8 @@ static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo,
 }
 
 // Encode a memory operand.
-static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
+static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
+                      xed_iclass_enum_t iclass) {
   GRANARY_ASSERT(!op.is_annotation_instr);
   xedo->type = op.type;
   xedo->u.mem.seg = XED_REG_DS != op.segment ? op.segment : XED_REG_INVALID;
@@ -160,8 +161,11 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
     xedo->u.mem.base = static_cast<xed_reg_enum_t>(op.reg.EncodeToNative());
   }
   if (op.is_effective_address) {
-    xedo->width = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
-                           xedo->width);
+    if (XED_ICLASS_LEA == iclass) {
+      xedo->width = arch::ADDRESS_WIDTH_BITS;
+    } else if (!xedo->width) {
+      xedo->width = 8;
+    }
   }
 }
 
@@ -272,7 +276,7 @@ static void EncodeOperands(const Instruction *instr,
         EncodeImm(op, &xedo, instr->iclass);
         break;
       case XED_ENCODER_OPERAND_TYPE_MEM:
-        EncodeMem(op, &xedo);
+        EncodeMem(op, &xedo, instr->iclass);
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
         // TODO(pag): Do reachability checks in `EncodePtr`, as is

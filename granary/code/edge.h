@@ -37,9 +37,6 @@ class DirectEdge {
   // known and profiling is enabled.
   CachePC entry_target_pc;
 
-  // Lock that guards the modification of `dest_meta` and this structure.
-  os::Lock entry_target_pc_lock;
-
   // Next direct edge in a chain of all direct edges.
   DirectEdge *next;
 
@@ -64,6 +61,9 @@ class DirectEdge {
 
   // Instruction that is patched by this direct edge.
   CachePC patch_instruction_pc;
+
+  // Lock that guards the modification of `dest_meta` and this structure.
+  os::Lock lock;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DirectEdge, {
     SHARED = true,
@@ -109,9 +109,6 @@ class IndirectEdge {
   //        to (1).
   CachePC out_edge_pc;
 
-  // Lock guarding `out_edge_pc` and the rest of the structure.
-  os::Lock out_edge_pc_lock;
-
   // Meta-data template associated with targets of this indirect CFI.
   const BlockMetaData * const meta_template;
 
@@ -130,6 +127,9 @@ class IndirectEdge {
   // TODO(pag): Map this to a `(CachePC, BlockMetaData *)` pair, so that we can
   //            know the in-edge PC and the block PC.
   TinyMap<AppPC, CachePC, 2> out_edges;
+
+  // Lock guarding `out_edge_pc` and the rest of the structure.
+  os::Lock lock;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,

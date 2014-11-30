@@ -113,10 +113,13 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
   auto target_stack_valid = TargetStackIsValid(edge);
   GRANARY_IF_DEBUG( const auto start_pc = pc; )
 
+  // Clear the memory with `INT3`s.
+  memset(pc, 0xCC, arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+
   // The first time this is executed, it will jump to the next instruction,
   // which also agrees with prefetching and predicting of unknown branches.
-  //
-  // If profiling isn't enabled, then later executions will jump directly
+  // After the target block is translated, we will update `entry_target_pc`
+  // to point to the new block so that later executions will jump directly
   // to where they are meant to go.
   //
   // Another benefit to this approach is that if patching is not enabled, then
@@ -177,7 +180,7 @@ void GenerateIndirectEdgeEntryCode(CachePC pc) {
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
   ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_arch_enter_indirect_edge,
-                       &enter_indirect_addr));
+                                &enter_indirect_addr));
 
   if (GRANARY_IF_USER_ELSE(false, true)) {
     // Swap back to the native stack.

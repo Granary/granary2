@@ -29,6 +29,9 @@ enum {
   // Upper bound on the size of edge-specific direct edge code. Ideally this
   // should be as small as possible.
   DIRECT_EDGE_CODE_SIZE_BYTES = GRANARY_IF_KERNEL_ELSE(32, 48),
+
+  // This is the size of the edge "entrypoint" code. This code is targeted by
+  // edge code in order to get into Granary.
   DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES = 48,
 
   // Upper bound on the size of indirect edge code. Ideally this should be as
