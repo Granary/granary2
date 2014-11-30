@@ -201,7 +201,26 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 
   instr_op->segment = segment_reg;
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
-  instr_op->is_effective_address = XED_ICLASS_LEA == instr->iclass;
+
+  // Should we mark this memory operand as not actually reading / writing to
+  // memory, and instead computing an address?
+  //
+  // Note: These need to be kept consistent with `MemoryBuilder::Build` and
+  //       with `InlineAssemblyParser::ParseMemoryOperand`.
+  //
+  // TODO(pag): Might be better to express this as asking XED if the `xedd`
+  //            accesses memory or not.
+  if (XED_ICLASS_BNDCL == instr->iclass ||
+      XED_ICLASS_BNDCN == instr->iclass ||
+      XED_ICLASS_BNDCU == instr->iclass ||
+      XED_ICLASS_BNDMK == instr->iclass ||
+      XED_ICLASS_CLFLUSH == instr->iclass ||
+      XED_ICLASS_CLFLUSHOPT == instr->iclass ||
+      XED_ICLASS_LEA == instr->iclass ||
+      (XED_ICLASS_PREFETCHNTA <= instr->iclass &&
+          XED_ICLASS_PREFETCH_RESERVED >= instr->iclass)) {
+    instr_op->is_effective_address = true;
+  }
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually

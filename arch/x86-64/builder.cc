@@ -127,12 +127,28 @@ void MemoryBuilder::Build(Instruction *instr) {
   instr_op.rw = action;
   instr_op.is_explicit = true;
 
+  // Note: These need to be kept consistent with `ConvertMemoryOperand` in
+  //       `decode.cc` and with `InlineAssemblyParser::ParseMemoryOperand`.
   switch (instr->iform) {
     case XED_IFORM_BNDCN_BND_AGEN:
     case XED_IFORM_BNDCL_BND_AGEN:
     case XED_IFORM_BNDCU_BND_AGEN:
     case XED_IFORM_BNDMK_BND_AGEN:
+    case XED_IFORM_CLFLUSH_MEMmprefetch:
+    case XED_IFORM_CLFLUSHOPT_MEMmprefetch:
     case XED_IFORM_LEA_GPRv_AGEN:
+    case XED_IFORM_PREFETCHNTA_MEMmprefetch:
+    case XED_IFORM_PREFETCHT0_MEMmprefetch:
+    case XED_IFORM_PREFETCHT1_MEMmprefetch:
+    case XED_IFORM_PREFETCHT2_MEMmprefetch:
+    case XED_IFORM_PREFETCHW_0F0Dr1:
+    case XED_IFORM_PREFETCHW_0F0Dr3:
+    case XED_IFORM_PREFETCH_EXCLUSIVE_MEMmprefetch:
+    case XED_IFORM_PREFETCH_RESERVED_0F0Dr2:
+    case XED_IFORM_PREFETCH_RESERVED_0F0Dr4:
+    case XED_IFORM_PREFETCH_RESERVED_0F0Dr5:
+    case XED_IFORM_PREFETCH_RESERVED_0F0Dr6:
+    case XED_IFORM_PREFETCH_RESERVED_0F0Dr7:
       instr_op.is_effective_address = true;
       break;
     default: break;

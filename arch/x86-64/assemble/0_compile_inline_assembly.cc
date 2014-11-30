@@ -325,6 +325,20 @@ class InlineAssemblyParser {
     } else {
       ParseMemoryOp();
     }
+
+    // Note: These need to be kept consistent with `ConvertMemoryOperand` in
+    //       `decode.cc` and with `MemoryBuilder::Build`.
+    if (XED_ICLASS_BNDCL == data.iclass ||
+        XED_ICLASS_BNDCN == data.iclass ||
+        XED_ICLASS_BNDCU == data.iclass ||
+        XED_ICLASS_BNDMK == data.iclass ||
+        XED_ICLASS_CLFLUSH == data.iclass ||
+        XED_ICLASS_CLFLUSHOPT == data.iclass ||
+        XED_ICLASS_LEA == data.iclass ||
+        (XED_ICLASS_PREFETCHNTA <= data.iclass &&
+            XED_ICLASS_PREFETCH_RESERVED >= data.iclass)) {
+      op->is_effective_address = true;
+    }
   }
 
   void ParseImmediateOperand(void) {
