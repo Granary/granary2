@@ -4,7 +4,7 @@
 
 #include <granary.h>
 
-#ifdef GRANARY_WHERE_user
+#if 0 //def GRANARY_WHERE_user
 
 #include "clients/user/syscall.h"
 #include "clients/watchpoints/type_id.h"

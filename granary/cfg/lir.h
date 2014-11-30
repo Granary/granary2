@@ -151,7 +151,7 @@ class InlineAssembly {
   inline explicit InlineAssembly(OperandTs&... ops)
       : InlineAssembly({&ops...}) {}
 
-  explicit InlineAssembly(std::initializer_list<Operand *> operands);
+  explicit InlineAssembly(std::initializer_list<const Operand *> operands);
 
   ~InlineAssembly(void);
 

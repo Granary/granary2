@@ -13,17 +13,17 @@ namespace granary {
 // Defines an in-line global new allocator for a specific class.
 #define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
-  friend class granary::OperatorNewAllocator<class_name>; \
+  friend class ::granary::OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
   static void *operator new(std::size_t, void *address) { \
     return address; \
   } \
   static void *operator new(std::size_t) { \
-    return granary::OperatorNewAllocator<class_name>::Allocate(); \
+    return ::granary::OperatorNewAllocator<class_name>::Allocate(); \
   } \
   static void operator delete(void *address) { \
-    return granary::OperatorNewAllocator<class_name>::Free(address); \
+    ::granary::OperatorNewAllocator<class_name>::Free(address); \
   } \
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
@@ -41,7 +41,7 @@ namespace granary {
 // exposing the size of the class.
 #define GRANARY_DECLARE_NEW_ALLOCATOR(class_name, ...) \
  GRANARY_IF_INTERNAL( private: \
-  friend class granary::OperatorNewAllocator<class_name>; \
+  friend class ::granary::OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; ) \
  public: \
   static void *operator new(std::size_t, void *); \
@@ -56,10 +56,10 @@ namespace granary {
     return address; \
   } \
   void *class_name::operator new(std::size_t) { \
-    return granary::OperatorNewAllocator<class_name>::Allocate(); \
+    return ::granary::OperatorNewAllocator<class_name>::Allocate(); \
   } \
   void class_name::operator delete(void *address) { \
-    return granary::OperatorNewAllocator<class_name>::Free(address); \
+    ::granary::OperatorNewAllocator<class_name>::Free(address); \
   }
 
 namespace internal {

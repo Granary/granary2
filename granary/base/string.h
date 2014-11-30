@@ -143,13 +143,29 @@ unsigned long CopyString(char * __restrict buffer, const char * __restrict str);
 bool StringsMatch(const char *str1, const char *str2);
 
 // Similar to `vsnprintf`. Returns the number of formatted characters.
-unsigned long VarFormat(char * __restrict buffer, unsigned long len,
-                        const char * __restrict format, va_list args);
+unsigned long VFormat(char * __restrict buffer, unsigned long len,
+                      const char * __restrict format, va_list args);
 
-// Similar to `snprintf`. Returns the number of formatted characters.
-__attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char * __restrict buffer, unsigned long len,
-                     const char * __restrict format, ...);
+// Convenience for formatting.
+inline static unsigned long Format(char *buff, unsigned long len,
+                                   const char * __restrict format, ...) {
+  va_list arg_list;
+  va_start(arg_list, format);
+  auto ret = VFormat(buff, len, format, arg_list);
+  va_end(arg_list);
+  return ret;
+}
+
+// Convenience for formatting.
+template <unsigned long kBuffLen>
+inline static unsigned long Format(char (&buff)[kBuffLen],
+                                   const char * __restrict format, ...) {
+  va_list arg_list;
+  va_start(arg_list, format);
+  auto ret = VFormat(&(buff[0]), kBuffLen, format, arg_list);
+  va_end(arg_list);
+  return ret;
+}
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.
 __attribute__ ((format(scanf, 2, 3)))
@@ -208,7 +224,7 @@ class FixedLengthString {
   void Format(const char * __restrict format, ...) {
     va_list args;
     va_start(args, format);
-    len = VarFormat(Buffer(), MaxLength(), format, args);
+    len = VFormat(Buffer(), MaxLength(), format, args);
     va_end(args);
   }
 
@@ -217,7 +233,7 @@ class FixedLengthString {
   void UpdateFormat(const char * __restrict format, ...) {
     va_list args;
     va_start(args, format);
-    len += VarFormat(RemainingBuffer(), RemainingLength(), format, args);
+    len += VFormat(RemainingBuffer(), RemainingLength(), format, args);
     va_end(args);
   }
 

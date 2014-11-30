@@ -5,15 +5,7 @@
 
 namespace granary {
 
-// Blocks execution by spinning until the lock has been acquired.
-void SpinLock::Acquire(void) {
-  if (TryAcquire()) {
-    return;
-  }
-  ContendedAcquire();
-}
-
-// Tries to acquire the lock, knowing that the lock is currently contended.
+// Acquires the lock, knowing that the lock is currently contended.
 void SpinLock::ContendedAcquire(void) {
   do {
     arch::Relax();

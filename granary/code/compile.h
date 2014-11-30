@@ -15,11 +15,11 @@ class IndirectEdge;
 class LocalControlFlowGraph;
 
 // Compile some instrumented code.
-void Compile(Context *context, LocalControlFlowGraph *cfg);
+CachePC Compile(Context *context, LocalControlFlowGraph *cfg);
 
 // Compile some instrumented code for an indirect edge.
-void Compile(Context *context, LocalControlFlowGraph *cfg,
-             IndirectEdge *edge, AppPC target_pc);
+CachePC Compile(Context *context, LocalControlFlowGraph *cfg,
+                IndirectEdge *edge, BlockMetaData *meta);
 
 }  // namespace granary
 

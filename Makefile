@@ -8,7 +8,8 @@ include Makefile.inc
 .PHONY: target_debug target_release target_test
 .PHONY: build_driver build_dbt build_arch build_os
 
-# Make a header file that external clients can use to define clients.
+# Make a header file that external clients can use to define clients. This
+# happens before `build_clients`.
 $(GRANARY_HEADERS):
 	@mkdir -p $(GRANARY_HEADERS_DIR)
 	# Make the combined C++ header file (granary.h) used by clients.
@@ -20,6 +21,13 @@ $(GRANARY_HEADERS):
 	# routines.
 	@cp $(GRANARY_ARCH_SRC_DIR)/asm/include.asm.inc \
 		$(GRANARY_HEADERS_DIR)/include.asm.inc
+
+# Makefile that Granary and external clients can used to access user / kernel
+# headers. This happens before `build_os`.
+$(GRANARY_OS_TYPES):
+	@echo "Entering $(GRANARY_SRC_DIR)/os/$(GRANARY_OS)"
+	$(MAKE) -C $(GRANARY_SRC_DIR)/os/$(GRANARY_OS) \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) types
 
 build_driver:
 	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
@@ -36,7 +44,7 @@ build_arch: build_driver
 	$(MAKE) -C $(GRANARY_ARCH_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_os: build_driver
+build_os: build_driver $(GRANARY_OS_TYPES)
 	@echo "Entering $(GRANARY_WHERE_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all

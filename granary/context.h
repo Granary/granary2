@@ -18,6 +18,8 @@
 #include "granary/index.h"
 #include "granary/tool.h"
 
+#include "os/lock.h"
+
 namespace granary {
 
 // Forward declarations.
@@ -56,7 +58,7 @@ class Context {
 
   // Allocate and initialize some `BlockMetaData`, based on some existing
   // meta-data template `meta_template`.
-  BlockMetaData *AllocateBlockMetaData(const BlockMetaData *meta_template,
+  BlockMetaData *InstantiateBlockMetaData(const BlockMetaData *meta_template,
                                        AppPC start_pc);
 
   // Allocate instances of the tools that will be used to instrument blocks.
@@ -68,6 +70,9 @@ class Context {
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
   DirectEdge *AllocateDirectEdge(BlockMetaData *dest_block_meta);
+
+  // Prepare a direct edge for patching.
+  void PreparePatchDirectEdge(DirectEdge *edge);
 
   // Allocates an indirect edge data structure.
   IndirectEdge *AllocateIndirectEdge(const BlockMetaData *dest_block_meta);
@@ -126,8 +131,9 @@ class Context {
   // List of patched and not-yet-patched direct edges, as well as a lock that
   // protects both lists.
   SpinLock edge_list_lock;
-  DirectEdge *patched_edge_list;
+  DirectEdge *edge_list;
   DirectEdge *unpatched_edge_list;
+  DirectEdge *patched_edge_list;
 
   // List of indirect edges.
   SpinLock indirect_edge_list_lock;
@@ -139,14 +145,14 @@ class Context {
   // Mapping of context callback functions to their code cache equivalents. In
   // the code cache, these functions are wrapped with code that saves/restores
   // registers, etc.
-  SpinLock context_callbacks_lock;
+  os::Lock context_callbacks_lock;
   TinyMap<AppPC, arch::Callback *, 8> context_callbacks;
 
   // Mapping of arguments callback functions to their code cache equivalents.
   // In the code cache, these functions are wrapped with code that saves/
   // restores registers, etc.
-  SpinLock arg_callbacks_lock;
-  TinyMap<AppPC, arch::Callback *, 8> outline_callbacks;
+  os::Lock inline_callbacks_lock;
+  TinyMap<AppPC, arch::Callback *, 8> inline_callbacks;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Context);
 };

@@ -31,7 +31,7 @@ class DirectShadowedOperand {
   inline DirectShadowedOperand(granary::DecodedBasicBlock *block_,
                                granary::NativeInstruction *instr_,
                                const granary::MemoryOperand &native_mem_op_,
-                               const granary::MemoryOperand &shadow_addr_op_,
+                               const granary::RegisterOperand &shadow_addr_op_,
                                const granary::RegisterOperand &native_addr_op_)
       : block(block_),
         instr(instr_),
@@ -47,7 +47,7 @@ class DirectShadowedOperand {
 class ShadowStructureDescription {
  public:
   ShadowStructureDescription *next;
-  void (*instrumenter)(const DirectShadowedOperand *);
+  void (*instrumenter)(const DirectShadowedOperand &);
   size_t offset;
   const size_t size;
   const size_t align;
@@ -58,7 +58,7 @@ class ShadowStructureDescription {
 template <typename T>
 class GetShadowStructureDescription {
  public:
-  static_assert(std::has_trivial_default_constructor<T>(),
+  static_assert(std::is_trivially_default_constructible<T>(),
                 "Type `T` must have a trivial default constructor, as shadow "
                 "memory is default-initialized with zero bytes.");
 
@@ -80,11 +80,11 @@ ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(DirectShadowedOperand *));
+                        void (*instrumenter)(const DirectShadowedOperand &));
 
 template <typename T>
 inline static void AddShadowStructure(
-    void (*instrumenter)(DirectShadowedOperand *)) {
+    void (*instrumenter)(const DirectShadowedOperand &)) {
   AddShadowStructure(&(GetShadowStructureDescription<T>::kDescription),
                      instrumenter);
 }

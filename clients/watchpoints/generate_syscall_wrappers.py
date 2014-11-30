@@ -165,7 +165,7 @@ def main(types_file_name):
       else:
         line_buff.append(line)
 
-  tokens = CTokenizer("".join(line_buff))
+  tokens = CTokenizer(line_buff)
   parser = CParser()
   parser.parse(tokens)
   for var, ctype in parser.vars():

@@ -24,6 +24,9 @@
 typedef long int ssize_t;
 #endif
 
+// Serves as documentation of the key entrypoints into Granary.
+#define GRANARY_ENTRYPOINT
+
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
 #define GRANARY_GLOBAL __attribute__((init_priority(103)))
 #define GRANARY_UNPROTECTED_GLOBAL \
@@ -66,7 +69,7 @@ typedef long int ssize_t;
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
 #define IF_ECLIPSE_alignas(...)
-#define IF_ECLIPSE_alignof(...)
+#define IF_ECLIPSE_alignof(...) 16
 #ifdef GRANARY_ECLIPSE
 # define alignas(...)
 # define alignof(...) 16

@@ -62,7 +62,7 @@ class DirectMappedShadowMemory : public InstrumentationTool {
   // memory.
   virtual void Init(InitReason) {
     gShiftAmountLong = static_cast<size_t>(
-        __builtin_ctz(FLAG_shadow_granularity));
+        __builtin_ctz(static_cast<unsigned>(FLAG_shadow_granularity)));
     gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
     GRANARY_ASSERT(0 != gShiftAmount);
   }
@@ -192,7 +192,7 @@ class DirectMappedShadowMemory : public InstrumentationTool {
     auto &native_addr_op(asm_.Register(bb, 3));
     auto &shadow_addr_op(asm_.Register(bb, 4));
 
-    auto old_offset = 0;
+    auto old_offset = 0UL;
     char adjust_shadow_offset[32];
     for (auto desc : ShadowStructureIterator(gDescriptions)) {
 
@@ -203,7 +203,7 @@ class DirectMappedShadowMemory : public InstrumentationTool {
         asm_.InlineBefore(instr, adjust_shadow_offset);
       }
       DirectShadowedOperand op(bb, instr, mloc, shadow_addr_op, native_addr_op);
-      desc->instrumenter(&op);
+      desc->instrumenter(op);
     }
   }
 
@@ -215,10 +215,9 @@ class DirectMappedShadowMemory : public InstrumentationTool {
 #ifdef GRANARY_WHERE_user
     // Note: We don't use `os::AllocateDataPages` in user space because
     //       we want these page to be lazily mapped.
-    gShadowMem = mmap(nullptr, gShadowMemSize,
-                      PROT_READ | PROT_WRITE,  // Fault on first access.
-                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
-                      -1, 0);
+    gShadowMem = reinterpret_cast<char *>(mmap(
+        nullptr, gShadowMemSize, PROT_READ | PROT_WRITE,  // Fault on first access.
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0));
 #else
     gShadowMem = os::AllocateDataPages(gShadowMemNumPages);
 #endif
@@ -235,7 +234,7 @@ class DirectMappedShadowMemory : public InstrumentationTool {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(DirectShadowedOperand *)) {
+                        void (*instrumenter)(const DirectShadowedOperand &)) {
   GRANARY_ASSERT(!gShadowMem);
   GRANARY_ASSERT(!desc->next);
   GRANARY_ASSERT(!desc->instrumenter);
@@ -252,7 +251,7 @@ void AddShadowStructure(ShadowStructureDescription *desc,
   gUnalignedSize += desc->size;
 
   gScaleAmountLong = static_cast<size_t>(
-      32 - __builtin_clz(static_cast<int32_t>(gUnalignedSize)) - 1);
+      32 - __builtin_clz(static_cast<uint32_t>(gUnalignedSize)) - 1);
 
   // Adjust the aligned size of the shadow unit based on our newly added
   // description.

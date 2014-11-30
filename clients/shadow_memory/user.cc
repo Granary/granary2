@@ -1,4 +1,6 @@
+/* Copyright 2014 Peter Goodman, all rights reserved. */
 
+#if 0
 #include "clients/user/syscall.h"
 
 // Amount by which addresses should be shifted.
@@ -85,3 +87,4 @@ GRANARY_ASSERT(!ret);
 AddSystemCallEntryFunction(FindClone);
 AddSystemCallExitFunction(SetupShadowSegment);
 #endif  // GRANARY_WHERE_user
+#endif

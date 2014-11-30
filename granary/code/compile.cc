@@ -15,6 +15,7 @@
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
 
+#include "granary/app.h"
 #include "granary/cache.h"
 #include "granary/context.h"
 #include "granary/util.h"
@@ -203,7 +204,7 @@ static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
 //            that all fragments are correctly connected. However, some
 //            branch instructions are introduced at a later point in time,
 //            e.g. `10_add_connecting_jumps.cc`, to make sure there are
-//            fall-throughs for everything.
+//            fall-through jumps for everything.
 //
 //            Perhaps one solution would be to move the labels into the
 //            correct fragments at some point.
@@ -260,11 +261,9 @@ static void AddBlockTracers(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
-
       auto partition = cfrag->partition.Value();
       auto block_meta = cfrag->attr.block_meta;
       auto block_frag = partition->entry_frag;
-
       arch::AddBlockTracer(block_frag, block_meta, estimated_encode_pc);
     }
   }
@@ -278,8 +277,7 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
       auto cache_meta = MetaDataCast<CacheMetaData *>(cfrag->attr.block_meta);
       auto partition = cfrag->partition.Value();
       auto entry_frag = partition->entry_frag;
-
-      GRANARY_ASSERT(nullptr == cache_meta->start_pc);
+      GRANARY_ASSERT(!cache_meta->start_pc);
       cache_meta->start_pc = entry_frag->encoded_pc;
     }
   }
@@ -309,52 +307,49 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 }
 
 // Encodes the fragments into the specified code caches.
-static void Encode(FragmentList *frags, CodeCache *block_cache) {
-  if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) {
-    AddBlockTracers(frags);
-  }
-  if (auto num_bytes = StageEncode(frags)) {
-    auto cache_code = block_cache->AllocateBlock(num_bytes);
-    auto cache_code_end = cache_code + num_bytes;
-    auto update_addresses = false;
-    RelativizeCode(frags, cache_code, &update_addresses);
-    RelativizeControlFlow(frags);
+static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
+  if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) AddBlockTracers(frags);
+  auto num_bytes = StageEncode(frags);
+  GRANARY_ASSERT(0 < num_bytes);
+  const auto cache_code = block_cache->AllocateBlock(num_bytes);
+  auto cache_code_end = cache_code + num_bytes;
+  auto update_addresses = false;
+  RelativizeCode(frags, cache_code, &update_addresses);
+  RelativizeControlFlow(frags);
 
-    do {
-      CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
-      Encode(frags);
-    } while (0);
+  do {
+    CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
+    Encode(frags);
+  } while (0);
 
-    if (GRANARY_UNLIKELY(update_addresses)) {
-      UpdateEncodeAddresses(frags);
-    }
-  }
+  // Go through all `kAnnotUpdateAddressWhenEncoded` annotations and update
+  // the associated pointers with their resolved addresses.
+  if (GRANARY_UNLIKELY(update_addresses)) UpdateEncodeAddresses(frags);
+
   AssignBlockCacheLocations(frags);
   ConnectEdgesToInstructions(frags);
+  return cache_code;
 }
 
 }  // namespace
 
 // Compile some instrumented code.
-void Compile(Context *context, LocalControlFlowGraph *cfg) {
+CachePC Compile(Context *context, LocalControlFlowGraph *cfg) {
   auto frags = Assemble(context, cfg);
-  Encode(&frags, context->BlockCodeCache());
+  auto encoded_pc = Encode(&frags, context->BlockCodeCache());
   FreeFragments(&frags);
+  return encoded_pc;
 }
 
 // Compile some instrumented code for an indirect edge.
-void Compile(Context *context, LocalControlFlowGraph *cfg,
-             IndirectEdge *edge, AppPC target_app_pc) {
+CachePC Compile(Context *context, LocalControlFlowGraph *cfg,
+                IndirectEdge *edge, BlockMetaData *meta) {
   auto frags = Assemble(context, cfg);
-  {
-    // Note: Need to acquire the `out_edge_pc_lock` around edge instantiation
-    //       and fragment encoding because that's where `out_edge_pc` is read
-    //       and then updated.
-    SpinLockedRegion locker(&(edge->out_edge_pc_lock));
-    arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
-    Encode(&frags, context->BlockCodeCache());
-  }
+  auto target_app_pc = MetaDataCast<AppMetaData *>(meta)->start_pc;
+  arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
+  auto encoded_pc = Encode(&frags, context->BlockCodeCache());
   FreeFragments(&frags);
+  return encoded_pc;
 }
 
 }  // namespace granary

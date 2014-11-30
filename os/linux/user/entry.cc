@@ -27,9 +27,7 @@ extern char ** __attribute__((weak)) environ;
 
 // Defined in `os/linux/arch/*/syscall.asm`.
 [[noreturn]] extern void exit_group(int);
-
 }  // extern C
-
 namespace granary {
 namespace {
 // Searches for a specific environment variable.
@@ -80,7 +78,7 @@ static void DisplayHelpMessage(void) {
 extern "C" {
 
 // Initialize and attach Granary. Invoked by means of a tail-call from `_init`.
-void granary_init(granary::AppPC *attach_pc_ptr) {
+GRANARY_ENTRYPOINT void granary_init(granary::AppPC *attach_pc_ptr) {
   GRANARY_USING_NAMESPACE granary;
   PreInit();
   InitOptions(GetEnv("GRANARY_OPTIONS"));

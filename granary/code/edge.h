@@ -13,6 +13,9 @@
 #include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
+#include "granary/base/tiny_map.h"
+
+#include "os/lock.h"
 
 namespace granary {
 
@@ -22,9 +25,10 @@ class Context;
 
 // Used to resolve direct control-flow transfers between the code cache and
 // Granary.
-class alignas(alignof(void *)) DirectEdge {
+class DirectEdge {
  public:
-  DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_);
+  DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_,
+             DirectEdge *next_=nullptr);
 
   ~DirectEdge(void);
 
@@ -33,29 +37,25 @@ class alignas(alignof(void *)) DirectEdge {
   // known and profiling is enabled.
   CachePC entry_target_pc;
 
-  // On exit from an edge, this is the address targeted by an indirect jump. By
-  // default, this has the same value is `edge_code`, and so if two threads
-  // execute the edge code, then one will end up in a busy loop that increments
-  // `num_executions`. Eventually, when the target block is resolved, this is
-  // changed to be the `cache_pc` of the target block.
-  CachePC exit_target_pc;
-
-  // The number of executions. The edge entrypoint assembly routine
-  // atomically increments this value by `2` each time, but when the edge is
-  // patched, the value is changed to `1`. Thus, once the edge is patched, the
-  // value is always odd, even if it overflows.
-  uint64_t num_executions;
+  // Lock that guards the modification of `dest_meta` and this structure.
+  os::Lock entry_target_pc_lock;
 
   // Next direct edge in a chain of all direct edges.
   DirectEdge *next;
 
-  // Meta-data associated with the block that must be translated. If this is
-  // null then it means that this block has either been translated, or is in
-  // the process of being translated.
-  //
-  // If this is null then the meta-data must be looked up in the code cache
-  // index.
-  std::atomic<BlockMetaData *> dest_meta;
+  union {
+    // Meta-data associated with the block that must be translated.
+    BlockMetaData *dest_meta;
+
+    // When the edge has been translated, we add it to a list of edges that
+    // can be patched.
+    DirectEdge *next_patchable;
+
+    // When the edge has been patched, we add it to a list of edges that can
+    // be reclaimed.
+    DirectEdge *next_patched;
+
+  } __attribute__((packed));
 
   // The stub code in an edge code cache that is used to context switch
   // into Granary and find/decode/instrument the block associated with
@@ -67,10 +67,7 @@ class alignas(alignof(void *)) DirectEdge {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(DirectEdge, {
     SHARED = true,
-
-    // We want this cache-line aligned because the `num_executions` and
-    // `num_execution_overflows` are potentially operated on atomically.
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+    ALIGNMENT = 1
   })
 
  private:
@@ -81,14 +78,6 @@ class alignas(alignof(void *)) DirectEdge {
 
 static_assert(0 == offsetof(DirectEdge, entry_target_pc),
     "Field `DirectEdge::cached_target` must be at offset `0`, as assembly "
-    "routines depend on this.");
-
-static_assert(8 == offsetof(DirectEdge, exit_target_pc),
-    "Field `DirectEdge::exit_target` must be at offset `8`, as assembly "
-    "routines depend on this.");
-
-static_assert(16 == offsetof(DirectEdge, num_executions),
-    "Field `DirectEdge::num_executions` must be at offset `16`, as assembly "
     "routines depend on this.");
 
 static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
@@ -119,7 +108,9 @@ class IndirectEdge {
   //        or jumps to the "miss" code (2; base case), which transfers control
   //        to (1).
   CachePC out_edge_pc;
-  SpinLock out_edge_pc_lock;
+
+  // Lock guarding `out_edge_pc` and the rest of the structure.
+  os::Lock out_edge_pc_lock;
 
   // Meta-data template associated with targets of this indirect CFI.
   const BlockMetaData * const meta_template;
@@ -133,6 +124,12 @@ class IndirectEdge {
   // Note: These pointers are updated at JIT-compile time via an annotation
   //       instruction using `kAnnotUpdateAddressWhenEncoded`.
   AppPC out_edge_template;
+
+  // Map of all application targets and the associated in-edge PC.
+  //
+  // TODO(pag): Map this to a `(CachePC, BlockMetaData *)` pair, so that we can
+  //            know the in-edge PC and the block PC.
+  TinyMap<AppPC, CachePC, 2> out_edges;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,

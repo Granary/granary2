@@ -53,7 +53,7 @@ std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
 
 }  // namespace detail
 
-InlineAssembly::InlineAssembly(std::initializer_list<Operand *> operands)
+InlineAssembly::InlineAssembly(std::initializer_list<const Operand *> operands)
     : scope(new InlineAssemblyScope(operands)) {}
 
 InlineAssembly::~InlineAssembly(void) {

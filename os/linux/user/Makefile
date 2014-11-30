@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include $(GRANARY_SRC_DIR)/os/linux/Types.mk
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
