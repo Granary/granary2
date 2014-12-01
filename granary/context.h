@@ -82,7 +82,7 @@ class Context {
   CodeCache *BlockCodeCache(void);
 
   // Get a pointer to this context's code cache index.
-  LockedIndex *CodeCacheIndex(void);
+  Index *CodeCacheIndex(void);
 
   // Invalidate blocks that have been committed to the code cache index. This
   // invalidates all blocks in the range `[begin_addr, end_addr)`.
@@ -140,7 +140,7 @@ class Context {
   IndirectEdge *indirect_edge_list;
 
   // Code cache index for normal blocks.
-  LockedIndex code_cache_index;
+  Index *code_cache_index;
 
   // Mapping of context callback functions to their code cache equivalents. In
   // the code cache, these functions are wrapped with code that saves/restores

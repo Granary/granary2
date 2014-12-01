@@ -296,16 +296,15 @@ CodeCache *Context::BlockCodeCache(void) {
 }
 
 // Get a pointer to this context's code cache index.
-LockedIndex *Context::CodeCacheIndex(void) {
-  return &code_cache_index;
+Index *Context::CodeCacheIndex(void) {
+  return code_cache_index;
 }
 
 // Invalidate blocks that have been committed to the code cache index. This
 // invalidates all blocks in the range `[begin_addr, end_addr)`.
 void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
   BlockMetaData *meta(nullptr);
-  LockedIndexTransaction transaction(&code_cache_index);
-  meta = transaction.RemoveRange(begin_addr, end_addr);
+  meta = code_cache_index->RemoveRange(begin_addr, end_addr);
 
   // TODO(pag): Do something with `meta`!! This is a major memory leak at the
   //            moment.

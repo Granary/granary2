@@ -37,19 +37,18 @@ enum IndexConstraint {
 };
 
 // Add the decoded blocks to the code cache index.
-static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg,
+static void IndexBlocks(Index *index, LocalControlFlowGraph *cfg,
                         IndexConstraint constraint=kIndexAll) {
   const auto entry_block = cfg->EntryBlock();
   GRANARY_ASSERT(nullptr != entry_block);
 
-  LockedIndexTransaction transaction(index);
   auto trace_group = gNumContextSwitches.fetch_add(1);
   for (auto block : cfg->ReverseBlocks()) {
     if (kIndexAllButEntry == constraint && entry_block == block) continue;
     if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
       GRANARY_ASSERT(nullptr != decoded_block->StartAppPC());
       auto meta = decoded_block->MetaData();
-      transaction.Insert(meta);
+      index->Insert(meta);
       TraceMetaData(trace_group, meta);
     }
   }
