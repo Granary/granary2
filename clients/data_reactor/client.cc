@@ -4,123 +4,33 @@
 
 #include <granary.h>
 
-#if 0 //def GRANARY_WHERE_user
+#ifdef GRANARY_WHERE_user
 
-#include "clients/user/syscall.h"
 #include "clients/watchpoints/type_id.h"
 #include "clients/wrap_func/client.h"
+#include "clients/shadow_memory/client.h"
 
 #include "generated/clients/data_reactor/offsets.h"
 
 GRANARY_USING_NAMESPACE granary;
 
-GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
-    "The granularity (in bytes) of shadow memory. This must be a power of two. "
-    "The default value is `4096`.",
-
-    "data_collider");
-
 namespace {
 
 enum : uint64_t {
-  ADDRESS_SPACE_SIZE = 1ULL << 47U,
-  NUM_SAMPLE_SOURCES = MAX_TYPE_ID + 1
+  kNumSamplePoints = kMaxWatchpointTypeId + 1
 };
 
-// Amount by which addresses should be shifted.
-static uint64_t gShiftAmountLong = 0UL;
-static uint8_t gShiftAmount = 0;
-
-// Size (in bytes) of the shadow memory.
-static auto gShadowMemSize = 0UL;
-
-// Base and limit of shadow memory.
-static void *gBeginShadowMem = nullptr;
-static void *gEndShadowMem = nullptr;
-
-// Tells us if we came across a `clone` system call.
-static __thread bool tIsClone = false;
-
-// Find `clone` system calls, which are used for spawning threads.
-static void FindClone(void *, SystemCallContext context) {
-  tIsClone = __NR_clone == context.Number();
-}
-
-struct SampleSource {
-  // Number of additional shadow memory slots the sample object occupies.
-  size_t num_additional_slots:16;
-
-  // Shadow address of the sample object.
-  uintptr_t address:48;
-} __attribute__((packed));
-
-static_assert(sizeof(SampleSource) == sizeof(uintptr_t),
-    "Bad structure packing for type `SampleSource`.");
+// Proxy memory data structure.
+struct SamplePoint {};
 
 // Set of all addresses that can be sampled.
-static SampleSource gSampleSources[NUM_SAMPLE_SOURCES] = {{0,0}};
-static SpinLock gSampleSourcesLock;
-
-// After a `clone` system call, set the `GS` segment base to point to shadow
-// memory.
-//
-// There's a bit of duplication here in that we'll set the `GS` base on both
-// the new thread and the old thread, but that doesn't matter.
-static void SetupShadowSegment(void *, SystemCallContext) {
-  if (!tIsClone) return;
-  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, gBeginShadowMem);
-  GRANARY_ASSERT(!ret);
-  tIsClone = false;
-}
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wold-style-cast"
-
-static void InitShadowMemory(void) {
-  gShiftAmountLong = static_cast<uint64_t>(__builtin_ctzl(
-      static_cast<uint64_t>(FLAG_shadow_granularity)));
-
-  gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
-  gShadowMemSize = ADDRESS_SPACE_SIZE >> gShiftAmountLong;
-  gShadowMemSize = GRANARY_ALIGN_TO(gShadowMemSize, arch::PAGE_SIZE_BYTES);
-
-  // Allocate the shadow memory space. To reduce the scope of what we actually
-  // want to sample, we'll lazily map the shadow memory on the first fault, and
-  // record the mapped shadow memory in a simple data structure that GDB can
-  // then inspect to choose taint targets.
-  gBeginShadowMem = mmap(nullptr, gShadowMemSize,
-                         PROT_READ | PROT_WRITE,  // Fault on first access.
-                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
-                         -1, 0);
-
-  if (MAP_FAILED == gBeginShadowMem) {
-    os::Log(os::LogDebug, "Failed to map shadow memory. Exiting.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  gEndShadowMem = reinterpret_cast<char *>(gBeginShadowMem) + gShadowMemSize;
-
-  // Make it so that the `GS` segment points to our shadow memory.
-  GRANARY_IF_DEBUG( auto ret = ) arch_prctl(ARCH_SET_GS, gBeginShadowMem);
-  GRANARY_ASSERT(!ret);
-
-  // Interpose on clone system calls so that we can setup the shadow memory.
-  AddSystemCallEntryFunction(FindClone);
-  AddSystemCallExitFunction(SetupShadowSegment);
-}
-
-#pragma clang diagnostic pop
+static SamplePoint *gSamplePoints[kNumSamplePoints] = {nullptr};
+static SpinLock gSamplePointsLock;
 
 // Add an address for sampling.
-static void AddSampleAddress(uintptr_t type_id, void *addr, size_t size) {
-  auto sample_addr = (reinterpret_cast<uintptr_t>(addr) >> gShiftAmountLong) +
-                     reinterpret_cast<uintptr_t>(gBeginShadowMem);
-  auto sample_size = (size >> gShiftAmountLong) & 0xFFFFULL;
-
-  SpinLockedRegion locker(&gSampleSourcesLock);
-  auto &source(gSampleSources[type_id]);
-  source.address = sample_addr;
-  source.num_additional_slots = sample_size;
+static void AddSampleAddress(uintptr_t type_id, void *addr) {
+  SpinLockedRegion locker(&gSamplePointsLock);
+  gSamplePoints[type_id] = ShadowOf<SamplePoint>(addr);
 }
 
 #define GET_ALLOCATOR(name) \
@@ -130,7 +40,7 @@ static void AddSampleAddress(uintptr_t type_id, void *addr, size_t size) {
 #define SAMPLE_AND_RETURN_ADDRESS \
   if (addr) { \
     auto type_id = TypeIdFor(ret_address, size); \
-    AddSampleAddress(type_id, addr, size); \
+    AddSampleAddress(type_id, addr); \
   } \
   return addr
 
@@ -180,7 +90,7 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
   auto ret = posix_memalign(addr_ptr, align, size);
   if (!ret) {
     auto type_id = TypeIdFor(ret_address, size);
-    AddSampleAddress(type_id, *addr_ptr, size);
+    AddSampleAddress(type_id, *addr_ptr);
   }
   return ret;
 }
@@ -190,17 +100,18 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 
 static auto gCurrSourceTypeId = 0UL;
 
-static uintptr_t GetSampleAddress(uintptr_t type_id) {
-  SpinLockedRegion locker(&gSampleSourcesLock);
-  return gSampleSources[type_id].address;
+static SamplePoint *GetSampleAddress(uintptr_t type_id) {
+  SpinLockedRegion locker(&gSamplePointsLock);
+  return gSamplePoints[type_id];
 }
 
 // Try to change what proxy memory address gets sampled.
 static void ChangeSampleSource(int) {
-  for (int num_attempts = NUM_SAMPLE_SOURCES; num_attempts-- > 0; ) {
-    auto type_id = gCurrSourceTypeId++ % NUM_SAMPLE_SOURCES;
-    if (auto addr = GetSampleAddress(type_id)) {
-      granary_gdb_event1(addr);
+  for (int num_attempts = kNumSamplePoints; num_attempts-- > 0; ) {
+    auto type_id = gCurrSourceTypeId++ % kNumSamplePoints;
+    if (auto sample = GetSampleAddress(type_id)) {
+      os::Log("Sample!\n");
+      granary_gdb_event1(reinterpret_cast<uintptr_t>(sample));
       break;
     }
   }
@@ -229,7 +140,7 @@ class DataReactor : public InstrumentationTool {
   virtual ~DataReactor(void) = default;
 
   virtual void Init(InitReason) {
-    InitShadowMemory();
+    AddShadowStructure<SamplePoint>(AccessProxyMem);
 
     // Wrap libc.
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
@@ -251,89 +162,24 @@ class DataReactor : public InstrumentationTool {
     InitSampler();
   }
 
+ private:
   // Implements the actual touching (reading or writing) of shadow memory.
-  void TouchShadow(NativeInstruction *instr, const MemoryOperand &mloc,
-                   lir::InlineAssembly &asm_) {
-    if (mloc.IsReadWrite()) {
-      asm_.InlineBefore(instr, "AND m8 GS:[%2], i8 0;");
-    } else if (mloc.IsWrite()) {
-      asm_.InlineBefore(instr, "MOV m8 GS:[%2], i8 0;");
+  static void AccessProxyMem(const ShadowedOperand &op) {
+    lir::InlineAssembly asm_(op.shadow_addr_op);
+    if (op.native_mem_op.IsReadWrite()) {
+      asm_.InlineBefore(op.instr, "AND m8 [%0], i8 0;");
+    } else if (op.native_mem_op.IsWrite()) {
+      asm_.InlineBefore(op.instr, "MOV m8 [%0], i8 0;");
     } else {
-      asm_.InlineBefore(instr, "TEST m8 GS:[%2], i8 0;");
-    }
-  }
-
-  // Instrument a memory operand that accesses some absolute memory address.
-  void InstrumentAddrMemOp(NativeInstruction *instr, const MemoryOperand &mloc,
-                           const void *addr) {
-    auto ptr = reinterpret_cast<uintptr_t>(addr);
-#ifdef GRANARY_WHERE_user
-    // A kernel pointer from the vdso.
-    if (GRANARY_UNLIKELY(ptr >= 0xFFFFFFFFFFFFULL)) {
-      ptr &= 0xFFFFFFFFULL;
-    }
-#endif
-    ImmediateOperand shadow_offset(ptr >> gShiftAmountLong);
-    lir::InlineAssembly asm_(shadow_offset);
-    asm_.InlineBefore(instr, "MOV r64 %2, i64 %0;");
-    TouchShadow(instr, mloc, asm_);
-  }
-
-  // Instrument a memory operand that accesses some memory address through a
-  // register.
-  void InstrumentRegMemOp(NativeInstruction *instr, const MemoryOperand &mloc,
-                          VirtualRegister addr) {
-    RegisterOperand reg(addr);
-    ImmediateOperand shift(gShiftAmount);
-    lir::InlineAssembly asm_(reg, shift);
-    asm_.InlineBefore(instr, "MOV r64 %2, r64 %0;"
-                             "SHR r64 %2, i8 %1;");
-    TouchShadow(instr, mloc, asm_);
-  }
-
-  void InstrumentMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
-    // Doesn't read from or write to memory.
-    if (mloc.IsEffectiveAddress()) return;
-
-    // Reads or writes from an absolute address, not through a register.
-    VirtualRegister addr_reg;
-    const void *addr_ptr(nullptr);
-
-    if (mloc.MatchRegister(addr_reg)) {
-
-      // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
-      if (!addr_reg.IsGeneralPurpose()) return;
-      if (addr_reg.IsVirtualStackPointer()) return;
-      if (addr_reg.IsSegmentOffset()) return;
-
-      InstrumentRegMemOp(instr, mloc, addr_reg);
-
-    } else if (mloc.MatchPointer(addr_ptr)) {
-      InstrumentAddrMemOp(instr, mloc, addr_ptr);
-
-    } else if (mloc.IsCompound()) {
-      // TODO(pag): Implement me!
-    }
-  }
-
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
-    MemoryOperand mloc1, mloc2;
-    for (auto instr : bb->AppInstructions()) {
-      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
-                                                     ReadOrWriteTo(mloc2));
-      if (2 == num_matched) {
-        InstrumentMemOp(instr, mloc1);
-        InstrumentMemOp(instr, mloc2);
-      } else if (1 == num_matched) {
-        InstrumentMemOp(instr, mloc1);
-      }
+      asm_.InlineBefore(op.instr, "TEST m8 [%0], i8 0;");
     }
   }
 };
 
 // Initialize the `data_reactor` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DataReactor>("data_reactor", {"gdb", "wrap_func"});
+  AddInstrumentationTool<DataReactor>(
+      "data_reactor", {"gdb", "wrap_func", "shadow_memory"});
 }
 
 #endif  // GRANARY_WHERE_user

@@ -1,14 +1,14 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef CLIENTS_SHADOW_MEMORY_SHADOW_MEMORY_H_
-#define CLIENTS_SHADOW_MEMORY_SHADOW_MEMORY_H_
+#ifndef CLIENTS_SHADOW_MEMORY_CLIENT_H_
+#define CLIENTS_SHADOW_MEMORY_CLIENT_H_
 
 #include <granary.h>
 
 // Forward declaration.
 class DirectMappedShadowMemory;
 
-class DirectShadowedOperand {
+class ShadowedOperand {
  public:
   granary::DecodedBasicBlock * const block;
 
@@ -28,11 +28,11 @@ class DirectShadowedOperand {
  protected:
   friend class DirectMappedShadowMemory;
 
-  inline DirectShadowedOperand(granary::DecodedBasicBlock *block_,
-                               granary::NativeInstruction *instr_,
-                               const granary::MemoryOperand &native_mem_op_,
-                               const granary::RegisterOperand &shadow_addr_op_,
-                               const granary::RegisterOperand &native_addr_op_)
+  inline ShadowedOperand(granary::DecodedBasicBlock *block_,
+                         granary::NativeInstruction *instr_,
+                         const granary::MemoryOperand &native_mem_op_,
+                         const granary::RegisterOperand &shadow_addr_op_,
+                         const granary::RegisterOperand &native_addr_op_)
       : block(block_),
         instr(instr_),
         native_mem_op(native_mem_op_),
@@ -40,17 +40,18 @@ class DirectShadowedOperand {
         native_addr_op(native_addr_op_) {}
 
  private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectShadowedOperand);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ShadowedOperand);
 };
 
 // Represents a description of a shadow memory structure.
 class ShadowStructureDescription {
  public:
   ShadowStructureDescription *next;
-  void (*instrumenter)(const DirectShadowedOperand &);
+  void (*instrumenter)(const ShadowedOperand &);
   size_t offset;
   const size_t size;
   const size_t align;
+  bool is_registered;
 };
 
 // Used to initialize and get a description for some structure to be stored
@@ -74,19 +75,34 @@ ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
   nullptr,
   0,
   sizeof(T),
-  alignof(T)
+  alignof(T),
+  false
 };
 
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const DirectShadowedOperand &));
+                        void (*instrumenter)(const ShadowedOperand &));
+
+// Returns the address of the shadow memory descriptor.
+template <typename T>
+inline static ShadowStructureDescription *ShadowDescription(void) {
+  return &(GetShadowStructureDescription<T>::kDescription);
+}
 
 template <typename T>
 inline static void AddShadowStructure(
-    void (*instrumenter)(const DirectShadowedOperand &)) {
-  AddShadowStructure(&(GetShadowStructureDescription<T>::kDescription),
-                     instrumenter);
+    void (*instrumenter)(const ShadowedOperand &)) {
+  AddShadowStructure(ShadowDescription<T>(), instrumenter);
 }
 
-#endif  // CLIENTS_SHADOW_MEMORY_SHADOW_MEMORY_H_
+// Returns the address of some shadow object.
+uintptr_t ShadowOf(const ShadowStructureDescription *desc, uintptr_t addr);
+
+template <typename ShadowT, typename AddrT>
+inline static ShadowT *ShadowOf(AddrT *ptr) {
+  return reinterpret_cast<ShadowT *>(ShadowOf(
+      ShadowDescription<ShadowT>(), reinterpret_cast<uintptr_t>(ptr)));
+}
+
+#endif  // CLIENTS_SHADOW_MEMORY_CLIENT_H_

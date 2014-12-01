@@ -6,7 +6,7 @@
 #include <granary.h>
 
 enum {
-  MAX_TYPE_ID = std::numeric_limits<uint16_t>::max() >> 1U
+  kMaxWatchpointTypeId = std::numeric_limits<uint16_t>::max() >> 1U
 };
 
 // Returns the type id for some `(return address, allocation size)` pair.

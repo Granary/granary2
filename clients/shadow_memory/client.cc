@@ -4,7 +4,7 @@
 
 #include <granary.h>
 
-#include "clients/shadow_memory/shadow_memory.h"
+#include "clients/shadow_memory/client.h"
 
 GRANARY_USING_NAMESPACE granary;
 
@@ -74,6 +74,7 @@ class DirectMappedShadowMemory : public InstrumentationTool {
       gDescriptions = desc->next;
       desc->next = nullptr;
       desc->instrumenter = nullptr;
+      desc->is_registered = false;
     }
     gNextDescription = &gDescriptions;
     gUnalignedSize = 0;
@@ -145,9 +146,10 @@ class DirectMappedShadowMemory : public InstrumentationTool {
 
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
+    ImmediateOperand shadow_base(gShadowMem);
     ImmediateOperand native_addr(ptr);
-    lir::InlineAssembly asm_(shift, scale, native_addr);
-    asm_.InlineBefore(instr, "MOV r64 %3, i64 %2;"_x86_64);
+    lir::InlineAssembly asm_(shift, scale, shadow_base, native_addr);
+    asm_.InlineBefore(instr, "MOV r64 %4, i64 %3;"_x86_64);
     InstrumentMemOp(bb, instr, mloc, asm_);
   }
 
@@ -160,7 +162,8 @@ class DirectMappedShadowMemory : public InstrumentationTool {
     RegisterOperand reg(addr);
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
-    lir::InlineAssembly asm_(shift, scale, reg, reg);
+    ImmediateOperand shadow_base(gShadowMem);
+    lir::InlineAssembly asm_(shift, scale, shadow_base, reg, reg);
     InstrumentMemOp(bb, instr, mloc, asm_);
   }
 
@@ -169,8 +172,9 @@ class DirectMappedShadowMemory : public InstrumentationTool {
                                       const MemoryOperand &mloc) {
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
-    lir::InlineAssembly asm_(shift, scale, mloc);
-    asm_.InlineBefore(instr, "LEA r64 %3, m64 %2;"_x86_64);
+    ImmediateOperand shadow_base(gShadowMem);
+    lir::InlineAssembly asm_(shift, scale, shadow_base, mloc);
+    asm_.InlineBefore(instr, "LEA r64 %4, m64 %3;"_x86_64);
     InstrumentMemOp(bb, instr, mloc, asm_);
   }
 
@@ -180,17 +184,20 @@ class DirectMappedShadowMemory : public InstrumentationTool {
   // For `asm_`:
   //      %0 is an i8 shift amount.
   //      %1 is an i8 scale amount.
-  //      %3 is an r64 native pointer.
+  //      %2 is an i64 containing the value of `gShadowMem`.
+  //      %4 is an r64 native pointer.
   static void InstrumentMemOp(DecodedBasicBlock *bb,
                               NativeInstruction *instr,
                               const MemoryOperand &mloc,
                               lir::InlineAssembly &asm_) {
-    asm_.InlineBefore(instr, "MOV r64 %4, r64 %3;"_x86_64);
-    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %4, i8 %0;"_x86_64);
-    asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %4, i8 %1;"_x86_64);
-
-    auto &native_addr_op(asm_.Register(bb, 3));
-    auto &shadow_addr_op(asm_.Register(bb, 4));
+    asm_.InlineBefore(instr, "MOV r64 %5, r64 %4;"_x86_64);
+    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %5, i8 %0;"_x86_64);
+    asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %5, i8 %1;"_x86_64);
+    asm_.InlineBefore(instr, "MOV r64 %6, i64 %2;"
+                             "MOV r32 %5, r32 %5;"
+                             "ADD r64 %6, r64 %5;"_x86_64);
+    auto &native_addr_op(asm_.Register(bb, 4));
+    auto &shadow_addr_op(asm_.Register(bb, 6));
 
     auto old_offset = 0UL;
     char adjust_shadow_offset[32];
@@ -199,10 +206,10 @@ class DirectMappedShadowMemory : public InstrumentationTool {
       // Move `%4` (the offset/pointer) to point to this description's
       // structure.
       if (auto offset_diff = desc->offset - old_offset) {
-        Format(adjust_shadow_offset, "ADD r64 %%4, i8 %lu;", offset_diff);
+        Format(adjust_shadow_offset, "ADD r64 %%6, i8 %lu;", offset_diff);
         asm_.InlineBefore(instr, adjust_shadow_offset);
       }
-      DirectShadowedOperand op(bb, instr, mloc, shadow_addr_op, native_addr_op);
+      ShadowedOperand op(bb, instr, mloc, shadow_addr_op, native_addr_op);
       desc->instrumenter(op);
     }
   }
@@ -234,12 +241,13 @@ class DirectMappedShadowMemory : public InstrumentationTool {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const DirectShadowedOperand &)) {
+                        void (*instrumenter)(const ShadowedOperand &)) {
   GRANARY_ASSERT(!gShadowMem);
   GRANARY_ASSERT(!desc->next);
   GRANARY_ASSERT(!desc->instrumenter);
 
   desc->instrumenter = instrumenter;
+  desc->is_registered = true;
 
   *gNextDescription = desc;
   gNextDescription = &(desc->next);
@@ -262,7 +270,6 @@ void AddShadowStructure(ShadowStructureDescription *desc,
     GRANARY_ASSERT(gAlignedSize >= gUnalignedSize);
   }
   gScaleAmount = static_cast<uint8_t>(gScaleAmountLong);
-  GRANARY_ASSERT(0 != gScaleAmount);
 
   // Scale the size of shadow memory based on the new shadow unit size.
   gShadowMemSize = kAddressSpaceSize >> gShiftAmountLong;
@@ -271,7 +278,17 @@ void AddShadowStructure(ShadowStructureDescription *desc,
   gShadowMemNumPages = gShadowMemSize / arch::PAGE_SIZE_BYTES;
 }
 
-// Add the `direct_shadow_memory` tool.
+// Returns the address of some shadow object.
+uintptr_t ShadowOf(const ShadowStructureDescription *desc, uintptr_t addr) {
+  GRANARY_ASSERT(desc->is_registered);
+  GRANARY_ASSERT(nullptr != gShadowMem);
+  addr >>= gShiftAmountLong;
+  addr <<= gScaleAmountLong;
+  addr &= 0xFFFFFFFFUL;
+  return reinterpret_cast<uintptr_t>(gShadowMem) + addr + desc->offset;
+}
+
+// Add the `shadow_memory` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DirectMappedShadowMemory>("direct_shadow_memory");
+  AddInstrumentationTool<DirectMappedShadowMemory>("shadow_memory");
 }

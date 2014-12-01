@@ -5,9 +5,8 @@
 GRANARY_USING_NAMESPACE granary;
 
 namespace {
-
 enum {
-  MAX_SET_BIT = 31
+  kMaxSetBit = 31
 };
 
 // Uses a combination of (return address, log2 size) to identify a type.
@@ -23,13 +22,13 @@ static_assert(2 * sizeof(uint64_t) == sizeof(Type),
     "Invalid structure packing for type `struct Type`.");
 
 // Array of types for serving type allocations.
-Type types[MAX_TYPE_ID + 1];
+Type types[kMaxWatchpointTypeId + 1];
 
 // Array of `Type` lists, with locks protecting each list.
 struct TypeList {
   ReaderWriterLock types_lock;
   const Type *types;
-} sizes[MAX_SET_BIT + 1];
+} sizes[kMaxSetBit + 1];
 
 // Search the type lists for the matching type.
 static const Type *FindType(TypeList *ls, uint64_t ret_address_) {
@@ -48,7 +47,7 @@ static std::atomic<uint64_t> gNextTypeId = ATOMIC_VAR_INIT(0);
 // Allocate a new type id.
 static uint64_t AllocateTypeId(void) {
   auto id = gNextTypeId.fetch_add(1);
-  GRANARY_ASSERT(MAX_TYPE_ID >= id);
+  GRANARY_ASSERT(kMaxWatchpointTypeId >= id);
   return id;
 }
 
