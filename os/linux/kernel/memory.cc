@@ -24,25 +24,26 @@ namespace os {
 
 namespace {
 enum {
-  NUM_RW_PAGES = 4096,  // 16 MB.
-  BLOCK_NUM_PAGES = 2048,  // 8 MB.
-  BLOCK_NUM_BYTES = BLOCK_NUM_PAGES * arch::PAGE_SIZE_BYTES,
-  EDGE_NUM_PAGES = 512,  // 2 MB.
-  EDGE_NUM_BYTES = BLOCK_NUM_PAGES * arch::PAGE_SIZE_BYTES,
-  MODULE_ALLOC_SIZE = (BLOCK_NUM_PAGES + EDGE_NUM_PAGES) * arch::PAGE_SIZE_BYTES
+  kHeapNumPages = 4096,  // 16 MB.
+  kBlockCacheNumPages = 2048,  // 8 MB.
+  kBlockCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,
+  kEdgeCacheNumPages = 512,  // 2 MB.
+  kEdgeCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,
+  kCodeCacheNumBytes = kBlockCacheNumBytes + kEdgeCacheNumBytes
 };
-static Container<StaticHeap<NUM_RW_PAGES>> rw_memory GRANARY_UNPROTECTED_GLOBAL;
-static Container<DynamicHeap<BLOCK_NUM_PAGES>> block_memory;
-static Container<DynamicHeap<EDGE_NUM_PAGES>> edge_memory;
+static Container<StaticHeap<kHeapNumPages>> rw_memory \
+    GRANARY_UNPROTECTED_GLOBAL;
+static Container<DynamicHeap<kBlockCacheNumPages>> block_memory;
+static Container<DynamicHeap<kEdgeCacheNumPages>> edge_memory;
 }  // namespace
 
 // Initialize the Granary heap.
 void InitHeap(void) {
   if (granary_block_cache_begin) return;
-  granary_block_cache_begin = linux_module_alloc(MODULE_ALLOC_SIZE);
-  granary_block_cache_end = granary_block_cache_begin + BLOCK_NUM_BYTES;
+  granary_block_cache_begin = linux_module_alloc(kCodeCacheNumBytes);
+  granary_block_cache_end = granary_block_cache_begin + kBlockCacheNumBytes;
   granary_edge_cache_begin = granary_block_cache_end;
-  granary_edge_cache_end = granary_edge_cache_begin + EDGE_NUM_BYTES;
+  granary_edge_cache_end = granary_edge_cache_begin + kEdgeCacheNumBytes;
 
   rw_memory.Construct();
   block_memory.Construct(granary_block_cache_begin);

@@ -23,7 +23,7 @@ enum : uint64_t {
   //            ideally be much smaller (on the order of a few hundred
   //            megabytes, and probably only going into the gigabyte range if
   //            the buffer cache is heavily used).
-  kAddressSpaceSize = 1ULL << 47U,
+  kAddressSpaceSize = 1ULL << 47UL
 };
 
 typedef LinkedListIterator<ShadowStructureDescription> ShadowStructureIterator;
@@ -192,9 +192,16 @@ class DirectMappedShadowMemory : public InstrumentationTool {
                               lir::InlineAssembly &asm_) {
     asm_.InlineBefore(instr, "MOV r64 %5, r64 %4;"_x86_64);
     asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %5, i8 %0;"_x86_64);
+
+    // Convert `%5` to a 32-bit offset, as we only keep the low 32-significant
+    // bits of the shifted address for shadowing (see the computation of
+    // `kShadowMemSize`).
+    asm_.InlineBefore(instr, "MOV r32 %5, r32 %5;"_x86_64);
+
     asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %5, i8 %1;"_x86_64);
+
+
     asm_.InlineBefore(instr, "MOV r64 %6, i64 %2;"
-                             "MOV r32 %5, r32 %5;"
                              "ADD r64 %6, r64 %5;"_x86_64);
     auto &native_addr_op(asm_.Register(bb, 4));
     auto &shadow_addr_op(asm_.Register(bb, 6));
@@ -273,6 +280,7 @@ void AddShadowStructure(ShadowStructureDescription *desc,
 
   // Scale the size of shadow memory based on the new shadow unit size.
   gShadowMemSize = kAddressSpaceSize >> gShiftAmountLong;
+  gShadowMemSize &= 0xFFFFFFFFULL;  // Keep only 32-bits of significance.
   gShadowMemSize *= gAlignedSize;
   gShadowMemSize = GRANARY_ALIGN_TO(gShadowMemSize, arch::PAGE_SIZE_BYTES);
   gShadowMemNumPages = gShadowMemSize / arch::PAGE_SIZE_BYTES;

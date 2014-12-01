@@ -1,6 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 // TODO(pag): Issue #1: Refactor this code to use an output stream.
+#include "generated/linux_user/types.h"
 
 #define GRANARY_INTERNAL
 
@@ -22,19 +23,12 @@ GRANARY_DEFINE_string(debug_log_file, "/dev/stderr",
 
 extern "C" {
 
-#define O_WRONLY  01
-#define O_CREAT   0100
-#define O_APPEND  02000
-
-extern int open(const char *filename, int flags, int);
-extern long long write(int __fd, const void *__buf, size_t __n);
-
 enum {
-  LOG_BUFFER_SIZE = 32768 << 5,
-  LOG_BUFFER_SAFE_SIZE = LOG_BUFFER_SIZE - 4096
+  kLogBufferSize = 32768 << 5,
+  kLogBufferSafeSize = kLogBufferSize - 4096
 };
 
-char granary_log_buffer[LOG_BUFFER_SIZE] = {'\0'};
+char granary_log_buffer[kLogBufferSize] = {'\0'};
 unsigned long granary_log_buffer_index = 0;
 
 }  // extern C
@@ -81,7 +75,7 @@ int Log(LogLevel level, const char *format, ...) {
 
   // Flush the buffer.
   if (granary_log_buffer_index &&
-      (granary_log_buffer_index >= LOG_BUFFER_SAFE_SIZE || log_buffer_fd != fd)) {
+      (granary_log_buffer_index >= kLogBufferSafeSize || log_buffer_fd != fd)) {
     write(fd, granary_log_buffer, granary_log_buffer_index);
     granary_log_buffer_index = 0;
     granary_log_buffer[0] = '\0';

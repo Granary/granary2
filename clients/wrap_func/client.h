@@ -5,7 +5,7 @@
 
 #include <granary.h>
 
-enum WrapperAction {
+enum FunctionWrapperAction {
   // Replace a function-to-be-wrapped with the wrapper itself.
   REPLACE_WRAPPED_FUNCTION,
 
@@ -42,7 +42,7 @@ struct FunctionWrapper {
 
   // How should we handle the function being wrapped? Do we replace it,
   // pass it through (uninstrumented), or pass it through instrumented?
-  const WrapperAction action;
+  const FunctionWrapperAction action;
 };
 
 // Register a function wrapper with the wrapper tool.

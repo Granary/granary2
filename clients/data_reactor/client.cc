@@ -15,20 +15,25 @@
 GRANARY_USING_NAMESPACE granary;
 
 namespace {
-
-enum : uint64_t {
+enum : size_t {
+  kStackSize = arch::PAGE_SIZE_BYTES * 4,
   kNumSamplePoints = kMaxWatchpointTypeId + 1
 };
 
-// Proxy memory data structure.
 struct SamplePoint {};
+
+// The stack on which the monitor thread executes.
+alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
 // Set of all addresses that can be sampled.
 static SamplePoint *gSamplePoints[kNumSamplePoints] = {nullptr};
 static SpinLock gSamplePointsLock;
 
+// Current type ID being sampled.
+static auto gCurrSourceTypeId = 0UL;
+
 // Add an address for sampling.
-static void AddSampleAddress(uintptr_t type_id, void *addr) {
+static void AddSamplePoint(uintptr_t type_id, void *addr) {
   SpinLockedRegion locker(&gSamplePointsLock);
   gSamplePoints[type_id] = ShadowOf<SamplePoint>(addr);
 }
@@ -40,7 +45,7 @@ static void AddSampleAddress(uintptr_t type_id, void *addr) {
 #define SAMPLE_AND_RETURN_ADDRESS \
   if (addr) { \
     auto type_id = TypeIdFor(ret_address, size); \
-    AddSampleAddress(type_id, addr); \
+    AddSamplePoint(type_id, addr); \
   } \
   return addr
 
@@ -90,7 +95,7 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
   auto ret = posix_memalign(addr_ptr, align, size);
   if (!ret) {
     auto type_id = TypeIdFor(ret_address, size);
-    AddSampleAddress(type_id, *addr_ptr);
+    AddSamplePoint(type_id, *addr_ptr);
   }
   return ret;
 }
@@ -98,8 +103,10 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 // TODO(pag): Don't handle `realloc` at the moment because we have no idea what
 //            type id it should be associated with.
 
-static auto gCurrSourceTypeId = 0UL;
 
+
+
+// Get the sample point for some type ID.
 static SamplePoint *GetSampleAddress(uintptr_t type_id) {
   SpinLockedRegion locker(&gSamplePointsLock);
   return gSamplePoints[type_id];
@@ -110,8 +117,7 @@ static void ChangeSampleSource(int) {
   for (int num_attempts = kNumSamplePoints; num_attempts-- > 0; ) {
     auto type_id = gCurrSourceTypeId++ % kNumSamplePoints;
     if (auto sample = GetSampleAddress(type_id)) {
-      os::Log("Sample!\n");
-      granary_gdb_event1(reinterpret_cast<uintptr_t>(sample));
+      os::Log("Sampling %p!\n", sample);
       break;
     }
   }
@@ -130,6 +136,22 @@ static void InitSampler(void) {
                                               _NSIG / 8);
   GRANARY_ASSERT(!ret);
   alarm(1);
+}
+
+// Initialize the monitoring process for DataReactor. This allows us to set
+// hardware watchpoints.
+static void InitMonitor(void) {
+  unsigned long flags = CLONE_VM | CLONE_FILES;
+  auto pid = getpid();
+  auto tid = sys_clone(flags, &(gMonitorStack[kStackSize]), 0, 0, 0);
+  GRANARY_ASSERT(0 <= tid);
+  if (!tid) {
+    sleep(1);
+    os::Log("In child thread!\n");
+    InitSampler();
+  } else {
+    os::Log("In parent thread %d; child is %d!\n", pid, tid);
+  }
 }
 
 }  // namespace
@@ -159,7 +181,7 @@ class DataReactor : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
-    InitSampler();
+    InitMonitor();
   }
 
  private:

@@ -14,7 +14,7 @@ GRANARY_SCAN_BUILD ?= 0
 
 GRANARY_ARCH ?= x86-64
 GRANARY_OS ?= linux
-GRANARY_TARGET ?= debug# release, debug, test
+GRANARY_TARGET ?= debug# release, opt, debug, test
 GRANARY_WHERE ?= user# user, kernel
 GRANARY_TRIPLE := $(GRANARY_TARGET)_$(GRANARY_OS)_$(GRANARY_WHERE)
 GRANARY_DOUBLE := $(GRANARY_OS)_$(GRANARY_WHERE)
@@ -149,6 +149,7 @@ endif
 
 GRANARY_HEADER_MACRO_DEFS += $(GRANARY_COMMON_MACROS)
 GRANARY_COMMON_FLAGS += $(GRANARY_COMMON_MACROS)
+GRANARY_LD_FLAGS_LATE += "-Wl,-g" $(GRANARY_DEBUG_FLAGS)
 
 # Get the opposite of the where-directory.
 ifeq (kernel,$(GRANARY_WHERE))
@@ -160,14 +161,16 @@ endif
 
 # Enable/disable features based on whether or not this is a debug or release
 # build.
+GRANARY_OPT_FLAGS = -O0
 ifeq (release,$(GRANARY_TARGET))  # release
-	GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-else  # debug, test
-	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS_LATE += "-Wl,-g" $(GRANARY_DEBUG_FLAGS)
+	GRANARY_OPT_FLAGS = -O3
 endif
+ifeq (opt,$(GRANARY_TARGET))  # opt
+	GRANARY_OPT_FLAGS = -O3
+endif
+
+GRANARY_COMMON_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
+GRANARY_LD_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
 
 # Make sure certain architectural features are disabled.
 GRANARY_COMMON_ARCH_FLAGS += -fno-common -fno-builtin

@@ -63,6 +63,7 @@ where_common: build_driver build_arch build_dbt build_os build_clients
 # Target-specific.
 target_debug: where_common
 target_release: where_common
+target_opt: where_common
 target_test: where_common
 	@mkdir -p $(GRANARY_TEST_BIN_DIR)
 	@mkdir -p $(GRANARY_GTEST_BIN_DIR)

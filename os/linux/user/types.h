@@ -5,6 +5,10 @@
 
 #define __restrict
 
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
+
 #include <fcntl.h>
 
 #include <stddef.h>
@@ -44,8 +48,6 @@
 
 #include <linux/futex.h>
 
-extern int arch_prctl(int option, ...);
-
 
 #ifndef HAVE_SA_RESTORER
 # define HAVE_SA_RESTORER
@@ -75,6 +77,12 @@ extern int rt_sigaction(int sig, const struct kernel_sigaction *new_act,
                         struct kernel_sigaction *old_act, size_t sigsetsize);
 
 extern void rt_sigreturn(void);
+
+// Raw clone system call.
+extern long sys_clone(unsigned long clone_flags, char *newsp,
+                      int *parent_tidptr, int *child_tidptr, int tls_val);
+
+extern int arch_prctl(int option, ...);
 
 #undef __restrict
 
