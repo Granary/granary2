@@ -46,6 +46,7 @@ EXPORT_HEADERS = [
   "os/abi.h",
   "os/logging.h",
   "os/module.h",
+  "os/lock.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")

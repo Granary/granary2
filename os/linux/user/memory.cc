@@ -20,6 +20,8 @@ char *granary_block_cache_begin = nullptr;
 char *granary_block_cache_end = nullptr;
 char *granary_edge_cache_begin = nullptr;
 char *granary_edge_cache_end = nullptr;
+void *granary_heap_begin = nullptr;
+void *granary_heap_end = nullptr;
 
 }  // extern C
 namespace granary {
@@ -27,68 +29,73 @@ namespace os {
 namespace {
 
 enum : size_t {
-  kBlockCacheNumPages = 10240UL,
-  kBlockCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,  // 40mb
-  kEdgeCacheNumPages = 2560,
-  kEdgeCacheNumBytes = kEdgeCacheNumPages * arch::PAGE_SIZE_BYTES,  // 10mb
-  kCodeCacheNumBytes = kBlockCacheNumBytes + kEdgeCacheNumBytes
+  kBlockCacheNumPages = 10240UL,  // 40mb
+  kBlockCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,
+  kEdgeCacheNumPages = 2560,  // 10mb
+  kEdgeCacheNumBytes = kEdgeCacheNumPages * arch::PAGE_SIZE_BYTES,
+  kCodeCacheNumBytes = kBlockCacheNumBytes + kEdgeCacheNumBytes,
+  kHeapNumPages = 40960UL,  // 160mb
+  kHeapNumBytes = kHeapNumPages * arch::PAGE_SIZE_BYTES,
+  kMmapNumBytes = kCodeCacheNumBytes + kHeapNumBytes
 };
 
 // Slab allocators for block and edge cache code.
 static Container<DynamicHeap<kBlockCacheNumPages>> block_memory;
 static Container<DynamicHeap<kEdgeCacheNumPages>> edge_memory;
+static Container<DynamicHeap<kHeapNumPages>> heap_memory;
 
 }  // namespace
 
 // Initialize the Granary heap.
 void InitHeap(void) {
-  auto prot = PROT_EXEC | PROT_READ | PROT_WRITE;
-  auto flags = MAP_PRIVATE | MAP_ANONYMOUS;
+  auto all_mem = mmap(nullptr, kMmapNumBytes, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+
+  mprotect(all_mem, kCodeCacheNumBytes, PROT_EXEC | PROT_READ | PROT_WRITE);
 
   // Initialize the block code cache.
-  granary_block_cache_begin = reinterpret_cast<char *>(
-      mmap(nullptr, kCodeCacheNumBytes, prot, flags, -1, 0));
+  granary_block_cache_begin = reinterpret_cast<char *>(all_mem);
   granary_block_cache_end = granary_block_cache_begin + kBlockCacheNumBytes;
 
   // Initialize the edge code cache.
   granary_edge_cache_begin = granary_block_cache_end;
   granary_edge_cache_end = granary_edge_cache_begin + kEdgeCacheNumBytes;
 
+  granary_heap_begin = granary_block_cache_begin + kCodeCacheNumBytes;
+  granary_heap_end = granary_block_cache_begin + kMmapNumBytes;
+
   block_memory.Construct(granary_block_cache_begin);
   edge_memory.Construct(granary_edge_cache_begin);
+  heap_memory.Construct(granary_heap_begin);
 }
 
 // Destroys the Granary heap.
 void ExitHeap(void) {
   block_memory.Destroy();
   edge_memory.Destroy();
+  heap_memory.Destroy();
 
-  munmap(granary_block_cache_begin, kCodeCacheNumBytes);
+  munmap(granary_block_cache_begin, kMmapNumBytes);
 
   granary_block_cache_begin = nullptr;
   granary_block_cache_end = nullptr;
 
   granary_edge_cache_begin = nullptr;
   granary_edge_cache_end = nullptr;
+
+  granary_heap_begin = nullptr;
+  granary_heap_end = nullptr;
 }
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocateDataPages(size_t num) {
-  auto prot = PROT_READ | PROT_WRITE;
-  auto flags = MAP_PRIVATE | MAP_ANONYMOUS;
-  for (auto num_tries = 0; num_tries < 3; ++num_tries) {
-    auto ret = mmap(nullptr, arch::PAGE_SIZE_BYTES * num, prot, flags, -1, 0);
-    if (reinterpret_cast<void *>(-1LL) == ret) continue;
-    return ret;
-  }
-  GRANARY_ASSERT(false);
-  return nullptr;
+  return heap_memory->AllocatePages(num);
 }
 
 // Frees `num` pages back to the OS.
 void FreeDataPages(void *addr, size_t num) {
-  munmap(addr, arch::PAGE_SIZE_BYTES * num);
+  heap_memory->FreePages(addr, num);
 }
 
 // Allocates `num` number of executable pages from the block code cache.

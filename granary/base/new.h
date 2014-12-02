@@ -82,7 +82,7 @@ class SlabList {
 };
 
 enum {
-  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 8,
+  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 2,
   SLAB_ALLOCATOR_SLAB_SIZE_BYTES = arch::PAGE_SIZE_BYTES *
                                    SLAB_ALLOCATOR_SLAB_SIZE_PAGES
 };

@@ -25,6 +25,8 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/msg.h>
+#include <sys/ptrace.h>
+#include <sys/reg.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/sem.h>
@@ -37,6 +39,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <sys/user.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 
@@ -48,6 +51,7 @@
 #include <time.h>
 
 #include <linux/futex.h>
+
 
 
 #ifndef HAVE_SA_RESTORER

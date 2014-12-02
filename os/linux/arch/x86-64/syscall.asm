@@ -144,6 +144,13 @@ DEFINE_FUNC(sigaltstack)
     ret
 END_FUNC(sigaltstack)
 
+DEFINE_FUNC(prctl)
+  mov     r10, rcx  // arg4, `arg4`.
+  mov     eax, 157  // `__NR_prctl`.
+  syscall
+  ret
+END_FUNC(prctl)
+
 DEFINE_FUNC(arch_prctl)
     mov     eax, 158  // `__NR_arch_prctl`.
     syscall
@@ -163,6 +170,19 @@ DEFINE_FUNC(sys_futex)
     syscall
     ret
 END_FUNC(sys_futex)
+
+DEFINE_FUNC(ptrace)
+    mov     r10, rcx  // arg4, `data`.
+    mov     eax, 101  // `__NR_ptrace`.
+    syscall
+    ret
+END_FUNC(ptrace)
+
+DEFINE_FUNC(kill)
+    mov     eax, 62  // `__NR_kill`.
+    syscall
+    ret
+END_FUNC(ptrace)
 
 DEFINE_FUNC(nanosleep)
     mov     eax, 35  // `__NR_nanosleep`.
