@@ -14,9 +14,19 @@
 
 GRANARY_USING_NAMESPACE granary;
 
+GRANARY_DEFINE_positive_int(sample_rate, 10,
+    "Defines the rate, in milliseconds, at which DataReactor changes its "
+    "sample points. The default value is `10`, representing `10ms`.\n"
+    "\n"
+    "Note: This value is approximate, in that we do not guarantee that\n"
+    "      sampling will indeed occur every N ms, but rather, approximately\n"
+    "      every N ms, given a fair scheduler.",
+
+    "data_reactor");
+
 namespace {
 enum : size_t {
-  kStackSize = arch::PAGE_SIZE_BYTES * 4,
+  kStackSize = arch::PAGE_SIZE_BYTES * 8,
   kNumSamplePoints = kMaxWatchpointTypeId + 1
 };
 
@@ -103,55 +113,40 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 // TODO(pag): Don't handle `realloc` at the moment because we have no idea what
 //            type id it should be associated with.
 
+static pid_t gProgramPid;
 
-
-
-// Get the sample point for some type ID.
-static SamplePoint *GetSampleAddress(uintptr_t type_id) {
-  SpinLockedRegion locker(&gSamplePointsLock);
-  return gSamplePoints[type_id];
-}
-
-// Try to change what proxy memory address gets sampled.
-static void ChangeSampleSource(int) {
+// Get the next sample point to return.
+static SamplePoint *NextSamplePoint(void) {
   for (int num_attempts = kNumSamplePoints; num_attempts-- > 0; ) {
     auto type_id = gCurrSourceTypeId++ % kNumSamplePoints;
-    if (auto sample = GetSampleAddress(type_id)) {
-      os::Log("Sampling %p!\n", sample);
-      break;
+    SpinLockedRegion locker(&gSamplePointsLock);
+    if (auto sample = gSamplePoints[type_id]) {
+      return sample;
     }
   }
-  alarm(1);
+  return nullptr;
 }
 
-// Add a `SIGALRM` handler, then start an alarm.
-static void InitSampler(void) {
-  struct kernel_sigaction sig;
-  memset(&sig, 0, sizeof sig);
-  memset(&(sig.sa_mask), 0xFF, sizeof sig.sa_mask);
-  sig.k_sa_handler = &ChangeSampleSource;
-  sig.sa_restorer = &rt_sigreturn;
-  sig.sa_flags = SA_INTERRUPT | SA_RESTORER | SA_RESTART;
-  GRANARY_IF_DEBUG( auto ret = ) rt_sigaction(SIGALRM, &sig, nullptr,
-                                              _NSIG / 8);
-  GRANARY_ASSERT(!ret);
-  alarm(1);
+// Monitor thread changes the sample point every FLAG_sample_rate milliseconds.
+static void Monitor(void) {
+  const timespec sample_10ms = {0, FLAG_sample_rate * 1000000L};
+  for (SamplePoint *last_sample(nullptr);;) {
+    nanosleep(&sample_10ms, nullptr);
+    if (auto sample = NextSamplePoint()) {
+      if (sample == last_sample) continue;
+      last_sample = sample;
+    }
+  }
 }
 
 // Initialize the monitoring process for DataReactor. This allows us to set
 // hardware watchpoints.
 static void InitMonitor(void) {
-  unsigned long flags = CLONE_VM | CLONE_FILES;
-  auto pid = getpid();
-  auto tid = sys_clone(flags, &(gMonitorStack[kStackSize]), 0, 0, 0);
-  GRANARY_ASSERT(0 <= tid);
-  if (!tid) {
-    sleep(1);
-    os::Log("In child thread!\n");
-    InitSampler();
-  } else {
-    os::Log("In parent thread %d; child is %d!\n", pid, tid);
-  }
+  unsigned long flags = CLONE_VM | CLONE_FILES | CLONE_THREAD | CLONE_UNTRACED;
+  gProgramPid = getpid();
+  auto stack_ptr = &(gMonitorStack[kStackSize - arch::ADDRESS_WIDTH_BYTES]);
+  *UnsafeCast<void(**)(void)>(stack_ptr) = Monitor;
+  sys_clone(flags, stack_ptr, nullptr, nullptr, 0);
 }
 
 }  // namespace

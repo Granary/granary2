@@ -45,6 +45,7 @@
 #include <asm/unistd.h>
 
 #include <semaphore.h>
+#include <time.h>
 
 #include <linux/futex.h>
 

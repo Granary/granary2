@@ -23,7 +23,7 @@ enum : uint64_t {
   //            ideally be much smaller (on the order of a few hundred
   //            megabytes, and probably only going into the gigabyte range if
   //            the buffer cache is heavily used).
-  kAddressSpaceSize = 1ULL << 47UL
+  kUnscaledShadowMemSize = 1ULL << 32UL
 };
 
 typedef LinkedListIterator<ShadowStructureDescription> ShadowStructureIterator;
@@ -279,9 +279,7 @@ void AddShadowStructure(ShadowStructureDescription *desc,
   gScaleAmount = static_cast<uint8_t>(gScaleAmountLong);
 
   // Scale the size of shadow memory based on the new shadow unit size.
-  gShadowMemSize = kAddressSpaceSize >> gShiftAmountLong;
-  gShadowMemSize &= 0xFFFFFFFFULL;  // Keep only 32-bits of significance.
-  gShadowMemSize *= gAlignedSize;
+  gShadowMemSize = kUnscaledShadowMemSize * gAlignedSize;
   gShadowMemSize = GRANARY_ALIGN_TO(gShadowMemSize, arch::PAGE_SIZE_BYTES);
   gShadowMemNumPages = gShadowMemSize / arch::PAGE_SIZE_BYTES;
 }
