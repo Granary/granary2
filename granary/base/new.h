@@ -82,9 +82,9 @@ class SlabList {
 };
 
 enum {
-  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 2,
-  SLAB_ALLOCATOR_SLAB_SIZE_BYTES = arch::PAGE_SIZE_BYTES *
-                                   SLAB_ALLOCATOR_SLAB_SIZE_PAGES
+  kNewAllocatorNumPagesPerSlab = 2,
+  kNewAllocatorNumBytesPerSlab = arch::PAGE_SIZE_BYTES *
+                                 kNewAllocatorNumPagesPerSlab
 };
 
 // Simple, lock-free allocator. This allocator operates at a page granularity,
@@ -95,16 +95,14 @@ class SlabAllocator {
   SlabAllocator(size_t start_offset_, size_t max_offset_,
                 size_t allocation_size_, size_t object_size_);
 
+  ~SlabAllocator(void);
+
   void *Allocate(void);
   void Free(void *address);
-
-  // For those cases where a slab allocator is non-global.
-  void Destroy(void);
 
  private:
   void *AllocateFromFreeList(void);
 
-  const SlabList *AllocateSlab(const SlabList *next_slab);
   const SlabList *SlabForAllocation(void);
 
   size_t offset;
@@ -157,7 +155,7 @@ class OperatorNewAllocator {
     ALIGNED_SIZE = GRANARY_ALIGN_TO(sizeof(T), MINIMUM_ALIGNMENT),
     START_OFFSET = GRANARY_ALIGN_TO(sizeof(internal::SlabList),
                                     MINIMUM_ALIGNMENT),
-    NUM_OBJS_PER_SLAB = (internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES -
+    NUM_OBJS_PER_SLAB = (internal::kNewAllocatorNumBytesPerSlab -
                          START_OFFSET - (ALIGNED_SIZE - 1)) / ALIGNED_SIZE,
     END_OFFSET = START_OFFSET + (NUM_OBJS_PER_SLAB * ALIGNED_SIZE)
   };
@@ -168,7 +166,7 @@ class OperatorNewAllocator {
   static_assert(sizeof(T) <= ALIGNED_SIZE,
       "Error computing the aligned object size.");
 
-  static_assert(END_OFFSET <= internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES,
+  static_assert(END_OFFSET <= internal::kNewAllocatorNumBytesPerSlab,
       "Error computing the layout of meta-data and objects on page frames.");
 
   OperatorNewAllocator(void) = delete;

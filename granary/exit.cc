@@ -36,9 +36,9 @@ namespace {
 
 // Runs the constructors from the initialization array.
 void PostExit(void) {
-  auto init_func = granary_begin_fini_array;
-  for (; init_func < granary_end_fini_array; ++init_func) {
-    (*init_func)();
+  auto exit_func = granary_begin_fini_array;
+  for (; exit_func < granary_end_fini_array; ++exit_func) {
+    (*exit_func)();
   }
 }
 

@@ -161,7 +161,7 @@ class Operand {
   GRANARY_DECLARE_BASE_CLASS(Operand)
 
  GRANARY_PROTECTED:
-  GRANARY_CONST OpaqueContainer<arch::Operand, 16, 16> op;
+  GRANARY_CONST OpaqueContainer<arch::Operand, 32, 16> op;
 
   friend class OperandRef;
 

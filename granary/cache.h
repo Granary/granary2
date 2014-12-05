@@ -33,7 +33,7 @@ enum CodeCacheKind {
 class CodeCache {
  public:
   CodeCache(size_t slab_size_, CodeCacheKind kind_);
-  ~CodeCache(void) = default;
+  ~CodeCache(void);
 
   // Allocate a block of code from this code cache.
   CachePC AllocateBlock(size_t size);
@@ -58,6 +58,9 @@ class CodeCache {
   const size_t slab_num_pages;
   const size_t slab_num_bytes;
 
+  // The offset into the current slab that's serving allocations.
+  size_t slab_byte_offset;
+
   // What type of code cache is this?
   const CodeCacheKind kind;
 
@@ -66,7 +69,7 @@ class CodeCache {
   SpinLock slab_list_lock;
 
   // Allocator used to allocate blocks from this code cache.
-  internal::CodeSlab *slab_list;
+  const internal::CodeSlab *slab_list;
 
   // Lock around writes to the code cache.
   SpinLock code_lock;

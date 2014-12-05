@@ -206,7 +206,8 @@ static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
   if (mem_op->IsPointer()) return;
 
   if (mem_op->is_compound) {
-    if (XED_REG_RSP == mem_op->mem.reg_base) {
+    GRANARY_ASSERT(!mem_op->mem.index.IsStackPointer());
+    if (mem_op->mem.base.IsStackPointer()) {
       mem_op->mem.disp += adjusted_offset;
     }
   } else if (mem_op->reg.IsStackPointer()) {
@@ -272,9 +273,8 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
   auto &src(ainstr.ops[1]);
   if (dst.reg.IsStackPointer()) {  // Stack pointer shift.
     if (src.is_compound) {
-      GRANARY_ASSERT(XED_REG_RSP == src.mem.reg_base &&
-                     XED_REG_INVALID == src.mem.reg_index);
-    } else {  // Nop.
+      GRANARY_ASSERT(src.mem.base.IsStackPointer() && !src.mem.index.IsValid());
+    } else {  // No-op.
       GRANARY_ASSERT(src.reg.IsStackPointer());
     }
     GRANARY_ASSERT(!ainstr.is_sticky);

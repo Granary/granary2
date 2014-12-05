@@ -43,7 +43,7 @@ static void ProcessInit(const char *options) {
     seen_first_init = 1;
   }
   _ZN7granary11InitOptionsEPKc(options);  // `granary::InitOptions`.
-  _ZN7granary4InitENS_10InitReasonE(1 /* INIT_ATTACH */);  // `granary::Init`.
+  _ZN7granary4InitENS_10InitReasonE(1 /* kInitAttach */);  // `granary::Init`.
   printk("[granary] Initialized.\n");
 }
 

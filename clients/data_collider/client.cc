@@ -6,18 +6,18 @@
 
 #ifdef GRANARY_WHERE_user
 
-#include "clients/data_reactor/arch/x86-64.h"
 #include "clients/watchpoints/type_id.h"
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
 #include "clients/user/syscall.h"
+#include "clients/util/instrument_memop.h"
 
-#include "generated/clients/data_reactor/offsets.h"
+#include "generated/clients/data_collider/offsets.h"
 
 GRANARY_USING_NAMESPACE granary;
 
-GRANARY_DEFINE_positive_int(proxy_sample_rate, 20,
-    "Defines the rate, in milliseconds, at which DataReactor changes its "
+GRANARY_DEFINE_positive_int(sample_rate, 20,
+    "Defines the rate, in milliseconds, at which DataCollider changes its "
     "sample points in proxy memory. The default value is `20`, representing "
     "`20ms`.\n"
     "\n"
@@ -25,27 +25,33 @@ GRANARY_DEFINE_positive_int(proxy_sample_rate, 20,
     "      sampling will indeed occur every N ms, but rather, approximately\n"
     "      every N ms, given a fair scheduler.",
 
-    "data_reactor");
+    "data_collider");
+
+GRANARY_DEFINE_positive_int(watchpoint_granularity, 4096,
+    "The granularity (in bytes) of the software watchpoint. This must be a "
+    "power of two. The default value is `4096`, which means: 1 page of "
+    "physical memory maps to one unit of shadow memory.",
+
+    "data_collider");
 
 namespace {
 enum : size_t {
   kStackSize = arch::PAGE_SIZE_BYTES * 2,
-  kNumSamplePoints = kMaxWatchpointTypeId + 1,
-  kOffsetOfDR0 = offsetof(struct user, u_debugreg[0]),
-  kOffsetOfDR7 = offsetof(struct user, u_debugreg[7]),
-  kNumPtraceSeizeAttempts = 20,
-  kNumPtracePokeAttempts = 20,
+  kNumSamplePoints = kMaxWatchpointTypeId + 1
 };
-
-// Shadow memory type. By default, this will be 1 byte in size.
-struct SamplePoint {};
 
 // The stack on which the monitor thread executes.
 alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
+// Defines the granularity of the software watchpoint.
+static size_t gShiftAmount = 0;
+
 // Set of all addresses that can be sampled.
-static SamplePoint *gSamplePoints[kNumSamplePoints] = {nullptr};
+static uintptr_t gSamplePoints[kNumSamplePoints] = {0ULL};
 static SpinLock gSamplePointsLock;
+
+// The current address being sample.
+static uintptr_t gSamplePoint = 0;
 
 // Current type ID being sampled.
 static auto gCurrSourceTypeId = 0UL;
@@ -53,29 +59,8 @@ static auto gCurrSourceTypeId = 0UL;
 // Is the program multi-threaded?
 static bool gIsMultithreaded = false;
 
-// Has the program exited?
-static bool gProgramExited = false;
-static bool gMonitorExited = false;
-
-// Process IDs of the instrumented program (`gProgramPid`) and the monitor
-// process (`gMonitorPid`).
-static pid_t gProgramPid = -1;
-static pid_t gMonitorPid = -1;
-
-// We use this to block the monitor process's execution until the parent
-// process has set up the monitor process as its tracer.
-static os::Lock gMonitorLock;
-
-// Have we enabled `DR7` yet? We only set the values of `DR7` once.
-static bool gEnabledDR7 = false;
-
-// Small buffer used for `write`s by the monitor thread.
-static char gMonitorBuff[256] = {'\0'};
-
-template <typename... Args>
-inline static void Output(const char *format, Args... args) {
-  write(1, gMonitorBuff, Format(gMonitorBuff, format, args...));
-}
+// The PID of the monitor thread.
+static pid_t gMonitorThread = -1;
 
 // Interposes on system calls to detect the spawning of threads. If a thread is
 // spawned then the sampler will turn on, otherwise it will never add
@@ -87,9 +72,9 @@ static void DetectMultiThreadedCode(void *, SystemCallContext ctx) {
 }
 
 // Add an address for sampling.
-static void AddSamplePoint(uintptr_t type_id, void *addr) {
-  SpinLockedRegion locker(&gSamplePointsLock);
-  gSamplePoints[type_id] = ShadowOf<SamplePoint>(addr);
+static void AddSamplePoint(uintptr_t type_id, void *ptr) {
+  auto addr = reinterpret_cast<uintptr_t>(ptr) >> gShiftAmount;
+  gSamplePoints[type_id] = addr;
 }
 
 #define GET_ALLOCATOR(name) \
@@ -158,7 +143,7 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 //            type id it should be associated with.
 
 // Get the next sample point to return.
-static SamplePoint *NextSamplePoint(void) {
+static uintptr_t NextSamplePoint(void) {
   for (int num_attempts = kNumSamplePoints; num_attempts-- > 0; ) {
     auto type_id = gCurrSourceTypeId++ % kNumSamplePoints;
     SpinLockedRegion locker(&gSamplePointsLock);
@@ -166,125 +151,59 @@ static SamplePoint *NextSamplePoint(void) {
       return sample;
     }
   }
-  return nullptr;
-}
-
-// Kill the instrumented program and exit the monitor thread.
-static void ExitMonitor(void) {
-  gMonitorExited = true;
-  //kill(gProgramPid, SIGKILL);
-  exit(EXIT_FAILURE);
-}
-
-// Add the sampled address as a watched address.
-static bool AddWatchpoint(SamplePoint *sample) {
-  const auto addr = reinterpret_cast<uintptr_t>(sample);
-  const timespec poke_time = {0, 1000000L};  // 1ms.
-  for (auto i = 0UL; i < kNumPtracePokeAttempts; ++i) {
-    if (!ptrace(PTRACE_POKEUSER, gProgramPid, kOffsetOfDR0, addr)) return true;
-    nanosleep(&poke_time, nullptr);
-  }
-  return false;
-}
-
-// Enabled hardware watchpoints.
-static void EnableWatchpoints(void) {
-  if (!gEnabledDR7) {
-    gEnabledDR7 = true;
-    dr7_t dr7 = {0};
-    dr7.l0 = 1;
-    dr7.rw0 = DR7_BREAK_ON_RW;
-    dr7.len0 = DR7_LEN_4;
-    if (ptrace(PTRACE_POKEUSER, gProgramPid, kOffsetOfDR7, dr7.value)) {
-      Output("ERROR: Couldn't set DR7 with value %lx.\n", dr7.value);
-      ExitMonitor();
-    }
-    Output("Enabled hardware watchpoints.\n");
-  }
+  return 0;
 }
 
 // Monitors a single sample point.
-static void MonitorSamplePoint(SamplePoint *&last_sample) {
+static void MonitorSamplePoint(uintptr_t &last_sample) {
   if (auto sample = NextSamplePoint()) {
     if (sample == last_sample) return;
     last_sample = sample;
-    if (AddWatchpoint(sample)) {
-      EnableWatchpoints();
-      Output("Sampling address %p.\n", sample);
-    }
-  }
-}
 
-// Try to seize the instrumented program with ptrace.
-static void SeizeInstrumentedProcess(void) {
-  const timespec seize_time = {0, 1000000L};  // 1ms.
-  auto seized = false;
-  for (auto i = 0UL; i < kNumPtraceSeizeAttempts; ++i) {
-    nanosleep(&seize_time, nullptr);
-    if (!(seized = ptrace(PTRACE_SEIZE, gProgramPid))) continue;
+    os::Log("Sampling address %lx.\n", sample);
   }
-  if (gProgramExited) ExitMonitor();
-  if (!seized) {
-    Output("ERROR: Failed to seize process %d.\n", gProgramPid);
-    ExitMonitor();
-  }
-  Output("Seized process %d.\n", gProgramPid);
 }
 
 // Monitor thread changes the sample point every FLAG_sample_rate milliseconds.
 static void Monitor(void) {
-  os::LockedRegion locker(&gMonitorLock);
-
-  gEnabledDR7 = false;
-
-  Output("Monitor PID: %d\n", gMonitorPid);
-  SeizeInstrumentedProcess();
-
-  auto sample_time_ms = FLAG_proxy_sample_rate * 1000000L;
+  auto sample_time_ms = FLAG_sample_rate * 1000000L;
   const timespec sample_time = {0, sample_time_ms};
-
-  for (SamplePoint *last_sample(nullptr);;) {
+  for (uintptr_t last_sample(0);;) {
     nanosleep(&sample_time, nullptr);
     if (!gIsMultithreaded) continue;
     MonitorSamplePoint(last_sample);
   }
 }
 
-// Initialize the monitoring process for DataReactor. This allows us to set
+// Initialize the monitoring process for DataCollider. This allows us to set
 // hardware watchpoints.
 static void CreateMonitorThread(void) {
-  os::LockedRegion locker(&gMonitorLock);
-  gProgramPid = getpid();
-  gProgramExited = false;
-  gMonitorExited = false;
-
   auto stack_ptr = &(gMonitorStack[kStackSize - arch::ADDRESS_WIDTH_BYTES]);
   *UnsafeCast<void(**)(void)>(stack_ptr) = Monitor;
-  auto ret = sys_clone(CLONE_VM | CLONE_FILES | CLONE_FS | CLONE_UNTRACED,
+  auto ret = sys_clone(CLONE_VM | CLONE_FILES | CLONE_FS | CLONE_UNTRACED |
+                       CLONE_THREAD,
                        stack_ptr, nullptr, nullptr, 0);
   if (0 >= ret) {
     os::Log("ERROR: Couldn't create monitor thread.\n");
     exit(EXIT_FAILURE);
-  }
-  gMonitorPid = static_cast<pid_t>(ret);
-  prctl(PR_SET_PTRACER, gMonitorPid, 0, 0, 0);
-}
-
-static void KillMonitorThread(void) {
-  if (!gMonitorExited && -1 != gMonitorPid) {
-    kill(gMonitorPid, SIGKILL);
   }
 }
 
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
-class DataReactor : public InstrumentationTool {
+class DataCollider : public MemOpInstrumentationTool {
  public:
-  virtual ~DataReactor(void) = default;
+  virtual ~DataCollider(void) = default;
 
+  // Initialize the few things that we can. We can't initialize the shadow
+  // memory up-front because dependent tools won't yet be initialized, and
+  // therefore won't have added their shadow structure descriptions yet. We
+  // need those shadow structure descriptions to determine the size of shadow
+  // memory.
   virtual void Init(InitReason) {
-    AddShadowStructure<SamplePoint>(AccessProxyMem);
+    gShiftAmount = static_cast<size_t>(
+        __builtin_ctz(static_cast<unsigned>(FLAG_watchpoint_granularity)));
 
     // Wrap libc.
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
@@ -311,34 +230,35 @@ class DataReactor : public InstrumentationTool {
 
   // Exit; this kills off the monitor thread.
   virtual void Exit(ExitReason reason) {
-    if (kExitProgram == reason) {
-      KillMonitorThread();
-    } else if (kExitDetach == reason) {
-      gCurrSourceTypeId = 0;
-      gIsMultithreaded = false;
-      gProgramExited = true;
-      memset(gSamplePoints, 0, sizeof gSamplePoints);
+    if (kExitProgram != reason && -1 != gMonitorThread) {
+      kill(gMonitorThread, SIGKILL);
     }
+    gMonitorThread = -1;
+    gCurrSourceTypeId = 0;
+    gIsMultithreaded = false;
+    gShiftAmount = 0;
+    gSamplePoint = 0;
+    memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
   }
 
- private:
-  // Implements the actual touching (reading or writing) of shadow memory.
-  static void AccessProxyMem(const ShadowedOperand &op) {
-    lir::InlineAssembly asm_(op.shadow_addr_op);
-    if (op.native_mem_op.IsReadWrite()) {
-      asm_.InlineBefore(op.instr, "AND m8 [%0], i8 0;");
-    } else if (op.native_mem_op.IsWrite()) {
-      asm_.InlineBefore(op.instr, "MOV m8 [%0], i8 0;");
-    } else {
-      asm_.InlineBefore(op.instr, "TEST m8 [%0], i8 0;");
-    }
+ protected:
+  virtual void InstrumentMemOp(DecodedBasicBlock *, NativeInstruction *instr,
+                               MemoryOperand &, const RegisterOperand &addr) {
+    MemoryOperand sample_point(&gSamplePoint);
+    ImmediateOperand shift_amount(gShiftAmount, 1);
+    lir::InlineAssembly asm_(addr, shift_amount, sample_point);
+    asm_.InlineBefore(instr, "MOV r64 %3, r64 %0;"_x86_64);
+    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %3, i8 %2;");
+    asm_.InlineBefore(instr, "CMP r64 %3, m64 %2;"
+                             "JNZ l %4;"_x86_64);
+    asm_.InlineBefore(instr, "LABEL %4:"_x86_64);
   }
 };
 
-// Initialize the `data_reactor` tool.
+// Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DataReactor>(
-      "data_reactor", {"gdb", "wrap_func", "shadow_memory"});
+  AddInstrumentationTool<DataCollider>(
+      "data_collider", {"gdb", "wrap_func", "shadow_memory"});
 }
 
 #endif  // GRANARY_WHERE_user

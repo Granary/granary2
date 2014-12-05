@@ -38,29 +38,45 @@ SlabAllocator::SlabAllocator(size_t start_offset_, size_t max_offset_,
   GRANARY_UNUSED(free_list);
 }
 
+// For those cases where a slab allocator is non-global.
+SlabAllocator::~SlabAllocator(void) {
+  auto slab = slab_list;
+  for (const SlabList *next_slab(nullptr); slab; slab = next_slab) {
+    next_slab = slab->next;
+    auto slab_addr = const_cast<void *>(
+        reinterpret_cast<const void *>(slab_list));
+    os::FreeDataPages(slab_addr, kNewAllocatorNumPagesPerSlab);
+  }
+  slab_list = nullptr;
+  free_list = nullptr;
+}
+
 #ifndef GRANARY_WITH_VALGRIND
+namespace {
 
 // Constants that define how we will initialize various chunks of memory.
 enum {
-  UNALLOCATED_MEMORY_POISON = 0xAB,
-  DEALLOCATED_MEMORY_POISON = 0xCD,
-  UNINITIALIZED_MEMORY_POISON = 0xEF,
+  kUnallocatedMemoryPoison = 0xAB,
+  kDeallocatedMemoryPoison = 0xCD,
+  kUninitializedMemoryPoison = 0xEF,
 };
 
 // Allocate a new slab of memory for this object. The backing memory of the
 // slab is initialized to `UNALLOCATED_MEMORY_POISON`.
-const SlabList *SlabAllocator::AllocateSlab(const SlabList *next_slab) {
-  void *slab_memory(os::AllocateDataPages(SLAB_ALLOCATOR_SLAB_SIZE_PAGES));
-  checked_memset(slab_memory, UNALLOCATED_MEMORY_POISON,
-                 SLAB_ALLOCATOR_SLAB_SIZE_BYTES);
+static const SlabList *AllocateSlab(const SlabList *next_slab) {
+  auto slab_memory = os::AllocateDataPages(kNewAllocatorNumPagesPerSlab);
+  GRANARY_IF_DEBUG( checked_memset(slab_memory, kUnallocatedMemoryPoison,
+                                   kNewAllocatorNumBytesPerSlab); )
   return new (slab_memory) SlabList(next_slab);
 }
+
+}  // namespace
 
 // Get a pointer into the slab list. This potentially allocates a new slab.
 const SlabList *SlabAllocator::SlabForAllocation(void) {
   if (GRANARY_UNLIKELY(offset >= max_offset)) {
-    offset = start_offset;
     slab_list = AllocateSlab(slab_list);
+    offset = start_offset;
   }
   return slab_list;
 }
@@ -70,8 +86,8 @@ namespace {
 static bool MemoryNotInUse(void *mem, size_t num_bytes) {
   auto bytes = reinterpret_cast<uint8_t *>(mem);
   for (auto i = 0UL; i < num_bytes; ++i) {
-    if (bytes[i] != static_cast<uint8_t>(UNALLOCATED_MEMORY_POISON) &&
-        bytes[i] != static_cast<uint8_t>(DEALLOCATED_MEMORY_POISON)) {
+    if (bytes[i] != static_cast<uint8_t>(kUnallocatedMemoryPoison) &&
+        bytes[i] != static_cast<uint8_t>(kDeallocatedMemoryPoison)) {
       return false;
     }
   }
@@ -91,7 +107,8 @@ void *SlabAllocator::Allocate(void) {
     address = reinterpret_cast<void *>(addr);
   }
   GRANARY_ASSERT(MemoryNotInUse(address, allocation_size));
-  checked_memset(address, UNINITIALIZED_MEMORY_POISON, allocation_size);
+  GRANARY_IF_DEBUG( checked_memset(address, kUninitializedMemoryPoison,
+                                   allocation_size); )
   VALGRIND_MALLOCLIKE_BLOCK(address, unaligned_size, 0, 1);
   return address;
 }
@@ -99,24 +116,13 @@ void *SlabAllocator::Allocate(void) {
 // Free some memory that was allocated from the slab allocator.
 void SlabAllocator::Free(void *address) {
   VALGRIND_FREELIKE_BLOCK(address, unaligned_size);
-  checked_memset(address, DEALLOCATED_MEMORY_POISON, allocation_size);
+  GRANARY_IF_DEBUG( checked_memset(address, kDeallocatedMemoryPoison,
+                                   allocation_size); )
 
   SpinLockedRegion locker(&free_list_lock);
   auto list = reinterpret_cast<FreeList *>(address);
   list->next = free_list;
   free_list = list;
-}
-
-// For those cases where a slab allocator is non-global.
-void SlabAllocator::Destroy(void) {
-  auto slab = slab_list;
-  for (const SlabList *next_slab(nullptr); slab; slab = next_slab) {
-    next_slab = slab->next;
-    auto slab_addr = const_cast<void *>(
-        reinterpret_cast<const void *>(slab_list));
-    os::FreeDataPages(slab_addr, SLAB_ALLOCATOR_SLAB_SIZE_PAGES);
-  }
-  slab_list = nullptr;
 }
 
 // Allocate an object from the free list, if possible. Returns `nullptr` if
@@ -130,10 +136,9 @@ void *SlabAllocator::AllocateFromFreeList(void) {
     free_list = list->next;
     head = list;
   }
-#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
   // Maintain the invariant that is checked by `MemoryNotInUse`.
-  memset(head, DEALLOCATED_MEMORY_POISON, sizeof (FreeList *));
-#endif  // GRANARY_TARGET_debug
+  GRANARY_IF_DEBUG( memset(head, kDeallocatedMemoryPoison,
+                           sizeof (FreeList *)); )
   return head;
 }
 

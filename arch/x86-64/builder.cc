@@ -22,7 +22,7 @@ extern const uint8_t NUM_IMPLICIT_OPERANDS[];
 void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, unsigned isel,
                       xed_category_enum_t category) {
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
   // Sanity check to make sure the backing memory is initialized with
   // reasonable values.
   GRANARY_ASSERT(XED_ICLASS_INVALID <= instr->iclass &&
@@ -34,6 +34,7 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
 
   auto note = instr->note_create;
 #endif
+
   auto decoded_pc = instr->decoded_pc;
   auto decoded_len = instr->decoded_length;
   memset(instr, 0, sizeof *instr);
@@ -44,7 +45,7 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
   instr->decoded_pc = decoded_pc;
   instr->decoded_length = decoded_len;
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
   instr->note_create = note;
   auto mod = __builtin_return_address(1);
   (instr->note_create ? instr->note_alter : instr->note_create) = mod;

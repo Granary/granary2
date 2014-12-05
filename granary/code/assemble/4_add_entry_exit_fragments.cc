@@ -234,7 +234,7 @@ static void UpdateFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (FRAG_TYPE_INST != frag->type) continue;
     if (auto flag_zone = frag->flag_zone.Value()) {
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
       if (auto code = DynamicCast<CodeFragment *>(frag)) {
         GRANARY_ASSERT(code->attr.modifies_flags ==
                        !!frag->inst_flags.all_written_flags);

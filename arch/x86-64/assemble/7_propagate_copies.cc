@@ -40,11 +40,8 @@ SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
   } else if (XED_ICLASS_LEA == ainstr.iclass &&
              2 == ainstr.num_explicit_ops) {
     if (op1.is_compound) {
-      auto base_reg = VirtualRegister::FromNative(op1.mem.reg_base);
-      if (base_reg.IsStackPointer()) return nullptr;
-
-      auto index_reg = VirtualRegister::FromNative(op1.mem.reg_base);
-      if (index_reg.IsStackPointer()) return nullptr;
+      if (op1.mem.base.IsStackPointer()) return nullptr;
+      if (op1.mem.index.IsStackPointer()) return nullptr;
     } else {
       if (op1.reg.IsStackPointer()) return nullptr;
     }

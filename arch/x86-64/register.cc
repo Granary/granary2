@@ -34,6 +34,11 @@ void VirtualRegister::DecodeFromNative(int reg_) {
   value = 0;  // Reset.
 
   auto reg = static_cast<xed_reg_enum_t>(reg_);
+  if (XED_REG_INVALID == reg || XED_REG_LAST <= reg_) {
+    kind = VR_KIND_UNKNOWN;
+    return;
+  }
+
   auto widest_reg = xed_get_largest_enclosing_register(reg);
   num_bytes = static_cast<uint8_t>(xed_get_register_width_bits64(reg) / 8);
 
@@ -213,8 +218,8 @@ void UsedRegisterSet::Visit(const arch::Operand *op) {
     Revive(op->reg);
   } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
-      Revive(VirtualRegister::FromNative(op->mem.reg_base));
-      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+      Revive(op->mem.base);
+      Revive(op->mem.index);
     } else {
       Revive(op->reg);
     }
@@ -271,8 +276,8 @@ void UsedRegisterSet::ReviveRestrictedRegisters(const arch::Operand *op) {
     Revive(op->reg);
   } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
-      Revive(VirtualRegister::FromNative(op->mem.reg_base));
-      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+      Revive(op->mem.base);
+      Revive(op->mem.index);
     } else {
       Revive(op->reg);
     }
@@ -309,8 +314,8 @@ void LiveRegisterSet::Visit(const arch::Operand *op) {
     }
   } else if (op->IsMemory() && !op->IsPointer()) {
     if (op->is_compound) {
-      Revive(VirtualRegister::FromNative(op->mem.reg_base));
-      Revive(VirtualRegister::FromNative(op->mem.reg_index));
+      Revive(op->mem.base);
+      Revive(op->mem.index);
     } else {
       Revive(op->reg);
     }

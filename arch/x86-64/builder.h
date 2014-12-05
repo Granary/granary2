@@ -270,10 +270,27 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
   if (disp) {
     op.is_compound = true;
     op.mem.disp = disp;
-    op.mem.reg_base = base_reg;
+    op.mem.base.DecodeFromNative(base_reg);
   } else {
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
+  }
+  op.width = static_cast<uint16_t>(width);
+  return op;
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
+                                    int width=0) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  if (disp) {
+    op.is_compound = true;
+    op.mem.disp = disp;
+    op.mem.base = base_reg;
+  } else {
+    op.is_compound = false;
+    op.reg = base_reg;
   }
   op.width = static_cast<uint16_t>(width);
   return op;
@@ -286,8 +303,21 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
   op.mem.disp = disp;
-  op.mem.reg_base = base_reg;
-  op.mem.reg_index = index_reg;
+  op.mem.base.DecodeFromNative(base_reg);
+  op.mem.index.DecodeFromNative(index_reg);
+  op.width = static_cast<uint16_t>(width);
+  return op;
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
+                                    VirtualRegister index_reg, int width=0) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op.is_compound = true;
+  op.mem.disp = disp;
+  op.mem.base = base_reg;
+  op.mem.index = index_reg;
   op.width = static_cast<uint16_t>(width);
   return op;
 }

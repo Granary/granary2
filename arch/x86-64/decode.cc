@@ -192,9 +192,9 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
       instr_op->reg.ConvertToSegmentOffset();
     }
   } else {
+    instr_op->mem.base.DecodeFromNative(base_reg);
+    instr_op->mem.index.DecodeFromNative(index_reg);
     instr_op->mem.disp = static_cast<int32_t>(disp);
-    instr_op->mem.reg_base = base_reg;
-    instr_op->mem.reg_index = index_reg;
     instr_op->mem.scale = static_cast<uint8_t>(scale);
     instr_op->is_compound = true;
   }

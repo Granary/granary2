@@ -86,7 +86,7 @@ GRANARY_ENTRYPOINT void granary_init(granary::AppPC *attach_pc_ptr) {
     DisplayHelpMessage();
     GRANARY_ASSERT(false);  // Not reached.
   }
-  Init(kInitProgram);
+  Init(kInitAttach);
   Attach(attach_pc_ptr);
 }
 }  // extern "C"

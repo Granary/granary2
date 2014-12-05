@@ -194,7 +194,7 @@ void InstrumentationManager::InitAllocator(void) {
   if (max_size) {
     auto size = GRANARY_ALIGN_TO(max_size, max_align);
     auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), max_align);
-    auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
+    auto remaining_size = internal::kNewAllocatorNumBytesPerSlab - offset;
     auto max_num_allocs = (remaining_size - size + 1) / size;
     auto max_offset = offset + max_num_allocs * size;
     allocator.Construct(offset, max_offset, size, size);

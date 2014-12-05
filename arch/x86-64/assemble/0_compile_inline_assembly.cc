@@ -163,7 +163,7 @@ class InlineAssemblyParser {
     return width;
   }
 
-  void ParseArchReg(void) {
+  void ParseArchRegOp(void) {
     char buff[20] = {'\0'};
     ParseWord(buff);
     auto reg = str2xed_reg_enum_t(buff);
@@ -210,16 +210,16 @@ class InlineAssemblyParser {
       op->reg = reg_op->Register();
       op->reg.Widen(sub_size / 8);
     } else {
-      ParseArchReg();
+      ParseArchRegOp();
       ConsumeWhiteSpace();
       if (Peek('+')) {
         Accept('+');
         ConsumeWhiteSpace();
 
+        op->mem.base = op->reg;
+        op->mem.index = VirtualRegister();
         op->is_compound = true;
-        op->mem.reg_base = static_cast<xed_reg_enum_t>(
-            op->reg.EncodeToNative());
-        op->mem.reg_index = XED_REG_INVALID;
+        op->mem.disp = 0;
         op->mem.scale = 0;
 
         char buff[20] = {'\0'};
@@ -353,7 +353,7 @@ class InlineAssemblyParser {
     if (Peek('%')) {
       ParseRegOp();
     } else {
-      ParseArchReg();
+      ParseArchRegOp();
     }
     op->reg.Widen(width / 8);
   }

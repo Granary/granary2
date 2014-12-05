@@ -134,15 +134,22 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
   xedo->type = op.type;
   xedo->u.mem.seg = XED_REG_DS != op.segment ? op.segment : XED_REG_INVALID;
   if (op.is_compound) {
-    xedo->u.mem.base = op.mem.reg_base;
+    if (op.mem.base.IsValid()) {
+      xedo->u.mem.base = static_cast<xed_reg_enum_t>(
+          op.mem.base.EncodeToNative());
+    }
+    if (op.mem.index.IsValid()) {
+      GRANARY_ASSERT(0 != op.mem.scale);
+      xedo->u.mem.index = static_cast<xed_reg_enum_t>(
+          op.mem.index.EncodeToNative());
+    }
+    xedo->u.mem.scale = op.mem.scale;
     if (op.mem.disp) {
       xedo->u.mem.disp.displacement = static_cast<uint64_t>(op.mem.disp);
       auto width = ImmediateWidthBits(op.mem.disp);
       width = 16 == width ? 32 : std::min(32, width);
       xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(width);
     }
-    xedo->u.mem.index = op.mem.reg_index;
-    xedo->u.mem.scale = op.mem.scale;
 
     if (!xedo->u.mem.base && xedo->u.mem.index && 1 == xedo->u.mem.scale) {
       xedo->u.mem.base = xedo->u.mem.index;
@@ -228,6 +235,8 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 }
 
 // Perform late-mangling of an LEA instruction.
+//
+// TODO(pag): Try to remove the necessity for this!
 static void LateMangleLEA(Instruction *instr) {
   GRANARY_ASSERT(3 == instr->num_explicit_ops);
   GRANARY_ASSERT(instr->ops[1].IsRegister());
@@ -236,18 +245,14 @@ static void LateMangleLEA(Instruction *instr) {
   GRANARY_ASSERT(instr->ops[2].reg.IsNative());
   GRANARY_ASSERT(instr->ops[1].reg.IsGeneralPurpose());
   GRANARY_ASSERT(instr->ops[2].reg.IsGeneralPurpose());
-  auto base_reg = static_cast<xed_reg_enum_t>(
-      instr->ops[1].reg.EncodeToNative());
-  auto index_reg = static_cast<xed_reg_enum_t>(
-      instr->ops[2].reg.EncodeToNative());
   auto &op1(instr->ops[1]);
   instr->ops[2].type = XED_ENCODER_OPERAND_TYPE_INVALID;
   op1.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op1.is_effective_address = true;
   op1.is_compound = true;
   op1.mem.disp = 0;
-  op1.mem.reg_base = base_reg;
-  op1.mem.reg_index = index_reg;
+  op1.mem.base = instr->ops[1].reg;
+  op1.mem.index = instr->ops[2].reg;
   op1.mem.scale = 1;
   instr->num_explicit_ops = 2;
 }

@@ -15,8 +15,6 @@ extern const FlagActions ICLASS_FLAG_ACTIONS[];
 
 Instruction::Instruction(void) {
   memset(this, 0, sizeof *this);
-  iclass = XED_ICLASS_INVALID;
-  category = XED_CATEGORY_INVALID;
 }
 
 Instruction::Instruction(const Instruction &that) {
@@ -82,8 +80,8 @@ bool Instruction::ShiftsStackPointer(void) const {
     case XED_ICLASS_LEA:
       return ops[0].IsRegister() && ops[0].reg.IsStackPointer() &&
              ops[1].IsMemory() && !ops[1].IsPointer() && ops[1].is_compound &&
-             XED_REG_RSP == ops[1].mem.reg_base &&
-             XED_REG_INVALID == ops[1].mem.reg_index &&
+             ops[1].mem.base.IsStackPointer() &&
+             !ops[1].mem.index.IsValid() &&
              1 >= ops[1].mem.scale;
 
     // Things that appear, but aren't, constant stack pointer shifts that fall
@@ -189,13 +187,10 @@ int Instruction::StackPointerShiftAmount(void) const {
       if (!ops[1].IsMemory()) break;
       if (ops[1].IsPointer()) break;
       if (!ops[1].is_compound) break;
-
-      // TODO(pag): For non-64-bit, allow for ESP/SP.
-      if (XED_REG_RSP != ops[1].mem.reg_base) break;
-      if (XED_REG_INVALID != ops[1].mem.reg_index) break;
+      if (!ops[1].mem.base.IsStackPointer()) break;
+      if (ops[1].mem.index.IsValid()) break;
       if (1 < ops[1].mem.scale) break;
       return static_cast<int>(ops[1].mem.disp);
-      break;
 
     default:
       break;
@@ -218,17 +213,10 @@ int Instruction::ComputedOffsetBelowStackPointer(void) const {
   if (is_stack_blind) return 0;
   if (XED_ICLASS_LEA != iclass) return 0;
   if (!ops[1].is_compound) return 0;
-  if (XED_REG_RSP != ops[1].mem.reg_base) return 0;
-  if (XED_REG_INVALID == ops[1].mem.reg_index) {
-    if (0 <= ops[1].mem.disp) return 0;
-    return ops[1].mem.disp;
-  } else {
-    // TODO(pag): Assume that this is always going up on the stack rather than
-    //            down.
-    return 0;
-    //if (0 <= ops[1].mem.disp) return -128;
-    //return ops[1].mem.disp - 128;
-  }
+  if (!ops[1].mem.base.IsStackPointer()) return 0;
+  if (ops[1].mem.index.IsValid()) return 0;
+  if (0 <= ops[1].mem.disp) return 0;
+  return ops[1].mem.disp;
 }
 
 // Returns true if an instruction reads the flags.
@@ -259,7 +247,8 @@ static void AnalyzeOperandStackUsage(Instruction *instr, const Operand &op) {
     }
   } else if (XED_ENCODER_OPERAND_TYPE_MEM == op.type) {
     if (op.is_compound) {
-      if (XED_REG_RSP == op.mem.reg_base)  {
+      GRANARY_ASSERT(!op.mem.index.IsStackPointer());
+      if (op.mem.base.IsStackPointer()) {
         instr->reads_from_stack_pointer = true;
       }
     } else {

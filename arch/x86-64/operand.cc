@@ -141,17 +141,6 @@ bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
   return false;
 }
 
-namespace {
-// Match the next register in the compound memory operand.
-static void MatchNextRegister(xed_reg_enum_t reg,
-                              VirtualRegister * const *regs,
-                              size_t *next) {
-  if (XED_REG_INVALID != reg) {
-    regs[*next++]->DecodeFromNative(static_cast<int>(reg));
-  }
-}
-}  // namespace
-
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.
 size_t MemoryOperand::CountMatchedRegisters(
@@ -161,11 +150,10 @@ size_t MemoryOperand::CountMatchedRegisters(
   auto regs = regs_.begin();
   if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
     if (op->is_compound) {
-      MatchNextRegister(op->mem.reg_base, regs, &num_matched);
-      MatchNextRegister(op->mem.reg_index, regs, &num_matched);
+      if (op->mem.base.IsValid()) *(regs[num_matched++]) = op->mem.base;
+      if (op->mem.index.IsValid()) *(regs[num_matched++]) = op->mem.index;
     } else {
-      *(regs[0]) = op->reg;
-      num_matched = 1;
+      *(regs[num_matched++]) = op->reg;
     }
   }
   return num_matched;
@@ -261,20 +249,37 @@ Operand &Operand::operator=(const Operand &that) {
 }
 
 namespace {
+
+static void EncodeRegToString(VirtualRegister reg, OperandString *str,
+                              const char *prefix, const char *suffix) {
+  if (reg.IsNative()) {
+    auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
+    str->UpdateFormat("%sr%d %s%s", prefix, reg.BitWidth(),
+                      xed_reg_enum_t2str(arch_reg), suffix);
+  } else if (reg.IsVirtual()) {
+    str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
+  } else if (reg.IsVirtualSlot()) {
+    str->UpdateFormat("%sSLOT:%d%s", prefix, reg.Number(), suffix);
+  } else {
+    str->UpdateFormat("%s?reg?%s", prefix, suffix);
+  }
+}
+
 // Encode a compressed memory operand into a string.
 static void EncodeMemOpToString(const Operand *op, OperandString *str) {
   str->UpdateFormat("[");
-  if (op->mem.reg_base) {
-    str->UpdateFormat("%s%s", xed_reg_enum_t2str(op->mem.reg_base),
-                      op->mem.reg_index ? " + " : "");
+  if (op->mem.base.IsValid()) {
+    EncodeRegToString(op->mem.base, str, "",
+                      op->mem.index.IsValid() ? " + " : "");
   }
-  if (op->mem.reg_index) {
-    str->UpdateFormat("%s * %u", xed_reg_enum_t2str(op->mem.reg_index),
-                      op->mem.scale);
+  if (op->mem.index.IsValid()) {
+    GRANARY_ASSERT(0 != op->mem.scale);
+    EncodeRegToString(op->mem.index, str, "", "");
+    str->UpdateFormat(" * %u", op->mem.scale);
   }
   if (op->mem.disp) {
     if (op->mem.disp > 0) {
-      GRANARY_ASSERT(op->mem.reg_base || op->mem.reg_index);
+      GRANARY_ASSERT(op->mem.base.IsValid() || op->mem.index.IsValid());
       str->UpdateFormat(" + 0x%x", op->mem.disp);
     } else {
       str->UpdateFormat(" - 0x%x", -op->mem.disp);
@@ -319,17 +324,7 @@ void Operand::EncodeToString(OperandString *str) const {
     case XED_ENCODER_OPERAND_TYPE_REG:
     case XED_ENCODER_OPERAND_TYPE_SEG0:
     case XED_ENCODER_OPERAND_TYPE_SEG1:
-      if (reg.IsNative()) {
-        auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        str->UpdateFormat("%sr%d %s%s", prefix, reg.BitWidth(),
-                          xed_reg_enum_t2str(arch_reg), suffix);
-      } else if (reg.IsVirtual()) {
-        str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
-      } else if (reg.IsVirtualSlot()) {
-        str->UpdateFormat("%sSLOT:%d%s", prefix, reg.Number(), suffix);
-      } else {
-        str->UpdateFormat("%s?reg?%s", prefix, suffix);
-      }
+      EncodeRegToString(reg, str, prefix, suffix);
       break;
 
     case XED_ENCODER_OPERAND_TYPE_IMM0:

@@ -37,7 +37,10 @@ SECTIONS
   {
     /* Defines boundaries for arrays of constructor functions. */
     granary_begin_init_array = .;
-    KEEP (*(.init_array.*))
+    KEEP (*(.preinit_array))
+    KEEP (*(SORT(.ctors.*)))
+    KEEP (*(.ctors))
+    KEEP (*(SORT(.init_array.*)))
     KEEP (*(.init_array))
     granary_end_init_array = .;
   }
@@ -47,14 +50,10 @@ SECTIONS
   {
     /* Defines boundaries for arrays of destructor functions. */
     granary_begin_fini_array = .;
-    KEEP (*(.fini_array.*))
+    KEEP (*(SORT(.fini_array.*)))
     KEEP (*(.fini_array))
+    KEEP (*(SORT(.dtors.*)))
+    KEEP (*(.dtors))
     granary_end_fini_array = .;
-  }
-
-  /DISCARD/ :
-  {
-    *(.ctors)
-    *(.dtors)
   }
 }

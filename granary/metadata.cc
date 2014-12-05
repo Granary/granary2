@@ -122,7 +122,6 @@ MetaDataManager::~MetaDataManager(void) {
       desc->offset = std::numeric_limits<uintptr_t>::max();
     }
   }
-  allocator->Destroy();
   allocator.Destroy();
 }
 
@@ -173,10 +172,10 @@ void MetaDataManager::Finalize(void) {
 // Initialize the allocator for meta-data managed by this manager.
 void MetaDataManager::InitAllocator(void) {
   auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
-  auto remaining_size = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES - offset;
+  auto remaining_size = internal::kNewAllocatorNumBytesPerSlab - offset;
   auto max_num_allocs = (remaining_size - size + 1) / size;
   auto max_offset = offset + max_num_allocs * size;
-  GRANARY_ASSERT(internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES >= max_offset);
+  GRANARY_ASSERT(internal::kNewAllocatorNumBytesPerSlab >= max_offset);
   allocator.Construct(offset, max_offset, size, size);
 }
 

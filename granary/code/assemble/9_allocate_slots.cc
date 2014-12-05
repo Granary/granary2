@@ -91,14 +91,14 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
         }
       }
     }
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
     // Simple verification step.
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
       ++partition->num_partition_entry_frags;
       GRANARY_ASSERT(1 == partition->num_partition_entry_frags);
     }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
   }
 }
 

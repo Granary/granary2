@@ -64,6 +64,8 @@ static void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
 // `LEA` instructions. The motivation for this is that ideally, we want
 // instrumentation tools to be able to always deal with memory addresses as
 // either: 1) registers, 2) absolute addresses, or 3) offsets from a segment.
+//
+// Note: This applies to `XED_ENCODER_OPERAND_TYPE_MEM` only.
 static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   // Special consideration is given to non-compound stack operands, e.g.
   // `MOV ..., [RSP]`. Because we might be changing the stack pointer, we
@@ -80,10 +82,10 @@ static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
   // operands to make them easier to manipulate from the instrumentation
   // side of things.
   if (op.is_sticky) {
-    if (0 == op.mem.disp && XED_REG_INVALID == op.mem.reg_index) {
-      GRANARY_ASSERT(XED_REG_RSP != op.mem.reg_base);
+    if (0 == op.mem.disp && !op.mem.index.IsValid()) {
+      GRANARY_ASSERT(!op.mem.base.IsStackPointer());
       op.is_compound = false;
-      op.reg.DecodeFromNative(static_cast<int>(op.mem.reg_base));
+      op.reg = op.mem.base;
       if (is_seg_offset) op.reg.ConvertToSegmentOffset();
     }
   } else {
@@ -94,7 +96,7 @@ static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
     }
 
     auto mem_reg = block->AllocateVirtualRegister();
-    if (XED_REG_RSP == op.mem.reg_base) mem_reg.ConvertToVirtualStackPointer();
+    if (op.mem.base.IsStackPointer()) mem_reg.ConvertToVirtualStackPointer();
     if (is_seg_offset) mem_reg.ConvertToSegmentOffset();
 
     Instruction ni;
@@ -149,42 +151,16 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
   }
 }
 
+// Note: This applies to `XED_ENCODER_OPERAND_TYPE_PTR` only.
 static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
-#if 0
   Instruction ni;
   auto offset = block->AllocateVirtualRegister();
   offset.ConvertToSegmentOffset();
 
-  // Only reduce to a 32-bit value if the offset doesn't sign-extend. Here, we
-  // want to be careful about changing the meaning of a segment offset. For
-  // example, if we had something like `FS:[-1]`, then we don't want to
-  // accidentally convert it into something like:
-  //
-  //      MOV %0, -1_U32
-  //      ... FS:[%0]
-  //
-  // Because this will have a very different meaning than the original, as
-  // `-1_U32 != -1_U64`.
-  if (static_cast<uint32_t>(op.addr.as_uint) == op.addr.as_uint) {
-    MOV_GPRv_IMMv(&ni, offset.WidenedTo(4 /* bytes */),
-                  static_cast<uint32_t>(op.addr.as_uint));
-    ni.effective_operand_width = 32;
-
-  } else {
-    MOV_GPRv_IMMv(&ni, offset, op.addr.as_uint);
-    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
-  }
-  APP();
-
+  APP(MOV_GPRv_IMMv(&ni, offset, op.addr.as_uint));
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op.is_compound = false;
   op.reg = offset;
-#else
-  // TODO(pag): The above code was buggy, but might be worth re-visiting. The
-  //            bug came out when doing recursive instrumentation of Granary's
-  //            test cases.
-  GRANARY_UNUSED(block);
-  GRANARY_UNUSED(op);
-#endif
 }
 
 // Mangle an explicit memory operand. This will expand memory operands into
@@ -306,10 +282,12 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   if (op.IsPointer()) {
     // Nothing.
   } else if (op.is_compound) {
-    if (XED_REG_RSP == op.mem.reg_base || XED_REG_ESP == op.mem.reg_base) {
+    if (op.mem.base.IsStackPointer()) {
+      GRANARY_ASSERT(arch::ADDRESS_WIDTH_BITS == op.mem.base.BitWidth());
       op.mem.disp += stack_shift;
     }
   } else if (op.reg.IsStackPointer()) {
+    GRANARY_ASSERT(arch::ADDRESS_WIDTH_BITS == op.reg.BitWidth());
     op = BaseDispMemOp(stack_shift, XED_REG_RSP, op.width);
   }
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));

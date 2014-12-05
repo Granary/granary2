@@ -72,9 +72,9 @@ $(GRANARY_TEST_BIN_DIR)/%.o :: $(GRANARY_TEST_SRC_DIR)/%.cc
 # Compile all individual testers into one large test file/runner.
 $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
                 $(GRANARY_TEST_ASM_OBJ_FILES) \
+                $(GRANARY_BIN_DIR)/libgranary.o \
                 $(GRANARY_GTEST_BIN_DIR)/gtest-all.o \
-                $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o \
-                $(GRANARY_BIN_DIR)/libgranary.o
+                $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o
 	@echo "Compiling $@"
 	@mkdir -p $(@D)
 	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
