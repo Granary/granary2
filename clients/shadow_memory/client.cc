@@ -103,6 +103,8 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
                                NativeInstruction *instr,
                                MemoryOperand &mloc,
                                const RegisterOperand &addr) {
+    if (addr.IsStackPointer() || addr.IsVirtualStackPointer()) return;
+
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
     ImmediateOperand shadow_base(gShadowMem);

@@ -228,8 +228,25 @@ class MemoryOperand : public Operand {
   // Try to match this memory operand as a register value. That is, the address
   // is stored in the matched register.
   //
+  // Note: This does not match segment registers.
+  //
   // Note: This has a driver-specific implementation.
   bool MatchRegister(VirtualRegister &reg) const;
+
+  // Try to match a segment register.
+  //
+  // Note: This has a driver-specific implementation.
+  bool MatchSegmentRegister(VirtualRegister &reg) const;
+
+  // Try to match several registers from the memory operand. This is applicable
+  // when this is a compound memory operand, e.g. `base + index * scale`. This
+  // also works when the memory operand is not compound.
+  //
+  // Note: This has a architecture-specific implementation.
+  template <typename... VRs>
+  inline size_t CountMatchedRegisters(VRs... regs) const {
+    return CountMatchedRegisters({&regs...});
+  }
 
   // Try to match several registers from the memory operand. This is applicable
   // when this is a compound memory operand, e.g. `base + index * scale`. This
@@ -261,6 +278,8 @@ class RegisterOperand : public Operand {
   // Driver-specific implementations.
   bool IsNative(void) const;
   bool IsVirtual(void) const;
+  bool IsStackPointer(void) const;
+  bool IsVirtualStackPointer(void) const;
 
   // Extract the register.
   //

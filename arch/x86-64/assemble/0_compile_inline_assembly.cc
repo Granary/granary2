@@ -141,6 +141,17 @@ class InlineAssemblyParser {
     return *(scope->vars[var_num]);
   }
 
+  // Treat this memory operand as a pointer.
+  void ParsePointerOperand(void) {
+    op->type = XED_ENCODER_OPERAND_TYPE_PTR;
+    ParseWord();
+    if ('0' == buff[0]) {
+      DeFormat(buff, "%lx", &(op->addr.as_uint));
+    } else {
+      DeFormat(buff, "%lu", &(op->addr.as_uint));
+    }
+  }
+
   // Parse a compound memory operand. This is quite tricky and almost nearly
   // handles the full generality of base/disp memory operands, with the ability
   // to mix in input virtual registers and immediates, as well as literal
@@ -159,8 +170,14 @@ class InlineAssemblyParser {
     Accept('[');
     ConsumeWhiteSpace();
 
-    for (; !Peek(']');) {
+    if ('0' <= *ch && '9' >= *ch) {  // Point.
+      ParsePointerOperand();
+      ConsumeWhiteSpace();
+      Accept(']');
+      return;
+    }
 
+    for (; !Peek(']');) {
       switch (state) {
         case ParseReg:
           if (Peek('%')) {
@@ -291,15 +308,40 @@ class InlineAssemblyParser {
   // might reference an input operand. This alos might need to mark memory
   // operands as not actually reading/writing from/to memory.
   void ParseMemoryOperand(void) {
+    auto seg_reg = XED_REG_INVALID;
     if (Peek('[')) {
       ParseCompoundMemoryOperand();
-    } else {
+
+    } else if (Peek('F')) {
+      ParseWord();
+      GRANARY_ASSERT(StringsMatch(buff, "FS"));
+      seg_reg = XED_REG_FS;
+      Accept(':');
+      ParseCompoundMemoryOperand();
+
+    } else if (Peek('G')) {
+      ParseWord();
+      GRANARY_ASSERT(StringsMatch(buff, "GS"));
+      seg_reg = XED_REG_GS;
+      Accept(':');
+      ParseCompoundMemoryOperand();
+
+    } else if (Peek('%')) {
       auto var_num = ParseVar();
       auto &aop(scope->vars[var_num]);
-      GRANARY_ASSERT(aop->IsMemory());
-      *op = *aop;
+      if (aop->IsRegister()) {
+        seg_reg = static_cast<xed_reg_enum_t>(aop->reg.EncodeToNative());
+        GRANARY_ASSERT(seg_reg && XED_REG_DS != seg_reg);
+        Accept(':');
+        ParseCompoundMemoryOperand();
+      } else {
+        GRANARY_ASSERT(aop->IsMemory());
+        *op = *aop;
+      }
     }
+    op->segment = seg_reg;
     op->is_effective_address = IsEffectiveAddress();
+    GRANARY_ASSERT(!(op->is_effective_address && op->segment));
   }
 
   // Parse a virtual register.

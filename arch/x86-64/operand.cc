@@ -71,6 +71,14 @@ bool RegisterOperand::IsVirtual(void) const {
   return op->reg.IsVirtual();
 }
 
+bool RegisterOperand::IsStackPointer(void) const {
+  return op->reg.IsStackPointer();
+}
+
+bool RegisterOperand::IsVirtualStackPointer(void) const {
+  return op->reg.IsVirtualStackPointer();
+}
+
 // Extract the register.
 VirtualRegister RegisterOperand::Register(void) const {
   return op->reg;
@@ -136,6 +144,15 @@ bool MemoryOperand::MatchPointer(const void *&ptr) const {
 bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
   if (XED_ENCODER_OPERAND_TYPE_MEM == op->type && !op->is_compound) {
     reg = op->reg;
+    return true;
+  }
+  return false;
+}
+
+// Try to match a segment register.
+bool MemoryOperand::MatchSegmentRegister(VirtualRegister &reg) const {
+  if (XED_REG_INVALID != op->segment && XED_REG_DS != op->segment) {
+    reg.DecodeFromNative(static_cast<int>(op->segment));
     return true;
   }
   return false;

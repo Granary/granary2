@@ -5,6 +5,7 @@
 
 #include <granary.h>
 
+// Abstract tool for instrumenting memory operands.
 class MemOpInstrumentationTool : public granary::InstrumentationTool {
  public:
   virtual ~MemOpInstrumentationTool(void) = default;

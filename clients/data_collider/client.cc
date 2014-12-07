@@ -244,6 +244,8 @@ class DataCollider : public MemOpInstrumentationTool {
  protected:
   virtual void InstrumentMemOp(DecodedBasicBlock *, NativeInstruction *instr,
                                MemoryOperand &, const RegisterOperand &addr) {
+    if (addr.IsStackPointer() || addr.IsVirtualStackPointer()) return;
+
     MemoryOperand sample_point(&gSamplePoint);
     ImmediateOperand shift_amount(gShiftAmount, 1);
     lir::InlineAssembly asm_(addr, shift_amount, sample_point);
@@ -257,8 +259,7 @@ class DataCollider : public MemOpInstrumentationTool {
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DataCollider>(
-      "data_collider", {"gdb", "wrap_func", "shadow_memory"});
+  AddInstrumentationTool<DataCollider>("data_collider", {"wrap_func"});
 }
 
 #endif  // GRANARY_WHERE_user

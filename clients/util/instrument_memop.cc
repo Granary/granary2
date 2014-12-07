@@ -33,9 +33,6 @@ void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
   const void *addr_ptr(nullptr);
 
   if (mloc.MatchRegister(addr_reg)) {
-
-    // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
-    if (!addr_reg.IsGeneralPurpose()) return;
     if (addr_reg.IsSegmentOffset()) {
       InstrumentSegMemOp(bb, instr, mloc, addr_reg);
     } else {
@@ -57,30 +54,18 @@ void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBasicBlock *bb,
                                                   NativeInstruction *instr,
                                                   MemoryOperand &mloc,
                                                   VirtualRegister seg_offs) {
-  GRANARY_UNUSED(bb);
-  GRANARY_UNUSED(instr);
-  GRANARY_UNUSED(mloc);
-  GRANARY_UNUSED(seg_offs);
 
-#if 0
-  RegisterOperand offset(seg_offs);
-  OperandString str;
-  mloc.EncodeToString(&str);
+  VirtualRegister seg_reg;
+  GRANARY_IF_DEBUG( auto matched = ) mloc.MatchSegmentRegister(seg_reg);
+  GRANARY_ASSERT(matched);
 
-  lir::InlineAssembly asm_(offset);
-
-  // !!!! THIS IS WRONG -- NEED A WAY TO GET THE SEGMENT !!!
-  if (!memcmp("GS:", str.Buffer(), 3)) {
-    asm_.InlineBefore(instr, "MOV r64 %1, m64 GS:0;"
-                             "LEA r64 %1, m64 [%1 + %0];"_x86_64);
-    InstrumentMemOp(bb, instr, mloc, asm_.Register(bb, 1));
-
-  } else if (!memcmp("FS:", str.Buffer(), 3)) {
-    asm_.InlineBefore(instr, "MOV r64 %0, m64 FS:0;"
-                             "LEA r64 %1, m64 [%1 + %0];"_x86_64);
-    InstrumentMemOp(bb, instr, mloc, asm_.Register(bb, 1));
-  }
-#endif
+  RegisterOperand offset_op(seg_offs);
+  RegisterOperand addr_reg_op(bb->AllocateVirtualRegister());
+  RegisterOperand seg_reg_op(seg_reg);
+  lir::InlineAssembly asm_(offset_op, addr_reg_op, seg_reg_op);
+  asm_.InlineBefore(instr, "MOV r64 %1, m64 %2:[0];"
+                           "LEA r64 %1, m64 [%1 + %0];"_x86_64);
+  InstrumentMemOp(bb, instr, mloc, addr_reg_op);
 }
 
 // Instrument a memory operand that accesses some absolute memory address.
@@ -89,17 +74,26 @@ void MemOpInstrumentationTool::InstrumentAddrMemOp(DecodedBasicBlock *bb,
                                                    MemoryOperand &mloc,
                                                    const void *addr) {
   ImmediateOperand native_addr(addr);
-  RegisterOperand addr_reg(bb->AllocateVirtualRegister());
-  lir::InlineAssembly asm_(native_addr, addr_reg);
+  RegisterOperand addr_reg_op(bb->AllocateVirtualRegister());
+  lir::InlineAssembly asm_(native_addr, addr_reg_op);
   asm_.InlineBefore(instr, "MOV r64 %1, i64 %0;"_x86_64);
-  InstrumentMemOp(bb, instr, mloc, addr_reg);
+  InstrumentMemOp(bb, instr, mloc, addr_reg_op);
 }
 
 void MemOpInstrumentationTool::InstrumentCompoundMemOp(
     DecodedBasicBlock *bb, NativeInstruction *instr,
     MemoryOperand &mloc) {
-  RegisterOperand addr_reg(bb->AllocateVirtualRegister());
-  lir::InlineAssembly asm_(mloc, addr_reg);
+
+  // Track stack pointer propagation.
+  VirtualRegister base;
+  VirtualRegister addr_reg = bb->AllocateVirtualRegister();
+  if (mloc.CountMatchedRegisters(base) &&
+      (base.IsStackPointer() || base.IsVirtualStackPointer())) {
+    addr_reg.ConvertToVirtualStackPointer();
+  }
+
+  RegisterOperand addr_reg_op(addr_reg);
+  lir::InlineAssembly asm_(mloc, addr_reg_op);
   asm_.InlineBefore(instr, "LEA r64 %1, m64 %0;"_x86_64);
-  InstrumentMemOp(bb, instr, mloc, addr_reg);
+  InstrumentMemOp(bb, instr, mloc, addr_reg_op);
 }

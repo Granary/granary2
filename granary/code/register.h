@@ -224,7 +224,6 @@ union alignas(alignof(void *)) VirtualRegister {
     return reg_num != that.reg_num || kind != that.kind;
   }
 
-  GRANARY_INTERNAL_DEFINITION
   inline void ConvertToVirtualStackPointer(void) {
     GRANARY_ASSERT(VR_KIND_VIRTUAL_GPR == kind);
     kind = VR_KIND_VIRTUAL_STACK;
