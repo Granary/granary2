@@ -126,8 +126,8 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
 
     // Add the shadow base to the offset, forming the shadow pointer.
     asm_.InlineBefore(instr, "ADD r64 %4, r64 %5;"_x86_64);
-    auto &native_addr_op(asm_.Register(bb, 4));
-    auto &shadow_addr_op(asm_.Register(bb, 6));
+    auto native_addr_op = asm_.Register(bb, 4);
+    auto shadow_addr_op = asm_.Register(bb, 6);
 
     auto old_offset = 0UL;
     char adjust_shadow_offset[32];

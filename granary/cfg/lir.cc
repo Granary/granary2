@@ -94,24 +94,5 @@ Instruction *InlineAssembly::InlineAfter(
   return instr;
 }
 
-// Gives access to one of the registers defined within the inline assembly.
-//
-// This is a bit tricky because inline assembly is only parsed later. The
-// solution employed is to "pre allocated" the virtual register number when
-// it's requested here, then use that later when the virtual register is
-// needed.
-RegisterOperand &InlineAssembly::Register(DecodedBasicBlock *block,
-                                          int reg_num) const {
-  if (!scope->var_is_initialized[reg_num]) {
-    RegisterOperand reg_op(block->AllocateVirtualRegister());
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
-    memcpy(scope->vars[reg_num].reg.AddressOf(), &reg_op, sizeof reg_op);
-#pragma clang diagnostic pop
-    scope->var_is_initialized[reg_num] = true;
-  }
-  return *(scope->vars[reg_num].reg.AddressOf());
-}
-
 }  // namespace lir
 }  // namespace granary

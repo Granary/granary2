@@ -17,43 +17,21 @@
 namespace granary {
 
 enum {
-  MAX_NUM_INLINE_VARS = 16,
-  MAX_NUM_FUNC_OPERANDS = 6
+  kMaxNumInlineVars = 16,
+  kMaxNumFuncOperands = 6
 };
 
 #ifdef GRANARY_INTERNAL
+
 // Forward declarations.
 class LocalControlFlowGraph;
 class DecodedBasicBlock;
 class LabelInstruction;
 class Instruction;
 
-// A variable in the inline assembly. Variables are untyped, and assumed to
-// be used in the correct way from the inline assembly instructions themselves.
-union InlineAssemblyVariable {
- public:
-  InlineAssemblyVariable(void) = default;
-
-  // Initialize the inline assembly variable with a particular operand.
-  explicit InlineAssemblyVariable(const Operand *op);
-
-  Container<RegisterOperand> reg;
-  Container<MemoryOperand> mem;
-  Container<ImmediateOperand> imm;
-  AnnotationInstruction *label;
-};
-
-static_assert(0 == offsetof(InlineAssemblyVariable, reg),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, mem),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, imm),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, label),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
+namespace arch {
+class Operand;
+}  // namespace arch
 
 // Represents a scope of inline assembly. Within this scope, several virtual
 // registers are live.
@@ -69,8 +47,8 @@ class InlineAssemblyScope : public UnownedCountedObject {
   })
 
   // Variables used/referenced/created within the scope.
-  InlineAssemblyVariable vars[MAX_NUM_INLINE_VARS];
-  bool var_is_initialized[MAX_NUM_INLINE_VARS];
+  OpaqueContainer<arch::Operand, 32, 16> vars[kMaxNumInlineVars];
+  bool var_is_initialized[kMaxNumInlineVars];
 
  private:
   InlineAssemblyScope(void) = delete;
@@ -113,7 +91,7 @@ class InlineAssemblyBlock {
 class InlineFunctionCall {
  public:
   InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
-                     Operand ops[MAX_NUM_FUNC_OPERANDS], size_t num_args_);
+                     Operand ops[kMaxNumFuncOperands], size_t num_args_);
 
   inline size_t NumArguments(void) const {
     return num_args;
@@ -126,8 +104,8 @@ class InlineFunctionCall {
 
   AppPC target_app_pc;
   size_t num_args;
-  Operand args[MAX_NUM_FUNC_OPERANDS];
-  VirtualRegister arg_regs[MAX_NUM_FUNC_OPERANDS];
+  Operand args[kMaxNumFuncOperands];
+  VirtualRegister arg_regs[kMaxNumFuncOperands];
 
  private:
   InlineFunctionCall(void) = delete;

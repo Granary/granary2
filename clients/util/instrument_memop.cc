@@ -23,8 +23,8 @@ void MemOpInstrumentationTool::InstrumentBlock(DecodedBasicBlock *bb) {
 
 // Instrument a memory operation.
 void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
-                                                NativeInstruction *instr,
-                                                MemoryOperand &mloc) {
+                                               NativeInstruction *instr,
+                                               MemoryOperand &mloc) {
   // Doesn't read from or write to memory.
   if (mloc.IsEffectiveAddress()) return;
 
@@ -54,14 +54,22 @@ void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
 // a segment register. We assume that the first quadword stored in the segment
 // points to the segment base address.
 void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBasicBlock *bb,
-                                                   NativeInstruction *instr,
-                                                   MemoryOperand &mloc,
-                                                   VirtualRegister seg_offs) {
+                                                  NativeInstruction *instr,
+                                                  MemoryOperand &mloc,
+                                                  VirtualRegister seg_offs) {
+  GRANARY_UNUSED(bb);
+  GRANARY_UNUSED(instr);
+  GRANARY_UNUSED(mloc);
+  GRANARY_UNUSED(seg_offs);
+
+#if 0
   RegisterOperand offset(seg_offs);
   OperandString str;
   mloc.EncodeToString(&str);
 
   lir::InlineAssembly asm_(offset);
+
+  // !!!! THIS IS WRONG -- NEED A WAY TO GET THE SEGMENT !!!
   if (!memcmp("GS:", str.Buffer(), 3)) {
     asm_.InlineBefore(instr, "MOV r64 %1, m64 GS:0;"
                              "LEA r64 %1, m64 [%1 + %0];"_x86_64);
@@ -72,23 +80,26 @@ void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBasicBlock *bb,
                              "LEA r64 %1, m64 [%1 + %0];"_x86_64);
     InstrumentMemOp(bb, instr, mloc, asm_.Register(bb, 1));
   }
+#endif
 }
 
 // Instrument a memory operand that accesses some absolute memory address.
 void MemOpInstrumentationTool::InstrumentAddrMemOp(DecodedBasicBlock *bb,
-                                                    NativeInstruction *instr,
-                                                    MemoryOperand &mloc,
-                                                    const void *addr) {
+                                                   NativeInstruction *instr,
+                                                   MemoryOperand &mloc,
+                                                   const void *addr) {
   ImmediateOperand native_addr(addr);
-  lir::InlineAssembly asm_(native_addr);
+  RegisterOperand addr_reg(bb->AllocateVirtualRegister());
+  lir::InlineAssembly asm_(native_addr, addr_reg);
   asm_.InlineBefore(instr, "MOV r64 %1, i64 %0;"_x86_64);
-  InstrumentMemOp(bb, instr, mloc, asm_.Register(bb, 1));
+  InstrumentMemOp(bb, instr, mloc, addr_reg);
 }
 
 void MemOpInstrumentationTool::InstrumentCompoundMemOp(
     DecodedBasicBlock *bb, NativeInstruction *instr,
     MemoryOperand &mloc) {
-  lir::InlineAssembly asm_(mloc);
+  RegisterOperand addr_reg(bb->AllocateVirtualRegister());
+  lir::InlineAssembly asm_(mloc, addr_reg);
   asm_.InlineBefore(instr, "LEA r64 %1, m64 %0;"_x86_64);
-  InstrumentMemOp(bb, instr, mloc, asm_.Register(bb, 1));
+  InstrumentMemOp(bb, instr, mloc, addr_reg);
 }

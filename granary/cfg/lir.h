@@ -111,7 +111,7 @@ inline static void InitInlineOps(Operand *, size_t, size_t) {}
 template <typename T, typename... Args>
 inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
                                  T arg, Args... args) {
-  if (i >= num || i >= MAX_NUM_FUNC_OPERANDS) return;
+  if (i >= num || i >= kMaxNumFuncOperands) return;
   InitInlineOp(&(ops[i]), arg);
   InitInlineOps(ops, i + 1, num, args...);
 }
@@ -131,7 +131,7 @@ std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
 template <typename FuncT, typename... Args>
 inline static std::unique_ptr<Instruction> InlineFunctionCall(
     DecodedBasicBlock *block, FuncT func, Args... args) {
-  Operand ops[MAX_NUM_FUNC_OPERANDS];
+  Operand ops[kMaxNumFuncOperands];
   auto num_args = sizeof...(args);
   detail::InitInlineOps(ops, 0UL, num_args, args...);
   return detail::InlineFunctionCall(block, UnsafeCast<AppPC>(func), ops,
@@ -202,7 +202,9 @@ class InlineAssembly {
                            std::initializer_list<const char *> lines);
 
   // Gives access to one of the registers defined within the inline assembly.
-  RegisterOperand &Register(DecodedBasicBlock *block, int reg_num) const;
+  //
+  // Note: This function has an architecture-specific implementation.
+  RegisterOperand Register(DecodedBasicBlock *block, int reg_num) const;
 
  private:
   GRANARY_POINTER(InlineAssemblyScope) *scope;

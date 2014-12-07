@@ -503,15 +503,15 @@ define print-arch-operand
     # Compound base + index * scale + displacement memory operand.
     if $__o->is_compound
       set $__pplus = 0
-      if XED_REG_INVALID != $__o->mem.reg_base
-        print-xed-reg $__o->mem.reg_base
+      if VR_KIND_UNKNOWN != $__o->mem.base.kind
+        print-virt-reg $__o->mem.base
         set $__pplus = 1
       end
-      if XED_REG_INVALID != $__o->mem.reg_index
+      if VR_KIND_UNKNOWN != $__o->mem.index.kind
         if $__pplus
           printf " + "
         end
-        print-xed-reg $__o->mem.reg_index
+        print-virt-reg $__o->mem.index
         printf " * %u", $__o->mem.scale
         set $__pplus = 1
       end

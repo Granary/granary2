@@ -1,6 +1,9 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
+
+#include "arch/driver.h"
 
 #include "granary/base/cstring.h"
 
@@ -12,20 +15,6 @@
 
 namespace granary {
 
-InlineAssemblyVariable::InlineAssemblyVariable(const Operand *op) {
-  if (auto reg_op = DynamicCast<const RegisterOperand *>(op)) {
-    reg.Construct(*reg_op);
-  } else if (auto mem_op = DynamicCast<const MemoryOperand *>(op)) {
-    mem.Construct(*mem_op);
-  } else if (auto imm_op = DynamicCast<const ImmediateOperand *>(op)) {
-    imm.Construct(*imm_op);
-  } else if (auto label_op = DynamicCast<const LabelOperand *>(op)) {
-    label = label_op->Target();
-  } else {
-    GRANARY_ASSERT(false);  // E.g. Passing in a `nullptr`.
-  }
-}
-
 // Initialize this inline assembly scope.
 InlineAssemblyScope::InlineAssemblyScope(
     std::initializer_list<const Operand *> inputs)
@@ -34,9 +23,9 @@ InlineAssemblyScope::InlineAssemblyScope(
   memset(&vars, 0, sizeof vars);
   memset(&(var_is_initialized[0]), 0, sizeof var_is_initialized);
 
-  for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {
+  for (auto i = 0U; i < kMaxNumInlineVars && i < inputs.size(); ++i) {
     if (auto op = inputs.begin()[i]) {
-      new (&(vars[i])) InlineAssemblyVariable(op);
+      vars[i].Construct(*op->Extract());
       var_is_initialized[i] = true;
     }
   }
@@ -64,7 +53,7 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
 
 // Initialize the inline function call.
 InlineFunctionCall::InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
-                                       Operand ops[MAX_NUM_FUNC_OPERANDS],
+                                       Operand ops[kMaxNumFuncOperands],
                                        size_t num_args_)
     : target_app_pc(target),
       num_args(num_args_) {

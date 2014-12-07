@@ -181,7 +181,7 @@ static void CreateMonitorThread(void) {
   auto stack_ptr = &(gMonitorStack[kStackSize - arch::ADDRESS_WIDTH_BYTES]);
   *UnsafeCast<void(**)(void)>(stack_ptr) = Monitor;
   auto ret = sys_clone(CLONE_VM | CLONE_FILES | CLONE_FS | CLONE_UNTRACED |
-                       CLONE_THREAD,
+                       CLONE_THREAD | CLONE_SIGHAND,
                        stack_ptr, nullptr, nullptr, 0);
   if (0 >= ret) {
     os::Log("ERROR: Couldn't create monitor thread.\n");
@@ -248,7 +248,7 @@ class DataCollider : public MemOpInstrumentationTool {
     ImmediateOperand shift_amount(gShiftAmount, 1);
     lir::InlineAssembly asm_(addr, shift_amount, sample_point);
     asm_.InlineBefore(instr, "MOV r64 %3, r64 %0;"_x86_64);
-    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %3, i8 %2;");
+    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %3, i8 %1;");
     asm_.InlineBefore(instr, "CMP r64 %3, m64 %2;"
                              "JNZ l %4;"_x86_64);
     asm_.InlineBefore(instr, "LABEL %4:"_x86_64);

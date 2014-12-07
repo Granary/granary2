@@ -237,7 +237,7 @@ Operand &Operand::operator=(const Operand &that) {
     const auto old_segment = segment;
     memcpy(this, &that, sizeof that);
     if (old_width) width = old_width;
-    rw = old_rw;
+    if (old_rw) rw = old_rw;
     is_effective_address = old_is_ea;
     is_explicit = true;
     is_sticky = false;
