@@ -1,7 +1,5 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-/* Copyright 2014 Peter Goodman, all rights reserved. */
-
 #include "clients/util/instrument_memop.h"  // Needs to go first.
 
 GRANARY_USING_NAMESPACE granary;
