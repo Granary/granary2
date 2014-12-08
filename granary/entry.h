@@ -13,6 +13,7 @@ enum EntryPointKind : unsigned {
   kEntryPointKernelModuleCallback,
   kEntryPointUserSignalHandler,
   kEntryPointUserAttach,
+  kEntryPointUserThread,
   kEntryPointTestCase
 };
 

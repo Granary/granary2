@@ -52,6 +52,7 @@ class InlineAssemblyParser {
       ConsumeWhiteSpace();
       if (!*ch) break;
       memset(&data, 0, sizeof data);
+      num_immediates = 0;
       op = &(data.ops[0]);
       ParseInstruction();
     }

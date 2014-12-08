@@ -19,7 +19,7 @@
 #include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_allocate_slots.h"
 #include "granary/code/assemble/10_add_connecting_jumps.h"
-#include "granary/code/assemble/11_fixup_return_addresses.h"
+#include "granary/code/assemble/11_find_block_entrypoints.h"
 
 #include "granary/util.h"
 
@@ -90,9 +90,8 @@ FragmentList Assemble(Context *context, LocalControlFlowGraph *cfg) {
   // successor fragments.
   AddConnectingJumps(&frags);
 
-  // Move all `kAnnotReturnAddressLabel` annotations to the beginning of their
-  // partitions.
-  FixupReturnAddresses(&frags);
+  // Identify fragments associated with block entrypoints.
+  FindBlockEntrypointFragments(&frags);
 
   if (FLAG_debug_log_fragments) {
     os::Log(os::LogDebug, &frags);

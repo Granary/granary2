@@ -61,7 +61,8 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   // therefore won't have added their shadow structure descriptions yet. We
   // need those shadow structure descriptions to determine the size of shadow
   // memory.
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     gShiftAmountLong = static_cast<size_t>(
         __builtin_ctz(static_cast<unsigned>(FLAG_shadow_granularity)));
     gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
@@ -69,7 +70,9 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   }
 
   // Reset all globals to their initial state.
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
+
     while (gDescriptions) {
       auto desc = gDescriptions;
       gDescriptions = desc->next;

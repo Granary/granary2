@@ -46,7 +46,8 @@ typedef MetaDataLinkedListIterator<CounterMetaData> BlockCounterMetaIterator;
 // Simple tool for static and dynamic basic block counting.
 class BBCount : public InstrumentationTool {
  public:
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     if (FLAG_count_execs) {
       AddMetaData<CounterMetaData>();
     }
@@ -60,7 +61,9 @@ class BBCount : public InstrumentationTool {
             count_meta->count);
   }
 
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
+
     if (FLAG_count_execs) {
       SpinLockedRegion locker(&gAllBlocksLock);
       for (auto meta : BlockCounterMetaIterator(gAllBlocks)) {

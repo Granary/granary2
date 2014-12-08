@@ -97,7 +97,8 @@ class GDBDebuggerHelper : public InstrumentationTool {
   // attaching GDB somehow makes the bug being debugged disappear, then we
   // register a signal handler for `SEGFAULT`s that will prompt for GDB to be
   // attached.
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     if (!FLAG_debug_gdb_prompt) AddSystemCallEntryFunction(SuppressSigAction);
   }
 

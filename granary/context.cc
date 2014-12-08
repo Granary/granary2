@@ -13,6 +13,7 @@
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
+#include "granary/code/inline_assembly.h"
 
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
@@ -31,8 +32,6 @@ GRANARY_DEFINE_positive_int(edge_cache_slab_size, 256,
     "The number of pages allocated at once to store edge code. Each "
     "context maintains its own edge code allocator. The default value is "
     "`256` pages per slab (1MiB).");
-
-GRANARY_DECLARE_string(tools);
 
 namespace granary {
 namespace arch {
@@ -126,8 +125,7 @@ static void FreeCallbacks(T &callback_map) {
 }  // namespace
 
 Context::Context(void)
-    : tool_manager(this),
-      block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size),
+    : block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size),
                        kBlockCodeCache),
       edge_code_cache(static_cast<size_t>(FLAG_edge_cache_slab_size),
                       kEdgeCodeCache),
@@ -163,55 +161,6 @@ Context::~Context(void) {
   FreeCallbacks(inline_callbacks);
 }
 
-// Initialize all tools from a comma-separated list of tools.
-void Context::InitTools(InitReason reason) {
-
-  // Force register some tools that should get priority over all others.
-  tool_manager.Add(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
-
-  // Registered early so that all returns start off specialized by default.
-  tool_manager.Add("transparent_returns_early");
-
-#ifdef GRANARY_WITH_VALGRIND
-  // Auto-registered so that `aligned_alloc` and `free` are always wrapped to
-  // execute natively (and so are ideally instrumented by Valgrind to help
-  // catch memory access bugs).
-  tool_manager.Add("valgrind");
-#endif  // GRANARY_WITH_VALGRIND
-
-  if (FLAG_tools) {
-    // Register tools specified at the command-line.
-    ForEachCommaSeparatedString<kMaxToolNameLength>(
-        FLAG_tools,
-        [&] (const char *tool_name) {
-          tool_manager.Add(tool_name);
-        });
-  }
-
-  // Registered last so that transparent returns applies to all control-flow
-  // after every other tool has made control-flow decisions.
-  tool_manager.Add("transparent_returns_late");
-
-  // Initialize all tools. Tool initialization is typically where tools will
-  // register their specific their block meta-data, therefore it is important
-  // to initialize all tools before finalizing the meta-data manager.
-  auto tools = tool_manager.AllocateTools();
-  for (auto tool : ToolIterator(tools)) {
-    tool->Init(reason);
-  }
-  tool_manager.FreeTools(tools);
-}
-
-// Exit all tools. Tool `Exit` methods should restore any global state to
-// their initial values.
-void Context::ExitTools(ExitReason reason) {
-  auto tools = tool_manager.AllocateTools();
-  for (auto tool : ToolIterator(tools)) {
-    tool->Exit(reason);
-  }
-  tool_manager.FreeTools(tools);
-}
-
 // Allocate and initialize some `BlockMetaData`. This will also set-up the
 // `AppMetaData` within the `BlockMetaData`.
 BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
@@ -227,16 +176,6 @@ BlockMetaData *Context::InstantiateBlockMetaData(
   auto meta = meta_template->Copy();
   MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
   return meta;
-}
-
-// Allocate instances of the tools that will be used to instrument blocks.
-InstrumentationTool *Context::AllocateTools(void) {
-  return tool_manager.AllocateTools();
-}
-
-// Free the allocated tools.
-void Context::FreeTools(InstrumentationTool *tools) {
-  tool_manager.FreeTools(tools);
 }
 
 // Allocates a direct edge data structure, as well as the code needed to
@@ -354,14 +293,12 @@ GRANARY_EARLY_GLOBAL static Container<Context> gContext;
 }  // namespace
 
 // Initializes a new active context.
-void InitContext(InitReason reason) {
+void InitContext(void) {
   gContext.Construct();
-  gContext->InitTools(reason);
 }
 
 // Destroys the active context.
-void ExitContext(ExitReason reason) {
-  gContext->ExitTools(reason);
+void ExitContext(void) {
   gContext.Destroy();
 }
 

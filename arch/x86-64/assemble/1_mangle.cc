@@ -191,6 +191,26 @@ void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
   }
 }
 
+// Mangle a tail-call by pushing a return address onto the stack.
+void MangleTailCall(DecodedBasicBlock *block, ControlFlowInstruction *cfi) {
+  Instruction ni;
+  auto ret_addr_pc = cfi->DecodedPC() + cfi->DecodedLength();
+  auto ret_addr = reinterpret_cast<uintptr_t>(ret_addr_pc);
+  auto ret_addr32 = static_cast<uint32_t>(ret_addr);
+  if (ret_addr32 == ret_addr) {
+    PUSH_IMMz(&ni, ret_addr32);
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+    cfi->InsertBefore(new NativeInstruction(&ni));
+  } else {
+    auto ret_addr_reg = block->AllocateVirtualRegister();
+    MOV_GPRv_IMMz(&ni, ret_addr_reg, ret_addr);
+    cfi->InsertBefore(new NativeInstruction(&ni));
+    PUSH_GPRv_50(&ni, ret_addr_reg);
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+    cfi->InsertBefore(new NativeInstruction(&ni));
+  }
+}
+
 // Mangle a specialized indirect return into an indirect jump.
 void MangleIndirectReturn(DecodedBasicBlock *block,
                           ControlFlowInstruction *cfi) {

@@ -9,10 +9,12 @@
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"
+#include "granary/base/option.h"
 
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/lir.h"
 #include "granary/cfg/operand.h"
 
 #include "granary/code/assemble/1_mangle.h"
@@ -20,6 +22,8 @@
 
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
+
+GRANARY_DECLARE_bool(transparent_returns);
 
 namespace granary {
 namespace arch {
@@ -56,6 +60,10 @@ extern void MangleDirectCFI(DecodedBasicBlock *block,
 // Note: This has an architecture-specific implementation.
 extern void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
                             const MemoryOperand &op, const void *mem_addr);
+
+// Mangle a tail-call by pushing a return address onto the stack.
+extern void MangleTailCall(DecodedBasicBlock *block,
+                           ControlFlowInstruction *cfi);
 
 // Mangle a "specialized" return so that is converted into an indirect jump.
 //
@@ -111,16 +119,8 @@ class BlockMangler {
     }
   }
 
-  void MangleFunctionCall(ControlFlowInstruction *cfi) {
-    // Always add in an `kAnnotReturnAddressLabel` annotation. In a later stage,
-    // we ensure that this annotation is placed in the correct location, even
-    // if instructions are inserted between it and the function.
-    auto ret_address = new AnnotationInstruction(
-        kAnnotReturnAddressLabel, cfi->DecodedPC() + cfi->DecodedLength());
-    cfi->InsertAfter(ret_address);
-    cfi->return_address = ret_address;
-
-    // Ensure that targets of function calls have valid stack meta-data.
+  // Ensure that targets of function calls have valid stack meta-data.
+  void MangleFunctionCallTarget(ControlFlowInstruction *cfi) {
     auto target_generic = cfi->TargetBlock();
     if (auto target = DynamicCast<InstrumentedBasicBlock *>(target_generic)) {
       if (auto target_meta = target->UnsafeMetaData()) {
@@ -130,11 +130,17 @@ class BlockMangler {
     }
   }
 
+  void MangleFunctionCall(ControlFlowInstruction *cfi) {
+    if (FLAG_transparent_returns && cfi->IsAppInstruction()) {
+      lir::ConvertFunctionCallToJump(cfi);
+      arch::MangleTailCall(block, cfi);
+    }
+    MangleFunctionCallTarget(cfi);
+  }
+
   // Relativize a control-flow instruction.
   void MangleCFI(ControlFlowInstruction *cfi) {
-    if (cfi->IsFunctionCall()) {
-      MangleFunctionCall(cfi);
-    }
+    if (cfi->IsFunctionCall()) MangleFunctionCall(cfi);
 
     auto target_block = cfi->TargetBlock();
     if (IsA<NativeBasicBlock *>(target_block)) {

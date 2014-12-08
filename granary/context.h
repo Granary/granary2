@@ -31,8 +31,6 @@ class DirectEdge;
 class IndirectEdge;
 class Instruction;
 class MetaDataDescription;
-class InstrumentationTool;
-class InstrumentationManager;
 class InlineFunctionCall;
 
 namespace arch {
@@ -47,12 +45,6 @@ class Context {
   Context(void);
   ~Context(void);
 
-  // Initialize all tools from a comma-separated list of tools.
-  void InitTools(InitReason reason);
-
-  // Exit all tools.
-  void ExitTools(ExitReason reason);
-
   // Allocate and initialize some `BlockMetaData`.
   BlockMetaData *AllocateBlockMetaData(AppPC start_pc);
 
@@ -60,12 +52,6 @@ class Context {
   // meta-data template `meta_template`.
   BlockMetaData *InstantiateBlockMetaData(const BlockMetaData *meta_template,
                                        AppPC start_pc);
-
-  // Allocate instances of the tools that will be used to instrument blocks.
-  InstrumentationTool *AllocateTools(void);
-
-  // Free the allocated tools.
-  void FreeTools(InstrumentationTool *tools);
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
@@ -108,10 +94,6 @@ class Context {
 #endif  // GRANARY_WHERE_kernel
 
  private:
-  // Manages all tools that instrument code that is taken over by this
-  // environment.
-  InstrumentationManager tool_manager;
-
   // Manages all basic block code allocated/understood by this environment.
   CodeCache block_code_cache;
 
@@ -158,10 +140,10 @@ class Context {
 };
 
 // Initializes a new active context.
-void InitContext(InitReason reason);
+void InitContext(void);
 
 // Destroys the active context.
-void ExitContext(ExitReason reason);
+void ExitContext(void);
 
 // Loads the active context.
 Context *GlobalContext(void);

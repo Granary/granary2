@@ -64,7 +64,7 @@ namespace {
 
 // Set the encoded address for a label or return address instruction.
 static void SetEncodedPC(AnnotationInstruction *instr, CachePC pc) {
-  if (kAnnotationLabel == instr->annotation || kAnnotReturnAddressLabel == instr->annotation) {
+  if (kAnnotationLabel == instr->annotation) {
     instr->SetData(pc);
   }
 }

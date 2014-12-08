@@ -20,7 +20,7 @@ void granary_exit(ExitReason reason) {
   // helps track down memory leaks.
   Exit(reason);
 #else
-  GlobalContext()->ExitTools(reason);
+  ExitTools(reason);
   os::ExitLog();
 #endif  // GRANARY_WITH_VALGRIND
 }
@@ -45,7 +45,9 @@ void PostExit(void) {
 }  // namespace
 
 void Exit(ExitReason reason) {
-  ExitContext(reason);
+  ExitTools(reason);
+  ExitToolManager();
+  ExitContext();
   ExitClients();
   ExitMetaData();
   os::ExitLog();

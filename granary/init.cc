@@ -57,7 +57,9 @@ void Init(InitReason reason) {
 
   InitMetaData();
   InitClients();
-  InitContext(reason);
+  InitContext();
+  InitToolManager();
+  InitTools(reason);
 }
 
 }  // namespace granary

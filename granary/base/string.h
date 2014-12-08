@@ -137,7 +137,14 @@ unsigned long StringLength(const char *ch);
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`.
 unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
                          const char * __restrict str);
-unsigned long CopyString(char * __restrict buffer, const char * __restrict str);
+
+// Copy at most `kBuffLen` characters from the C string `str` into `buffer`.
+// Ensures that `buffer` is '\0'-terminated. Assumes `kBuffLen > 0`.
+template <const unsigned long kBuffLen>
+inline static unsigned long CopyString(char (&buffer)[kBuffLen],
+                                       const char * __restrict str) {
+  return CopyString(buffer, kBuffLen, str);
+}
 
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);
@@ -145,6 +152,14 @@ bool StringsMatch(const char *str1, const char *str2);
 // Similar to `vsnprintf`. Returns the number of formatted characters.
 unsigned long VFormat(char * __restrict buffer, unsigned long len,
                       const char * __restrict format, va_list args);
+
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+template <const unsigned long kBuffLen>
+inline static unsigned long VFormat(char (&buffer)[kBuffLen],
+                                    const char * __restrict format,
+                                    va_list args) {
+  return VFormat(buffer, kBuffLen, format, args);
+}
 
 // Convenience for formatting.
 inline static unsigned long Format(char *buff, unsigned long len,

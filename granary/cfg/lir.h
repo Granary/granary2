@@ -13,6 +13,8 @@
 
 #include "granary/code/inline_assembly.h"
 
+#include "granary/entry.h"
+
 namespace granary {
 
 class BasicBlock;
@@ -52,8 +54,21 @@ std::unique_ptr<Instruction> Jump(const LabelInstruction *target_instr);
 void ConvertFunctionCallToJump(ControlFlowInstruction *cfi);
 void ConvertJumpToFunctionCall(ControlFlowInstruction *cfi);
 
-struct TranslationContext {
-  GRANARY_POINTER(Context) *granary_context;
+// Represents a Granary translation context.
+//
+// Note: These cannot directly be constructed. Instead, they need to be passed
+//       'pre-built' to somewhere. In the case of context callbacks, this
+//       is accomplished by initializing an argument register correctly.
+class TranslationContext {
+ public:
+  // Translate an entrypoint.
+  CachePC TranslateEntryPoint(AppPC target_pc, EntryPointKind kind,
+                              int category=-1);
+
+ private:
+  TranslationContext(void) = delete;
+
+  GRANARY_POINTER(Context) * const context;
 };
 
 // Call to a client function that takes in an argument to a granary context and

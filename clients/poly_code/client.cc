@@ -160,7 +160,9 @@ class PolyCode : public InstrumentationTool {
  public:
   virtual ~PolyCode(void) = default;
 
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
+
 #ifdef GRANARY_WHERE_user
     // Wrap libc.
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
@@ -210,7 +212,9 @@ class PolyCode : public InstrumentationTool {
     os::Log("\n");
   }
 
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
+
     ForEachType(LogTypeInfo);
     SpinLockedRegion locker(&gAllBlocksLock);
     for (auto meta : BlockTypeInfoIterator(gAllBlocks)) {

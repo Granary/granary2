@@ -9,6 +9,8 @@
 
 #include "granary/code/inline_assembly.h"
 
+#include "granary/translate.h"
+
 namespace granary {
 namespace lir {
 
@@ -29,6 +31,14 @@ std::unique_ptr<Instruction> FunctionCall(BlockFactory *factory,
   auto block = factory->Materialize(target_pc);
   factory->RequestBlock(block, request);
   return FunctionCall(block);
+}
+
+// Translate an entrypoint.
+CachePC TranslationContext::TranslateEntryPoint(AppPC target_pc,
+                                                EntryPointKind kind,
+                                                int category) {
+  return granary::TranslateEntryPoint(context, target_pc, kind, category,
+                                      kTargetStackUnknown);
 }
 
 // Call to a client function that takes in an argument to a granary context and

@@ -201,7 +201,9 @@ class DataCollider : public MemOpInstrumentationTool {
   // therefore won't have added their shadow structure descriptions yet. We
   // need those shadow structure descriptions to determine the size of shadow
   // memory.
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
+
     gShiftAmount = static_cast<size_t>(
         __builtin_ctz(static_cast<unsigned>(FLAG_watchpoint_granularity)));
 
@@ -229,7 +231,8 @@ class DataCollider : public MemOpInstrumentationTool {
   }
 
   // Exit; this kills off the monitor thread.
-  virtual void Exit(ExitReason reason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
     if (kExitProgram != reason && -1 != gMonitorThread) {
       kill(gMonitorThread, SIGKILL);
     }

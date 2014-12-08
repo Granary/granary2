@@ -45,12 +45,6 @@ static void UnmapMemory(SystemCallContext ctx) {
   ctx.Arg2() = PROT_NONE;  // Should succeed.
 }
 
-// Use Granary's `exit_group` function to handle process exit. This will lead
-// to all tools exiting.
-static void ExitGranary(SystemCallContext ctx) {
-  exit(static_cast<int>(ctx.Arg0()));
-}
-
 // Hooks that other clients can use for interposing on system calls.
 static ClosureList<SystemCallContext> entry_hooks GRANARY_GLOBAL;
 static ClosureList<SystemCallContext> exit_hooks GRANARY_GLOBAL;
@@ -66,8 +60,8 @@ static void RemoveAllHooks(void) {
 
 // Handle a system call entrypoint.
 void HookSystemCallEntry(lir::TranslationContext,
-                         arch::MachineContext *context) {
-  SystemCallContext ctx(context);
+                         arch::MachineContext *mcontext) {
+  SystemCallContext ctx(mcontext);
   entry_hooks.ApplyAll(ctx);
 
   // Note: We apply these hooks *after* the `entry_hooks` so that client-added
@@ -76,8 +70,13 @@ void HookSystemCallEntry(lir::TranslationContext,
 
   // Handle proper Granary exit procedures. Granary's `exit_group` function
   // deals with proper `Exit`ing of all tools.
-  if (GRANARY_UNLIKELY(__NR_exit_group == ctx.Number())) {
-    ExitGranary(ctx);
+  if (__NR_exit_group == ctx.Number()) {
+    exit(static_cast<int>(ctx.Arg0()));
+
+  // Exit a thread. This might trigger a full Granary exit if the program is
+  // single-threaded.
+  } else if (__NR_exit == ctx.Number()) {
+    os::ExitThread();
 
   // Manipulate certain kinds of memory operations.
   } else if (__NR_munmap == ctx.Number()) {
@@ -112,7 +111,8 @@ class UserSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~UserSpaceInstrumenter(void) = default;
 
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
     if (FLAG_hook_syscalls) {
       RemoveAllHooks();
     }

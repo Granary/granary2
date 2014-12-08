@@ -28,13 +28,13 @@ BinaryInstrumenter::BinaryInstrumenter(Context *context_,
                                        LocalControlFlowGraph *cfg_,
                                        BlockMetaData **meta_)
     : context(context_),
-      tools(context->AllocateTools()),
+      tools(AllocateTools()),
       meta(meta_),
       cfg(cfg_),
       factory(context, cfg) {}
 
 BinaryInstrumenter::~BinaryInstrumenter(void) {
-  context->FreeTools(tools);
+  FreeTools(tools);
 }
 
 // Instrument some code as-if it is targeted by a direct CFI.

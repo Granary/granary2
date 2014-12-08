@@ -151,17 +151,6 @@ enum InstructionAnnotation {
   // Target of a branch instruction.
   kAnnotationLabel,
 
-  // A special label that refers to the location of a return address after
-  // a function call instruction. This is primarily used during late mangling
-  // of indirect call instructions.
-  //
-  // When created, the value of this annotation is the address of the native
-  // code associated with this return address.
-  //
-  // When compiling / encoding instructions, the value of this annotation
-  // becomes the address at which this annotation is logically encoded.
-  kAnnotReturnAddressLabel,
-
   // Marks the stack as changing to a valid or undefined stack pointer value.
   kAnnotInvalidStack,
   kAnnotUnknownStackAbove,

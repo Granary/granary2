@@ -30,11 +30,6 @@ uint64_t CopyString(char * __restrict buffer, uint64_t buffer_len,
   }
 }
 
-uint64_t CopyString(char * __restrict buffer, const char * __restrict str) {
-  strcpy(buffer, str);
-  return strlen(buffer);
-}
-
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2) {
   return !strcmp(str1, str2);

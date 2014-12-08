@@ -56,10 +56,9 @@ static const char *GetEnv(const char *var_name) {
 // See `os/linux/arch/*/init.asm` to see the definition of `_init` and the
 // pass-through to `granary_init`.
 static void Attach(AppPC *start_pc_ptr) {
-  if (auto context = GlobalContext()) {
-    *start_pc_ptr = TranslateEntryPoint(context, *start_pc_ptr,
-                                        kEntryPointUserAttach);
-  }
+  auto context = GlobalContext();
+  *start_pc_ptr = TranslateEntryPoint(context, *start_pc_ptr,
+                                      kEntryPointUserAttach);
 
   // TODO(pag): Attach to signals.
 }
@@ -89,6 +88,7 @@ GRANARY_ENTRYPOINT void granary_init(granary::AppPC *attach_pc_ptr) {
   Init(kInitAttach);
   Attach(attach_pc_ptr);
 }
+
 }  // extern "C"
 
 #endif  // GRANARY_TARGET_test

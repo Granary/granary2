@@ -23,6 +23,20 @@
 #include "os/exception.h"
 #include "os/module.h"
 
+GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
+    "Enable transparent return addresses? The default is `"
+    GRANARY_IF_USER_ELSE("yes", "no") "`.\n"
+    "\n"
+    "Note: Enabling transparent returns will introduce significant\n"
+    "      performance overheads due to the extra complications involved\n"
+    "      specializing function return targets."
+    GRANARY_IF_USER("\n"
+    "\n"
+    "Note: Granary needs to preserve return address transparency when\n"
+    "      comprehensively instrumenting user space programs. However, if a\n"
+    "      program isn't being comprehensively instrumented, then return\n"
+    "      address transparency can likely be enabled."));
+
 GRANARY_DEFINE_positive_int(max_decoded_instructions_per_block, 16,
     "The maximum number of instructions to decode per basic block. The default "
     "value is `16`.");
@@ -188,10 +202,14 @@ void BlockFactory::AddFallThroughInstruction(DecodedBasicBlock *block,
     // otherwise not explicitly a control-flow instruction).
     add_fall_through_block = IsA<ExceptionalControlFlowInstruction *>(cfi);
     request_fall_through_block = add_fall_through_block;
+
+    if (cfi->IsFunctionCall() && !FLAG_transparent_returns) {
+      add_fall_through_block = false;
+    }
   }
 
-  if (add_fall_through_block || cfi->IsFunctionCall() ||
-      cfi->IsConditionalJump() || cfi->IsSystemCall()) {
+  if (add_fall_through_block || cfi->IsConditionalJump() ||
+      cfi->IsSystemCall()) {
     auto meta = context->AllocateBlockMetaData(pc);
     fall_through_block = new DirectBasicBlock(cfg, meta);
     block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));

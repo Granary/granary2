@@ -36,11 +36,13 @@ class Watchpoints : public InstrumentationTool {
  public:
   virtual ~Watchpoints(void) = default;
 
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     InitUserWatchpoints();
   }
 
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
     watchpoint_hooks.Reset();
   }
 

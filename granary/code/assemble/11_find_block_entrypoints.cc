@@ -4,13 +4,12 @@
 
 #include "granary/code/fragment.h"
 
-#include "granary/code/assemble/11_fixup_return_addresses.h"
+#include "granary/code/assemble/11_find_block_entrypoints.h"
 
 namespace granary {
-namespace {
 
-// For each basic block, this finds the unique first fragment of the block.
-static void FindBlockEntrypointFragments(FragmentList *frags) {
+// Finds the unique first fragment of each block.
+void FindBlockEntrypointFragments(FragmentList *frags) {
   // Find the unique block head.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
@@ -30,26 +29,6 @@ static void FindBlockEntrypointFragments(FragmentList *frags) {
       auto partition = frag->partition.Value();
       if (partition->entry_frag) {
         partition->entry_frag = frag;
-      }
-    }
-  }
-}
-
-}  // namespace
-
-// Makes sure that all `kAnnotReturnAddressLabel` annotations are in the
-// correct position.
-void FixupReturnAddresses(FragmentList *frags) {
-  FindBlockEntrypointFragments(frags);
-  for (auto frag : FragmentListIterator(frags)) {
-    for (auto instr : InstructionListIterator(frag->instrs)) {
-      if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
-        if (kAnnotReturnAddressLabel == annot_instr->annotation) {
-          auto entry_frag = frag->partition.Value()->entry_frag;
-          frag->instrs.Remove(instr);
-          entry_frag->instrs.Prepend(instr);
-          break;
-        }
       }
     }
   }

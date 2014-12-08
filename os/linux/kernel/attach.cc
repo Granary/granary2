@@ -24,7 +24,7 @@ extern "C" {
 void granary_attach_to_syscall(AppPC *func_pc, int syscall_number) {
   if (auto context = GlobalContext()) {
     *func_pc = TranslateEntryPoint(context, *func_pc, kEntryPointKernelSyscall,
-                                   kTargetStackValid, syscall_number);
+                                   syscall_number, kTargetStackValid);
   }
 }
 }  // extern C

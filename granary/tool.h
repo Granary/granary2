@@ -5,10 +5,7 @@
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"
-#include "granary/base/new.h"
 #include "granary/base/operator.h"
-
-#include "granary/code/inline_assembly.h"
 
 #include "granary/entry.h"
 #include "granary/exit.h"
@@ -16,9 +13,6 @@
 #include "granary/metadata.h"
 
 namespace granary {
-namespace os {
-class Module;
-}  // namespace os
 
 // Forward declarations.
 class BlockFactory;
@@ -26,12 +20,8 @@ class CompensationBasicBlock;
 class DecodedBasicBlock;
 class LocalControlFlowGraph;
 class InstrumentationTool;
-class Operand;
 
-GRANARY_INTERNAL_DEFINITION class Context;
-GRANARY_INTERNAL_DEFINITION class InlineAssembly;
-
-GRANARY_INTERNAL_DEFINITION enum {
+GRANARY_INTERNAL_DEFINITION enum : size_t {
   kMaxNumTools = 64,
   kMaxToolNameLength = 32
 };
@@ -45,10 +35,10 @@ class InstrumentationTool {
   virtual ~InstrumentationTool(void);
 
   // Initialize this tool.
-  virtual void Init(InitReason reason);
+  static void Init(InitReason reason);
 
   // Tear down this tool.
-  virtual void Exit(ExitReason reason);
+  static void Exit(ExitReason reason);
 
   // Used to instrument code entrypoints.
   virtual void InstrumentEntryPoint(BlockFactory *factory,
@@ -82,9 +72,6 @@ class InstrumentationTool {
   // Next tool used to instrument code.
   GRANARY_POINTER(InstrumentationTool) *next;
 
-  // Context into which this tool has been instantiated.
-  GRANARY_POINTER(Context) *context;
-
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationTool);
 };
@@ -92,7 +79,15 @@ class InstrumentationTool {
 // Describes a generic tool.
 struct ToolDescription {
   // Globally unique ID for this tool description.
-  GRANARY_CONST int id;
+  GRANARY_CONST size_t id;
+
+  // Next offset for dependencies. Dependencies are ordered so that tool
+  // ordering is consistent, regardless of global initialization order
+  // (which might change from compile-to-compile).
+  GRANARY_CONST size_t next_dependency_offset;
+
+  // Is this an active instrumentation tool?
+  GRANARY_CONST bool is_active;
 
   // Next tool.
   GRANARY_CONST ToolDescription *next;
@@ -102,9 +97,13 @@ struct ToolDescription {
 
   const size_t size;
   const size_t align;
+  GRANARY_CONST size_t allocation_offset;
 
   // Virtual table of operations on tools.
-  void (* const initialize)(void *);
+  void (* const construct)(void *);
+  void (* const destruct)(void *);
+  void (* const init)(InitReason);
+  void (* const exit)(ExitReason);
 };
 
 // Creates a description for a tool. Tool descriptions are treated as being
@@ -117,75 +116,21 @@ struct ToolDescriptor {
 // Descriptor for some tool.
 template <typename T>
 ToolDescription ToolDescriptor<T>::kDescription = {
-  -1,
+  0,
+  1,
+  false,
   nullptr,
   nullptr,
   sizeof(T),
   alignof(T),
-  &(Construct<T>)
+  0,
+  &(Construct<T>),
+  &(Destruct<T>),
+  &(T::Init),
+  &(T::Exit)
 };
 
-#ifdef GRANARY_INTERNAL
 typedef LinkedListIterator<InstrumentationTool> ToolIterator;
-
-// Manages a set of tools.
-class InstrumentationManager {
- public:
-  // Initialize an empty tool manager.
-  explicit InstrumentationManager(Context *context);
-  ~InstrumentationManager(void);
-
-  // Register a tool with this manager using the tool's name. This will look
-  // up the tool in the global list of all registered Granary tools.
-  void Add(const char *name);
-
-  // Allocate all the tools managed by this `ToolManager` instance, and chain
-  // then into a linked list. The returns list can be used to instrument code.
-  //
-  // This ensures that tools are allocated and inserted into the list according
-  // to the order of their dependencies, whilst also trying to preserve the
-  // tool order specified at the command-line.
-  InstrumentationTool *AllocateTools(void);
-
-  // Free all allocated tool objects. This expects a list of `Tool` objects, as
-  // allocated by `ToolManager::AllocateTools`.
-  void FreeTools(InstrumentationTool *tool);
-
- private:
-  InstrumentationManager(void) = delete;
-
-  // Register a tool with this manager using the tool's description.
-  void Register(const ToolDescription *desc);
-
-  // Initialize the allocator for meta-data managed by this manager.
-  void InitAllocator(void);
-
-  // Maximum alignment and size (in bytes) of all registered tools.
-  size_t max_align;
-  size_t max_size;
-
-  // Has this manager been finalized?
-  bool is_finalized;
-
-  // All tools registered with this manager.
-  int num_registered;
-  bool is_registered[kMaxNumTools];
-  const ToolDescription *descriptions[kMaxNumTools];
-
-  // TODO(pag): Have an ordered array of tool descriptions that represent the
-  //            tools ordered according to how they are specified at the command
-  //            line or according to internal dependencies.
-
-  // Slab allocator for allocating tool instrumentation objects.
-  Container<internal::SlabAllocator> allocator;
-
-  // Context to which thios tool manager belongs.
-  Context *context;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentationManager);
-};
-
-#endif  // GRANARY_INTERNAL
 
 // Register a tool with Granary given its description.
 void AddInstrumentationTool(
@@ -205,6 +150,31 @@ inline static void AddInstrumentationTool(
   AddInstrumentationTool(&(ToolDescriptor<T>::kDescription), tool_name,
                          required_tools);
 }
+
+#ifdef GRANARY_INTERNAL
+
+// Initialize the tool manager.
+void InitToolManager(void);
+
+// Exit the tool manager.
+void ExitToolManager(void);
+
+// Initialize all tools. Tool initialization is typically where tools will
+// register their specific their block meta-data, therefore it is important
+// to initialize all tools before finalizing the meta-data manager.
+void InitTools(InitReason reason);
+
+// Exit all tools. Tool `Exit` methods should restore any global state to
+// their initial values.
+void ExitTools(ExitReason reason);
+
+// Allocates all tools, and returns a pointer to the first tool allocated.
+InstrumentationTool *AllocateTools(void);
+
+// Frees all tools, given a pointer to the first tool allocated.
+void FreeTools(InstrumentationTool *tools);
+
+#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 

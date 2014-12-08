@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "granary/base/option.h"
+
 #include "granary/cfg/basic_block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
@@ -10,6 +12,8 @@
 #include "granary/app.h"  // For `AppMetaData`.
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
+
+GRANARY_DECLARE_bool(transparent_returns);
 
 namespace granary {
 
@@ -221,7 +225,6 @@ std::unique_ptr<Instruction> DecodedBasicBlock::Unlink(Instruction *instr) {
       case kAnnotBeginBasicBlock:
       case kAnnotEndBasicBlock:
       case kAnnotationLabel:
-      case kAnnotReturnAddressLabel:
       case kAnnotInvalidStack:
       case kAnnotUnknownStackAbove:
       case kAnnotUnknownStackBelow:
@@ -281,8 +284,8 @@ CachePC IndirectBasicBlock::StartCachePC(void) const {
 // Initialize a return basic block.
 ReturnBasicBlock::ReturnBasicBlock(LocalControlFlowGraph *cfg_,
                                    BlockMetaData *meta_)
-    : InstrumentedBasicBlock(cfg_, nullptr),
-      lazy_meta(meta_) {}
+    : InstrumentedBasicBlock(cfg_, FLAG_transparent_returns ? meta_ : nullptr),
+      lazy_meta(FLAG_transparent_returns ? nullptr : meta_) {}
 
 ReturnBasicBlock::~ReturnBasicBlock(void) {
   if (!meta && lazy_meta) {

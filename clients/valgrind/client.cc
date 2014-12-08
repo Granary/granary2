@@ -60,7 +60,9 @@ class ValgrindHelper : public InstrumentationTool {
  public:
   virtual ~ValgrindHelper(void) = default;
 
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
+
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_pvalloc);

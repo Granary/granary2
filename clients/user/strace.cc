@@ -382,7 +382,8 @@ static void TraceSyscallExit(void *, SystemCallContext ctx) {
 class SystemCallTracer : public InstrumentationTool {
  public:
   virtual ~SystemCallTracer(void) = default;
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     AddSystemCallEntryFunction(TraceSyscallEntry);
     AddSystemCallExitFunction(TraceSyscallExit);
   }

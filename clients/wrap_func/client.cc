@@ -81,7 +81,6 @@ static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
       return wrapper;
     }
   }
-
   return nullptr;
 }
 
@@ -102,11 +101,13 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
  public:
   virtual ~FunctionWrapperInstrumenter(void) = default;
 
-  virtual void Init(InitReason) {
+  static void Init(InitReason reason) {
+    if (kInitThread == reason) return;
     AddMetaData<NextWrapperId>();
   }
 
-  virtual void Exit(ExitReason) {
+  static void Exit(ExitReason reason) {
+    if (kExitThread == reason) return;
     WriteLockedRegion locker(&wrappers_lock);
     for (; wrappers; ) {
       auto next_wrapper = wrappers->next;
@@ -138,7 +139,6 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
       if (!wrapper) continue;
 
       if (!succ.cfi->IsConditionalJump()) {
-
         WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
                   succ.cfi, direct_block);
       }

@@ -11,6 +11,7 @@
 
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
+#include "granary/code/inline_assembly.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 
 #include "granary/cache.h"
@@ -282,13 +283,6 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                              StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
       return false;
-
-    // Function return address. Used when mangling indirect function calls.
-    case kAnnotReturnAddressLabel:
-      GRANARY_ASSERT(!frag->attr.has_native_instrs);
-      frag->attr.is_return_target = true;
-      frag->instrs.Append(Instruction::Unlink(instr).release());
-      return true;
 
     // An annotation where, when encoded, will update a pointer to contain the
     // address at which this annotation is encoded.

@@ -44,24 +44,22 @@ static inline CachePC Translate(Context *context, T func_ptr) {
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
-                            EntryPointKind kind,
-                            TargetStackValidity stack_valid=kTargetStackUnknown,
-                            int entry_category=-1);
+                            EntryPointKind kind, int entry_category=-1,
+                            TargetStackValidity stack_valid=kTargetStackUnknown);
 
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
-                            EntryPointKind kind,
-                            TargetStackValidity stack_valid=kTargetStackUnknown,
-                            int entry_category=-1);
+                            EntryPointKind kind, int entry_category=-1,
+                            TargetStackValidity stack_valid=kTargetStackUnknown);
 
 // Instrument, compile, and index some basic blocks.
 template <typename T>
-static inline
-CachePC TranslateEntryPoint(Context *context, T func_ptr, EntryPointKind kind,
-                            int entry_category=-1) {
+static inline CachePC TranslateEntryPoint(Context *context, T func_ptr,
+                                          EntryPointKind kind,
+                                          int entry_category=-1) {
   return TranslateEntryPoint(context, UnsafeCast<AppPC>(func_ptr), kind,
-                             kTargetStackValid, entry_category);
+                             entry_category, kTargetStackValid);
 }
 
 }  // namespace granary

@@ -119,9 +119,8 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
-                            EntryPointKind kind,
-                            TargetStackValidity stack_valid,
-                            int category) {
+                            EntryPointKind kind, int category,
+                            TargetStackValidity stack_valid) {
   LocalControlFlowGraph cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   MarkStack(meta, stack_valid);
@@ -132,11 +131,10 @@ CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
-                            EntryPointKind kind,
-                            TargetStackValidity stack_valid,
-                            int category) {
+                            EntryPointKind kind, int category,
+                            TargetStackValidity stack_valid) {
   auto meta = context->AllocateBlockMetaData(target_pc);
-  return TranslateEntryPoint(context, meta, kind, stack_valid, category);
+  return TranslateEntryPoint(context, meta, kind, category, stack_valid);
 }
 
 }  // namespace granary
