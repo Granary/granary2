@@ -8,7 +8,7 @@
 #ifndef GRANARY_TARGET_test
 #ifndef GRANARY_WITH_VALGRIND
 
-#include "clients/user/syscall.h"
+#include "clients/user/client.h"
 #include "generated/clients/gdb/offsets.h"
 
 GRANARY_USING_NAMESPACE granary;
@@ -67,7 +67,7 @@ static void AwaitAttachOnSignal(int signum) {
 // signal handlers. This is to help in the debugging of user space
 // programs, where attaching GDB early on in the program's execution
 // causes the bug to disappear.
-static void SuppressSigAction(void *, SystemCallContext ctx) {
+static void SuppressSigAction(SystemCallContext ctx) {
   if (__NR_rt_sigaction != ctx.Number()) return;
 
   // If `act == NULL` then code is querying the current state of the signal

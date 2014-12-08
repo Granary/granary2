@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef CLIENTS_WATCHPOINTS_WATCHPOINTS_H_
-#define CLIENTS_WATCHPOINTS_WATCHPOINTS_H_
+#ifndef CLIENTS_WATCHPOINTS_CLIENT_H_
+#define CLIENTS_WATCHPOINTS_CLIENT_H_
 
 #include <granary.h>
 
@@ -42,11 +42,26 @@ class WatchedOperand {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(WatchedOperand);
 };
 
+enum {
+  kMaxWatchpointTypeId = std::numeric_limits<uint16_t>::max() >> 1U
+};
+
+// Returns the type id for some `(return address, allocation size)` pair.
+uint64_t TypeIdFor(uintptr_t ret_address, size_t num_bytes);
+
+// Returns the type id for some `(return address, allocation size)` pair.
+inline static uint64_t TypeIdFor(granary::AppPC ret_address, size_t num_bytes) {
+  return TypeIdFor(reinterpret_cast<uintptr_t>(ret_address), num_bytes);
+}
+
+// Apply a function to every type.
+void ForEachType(std::function<void(uint64_t type_id,
+                                    granary::AppPC ret_address,
+                                    size_t size_order)> func);
+
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
-void AddWatchpointInstrumenter(void (*func)(void *, WatchedOperand *),
-                               void *data=nullptr,
-                               void (*delete_data)(void *)=nullptr);
+void AddWatchpointInstrumenter(void (*func)(const WatchedOperand &));
 
 // Taints an address `addr` using the low 15 bits of the taint index `index`.
 uintptr_t TaintAddress(uintptr_t addr, uintptr_t index);
@@ -86,4 +101,4 @@ inline static uint16_t ExtractTaint(T *ptr) {
   return ExtractTaint(reinterpret_cast<uintptr_t>(ptr));
 }
 
-#endif  // CLIENTS_WATCHPOINTS_WATCHPOINTS_H_
+#endif  // CLIENTS_WATCHPOINTS_CLIENT_H_

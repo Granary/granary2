@@ -6,7 +6,7 @@
 
 #ifdef GRANARY_WHERE_user
 
-#include "clients/user/syscall.h"
+#include "clients/user/client.h"
 #include "clients/util/closure.h"
 
 GRANARY_USING_NAMESPACE granary;
@@ -91,19 +91,15 @@ void HookSystemCallExit(lir::TranslationContext,
 }
 
 // Register a function to be called before a system call is made.
-void AddSystemCallEntryFunction(SystemCallHook *callback,
-                                void *data,
-                                CleanUpData *delete_data) {
+void AddSystemCallEntryFunction(SystemCallHook *callback) {
   if (!FLAG_hook_syscalls) return;
-  entry_hooks.Add(callback, data, delete_data);
+  entry_hooks.Add(callback);
 }
 
 // Register a function to be called after a system call is made.
-void AddSystemCallExitFunction(SystemCallHook *callback,
-                               void *data,
-                               CleanUpData *delete_data) {
+void AddSystemCallExitFunction(SystemCallHook *callback) {
   if (!FLAG_hook_syscalls) return;
-  exit_hooks.Add(callback, data, delete_data);
+  exit_hooks.Add(callback);
 }
 
 // Tool that helps user-space instrumentation work.

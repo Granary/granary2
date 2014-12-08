@@ -8,11 +8,15 @@
 
 GRANARY_DECLARE_bool(hook_syscalls);
 
-#include "clients/user/syscall.h"
+#include "clients/user/client.h"
 
 GRANARY_USING_NAMESPACE granary;
 
 namespace {
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc99-extensions"
+#pragma clang diagnostic ignored "-Wc11-extensions"
 
 static const char *kSystemCallNames[] = {
   [__NR_read] = "read",  // 0
@@ -338,6 +342,8 @@ static const char *kSystemCallNames[] = {
 #endif
 };
 
+#pragma clang diagnostic pop
+
 enum {
   NUM_SYSCALLS = sizeof kSystemCallNames / sizeof kSystemCallNames[0]
 };
@@ -350,7 +356,7 @@ static __thread uint64_t tSyscallArg3 = 0;
 static __thread uint64_t tSyscallArg4 = 0;
 static __thread uint64_t tSyscallArg5 = 0;
 
-static void TraceSyscallEntry(void *, SystemCallContext ctx) {
+static void TraceSyscallEntry(SystemCallContext ctx) {
   tSyscallNumber = ctx.Number();
   tSyscallArg0 = ctx.Arg0();
   tSyscallArg1 = ctx.Arg1();
@@ -360,7 +366,7 @@ static void TraceSyscallEntry(void *, SystemCallContext ctx) {
   tSyscallArg5 = ctx.Arg5();
 }
 
-static void TraceSyscallExit(void *, SystemCallContext ctx) {
+static void TraceSyscallExit(SystemCallContext ctx) {
   if (tSyscallNumber < NUM_SYSCALLS) {
     os::Log("%s\t%lx\t%lx\t%lx\t%lx\t%lx\t%lx\t= %lx\n",
             kSystemCallNames[tSyscallNumber], tSyscallArg0, tSyscallArg1,

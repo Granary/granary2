@@ -1,8 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #include "clients/wrap_func/client.h"
-#include "clients/watchpoints/type_id.h"
-#include "clients/watchpoints/watchpoints.h"
+#include "clients/watchpoints/client.h"
+#include "clients/watchpoints/client.h"
 
 #include "generated/clients/poly_code/offsets.h"
 
@@ -146,11 +146,11 @@ static void TaintBlock(TypeMetaData *meta, void *address) {
 }
 
 // Taints block meta-data when some watchpoint is triggered.
-static void TaintBlockMeta(void *, WatchedOperand *op) {
-  op->instr->InsertBefore(lir::InlineFunctionCall(op->block,
+static void TaintBlockMeta(const WatchedOperand &op) {
+  op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
       TaintBlock,
-      GetMetaData<TypeMetaData>(op->block),
-      op->watched_reg_op));
+      GetMetaData<TypeMetaData>(op.block),
+      op.watched_reg_op));
 }
 
 }  // namespace

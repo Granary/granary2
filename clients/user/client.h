@@ -1,12 +1,7 @@
 /* Copyright 2012-2014 Peter Goodman, all rights reserved. */
-/*
- * syscall.h
- *
- *  Created on: Sep 8, 2014
- *      Author: Peter Goodman
- */
-#ifndef CLIENTS_USER_SYSCALL_H_
-#define CLIENTS_USER_SYSCALL_H_
+
+#ifndef CLIENTS_USER_CLIENT_H_
+#define CLIENTS_USER_CLIENT_H_
 
 #include <granary.h>
 
@@ -52,24 +47,19 @@ class SystemCallContext {
 // Callback types for system calls. The exit hook is interesting because it
 // gives access the machine context prior to the system call (so that arguments,
 // if clobbered by the syscall), can be correctly found.
-typedef void (SystemCallHook)(void *data, SystemCallContext context);
-typedef void (CleanUpData)(void *);
+typedef void (SystemCallHook)(SystemCallContext context);
 
 // Register a function to be called before a system call is made. `data` is
 // a pointer to some opaque data structure which will be passed to the callback.
 // `delete_data` is a function that will clean up `data`s memory when the
 // hook is removed.
-void AddSystemCallEntryFunction(SystemCallHook *hook,
-                                void *data=nullptr,
-                                CleanUpData *delete_data=nullptr);
+void AddSystemCallEntryFunction(SystemCallHook *hook);
 
 // Register a function to be called after a system call is made. `data` is
 // a pointer to some opaque data structure which will be passed to the callback.
 // `delete_data` is a function that will clean up `data`s memory when the
 // hook is removed.
-void AddSystemCallExitFunction(SystemCallHook *hook,
-                               void *data=nullptr,
-                               CleanUpData *delete_data=nullptr);
+void AddSystemCallExitFunction(SystemCallHook *hook);
 #endif  // GRANARY_WHERE_user
 
-#endif  // CLIENTS_USER_SYSCALL_H_
+#endif  // CLIENTS_USER_CLIENT_H_

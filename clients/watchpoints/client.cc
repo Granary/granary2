@@ -3,7 +3,7 @@
 #include <granary.h>
 
 #include "clients/util/closure.h"
-#include "clients/watchpoints/watchpoints.h"
+#include "clients/watchpoints/client.h"
 
 GRANARY_USING_NAMESPACE granary;
 
@@ -13,15 +13,14 @@ namespace {
 
 // Hooks that other tools can use for interposing on memory operands that will
 // be instrumented for watchpoints.
-static ClosureList<WatchedOperand *> watchpoint_hooks GRANARY_GLOBAL;
+static ClosureList<const WatchedOperand &> watchpoint_hooks GRANARY_GLOBAL;
 
 }  // namespace
 
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
-void AddWatchpointInstrumenter(void (*func)(void *, WatchedOperand *),
-                               void *data, void (*delete_data)(void *)) {
-  watchpoint_hooks.Add(func, data, delete_data);
+void AddWatchpointInstrumenter(void (*func)(const WatchedOperand &)) {
+  watchpoint_hooks.Add(func);
 }
 
 // Implements the instrumentation needed to do address watchpoints.
@@ -101,7 +100,7 @@ class Watchpoints : public InstrumentationTool {
 
     // Allow all hooked tools to see the watched (%1) and unwatched (%0)
     // address.
-    watchpoint_hooks.ApplyAll(&client_op);
+    watchpoint_hooks.ApplyAll(client_op);
 
     asm_.InlineBefore(instr,
         "LABEL %2:"_x86_64);

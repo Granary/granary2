@@ -6,10 +6,9 @@
 
 #ifdef GRANARY_WHERE_user
 
-#include "clients/watchpoints/type_id.h"
+#include "clients/watchpoints/client.h"  // For type ID stuff.
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
-#include "clients/user/syscall.h"
 #include "clients/util/instrument_memop.h"
 
 #include "generated/clients/data_collider/offsets.h"
@@ -18,8 +17,7 @@ GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_positive_int(sample_rate, 20,
     "Defines the rate, in milliseconds, at which DataCollider changes its "
-    "sample points in proxy memory. The default value is `20`, representing "
-    "`20ms`.\n"
+    "sample points. The default value is `20`, representing `20ms`.\n"
     "\n"
     "Note: This value is approximate, in that we do not guarantee that\n"
     "      sampling will indeed occur every N ms, but rather, approximately\n"
@@ -27,9 +25,9 @@ GRANARY_DEFINE_positive_int(sample_rate, 20,
 
     "data_collider");
 
-GRANARY_DEFINE_positive_int(watchpoint_granularity, 4096,
+GRANARY_DEFINE_positive_int(watchpoint_granularity, 64,
     "The granularity (in bytes) of the software watchpoint. This must be a "
-    "power of two. The default value is `4096`, which means: 1 page of "
+    "power of two. The default value is `64`, which means: 1 cache line of "
     "physical memory maps to one unit of shadow memory.",
 
     "data_collider");
@@ -56,20 +54,8 @@ static uintptr_t gSamplePoint = 0;
 // Current type ID being sampled.
 static auto gCurrSourceTypeId = 0UL;
 
-// Is the program multi-threaded?
-static bool gIsMultithreaded = false;
-
 // The PID of the monitor thread.
 static pid_t gMonitorThread = -1;
-
-// Interposes on system calls to detect the spawning of threads. If a thread is
-// spawned then the sampler will turn on, otherwise it will never add
-// watchpoints.
-static void DetectMultiThreadedCode(void *, SystemCallContext ctx) {
-  if (__NR_clone == ctx.Number() && 0 != (CLONE_THREAD & ctx.Arg0())) {
-    gIsMultithreaded = true;
-  }
-}
 
 // Add an address for sampling.
 static void AddSamplePoint(uintptr_t type_id, void *ptr) {
@@ -170,7 +156,6 @@ static void Monitor(void) {
   const timespec sample_time = {0, sample_time_ms};
   for (uintptr_t last_sample(0);;) {
     nanosleep(&sample_time, nullptr);
-    if (!gIsMultithreaded) continue;
     MonitorSamplePoint(last_sample);
   }
 }
@@ -189,10 +174,25 @@ static void CreateMonitorThread(void) {
   }
 }
 
+// Shadow memory for ownership tracking.
+struct OnwershipTracker {
+
+  enum : uint8_t {
+    kUnwatched = 0,
+    kWatched = 1,
+    kOwned = 2
+  } state:8;
+
+  uint8_t tid;
+
+  uintptr_t addr:48;
+
+} __attribute__((packed));
+
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
-class DataCollider : public MemOpInstrumentationTool {
+class DataCollider : public InstrumentationTool {
  public:
   virtual ~DataCollider(void) = default;
 
@@ -224,10 +224,8 @@ class DataCollider : public MemOpInstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
-    // Wrap system calls to make sure that we only monitor multi-threaded code.
-    AddSystemCallEntryFunction(&DetectMultiThreadedCode);
-
     CreateMonitorThread();
+    AddShadowStructure<OnwershipTracker>(InstrumentMemOp);
   }
 
   // Exit; this kills off the monitor thread.
@@ -238,15 +236,16 @@ class DataCollider : public MemOpInstrumentationTool {
     }
     gMonitorThread = -1;
     gCurrSourceTypeId = 0;
-    gIsMultithreaded = false;
     gShiftAmount = 0;
     gSamplePoint = 0;
     memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
   }
 
  protected:
-  virtual void InstrumentMemOp(DecodedBasicBlock *, NativeInstruction *instr,
-                               MemoryOperand &, const RegisterOperand &addr) {
+  static void InstrumentMemOp(const ShadowedOperand &op) {
+    lir::InlineAssembly asm_(op.shadow_addr_op);
+    //asm_
+    /*
     if (addr.IsStackPointer() || addr.IsVirtualStackPointer()) return;
 
     MemoryOperand sample_point(&gSamplePoint);
@@ -256,13 +255,14 @@ class DataCollider : public MemOpInstrumentationTool {
     asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %3, i8 %1;");
     asm_.InlineBefore(instr, "CMP r64 %3, m64 %2;"
                              "JNZ l %4;"_x86_64);
-    asm_.InlineBefore(instr, "LABEL %4:"_x86_64);
+    asm_.InlineBefore(instr, "LABEL %4:"_x86_64);*/
   }
 };
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DataCollider>("data_collider", {"wrap_func"});
+  AddInstrumentationTool<DataCollider>("data_collider", {"wrap_func",
+                                                         "shadow_memory"});
 }
 
 #endif  // GRANARY_WHERE_user

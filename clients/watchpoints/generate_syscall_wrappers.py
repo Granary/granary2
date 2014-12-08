@@ -37,6 +37,17 @@ def is_function_pointer(ctype):
     return isinstance(ctype.ctype.base_type(), CTypeFunction)
   return False
 
+# If we have a union with pointers in it, such as with `__SOCKADDR_ARG` being
+# passed to `getpeername`, then return one of the pointer types.
+def pointer_ctype_in_union(ctype):
+  if not isinstance(ctype, CTypeUnion):
+    return None
+  for field_ctype, name in ctype.fields():
+    field_ctype = field_ctype.base_type()
+    if isinstance(field_ctype, CTypePointer):
+      return field_ctype
+  return None
+
 # This system call has no pointer arguments, so don't wrap it.
 def dont_wrap_syscall(var):
   print "NO_WRAP_SYSCALL(%s)" % var
@@ -133,9 +144,15 @@ def wrap_syscall(var, ctype):
   for param_ctype in ctype.param_types:
     arg_num += 1
     param_ctype = param_ctype.base_type()
-    if not isinstance(param_ctype, CTypePointer) \
-    or is_function_pointer(param_ctype):
-      continue
+    if isinstance(param_ctype, CTypePointer):
+      if is_function_pointer(param_ctype):
+        continue
+    elif not isinstance(param_ctype, CTypeArray):
+      union_field_type = pointer_ctype_in_union(param_ctype)
+      if not union_field_type:
+        continue
+      else:
+        param_ctype = union_field_type
     
     pointed_ctype = param_ctype.ctype.base_type()
     if isinstance(pointed_ctype, CTypeStruct):

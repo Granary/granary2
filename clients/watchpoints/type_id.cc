@@ -1,6 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "clients/watchpoints/type_id.h"
+#include "clients/watchpoints/client.h"
 
 GRANARY_USING_NAMESPACE granary;
 
@@ -73,7 +73,11 @@ static const Type *CreateType(TypeList *ls, uint64_t ret_address,
 
 // Returns the type id for some `(return address, allocation size)` pair.
 uint64_t TypeIdFor(uintptr_t ret_address, size_t num_bytes) {
-  const auto size_order = 63UL - static_cast<size_t>(__builtin_clzl(num_bytes));
+  size_t size_order = 0;
+  if (num_bytes) {
+    size_order = 63UL - static_cast<size_t>(__builtin_clzl(num_bytes));
+    GRANARY_ASSERT(size_order <= kMaxSetBit);
+  }
   const auto type_list = &(sizes[size_order]);
   const Type *type(nullptr);
   {

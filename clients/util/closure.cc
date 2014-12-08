@@ -4,17 +4,10 @@
 
 namespace detail {
 
-Closure::Closure(uintptr_t callback_addr_, void *data_,
-                 void (*delete_data_)(void *))
+Closure::Closure(uintptr_t callback_addr_)
     : next(nullptr),
-      callback_addr(callback_addr_),
-      data(data_),
-      delete_data(delete_data_) {}
+      callback_addr(callback_addr_) {}
 
-Closure::~Closure(void) {
-  if (delete_data && data) {
-    delete_data(data);
-  }
-}
+Closure::~Closure(void) {}
 
 }  // namespace detail

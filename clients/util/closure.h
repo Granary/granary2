@@ -9,9 +9,7 @@ namespace detail {
 // Linked list of closures that can be used for a generic hooking mechanism.
 class Closure {
  public:
-  Closure(uintptr_t callback_addr_, void *data_,
-          void (*delete_data_)(void *));
-
+  explicit Closure(uintptr_t callback_addr_);
   ~Closure(void);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Closure, {
@@ -21,8 +19,9 @@ class Closure {
 
   Closure *next;
   uintptr_t callback_addr;
-  void *data;
-  void (*delete_data)(void *);
+
+ private:
+  Closure(void) = delete;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Closure);
 };
@@ -31,7 +30,7 @@ class Closure {
 template <typename... Args>
 class ClosureList {
  public:
-  typedef void (CallbackType)(void *data, Args...);
+  typedef void (CallbackType)(Args...);
   typedef detail::Closure ClosureType;
   typedef granary::LinkedListIterator<ClosureType> ClosureTypeIterator;
 
@@ -51,12 +50,8 @@ class ClosureList {
   }
 
   // Add a new closure to the closure list.
-  void Add(void (*callback)(void *, Args...), void *data=nullptr,
-           void (*delete_data)(void *)=nullptr) {
-    auto closure = new detail::Closure(
-        reinterpret_cast<uintptr_t>(callback), data,
-        granary::UnsafeCast<void (*)(void *)>(delete_data));
-
+  void Add(void (*callback)(Args...)) {
+    auto closure = new detail::Closure(reinterpret_cast<uintptr_t>(callback));
     granary::SpinLockedRegion locker(&lock);
     *next_ptr = closure;
     next_ptr = &(closure->next);
@@ -65,9 +60,7 @@ class ClosureList {
   // Apply all closures to some arguments.
   inline void ApplyAll(Args... args) const {
     for (auto closure : ClosureTypeIterator(first)) {
-      reinterpret_cast<CallbackType *>(closure->callback_addr)(
-          reinterpret_cast<void *>(closure->data),
-          args...);
+      reinterpret_cast<CallbackType *>(closure->callback_addr)(args...);
     }
   }
 

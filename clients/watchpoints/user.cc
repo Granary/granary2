@@ -5,8 +5,8 @@
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
-#include "clients/user/syscall.h"
-#include "clients/watchpoints/watchpoints.h"
+#include "clients/user/client.h"
+#include "clients/watchpoints/client.h"
 
 namespace {
 
@@ -109,7 +109,7 @@ enum {
 };
 
 // Prevent watched addresses from being passed to system calls.
-static void UnwatchSyscallArgs(void *, SystemCallContext ctx) {
+static void UnwatchSyscallArgs(SystemCallContext ctx) {
   const auto nr = ctx.Number();
   if (nr < NUM_SYSCALLS) {
     if (auto wrapper = kSyscallWrappers[nr]) {
