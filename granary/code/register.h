@@ -60,7 +60,8 @@ union alignas(alignof(void *)) VirtualRegister {
         num_bytes(num_bytes_),
         byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
         preserved_byte_mask(0),
-        is_segment_offset(false) {
+        is_segment_offset(false),
+        is_legacy(false) {
     GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
   }
 
@@ -82,10 +83,10 @@ union alignas(alignof(void *)) VirtualRegister {
 
   // Returns a new virtual register that was created from an architectural
   // register.
-  static VirtualRegister FromNative(int arch_reg_id) {
-    VirtualRegister reg;
-    reg.DecodeFromNative(arch_reg_id);
-    return reg;
+  inline static VirtualRegister FromNative(int arch_reg_id) {
+    VirtualRegister vr;
+    vr.DecodeFromNative(arch_reg_id);
+    return vr;
   }
 
   // Convert a virtual register into its associated architectural register.
@@ -472,12 +473,12 @@ class UsedRegisterSet : public RegisterSet {
   void ReviveRestrictedRegisters(const NativeInstruction *instr);
 
   // Note: This function has an architecture-specific implementation.
+  //
+  // Note: This should be used in combination with `Visit` in order to extend
+  //       the "used set" to mark certain registers as off-limits (via marking
+  //       them as used).
   GRANARY_INTERNAL_DEFINITION
   void ReviveRestrictedRegisters(const arch::Instruction *instr);
-
-  // Note: This function has an architecture-specific implementation.
-  GRANARY_INTERNAL_DEFINITION
-  void ReviveRestrictedRegisters(const arch::Operand *op);
 
   inline void Join(const UsedRegisterSet &that) {
     Union(that);

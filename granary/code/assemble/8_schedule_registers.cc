@@ -364,7 +364,9 @@ static bool GetUnscheduledVR(SSAFragment *frag, VirtualRegister *reg,
 
 struct GPRScheduler {
   GPRScheduler(void)
-      : reg_counts() {}
+      : reg_counts(),
+        used_regs(),
+        restricted_regs() {}
 
   // Recounts the number of times each arch GPR is used within a partition.
   void RecountGPRUsage(const PartitionInfo *partition,
@@ -403,12 +405,12 @@ struct GPRScheduler {
 
   // Get some GPR for use, so long as the GPR is not part of the
   // `avoid_reg_set`.
-  VirtualRegister GetGPR(const UsedRegisterSet &avoid_reg_set) {
+  VirtualRegister GetGPR(void) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
     auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<int>::max();
     for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-      if (avoid_reg_set.IsLive(i)) continue;
+      if (used_regs.IsLive(i) || restricted_regs.IsLive(i)) continue;
       if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
         GRANARY_IF_DEBUG( found_reg = true; )
         min_gpr_num = i;
@@ -419,7 +421,14 @@ struct GPRScheduler {
     return NthArchGPR(min_gpr_num);
   }
 
+  // Counts of the number of uses of each register.
   RegisterUsageCounter reg_counts;
+
+  // Registers being used by an instruction.
+  UsedRegisterSet used_regs;
+
+  // Registers that an instruction is not allowed to use.
+  UsedRegisterSet restricted_regs;
 };
 
 // Returns true if the virtual register associated with a particular SSA node
@@ -433,13 +442,13 @@ static bool IsLive(SSANodeMap &nodes, VirtualRegister reg, SSANodeId node_id) {
 }
 
 // Try to get a GPR for use by an instruction.
-static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr,
-                              const UsedRegisterSet &used_regs) {
+static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
   VirtualRegister agpr;
-  if (pgpr.IsValid() && used_regs.IsDead(pgpr)) {
+  if (pgpr.IsValid() && reg_sched->used_regs.IsDead(pgpr) &&
+      reg_sched->restricted_regs.IsDead(pgpr)) {
     return pgpr;  // Try to use the preferred GPR if possible.
   } else {
-    return reg_sched->GetGPR(used_regs);
+    return reg_sched->GetGPR();
   }
 }
 
@@ -550,16 +559,17 @@ static void HomeUsedReg(PartitionScheduler *part_sched,
                         GPRScheduler *reg_sched,
                         SSAFragment *frag,
                         Instruction *instr,
-                        const UsedRegisterSet &used_regs,
                         RegLocation *vr_home) {
-
-  if (!vr_home->loc.IsNative() || !used_regs.IsLive(vr_home->loc))  return;
+  if (!vr_home->loc.IsNative() ||
+      !reg_sched->used_regs.IsLive(vr_home->loc)) {
+    return; // Not used in this instruction.
+  }
 
   const auto slot = part_sched->spill_slot;
   const auto pgpr = part_sched->preferred_gpr;
 
   GRANARY_ASSERT(RegLocationType::GPR == vr_home->type);
-  auto agpr = GetGPR(reg_sched, pgpr, used_regs);
+  auto agpr = GetGPR(reg_sched, pgpr);
   GRANARY_ASSERT(vr_home->loc != agpr);
 
   frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(agpr, slot));
@@ -609,11 +619,13 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
   for (Instruction *prev_instr(nullptr); instr; instr = prev_instr) {
     prev_instr = instr->Previous();
 
-    UsedRegisterSet used_regs;
     SSAInstruction *ssa_instr(nullptr);
     auto is_defined = false;
     auto is_used = false;
     auto &vr_home(part_sched->Loc(vr));
+
+    reg_sched->used_regs.KillAll();
+    reg_sched->restricted_regs.KillAll();
 
     // Annotation instructions can define/kill VRs.
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
@@ -642,13 +654,13 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
       } else if (kAnnotSSASaveRegister == ainstr->annotation ||
                  kAnnotSSARestoreRegister == ainstr->annotation) {
         GRANARY_ASSERT(node->id != node_id);
-        used_regs.Revive(ainstr->Data<VirtualRegister>());
-        HomeUsedReg(part_sched, reg_sched, frag, instr, used_regs, &vr_home);
+        reg_sched->used_regs.Revive(ainstr->Data<VirtualRegister>());
+        HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
         continue;
 
       } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
-        used_regs = ainstr->Data<UsedRegisterSet>();
-        HomeUsedReg(part_sched, reg_sched, frag, instr, used_regs, &vr_home);
+        reg_sched->used_regs = ainstr->Data<UsedRegisterSet>();
+        HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
         continue;
 
       // We can stop here.
@@ -665,9 +677,16 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ssa_instr = GetMetaData<SSAInstruction *>(ninstr);
       if (!ssa_instr) continue;
-      used_regs.Visit(ninstr);
-      used_regs.ReviveRestrictedRegisters(ninstr);
-      HomeUsedReg(part_sched, reg_sched, frag, instr, used_regs, &vr_home);
+      reg_sched->used_regs.Visit(ninstr);
+
+      // If this instruction has no explicit operands, then we can't possibly
+      // schedule a VR in, and so we don't need to add the constraint to the
+      // system that restricted registers should not be used.
+      if (ninstr->NumExplicitOperands()) {
+        reg_sched->restricted_regs.ReviveRestrictedRegisters(ninstr);
+      }
+
+      HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
       FindDefUse(ssa_instr, node_id, &is_defined, &is_used);
     }
 
@@ -680,7 +699,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     if (RegLocationType::SLOT == vr_home.type ||
         RegLocationType::LIVE_SLOT == vr_home.type) {
 
-      auto agpr = GetGPR(reg_sched, pgpr, used_regs);
+      auto agpr = GetGPR(reg_sched, pgpr);
       if (RegLocationType::SLOT == vr_home.type) {
         frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(agpr, slot));
 
@@ -1181,7 +1200,8 @@ static void ScheduleFragmentLocalDef(FragmentScheduler *sched, SSAOperand &op) {
 
 // Home a specific used register.
 static void HomeUsedReg(FragmentScheduler *sched, Instruction *instr,
-                        VirtualRegister gpr, const UsedRegisterSet &used_regs) {
+                        VirtualRegister gpr,
+                        const UsedRegisterSet &avoid_regs) {
   auto frag = sched->frag;
   auto &gpr_home(sched->Loc(gpr));
   auto &inv_gpr_home(sched->InverseLoc(gpr));
@@ -1210,7 +1230,7 @@ static void HomeUsedReg(FragmentScheduler *sched, Instruction *instr,
     auto &vr_home(sched->Loc(vr_occupying_gpr));
     GRANARY_ASSERT(vr_home.loc == gpr);
 
-    auto agpr = sched->GetGPR(used_regs);
+    auto agpr = sched->GetGPR(avoid_regs);
     auto slot = gpr_home.loc;
 
     GRANARY_ASSERT(agpr != gpr);
@@ -1226,10 +1246,15 @@ static void HomeUsedReg(FragmentScheduler *sched, Instruction *instr,
   }
 }
 
+// Home the GPRs from the set `used_set`, but ensure that none of the registers
+// from the set `avoid_set` are used as part of that homing.
+//
+// Note: This assumes that `used_regs` is a subset of `avoid_regs`.
 static void HomeUsedRegs(FragmentScheduler *sched, Instruction *instr,
-                         const UsedRegisterSet &used_regs) {
+                         const UsedRegisterSet &used_regs,
+                         const UsedRegisterSet &avoid_regs) {
   for (auto gpr : used_regs) {
-    HomeUsedReg(sched, instr, gpr, used_regs);
+    HomeUsedReg(sched, instr, gpr, avoid_regs);
   }
 }
 
@@ -1271,8 +1296,13 @@ static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
 
   UsedRegisterSet used_regs;
   used_regs.Visit(instr);
-  used_regs.ReviveRestrictedRegisters(instr);
-  HomeUsedRegs(sched, instr, used_regs);
+
+  UsedRegisterSet avoid_regs(used_regs);
+  if (instr->NumExplicitOperands()) {
+    avoid_regs.ReviveRestrictedRegisters(instr);
+  }
+
+  HomeUsedRegs(sched, instr, used_regs, avoid_regs);
 
   for (auto &use_op : ssa_instr->uses) {
     ScheduleFragmentLocalUse(sched, use_op, instr, used_regs);
@@ -1318,7 +1348,7 @@ static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
 
     // First, home the GPR *after* `instr` in case a later instruction had it
     // in a spill slot.
-    HomeUsedRegs(sched, instr, used_regs);
+    HomeUsedRegs(sched, instr, used_regs, used_regs);
 
     // Now, insert a restore instruction.
     slot = sched->AllocateSlot();
@@ -1344,7 +1374,8 @@ static void ScheduleFragmentLocalRegs(SSAFragment *frag) {
       } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
         ScheduleFragmentLocalRegs(&sched, ainstr, false);
       } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
-        HomeUsedRegs(&sched, ainstr, ainstr->Data<UsedRegisterSet>());
+        auto used_regs = ainstr->Data<UsedRegisterSet>();
+        HomeUsedRegs(&sched, ainstr, used_regs, used_regs);
       }
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ScheduleFragmentLocalRegs(&sched, ninstr);

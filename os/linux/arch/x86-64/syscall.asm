@@ -190,6 +190,13 @@ DEFINE_FUNC(nanosleep)
     ret
 END_FUNC(nanosleep)
 
+// Thread exit.
+DEFINE_FUNC(sys_exit)
+    mov     eax, 60  // `__NR_exit`.
+    syscall
+END_FUNC(sys_exit)
+
+
 DECLARE_FUNC(granary_exit)
 DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.
     xor     rdi, rdi

@@ -23,6 +23,7 @@ RegisterOperand InlineAssembly::Register(DecodedBasicBlock *block,
                                          int reg_num) const {
   auto &aop(*(scope->vars[reg_num]));
   if (!scope->var_is_initialized[reg_num]) {
+    scope->var_is_initialized[reg_num] = true;
     aop.reg = block->AllocateVirtualRegister();
     aop.width = arch::GPR_WIDTH_BITS;
     aop.rw = XED_OPERAND_ACTION_R;

@@ -23,7 +23,7 @@ namespace arch {
 // interface class cannot be used as-is as the methods don't exist.
 class InstructionInterface {
  public:
-  int DecodedLength(void) const;
+  size_t DecodedLength(void) const;
 
   PC DecodedPC(void) const;
   void SetDecodedPC(PC decoded_pc_);
@@ -130,6 +130,12 @@ class InstructionInterface {
 
   // Does this instruction perform an atomic read/modify/write?
   bool IsAtomic(void) const;
+
+  // Returns the total number of operands.
+  size_t NumOperands(void) const;
+
+  // Returns the total number of explicit operands.
+  size_t NumExplicitOperands(void) const;
 };
 
 }  // namespace arch

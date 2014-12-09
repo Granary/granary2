@@ -116,6 +116,20 @@ static void InitIclassFlags(void) {
 
     UpdateFlagActions(xedi, iclass);
   }
+
+  // Special case `INTn` instructions. The reason why we do this is that these
+  // end up being a bit screwy with our assembly-time flags analysis. That is,
+  // we find that these read/write to flags, but that we can't necessarily save
+  // or restore all those flags. Also, we assume that the saving/restoring is
+  // beyond our control anyway (i.e. handled by OS or debugger).
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INT].is_write = false;
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INT].is_conditional_write = false;
+
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INTO].is_write = false;
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INTO].is_conditional_write = false;
+
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INT3].is_write = false;
+  ICLASS_FLAG_ACTIONS[XED_ICLASS_INT3].is_conditional_write = false;
 }
 
 // Initialize the table of iform flags.

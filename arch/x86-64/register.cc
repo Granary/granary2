@@ -33,13 +33,13 @@ enum {
 void VirtualRegister::DecodeFromNative(int reg_) {
   value = 0;  // Reset.
 
-  auto reg = static_cast<xed_reg_enum_t>(reg_);
+  const auto reg = static_cast<xed_reg_enum_t>(reg_);
   if (XED_REG_INVALID == reg || XED_REG_LAST <= reg_) {
     kind = VR_KIND_UNKNOWN;
     return;
   }
 
-  auto widest_reg = xed_get_largest_enclosing_register(reg);
+  const auto widest_reg = xed_get_largest_enclosing_register(reg);
   num_bytes = static_cast<uint8_t>(xed_get_register_width_bits64(reg) / 8);
 
   // Non-general-purpose registers are treated as "fixed" architectural
@@ -259,28 +259,6 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
     Revive(9);
     Revive(8);
     Revive(7);  // XED_REG_R8
-  }
-
-  // Now: Revive all registers that are part of *sticky* operands.
-  for (auto i = 0; i < instr->num_ops; ++i) {
-    ReviveRestrictedRegisters(&(instr->ops[i]));
-  }
-}
-
-// Update this register tracker by marking some registers as used (i.e.
-// restricted). This allows us to communicate some architecture-specific
-// encoding constraints to the register scheduler.
-void UsedRegisterSet::ReviveRestrictedRegisters(const arch::Operand *op) {
-  if (!op->is_sticky) return;  // THIS IS KEY!!!
-  if (op->IsRegister()) {
-    Revive(op->reg);
-  } else if (op->IsMemory() && !op->IsPointer()) {
-    if (op->is_compound) {
-      Revive(op->mem.base);
-      Revive(op->mem.index);
-    } else {
-      Revive(op->reg);
-    }
   }
 }
 

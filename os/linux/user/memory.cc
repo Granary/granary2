@@ -29,7 +29,7 @@ namespace os {
 namespace {
 
 enum : size_t {
-  kBlockCacheNumPages = 10240UL,  // 40mb
+  kBlockCacheNumPages = 20480UL,  // 80mb
   kBlockCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,
   kEdgeCacheNumPages = 2560,  // 10mb
   kEdgeCacheNumBytes = kEdgeCacheNumPages * arch::PAGE_SIZE_BYTES,

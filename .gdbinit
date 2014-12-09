@@ -818,8 +818,8 @@ define xdot-frags
   log-frags $__frags
   shell rm -f /tmp/graph.dot
   save-log /tmp/graph.dot
-  shell dot -Teps -o/tmp/graph.eps /tmp/graph.dot
-  shell qpdfview /tmp/graph.eps &
+  shell dot -Tpdf -o/tmp/graph.pdf /tmp/graph.dot
+  shell qpdfview /tmp/graph.pdf &
 end
 
 

@@ -359,7 +359,13 @@ class NativeInstruction : public Instruction {
   // length of the encoded instruction, which could be wildly different as a
   // single decoded instruction might map to many encoded instructions. If the
   // instruction was not decoded then this returns 0.
-  int DecodedLength(void) const;
+  size_t DecodedLength(void) const;
+
+  // Returns the total number of operands.
+  size_t NumOperands(void) const;
+
+  // Returns the total number of explicit operands.
+  size_t NumExplicitOperands(void) const;
 
   // Returns true if this instruction is essentially a no-op, i.e. it does
   // nothing and has no observable side-effects.

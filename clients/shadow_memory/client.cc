@@ -36,6 +36,7 @@ static size_t gUnalignedSize = 0;
 static size_t gAlignedSize = 1;
 static size_t gScaleAmountLong = 0;
 static uint8_t gScaleAmount = 0;
+static size_t gPrevOffset = 0;
 
 // Defines the granularity of shadow memory in terms of a shift.
 static size_t gShiftAmountLong = 0;
@@ -79,10 +80,13 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
       desc->next = nullptr;
       desc->instrumenter = nullptr;
       desc->is_registered = false;
+      desc->offset_asm_instruction[0] = '\0';
     }
+
     gNextDescription = &gDescriptions;
     gUnalignedSize = 0;
     gAlignedSize = 1;
+    gPrevOffset = 0;
     gScaleAmountLong = 0;
     gScaleAmount = 0;
     gShiftAmountLong = 0;
@@ -110,10 +114,11 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
 
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
-    ImmediateOperand shadow_base(gShadowMem);
+    MemoryOperand shadow_base(gShadowMem);
     lir::InlineAssembly asm_(shift, scale, shadow_base, addr);
     asm_.InlineBefore(instr, "MOV r64 %4, r64 %3;"
-                             "MOV r64 %5, i64 %2;"_x86_64);
+                             "LEA r64 %5, m64 %2;"_x86_64);
+
     // %0 is an i8 shift amount.
     // %1 is an i8 scale amount.
     // %2 is an i64 containing the value of `gShadowMem`.
@@ -125,25 +130,21 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %4, i8 %0;"_x86_64);
 
     // Chop off the high-order 32 bits of the shadow offset, then scale the
-    // offset by the size of the shadow structure.
+    // offset by the size of the shadow structure. This has the benefit of
+    // making it more likely that both shadow memory and address watchpoints
+    // can be simultaneously used.
     asm_.InlineBefore(instr, "MOV r32 %4, r32 %4;"_x86_64);
-    asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %5, i8 %1;"_x86_64);
+    asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %4, i8 %1;"_x86_64);
 
     // Add the shadow base to the offset, forming the shadow pointer.
     asm_.InlineBefore(instr, "ADD r64 %4, r64 %5;"_x86_64);
-    auto native_addr_op = asm_.Register(bb, 4);
-    auto shadow_addr_op = asm_.Register(bb, 6);
-
-    auto old_offset = 0UL;
-    char adjust_shadow_offset[32];
+    auto native_addr_op(asm_.Register(bb, 3));
+    auto shadow_addr_op(asm_.Register(bb, 4));
     for (auto desc : ShadowStructureIterator(gDescriptions)) {
 
       // Move `%4` (the offset/pointer) to point to this description's
       // structure.
-      if (auto offset_diff = desc->offset - old_offset) {
-        Format(adjust_shadow_offset, "ADD r64 %%4, i8 %lu;", offset_diff);
-        asm_.InlineBefore(instr, adjust_shadow_offset);
-      }
+      asm_.InlineBefore(instr, desc->offset_asm_instruction);
 
       ShadowedOperand op(bb, instr, mloc, shadow_addr_op, native_addr_op);
       desc->instrumenter(op);
@@ -159,7 +160,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     // Note: We don't use `os::AllocateDataPages` in user space because
     //       we want these page to be lazily mapped.
     gShadowMem = reinterpret_cast<char *>(mmap(
-        nullptr, gShadowMemSize, PROT_READ | PROT_WRITE,  // Fault on first access.
+        nullptr, gShadowMemSize, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0));
 #else
     gShadowMem = os::AllocateDataPages(gShadowMemNumPages);
@@ -194,6 +195,18 @@ void AddShadowStructure(ShadowStructureDescription *desc,
   desc->offset = gUnalignedSize;
   gUnalignedSize += desc->size;
 
+  // Figure out the offset of this structure from the previous shadow structure
+  // and create an inline assembly instruction that we can inject to perform
+  // this offsetting in order to get an address to this descriptor's shadow
+  // structure.
+  desc->offset_asm_instruction[0] = '\0';
+  if (auto offset_diff = (desc->offset - gPrevOffset)) {
+    Format(desc->offset_asm_instruction, "ADD r64 %%4, i8 %lu;", offset_diff);
+  }
+  gPrevOffset = desc->offset;
+
+  // How much (log2) do we need to scale a shifted address by in order to
+  // address some shadow memory?
   gScaleAmountLong = static_cast<size_t>(
       32 - __builtin_clz(static_cast<uint32_t>(gUnalignedSize)) - 1);
 

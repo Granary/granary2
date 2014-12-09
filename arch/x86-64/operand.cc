@@ -274,7 +274,8 @@ static void EncodeRegToString(VirtualRegister reg, OperandString *str,
     str->UpdateFormat("%sr%d %s%s", prefix, reg.BitWidth(),
                       xed_reg_enum_t2str(arch_reg), suffix);
   } else if (reg.IsVirtual()) {
-    str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
+    str->UpdateFormat("%sr%d %%%u%s", prefix, reg.BitWidth(),
+                      reg.Number(), suffix);
   } else if (reg.IsVirtualSlot()) {
     str->UpdateFormat("%sSLOT:%d%s", prefix, reg.Number(), suffix);
   } else {

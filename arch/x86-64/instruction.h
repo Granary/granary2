@@ -34,8 +34,8 @@ class Instruction : public InstructionInterface {
   Instruction(const Instruction &that);
 
   // Get the decoded length of this instruction.
-  inline int DecodedLength(void) const {
-    return static_cast<int>(decoded_length);
+  inline size_t DecodedLength(void) const {
+    return decoded_length;
   }
 
   inline PC DecodedPC(void) const {
@@ -219,6 +219,16 @@ class Instruction : public InstructionInterface {
   // Does this instruction perform an atomic read/modify/write?
   inline bool IsAtomic(void) const {
     return is_atomic;
+  }
+
+  // Returns the total number of operands.
+  inline size_t NumOperands(void) const {
+    return num_ops;
+  }
+
+  // Returns the total number of explicit operands.
+  inline size_t NumExplicitOperands(void) const {
+    return num_explicit_ops;
   }
 
   // Where was this instruction encoded/decoded. When debugging, it's helpful

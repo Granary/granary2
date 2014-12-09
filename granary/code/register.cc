@@ -85,7 +85,6 @@ RegisterSet &RegisterSet::operator=(const RegisterSet &that) {
 // Update this register tracker by marking all registers that appear in an
 // instruction as used.
 void UsedRegisterSet::Visit(const NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
   Visit(&(instr->instruction));
 }
 
@@ -94,13 +93,11 @@ void UsedRegisterSet::Visit(const NativeInstruction *instr) {
 // encoding constraints to the register scheduler.
 void UsedRegisterSet::ReviveRestrictedRegisters(
     const NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
   ReviveRestrictedRegisters(&(instr->instruction));
 }
 
 // Update this register tracker by visiting the operands of an instruction.
 void LiveRegisterSet::Visit(const NativeInstruction *instr) {
-  if (GRANARY_UNLIKELY(!instr)) return;
   Visit(&(instr->instruction));
 }
 

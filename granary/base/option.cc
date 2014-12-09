@@ -284,6 +284,18 @@ void ParseBoolOption(Option *option) {
   }
 }
 
+
+// Parse an option that will be interpreted as an unsigned integer.
+void ParseIntOption(Option *option) {
+  if (auto value = FindValueForName(option->name)) {
+    int int_value(0);
+    if (DeFormat(value, "%d", &int_value)) {
+      *(option->has_value) = true;
+      *reinterpret_cast<int *>(option->value) = int_value;
+    }
+  }
+}
+
 // Parse an option that will be interpreted as an unsigned integer but stored
 // as a signed integer.
 void ParsePositiveIntOption(Option *option) {
@@ -299,12 +311,26 @@ void ParsePositiveIntOption(Option *option) {
 }
 
 // Parse an option that will be interpreted as an unsigned integer.
-void ParseUnsignedIntOption(Option *option) {
+void ParseUintOption(Option *option) {
   if (auto value = FindValueForName(option->name)) {
     unsigned uint_value(0);
     if (DeFormat(value, "%u", &uint_value)) {
       *(option->has_value) = true;
       *reinterpret_cast<unsigned *>(option->value) = uint_value;
+    }
+  }
+}
+
+// Parse an option that will be interpreted as an unsigned integer whose
+// value is >= 1.
+void ParsePositiveUintOption(Option *option) {
+  if (auto value = FindValueForName(option->name)) {
+    unsigned uint_value(0);
+    if (DeFormat(value, "%u", &uint_value)) {
+      if (0 < uint_value) {
+        *(option->has_value) = true;
+        *reinterpret_cast<unsigned *>(option->value) = uint_value;
+      }
     }
   }
 }

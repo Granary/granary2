@@ -51,7 +51,12 @@ class ShadowStructureDescription {
   size_t offset;
   const size_t size;
   const size_t align;
+
+  // Have we registered this shadow data structure?
   bool is_registered;
+
+  // Inline assembly for getting the address
+  char offset_asm_instruction[32];
 };
 
 // Used to initialize and get a description for some structure to be stored
@@ -76,7 +81,8 @@ ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
   0,
   sizeof(T),
   alignof(T),
-  false
+  false,
+  {'\0'}
 };
 
 // Tells the shadow memory tool about a structure to be stored in shadow

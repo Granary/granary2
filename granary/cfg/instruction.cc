@@ -152,8 +152,18 @@ AppPC NativeInstruction::DecodedPC(void) const {
 }
 
 // Get the length of the instruction.
-int NativeInstruction::DecodedLength(void) const {
+size_t NativeInstruction::DecodedLength(void) const {
   return instruction.DecodedLength();
+}
+
+// Returns the total number of operands.
+size_t NativeInstruction::NumOperands(void) const {
+  return instruction.NumOperands();
+}
+
+// Returns the total number of explicit operands.
+size_t NativeInstruction::NumExplicitOperands(void) const {
+  return instruction.NumExplicitOperands();
 }
 
 // Returns true if this instruction is essentially a no-op, i.e. it does

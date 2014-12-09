@@ -86,7 +86,7 @@ static Instruction *MakeInlineAssembly(InlineAssemblyScope *scope,
 Instruction *InlineAssembly::InlineBefore(
     Instruction *instr, std::initializer_list<const char *> lines) {
   for (auto line : lines) {
-    if (line) {
+    if (line && line[0]) {
       instr = instr->InsertBefore(MakeInlineAssembly(scope, line));
     }
   }
@@ -97,7 +97,7 @@ Instruction *InlineAssembly::InlineBefore(
 Instruction *InlineAssembly::InlineAfter(
     Instruction *instr, std::initializer_list<const char *> lines) {
   for (auto line : lines) {
-    if (line) {
+    if (line && line[0]) {
       instr = instr->InsertAfter(MakeInlineAssembly(scope, line));
     }
   }

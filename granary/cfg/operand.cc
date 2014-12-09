@@ -80,6 +80,11 @@ Operand::Operand(arch::Operand *op_)
     : op(*op_),
       op_ptr(op_) {}
 
+// Initialize an empty operand.
+Operand::Operand(const arch::Operand *op_)
+    : op(*op_),
+      op_ptr(TOMBSTONE) {}
+
 Operand::~Operand(void) {}
 
 // Replace the internal operand memory.

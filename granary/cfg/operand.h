@@ -82,7 +82,6 @@ class Operand {
       : op(),
         op_ptr(nullptr) {}
 
-  // Copy semantics does
   Operand(const Operand &that);
 
   // Move semantics transfers referenceability.
@@ -90,6 +89,9 @@ class Operand {
 
   // Initialize this operand.
   GRANARY_INTERNAL_DEFINITION Operand(arch::Operand *op_);
+
+  // Initialize this operand.
+  GRANARY_INTERNAL_DEFINITION Operand(const arch::Operand *op_);
 
   virtual ~Operand(void);
 
