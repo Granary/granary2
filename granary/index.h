@@ -31,7 +31,7 @@ class IndexMetaData : public MutableMetaData<IndexMetaData> {
   // When an indirect CFI targets a translated block, don't copy over its
   // various `next_*` pointer links otherwise that would lead to disastrous
   // behavior.
-  void Join(const IndexMetaData *) {}
+  void Join(const IndexMetaData &) {}
 
   // The next meta-data chunk stored in the same spot in the code cache index.
   //

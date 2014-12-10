@@ -158,7 +158,7 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
 
   // When an indirect CFI targets a translated block, don't copy over its
   // `start_pc` or `native_addresses`.
-  void Join(const CacheMetaData *) {}
+  void Join(const CacheMetaData &) {}
 
   // Where this block is located in the code cache.
   //

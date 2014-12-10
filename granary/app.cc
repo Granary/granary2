@@ -11,8 +11,8 @@ AppMetaData::AppMetaData(void)
     : start_pc(nullptr) {}
 
 // Compare two translation meta-data objects for equality.
-bool AppMetaData::Equals(const AppMetaData *meta) const {
-  return start_pc == meta->start_pc;
+bool AppMetaData::Equals(const AppMetaData &meta) const {
+  return start_pc == meta.start_pc;
 }
 
 }  // namespace granary

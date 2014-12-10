@@ -33,23 +33,25 @@ GRANARY_DEFINE_positive_uint(num_sample_points, 1,
 
 namespace {
 enum : size_t {
+  // Stack size of monitor thread.
   kStackSize = arch::PAGE_SIZE_BYTES * 2,
-  kNumSamplePoints = kMaxWatchpointTypeId + 1,
-  kMaxNumActiveSamplePoints = 4096
-};
 
-// The state of shadow memory.
-enum ShadowState : uint8_t {
-  kShadowUnwatched = 0,
-  kShadowWatched = 1
+  // Maximum number of sample points tha
+  kNumSamplePoints = kMaxWatchpointTypeId + 1,
+
+  // Not all of the sample points are usable because we reserve type id = 0 to
+  // represent "unwatched" memory.
+  kNumUsableSamplePoints = kNumSamplePoints - 1,
+
+  // How big of a stack trace should be recorder per sample?
+  kSampleStackTraceSize = 5
 };
 
 // Shadow memory for ownership tracking.
 union OnwershipTracker {
   struct {
-    // State that tracks the ownership of shadow memory.
-    ShadowState state:8;
-    uint64_t thread_base:56;
+    uint64_t type_id:16;
+    uint64_t thread_base:48;
   };
 
   uint64_t value;
@@ -59,15 +61,27 @@ union OnwershipTracker {
 static_assert(8 == sizeof(OnwershipTracker),
               "Error: Invalid structure packing of `struct OnwershipTracker`.");
 
+// Represents a stack trace.
+struct StackTrace {
+  size_t trace_size;
+  AppPC trace[kSampleStackTraceSize];
+};
+
+// Represents
+struct SamplePoint {
+  OnwershipTracker *tracker;
+  StackTrace traces[2];
+};
+
 // The stack on which the monitor thread executes.
 alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
-// Set of all shadow locations that can be sampled.
-static OnwershipTracker *gSamplePoints[kNumSamplePoints] = {nullptr};
+// Set of all shadow locations that can be sampled. This corresponds to recent
+// memory allocations.
+static OnwershipTracker *gRecentAllocations[kNumSamplePoints] = {nullptr};
 
-// Set of shadow locations that are actively being sampled.
-static OnwershipTracker *
-gActiveSamplePoints[kMaxNumActiveSamplePoints] = {nullptr};
+// Set of active sample points.
+static SamplePoint gSamplePoints[kNumSamplePoints];
 
 // The PID of the monitor thread.
 static pid_t gMonitorThread = -1;
@@ -78,7 +92,9 @@ static size_t gCurrSourceIndex = 0;
 
 // Add an address for sampling.
 static void AddSamplePoint(uintptr_t type_id, void *ptr) {
-  gSamplePoints[type_id] = ShadowOf<OnwershipTracker>(ptr);
+  if (type_id < kNumUsableSamplePoints) {
+    gRecentAllocations[type_id + 1] = ShadowOf<OnwershipTracker>(ptr);
+  }
 }
 
 #define GET_ALLOCATOR(name) \
@@ -146,22 +162,22 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
 //            type id it should be associated with.
 
 static void ClearActiveSamplePoints(void) {
-  for (auto i = 0U; i < FLAG_num_sample_points; ++i) {
-    if (gActiveSamplePoints[i]) {
-      gActiveSamplePoints[i]->value = 0;
-      gActiveSamplePoints[i] = nullptr;
-    }
-  }
+  memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
 }
 
 // Monitors a single sample point.
 static void ActivateSamplePoints(void) {
+
+  // Figure out where the "end" of the sampling should be.
   auto end_id = (gCurrSourceIndex + kNumSamplePoints - 1) % kNumSamplePoints;
+  if (!end_id) end_id++;
+
   for (auto num_samples = 0U; num_samples < FLAG_num_sample_points; ) {
     auto type_id = gCurrSourceIndex++ % kNumSamplePoints;
-    if (auto sample = gSamplePoints[type_id]) {
-      gActiveSamplePoints[num_samples] = sample;
-      sample->state = kShadowWatched;
+    if (!type_id) continue;  // Type ID 0 means unwatched.
+    if (auto tracker = gRecentAllocations[type_id]) {
+      gSamplePoints[type_id].tracker = tracker;
+      tracker->type_id = type_id;
       ++num_samples;
     }
     if (type_id == end_id) break;
@@ -173,11 +189,13 @@ static void Monitor(void) {
   const timespec sample_time = {0, FLAG_sample_rate * 1000000L};
   const timespec clear_time = {0, 1000000L};
   for (;;) {
-    for (auto timer = sample_time; timer.tv_nsec >= 1000000L; ) {
+    for (auto timer = sample_time; timer.tv_nsec > 1000000L; ) {
+      const auto prev_timer = timer;
       nanosleep(&timer, &timer);
+      if (prev_timer.tv_nsec == timer.tv_nsec) break;
     }
 
-    // Potentiall race? Let's try to wait it out.
+    // Potential race? Let's try to wait it out.
     ClearActiveSamplePoints();
     nanosleep(&clear_time, nullptr);
     ClearActiveSamplePoints();
@@ -191,11 +209,10 @@ static void Monitor(void) {
 //
 // TODO(pag): The only thing that makes this actually work is luck...
 static void CreateMonitorThread(void) {
-  auto stack_ptr = &(gMonitorStack[kStackSize - arch::ADDRESS_WIDTH_BYTES]);
-  *UnsafeCast<void(**)(void)>(stack_ptr) = Monitor;
-  auto ret = sys_clone(CLONE_VM | CLONE_FILES | CLONE_FS | CLONE_UNTRACED |
-                       CLONE_THREAD | CLONE_SIGHAND,
-                       stack_ptr, nullptr, nullptr, 0);
+  auto ret = sys_clone(CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|
+                       CLONE_THREAD|CLONE_SYSVSEM,
+                       &(gMonitorStack[kStackSize]), nullptr, nullptr, 0,
+                       Monitor);
   if (0 >= ret) {
     os::Log("ERROR: Couldn't create monitor thread.\n");
     exit(EXIT_FAILURE);
@@ -217,10 +234,10 @@ class DataCollider : public InstrumentationTool {
   static void Init(InitReason reason) {
     if (kInitThread == reason) return;
 
-    if (FLAG_num_sample_points > kMaxNumActiveSamplePoints) {
+    if (FLAG_num_sample_points > kNumUsableSamplePoints) {
       os::Log("Error: Too many sample points. The maximum is %lu\n.",
-              kMaxNumActiveSamplePoints);
-      FLAG_num_sample_points = kMaxNumActiveSamplePoints;
+              kNumUsableSamplePoints);
+      FLAG_num_sample_points = kNumUsableSamplePoints;
     }
 
     // Wrap libc.
@@ -252,70 +269,64 @@ class DataCollider : public InstrumentationTool {
     }
     gMonitorThread = -1;
     gCurrSourceIndex = 0;
-    memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
-    memset(&(gActiveSamplePoints[0]), 0, sizeof gActiveSamplePoints);
+    memset(&(gRecentAllocations[0]), 0, sizeof gRecentAllocations);
+    ClearActiveSamplePoints();
   }
 
  protected:
+  static void InstrumentContention(const OnwershipTracker tracker) {
+
+    // Race happened and we missed it. This case comes up when someone just
+    // took ownership of the line, and a contender also tried to take
+    // ownership. If we've reached here, then we're the contender.
+    if (!tracker.type_id) return;
+
+    // We just took ownership.
+    if (!tracker.thread_base) {
+
+    // We're the contender.
+    } else {
+
+    }
+  }
+
   static void InstrumentMemRead(const ShadowedOperand &op) {
     GRANARY_UNUSED(op);
   }
 
   static void InstrumentMemWrite(const ShadowedOperand &op) {
-    lir::InlineAssembly asm_(op.shadow_addr_op);
+    RegisterOperand tracker(op.block->AllocateVirtualRegister());
+    lir::InlineAssembly asm_(op.shadow_addr_op, tracker);
 
     asm_.InlineBefore(op.instr,
-        // Start with a racy read of `OnwershipTracker::state`.
-        "CMP m8 [%0], i8 0;"
-
-        // Common case: `OnwershipTracker::state == kShadowUnwatched`.
-        "JZ l %1;"
+        // Start with a racy read of `OnwershipTracker::type_id`. This allows
+        // us to optimize the common case, which is that type = 0 (which is
+        // reserved for unwatched memory).
+        "CMP m16 [%0], i8 0;"
+        "JZ l %2;"
 
         // Racy check that we don't own the cache line. Compare only the low
         // order 32 bits.
-        "MOV r64 %4, m64 FS:[0];"
-        "CMP m32 [%0 + 4], r32 %4;"
-        "JZ l %1;"
-
-        // Okay, we could be in `kShadowWatched` or `kShadowOwned`. We will
-        // unwatched the location, then check what state it was in, then, if
-        // it was `kShadowWatched`, we'll take ownership, otherwise we'll
-        // report.
-        "XCHG m64 [%0], r64 %4;"
-
-        // Between the racy read and the `XCHG`, the state changed to unwatched
-        // so go remove the watchpoint.
-        "TEST r64 %4, r64 %4;"
+        "MOV r64 %1, m64 FS:[0];"
+        "CMP m32 [%0 + 4], r32 %1;"
         "JZ l %2;"
 
-        // Now need to figure out if we're the owner or the contender. Test the
-        // low-order 32 bits, which should be non-zero because they should store
-        // part of an address.
-        "TEST r32 %4, r32 %4;"
-        "JZ l %3;"
+        // Okay, we might be taking ownership, or detecting contention. So,
+        // we'll add ourselves to the shadow and pull out the old value.
+        // Because of user space addresses have all 16 high order bits as 0,
+        // we'll end up marking the shadow as unwatched. If in
+        // `InstrumentContention` we detect that we should take ownership, then
+        // we'll re-watch the memory.
+        "XCHG m64 [%0], r64 %1;"_x86_64);
 
-        // We're the contender.
-        "INT3;"  // Detected an issue!
-        "JMP l %2;"
+    op.instr->InsertBefore(
+        // We've detected some kind of contention; we'll call out to a generic
+        // routine to instrument it.
+        lir::InlineFunctionCall(op.block, InstrumentContention, tracker));
 
-        // We're the owner; re-add the watchpoint.
-        //
-        // Note: There is a race here with contender threads. I am pretty sure
-        //       it's benign, insofar as it shouldn't affect correctness, and
-        //       should also potentially re-enabled the watchpoint. The trick
-        //       is that one of the outcomes could be the contended turning
-        //       into owner.
-        "LABEL %3:"
-        "MOV m8 [%0], i8 1;"
-
-        "JMP l %1;"
-
-        // Remove the watchpoint, and fall-through.
-        "LABEL %2:"
-        "MOV m64 [%0], i32 0;"
-
+    asm_.InlineBefore(op.instr,
         // Done, fall-through to instruction.
-        "LABEL %1:");
+        "LABEL %2:"_x86_64);
   }
 
   static void InstrumentMemOp(const ShadowedOperand &op) {
@@ -332,6 +343,7 @@ class DataCollider : public InstrumentationTool {
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
   AddInstrumentationTool<DataCollider>("data_collider", {"wrap_func",
+                                                         "stack_trace",
                                                          "shadow_memory"});
 }
 

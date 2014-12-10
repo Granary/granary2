@@ -14,7 +14,7 @@ class AppMetaData : public IndexableMetaData<AppMetaData> {
   AppMetaData(void);
 
   // Compare two translation meta-data objects for equality.
-  bool Equals(const AppMetaData *meta) const;
+  bool Equals(const AppMetaData &meta) const;
 
   // The native program counter where this block begins.
   GRANARY_CONST AppPC start_pc;

@@ -6,6 +6,7 @@
 #include "granary/base/base.h"
 
 #include "arch/x86-64/xed.h"
+#include "arch/x86-64/register.h"
 
 #include "granary/cfg/instruction.h"
 
@@ -300,4 +301,406 @@ void LiveRegisterSet::Visit(const arch::Operand *op) {
   }
 }
 
+namespace arch {
+
+const VirtualRegister REG_AX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_AX));
+const VirtualRegister REG_CX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_CX));
+const VirtualRegister REG_DX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DX));
+const VirtualRegister REG_BX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_BX));
+const VirtualRegister REG_SP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_SP));
+const VirtualRegister REG_BP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_BP));
+const VirtualRegister REG_SI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_SI));
+const VirtualRegister REG_DI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DI));
+const VirtualRegister REG_R8W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R8W));
+const VirtualRegister REG_R9W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R9W));
+const VirtualRegister REG_R10W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R10W));
+const VirtualRegister REG_R11W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R11W));
+const VirtualRegister REG_R12W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R12W));
+const VirtualRegister REG_R13W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R13W));
+const VirtualRegister REG_R14W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R14W));
+const VirtualRegister REG_R15W GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R15W));
+const VirtualRegister REG_EAX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EAX));
+const VirtualRegister REG_ECX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ECX));
+const VirtualRegister REG_EDX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EDX));
+const VirtualRegister REG_EBX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EBX));
+const VirtualRegister REG_ESP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ESP));
+const VirtualRegister REG_EBP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EBP));
+const VirtualRegister REG_ESI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ESI));
+const VirtualRegister REG_EDI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EDI));
+const VirtualRegister REG_R8D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R8D));
+const VirtualRegister REG_R9D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R9D));
+const VirtualRegister REG_R10D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R10D));
+const VirtualRegister REG_R11D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R11D));
+const VirtualRegister REG_R12D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R12D));
+const VirtualRegister REG_R13D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R13D));
+const VirtualRegister REG_R14D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R14D));
+const VirtualRegister REG_R15D GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R15D));
+const VirtualRegister REG_RAX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RAX));
+const VirtualRegister REG_RCX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RCX));
+const VirtualRegister REG_RDX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RDX));
+const VirtualRegister REG_RBX GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RBX));
+const VirtualRegister REG_RSP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RSP));
+const VirtualRegister REG_RBP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RBP));
+const VirtualRegister REG_RSI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RSI));
+const VirtualRegister REG_RDI GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RDI));
+const VirtualRegister REG_R8 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R8));
+const VirtualRegister REG_R9 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R9));
+const VirtualRegister REG_R10 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R10));
+const VirtualRegister REG_R11 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R11));
+const VirtualRegister REG_R12 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R12));
+const VirtualRegister REG_R13 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R13));
+const VirtualRegister REG_R14 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R14));
+const VirtualRegister REG_R15 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R15));
+const VirtualRegister REG_AL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_AL));
+const VirtualRegister REG_CL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_CL));
+const VirtualRegister REG_DL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DL));
+const VirtualRegister REG_BL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_BL));
+const VirtualRegister REG_SPL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_SPL));
+const VirtualRegister REG_BPL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_BPL));
+const VirtualRegister REG_SIL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_SIL));
+const VirtualRegister REG_DIL GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DIL));
+const VirtualRegister REG_R8B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R8B));
+const VirtualRegister REG_R9B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R9B));
+const VirtualRegister REG_R10B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R10B));
+const VirtualRegister REG_R11B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R11B));
+const VirtualRegister REG_R12B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R12B));
+const VirtualRegister REG_R13B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R13B));
+const VirtualRegister REG_R14B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R14B));
+const VirtualRegister REG_R15B GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_R15B));
+const VirtualRegister REG_AH GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_AH));
+const VirtualRegister REG_CH GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_CH));
+const VirtualRegister REG_DH GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DH));
+const VirtualRegister REG_BH GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_BH));
+const VirtualRegister REG_ERROR GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ERROR));
+const VirtualRegister REG_RIP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_RIP));
+const VirtualRegister REG_EIP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_EIP));
+const VirtualRegister REG_IP GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_IP));
+const VirtualRegister REG_K0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K0));
+const VirtualRegister REG_K1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K1));
+const VirtualRegister REG_K2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K2));
+const VirtualRegister REG_K3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K3));
+const VirtualRegister REG_K4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K4));
+const VirtualRegister REG_K5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K5));
+const VirtualRegister REG_K6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K6));
+const VirtualRegister REG_K7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_K7));
+const VirtualRegister REG_MMX0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX0));
+const VirtualRegister REG_MMX1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX1));
+const VirtualRegister REG_MMX2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX2));
+const VirtualRegister REG_MMX3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX3));
+const VirtualRegister REG_MMX4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX4));
+const VirtualRegister REG_MMX5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX5));
+const VirtualRegister REG_MMX6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX6));
+const VirtualRegister REG_MMX7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_MMX7));
+const VirtualRegister REG_CS GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_CS));
+const VirtualRegister REG_DS GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_DS));
+const VirtualRegister REG_ES GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ES));
+const VirtualRegister REG_SS GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_SS));
+const VirtualRegister REG_FS GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_FS));
+const VirtualRegister REG_GS GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_GS));
+const VirtualRegister REG_ST0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST0));
+const VirtualRegister REG_ST1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST1));
+const VirtualRegister REG_ST2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST2));
+const VirtualRegister REG_ST3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST3));
+const VirtualRegister REG_ST4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST4));
+const VirtualRegister REG_ST5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST5));
+const VirtualRegister REG_ST6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST6));
+const VirtualRegister REG_ST7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ST7));
+const VirtualRegister REG_XCR0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XCR0));
+const VirtualRegister REG_XMM0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM0));
+const VirtualRegister REG_XMM1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM1));
+const VirtualRegister REG_XMM2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM2));
+const VirtualRegister REG_XMM3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM3));
+const VirtualRegister REG_XMM4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM4));
+const VirtualRegister REG_XMM5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM5));
+const VirtualRegister REG_XMM6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM6));
+const VirtualRegister REG_XMM7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM7));
+const VirtualRegister REG_XMM8 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM8));
+const VirtualRegister REG_XMM9 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM9));
+const VirtualRegister REG_XMM10 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM10));
+const VirtualRegister REG_XMM11 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM11));
+const VirtualRegister REG_XMM12 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM12));
+const VirtualRegister REG_XMM13 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM13));
+const VirtualRegister REG_XMM14 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM14));
+const VirtualRegister REG_XMM15 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM15));
+const VirtualRegister REG_XMM16 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM16));
+const VirtualRegister REG_XMM17 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM17));
+const VirtualRegister REG_XMM18 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM18));
+const VirtualRegister REG_XMM19 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM19));
+const VirtualRegister REG_XMM20 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM20));
+const VirtualRegister REG_XMM21 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM21));
+const VirtualRegister REG_XMM22 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM22));
+const VirtualRegister REG_XMM23 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM23));
+const VirtualRegister REG_XMM24 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM24));
+const VirtualRegister REG_XMM25 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM25));
+const VirtualRegister REG_XMM26 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM26));
+const VirtualRegister REG_XMM27 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM27));
+const VirtualRegister REG_XMM28 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM28));
+const VirtualRegister REG_XMM29 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM29));
+const VirtualRegister REG_XMM30 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM30));
+const VirtualRegister REG_XMM31 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_XMM31));
+const VirtualRegister REG_YMM0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM0));
+const VirtualRegister REG_YMM1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM1));
+const VirtualRegister REG_YMM2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM2));
+const VirtualRegister REG_YMM3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM3));
+const VirtualRegister REG_YMM4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM4));
+const VirtualRegister REG_YMM5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM5));
+const VirtualRegister REG_YMM6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM6));
+const VirtualRegister REG_YMM7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM7));
+const VirtualRegister REG_YMM8 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM8));
+const VirtualRegister REG_YMM9 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM9));
+const VirtualRegister REG_YMM10 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM10));
+const VirtualRegister REG_YMM11 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM11));
+const VirtualRegister REG_YMM12 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM12));
+const VirtualRegister REG_YMM13 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM13));
+const VirtualRegister REG_YMM14 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM14));
+const VirtualRegister REG_YMM15 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM15));
+const VirtualRegister REG_YMM16 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM16));
+const VirtualRegister REG_YMM17 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM17));
+const VirtualRegister REG_YMM18 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM18));
+const VirtualRegister REG_YMM19 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM19));
+const VirtualRegister REG_YMM20 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM20));
+const VirtualRegister REG_YMM21 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM21));
+const VirtualRegister REG_YMM22 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM22));
+const VirtualRegister REG_YMM23 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM23));
+const VirtualRegister REG_YMM24 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM24));
+const VirtualRegister REG_YMM25 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM25));
+const VirtualRegister REG_YMM26 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM26));
+const VirtualRegister REG_YMM27 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM27));
+const VirtualRegister REG_YMM28 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM28));
+const VirtualRegister REG_YMM29 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM29));
+const VirtualRegister REG_YMM30 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM30));
+const VirtualRegister REG_YMM31 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_YMM31));
+const VirtualRegister REG_ZMM0 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM0));
+const VirtualRegister REG_ZMM1 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM1));
+const VirtualRegister REG_ZMM2 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM2));
+const VirtualRegister REG_ZMM3 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM3));
+const VirtualRegister REG_ZMM4 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM4));
+const VirtualRegister REG_ZMM5 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM5));
+const VirtualRegister REG_ZMM6 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM6));
+const VirtualRegister REG_ZMM7 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM7));
+const VirtualRegister REG_ZMM8 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM8));
+const VirtualRegister REG_ZMM9 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM9));
+const VirtualRegister REG_ZMM10 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM10));
+const VirtualRegister REG_ZMM11 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM11));
+const VirtualRegister REG_ZMM12 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM12));
+const VirtualRegister REG_ZMM13 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM13));
+const VirtualRegister REG_ZMM14 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM14));
+const VirtualRegister REG_ZMM15 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM15));
+const VirtualRegister REG_ZMM16 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM16));
+const VirtualRegister REG_ZMM17 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM17));
+const VirtualRegister REG_ZMM18 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM18));
+const VirtualRegister REG_ZMM19 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM19));
+const VirtualRegister REG_ZMM20 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM20));
+const VirtualRegister REG_ZMM21 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM21));
+const VirtualRegister REG_ZMM22 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM22));
+const VirtualRegister REG_ZMM23 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM23));
+const VirtualRegister REG_ZMM24 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM24));
+const VirtualRegister REG_ZMM25 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM25));
+const VirtualRegister REG_ZMM26 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM26));
+const VirtualRegister REG_ZMM27 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM27));
+const VirtualRegister REG_ZMM28 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM28));
+const VirtualRegister REG_ZMM29 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM29));
+const VirtualRegister REG_ZMM30 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM30));
+const VirtualRegister REG_ZMM31 GRANARY_GLOBAL =
+    VirtualRegister::FromNative(static_cast<int>(XED_REG_ZMM31));
+
+}  // namespace arch
 }  // namespace granary

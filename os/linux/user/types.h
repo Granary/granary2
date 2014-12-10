@@ -83,9 +83,10 @@ extern int rt_sigaction(int sig, const struct kernel_sigaction *new_act,
 
 extern void rt_sigreturn(void);
 
-// Raw clone system call.
+// Raw clone system call, plus an extra parameter :-D
 extern long sys_clone(unsigned long clone_flags, char *newsp,
-                      int *parent_tidptr, int *child_tidptr, int tls_val);
+                      int *parent_tidptr, int *child_tidptr, int tls_val,
+                      void (*func)(void));
 
 extern int arch_prctl(int option, ...);
 

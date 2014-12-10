@@ -3,6 +3,8 @@
 #ifndef OS_THREAD_H_
 #define OS_THREAD_H_
 
+#include "granary/base/base.h"
+
 namespace granary {
 namespace os {
 
@@ -11,6 +13,11 @@ void InitThread(void);
 
 // Notify Granary tools that a thread has been destroyed.
 void ExitThread(void);
+
+// Get the thread/CPU base address.
+//
+// Note: This has an architecture-specific implementation.
+uintptr_t ThreadBase(void);
 
 }  // namespace os
 }  // namespace granary

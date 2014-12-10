@@ -14,8 +14,8 @@ struct NextWrapperId : public IndexableMetaData<NextWrapperId> {
   NextWrapperId(void)
       : next_wrapper_id(0) {}
 
-  bool Equals(const NextWrapperId *that) const {
-    return next_wrapper_id == that->next_wrapper_id;
+  bool Equals(const NextWrapperId &that) const {
+    return next_wrapper_id == that.next_wrapper_id;
   }
 
   // The Id of the next thing to wrap.

@@ -3,15 +3,11 @@
 #define GRANARY_INTERNAL
 
 #include "os/slot.h"
+#include "os/thread.h"
 
 #include "granary/breakpoint.h"
 
 extern "C" {
-
-// Get the base address of the current thread's TLS. We use this address to
-// compute `FS`-based offsets from the TLS base. We assume that the base address
-// returned by this function is the address associated with `FS:0`.
-extern intptr_t granary_arch_get_segment_base(void);
 
 // Per-thread spill slots.
 //
@@ -27,7 +23,7 @@ namespace os {
 // Access the value of some kind of private slot (by reference). This is an
 // instance of the requested slot, although many such instances might actually
 // exist.
-intptr_t Slot(SlotCategory category, int sub_category) {
+uintptr_t Slot(SlotCategory category, int sub_category) {
   void *slot_ptr(nullptr);
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:
@@ -41,8 +37,7 @@ intptr_t Slot(SlotCategory category, int sub_category) {
       slot_ptr = &(granary_slots.flags);
       break;
   }
-  auto slot_addr = reinterpret_cast<intptr_t>(slot_ptr);
-  return slot_addr - granary_arch_get_segment_base();
+  return reinterpret_cast<uintptr_t>(slot_ptr) - ThreadBase();
 }
 
 }  // namespace os

@@ -32,8 +32,8 @@ class ToolMetaData {
   // with the meta-data template associated with some indirect basic block
   // (`this`). The default behavior here to to inherit all information from
   // the existing block's meta-data.
-  void Join(const T *existing) {
-    CopyConstruct<T>(this, existing);
+  void Join(const T &existing) {
+    CopyConstruct<T>(this, &existing);
   }
 };
 
@@ -43,7 +43,7 @@ class ToolMetaData {
 template <typename T>
 class IndexableMetaData : public ToolMetaData<T> {
  public:
-  bool Equals(const T *that) const;
+  bool Equals(const T &that) const;
 };
 
 // Mutable meta-data (i.e. mutable even after committed to the code cache)
@@ -69,7 +69,7 @@ enum class UnificationStatus : int {
 template <typename T>
 class UnifiableMetaData : public ToolMetaData<T> {
  public:
-  UnificationStatus CanUnifyWith(const T *that) const;
+  UnificationStatus CanUnifyWith(const T &that) const;
 };
 
 // Describes whether some type is an indexable meta-data type.
@@ -178,21 +178,21 @@ namespace detail {
 // Compare some meta-data for equality.
 template <typename T>
 bool CompareEquals(const void *a, const void *b) {
-  return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
+  return reinterpret_cast<const T *>(a)->Equals(*reinterpret_cast<const T *>(b));
 }
 
 // Join / combine two an existing meta-data `b` into a requested meta-data
 // template `a`.
 template <typename T>
 void Join(void *a, const void *b) {
-  return reinterpret_cast<T *>(a)->Join(reinterpret_cast<const T *>(b));
+  return reinterpret_cast<T *>(a)->Join(*reinterpret_cast<const T *>(b));
 }
 
 // Compare some meta-data for equality.
 template <typename T>
 UnificationStatus CanUnify(const void *a, const void *b) {
   return reinterpret_cast<const T *>(a)->CanUnifyWith(
-      reinterpret_cast<const T *>(b));
+      *reinterpret_cast<const T *>(b));
 }
 }  // namespace detail
 

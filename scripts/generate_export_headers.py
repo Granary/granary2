@@ -12,6 +12,7 @@ EXPORT_HEADERS = [
   "arch/context.h",
   "arch/cpu.h",
   "arch/util.h",
+  "arch/register.h",
 
   "granary/base/abi.h",
   "granary/base/base.h",

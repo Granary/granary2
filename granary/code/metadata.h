@@ -29,7 +29,7 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
 
   // Tells us if we can unify our (uncommitted) meta-data with some existing
   // meta-data.
-  UnificationStatus CanUnifyWith(const StackMetaData *that) const;
+  UnificationStatus CanUnifyWith(const StackMetaData &that) const;
 
   inline void MarkStackAsValid(void) {
     // If we've already got a "bad" stack hint, then don't allow us to change

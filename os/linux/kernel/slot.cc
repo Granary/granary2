@@ -29,12 +29,12 @@ intptr_t Slot(SlotCategory category, int sub_category) {
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:
       GRANARY_ASSERT(sub_category < arch::MAX_NUM_SPILL_SLOTS);
-      return reinterpret_cast<intptr_t>(
+      return reinterpret_cast<uintptr_t>(
           &(granary_slots->spill_slots[sub_category]));
     case SLOT_PRIVATE_STACK:
-      return reinterpret_cast<intptr_t>(&(granary_slots->stack_slot));
+      return reinterpret_cast<uintptr_t>(&(granary_slots->stack_slot));
     case SLOT_SAVED_FLAGS:
-      return reinterpret_cast<intptr_t>(&(granary_slots->flags));
+      return reinterpret_cast<uintptr_t>(&(granary_slots->flags));
   }
 }
 

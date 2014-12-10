@@ -21,20 +21,20 @@ enum SlotCategory {
 
 struct SlotSet {
   // Pointer to a thread- or CPU-private stack.
-  intptr_t stack_slot;
+  uintptr_t stack_slot;
 
   // Saved flags.
   uint64_t flags;
 
   // Used for spilling general-purpose registers, so that a spilled GPR can be
   // used to hold the value of a virtual register.
-  intptr_t spill_slots[arch::MAX_NUM_SPILL_SLOTS];
+  uintptr_t spill_slots[arch::MAX_NUM_SPILL_SLOTS];
 };
 
 // Access the value of some kind of private slot (by reference). This is an
 // instance of the requested slot, although many such instances might actually
 // exist.
-intptr_t Slot(os::SlotCategory category, int sub_category=0);
+uintptr_t Slot(os::SlotCategory category, int sub_category=0);
 
 }  // namespace os
 }  // namespace granary

@@ -157,11 +157,36 @@ DEFINE_FUNC(arch_prctl)
     ret
 END_FUNC(arch_prctl)
 
+// Thread exit.
+DEFINE_FUNC(sys_exit)
+    mov     eax, 60  // `__NR_exit`.
+    syscall
+END_FUNC(sys_exit)
+
+// extern long sys_clone (
+//      unsigned long clone_flags ,     RDI
+//      char * newsp ,                  RSI
+//      int * parent_tidptr ,           RDX
+//      int * child_tidptr ,            RCX
+//      int tls_val ,                   R8
+//      void (*func)()                  R9
+//
 DEFINE_FUNC(sys_clone)
     mov     r10, rcx  // arg4, `child_tidptr`.
     mov     eax, 56  // `__NR_clone`.
+    mov     [rsi], r9
+    sub     r9, 8
     syscall
+    test rax, rax
+    jz L(return_to_child)
+
+L(return_to_parent):
     ret
+
+L(return_to_child):
+    pop rax
+    call rax
+    jmp sys_exit
 END_FUNC(sys_clone)
 
 DEFINE_FUNC(sys_futex)
@@ -189,12 +214,6 @@ DEFINE_FUNC(nanosleep)
     syscall
     ret
 END_FUNC(nanosleep)
-
-// Thread exit.
-DEFINE_FUNC(sys_exit)
-    mov     eax, 60  // `__NR_exit`.
-    syscall
-END_FUNC(sys_exit)
 
 
 DECLARE_FUNC(granary_exit)
