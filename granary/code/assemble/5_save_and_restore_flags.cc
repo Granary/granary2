@@ -106,7 +106,9 @@ static void AnalyzeFragRegs(FragmentList *frags) {
 // Tracks which registers are used anywhere in the flag zone.
 static void UpdateUsedRegsInFlagZone(FlagZone *zone, CodeFragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
-    zone->used_regs.Visit(DynamicCast<NativeInstruction *>(instr));
+    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      zone->used_regs.Visit(ninstr);
+    }
   }
 }
 

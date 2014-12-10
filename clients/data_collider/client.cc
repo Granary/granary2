@@ -271,9 +271,10 @@ class DataCollider : public InstrumentationTool {
         // Common case: `OnwershipTracker::state == kShadowUnwatched`.
         "JZ l %1;"
 
-        // Racy check that we don't own the cache line.
+        // Racy check that we don't own the cache line. Compare only the low
+        // order 32 bits.
         "MOV r64 %4, m64 FS:[0];"
-        "CMP m64 [%0], r64 %4;"
+        "CMP m32 [%0 + 4], r32 %4;"
         "JZ l %1;"
 
         // Okay, we could be in `kShadowWatched` or `kShadowOwned`. We will
@@ -306,9 +307,7 @@ class DataCollider : public InstrumentationTool {
         //       into owner.
         "LABEL %3:"
         "MOV m8 [%0], i8 1;"
-        );
 
-    asm_.InlineBefore(op.instr,
         "JMP l %1;"
 
         // Remove the watchpoint, and fall-through.
