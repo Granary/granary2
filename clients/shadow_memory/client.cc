@@ -106,18 +106,19 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   }
 
  protected:
-  virtual void InstrumentMemOp(DecodedBasicBlock *bb,
-                               NativeInstruction *instr,
-                               MemoryOperand &mloc,
-                               const RegisterOperand &addr) {
-    if (addr.IsStackPointer() || addr.IsVirtualStackPointer()) return;
+  virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) {
+    if (op.native_addr_op.IsStackPointer() ||
+        op.native_addr_op.IsVirtualStackPointer()) {
+      return;
+    }
 
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
     MemoryOperand shadow_base(gShadowMem);
-    lir::InlineAssembly asm_(shift, scale, shadow_base, addr);
-    asm_.InlineBefore(instr, "MOV r64 %4, r64 %3;"
-                             "LEA r64 %5, m64 %2;"_x86_64);
+    lir::InlineAssembly asm_(shift, scale, shadow_base, op.native_addr_op);
+    asm_.InlineBefore(op.instr,
+        "MOV r64 %4, r64 %3;"
+        "LEA r64 %5, m64 %2;"_x86_64);
 
     // %0 is an i8 shift amount.
     // %1 is an i8 scale amount.
@@ -127,27 +128,33 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     // %5 is our shadow base
 
     // Scale the native address by the granularity of the shadow memory.
-    asm_.InlineBeforeIf(instr, 0 < gShiftAmount, "SHR r64 %4, i8 %0;"_x86_64);
+    asm_.InlineBeforeIf(op.instr, 0 < gShiftAmount,
+        "SHR r64 %4, i8 %0;"_x86_64);
 
     // Chop off the high-order 32 bits of the shadow offset, then scale the
     // offset by the size of the shadow structure. This has the benefit of
     // making it more likely that both shadow memory and address watchpoints
     // can be simultaneously used.
-    asm_.InlineBefore(instr, "MOV r32 %4, r32 %4;"_x86_64);
-    asm_.InlineBeforeIf(instr, 1 < gAlignedSize, "SHL r64 %4, i8 %1;"_x86_64);
+    asm_.InlineBefore(op.instr,
+        "MOV r32 %4, r32 %4;"_x86_64);
+    asm_.InlineBeforeIf(op.instr, 1 < gAlignedSize,
+        "SHL r64 %4, i8 %1;"_x86_64);
 
     // Add the shadow base to the offset, forming the shadow pointer.
-    asm_.InlineBefore(instr, "ADD r64 %4, r64 %5;"_x86_64);
-    auto native_addr_op(asm_.Register(bb, 3));
-    auto shadow_addr_op(asm_.Register(bb, 4));
+    asm_.InlineBefore(op.instr,
+        "ADD r64 %4, r64 %5;"_x86_64);
+    auto native_addr_op(asm_.Register(op.block, 3));
+    auto shadow_addr_op(asm_.Register(op.block, 4));
     for (auto desc : ShadowStructureIterator(gDescriptions)) {
 
       // Move `%4` (the offset/pointer) to point to this description's
       // structure.
-      asm_.InlineBefore(instr, desc->offset_asm_instruction);
+      asm_.InlineBefore(op.instr, desc->offset_asm_instruction);
 
-      ShadowedOperand op(bb, instr, mloc, shadow_addr_op, native_addr_op);
-      desc->instrumenter(op);
+      ShadowedMemoryOperand shadow_op{op.block, op.instr, op.native_mem_op,
+                                      shadow_addr_op, native_addr_op,
+                                      op.operand_number};
+      desc->instrumenter(shadow_op);
     }
   }
 
@@ -178,7 +185,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const ShadowedOperand &)) {
+                        void (*instrumenter)(const ShadowedMemoryOperand &)) {
   GRANARY_ASSERT(!gShadowMem);
   GRANARY_ASSERT(!desc->next);
   GRANARY_ASSERT(!desc->instrumenter);

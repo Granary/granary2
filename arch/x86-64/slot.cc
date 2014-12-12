@@ -14,10 +14,9 @@ namespace arch {
 
 // Used to access some kind of private slot, e.g. virtual register spill slot
 // as a memory operand.
-arch::Operand SlotMemOp(os::SlotCategory category, int sub_category,
-                        int width) {
+arch::Operand SlotMemOp(os::SlotCategory category, size_t sub_category,
+                        size_t width) {
   arch::Operand op;
-
   op.type = XED_ENCODER_OPERAND_TYPE_PTR;
   op.segment = GRANARY_IF_USER_ELSE(XED_REG_FS, XED_REG_GS);  // Linux-specific.
   op.is_compound = true;

@@ -229,6 +229,8 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 //                 |         |       |
 //          compare_target --' <-----'
 //                 |
+//            about_to_exit
+//                 |
 //            exit_to_block
 //
 CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
@@ -240,9 +242,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto in_edge = new CodeFragment;
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
+  auto about_to_exit = new CodeFragment;
   auto exit_to_block = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
-  auto is_call_ret = cfi->IsFunctionCall() || cfi->IsFunctionTailCall() ||
-                     IsA<ReturnBasicBlock *>(cfi->TargetBlock());
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
   // we will often use the combination of a `branch_instr` and
@@ -251,8 +252,9 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   in_edge->successors[FRAG_SUCC_FALL_THROUGH] = go_to_granary;
   in_edge->successors[FRAG_SUCC_BRANCH] = compare_target;
   go_to_granary->successors[FRAG_SUCC_BRANCH] = compare_target;
-  compare_target->successors[FRAG_SUCC_FALL_THROUGH] = exit_to_block;
+  compare_target->successors[FRAG_SUCC_FALL_THROUGH] = about_to_exit;
   compare_target->successors[FRAG_SUCC_BRANCH] = go_to_granary;
+  about_to_exit->successors[FRAG_SUCC_FALL_THROUGH] = exit_to_block;
 
   exit_to_block->edge.kind = EDGE_KIND_INDIRECT;
   exit_to_block->block_meta = dest_block_meta;
@@ -261,11 +263,13 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   frags->Append(in_edge);
   frags->Append(go_to_granary);
   frags->Append(compare_target);
+  frags->Append(about_to_exit);
   frags->Append(exit_to_block);
 
   UpdateIndirectEdgeFrag(in_edge, predecessor_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(go_to_granary, predecessor_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(compare_target, predecessor_frag, dest_block_meta);
+  UpdateIndirectEdgeFrag(about_to_exit, predecessor_frag, dest_block_meta);
 
   in_edge->attr.is_in_edge_code = true;
 
@@ -277,12 +281,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // --------------------- in_edge --------------------------------
 
-  if (REDZONE_SIZE_BYTES && !is_call_ret) {
-    APP(in_edge,
-        SHIFT_REDZONE(&ni);
-        ni.is_stack_blind = true;
-        ni.analyzed_stack_usage = false; );
-  }
+  in_edge->instrs.Append(
+      new AnnotationInstruction(kAnnotCondLeaveNativeStack));
 
   // Copy the target, just in case it's stored in `RCX` or `RDI`.
   auto cfi_target = target_op.reg;
@@ -352,8 +352,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   //    2)  Jumping directly to the targeted basic block (last instruction).
   APP(compare_target, MOV_GPRv_IMMv(&ni, XED_REG_RCX, 0UL);
                       ni.dont_encode = true; );
-  APP(compare_target, LEA_GPRv_GPRv_GPRv(&ni, XED_REG_RCX, XED_REG_RCX,
-                                              cfi_target));
+  APP(compare_target, LEA_GPRv_AGEN(&ni, XED_REG_RCX, XED_REG_RCX, cfi_target));
   auto go_to_exit_to_block = new LabelInstruction;
 
   // Note: We add the `JRCXZ` as the branch instruction, as opposed to the
@@ -380,12 +379,12 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
                         ni.analyzed_stack_usage = false; );
   }
 
-  if (REDZONE_SIZE_BYTES && !is_call_ret) {
-    APP(compare_target,
-        UNSHIFT_REDZONE(&ni);
-        ni.is_stack_blind = true;
-        ni.analyzed_stack_usage = false; );
-  }
+  // --------------------- about_to_exit --------------------------------
+
+  // We separate this off so that if a compensation fragment needs to be
+  // added, then it won't be added *after* the enter stack annotation.
+  about_to_exit->instrs.Append(
+      new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   // --------------------- exit_to_block --------------------------------
 

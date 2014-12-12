@@ -200,15 +200,33 @@ enum : unsigned {
   BNDMK_BND_AGEN_ISEL = 1170U
 };
 
+inline static VirtualRegister GetRegister(VirtualRegister reg) {
+  return reg;
+}
+
+inline static VirtualRegister GetRegister(xed_reg_enum_t reg) {
+  return VirtualRegister::FromNative(reg);
+}
+
 // Custom LEA instruction builder for source register operands. This is like
 // doing `dest = src1 + src2`.
 template <typename A0, typename A1, typename A2>
-inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
+inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, A1 a1, A2 a2) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
                    LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
-  RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
-  RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
+  auto &aop(instr->ops[1]);
+  aop.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  aop.mem.base = GetRegister(a1);
+  aop.mem.index = GetRegister(a2);
+  aop.mem.disp = 0;
+  aop.mem.scale = 1;
+  aop.width = ADDRESS_WIDTH_BITS;
+  aop.is_compound = true;
+  aop.is_explicit = true;
+  aop.is_effective_address = true;
+  aop.rw = XED_OPERAND_ACTION_R;
+  instr->num_explicit_ops = 2;
   FinalizeInstruction(instr);
 }
 
@@ -264,7 +282,7 @@ inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    int width=0) {
+                                    size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
@@ -281,7 +299,7 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
-                                    int width=0) {
+                                    size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
@@ -298,7 +316,7 @@ inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    xed_reg_enum_t index_reg, int width=0) {
+                                    xed_reg_enum_t index_reg, size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
@@ -311,7 +329,7 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
-                                    VirtualRegister index_reg, int width=0) {
+                                    VirtualRegister index_reg, size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;

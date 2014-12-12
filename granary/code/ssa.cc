@@ -42,7 +42,7 @@ SSANode::SSANode(SSAFragment *frag_, VirtualRegister reg_)
     : id(NODE_UNSCHEDULED),
       frag(frag_),
       reg(reg_) {
-  GRANARY_ASSERT(reg.IsGeneralPurpose());
+  GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
 }
 
 SSANode::~SSANode(void) {}
@@ -158,26 +158,27 @@ GRANARY_DEFINE_SSA_ALLOCATOR(SSARegisterNode)
 
 SSAOperand::SSAOperand(void)
     : operand(nullptr),
-      nodes(),
-      action(SSAOperandAction::INVALID),
-      is_reg(false) {}
+      node(nullptr),
+      action(SSAOperandAction::INVALID) {}
+
+SSAOperand &SSAOperand::operator=(const SSAOperand &that) {
+  if (&that != this) {
+    operand = that.operand;
+    node = that.node;
+    action = that.action;
+  }
+  return *this;
+}
 
 SSAInstruction::SSAInstruction(void)
-    : defs(),
-      uses() {}
+    : operands() {}
 
 SSAInstruction::~SSAInstruction(void) {
-  for (auto &def : defs) {
-    if (SSAOperandAction::WRITE == def.action) {
-      delete def.nodes[0];
-    }
-  }
-  for (auto &use : uses) {
-    if (SSAOperandAction::READ_WRITE == use.action) {
-      if (IsA<SSADataPhiNode *>(use.nodes[0])) {
-        delete use.nodes[0];
-      }
-    }
+  for (auto &op : operands) {
+    if (SSAOperandAction::WRITE == op.action) delete op.node;
+    if (SSAOperandAction::CLEARED == op.action) continue;
+    if (SSAOperandAction::READ_WRITE != op.action) continue;
+    if (IsA<SSADataPhiNode *>(op.node)) delete op.node;
   }
 }
 
@@ -188,22 +189,13 @@ namespace {
 // the instruction.
 static SSANode *DefinedNodeForReg(NativeInstruction *instr,
                                   VirtualRegister reg) {
-  if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
-    for (auto &op : ssa_instr->defs) {
-      if (SSAOperandAction::WRITE == op.action) {
-        auto node = op.nodes[0];
-        if (node->reg == reg) return node;
-      } else {  // `SSAOperandAction::CLEARED`.
-        break;
-      }
-    }
-    for (auto &op : ssa_instr->uses) {
-      if (SSAOperandAction::READ_WRITE == op.action) {
-        auto node = op.nodes[0];
-        if (node->reg == reg) return node;
-      } else {  // `SSAOperandAction::READ`.
-        break;
-      }
+  auto ssa_instr = instr->ssa;
+  if (!ssa_instr) return nullptr;
+
+  for (auto &op : ssa_instr->operands) {
+    if (SSAOperandAction::WRITE == op.action ||
+        SSAOperandAction::READ_WRITE == op.action) {
+      if (op.node->reg == reg) return op.node;
     }
   }
   return nullptr;

@@ -9,6 +9,10 @@
 namespace granary {
 namespace arch {
 
+extern const VirtualRegister REG_RFLAGS;
+extern const VirtualRegister REG_EFLAGS;
+extern const VirtualRegister REG_FLAGS;
+
 extern const VirtualRegister REG_AX;
 extern const VirtualRegister REG_CX;
 extern const VirtualRegister REG_DX;

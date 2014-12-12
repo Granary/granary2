@@ -69,7 +69,7 @@ class LocalControlFlowGraph final {
 
   // Allocate a new virtual register.
   GRANARY_INTERNAL_DEFINITION
-  VirtualRegister AllocateVirtualRegister(int num_bytes);
+  VirtualRegister AllocateVirtualRegister(size_t num_bytes);
 
  private:
   friend class BlockFactory;  // For `first_new_block`.

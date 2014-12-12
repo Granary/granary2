@@ -8,11 +8,12 @@
 // Forward declaration.
 class DirectMappedShadowMemory;
 
-class ShadowedOperand {
+class ShadowedMemoryOperand {
  public:
+  // Block that contains `instr`.
   granary::DecodedBasicBlock * const block;
 
-  // Instruction that contains the memory operand `mem_op`.
+  // Instruction that contains the memory operand `native_mem_op`.
   granary::NativeInstruction * const instr;
 
   // Memory operand that is accessing native memory.
@@ -25,29 +26,19 @@ class ShadowedOperand {
   // `address_reg_op`.
   const granary::RegisterOperand &native_addr_op;
 
- protected:
-  friend class DirectMappedShadowMemory;
-
-  inline ShadowedOperand(granary::DecodedBasicBlock *block_,
-                         granary::NativeInstruction *instr_,
-                         const granary::MemoryOperand &native_mem_op_,
-                         const granary::RegisterOperand &shadow_addr_op_,
-                         const granary::RegisterOperand &native_addr_op_)
-      : block(block_),
-        instr(instr_),
-        native_mem_op(native_mem_op_),
-        shadow_addr_op(shadow_addr_op_),
-        native_addr_op(native_addr_op_) {}
+  // Which memory operand (of the instruction) is being shadowed? This is
+  // going to be `0` or `1`.
+  const size_t operand_number;
 
  private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ShadowedOperand);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ShadowedMemoryOperand);
 };
 
 // Represents a description of a shadow memory structure.
 class ShadowStructureDescription {
  public:
   ShadowStructureDescription *next;
-  void (*instrumenter)(const ShadowedOperand &);
+  void (*instrumenter)(const ShadowedMemoryOperand &);
   size_t offset;
   const size_t size;
   const size_t align;
@@ -88,7 +79,7 @@ ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const ShadowedOperand &));
+                        void (*instrumenter)(const ShadowedMemoryOperand &));
 
 // Returns the address of the shadow memory descriptor.
 template <typename T>
@@ -98,7 +89,7 @@ inline static ShadowStructureDescription *ShadowDescription(void) {
 
 template <typename T>
 inline static void AddShadowStructure(
-    void (*instrumenter)(const ShadowedOperand &)) {
+    void (*instrumenter)(const ShadowedMemoryOperand &)) {
   AddShadowStructure(ShadowDescription<T>(), instrumenter);
 }
 

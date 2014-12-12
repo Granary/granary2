@@ -234,29 +234,6 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
   }
 }
 
-// Perform late-mangling of an LEA instruction.
-//
-// TODO(pag): Try to remove the necessity for this!
-static void LateMangleLEA(Instruction *instr) {
-  GRANARY_ASSERT(3 == instr->num_explicit_ops);
-  GRANARY_ASSERT(instr->ops[1].IsRegister());
-  GRANARY_ASSERT(instr->ops[2].IsRegister());
-  GRANARY_ASSERT(instr->ops[1].reg.IsNative());
-  GRANARY_ASSERT(instr->ops[2].reg.IsNative());
-  GRANARY_ASSERT(instr->ops[1].reg.IsGeneralPurpose());
-  GRANARY_ASSERT(instr->ops[2].reg.IsGeneralPurpose());
-  auto &op1(instr->ops[1]);
-  instr->ops[2].type = XED_ENCODER_OPERAND_TYPE_INVALID;
-  op1.type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op1.is_effective_address = true;
-  op1.is_compound = true;
-  op1.mem.disp = 0;
-  op1.mem.base = instr->ops[1].reg;
-  op1.mem.index = instr->ops[2].reg;
-  op1.mem.scale = 1;
-  instr->num_explicit_ops = 2;
-}
-
 // Encode the operands of the instruction.
 static void EncodeOperands(const Instruction *instr,
                            xed_encoder_instruction_t *xede, CachePC pc
@@ -265,7 +242,7 @@ static void EncodeOperands(const Instruction *instr,
   for (uint16_t op_index = 0; op_index < instr->num_explicit_ops; ++op_index) {
     const auto &op(instr->ops[op_index]);
     auto &xedo(xede->operands[op_index]);
-    xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
+    xedo.width = static_cast<uint32_t>(std::max(0UL, op.BitWidth()));
 
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
@@ -355,13 +332,6 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   xed_encoder_instruction_t xede;
   const auto is_stage_encoding = InstructionEncodeKind::STAGED == encode_kind;
-
-  // Make sure that something like the `LEA` produced from mangling `XLAT` is
-  // correctly handled.
-  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == instr->iclass &&
-                       2 != instr->num_explicit_ops)) {
-    LateMangleLEA(instr);
-  }
 
   // Step 1: Convert Granary IR into XED encoder IR.
   InitEncoderInstruction(instr, &xede);

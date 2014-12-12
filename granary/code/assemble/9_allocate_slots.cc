@@ -209,8 +209,9 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
 // Allocate space when the stack is valid.
 static void AllocateStackSlotsStackValid(PartitionInfo *partition,
                                          Fragment *frag) {
-  const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
-                        arch::REDZONE_SIZE_BYTES;
+  const auto vr_space = static_cast<int>(partition->num_slots *
+                                         arch::GPR_WIDTH_BYTES +
+                                         arch::REDZONE_SIZE_BYTES);
 
   const auto frame_space = GRANARY_ALIGN_TO(
       partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
@@ -230,6 +231,7 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
 static void VerifyAllSlotsScheduled(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!ninstr->instruction.WillBeEncoded()) continue;
       ninstr->ForEachOperand([=] (Operand *op) {
         if (!op->IsExplicit()) return;
         if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {

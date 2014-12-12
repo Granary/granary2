@@ -70,6 +70,14 @@ class Operand : public OperandInterface {
            XED_ENCODER_OPERAND_TYPE_PTR == type;
   }
 
+  inline bool IsCompoundMemory(void) const {
+    return XED_ENCODER_OPERAND_TYPE_MEM == type && is_compound;
+  }
+
+  inline bool IsEffectiveAddress(void) const {
+    return is_effective_address;
+  }
+
   inline bool IsPointer(void) const {
     return XED_ENCODER_OPERAND_TYPE_PTR == type;
   }
@@ -92,11 +100,11 @@ class Operand : public OperandInterface {
     return is_explicit;
   }
 
-  inline int ByteWidth(void) const {
+  inline size_t ByteWidth(void) const {
     return width / 8;
   }
 
-  inline int BitWidth(void) const {
+  inline size_t BitWidth(void) const {
     return width;
   }
 
@@ -182,6 +190,9 @@ class Operand : public OperandInterface {
 
 #pragma clang diagnostic pop
 };
+
+static_assert(offsetof(Operand, reg) == offsetof(Operand, mem.base),
+    "Invalid structure packing of `granary::arch::Operand`.");
 
 static_assert(sizeof(Operand) <= 32,
     "Invalid structure packing of `granary::arch::Operand`.");

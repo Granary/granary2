@@ -85,7 +85,8 @@ void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
 }
 
 // Allocate a new virtual register.
-VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(int num_bytes) {
+VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(
+    size_t num_bytes) {
   GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
   GRANARY_ASSERT((1 << 16) > num_virtual_regs);
   return VirtualRegister(VR_KIND_VIRTUAL_GPR, static_cast<uint8_t>(num_bytes),

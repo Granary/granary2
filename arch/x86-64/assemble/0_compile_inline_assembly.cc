@@ -120,7 +120,7 @@ class InlineAssemblyParser {
   VirtualRegister ParseArchRegister(void) {
     ParseWord();
     ConsumeWhiteSpace();
-    return VirtualRegister::FromNative(static_cast<int>(
+    return VirtualRegister::FromNative(static_cast<uint32_t>(
         str2xed_reg_enum_t(buff)));
   }
 
@@ -171,7 +171,7 @@ class InlineAssemblyParser {
     Accept('[');
     ConsumeWhiteSpace();
 
-    if ('0' <= *ch && '9' >= *ch) {  // Point.
+    if (PeekNumber()) {  // Pointer.
       ParsePointerOperand();
       ConsumeWhiteSpace();
       Accept(']');
@@ -184,6 +184,7 @@ class InlineAssemblyParser {
           if (Peek('%')) {
             reg = ParseRegisterVar();
           } else {
+            GRANARY_ASSERT(PeekAlpha());
             reg = ParseArchRegister();
           }
           if (Peek('+') || Peek(']')) {
@@ -226,10 +227,10 @@ class InlineAssemblyParser {
           break;
 
         case TryParseIndexOrDisp:
-          if ('0' <= *ch && '9' >= *ch) {  // Literal displacement.
+          if (PeekNumber()) {  // Literal displacement.
             state = ParseDisp;
 
-          } else if ('A' <= *ch && 'Z' >= *ch) {  // Index arch reg.
+          } else if (PeekAlpha()) {  // Index arch reg.
             reg = ParseArchRegister();
             state = InterpretRegAsIndex;
 
@@ -241,6 +242,8 @@ class InlineAssemblyParser {
 
             } else if (aop.IsImmediate()) {
               op->mem.disp = static_cast<int32_t>(aop.imm.as_int);
+
+              // Make sure that we don't lost precision.
               GRANARY_ASSERT(op->mem.disp == aop.imm.as_int);
               goto done;
 
@@ -272,18 +275,21 @@ class InlineAssemblyParser {
           break;
 
         case ParseDisp:
-          if ('0' <= *ch && '9' >= *ch) {  // Literal displacement.
+          if (PeekNumber()) {  // Literal displacement.
             ParseWord();
             if ('0' == buff[0]) {
               DeFormat(buff, "%x", &(op->mem.disp));
             } else {
               DeFormat(buff, "%d", &(op->mem.disp));
             }
-          } else {
+          } else if (Peek('%')) {
             auto &aop(ParseOperandVar());
             GRANARY_ASSERT(aop.IsImmediate());
             op->mem.disp = static_cast<int32_t>(aop.imm.as_int);
             GRANARY_ASSERT(op->mem.disp == aop.imm.as_int);
+
+          } else {
+            GRANARY_ASSERT(false);
           }
           goto done;
       }
@@ -296,12 +302,19 @@ class InlineAssemblyParser {
     op->type = XED_ENCODER_OPERAND_TYPE_MEM;
     op->is_compound = op->mem.disp || 1 < op->mem.scale ||
                       (op->mem.base.IsValid() && op->mem.index.IsValid());
+    if (6 == op->mem.disp) {
 
-    // Canonicalize.
+    }
+    // Canonicalise to use base reg over index reg when it makes sense.
     if (!op->is_compound && op->mem.index.IsValid()) {
       op->mem.base = op->mem.index;
       op->mem.index = VirtualRegister();
       op->mem.scale = 0;
+    }
+
+    // TODO(pag): Uggh, get rid of this nastiness.
+    if (!op->is_compound) {
+      op->reg = op->mem.base;
     }
   }
 
@@ -357,7 +370,7 @@ class InlineAssemblyParser {
     ParseWord();
     auto reg = str2xed_reg_enum_t(buff);
     GRANARY_ASSERT(XED_REG_INVALID != reg);
-    op->reg.DecodeFromNative(static_cast<int>(reg));
+    op->reg.DecodeFromNative(static_cast<uint32_t>(reg));
     op->type = XED_ENCODER_OPERAND_TYPE_REG;
   }
 
@@ -369,7 +382,7 @@ class InlineAssemblyParser {
     } else {
       ParseArchRegisterOperand();
     }
-    op->reg.Widen(static_cast<int>(width / arch::BYTE_WIDTH_BITS));
+    op->reg.Widen(width / arch::BYTE_WIDTH_BITS);
   }
 
   // Parse an immediate literal operand.
@@ -599,16 +612,24 @@ class InlineAssemblyParser {
   }
 
  private:
-  bool Peek(char next) {
+  inline bool Peek(char next) {
     return *ch == next;
   }
 
-  void Accept(char GRANARY_IF_DEBUG(next)) {
+  inline bool PeekNumber(void) {
+    return '0' <= *ch && '9' >= *ch;
+  }
+
+  inline bool PeekAlpha(void) {
+    return 'A' <= *ch && 'Z' >= *ch;
+  }
+
+  inline void Accept(char GRANARY_IF_DEBUG(next)) {
     GRANARY_ASSERT(Peek(next));
     ch++;
   }
 
-  bool PeekWhitespace(void) {
+  inline bool PeekWhitespace(void) {
     return ' ' == *ch || '\t' == *ch || '\n' == *ch;
   }
 

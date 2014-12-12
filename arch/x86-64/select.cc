@@ -18,7 +18,7 @@ extern const xed_inst_t * const LAST_ICLASS_SELECTION;
 
 namespace {
 
-static bool MatchWidth(int bit_width, xed_operand_width_enum_t op_width) {
+static bool MatchWidth(size_t bit_width, xed_operand_width_enum_t op_width) {
   if (!bit_width) return true;
   switch (op_width) {
     case XED_OPERAND_WIDTH_MB:

@@ -146,7 +146,8 @@ int Instruction::StackPointerShiftAmount(void) const {
 
     case XED_ICLASS_RET_NEAR:
       if (ops[0].IsImmediate()) {
-        return arch::ADDRESS_WIDTH_BYTES + static_cast<int>(ops[0].imm.as_uint);
+        return arch::ADDRESS_WIDTH_BYTES +
+               static_cast<uint16_t>(ops[0].imm.as_uint);
       } else {
         return arch::ADDRESS_WIDTH_BYTES;
       }
@@ -170,7 +171,7 @@ int Instruction::StackPointerShiftAmount(void) const {
       if (!ops[0].IsRegister()) break;
       if (!ops[0].reg.IsStackPointer()) break;
       if (!ops[1].IsImmediate()) break;
-      return static_cast<int>(ops[1].imm.as_int) * mult;
+      return static_cast<int32_t>(ops[1].imm.as_int) * mult;
 
     case XED_ICLASS_INC:
       mult = 1;
@@ -190,7 +191,7 @@ int Instruction::StackPointerShiftAmount(void) const {
       if (!ops[1].mem.base.IsStackPointer()) break;
       if (ops[1].mem.index.IsValid()) break;
       if (1 < ops[1].mem.scale) break;
-      return static_cast<int>(ops[1].mem.disp);
+      return static_cast<int32_t>(ops[1].mem.disp);
 
     default:
       break;

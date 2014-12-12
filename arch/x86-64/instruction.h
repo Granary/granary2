@@ -42,8 +42,8 @@ class Instruction : public InstructionInterface {
     return decoded_pc;
   }
 
-  inline int EncodedLength(void) const {
-   return static_cast<int>(encoded_length);
+  inline size_t EncodedLength(void) const {
+   return encoded_length;
  }
 
   inline CachePC EncodedPC(void) const {

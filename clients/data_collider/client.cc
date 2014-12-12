@@ -9,15 +9,16 @@
 #include "clients/watchpoints/client.h"  // For type ID stuff.
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
+#include "clients/stack_trace/client.h"
 #include "clients/util/instrument_memop.h"
 
 #include "generated/clients/data_collider/offsets.h"
 
 GRANARY_USING_NAMESPACE granary;
 
-GRANARY_DEFINE_positive_uint(sample_rate, 100,
+GRANARY_DEFINE_positive_uint(sample_rate, 500,
     "The rate, in milliseconds, at which DataCollider changes its sample "
-    "points. The default value is `100`, representing `100ms`.\n"
+    "points. The default value is `500`, representing `500ms`.\n"
     "\n"
     "Note: This value is approximate, in that we do not guarantee that\n"
     "      sampling will indeed occur every N ms, but rather, approximately\n"
@@ -25,9 +26,9 @@ GRANARY_DEFINE_positive_uint(sample_rate, 100,
 
     "data_collider");
 
-GRANARY_DEFINE_positive_uint(num_sample_points, 1,
+GRANARY_DEFINE_positive_uint(num_sample_points, 64,
     "The number of addresses that will be sampled by DataCollider. By default "
-    "this is `1`. The maximum number of active sample points is `4096`.",
+    "this is `64`. The maximum number of active sample points is `2^16 - 2`.",
 
     "data_collider");
 
@@ -61,16 +62,33 @@ union OnwershipTracker {
 static_assert(8 == sizeof(OnwershipTracker),
               "Error: Invalid structure packing of `struct OnwershipTracker`.");
 
-// Represents a stack trace.
-struct StackTrace {
-  size_t trace_size;
-  AppPC trace[kSampleStackTraceSize];
+// Represents a memory access operand in an application.
+union MemoryOperandDescriptor {
+  struct {
+    uint16_t size:12;
+    uint16_t op_num:1;
+    bool is_read:1;
+    bool is_write:1;
+    bool is_atomic:1;
+    uintptr_t accessing_pc:48;
+  } __attribute__((packed));
+
+  uint64_t value;
+};
+
+typedef AppPC StackTrace[kSampleStackTraceSize];
+
+// Represents a summary of memory access information.
+struct MemoryAccess {
+  const void *address;
+  MemoryOperandDescriptor location;
+  StackTrace stack_trace;
 };
 
 // Represents
 struct SamplePoint {
   OnwershipTracker *tracker;
-  StackTrace traces[2];
+  MemoryAccess accesses[2];
 };
 
 // The stack on which the monitor thread executes.
@@ -165,7 +183,7 @@ static void ClearActiveSamplePoints(void) {
   memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
 }
 
-// Monitors a single sample point.
+// Samples up to `FLAG_num_sample_points` object trackers.
 static void ActivateSamplePoints(void) {
 
   // Figure out where the "end" of the sampling should be.
@@ -177,10 +195,57 @@ static void ActivateSamplePoints(void) {
     if (!type_id) continue;  // Type ID 0 means unwatched.
     if (auto tracker = gRecentAllocations[type_id]) {
       gSamplePoints[type_id].tracker = tracker;
+      tracker->value = 0;
       tracker->type_id = type_id;
       ++num_samples;
+      os::Log("Sampling %p\n", tracker);
     }
     if (type_id == end_id) break;
+  }
+}
+
+// Log a program counter.
+static void LogPC(AppPC pc) {
+  auto offset = os::ModuleOffsetOfPC(pc);
+  if (offset.module) {
+    os::Log("    %s:%lu\n", offset.module->Name(), offset.offset);
+  } else {
+    os::Log("    %p\n", pc);
+  }
+}
+
+// Log a stack trace.
+static void LogStackTrace(const StackTrace &trace) {
+  for (auto pc : trace) {
+    if (pc) LogPC(pc);
+  }
+}
+
+// Log an individual memory access.
+static void LogMemoryAccess(const MemoryAccess &access) {
+  auto is_atomic = access.location.is_atomic ? " ATOMIC" : "";
+  auto is_read = access.location.is_read ? " READ" : "";
+  auto is_write = access.location.is_write ? " WRITE" : "";
+
+  os::Log("  Operand %u accessing %u bytes at %p using %s%s%s:\n",
+          access.location.op_num, access.location.size, access.address,
+          is_atomic, is_read, is_write);
+  LogPC(reinterpret_cast<AppPC>(access.location.accessing_pc));
+  LogStackTrace(access.stack_trace);
+}
+
+// Reports stack reports for found issues.
+static void ReportSamplePoints(void) {
+  for (auto &sample : gSamplePoints) {
+    if (!sample.tracker) continue;
+    if (!sample.accesses[0].address) continue;
+    if (!sample.accesses[1].address) continue;
+
+    os::Log("Contention detected!\n\n");
+    LogMemoryAccess(sample.accesses[0]);
+    os::Log("\n");
+    LogMemoryAccess(sample.accesses[1]);
+    os::Log("\n");
   }
 }
 
@@ -189,17 +254,14 @@ static void Monitor(void) {
   const timespec sample_time = {0, FLAG_sample_rate * 1000000L};
   const timespec clear_time = {0, 1000000L};
   for (;;) {
-    for (auto timer = sample_time; timer.tv_nsec > 1000000L; ) {
-      const auto prev_timer = timer;
-      nanosleep(&timer, &timer);
-      if (prev_timer.tv_nsec == timer.tv_nsec) break;
+    for (auto timer = sample_time; ; ) {
+      if (!nanosleep(&timer, &timer)) break;
     }
 
-    // Potential race? Let's try to wait it out.
-    ClearActiveSamplePoints();
+    ReportSamplePoints();
     nanosleep(&clear_time, nullptr);
     ClearActiveSamplePoints();
-
+    nanosleep(&clear_time, nullptr);
     ActivateSamplePoints();
   }
 }
@@ -274,27 +336,46 @@ class DataCollider : public InstrumentationTool {
   }
 
  protected:
-  static void InstrumentContention(const OnwershipTracker tracker) {
+  static void InstrumentContention(const OnwershipTracker tracker,
+                                   const MemoryOperandDescriptor location,
+                                   const void *address) {
 
     // Race happened and we missed it. This case comes up when someone just
     // took ownership of the line, and a contender also tried to take
     // ownership. If we've reached here, then we're the contender.
     if (!tracker.type_id) return;
 
-    // We just took ownership.
-    if (!tracker.thread_base) {
+    auto &sample_point(gSamplePoints[tracker.type_id]);
+    const int trace = !!tracker.thread_base;
 
-    // We're the contender.
+    // We just took ownership; re-add the watchpoint.
+    if (!trace) {
+      sample_point.tracker->type_id = tracker.type_id;
+
+    // We're the contender, remove the watchpoint and all info.
     } else {
-
+      sample_point.tracker->value = 0;
     }
+
+    // Copy our stack trace.
+    auto &access(sample_point.accesses[trace]);
+    access.address = address;
+    access.location = location;
+    CopyStackTrace(access.stack_trace);
   }
 
-  static void InstrumentMemRead(const ShadowedOperand &op) {
-    GRANARY_UNUSED(op);
-  }
+  static void InstrumentMemOp(const ShadowedMemoryOperand &op) {
+    // Summary of this particular memory operand.
+    MemoryOperandDescriptor mem_access{{
+      static_cast<uint16_t>(op.native_mem_op.ByteWidth()),
+      static_cast<uint16_t>(op.operand_number),
+      op.native_mem_op.IsRead(),
+      op.native_mem_op.IsWrite(),
+      op.instr->IsAtomic(),
+      reinterpret_cast<uintptr_t>(op.instr->DecodedPC())
+    }};
 
-  static void InstrumentMemWrite(const ShadowedOperand &op) {
+    ImmediateOperand mem_access_op(mem_access.value);
     RegisterOperand tracker(op.block->AllocateVirtualRegister());
     lir::InlineAssembly asm_(op.shadow_addr_op, tracker);
 
@@ -302,41 +383,32 @@ class DataCollider : public InstrumentationTool {
         // Start with a racy read of `OnwershipTracker::type_id`. This allows
         // us to optimize the common case, which is that type = 0 (which is
         // reserved for unwatched memory).
-        "CMP m16 [%0], i8 0;"
+        "CMP m16 [%0 + 6], i8 0;"
         "JZ l %2;"
 
         // Racy check that we don't own the cache line. Compare only the low
         // order 32 bits.
         "MOV r64 %1, m64 FS:[0];"
-        "CMP m32 [%0 + 4], r32 %1;"
+        "CMP m32 [%0], r32 %1;"
         "JZ l %2;"
 
         // Okay, we might be taking ownership, or detecting contention. So,
         // we'll add ourselves to the shadow and pull out the old value.
         // Because of user space addresses have all 16 high order bits as 0,
         // we'll end up marking the shadow as unwatched. If in
-        // `InstrumentContention` we detect that we should take ownership, then
-        // we'll re-watch the memory.
+        // `InstrumentContention` we detect that we should take ownership,
+        // then we'll re-watch the memory.
         "XCHG m64 [%0], r64 %1;"_x86_64);
 
     op.instr->InsertBefore(
         // We've detected some kind of contention; we'll call out to a generic
         // routine to instrument it.
-        lir::InlineFunctionCall(op.block, InstrumentContention, tracker));
+        lir::InlineFunctionCall(op.block, InstrumentContention,
+                                tracker, mem_access_op, op.native_addr_op));
 
     asm_.InlineBefore(op.instr,
         // Done, fall-through to instruction.
         "LABEL %2:"_x86_64);
-  }
-
-  static void InstrumentMemOp(const ShadowedOperand &op) {
-    InstrumentMemWrite(op);
-    return;
-    if (op.native_mem_op.IsWrite()) {
-      InstrumentMemWrite(op);
-    } else {
-      InstrumentMemRead(op);
-    }
   }
 };
 

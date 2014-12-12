@@ -37,9 +37,17 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "      program isn't being comprehensively instrumented, then return\n"
     "      address transparency can likely be enabled."));
 
-GRANARY_DEFINE_positive_int(max_decoded_instructions_per_block, 16,
+GRANARY_DEFINE_positive_uint(max_decoded_instructions_per_block, 16,
     "The maximum number of instructions to decode per basic block. The default "
     "value is `16`.");
+
+GRANARY_DEFINE_positive_uint(max_decoded_blocks,
+                             std::numeric_limits<unsigned>::max(),
+     "The maximum number of basic blocks to decode. The default value for this "
+     "is infinite.\n"
+     "\n"
+     "Note: This is primarily useful as a debugging aid when narrowing down\n"
+     "      on a specific problem in Granary itself.");
 
 namespace granary {
 extern "C" {
@@ -302,7 +310,7 @@ void BlockFactory::DecodeInstructionList(DecodedBasicBlock *block) {
     AnnotateInstruction(this, block, before_instr, decode_pc);
 
     instr = block->LastInstruction()->Previous();
-  } while (!IsA<ControlFlowInstruction *>(instr) && 0 < --num_instrs);
+  } while (!IsA<ControlFlowInstruction *>(instr) && --num_instrs > 0);
   AddFallThroughInstruction(block , instr, decode_pc);
 }
 
@@ -481,6 +489,9 @@ InstrumentedBasicBlock *BlockFactory::RequestIndexedBlock(
 
 namespace {
 
+// TODO(pag): Reset this on `Exit`.
+static std::atomic<unsigned> gNumDecodedBlocks = ATOMIC_VAR_INIT(0U);
+
 // Returns the block request kind for a given target PC. This does some sanity
 // and bounds checking.
 static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
@@ -531,6 +542,21 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
     granary_unreachable("Fatal error: Trying to instrument non-"
                         "executable code.");
   }
+
+  // Limit the decoding of blocks.
+  unsigned num_decoded_blocks(gNumDecodedBlocks.load());
+  if (kRequestBlockDecodeNow == request_kind) {
+    num_decoded_blocks = 1U + gNumDecodedBlocks.fetch_add(1U);
+  }
+
+  // Because this flag is intended for debugging, we want to limit all request
+  // kinds. This is because sometimes we'll have a situation where we've
+  // narrowed a bug down to a particular block, but the bug itself only happens
+  // because the found block jumps back into an existing block!
+  if (GRANARY_UNLIKELY(num_decoded_blocks >= FLAG_max_decoded_blocks)) {
+    request_kind = kRequestBlockExecuteNatively;
+  }
+
   return request_kind;
 }
 
@@ -640,11 +666,29 @@ bool BlockFactory::HasPendingMaterializationRequest(void) const {
 DecodedBasicBlock *BlockFactory::MaterializeDirectEntryBlock(
     BlockMetaData *meta) {
   GRANARY_ASSERT(nullptr != meta);
-  auto decoded_block = new DecodedBasicBlock(cfg, meta);
-  DecodeInstructionList(decoded_block);
-  cfg->AddEntryBlock(decoded_block);
+
+  DecodedBasicBlock *entry_block(nullptr);
+  auto start_pc = MetaDataCast<AppMetaData *>(meta)->start_pc;
+  auto request_kind = RequestKindForTargetPC(start_pc, kRequestBlockDecodeNow);
+
+  // Double check that we should indeed be decoding this block.
+  if (kRequestBlockDecodeNow == request_kind) {
+    entry_block = new DecodedBasicBlock(cfg, meta);
+    DecodeInstructionList(entry_block);
+
+  // Okay, we're not supposed to go there; we'll punt on the client and give
+  // them a compensation basic block.
+  } else if (kRequestBlockExecuteNatively == request_kind) {
+    auto requested_block = new NativeBasicBlock(start_pc);
+    entry_block = AdaptToBlock(cfg, meta, requested_block);
+
+  } else {
+    GRANARY_ASSERT(false);
+  }
+
+  cfg->AddEntryBlock(entry_block);
   has_pending_request = false;
-  return decoded_block;
+  return entry_block;
 }
 
 // Try to request the initial entry block from the code cache index.

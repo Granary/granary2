@@ -43,10 +43,10 @@ class SSANode {
   SSANodeId id;
 
   // Fragment in which this register is defined.
-  SSAFragment * const frag;
+  SSAFragment *frag;
 
   // The register associated with this node.
-  const VirtualRegister reg;
+  VirtualRegister reg;
 
   GRANARY_DECLARE_BASE_CLASS(SSANode)
 
@@ -161,15 +161,16 @@ class SSARegisterNode : public SSANode {
 // then used to guide
 enum class SSAOperandAction {
   INVALID,
-  CLEARED,    // Happens for things like `XOR A, A`. In this case, we set
-              // the first operand to have an action `WRITE`, and the second
-              // operand to have an action of `CLEARED`.
-
-              // Register Operands      Memory Operands
-              // -----------------      ---------------
-  READ,       // R, CR                  all
-  WRITE,      // W*
-  READ_WRITE  // RW, CW, RCW
+  CLEARED,      // Happens for things like `XOR A, A`. In this case, we set
+                // the first operand to have an action `WRITE`, and the second
+                // operand to have an action of `CLEARED`.
+                //
+                // Register Operands      Memory Operands
+                // -----------------      ---------------
+  READ,         // R, CR
+  MEMORY_READ,  //                        all
+  WRITE,        // W*
+  READ_WRITE    // RW, CW, RCW
 
   // * Special case: If the write preserves some of the bytes of the original
   //                 register's value then we treat it as a `READ_WRITE` and not
@@ -184,23 +185,27 @@ class SSAOperand {
  public:
   SSAOperand(void);
 
+  SSAOperand &operator=(const SSAOperand &that);
+
   // References the arch-specific instruction operand directly. This is used
   // when doing things like copy propagation and register re-scheduling.
   arch::Operand *operand;
 
-  // Vector of pointers to `SSANode`s to which this operand refers.
-  SSANodePack nodes;
+  union {
+    // Initial state: The register that will be stored in `node`.
+    VirtualRegister reg;
+
+    // SSA Node to which this operand refers.
+    SSANode *node;
+  };
 
   // Canonical action that determines how the dependencies should be interpreted
   // as well as created.
   SSAOperandAction action;
-
-  // True if this is a register operand, false if it's a memory operand.
-  bool is_reg;
 };
 
 // Represents a small group of `SSAOperand`s that are part of an instruction.
-typedef TinyVector<SSAOperand, 2> SSAOperandPack;
+typedef TinyVector<SSAOperand, 4> SSAOperandPack;
 
 // Represents the operands of a `NativeInstruction`, but in SSA form.
 class SSAInstruction {
@@ -208,11 +213,7 @@ class SSAInstruction {
   SSAInstruction(void);
   ~SSAInstruction(void);
 
-  // Ordered as: `WRITE` > `CLEARED`.
-  SSAOperandPack defs;
-
-  // Ordered as: `READ_WRITE` > `READ`.
-  SSAOperandPack uses;
+  SSAOperandPack operands;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(SSAInstruction, {
     SHARED = false,

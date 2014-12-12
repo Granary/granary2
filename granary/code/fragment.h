@@ -88,7 +88,7 @@ class PartitionInfo {
 
   // The number of slots allocated in this partition. This includes fragment-
   // local and partition-local slots.
-  int num_slots;
+  size_t num_slots;
 
   // For sanity checking: our stack analysis might yield undefined behavior of
   // a partition has more than one entry points.
@@ -144,7 +144,7 @@ class RegisterUsageCounter {
   // Count the number of uses of the arch GPRs in this fragment.
   void CountGPRUses(Fragment *frag);
 
-  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+  size_t num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 };
 
 // Tracks flag usage within a code fragment.
@@ -478,11 +478,11 @@ class SSAFragment : public Fragment {
 
     // Number of spill slots used. This includes partition-local spill slots
     // and fragment-local spill slots.
-    int num_slots;
+    size_t num_slots;
 
     // Number of partition-local spill slots used *before* this fragment
     // scheduled its fragment-local registers.
-    int num_partition_slots;
+    size_t num_partition_slots;
   } spill;
 };
 

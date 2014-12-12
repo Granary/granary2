@@ -146,7 +146,7 @@ static void TaintBlock(TypeMetaData *meta, void *address) {
 }
 
 // Taints block meta-data when some watchpoint is triggered.
-static void TaintBlockMeta(const WatchedOperand &op) {
+static void TaintBlockMeta(const WatchedMemoryOperand &op) {
   op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
       TaintBlock,
       GetMetaData<TypeMetaData>(op.block),

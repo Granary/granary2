@@ -179,14 +179,14 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   // Try to simplify the memory operand to a non-compound one.
   } else if (XED_REG_INVALID == base_reg && !disp && 1 == scale &&
              XED_REG_RSP != index_reg) {
-    instr_op->reg.DecodeFromNative(static_cast<int>(index_reg));
+    instr_op->reg.DecodeFromNative(index_reg);
     instr_op->is_compound = false;
     if (XED_REG_INVALID != segment_reg) {
       instr_op->reg.ConvertToSegmentOffset();
     }
   } else if (XED_REG_INVALID == index_reg && !disp &&
              XED_REG_RSP != base_reg) {
-    instr_op->reg.DecodeFromNative(static_cast<int>(base_reg));
+    instr_op->reg.DecodeFromNative(base_reg);
     instr_op->is_compound = false;
     if (XED_REG_INVALID != segment_reg) {
       instr_op->reg.ConvertToSegmentOffset();

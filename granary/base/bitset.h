@@ -18,19 +18,11 @@ class FastBitSet {
     storage[0] = static_cast<StorageT>(0U);
   }
 
-  inline bool Get(int i) const {
-    return Get(static_cast<unsigned>(i));
-  }
-
-  inline bool Get(unsigned i) const {
+  inline bool Get(size_t i) const {
     return storage[0] & (1U << i);
   }
 
-  inline void Set(int i, bool val) {
-    Set(static_cast<unsigned>(i), val);
-  }
-
-  inline void Set(unsigned i, bool val) {
+  inline void Set(size_t i, bool val) {
     if (val) {
       storage[0] |= static_cast<StorageT>(1U << i);
     } else {
@@ -64,7 +56,7 @@ class FastBitSet {
 };
 
 // Represents a "slow" bitset that is backed by an array of integers.
-template <unsigned long kNumBits>
+template <size_t kNumBits>
 class BitSet : public PackedArray<bool, 1, kNumBits> {
  public:
   inline BitSet(void) {

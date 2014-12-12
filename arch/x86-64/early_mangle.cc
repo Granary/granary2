@@ -209,7 +209,7 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
 static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 != instr->effective_operand_width);
   auto op = instr->ops[0];
-  auto stack_shift = instr->effective_operand_width / 8;
+  size_t stack_shift = instr->effective_operand_width / 8UL;
   auto vr = block->AllocateVirtualRegister(stack_shift);
   Instruction ni;
   APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, vr, op));
@@ -248,7 +248,7 @@ static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
   auto vr_32 = vr_16.WidenedTo(4);
   APP(MOV_GPRv_SEG(&ni, vr_16, instr->ops[0].reg));
   APP(MOVZX_GPRv_GPR16(&ni, vr_32, vr_16));
-  auto stack_shift = instr->effective_operand_width / 8;
+  size_t stack_shift = instr->effective_operand_width / 8UL;
   instr->iform = XED_IFORM_PUSH_GPRv_50;
   instr->ops[0].reg = vr_16.WidenedTo(stack_shift);
   instr->ops[0].width = instr->effective_operand_width;
@@ -270,8 +270,9 @@ static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
 // Mangle a `POP_MEMv` instruction.
 static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 < instr->effective_operand_width);
-  auto stack_shift = instr->effective_operand_width / arch::BYTE_WIDTH_BITS;
-  GRANARY_ASSERT(instr->StackPointerShiftAmount() == stack_shift);
+  size_t stack_shift = instr->effective_operand_width / arch::BYTE_WIDTH_BITS;
+  auto stack_shift_int32 = static_cast<int32_t>(stack_shift);
+  GRANARY_ASSERT(instr->StackPointerShiftAmount() == stack_shift_int32);
 
   Instruction ni;
   auto op = instr->ops[0];
@@ -288,10 +289,11 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
     }
   } else if (op.reg.IsStackPointer()) {
     GRANARY_ASSERT(arch::ADDRESS_WIDTH_BITS == op.reg.BitWidth());
-    op = BaseDispMemOp(stack_shift, XED_REG_RSP, op.width);
+    op = BaseDispMemOp(stack_shift_int32, XED_REG_RSP, op.width);
   }
   APP_NATIVE_MANGLED(MOV_MEMv_GPRv(&ni, op, vr));
-  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift, XED_REG_RSP,
+  LEA_GPRv_AGEN(instr, XED_REG_RSP, BaseDispMemOp(stack_shift_int32,
+                                                  XED_REG_RSP,
                                                   arch::ADDRESS_WIDTH_BITS));
   AnalyzedStackUsage(instr, true, true);
 }
@@ -318,8 +320,9 @@ static void ManglePopStackPointer(DecodedBasicBlock *block,
 // Note: Need to do the proper zero-extension of the 16 bit value.
 static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 < instr->effective_operand_width);
-  auto stack_shift = instr->effective_operand_width / 8;
-  GRANARY_ASSERT(instr->StackPointerShiftAmount() == stack_shift);
+  size_t stack_shift = instr->effective_operand_width / 8UL;
+  GRANARY_ASSERT(instr->StackPointerShiftAmount() ==
+                 static_cast<int>(stack_shift));
 
   Instruction ni;
   auto vr = block->AllocateVirtualRegister(stack_shift);
@@ -362,7 +365,7 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
   auto addr = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
   APP(MOVZX_GPRv_GPR8(&ni, addr, XED_REG_AL));
-  APP(LEA_GPRv_GPRv_GPRv(&ni, addr, addr, XED_REG_RBX));
+  APP(LEA_GPRv_AGEN(&ni, addr, addr, XED_REG_RBX));
   MOV_GPR8_MEMb(instr, XED_REG_AL, addr);
   instr->decoded_pc = decoded_pc;
   instr->ops[1].width = 8;  // Bits.
@@ -438,7 +441,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
 // This is a big hack: it is our way of ensuring that during late mangling, we
 // have access to some kind of virtual register for `PUSHF` and `PUSHFQ`.
 static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
-  auto flag_size = instr->effective_operand_width / 8;
+  auto flag_size = instr->effective_operand_width / 8UL;
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
   instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
   instr->ops[0].rw = XED_OPERAND_ACTION_W;

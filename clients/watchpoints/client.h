@@ -8,7 +8,7 @@
 // Forward declaration.
 class Watchpoints;
 
-class WatchedOperand {
+class WatchedMemoryOperand {
  public:
   granary::DecodedBasicBlock * const block;
 
@@ -27,7 +27,7 @@ class WatchedOperand {
  protected:
   friend class Watchpoints;
 
-  inline WatchedOperand(granary::DecodedBasicBlock *block_,
+  inline WatchedMemoryOperand(granary::DecodedBasicBlock *block_,
                         granary::NativeInstruction *instr_,
                         const granary::MemoryOperand &mem_op_,
                         const granary::RegisterOperand &unwatched_reg_op_,
@@ -39,7 +39,7 @@ class WatchedOperand {
         watched_reg_op(watched_reg_op_) {}
 
  private:
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(WatchedOperand);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(WatchedMemoryOperand);
 };
 
 enum {
@@ -61,7 +61,7 @@ void ForEachType(std::function<void(uint64_t type_id,
 
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
-void AddWatchpointInstrumenter(void (*func)(const WatchedOperand &));
+void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &));
 
 // Taints an address `addr` using the low 15 bits of the taint index `index`.
 uintptr_t TaintAddress(uintptr_t addr, uintptr_t index);

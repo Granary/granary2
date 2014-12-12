@@ -24,8 +24,8 @@ class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class Fragment;
+GRANARY_INTERNAL_DEFINITION class SSAInstruction;
 GRANARY_INTERNAL_DEFINITION enum alignas(16) UntypedData : uint64_t {
-  DEFAULT_UNTYPED_DATA = 0
 };
 
 // Represents an abstract instruction.
@@ -34,7 +34,7 @@ class Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
-        transient_meta(DEFAULT_UNTYPED_DATA) {}
+        transient_meta() {}
 
   virtual ~Instruction(void) = default;
 
@@ -169,13 +169,6 @@ enum InstructionAnnotation {
   // The data associated with this annotation is a `VirtualRegister`.
   kAnnotSSANodeKill,
 
-  // A "removed" or junk `SSAInstruction`. We keep some useless
-  // `SSAInstruction`s around because pointers from outside `SSANode`s might
-  // point to nodes that the `SSAInstruction` owns.
-  //
-  // The data associated with this annotation is a `VirtualRegister`.
-  kAnnotSSAElidedInstruction,
-
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
   kAnnotSSAFragLocalBegin,
@@ -250,7 +243,7 @@ class AnnotationInstruction : public Instruction {
   GRANARY_INTERNAL_DEFINITION
   inline explicit AnnotationInstruction(InstructionAnnotation annotation_)
       : annotation(annotation_),
-        data(DEFAULT_UNTYPED_DATA) {}
+        data() {}
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
@@ -386,12 +379,17 @@ class NativeInstruction : public Instruction {
   bool IsConditionalJump(void) const;
   virtual bool HasIndirectTarget(void) const;
 
+  // Does this instruction perform an atomic read/modify/write?
+  bool IsAtomic(void) const;
+
   // Note: See `NativeInstruction::DecodedPC` for some details related to
   //       how native instructions might be decoded into many instructions, not
   //       all of which necessarily have a non-NULL `DecodedPC`.
   bool IsAppInstruction(void) const;
 
   GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
+  GRANARY_INTERNAL_DEFINITION bool ReadsFromStackPointer(void) const;
+  GRANARY_INTERNAL_DEFINITION bool WritesToStackPointer(void) const;
 
   // Get the opcode name. The opcode name of an instruction is a semantic
   // name that conveys the meaning of the instruction, but not necessarily
@@ -439,6 +437,9 @@ class NativeInstruction : public Instruction {
  GRANARY_ARCH_PUBLIC:
   // Mid-level IR that represents the instruction.
   GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
+
+  // High-level SSA form for this instruction. Focuses only on register usage.
+  GRANARY_INTERNAL_DEFINITION SSAInstruction *ssa;
 
   // OS-specific annotation for this instruction. For example, in the Linux
   // kernel, this would be an exception table entry.

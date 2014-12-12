@@ -203,6 +203,7 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
 
 // Adjust a memory operand if it refers to the stack pointer.
 static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
+  if (!mem_op->IsExplicit()) return;
   if (mem_op->IsPointer()) return;
 
   if (mem_op->is_compound) {
@@ -213,6 +214,14 @@ static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
   } else if (mem_op->reg.IsStackPointer()) {
     *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
                                   arch::GPR_WIDTH_BITS);
+  }
+}
+
+static void GenericAdjustMemOps(arch::Instruction *instr, int adjusted_offset) {
+  GRANARY_ASSERT(!instr->WritesToStackPointer());
+  if (!instr->ReadsFromStackPointer()) return;
+  for (auto &op : instr->ops) {
+    if (op.IsMemory()) AdjustMemOp(&op, adjusted_offset);
   }
 }
 
@@ -229,7 +238,7 @@ static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
   }
   if (mem_op) {  // Found a spill slot.
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * arch::GPR_WIDTH_BYTES,
+        static_cast<int32_t>(mem_op->reg.Number()) * arch::GPR_WIDTH_BYTES,
         XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
@@ -256,7 +265,7 @@ static void MangleXchg(NativeInstruction *instr, int adjusted_offset) {
 
   if (IsSpillSlot(ainstr.ops[0])) {
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * arch::GPR_WIDTH_BYTES,
+        static_cast<int32_t>(mem_op->reg.Number()) * arch::GPR_WIDTH_BYTES,
         XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
@@ -287,10 +296,13 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
 // Mangle simple arithmetic instructions that make constant changes to the
 // stack pointer into `TEST` instructions based on the stack pointer, so as
 // to approximately conserve the flags behavior.
-static void MangleArith(NativeInstruction *instr) {
+static void MangleArith(NativeInstruction *instr, int adjusted_offset) {
   auto &ainstr(instr->instruction);
-  if (!ainstr.ops[0].IsRegister()) return;
-  if (!ainstr.ops[0].reg.IsStackPointer()) return;
+  if (!ainstr.ops[0].IsRegister() || !ainstr.ops[0].reg.IsStackPointer()) {
+    GenericAdjustMemOps(&ainstr, adjusted_offset);
+    return;
+  }
+
   if (XED_ICLASS_ADD == ainstr.iclass || XED_ICLASS_SUB == ainstr.iclass) {
     GRANARY_ASSERT(ainstr.ops[1].IsImmediate());
   }
@@ -356,7 +368,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
     case XED_ICLASS_ADD:
     case XED_ICLASS_INC:
     case XED_ICLASS_DEC:
-      MangleArith(instr);
+      MangleArith(instr, adjusted_offset);
       break;
 
     // Shouldn't be seen!
@@ -373,8 +385,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
 
     default:
-      GRANARY_ASSERT(!ainstr.ReadsFromStackPointer() &&
-                     !ainstr.WritesToStackPointer());
+      GenericAdjustMemOps(&ainstr, adjusted_offset);
       break;
   }
 }

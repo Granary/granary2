@@ -13,7 +13,7 @@
 namespace granary {
 namespace os {
 
-enum SlotCategory {
+enum SlotCategory : size_t {
   SLOT_VIRTUAL_REGISTER,
   SLOT_PRIVATE_STACK,
   SLOT_SAVED_FLAGS
@@ -34,7 +34,7 @@ struct SlotSet {
 // Access the value of some kind of private slot (by reference). This is an
 // instance of the requested slot, although many such instances might actually
 // exist.
-uintptr_t Slot(os::SlotCategory category, int sub_category=0);
+uintptr_t Slot(os::SlotCategory category, size_t sub_category=0);
 
 }  // namespace os
 }  // namespace granary

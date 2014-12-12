@@ -13,13 +13,13 @@ namespace {
 
 // Hooks that other tools can use for interposing on memory operands that will
 // be instrumented for watchpoints.
-static ClosureList<const WatchedOperand &> watchpoint_hooks GRANARY_GLOBAL;
+static ClosureList<const WatchedMemoryOperand &> watchpoint_hooks GRANARY_GLOBAL;
 
 }  // namespace
 
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
-void AddWatchpointInstrumenter(void (*func)(const WatchedOperand &)) {
+void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &)) {
   watchpoint_hooks.Add(func);
 }
 
@@ -78,7 +78,7 @@ class Watchpoints : public InstrumentationTool {
     VirtualRegister unwatched_addr(bb->AllocateVirtualRegister());
     RegisterOperand unwatched_addr_reg(unwatched_addr);
     RegisterOperand watched_addr_reg(watched_addr);
-    WatchedOperand client_op(bb, instr, mloc, unwatched_addr_reg,
+    WatchedMemoryOperand client_op(bb, instr, mloc, unwatched_addr_reg,
                              watched_addr_reg);
 
     lir::InlineAssembly asm_(unwatched_addr_reg, watched_addr_reg);

@@ -23,7 +23,7 @@ namespace os {
 // Access the value of some kind of private slot (by reference). This is an
 // instance of the requested slot, although many such instances might actually
 // exist.
-uintptr_t Slot(SlotCategory category, int sub_category) {
+uintptr_t Slot(SlotCategory category, size_t sub_category) {
   void *slot_ptr(nullptr);
   switch (category) {
     case SLOT_VIRTUAL_REGISTER:

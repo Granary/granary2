@@ -66,7 +66,7 @@ void ExitLog(void) {
 }
 
 // Log something.
-int Log(LogLevel level, const char *format, ...) {
+size_t Log(LogLevel level, const char *format, ...) {
   va_list args;
   va_start(args, format);
   const auto fd = OUTPUT_FD[level];
@@ -90,7 +90,7 @@ int Log(LogLevel level, const char *format, ...) {
   log_buffer_fd = fd;
 
   va_end(args);
-  return static_cast<int>(ret);
+  return ret;
 }
 
 }  // namespace os

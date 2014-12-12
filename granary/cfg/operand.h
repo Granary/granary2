@@ -124,13 +124,13 @@ class Operand {
   // known.
   //
   // Note: This has a driver-specific implementation.
-  int BitWidth(void) const;
+  size_t BitWidth(void) const;
 
   // Return the width (in bytes) of this operand, or 0 if its width is not
   // known.
   //
   // Note: This has a driver-specific implementation.
-  int ByteWidth(void) const;
+  size_t ByteWidth(void) const;
 
   // Convert this operand into a string.
   //
@@ -173,7 +173,18 @@ class Operand {
   // Instead, it is used only to make a generic `OperandRef`, with which one can
   // replace the backing operand.
   //
-  // This might point to a special tombstone operand that can't validly be
+  // This has three states:
+  //
+  //    valid     - It points to an `arch::Operand` inside of an
+  //                `arch::Instruction` that we can access and modify. In this
+  //                case, `op` is a point-in-time copy of `*op_ptr`.
+  //
+  //    tombstone - `op` is either a point-in-time copy of a constant
+  //                `arch::Operand` within an `arch::Instruction`, or it is a
+  //                copy of another `Operand`, or was manually constructed.
+  //
+  //    nullptr   - `op` does not represent any kind of operand.
+  //
   GRANARY_POINTER(arch::Operand) * GRANARY_CONST op_ptr;
 };
 
@@ -190,19 +201,19 @@ class MemoryOperand : public Operand {
   // referenced memory has a width of `num_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes);
+  MemoryOperand(const VirtualRegister &ptr_reg, size_t num_bytes);
 
   // Generic initializer for a pointer to some data.
   template <typename T>
   inline explicit MemoryOperand(const T *ptr)
       : MemoryOperand(reinterpret_cast<const void *>(ptr),
-                      static_cast<int>(GRANARY_MIN(8, sizeof(T)))) {}
+                      GRANARY_MIN(8UL, sizeof(T))) {}
 
   // Initialize a new memory operand from a pointer, where the
   // referenced memory has a width of `num_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  MemoryOperand(const void *ptr, int num_bytes);
+  MemoryOperand(const void *ptr, size_t num_bytes);
 
   // Returns true if this is a compound memory operation. Compound memory
   // operations can have multiple smaller operands (e.g. registers) inside of
@@ -305,13 +316,13 @@ class ImmediateOperand : public Operand {
   // a width of `width_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  ImmediateOperand(intptr_t imm, int width_bytes);
+  ImmediateOperand(intptr_t imm, size_t width_bytes);
 
   // Initialize a immediate operand from a unsigned integer, where the value
   // has a width of `width_bytes`.
   //
   // Note: This has a driver-specific implementation.
-  ImmediateOperand(uintptr_t imm, int width_bytes);
+  ImmediateOperand(uintptr_t imm, size_t width_bytes);
 
 
   template <typename T, typename EnableIf<IsPointer<T>::RESULT>::Type=0>
@@ -321,13 +332,11 @@ class ImmediateOperand : public Operand {
 
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   inline explicit ImmediateOperand(T imm)
-      : ImmediateOperand(static_cast<intptr_t>(imm),
-                         static_cast<int>(sizeof(T))) {}
+      : ImmediateOperand(static_cast<intptr_t>(imm), sizeof(T)) {}
 
   template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
   inline explicit ImmediateOperand(T imm)
-      : ImmediateOperand(static_cast<uintptr_t>(imm),
-                         static_cast<int>(sizeof(T))) {}
+      : ImmediateOperand(static_cast<uintptr_t>(imm), sizeof(T)) {}
 
   // Extract the value as an unsigned integer.
   //

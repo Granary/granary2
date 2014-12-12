@@ -8,15 +8,29 @@ GRANARY_USING_NAMESPACE granary;
 
 namespace {
 enum : size_t {
-  kInitialThreadStackIndex = 64,
+  kInitialThreadStackIndex = 63,
   kMaxThreadStackSize = 256
 };
 
 // Stack of return addresses.
 static __thread AppPC tThreadStack[kMaxThreadStackSize] = {nullptr};
-static __thread uintptr_t tThreadStackIndex = kInitialThreadStackIndex;
+static __thread size_t tThreadStackIndex = kInitialThreadStackIndex;
 
 }  // namespace
+
+// Copy up to `buff_size` of the most recent program counters from the stack
+// trace into `buff`, and return the number of copied
+size_t CopyStackTrace(AppPC *buff, size_t buff_size) {
+  if (!tThreadStackIndex) return 0;
+  for (auto i = 0UL; i < buff_size; ++i) {
+    auto index = tThreadStackIndex - i;
+    if (!index) return i;
+    auto pc = tThreadStack[index];
+    if (!pc) return i;
+    buff[i] = pc;
+  }
+  return buff_size;
+}
 
 // Simple tool for static and dynamic basic block counting.
 class CallStackTracer : public InstrumentationTool {
@@ -24,10 +38,7 @@ class CallStackTracer : public InstrumentationTool {
   virtual ~CallStackTracer(void) = default;
 
   static void Init(InitReason reason) {
-    if (kInitThread == reason) {
-      memset(tThreadStack, 0, sizeof tThreadStack);
-      tThreadStackIndex = kInitialThreadStackIndex;
-    }
+    if (kInitThread == reason) ResetStack();
   }
 
   // Add in instrumentation at the target of function calls
@@ -51,17 +62,24 @@ class CallStackTracer : public InstrumentationTool {
 
  protected:
 
+  static void ResetStack(void) {
+    memset(tThreadStack, 0, sizeof tThreadStack);
+    tThreadStackIndex = kInitialThreadStackIndex;
+  }
+
   // Enter a function.
   static void EnterFunction(AppPC return_address) {
-    tThreadStack[tThreadStackIndex++] = return_address;
+    if (GRANARY_UNLIKELY(tThreadStackIndex >= kMaxThreadStackSize)) {
+      ResetStack();
+    }
+    tThreadStack[++tThreadStackIndex] = return_address;
   }
 
   // Leave a function.
   static void LeaveFunction(AppPC return_address) {
     if (!tThreadStackIndex ||
-        return_address != tThreadStack[--tThreadStackIndex]) {
-      memset(tThreadStack, 0, sizeof tThreadStack);
-      tThreadStackIndex = kInitialThreadStackIndex;
+        return_address != tThreadStack[tThreadStackIndex--]) {
+      ResetStack();
     }
   }
 };

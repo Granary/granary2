@@ -75,24 +75,36 @@ union alignas(alignof(void *)) VirtualRegister {
     return *this;
   }
 
+  template <typename T,
+            typename EnableIf<!IsUnsignedInteger<T>::RESULT>::Type=0>
+  inline void DecodeFromNative(T arch_reg_id) {
+    DecodeFromNative(static_cast<uint32_t>(arch_reg_id));
+  }
+
   // Convert an architectural register into a virtual register.
   //
   // Note: This has a architecture-specific implementation. See
   //       `arch/*/register.cc` for the implementation.
-  void DecodeFromNative(int arch_reg_id);
+  void DecodeFromNative(uint32_t arch_reg_id);
 
   // Returns a new virtual register that was created from an architectural
   // register.
-  inline static VirtualRegister FromNative(int arch_reg_id) {
+  inline static VirtualRegister FromNative(uint32_t arch_reg_id) {
     VirtualRegister vr;
     vr.DecodeFromNative(arch_reg_id);
     return vr;
   }
 
+  template <typename T,
+            typename EnableIf<!IsUnsignedInteger<T>::RESULT>::Type=0>
+  inline static VirtualRegister FromNative(T arch_reg_id) {
+    return FromNative(static_cast<uint32_t>(arch_reg_id));
+  }
+
   // Convert a virtual register into its associated architectural register.
   //
   // Note: This has an architecture-specific implementation.
-  int EncodeToNative(void) const;
+  uint32_t EncodeToNative(void) const;
 
   // Return the flags register as a virtual register.
   //
@@ -115,13 +127,13 @@ union alignas(alignof(void *)) VirtualRegister {
   static VirtualRegister FramePointer(void);
 
   // Return the width (in bits) of this register.
-  inline int BitWidth(void) const {
-    return static_cast<int>(num_bytes) * 8;
+  inline size_t BitWidth(void) const {
+    return num_bytes * 8UL;
   }
 
   // Return the width (in bytes) of this register.
-  inline int ByteWidth(void) const {
-    return static_cast<int>(num_bytes);
+  inline size_t ByteWidth(void) const {
+    return num_bytes;
   }
 
   // Returns true if this register preserves any of the bytes of the backing
@@ -129,6 +141,12 @@ union alignas(alignof(void *)) VirtualRegister {
   inline bool PreservesBytesOnWrite(void) const {
     return 0 != preserved_byte_mask;
   }
+
+  // Returns the effective size (in bytes) of a write to this register. This
+  // could be bigger than the width of the register in bytes.
+  //
+  // Note: This has an architecture-specific implementation.
+  size_t EffectiveWriteWidth(void) const;
 
   // Is this an architectural register?
   inline bool IsNative(void) const {
@@ -192,8 +210,8 @@ union alignas(alignof(void *)) VirtualRegister {
   bool IsFlags(void) const;
 
   // Returns this register's internal number.
-  inline int Number(void) const {
-    return static_cast<int>(reg_num);
+  inline size_t Number(void) const {
+    return reg_num;
   }
 
   // Widen this virtual register to a specific bit width.
@@ -201,11 +219,11 @@ union alignas(alignof(void *)) VirtualRegister {
   // Note: This operates in place.
   //
   // Note: This has an architecture-specific implementation.
-  void Widen(int dest_byte_width);
+  void Widen(size_t dest_byte_width);
 
   // Return a copy of this virtual register, but where the new register has
   // the specified bit width.
-  inline VirtualRegister WidenedTo(int dest_byte_width) const {
+  inline VirtualRegister WidenedTo(size_t dest_byte_width) const {
     auto widened = *this;
     widened.Widen(dest_byte_width);
     return widened;
@@ -353,9 +371,9 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   }
 
   // Kill a specific register.
-  inline void Kill(int num) {
+  inline void Kill(size_t num) {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    Set(static_cast<unsigned>(num), false);
+    Set(num, false);
   }
 
   // Kill a specific register.
@@ -367,9 +385,9 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   void WriteKill(VirtualRegister reg);
 
   // Returns true if a register is dead.
-  inline bool IsDead(int num) const {
+  inline bool IsDead(size_t num) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return !Get(static_cast<unsigned>(num));
+    return !Get(num);
   }
 
   // Returns true if a register is live.
@@ -378,18 +396,18 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   }
 
   // Revive a specific register.
-  inline void Revive(int num) {
+  inline void Revive(size_t num) {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    Set(static_cast<unsigned>(num), true);
+    Set(num, true);
   }
 
   // Kill a specific register.
   void Revive(VirtualRegister reg);
 
   // Returns true if a register is live.
-  inline bool IsLive(int num) const {
+  inline bool IsLive(size_t num) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return Get(static_cast<unsigned>(num));
+    return Get(num);
   }
 
   // Returns true if a register is live.
@@ -429,7 +447,7 @@ namespace detail {
 template <bool kIsLive>
 void RegisterSetIterator<kIsLive>::Advance(void) {
   for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
-         kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
+         kIsLive != tracker->IsLive(num); ++num) {}
 }
 }  // namespace detail
 

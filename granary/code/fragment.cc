@@ -307,10 +307,12 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@save";
   } else if (kAnnotSSARestoreRegister == instr->annotation) {
     kind = "@restore";
-  } else if (kAnnotSSAElidedInstruction == instr->annotation) {
-    kind = "@elided_copy";
   } else if (kAnnotSSANodeKill == instr->annotation) {
     kind = "@undef";
+  } else if (kAnnotSSAFragLocalBegin == instr->annotation) {
+    Log(level, FONT_BLUE "@ssa_begin_local" END_FONT NEW_LINE);
+  } else if (kAnnotSSAPartitionLocalBegin == instr->annotation) {
+    Log(level, FONT_BLUE "@ssa_begin_global" END_FONT NEW_LINE);
   } else if (kAnnotSSAReviveRegisters == instr->annotation) {
     return LogUsedRegs(level, instr);
   } else if (kAnnotCondLeaveNativeStack == instr->annotation) {

@@ -28,7 +28,7 @@ GRANARY_DEFINE_mask(value_mask, std::numeric_limits<uintptr_t>::max(),
 
     "find_write");
 
-GRANARY_DEFINE_positive_int(min_write_size, 1,
+GRANARY_DEFINE_positive_uint(min_write_size, 1,
     "The minimum size of a write (in bytes) to memory that should be checked "
     "and logged.",
 

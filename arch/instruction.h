@@ -23,6 +23,7 @@ namespace arch {
 // interface class cannot be used as-is as the methods don't exist.
 class InstructionInterface {
  public:
+  size_t EncodedLength(void) const;
   size_t DecodedLength(void) const;
 
   PC DecodedPC(void) const;

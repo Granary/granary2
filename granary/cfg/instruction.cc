@@ -93,7 +93,7 @@ Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
     this->Instruction::InsertBefore(new_first);
     *block_first_ptr = new_first;
     annotation = kAnnotNoOp;
-    data = DEFAULT_UNTYPED_DATA;
+    data = UntypedData();
   }
   return this->Instruction::InsertBefore(instr);
 }
@@ -113,7 +113,7 @@ Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
     this->Instruction::InsertAfter(new_last);
     *block_last_ptr = new_last;
     annotation = kAnnotNoOp;
-    data = DEFAULT_UNTYPED_DATA;
+    data = UntypedData();
   }
   return this->Instruction::InsertAfter(instr);
 }
@@ -139,6 +139,7 @@ LabelInstruction::LabelInstruction(void)
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_),
+      ssa(nullptr),
       os_annotation(nullptr) {
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
@@ -224,12 +225,25 @@ bool NativeInstruction::HasIndirectTarget(void) const {
   return instruction.HasIndirectTarget();
 }
 
+// Does this instruction perform an atomic read/modify/write?
+bool NativeInstruction::IsAtomic(void) const {
+  return instruction.IsAtomic();
+}
+
 bool NativeInstruction::IsAppInstruction(void) const {
   return nullptr != instruction.DecodedPC();
 }
 
 void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
   instruction.SetDecodedPC(decoded_pc);
+}
+
+bool NativeInstruction::ReadsFromStackPointer(void) const {
+  return instruction.ReadsFromStackPointer();
+}
+
+bool NativeInstruction::WritesToStackPointer(void) const {
+  return instruction.WritesToStackPointer();
 }
 
 // Get the opcode name.

@@ -19,13 +19,6 @@ enum : bool {
 namespace granary {
 namespace arch {
 
-// Returns a valid `SSAOperand` pointer to the operand being copied if this
-// instruction is a copy instruction, otherwise returns `nullptr`.
-//
-// Note: This has an architecture-specific implementation.
-extern SSAOperand *GetCopiedOperand(const NativeInstruction *instr,
-                                    SSAInstruction *ssa_instr);
-
 // Create an instruction to copy a GPR to a spill slot.
 //
 // Note: This has an architecture-specific implementation.
@@ -50,6 +43,18 @@ extern granary::Instruction *SwapGPRWithGPR(VirtualRegister gpr1,
 extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
                                              VirtualRegister slot);
 
+// Replace the virtual register `old_reg` with the virtual register `new_reg`
+// in the operand `op`.
+extern bool ReplaceRegInOperand(Operand *op, VirtualRegister old_reg,
+                                VirtualRegister new_reg);
+
+// Returns true of `instr` makes a copy of `use0` and `use1` and stores it into
+// `def`.
+extern bool GetCopiedOperand(const NativeInstruction *instr,
+                             SSAInstruction *ssa_instr,
+                             SSAOperand **def, SSAOperand **use0,
+                             SSAOperand **use1);
+
 }  // namespace arch
 namespace {
 
@@ -57,10 +62,10 @@ namespace {
 static void FreeSSAData(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     for (auto instr : InstructionListIterator(frag->instrs)) {
-      if (IsA<NativeInstruction *>(instr)) {
-        if (auto ssa_instr = GetMetaData<SSAInstruction *>(instr)) {
+      if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (auto ssa_instr = ninstr->ssa) {
           delete ssa_instr;
-          ClearMetaData(instr);
+          ninstr->ssa = nullptr;
         }
       } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
         if (kAnnotSSANodeOwner == ainstr->annotation ||
@@ -69,9 +74,6 @@ static void FreeSSAData(FragmentList *frags) {
           //       `kAnnotSSANodeOwner`s if the scope of the save/restore is
           //       partition-local.
           delete GetMetaData<SSANode *>(instr);
-          ClearMetaData(instr);
-        } else if (kAnnotSSAElidedInstruction == ainstr->annotation) {
-          delete GetMetaData<SSAInstruction *>(instr);
           ClearMetaData(instr);
         }
       }
@@ -91,13 +93,13 @@ static void FreeFlagZones(FragmentList *frags) {
 }
 
 // Return the Nth architectural GPR.
-static VirtualRegister NthArchGPR(int n) {
+static VirtualRegister NthArchGPR(size_t n) {
   return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
 
 // Return the Nth spill slot.
-static VirtualRegister NthSpillSlot(int n) {
+static VirtualRegister NthSpillSlot(size_t n) {
   return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
@@ -288,7 +290,7 @@ struct RegLocation {
 
 // Used for scheduling registers in a partition.
 struct PartitionScheduler {
-  PartitionScheduler(VirtualRegister vr_, SSANodeId node_id_, int slot_,
+  PartitionScheduler(VirtualRegister vr_, SSANodeId node_id_, size_t slot_,
                      VirtualRegister preferred_gpr_)
     : vr(vr_),
       spill_slot(NthSpillSlot(slot_)),
@@ -296,7 +298,7 @@ struct PartitionScheduler {
       vr_location{spill_slot, RegLocationType::SLOT},
       invalid_location{VirtualRegister(), RegLocationType::GPR},
       preferred_gpr(preferred_gpr_) {
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       gpr_locations[i] = {NthArchGPR(i), RegLocationType::GPR};
     }
   }
@@ -385,9 +387,9 @@ struct GPRScheduler {
   // it from being a preferred GPR again.
   VirtualRegister GetPreferredGPR(UsedRegisterSet *preferred_gprs) {
     auto ret = false;
-    auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
-    auto min_num_uses = std::numeric_limits<int>::max();
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
+    auto min_num_uses = std::numeric_limits<size_t>::max();
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       if (preferred_gprs->IsLive(i)) continue;
       if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
         ret = true;
@@ -407,9 +409,9 @@ struct GPRScheduler {
   // `avoid_reg_set`.
   VirtualRegister GetGPR(void) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
-    auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
-    auto min_num_uses = std::numeric_limits<int>::max();
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
+    auto min_num_uses = std::numeric_limits<size_t>::max();
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       if (used_regs.IsLive(i) || restricted_regs.IsLive(i)) continue;
       if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
         GRANARY_IF_DEBUG( found_reg = true; )
@@ -455,40 +457,26 @@ static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
 // Looks through an instruction to see if some node is defined or used.
 static void FindDefUse(const SSAInstruction *instr, SSANodeId node_id,
                        bool *is_defined, bool *is_used) {
-  for (const auto &op : instr->defs) {
-    GRANARY_ASSERT(op.is_reg);
-    if (op.nodes[0]->id == node_id) {
+  for (const auto &op : instr->operands) {
+    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
+    if (op.node->id != node_id) continue;
+
+    if (SSAOperandAction::WRITE == op.action ||
+        SSAOperandAction::CLEARED == op.action) {
       *is_defined = true;
-      break;
-    }
-  }
-  for (const auto &op : instr->uses) {
-    for (const auto node : op.nodes) {
-      if (node->id == node_id) {
-        *is_used = true;
-        return;
-      }
+    } else {
+      *is_used = true;
     }
   }
 }
 
 // Replace a use of a virtual register
 static void ReplaceOperandReg(SSAOperand &op, VirtualRegister replacement_reg) {
-  GRANARY_ASSERT(1 == op.nodes.Size());
-  GRANARY_IF_DEBUG( auto node = op.nodes[0]; )
+  auto node = op.node;
   GRANARY_ASSERT(node->reg.IsVirtual());
   GRANARY_ASSERT(replacement_reg.IsNative());
-  Operand existing_op(op.operand);
-  if (op.is_reg) {
-    replacement_reg.Widen(op.operand->ByteWidth());
-    RegisterOperand repl_op(replacement_reg);
-    GRANARY_IF_DEBUG( auto replaced = ) existing_op.Ref().ReplaceWith(repl_op);
-    GRANARY_ASSERT(replaced);
-  } else {
-    replacement_reg.Widen(arch::ADDRESS_WIDTH_BYTES);
-    MemoryOperand repl_op(replacement_reg, op.operand->ByteWidth());
-    GRANARY_IF_DEBUG( auto replaced = ) existing_op.Ref().ReplaceWith(repl_op);
-    GRANARY_ASSERT(replaced);
+  if (!arch::ReplaceRegInOperand(op.operand, node->reg, replacement_reg)) {
+    GRANARY_ASSERT(false);
   }
 }
 
@@ -496,25 +484,19 @@ static void ReplaceOperandReg(SSAOperand &op, VirtualRegister replacement_reg) {
 // with a GPR.
 static void ReplaceUsesOfVR(SSAInstruction *instr, SSANodeId node_id,
                             VirtualRegister replacement_reg) {
-  for (auto &op : instr->defs) {
-    if (op.nodes[0]->id == node_id) {
-      GRANARY_ASSERT(op.is_reg);
-      ReplaceOperandReg(op, replacement_reg);
-    }
-  }
-  for (auto &op : instr->uses) {
-    if (op.nodes[0]->id == node_id) {
-      ReplaceOperandReg(op, replacement_reg);
-    }
+  for (auto &op : instr->operands) {
+    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
+    if (op.node->id != node_id) continue;
+    ReplaceOperandReg(op, replacement_reg);
   }
 }
 
 // Gets a spill slot to be used by the partition-local register scheduler.
-static int GetSpillSlot(const SpillSlotSet &used_slots, int *num_slots) {
+static size_t GetSpillSlot(const SpillSlotSet &used_slots, size_t *num_slots) {
   auto ret = *num_slots;
   if (SHARE_SPILL_SLOTS) {
     GRANARY_IF_DEBUG( auto found_slot = false; )
-    for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
+    for (auto i = 0UL; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
       if (!used_slots.Get(i)) {
         ret = i;
         GRANARY_IF_DEBUG( found_slot = true; )
@@ -530,9 +512,9 @@ static int GetSpillSlot(const SpillSlotSet &used_slots, int *num_slots) {
 // Finds a spill slot that can hold the virtual register. We need to make sure
 // that this spill slot does not interfere with any other spill slots being
 // used within the current partition.
-static int FindSlotForVR(PartitionInfo * const partition,
-                         Fragment *first, Fragment *last,
-                         VirtualRegister vr, SSANodeId node_id) {
+static size_t FindSlotForVR(PartitionInfo * const partition,
+                            Fragment *first, Fragment *last,
+                            VirtualRegister vr, SSANodeId node_id) {
   SpillSlotSet used_slots;
 
   for (auto frag : FragmentListIterator(first)) {
@@ -675,7 +657,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
     // Its a native instruction, need to look to see if the VR is used and/or
     // defined. We also need to see if the current location of the VR is used.
     } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      ssa_instr = GetMetaData<SSAInstruction *>(ninstr);
+      ssa_instr = ninstr->ssa;
       if (!ssa_instr) continue;
       reg_sched->used_regs.Visit(ninstr);
 
@@ -773,7 +755,7 @@ static void SchedulePartitionLocalRegs(FragmentList *frags,
   VirtualRegister preferred_gpr;
   SSANodeId node_id;
 
-  auto slot_num = 0;
+  auto slot_num = 0UL;
 
   // Used to bound the iterating through the fragment list after the first
   // register has been scheduled.
@@ -1003,7 +985,7 @@ struct FragmentScheduler {
         reg_counts() {
 
     reg_counts.CountGPRUses(frag);
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       auto gpr = NthArchGPR(i);
       gpr_locations[i] = {gpr, RegLocationType::GPR};
       inverse_gpr_locations[i] = {gpr, RegLocationType::GPR};
@@ -1019,8 +1001,8 @@ struct FragmentScheduler {
 
   // Allocates a spill slot for use.
   VirtualRegister AllocateSlot(void) {
-    auto slot = 0;
-    for (auto i = 0; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
+    auto slot = 0UL;
+    for (auto i = 0UL; i < arch::MAX_NUM_SPILL_SLOTS; ++i) {
       if (slot_is_available[i]) {
         slot_is_available[i] = false;
         slot = i;
@@ -1068,7 +1050,7 @@ struct FragmentScheduler {
   // otherwise returns `false`.
   bool TryGetSharedGPR(const UsedRegisterSet &avoid_reg_set,
                        VirtualRegister *reg) {
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       auto &loc(gpr_locations[i]);
       if (RegLocationType::LIVE_SLOT == loc.type && avoid_reg_set.IsDead(i)) {
         *reg = NthArchGPR(i);
@@ -1082,10 +1064,10 @@ struct FragmentScheduler {
   // `avoid_reg_set`.
   VirtualRegister GetGPR(const UsedRegisterSet &avoid_reg_set) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
-    auto min_gpr_num = static_cast<int>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
-    auto min_num_uses = std::numeric_limits<int>::max();
+    auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
+    auto min_num_uses = std::numeric_limits<size_t>::max();
 
-    for (auto i = 0; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       if (avoid_reg_set.IsLive(i)) continue;
       if (!gpr_locations[i].loc.IsNative()) continue;
       if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
@@ -1126,7 +1108,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
                                      SSAOperand &op,
                                      NativeInstruction *instr,
                                      const UsedRegisterSet &used_regs) {
-  auto node = op.nodes[0];
+  auto node = op.node;
   auto vr = node->reg;
   auto frag = sched->frag;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
@@ -1168,7 +1150,7 @@ static void ScheduleFragmentLocalUse(FragmentScheduler *sched,
 // Case 5: Schedule a fragment-local register definition. This enables slot
 // sharing within the fragment.
 static void ScheduleFragmentLocalDef(FragmentScheduler *sched, SSAOperand &op) {
-  auto node = op.nodes[0];
+  auto node = op.node;
   auto vr = node->reg;
   if (!vr.IsVirtual()) return;  // Ignore arch GPRs.
   if (NODE_SCHEDULED == node->id.Value()) return;
@@ -1262,10 +1244,15 @@ static void HomeUsedRegs(FragmentScheduler *sched, Instruction *instr,
 static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
                                      NativeInstruction *instr,
                                      SSAInstruction *ssa_instr) {
-  if (!arch::GetCopiedOperand(instr, ssa_instr)) return false;
+  SSAOperand *def(nullptr);
+  SSAOperand *use0(nullptr);
+  SSAOperand *use1(nullptr);
+  if (!arch::GetCopiedOperand(instr, ssa_instr, &def, &use0, &use1)) {
+    return false;
+  }
 
   // Ignore nodes that were scheduled by the partition-local scheduler.
-  auto dest_node = ssa_instr->defs[0].nodes[0];
+  auto dest_node = def->node;
   if (NODE_SCHEDULED == dest_node->id.Value()) return false;
 
   // For transparency, we'll only remove copies that we've likely introduced.
@@ -1278,11 +1265,8 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
     GRANARY_ASSERT(RegLocationType::LIVE_SLOT != vr_home.type);
   }
 
-  auto ainstr = new AnnotationInstruction(kAnnotSSAElidedInstruction, dest_reg);
-  SetMetaData(ainstr, ssa_instr);
-  sched->frag->instrs.InsertAfter(instr, ainstr);
-
-  Instruction::Unlink(instr);  // Will self-destruct.
+  // Don't encode this instruction.
+  instr->instruction.DontEncode();
   return true;
 }
 
@@ -1290,8 +1274,9 @@ static bool TryRemoveCopyInstruction(FragmentScheduler *sched,
 // in a specific native instruction.
 static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
                                       NativeInstruction *instr) {
-  auto ssa_instr = GetMetaData<SSAInstruction *>(instr);
+  auto ssa_instr = instr->ssa;
   if (!ssa_instr) return;
+  if (!instr->instruction.WillBeEncoded()) return;
   if (TryRemoveCopyInstruction(sched, instr, ssa_instr)) return;
 
   UsedRegisterSet used_regs;
@@ -1304,14 +1289,18 @@ static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
 
   HomeUsedRegs(sched, instr, used_regs, avoid_regs);
 
-  for (auto &use_op : ssa_instr->uses) {
-    ScheduleFragmentLocalUse(sched, use_op, instr, used_regs);
+  // Schedule all uses/defs regs as though they are uses.
+  for (auto &op : ssa_instr->operands) {
+    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
+    ScheduleFragmentLocalUse(sched, op, instr, used_regs);
   }
-  for (auto &def_op : ssa_instr->defs) {
-    ScheduleFragmentLocalUse(sched, def_op, instr, used_regs);
-  }
-  for (auto &def_op : ssa_instr->defs) {
-    ScheduleFragmentLocalDef(sched, def_op);
+
+  // Arrange for the right state to propagate for the defs.
+  for (auto &op : ssa_instr->operands) {
+    if (SSAOperandAction::WRITE == op.action ||
+        SSAOperandAction::CLEARED == op.action) {
+      ScheduleFragmentLocalDef(sched, op);
+    }
   }
 }
 
@@ -1431,9 +1420,8 @@ static Instruction *FirstSSAInstruction(SSAFragment *frag) {
       candidate = ninstr;
 
       // Implies that this instruction has an associated `SSAInstruction`.
-      if (ninstr->MetaData()) {
-        return ninstr;
-      }
+      if (ninstr->ssa) return ninstr;
+
     } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       switch (ainstr->annotation) {
         case kAnnotSSANodeOwner:

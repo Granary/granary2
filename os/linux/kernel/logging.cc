@@ -31,7 +31,7 @@ static os::Lock log_buffer_lock;
 // Log something.
 //
 // TODO(pag): This is totally unsafe! It can easily overflow.
-int Log(LogLevel, const char *format, ...) {
+size_t Log(LogLevel, const char *format, ...) {
   os::LockedRegion locker(&log_buffer_lock);
   va_list args;
   va_start(args, format);
@@ -43,7 +43,7 @@ int Log(LogLevel, const char *format, ...) {
     granary_log_buffer_index += ret;
   }
   va_end(args);
-  return static_cast<int>(ret);
+  return ret;
 }
 
 }  // namespace os
