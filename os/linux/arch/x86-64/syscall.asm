@@ -215,6 +215,11 @@ DEFINE_FUNC(nanosleep)
     ret
 END_FUNC(nanosleep)
 
+DEFINE_FUNC(sched_yield)
+    mov     eax, 24  // `__NR_sched_yield`.
+    syscall
+    ret
+END_FUNC(sched_yield)
 
 DECLARE_FUNC(granary_exit)
 DEFINE_INST_FUNC(exit_group_ok)  // Can be called by instrumentation code.

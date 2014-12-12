@@ -51,8 +51,8 @@ enum : size_t {
 // Shadow memory for ownership tracking.
 union OnwershipTracker {
   struct {
-    uint64_t type_id:16;
     uint64_t thread_base:48;
+    uint64_t type_id:16;
   };
 
   uint64_t value;
@@ -100,6 +100,9 @@ static OnwershipTracker *gRecentAllocations[kNumSamplePoints] = {nullptr};
 
 // Set of active sample points.
 static SamplePoint gSamplePoints[kNumSamplePoints];
+
+// Lock guarding the `gSamplePoints` array.
+static ReaderWriterLock gSamplePointsLock;
 
 // The PID of the monitor thread.
 static pid_t gMonitorThread = -1;
@@ -198,7 +201,6 @@ static void ActivateSamplePoints(void) {
       tracker->value = 0;
       tracker->type_id = type_id;
       ++num_samples;
-      os::Log("Sampling %p\n", tracker);
     }
     if (type_id == end_id) break;
   }
@@ -252,16 +254,18 @@ static void ReportSamplePoints(void) {
 // Monitor thread changes the sample point every FLAG_sample_rate milliseconds.
 static void Monitor(void) {
   const timespec sample_time = {0, FLAG_sample_rate * 1000000L};
-  const timespec clear_time = {0, 1000000L};
+  const timespec pause_time = {0, 1000000L};
   for (;;) {
     for (auto timer = sample_time; ; ) {
       if (!nanosleep(&timer, &timer)) break;
     }
-
+    while (!gSamplePointsLock.TryWriteAcquire()) {
+      nanosleep(&pause_time, nullptr);
+    }
     ReportSamplePoints();
-    nanosleep(&clear_time, nullptr);
     ClearActiveSamplePoints();
-    nanosleep(&clear_time, nullptr);
+    gSamplePointsLock.WriteRelease();
+
     ActivateSamplePoints();
   }
 }
@@ -344,6 +348,8 @@ class DataCollider : public InstrumentationTool {
     // took ownership of the line, and a contender also tried to take
     // ownership. If we've reached here, then we're the contender.
     if (!tracker.type_id) return;
+
+    ReadLockedRegion locker(&gSamplePointsLock);
 
     auto &sample_point(gSamplePoints[tracker.type_id]);
     const int trace = !!tracker.thread_base;

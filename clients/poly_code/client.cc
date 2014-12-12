@@ -132,27 +132,6 @@ static SpinLock gAllBlocksLock;
 // `BlockTypeInfo` type.
 typedef MetaDataLinkedListIterator<TypeMetaData> BlockTypeInfoIterator;
 
-// Taint a basic block with some type id.
-static void TaintBlock(TypeMetaData *meta, void *address) {
-  auto type_id = static_cast<uint16_t>(ExtractTaint(address) + 1);
-  {
-    ReadLockedRegion locker(&(meta->type_ids_lock));
-    if (meta->type_ids.Contains(type_id)) return;
-  }
-  {
-    WriteLockedRegion locker(&(meta->type_ids_lock));
-    meta->type_ids.Add(type_id);
-  }
-}
-
-// Taints block meta-data when some watchpoint is triggered.
-static void TaintBlockMeta(const WatchedMemoryOperand &op) {
-  op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
-      TaintBlock,
-      GetMetaData<TypeMetaData>(op.block),
-      op.watched_reg_op));
-}
-
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
@@ -188,32 +167,8 @@ class PolyCode : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdaPv);
 #endif  // GRANARY_WHERE_user
 
-    AddWatchpointInstrumenter(TaintBlockMeta);
+    AddWatchpointInstrumenter(CallTaintBlock);
     AddMetaData<TypeMetaData>();
-  }
-
-  static void LogTypeInfo(uint64_t type_id, AppPC ret_address,
-                          size_t size_order) {
-    auto offset = os::ModuleOffsetOfPC(ret_address);
-    if (offset.module) {
-      os::Log("T %u %lu B %s %lx\n", type_id, size_order,
-              offset.module->Name(), offset.offset);
-    } else {
-      os::Log("T %u %lu A %p\n", type_id, size_order, ret_address);
-    }
-  }
-
-  static void LogMetaInfo(BlockMetaData *meta) {
-    auto app_meta = MetaDataCast<AppMetaData *>(meta);
-    auto type_meta = MetaDataCast<TypeMetaData *>(meta);
-    auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
-    os::Log("B %s %lx", offset.module->Name(), offset.offset);
-    auto sep = " Ts ";
-    for (auto type_id : type_meta->type_ids) {
-      os::Log("%s%lu", sep, static_cast<uint64_t>(type_id));
-      sep = ",";
-    }
-    os::Log("\n");
   }
 
   static void Exit(ExitReason reason) {
@@ -236,6 +191,59 @@ class PolyCode : public InstrumentationTool {
     SpinLockedRegion locker(&gAllBlocksLock);
     type_meta->next = gAllBlocks;
     gAllBlocks = meta;
+  }
+
+ private:
+
+  // Taint a basic block with some type id.
+  static void TaintBlock(TypeMetaData *meta, void *address) {
+    if (0x7fUL != (reinterpret_cast<uintptr_t>(meta) >> 40)) {
+      granary_curiosity();
+    }
+    auto type_id = static_cast<uint16_t>(ExtractTaint(address) + 1);
+    {
+      ReadLockedRegion locker(&(meta->type_ids_lock));
+      if (meta->type_ids.Contains(type_id)) return;
+    }
+    {
+      WriteLockedRegion locker(&(meta->type_ids_lock));
+      meta->type_ids.Add(type_id);
+    }
+  }
+
+  // Taints block meta-data when some watchpoint is triggered.
+  static void CallTaintBlock(const WatchedMemoryOperand &op) {
+    auto meta = GetMetaData<TypeMetaData>(op.block);
+    if (!meta) return;
+    op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
+        TaintBlock, meta, op.watched_reg_op));
+  }
+
+  // Log info about what block (i.e. return address into a block) defines
+  // a type.
+  static void LogTypeInfo(uint64_t type_id, AppPC ret_address,
+                          size_t size_order) {
+    auto offset = os::ModuleOffsetOfPC(ret_address);
+    if (offset.module) {
+      os::Log("T %u %lu B %s %lx\n", type_id, size_order,
+              offset.module->Name(), offset.offset);
+    } else {
+      os::Log("T %u %lu A %p\n", type_id, size_order, ret_address);
+    }
+  }
+
+  // Log the types of data accessed by each block.
+  static void LogMetaInfo(BlockMetaData *meta) {
+    auto app_meta = MetaDataCast<AppMetaData *>(meta);
+    auto type_meta = MetaDataCast<TypeMetaData *>(meta);
+    auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
+    os::Log("B %s %lx", offset.module->Name(), offset.offset);
+    auto sep = " Ts ";
+    for (auto type_id : type_meta->type_ids) {
+      os::Log("%s%lu", sep, static_cast<uint64_t>(type_id - 1));
+      sep = ",";
+    }
+    os::Log("\n");
   }
 };
 

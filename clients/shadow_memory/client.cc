@@ -9,9 +9,9 @@
 
 GRANARY_USING_NAMESPACE granary;
 
-GRANARY_DEFINE_positive_int(shadow_granularity, 4096,
+GRANARY_DEFINE_positive_int(shadow_granularity, 64,
     "The granularity (in bytes) of shadow memory. This must be a power of two. "
-    "The default value is `4096`, which means: 1 page of physical memory "
+    "The default value is `64`, which means: 1 page of physical memory "
     "maps to one unit of shadow memory.",
 
     "direct_shadow_memory");

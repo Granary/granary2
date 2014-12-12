@@ -14,6 +14,9 @@ void InitThread(void);
 // Notify Granary tools that a thread has been destroyed.
 void ExitThread(void);
 
+// Yield this thread. This might not actually yield the thread.
+void YieldThread(void);
+
 // Get the thread/CPU base address.
 //
 // Note: This has an architecture-specific implementation.

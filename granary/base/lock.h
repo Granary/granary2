@@ -68,9 +68,11 @@ class ReaderWriterLock {
   inline ReaderWriterLock(void)
       : lock(ATOMIC_VAR_INIT(0)) {}
 
+  bool TryReadAcquire(void);
   void ReadAcquire(void);
   void ReadRelease(void);
 
+  bool TryWriteAcquire(void);
   void WriteAcquire(void);
   void WriteRelease(void);
 
