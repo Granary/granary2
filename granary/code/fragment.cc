@@ -9,6 +9,7 @@
 
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
+#include "granary/code/ssa.h"
 
 #include "granary/app.h"
 #include "granary/breakpoint.h"
@@ -27,7 +28,19 @@ GRANARY_DEFINE_bool(debug_log_instr_note, false,
     "created the instruction. This can be helpful when trying to discover the "
     "source of an instruction.\n"
     "\n"
-    "Note: This is only meaningful if `--debug_log_fragments` is used.");
+    "Note: This is only meaningful if `--debug_log_fragments` is used, or if\n"
+    "      one is using GDB commands, such as `xdot-frags`, to print out\n"
+    "      fragments.");
+
+GRANARY_DEFINE_bool(debug_log_ssa, false,
+    "Should SSA node information be logged for each logged instruction? This "
+    "can be helpful when debugging Granary's SSA-based register scheduler. The "
+    "default value is `no`.\n"
+    "\n"
+    "Note: This is only meaningful if `--debug_log_fragments` is used, or if\n"
+    "      one is using GDB commands, such as `xdot-frags`, to print out\n"
+    "      fragments.");
+
 #endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 namespace granary {
@@ -253,15 +266,22 @@ static void LogRegister(LogLevel level, VirtualRegister reg, const char *sep) {
 
 #if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 static void LogInstructionNote(LogLevel level, const arch::Instruction *instr) {
-  if (FLAG_debug_log_instr_note) {
-    if (instr->note_create) {
-      Log(level, "cnote: %p " NEW_LINE, instr->note_create);
-    }
-    if (instr->note_alter) {
-      Log(level, "anote: %p " NEW_LINE, instr->note_alter);
+  if (!FLAG_debug_log_instr_note) return;
+  if (instr->note_create) Log(level, "cnote: %p " NEW_LINE, instr->note_create);
+  if (instr->note_alter) Log(level, "anote: %p " NEW_LINE, instr->note_alter);
+}
+
+static void LogSSANodes(LogLevel level, const SSAInstruction *instr) {
+  if (!instr) return;
+  if (!FLAG_debug_log_ssa) return;
+  for (auto &op : instr->operands) {
+    if (kSSAOperandStateNode == op.state) {
+      LogRegister(level, op.node->reg, "    ");
+      Log(level, " %p" NEW_LINE, op.node->id.Find());
     }
   }
 }
+
 #endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 static void LogInstruction(LogLevel level, NativeInstruction *instr) {
@@ -282,7 +302,9 @@ static void LogInstruction(LogLevel level, NativeInstruction *instr) {
     Log(level, END_STRIKE);
   }
   Log(level, NEW_LINE);  // Keep instructions left-aligned.
-  GRANARY_IF_DEBUG(LogInstructionNote(level, &ainstr);)
+  GRANARY_IF_DEBUG(
+      LogInstructionNote(level, &ainstr);
+      LogSSANodes(level, instr->ssa); )
 }
 
 static void LogInstruction(LogLevel level, LabelInstruction *instr) {

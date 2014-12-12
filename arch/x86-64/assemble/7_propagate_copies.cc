@@ -32,26 +32,10 @@ bool GetCopiedOperand(const NativeInstruction *instr,
 
   if (XED_IFORM_LEA_GPRv_AGEN == ainstr.iform) {
     if (src.IsPointer()) return nullptr;
-#if 0
-    if (src.is_compound) {
-      if (src.mem.base.IsStackPointer()) return nullptr;
-      if (src.mem.index.IsStackPointer()) return nullptr;
-    } else {
-      if (src.reg.IsStackPointer()) return nullptr;
-    }
-#endif
-  } else if (XED_IFORM_MOV_GPRv_GPRv_89 == ainstr.iform ||
-             XED_IFORM_MOV_GPRv_GPRv_8B == ainstr.iform) {
-#if 0
-    if (src.reg.IsStackPointer()) return nullptr;
-#endif
-  } else {
+  } else if (XED_IFORM_MOV_GPRv_GPRv_89 != ainstr.iform &&
+             XED_IFORM_MOV_GPRv_GPRv_8B != ainstr.iform) {
     return nullptr;
   }
-
-#if 0
-  if (dst.reg.IsStackPointer()) return nullptr;
-#endif
 
   // Make sure we don't copy propagate things like `MOV r16, r16`.
   if (dst.reg.PreservesBytesOnWrite()) return nullptr;

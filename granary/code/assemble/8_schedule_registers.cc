@@ -458,11 +458,11 @@ static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
 static void FindDefUse(const SSAInstruction *instr, SSANodeId node_id,
                        bool *is_defined, bool *is_used) {
   for (const auto &op : instr->operands) {
-    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
+    GRANARY_ASSERT(kSSAOperandActionInvalid != op.action);
     if (op.node->id != node_id) continue;
 
-    if (SSAOperandAction::WRITE == op.action ||
-        SSAOperandAction::CLEARED == op.action) {
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionCleared == op.action) {
       *is_defined = true;
     } else {
       *is_used = true;
@@ -485,7 +485,7 @@ static void ReplaceOperandReg(SSAOperand &op, VirtualRegister replacement_reg) {
 static void ReplaceUsesOfVR(SSAInstruction *instr, SSANodeId node_id,
                             VirtualRegister replacement_reg) {
   for (auto &op : instr->operands) {
-    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
+    GRANARY_ASSERT(kSSAOperandActionInvalid != op.action);
     if (op.node->id != node_id) continue;
     ReplaceOperandReg(op, replacement_reg);
   }
@@ -543,7 +543,7 @@ static void HomeUsedReg(PartitionScheduler *part_sched,
                         Instruction *instr,
                         RegLocation *vr_home) {
   if (!vr_home->loc.IsNative() ||
-      !reg_sched->used_regs.IsLive(vr_home->loc)) {
+      !reg_sched->restricted_regs.IsLive(vr_home->loc)) {
     return; // Not used in this instruction.
   }
 
@@ -660,6 +660,7 @@ static void SchedulePartitionLocalRegs(PartitionScheduler *part_sched,
       ssa_instr = ninstr->ssa;
       if (!ssa_instr) continue;
       reg_sched->used_regs.Visit(ninstr);
+      reg_sched->restricted_regs = reg_sched->used_regs;
 
       // If this instruction has no explicit operands, then we can't possibly
       // schedule a VR in, and so we don't need to add the constraint to the
@@ -1289,16 +1290,15 @@ static void ScheduleFragmentLocalRegs(FragmentScheduler *sched,
 
   HomeUsedRegs(sched, instr, used_regs, avoid_regs);
 
-  // Schedule all uses/defs regs as though they are uses.
+  // Schedule all defs and uses as though they are uses.
   for (auto &op : ssa_instr->operands) {
-    GRANARY_ASSERT(SSAOperandAction::INVALID != op.action);
-    ScheduleFragmentLocalUse(sched, op, instr, used_regs);
+    ScheduleFragmentLocalUse(sched, op, instr, avoid_regs);
   }
 
   // Arrange for the right state to propagate for the defs.
   for (auto &op : ssa_instr->operands) {
-    if (SSAOperandAction::WRITE == op.action ||
-        SSAOperandAction::CLEARED == op.action) {
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionCleared == op.action) {
       ScheduleFragmentLocalDef(sched, op);
     }
   }

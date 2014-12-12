@@ -13,12 +13,12 @@
 
 namespace granary {
 
-// Decompose an `SSAOperandPack` containing all kinds of operands into the
-// canonical format required by `SSAInstruction`.
+// Convert writes to register operates into read/writes if there is another
+// read from the same register (that isn't a memory operand) in the current
+// operand pack.
 //
-// Note: This function is defined in `6_track_ssa_vars`.
-extern void AddInstructionOperands(SSAInstruction *instr,
-                                   SSAOperandPack &operands);
+// Note: This function is defined by `6_track_ssa_vars`.
+extern bool ConvertOperandActions(SSAOperandPack &operands);
 
 namespace arch {
 
@@ -36,8 +36,7 @@ extern bool GetCopiedOperand(const NativeInstruction *instr,
 //
 // Note: This function has an architecture-specific implementation.
 extern void ConvertOperandActions(NativeInstruction *instr,
-                                  SSAOperandPack &operands,
-                                  bool has_nodes);
+                                  SSAOperandPack &operands);
 
 // Invalidates the stack analysis property of `instr`.
 extern void InvalidateStackAnalysis(NativeInstruction *instr);
@@ -100,8 +99,8 @@ static void UpdateAnnotationDefs(ReachingDefinintions &defs, SSANode *node) {
 static void UpdateInstructionDefs(ReachingDefinintions &defs,
                                   SSAInstruction *instr) {
   for (const auto &op : instr->operands) {
-    if (SSAOperandAction::WRITE == op.action ||
-        SSAOperandAction::READ_WRITE == op.action) {
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionReadWrite == op.action) {
       auto reg = op.node->reg;
       auto &reg_value(defs[reg]);
       reg_value.defined_node = op.node;
@@ -179,7 +178,7 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
   // Only other possibility should be a `MEMORY_READ` representing an
   // effective address. We'll assume that base-only effective operands
   // have been converted into `READ` operands.
-  if (SSAOperandAction::READ != copied_value->action) return false;
+  if (kSSAOperandActionRead != copied_value->action) return false;
 
   GRANARY_ASSERT(nullptr == reg_value.copied_value2);
   GRANARY_ASSERT(copied_value->operand->IsRegister());
@@ -193,7 +192,7 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
   // then we might spill to the stack, and therefore have to modify instructions
   // using the stack pointer. To make things simple, we have an invariant that
   // we can only modify base/disp memory operands.
-  if (SSAOperandAction::READ == dest_operand.action &&
+  if (kSSAOperandActionRead == dest_operand.action &&
       copied_reg.IsStackPointer()) {
     return false;
   }
@@ -205,7 +204,7 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
   // our prior checks. If it doesn't, then there's a serious inconsistency
   // somewhere.
   if (arch::ReplaceRegInOperand(aop, reg, copied_reg)) {
-    *(dest_operand.node) = *(copied_value->node);
+    SSANode::Overwrite(dest_operand.node, copied_value->node);
     return true;
   }
 
@@ -229,7 +228,7 @@ static bool CopyPropagateMemOneReg(ReachingDefinintions &defs,
   // Overwrite the memory operand.
   ReplaceMemOpWithEffectiveAddress(aop, copied_aop);
 
-  *(dest_operand.node) = *copied_node;
+  SSANode::Overwrite(dest_operand.node, copied_node);
   return true;
 }
 
@@ -253,14 +252,14 @@ static bool CopyPropagateMemTwoReg(ReachingDefinintions &defs,
 
   // Overwrite the memory operand.
   ReplaceMemOpWithEffectiveAddress(aop, copied_aop);
-
-  *(dest_operand.node) = *copied_node0;
+  SSANode::Overwrite(dest_operand.node, copied_node0);
 
   // Need to add in a new SSAOperand for this additional register.
   SSAOperand op;
-  op.action = SSAOperandAction::MEMORY_READ;
+  op.action = kSSAOperandActionMemoryRead;
   op.node = copied_node1;
   op.operand = aop;
+  op.state = kSSAOperandStateNode;
   instr->operands.Append(op);
 
   return true;
@@ -285,14 +284,14 @@ static bool CopyPropagateMem(ReachingDefinintions &defs,
 
   auto copied_value0 = reg_value.copied_value;
   if (!copied_value0) return false;
-  if (SSAOperandAction::MEMORY_READ != copied_value0->action) return false;
+  if (kSSAOperandActionMemoryRead != copied_value0->action) return false;
 
   auto copied_value1 = reg_value.copied_value2;
   if (!copied_value1) {
     return CopyPropagateMemOneReg(defs, dest_operand, copied_value0);
 
   } else {
-    GRANARY_ASSERT(SSAOperandAction::MEMORY_READ == copied_value1->action);
+    GRANARY_ASSERT(kSSAOperandActionMemoryRead == copied_value1->action);
     return CopyPropagateMemTwoReg(defs, instr, dest_operand,
                                   copied_value0, copied_value1);
   }
@@ -308,11 +307,11 @@ static bool UpdateUses(ReachingDefinintions &defs, SSAInstruction *instr,
   for (auto &op : instr->operands) {
 
     // Register -> register.
-    if (SSAOperandAction::READ == op.action) {
+    if (kSSAOperandActionRead == op.action) {
       changed = CopyPropagateReg(defs, op) || changed;
 
     // Register -> memory base address, register -> memory index address
-    } else if (SSAOperandAction::MEMORY_READ == op.action) {
+    } else if (kSSAOperandActionMemoryRead == op.action) {
       changed = CopyPropagateReg(defs, op) || changed;
 
       // Track for later. Memory copy propagation can change the number of
@@ -364,7 +363,8 @@ static bool PropagateRegisterCopies(CodeFragment *frag) {
     }
 
     if (UpdateUses(defs, ssa_instr, ninstr)) {
-      arch::ConvertOperandActions(ninstr, ssa_instr->operands, true);
+      ConvertOperandActions(ssa_instr->operands);
+      arch::ConvertOperandActions(ninstr, ssa_instr->operands);
       arch::InvalidateStackAnalysis(ninstr);
       ret = true;
     }

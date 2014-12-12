@@ -50,6 +50,8 @@ class SSANode {
 
   GRANARY_DECLARE_BASE_CLASS(SSANode)
 
+  static void Overwrite(SSANode *dest, const SSANode *src);
+
  private:
   SSANode(void) = delete;
 };
@@ -158,23 +160,31 @@ class SSARegisterNode : public SSANode {
 //
 // The purpose of these actions are to canonicalize the various possible
 // combinations of architectural operand actions down to a simpler form that is
-// then used to guide
-enum class SSAOperandAction {
-  INVALID,
-  CLEARED,      // Happens for things like `XOR A, A`. In this case, we set
-                // the first operand to have an action `WRITE`, and the second
-                // operand to have an action of `CLEARED`.
-                //
-                // Register Operands      Memory Operands
-                // -----------------      ---------------
-  READ,         // R, CR
-  MEMORY_READ,  //                        all
-  WRITE,        // W*
-  READ_WRITE    // RW, CW, RCW
+// then used to guide scheduling.
+enum SSAOperandAction {
+  kSSAOperandActionInvalid,
+
+  // Happens for things like `XOR A, A`. In this case, we set the first operand
+  // to have an action `WRITE`, and the second operand to have an action of
+  // `kSSAOperandActionCleared`.
+  kSSAOperandActionCleared,
+
+                                  // Register Operands      Memory Operands
+                                  // -----------------      ---------------
+  kSSAOperandActionRead,          // R, CR
+  kSSAOperandActionMemoryRead,    //                        all
+  kSSAOperandActionWrite,         // W*
+  kSSAOperandActionReadWrite      // RW, CW, RCW
 
   // * Special case: If the write preserves some of the bytes of the original
   //                 register's value then we treat it as a `READ_WRITE` and not
   //                 as a `WRITE`.
+};
+
+enum SSAOperandState {
+  kSSAOperandStateInvalid,
+  kSSAOperandStateReg,
+  kSSAOperandStateNode
 };
 
 // Represents a small group of `SSANode` pointers.
@@ -202,6 +212,9 @@ class SSAOperand {
   // Canonical action that determines how the dependencies should be interpreted
   // as well as created.
   SSAOperandAction action;
+
+  // Are we using `reg` or `node`?
+  SSAOperandState state;
 };
 
 // Represents a small group of `SSAOperand`s that are part of an instruction.

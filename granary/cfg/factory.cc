@@ -41,7 +41,7 @@ GRANARY_DEFINE_positive_uint(max_decoded_instructions_per_block, 16,
     "The maximum number of instructions to decode per basic block. The default "
     "value is `16`.");
 
-GRANARY_DEFINE_positive_uint(max_decoded_blocks,
+GRANARY_DEFINE_positive_uint(debug_max_num_decoded_blocks,
                              std::numeric_limits<unsigned>::max(),
      "The maximum number of basic blocks to decode. The default value for this "
      "is infinite.\n"
@@ -553,7 +553,7 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
   // kinds. This is because sometimes we'll have a situation where we've
   // narrowed a bug down to a particular block, but the bug itself only happens
   // because the found block jumps back into an existing block!
-  if (GRANARY_UNLIKELY(num_decoded_blocks >= FLAG_max_decoded_blocks)) {
+  if (GRANARY_UNLIKELY(num_decoded_blocks >= FLAG_debug_max_num_decoded_blocks)) {
     request_kind = kRequestBlockExecuteNatively;
   }
 
@@ -607,7 +607,7 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   switch (request_kind) {
     case kRequestBlockFromIndexOrCFG:
     case kRequestBlockFromIndexOrCFGOnly:
-      if (!HAS_FLAG_max_decoded_blocks &&
+      if (!HAS_FLAG_debug_max_num_decoded_blocks &&
           (block->materialized_block = RequestIndexedBlock(&(block->meta)))) {
         break;
       }

@@ -24,6 +24,21 @@
   }
 
 namespace granary {
+namespace {
+// Enough memory to hold an arbitrary `SSANode`.
+union SSANodeMemory {
+ public:
+  alignas(SSAControlPhiNode) char _1[sizeof(SSAControlPhiNode)];
+  alignas(SSAAliasNode) char _2[sizeof(SSAAliasNode)];
+  alignas(SSADataPhiNode) char _3[sizeof(SSADataPhiNode)];
+  alignas(SSARegisterNode) char _4[sizeof(SSARegisterNode)];
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(SSANodeMemory, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+};
+}  // namespace
 
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (SSANode, 2),
@@ -46,6 +61,13 @@ SSANode::SSANode(SSAFragment *frag_, VirtualRegister reg_)
 }
 
 SSANode::~SSANode(void) {}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
+void SSANode::Overwrite(SSANode *dest, const SSANode *src) {
+  memcpy(dest, src, sizeof (SSANodeMemory));
+}
+#pragma clang diagnostic pop
 
 SSAControlPhiNode::SSAControlPhiNode(SSAFragment *frag_, VirtualRegister reg_)
     : SSANode(frag_, reg_),
@@ -135,20 +157,6 @@ SSADataPhiNode::SSADataPhiNode(SSAFragment *frag_, SSANode *incoming_node_)
 SSARegisterNode::SSARegisterNode(SSAFragment *frag_, VirtualRegister reg_)
     : SSANode(frag_, reg_) {}
 
-// Enough memory to hold an arbitrary `SSANode`.
-union SSANodeMemory {
- public:
-  alignas(SSAControlPhiNode) char _1[sizeof(SSAControlPhiNode)];
-  alignas(SSAAliasNode) char _2[sizeof(SSAAliasNode)];
-  alignas(SSADataPhiNode) char _3[sizeof(SSADataPhiNode)];
-  alignas(SSARegisterNode) char _4[sizeof(SSARegisterNode)];
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(SSANodeMemory, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-};
-
 GRANARY_DEFINE_SSA_ALLOCATOR(SSAControlPhiNode)
 GRANARY_DEFINE_SSA_ALLOCATOR(SSAAliasNode)
 GRANARY_DEFINE_SSA_ALLOCATOR(SSADataPhiNode)
@@ -159,13 +167,15 @@ GRANARY_DEFINE_SSA_ALLOCATOR(SSARegisterNode)
 SSAOperand::SSAOperand(void)
     : operand(nullptr),
       node(nullptr),
-      action(SSAOperandAction::INVALID) {}
+      action(kSSAOperandActionInvalid),
+      state(kSSAOperandStateInvalid) {}
 
 SSAOperand &SSAOperand::operator=(const SSAOperand &that) {
   if (&that != this) {
     operand = that.operand;
     node = that.node;
     action = that.action;
+    state = that.state;
   }
   return *this;
 }
@@ -175,10 +185,7 @@ SSAInstruction::SSAInstruction(void)
 
 SSAInstruction::~SSAInstruction(void) {
   for (auto &op : operands) {
-    if (SSAOperandAction::WRITE == op.action) delete op.node;
-    if (SSAOperandAction::CLEARED == op.action) continue;
-    if (SSAOperandAction::READ_WRITE != op.action) continue;
-    if (IsA<SSADataPhiNode *>(op.node)) delete op.node;
+    if (kSSAOperandActionCleared != op.action) delete op.node;
   }
 }
 
@@ -193,8 +200,8 @@ static SSANode *DefinedNodeForReg(NativeInstruction *instr,
   if (!ssa_instr) return nullptr;
 
   for (auto &op : ssa_instr->operands) {
-    if (SSAOperandAction::WRITE == op.action ||
-        SSAOperandAction::READ_WRITE == op.action) {
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionReadWrite == op.action) {
       if (op.node->reg == reg) return op.node;
     }
   }

@@ -195,8 +195,12 @@ class PolyCode : public InstrumentationTool {
   static void LogTypeInfo(uint64_t type_id, AppPC ret_address,
                           size_t size_order) {
     auto offset = os::ModuleOffsetOfPC(ret_address);
-    os::Log("T %u %lu B %s %lx\n", type_id, size_order,
-            offset.module->Name(), offset.offset);
+    if (offset.module) {
+      os::Log("T %u %lu B %s %lx\n", type_id, size_order,
+              offset.module->Name(), offset.offset);
+    } else {
+      os::Log("T %u %lu A %p\n", type_id, size_order, ret_address);
+    }
   }
 
   static void LogMetaInfo(BlockMetaData *meta) {
