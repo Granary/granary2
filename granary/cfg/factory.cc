@@ -607,7 +607,8 @@ bool BlockFactory::MaterializeBlock(DirectBasicBlock *block) {
   switch (request_kind) {
     case kRequestBlockFromIndexOrCFG:
     case kRequestBlockFromIndexOrCFGOnly:
-      if ((block->materialized_block = RequestIndexedBlock(&(block->meta)))) {
+      if (!HAS_FLAG_max_decoded_blocks &&
+          (block->materialized_block = RequestIndexedBlock(&(block->meta)))) {
         break;
       }
     [[clang::fallthrough]];

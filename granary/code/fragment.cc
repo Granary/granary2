@@ -311,8 +311,10 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@undef";
   } else if (kAnnotSSAFragLocalBegin == instr->annotation) {
     Log(level, FONT_BLUE "@ssa_begin_local" END_FONT NEW_LINE);
+    return;
   } else if (kAnnotSSAPartitionLocalBegin == instr->annotation) {
     Log(level, FONT_BLUE "@ssa_begin_global" END_FONT NEW_LINE);
+    return;
   } else if (kAnnotSSAReviveRegisters == instr->annotation) {
     return LogUsedRegs(level, instr);
   } else if (kAnnotCondLeaveNativeStack == instr->annotation) {
