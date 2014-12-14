@@ -22,8 +22,7 @@ namespace arch {
 //
 // Note: This function has an architecture-specific implementation.
 extern void ConvertOperandActions(NativeInstruction *instr,
-                                  SSAOperandPack &operands,
-                                  bool has_nodes);
+                                  SSAOperandPack &operands);
 }  // namespace arch
 namespace {
 
@@ -42,6 +41,7 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op,
   GRANARY_ASSERT(op->Ref().IsValid());
   ssa_op.operand = op->UnsafeExtract();
   ssa_op.reg = reg;
+  ssa_op.state = kSSAOperandStateReg;
 
   // Figure out the action that should be associated with all dependencies
   // of this operand. Later we'll also do minor post-processing of all
@@ -50,19 +50,19 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op,
   // Importantly, we could have the same register is a write reg, and a read
   // mem, and in that case we wouldn't perform any such conversions.
   if (ssa_op.operand->IsMemory()) {
-    ssa_op.action = SSAOperandAction::MEMORY_READ;
+    ssa_op.action = kSSAOperandActionMemoryRead;
 
   } else if (op->IsConditionalWrite() || op->IsReadWrite()) {
-    ssa_op.action = SSAOperandAction::READ_WRITE;
+    ssa_op.action = kSSAOperandActionReadWrite;
 
   } else if (op->IsWrite()) {
     if (!op->IsSemanticDefinition() && reg.PreservesBytesOnWrite()) {
-      ssa_op.action = SSAOperandAction::READ_WRITE;
+      ssa_op.action = kSSAOperandActionReadWrite;
     } else {
-      ssa_op.action = SSAOperandAction::WRITE;
+      ssa_op.action = kSSAOperandActionWrite;
     }
   } else {
-    ssa_op.action = SSAOperandAction::READ;
+    ssa_op.action = kSSAOperandActionRead;
   }
 
   operands.Append(ssa_op);
@@ -90,6 +90,46 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op
   }
 }
 
+// Returns true of we find a read register operand in the `operands` pack that
+// uses the same register as `op`.
+//
+// Note: This assumes that `op` refers to a register operand whose action is
+//       a `WRITE`.
+static bool FindReadFromReg(const SSAOperandPack &ops, VirtualRegister reg) {
+  for (const auto &op : ops) {
+    if (kSSAOperandActionRead == op.action ||
+        kSSAOperandActionMemoryRead == op.action ||
+        kSSAOperandActionReadWrite == op.action) {
+      auto op_reg = kSSAOperandStateReg == op.state ? op.reg : op.node->reg;
+      if (op_reg == reg) return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+// Convert writes to register operates into read/writes if there is another
+// read from the same register (that isn't a memory operand) in the current
+// operand pack.
+//
+// Note: This function is also used by `7_propagate_copies`.
+bool ConvertOperandActions(SSAOperandPack &operands) {
+  auto changed = false;
+  for (auto &op : operands) {
+    if (kSSAOperandActionWrite == op.action) {
+      auto reg = kSSAOperandStateReg == op.state ? op.reg : op.node->reg;
+      if (FindReadFromReg(operands, reg)) {
+        op.action = kSSAOperandActionReadWrite;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+namespace {
+
 // Create an `SSAInstruction` for a `NativeInstruction`.
 static void CreateSSAInstruction(NativeInstruction *instr
                                  _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
@@ -97,7 +137,8 @@ static void CreateSSAInstruction(NativeInstruction *instr
   instr->ForEachOperand([=] (Operand *op) {
     AddSSAOperand(ssa_instr->operands, op _GRANARY_IF_DEBUG(partition));
   });
-  arch::ConvertOperandActions(instr, ssa_instr->operands, false);
+  ConvertOperandActions(ssa_instr->operands);
+  arch::ConvertOperandActions(instr, ssa_instr->operands);
   instr->ssa = ssa_instr;
 }
 
@@ -116,6 +157,18 @@ static void CreateSSAInstructions(FragmentList *frags) {
   }
 }
 
+// Converts a `node` into an `SSADataPhiNode`, on the assumption that it's a
+// `SSAControlPhiNode`.
+static void ConvertControlPhiToDataPhi(SSAFragment *frag, SSANode *node,
+                                       SSANode *parent_node) {
+  GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
+  GRANARY_ASSERT(node->reg == parent_node->reg);
+  auto storage = node->id;
+  new (node) SSADataPhiNode(frag, parent_node);
+  node->id = storage;
+  node->id.Union(parent_node->id);
+}
+
 // For every `SSAFragment` that targets a non `SSAFragment` successor, add the
 // live GPRs on exit from the `SSAFragment` as initial `SSAControlPhiNode`s to
 // the fragment's `ssa.entry_nodes` map.
@@ -132,23 +185,13 @@ static void InitEntryNodesFromLiveExitRegs(FragmentList *frags) {
       if (is_exit) {
         for (auto reg : ssa_frag->regs.live_on_exit) {
           auto &node(ssa_frag->ssa.entry_nodes[reg]);
-          if (!node) {
-            node = new SSAControlPhiNode(ssa_frag, reg);
-          }
+          auto new_node = new SSAControlPhiNode(ssa_frag, reg);
+          if (node) ConvertControlPhiToDataPhi(ssa_frag, node, new_node);
+          node = new_node;
         }
       }
     }
   }
-}
-
-// Converts a `node` into an `SSADataPhiNode`, on the assumption that it's a
-// `SSAControlPhiNode`.
-static void ConvertControlPhiToDataPhi(SSAFragment *frag, SSANode *node,
-                                       SSANode *parent_node) {
-  GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-  auto storage = node->id;
-  new (node) SSADataPhiNode(frag, parent_node);
-  node->id = storage;
 }
 
 // Returns the `SSANode` that should be associated with a write to register
@@ -178,28 +221,35 @@ static void LVNDefs(SSAFragment *frag, SSAInstruction *ssa_instr) {
   // Update any existing nodes on writes to be `SSARegisterNode`s, and share
   // the register nodes with `CLEAR`ed operands.
   for (auto &op : ssa_instr->operands) {
-    if (SSAOperandAction::WRITE == op.action) {
+    if (kSSAOperandActionWrite != op.action &&
+        kSSAOperandActionCleared != op.action) {
+      continue;
+    }
+    GRANARY_ASSERT(kSSAOperandStateReg == op.state);
+
+    if (kSSAOperandActionWrite == op.action) {
       auto reg = op.reg;
       auto &node(frag->ssa.entry_nodes[reg]);
-      op.node = nullptr;
 
       node = LVNWrite(frag, node, reg);
       GRANARY_ASSERT(node->reg == reg);
       op.node = node;
 
-    } else if (SSAOperandAction::CLEARED == op.action) {
+    } else if (kSSAOperandActionCleared == op.action) {
       auto reg = op.reg;
       auto &node(frag->ssa.entry_nodes[reg]);
       GRANARY_ASSERT(IsA<SSARegisterNode *>(node));
       GRANARY_ASSERT(node->reg == reg);
       op.node = node;
     }
+
+    op.state = kSSAOperandStateNode;
   }
 
   // Clear out the written `SSARegisterNode`s, as we don't want them to be
   // inherited by other instructions.
   for (auto &op : ssa_instr->operands) {
-    if (SSAOperandAction::WRITE == op.action) {
+    if (kSSAOperandActionWrite == op.action) {
       frag->ssa.entry_nodes.Remove(op.node->reg);
     }
   }
@@ -208,53 +258,41 @@ static void LVNDefs(SSAFragment *frag, SSAInstruction *ssa_instr) {
 // Perform local value numbering for uses.
 static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
   for (auto &op : ssa_instr->operands) {
-    if (SSAOperandAction::READ_WRITE == op.action) {  // Read-only, must be reg.
-      auto reg = op.reg;
-      op.node = nullptr;
-
-      auto &node(frag->ssa.entry_nodes[reg]);
-
-      // We're doing a read/write, so while we are making a new definition, it
-      // will need to depend on some as-of-yet to be determined definition.
-      auto new_node = new SSAControlPhiNode(frag, reg);
-
-      // Some later instruction (in the current fragment) uses this register,
-      // and so created a placeholder version of the register to be filled in
-      // later. Now we've got a definition, so we can replace the existing
-      // control-PHI with a data-PHI.
-      if (node) {
-        ConvertControlPhiToDataPhi(frag, node, new_node);
-        op.node = node;
-
-      // No instructions (in the current fragment) that follow `instr` use the
-      // register `reg`, but later when we do GVN, we might need to propagate
-      // this definition to a successor.
-      } else {
-        op.node = new SSADataPhiNode(frag, new_node);
-      }
-
-      op.node->id.Union(new_node->id);
-      GRANARY_ASSERT(op.node->reg == reg);
-      node = new_node;
-
-    // Treat register and memory operands uniformly. For each read register,
-    // add a control-dependency on the register to signal that definition of
-    // the register is presently missing and thus might be inherited from
-    // a predecessor fragment.
-    } else if (SSAOperandAction::READ == op.action ||
-               SSAOperandAction::MEMORY_READ == op.action) {
-      auto reg = op.reg;
-      op.node = nullptr;
-
-      auto &node(frag->ssa.entry_nodes[reg]);
-      if (!node) node = new SSAControlPhiNode(frag, reg);
-
-      GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-      GRANARY_ASSERT(node->reg == reg);
-      op.node = node;
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionCleared == op.action) {
+      continue;
     }
 
+    GRANARY_ASSERT(kSSAOperandStateReg == op.state);
+
+    // We're doing a read/write, so while we are making a new definition, it
+    // will need to depend on some as-of-yet to be determined definition.
+    auto reg = op.reg;
+    auto new_node = new SSAControlPhiNode(frag, reg);
+    auto &node(frag->ssa.entry_nodes[reg]);
+
+    // Some later instruction (in the current fragment) uses this register,
+    // and so created a placeholder version of the register to be filled in
+    // later. Now we've got a definition, so we can replace the existing
+    // control-PHI with a data-PHI.
+    if (node) {
+      ConvertControlPhiToDataPhi(frag, node, new_node);
+      op.node = node;
+
+    // No instructions (in the current fragment) that follow `instr` use the
+    // register `reg`, but later when we do GVN, we might need to propagate
+    // this definition to a successor.
+    } else {
+      op.node = new SSADataPhiNode(frag, new_node);
+      GRANARY_ASSERT(op.node->reg == new_node->reg);
+      op.node->id.Union(new_node->id);
+    }
+
+    GRANARY_ASSERT(op.node->reg == reg);
+    node = new_node;
+
     // `op.reg` is now invalid and `op.node` is now valid.
+    op.state = kSSAOperandStateNode;
   }
 }
 
@@ -279,11 +317,11 @@ static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
   auto reg = instr->Data<VirtualRegister>();
   GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
   GRANARY_ASSERT(reg.IsNative());
+  auto new_node = new SSAControlPhiNode(frag, reg);
   auto &node(frag->ssa.entry_nodes[reg]);
-  if (!node) {
-    node = new SSAControlPhiNode(frag, reg);
-  }
-  SetMetaData(instr, node);
+  if (node) ConvertControlPhiToDataPhi(frag, node, new_node);
+  node = new_node;
+  SetMetaData(instr, new_node);
 }
 
 // Create an `SSANode` for a restore.
@@ -508,7 +546,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
 // instrumentation reads from a virtual register before writing to it. We
 // handle some architecture-specific special cases like `XOR A, A` on x86
 // when building up the `SSAInstruction`s and by using the
-// `SSAOperandAction::CLEARED` action.
+// `CLEARED` action.
 static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
   for (auto reg : frag->ssa.entry_nodes.Keys()) {
     GRANARY_ASSERT(!reg.IsVirtual());

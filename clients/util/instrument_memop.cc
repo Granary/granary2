@@ -35,7 +35,7 @@ void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
     if (addr_reg.IsSegmentOffset()) {
       InstrumentSegMemOp(bb, instr, mloc, addr_reg, op_num);
     } else {
-
+      InstrumentRegMemOp(bb, instr, mloc, addr_reg, op_num);
     }
   } else if (mloc.MatchPointer(addr_ptr)) {
     InstrumentAddrMemOp(bb, instr, mloc, addr_ptr, op_num);
