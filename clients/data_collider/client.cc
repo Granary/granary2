@@ -238,8 +238,20 @@ static void LogMemoryAccess(const MemoryAccess &access) {
 static void ReportSamplePoints(void) {
   for (auto &sample : gSamplePoints) {
     if (!sample.tracker) continue;
-    if (!sample.accesses[0].address) continue;
-    if (!sample.accesses[1].address) continue;
+
+    // Incomplete.
+    if (!sample.accesses[0].address || !sample.accesses[1].address) continue;
+
+    // Read/read, assume no contention.
+    if (!sample.accesses[0].location.is_write &&
+        !sample.accesses[1].location.is_write) {
+      continue;
+    }
+
+    // Different cache lines.
+    auto cl0 = reinterpret_cast<uintptr_t>(sample.accesses[0].address) >> 6UL;
+    auto cl1 = reinterpret_cast<uintptr_t>(sample.accesses[0].address) >> 6UL;
+    if (cl0 != cl1) continue;
 
     os::Log("Contention detected!\n\n");
     LogMemoryAccess(sample.accesses[0]);
