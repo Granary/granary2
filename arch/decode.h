@@ -13,7 +13,7 @@
 namespace granary {
 
 // Forward declarations.
-class DecodedBasicBlock;
+class DecodedBlock;
 
 namespace arch {
 
@@ -39,7 +39,7 @@ class InstructionDecoder {
   // mangling might involve adding many new instructions to deal with some
   // instruction set peculiarities, and sometimes we only want to speculatively
   // decode and instruction and not add these extra instructions to a block.
-  void Mangle(DecodedBasicBlock *block, Instruction *instr);
+  void Mangle(DecodedBlock *block, Instruction *instr);
 
  private:
   // Internal APIs for decoding instructions. These APIs directly

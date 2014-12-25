@@ -2,8 +2,8 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/control_flow_graph.h"
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/trace.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
@@ -19,15 +19,15 @@ namespace arch {
 // instructions.
 //
 // Note: This has an architecture-specific implementation.
-extern void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
-                                       DecodedBasicBlock *block,
+extern void CompileInlineAssemblyBlock(Trace *cfg,
+                                       DecodedBlock *block,
                                        granary::Instruction *instr,
                                        InlineAssemblyBlock *asm_block);
 }  // namespace arch
 namespace {
 
-static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
-                                  DecodedBasicBlock *block,
+static void CompileInlineAssembly(Trace *cfg,
+                                  DecodedBlock *block,
                                   AnnotationInstruction *instr) {
   auto asm_block = instr->Data<InlineAssemblyBlock *>();
   instr->SetData(0UL);
@@ -36,8 +36,8 @@ static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
   Instruction::Unlink(instr);
 }
 
-static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
-                                  DecodedBasicBlock *block) {
+static void CompileInlineAssembly(Trace *cfg,
+                                  DecodedBlock *block) {
   auto instr = block->FirstInstruction();
   for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
     next_instr = instr->Next();
@@ -53,9 +53,9 @@ static void CompileInlineAssembly(LocalControlFlowGraph *cfg,
 
 // Compile all inline assembly instructions by parsing the inline assembly
 // instructions and doing code generation for them.
-void CompileInlineAssembly(LocalControlFlowGraph *cfg) {
+void CompileInlineAssembly(Trace *cfg) {
   for (auto block : cfg->Blocks()) {
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+    if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
       CompileInlineAssembly(cfg, decoded_block);
     }
   }

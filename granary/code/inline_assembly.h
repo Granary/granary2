@@ -24,8 +24,8 @@ enum {
 #ifdef GRANARY_INTERNAL
 
 // Forward declarations.
-class LocalControlFlowGraph;
-class DecodedBasicBlock;
+class Trace;
+class DecodedBlock;
 class LabelInstruction;
 class Instruction;
 
@@ -90,7 +90,7 @@ class InlineAssemblyBlock {
 // `target_app_pc` is added.
 class InlineFunctionCall {
  public:
-  InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
+  InlineFunctionCall(DecodedBlock *block, AppPC target,
                      Operand ops[kMaxNumFuncOperands], size_t num_args_);
 
   inline size_t NumArguments(void) const {

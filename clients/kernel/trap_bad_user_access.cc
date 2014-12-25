@@ -21,7 +21,7 @@ class TrapBadUserAccess : public InstrumentationTool {
  public:
   virtual ~TrapBadUserAccess(void) = default;
 
-  void InstrumentMemOp(DecodedBasicBlock *bb, NativeInstruction *instr,
+  void InstrumentMemOp(DecodedBlock *bb, NativeInstruction *instr,
                        const MemoryOperand &mloc) {
 
     // Exceptional control-flow instructions are allowed to access user data.
@@ -64,7 +64,7 @@ class TrapBadUserAccess : public InstrumentationTool {
   }
 
   // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) {
     MemoryOperand mloc1, mloc2;
     for (auto instr : bb->AppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),

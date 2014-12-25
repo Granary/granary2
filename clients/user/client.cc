@@ -115,7 +115,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   }
 
   virtual void InstrumentEntrypoint(BlockFactory *factory,
-                                    CompensationBasicBlock *entry_block,
+                                    CompensationBlock *entry_block,
                                     EntryPointKind kind, int) {
     if (kEntryPointUserAttach == kind && !FLAG_early_attach) {
       for (auto succ : entry_block->Successors()) {
@@ -124,7 +124,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
     }
   }
 
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
+  virtual void InstrumentBlock(DecodedBlock *block) {
     if (!FLAG_hook_syscalls) return;
     for (auto succ : block->Successors()) {
       if (succ.cfi->IsSystemCall()) {

@@ -51,13 +51,15 @@ bool GetCopiedOperand(const NativeInstruction *instr,
   // have the wrong value!
   if (dst.reg.EffectiveWriteWidth() != dst.reg.ByteWidth()) return nullptr;
 
-  *def = &(ssa_instr->operands[0]);
-  *use0 = &(ssa_instr->operands[1]);
-  if (3 == ssa_instr->operands.Size()) {
+  GRANARY_ASSERT(2 == ssa_instr->num_ops);
+
+  *def = &(ssa_instr->ops[0]);
+  *use0 = &(ssa_instr->ops[1]);
+  if (3 == ssa_instr->num_ops) {
     GRANARY_ASSERT(XED_IFORM_LEA_GPRv_AGEN == ainstr.iform);
-    *use1 = &(ssa_instr->operands[2]);
+    *use1 = &(ssa_instr->ops[2]);
   } else {
-    GRANARY_ASSERT(2 == ssa_instr->operands.Size());
+
   }
   return true;
 }

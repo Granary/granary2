@@ -112,27 +112,24 @@ typedef MetaDataLinkedListIterator<IndexMetaData> IndexMetaDataIterator;
 // list of potential meta-data.
 static IndexFindResponse MatchMetaData(BlockMetaData *ls,
                                        BlockMetaData *search) {
-  IndexFindResponse response = {
-    UnificationStatus::REJECT,
-    nullptr
-  };
+  IndexFindResponse response = {kUnificationStatusReject, nullptr};
   for (auto meta : IndexMetaDataIterator(ls)) {
     if (kMetaArrayEnd == meta) break;
     if (!search->Equals(meta)) continue;
     switch (search->CanUnifyWith(ls)) {
-      case UnificationStatus::ACCEPT:
-        response.status = UnificationStatus::ACCEPT;
+      case kUnificationStatusAccept:
+        response.status = kUnificationStatusAccept;
         response.meta = meta;
         return response;
 
-      case UnificationStatus::ADAPT:
-        if (UnificationStatus::ADAPT != response.status) {
-          response.status = UnificationStatus::ADAPT;
+      case kUnificationStatusAdapt:
+        if (kUnificationStatusAdapt != response.status) {
+          response.status = kUnificationStatusAdapt;
           response.meta = meta;
         }
         break;
 
-      case UnificationStatus::REJECT:
+      case kUnificationStatusReject:
         break;
     }
   }
@@ -176,13 +173,12 @@ Index::~Index(void) {
 // not return exact matches, as hinted at by the `status` field of the
 // `IndexFindResponse` structure. This has to do with block unification.
 IndexFindResponse Index::Request(BlockMetaData *meta) {
-  if (GRANARY_UNLIKELY(!meta)) {
-    return {UnificationStatus::REJECT, meta};
-  }
+  if (GRANARY_UNLIKELY(!meta)) return {kUnificationStatusReject, nullptr};
+
+  // The index guarantees that the `next` pointer is always non-null.
   auto index_meta = MetaDataCast<IndexMetaData *>(meta);
-  if (index_meta->next) {
-    return {UnificationStatus::ACCEPT, meta};  // It must be in the index.
-  }
+  if (index_meta->next) return {kUnificationStatusAccept, meta};
+
   const auto index = GetIndex(meta);
   if (auto array = arrays[index.first]) {
     std::atomic_thread_fence(std::memory_order_acquire);
@@ -191,7 +187,7 @@ IndexFindResponse Index::Request(BlockMetaData *meta) {
       return MatchMetaData(metas, meta);
     }
   }
-  return {UnificationStatus::REJECT, nullptr};  // Not in the index
+  return {kUnificationStatusReject, nullptr};  // Not in the index
 }
 
 // Insert a block into the code cache index.

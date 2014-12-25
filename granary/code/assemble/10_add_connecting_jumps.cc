@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/fragment.h"
 
@@ -82,8 +82,8 @@ static void OrderFragment(FragmentWorkList *work_list, Fragment *frag) {
   auto visit_branch_first = false;
   if (auto cfi = DynamicCast<ControlFlowInstruction *>(frag->branch_instr)) {
     auto target_block = cfi->TargetBlock();
-    swap_successors = IsA<IndirectBasicBlock *>(target_block) ||
-                      IsA<ReturnBasicBlock *>(target_block);
+    swap_successors = IsA<IndirectBlock *>(target_block) ||
+                      IsA<ReturnBlock *>(target_block);
     visit_branch_first = swap_successors || arch::IsNearRelativeJump(cfi);
 
   } else if (auto br = DynamicCast<BranchInstruction *>(frag->branch_instr)) {
@@ -91,16 +91,16 @@ static void OrderFragment(FragmentWorkList *work_list, Fragment *frag) {
   }
 
   if (visit_branch_first) {
-    work_list->Enqueue(frag->successors[FRAG_SUCC_FALL_THROUGH]);
-    work_list->Enqueue(frag->successors[FRAG_SUCC_BRANCH]);
+    work_list->Enqueue(frag->successors[kFragSuccFallThrough]);
+    work_list->Enqueue(frag->successors[kFragSuccBranch]);
   } else {
-    work_list->Enqueue(frag->successors[FRAG_SUCC_BRANCH]);
-    work_list->Enqueue(frag->successors[FRAG_SUCC_FALL_THROUGH]);
+    work_list->Enqueue(frag->successors[kFragSuccBranch]);
+    work_list->Enqueue(frag->successors[kFragSuccFallThrough]);
   }
 
   if (swap_successors) {
-    std::swap(frag->successors[FRAG_SUCC_BRANCH],
-              frag->successors[FRAG_SUCC_FALL_THROUGH]);
+    std::swap(frag->successors[kFragSuccBranch],
+              frag->successors[kFragSuccFallThrough]);
   }
 }
 
@@ -144,8 +144,8 @@ void AddConnectingJumps(FragmentList *frags) {
   OrderFragments(&work_list);
 
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
-    auto frag_fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH];
-    auto frag_branch = frag->successors[FRAG_SUCC_BRANCH];
+    auto frag_fall_through = frag->successors[kFragSuccFallThrough];
+    auto frag_branch = frag->successors[kFragSuccBranch];
     auto frag_next = frag->next;
 
     if (frag_branch && frag_branch == frag_next && !frag_branch->encoded_pc) {

@@ -8,7 +8,7 @@
 
 #include "granary/base/base.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/breakpoint.h"
@@ -49,7 +49,7 @@ namespace {
 // Mangle an indirect CALL or JMP through memory into a MOV of the memory
 // location into a virtual register, then an indirect call through the
 // virtual register.
-static void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleIndirectCFI(DecodedBlock *block, Instruction *instr) {
   if (instr->ops[0].IsMemory()) {
     Instruction ni;
     auto target_loc = block->AllocateVirtualRegister();
@@ -66,7 +66,7 @@ static void MangleIndirectCFI(DecodedBasicBlock *block, Instruction *instr) {
 // either: 1) registers, 2) absolute addresses, or 3) offsets from a segment.
 //
 // Note: This applies to `XED_ENCODER_OPERAND_TYPE_MEM` only.
-static void MangleExplicitMemOp(DecodedBasicBlock *block, Operand &op) {
+static void MangleExplicitMemOp(DecodedBlock *block, Operand &op) {
   // Special consideration is given to non-compound stack operands, e.g.
   // `MOV ..., [RSP]`. Because we might be changing the stack pointer, we
   // bring those operands out into their own instructions early on so that we
@@ -123,7 +123,7 @@ static void MoveStackPointerToGPR(Instruction *instr) {
 // potentially need to emulate what the intended stack pointer read is later
 // on when virtual register spilling might have changed the actual stack
 // pointer.
-static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
+static void MangleExplicitStackPointerRegOp(DecodedBlock *block,
                                             Instruction *instr,
                                             Operand &op) {
 
@@ -152,7 +152,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBasicBlock *block,
 }
 
 // Note: This applies to `XED_ENCODER_OPERAND_TYPE_PTR` only.
-static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
+static void MangleSegmentOffset(DecodedBlock *block, Operand &op) {
   Instruction ni;
   auto offset = block->AllocateVirtualRegister();
   offset.ConvertToSegmentOffset();
@@ -165,7 +165,7 @@ static void MangleSegmentOffset(DecodedBasicBlock *block, Operand &op) {
 
 // Mangle an explicit memory operand. This will expand memory operands into
 // `LEA` instructions.
-static void MangleExplicitOps(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleExplicitOps(DecodedBlock *block, Instruction *instr) {
   Instruction ni;
   auto unmangled_uses_sp = instr->ReadsFromStackPointer() ||
                            instr->WritesToStackPointer();
@@ -206,7 +206,7 @@ static void AnalyzedStackUsage(Instruction *instr, bool does_read,
 // Mangle a `PUSH_MEMv` instruction. We have to mangle this because otherwise
 // we might hit the situation where we need to do a memory-to-memory move, but
 // can't pull it off with just a `MOV`.
-static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePushMemOp(DecodedBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 != instr->effective_operand_width);
   auto op = instr->ops[0];
   size_t stack_shift = instr->effective_operand_width / 8UL;
@@ -227,7 +227,7 @@ static void ManglePushMemOp(DecodedBasicBlock *block, Instruction *instr) {
 //            One suitable place would be `ManglePush` in `9_allocate_slots.cc`.
 //
 // Note: During decoding, we will have done the correct sign-extension.
-static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePushImmOp(DecodedBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
   auto vr = block->AllocateVirtualRegister(op.ByteWidth());
   Instruction ni;
@@ -242,7 +242,7 @@ static void ManglePushImmOp(DecodedBasicBlock *block, Instruction *instr) {
 // it's convenient.
 //
 // Note: Need to do the proper zero-extension of the 16 bit value.
-static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePushSegReg(DecodedBlock *block, Instruction *instr) {
   Instruction ni;
   auto vr_16 = block->AllocateVirtualRegister(2);
   auto vr_32 = vr_16.WidenedTo(4);
@@ -256,7 +256,7 @@ static void ManglePushSegReg(DecodedBasicBlock *block, Instruction *instr) {
 }
 
 // Mangle a `PUSH_*` instruction.
-static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePush(DecodedBlock *block, Instruction *instr) {
   if (instr->ops[0].IsMemory()) {
     ManglePushMemOp(block, instr);
   } else if (instr->ops[0].IsImmediate()) {
@@ -268,7 +268,7 @@ static void ManglePush(DecodedBasicBlock *block, Instruction *instr) {
 }
 
 // Mangle a `POP_MEMv` instruction.
-static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePopMemOp(DecodedBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 < instr->effective_operand_width);
   size_t stack_shift = instr->effective_operand_width / arch::BYTE_WIDTH_BITS;
   auto stack_shift_int32 = static_cast<int32_t>(stack_shift);
@@ -299,7 +299,7 @@ static void ManglePopMemOp(DecodedBasicBlock *block, Instruction *instr) {
 }
 
 // Mangle a `POP_GPRv` instruction, where the popped GPR is the stack pointer.
-static void ManglePopStackPointer(DecodedBasicBlock *block,
+static void ManglePopStackPointer(DecodedBlock *block,
                                   Instruction *instr) {
   GRANARY_ASSERT(0 < instr->effective_operand_width);
   auto decoded_pc = instr->decoded_pc;
@@ -318,7 +318,7 @@ static void ManglePopStackPointer(DecodedBasicBlock *block,
 // it's convenient.
 //
 // Note: Need to do the proper zero-extension of the 16 bit value.
-static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePopSegReg(DecodedBlock *block, Instruction *instr) {
   GRANARY_ASSERT(0 < instr->effective_operand_width);
   size_t stack_shift = instr->effective_operand_width / 8UL;
   GRANARY_ASSERT(instr->StackPointerShiftAmount() ==
@@ -345,7 +345,7 @@ static void ManglePopSegReg(DecodedBasicBlock *block, Instruction *instr) {
 }
 
 // Mangle a `POP_*` instruction.
-static void ManglePop(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePop(DecodedBlock *block, Instruction *instr) {
   auto op = instr->ops[0];
   if (op.IsMemory()) {
     ManglePopMemOp(block, instr);
@@ -360,7 +360,7 @@ static void ManglePop(DecodedBasicBlock *block, Instruction *instr) {
 // Mangle an `XLAT` instruction to use virtual registers. This is to avoid the
 // issue where `XLAT` is really the only instruction where two differently sized
 // registers are used as a base and index register.
-static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleXLAT(DecodedBlock *block, Instruction *instr) {
   Instruction ni;
   auto addr = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
@@ -372,7 +372,7 @@ static void MangleXLAT(DecodedBasicBlock *block, Instruction *instr) {
 }
 
 // Mangle an `ENTER` instruction.
-static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleEnter(DecodedBlock *block, Instruction *instr) {
   Instruction ni;
   auto frame_size = instr->ops[0].imm.as_uint & 0xFFFFUL;
   auto num_args = instr->ops[1].imm.as_uint & 0x1FUL;
@@ -427,7 +427,7 @@ static void MangleEnter(DecodedBasicBlock *block, Instruction *instr) {
 // the stack analysis in `granary/assemble/2_partition_fragments.cc` easier,
 // and by making the `POP RBP` explicit, we make the next fragment get marked
 // as having a valid stack.
-static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
+static void MangleLeave(DecodedBlock *block, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
@@ -440,7 +440,7 @@ static void MangleLeave(DecodedBasicBlock *block, Instruction *instr) {
 
 // This is a big hack: it is our way of ensuring that during late mangling, we
 // have access to some kind of virtual register for `PUSHF` and `PUSHFQ`.
-static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
+static void ManglePushFlags(DecodedBlock *block, Instruction *instr) {
   auto flag_size = instr->effective_operand_width / 8UL;
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
   instr->ops[0].reg = block->AllocateVirtualRegister(flag_size);
@@ -458,7 +458,7 @@ static void ManglePushFlags(DecodedBasicBlock *block, Instruction *instr) {
 
 // Perform "early" mangling of some instructions. This is primary to make the
 // task of virtual register allocation tractable.
-void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
+void MangleDecodedInstruction(DecodedBlock *block, Instruction *instr,
                               bool rec) {
   // Do the stack usage "early" so that it is reflected in instructions
   // whose memory operands and split into intermediate `LEA` instructions.

@@ -9,8 +9,8 @@
 
 #include "granary/base/base.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/edge.h"
@@ -238,6 +238,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
                                        CodeFragment *predecessor_frag,
                                        BlockMetaData *dest_block_meta) {
   GRANARY_ASSERT(!cfi->IsFunctionReturn());
+  cfi->instruction.DontEncode();
 
   auto in_edge = new CodeFragment;
   auto go_to_granary = new CodeFragment;
@@ -249,12 +250,12 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   // we will often use the combination of a `branch_instr` and
   // `FRAG_SUCC_BRANCH` to trick `10_add_connecting_jumps.cc` to put the
   // fragments in the desired order.
-  in_edge->successors[FRAG_SUCC_FALL_THROUGH] = go_to_granary;
-  in_edge->successors[FRAG_SUCC_BRANCH] = compare_target;
-  go_to_granary->successors[FRAG_SUCC_BRANCH] = compare_target;
-  compare_target->successors[FRAG_SUCC_FALL_THROUGH] = about_to_exit;
-  compare_target->successors[FRAG_SUCC_BRANCH] = go_to_granary;
-  about_to_exit->successors[FRAG_SUCC_FALL_THROUGH] = exit_to_block;
+  in_edge->successors[kFragSuccFallThrough] = go_to_granary;
+  in_edge->successors[kFragSuccBranch] = compare_target;
+  go_to_granary->successors[kFragSuccBranch] = compare_target;
+  compare_target->successors[kFragSuccFallThrough] = about_to_exit;
+  compare_target->successors[kFragSuccBranch] = go_to_granary;
+  about_to_exit->successors[kFragSuccFallThrough] = exit_to_block;
 
   exit_to_block->edge.kind = EDGE_KIND_INDIRECT;
   exit_to_block->block_meta = dest_block_meta;
@@ -416,7 +417,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
   auto frag = new Fragment;
   frags->Prepend(frag);
   frag->next = first_frag;
-  frag->successors[FRAG_SUCC_FALL_THROUGH] = first_frag;
+  frag->successors[kFragSuccFallThrough] = first_frag;
 
   BranchInstruction *jrcxz(nullptr);
   AppPC jrcxz_target(nullptr);

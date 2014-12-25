@@ -13,7 +13,7 @@
 namespace granary {
 
 // Forward declarations.
-class DecodedBasicBlock;
+class DecodedBlock;
 
 namespace arch {
 

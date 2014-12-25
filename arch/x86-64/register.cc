@@ -40,6 +40,9 @@ void VirtualRegister::DecodeFromNative(uint32_t reg_) {
     return;
   }
 
+  // Treat all arch regs as scheduled.
+  is_scheduled = true;
+
   const auto widest_reg = xed_get_largest_enclosing_register(reg);
   num_bytes = static_cast<uint8_t>(xed_get_register_width_bits64(reg) / 8);
 
@@ -251,7 +254,8 @@ namespace {
 // likely restricts the usage of REX prefixes, and therefore restricts the
 // virtual register scheduler to only the original 8 GPRs.
 static bool UsesLegacyRegisters(const arch::Instruction *instr) {
-  for (auto &op : instr->ops) {
+  for (auto i = 0U; i < instr->num_ops; ++i) {
+    const auto &op(instr->ops[i]);
     if (op.IsRegister() && op.reg.IsLegacy()) return true;
   }
   return false;
@@ -288,7 +292,7 @@ void UsedRegisterSet::ReviveRestrictedRegisters(
 void LiveRegisterSet::Visit(const arch::Instruction *instr) {
   GRANARY_ASSERT(XED_IFORM_INVALID != instr->iform);
   GRANARY_ASSERT(0 != instr->isel);
-  for (auto i = 0; i < instr->num_ops; ++i) {
+  for (auto i = 0U; i < instr->num_ops; ++i) {
     Visit(&(instr->ops[i]));
   }
 }

@@ -248,7 +248,7 @@ UnificationStatus BlockMetaData::CanUnifyWith(
     const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  auto can_unify = UnificationStatus::ACCEPT;
+  auto can_unify = kUnificationStatusAccept;
   for (auto desc : gMetaManager->descriptions) {
     if (desc && desc->can_unify) {  // Unifiable.
       const auto offset = desc->offset;
@@ -288,20 +288,13 @@ void BlockMetaData::operator delete(void *address) {
 #ifndef GRANARY_RECURSIVE
 
 extern "C" {
-
-// Represents a trace entry containing some meta-data.
-struct TracedMetaData {
-  uint64_t group;
-  const BlockMetaData *meta;
-};
-
 enum {
   GRANARY_META_LOG_LENGTH = 4096
 };
 
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
-TracedMetaData granary_meta_log[GRANARY_META_LOG_LENGTH];
+const BlockMetaData *granary_meta_log[GRANARY_META_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
@@ -317,12 +310,10 @@ void InitMetaDataTracer(void) {
 // Adds this meta-data to a trace log of recently translated meta-data blocks.
 // This is useful for GDB-based debugging, because it lets us see the most
 // recently translated blocks (in terms of their meta-data).
-void TraceMetaData(uint64_t group, const BlockMetaData *meta) {
+void TraceMetaData(const BlockMetaData *meta) {
   if (GRANARY_UNLIKELY(FLAG_debug_trace_meta)) {
     auto i = __sync_fetch_and_add(&granary_meta_log_index, 1);
-    auto &entry(granary_meta_log[i % GRANARY_META_LOG_LENGTH]);
-    entry.group = group;
-    entry.meta = meta;
+    granary_meta_log[i % GRANARY_META_LOG_LENGTH] = meta;
   }
 }
 

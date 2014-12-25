@@ -3,12 +3,14 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
+#include "granary/code/ssa.h"
 
 #include "granary/breakpoint.h"
+#include "granary/util.h"
 
 namespace granary {
 
@@ -72,12 +74,21 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
 AnnotationInstruction::~AnnotationInstruction(void) {
   if (!data) return;
   switch (annotation) {
+    case kAnnotSSARegisterWebOwner:
+    case kAnnotSSASaveRegister:
+    case kAnnotSSARestoreRegister:
+      delete GetMetaData<SSARegisterWeb *>(this);
+      ClearMetaData();
+      break;
+
     case kAnnotInlineAssembly:
       delete reinterpret_cast<InlineAssemblyBlock *>(data);
       break;
+
     case kAnnotInlineFunctionCall:
       delete reinterpret_cast<InlineFunctionCall *>(data);
       break;
+
     default: break;
   }
 }
@@ -87,7 +98,7 @@ AnnotationInstruction::~AnnotationInstruction(void) {
 // issue of maintaining a designated first instruction, whilst also avoiding the
 // issue of multiple `InsertBefore`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
-  if (GRANARY_UNLIKELY(kAnnotBeginBasicBlock == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotBeginBlock == annotation)) {
     auto new_first = new AnnotationInstruction(annotation, data);
     auto block_first_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertBefore(new_first);
@@ -107,7 +118,7 @@ Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
 // issue of maintaining a designated last instruction, whilst also avoiding the
 // issue of multiple `InsertAfter`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
-  if (GRANARY_UNLIKELY(kAnnotEndBasicBlock == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotEndBlock == annotation)) {
     auto new_last = new AnnotationInstruction(annotation, data);
     auto block_last_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertAfter(new_last);
@@ -144,7 +155,12 @@ NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
-NativeInstruction::~NativeInstruction(void) {}
+NativeInstruction::~NativeInstruction(void) {
+  if (ssa) {
+    delete ssa;
+    ssa = nullptr;
+  }
+}
 
 // Return the address in the native code from which this instruction was
 // decoded.
@@ -299,7 +315,7 @@ void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    const arch::Instruction *instruction_, BasicBlock *target_)
+    const arch::Instruction *instruction_, Block *target_)
       : NativeInstruction(instruction_),
         return_address(nullptr),
         target(target_) {
@@ -318,9 +334,9 @@ ControlFlowInstruction::~ControlFlowInstruction(void) {
 // are still direct.
 bool ControlFlowInstruction::HasIndirectTarget(void) const {
   if (this->NativeInstruction::HasIndirectTarget()) {
-    if (auto native_target = DynamicCast<NativeBasicBlock *>(target)) {
+    if (auto native_target = DynamicCast<NativeBlock *>(target)) {
       return nullptr == native_target->StartAppPC();
-    } else if (IsA<CachedBasicBlock *>(target)) {
+    } else if (IsA<CachedBlock *>(target)) {
       return false;
     }
     return true;
@@ -329,20 +345,20 @@ bool ControlFlowInstruction::HasIndirectTarget(void) const {
 }
 
 // Return the target block of this CFI.
-BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
+Block *ControlFlowInstruction::TargetBlock(void) const {
   return target;
 }
 
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
-void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
+void ControlFlowInstruction::ChangeTarget(Block *new_target) const {
   target = new_target;
 }
 
 ExceptionalControlFlowInstruction::ExceptionalControlFlowInstruction(
     const arch::Instruction *instruction_,
     const arch::Instruction *orig_instruction_,
-    BasicBlock *exception_target_, AppPC emulation_pc_)
+    Block *exception_target_, AppPC emulation_pc_)
     : ControlFlowInstruction(instruction_, exception_target_),
       emulation_pc(emulation_pc_) {
   GRANARY_ASSERT(!orig_instruction_->WritesToStackPointer());

@@ -10,6 +10,7 @@
 
 extern "C" {
 extern const granary::CachePC granary_block_cache_begin;
+extern const granary::CachePC granary_block_cache_end;
 }  // extern C
 namespace granary {
 namespace internal {
@@ -90,7 +91,8 @@ CachePC CodeCache::AllocateBlock(size_t size) {
 // by all code that computes whether or not an address is too far away from the
 // code cache.
 CachePC EstimatedCachePC(void) {
-  return granary_block_cache_begin;
+  auto diff = (granary_block_cache_end - granary_block_cache_begin) / 2;
+  return granary_block_cache_begin + diff;
 }
 
 // Begin a transaction that will read or write to the code cache.

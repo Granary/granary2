@@ -20,6 +20,7 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
+#include "granary/code/ssa.h"
 
 #include "os/logging.h"
 
@@ -36,7 +37,6 @@ class PartitionEntryFragment;
 class PartitionExitFragment;
 class FlagEntryFragment;
 class FlagExitFragment;
-class SSANode;
 class DirectEdge;
 
 // Tracks the size of the stack frame within the current fragment/partition.
@@ -170,8 +170,8 @@ class FlagUsageInfo {
 
 // Targets in/out of this fragment.
 enum FragmentSuccessorSelector {
-  FRAG_SUCC_FALL_THROUGH = 0,
-  FRAG_SUCC_BRANCH = 1
+  kFragSuccFallThrough = 0,
+  kFragSuccBranch = 1
 };
 
 enum FragmentType {
@@ -303,9 +303,9 @@ class FlagZone {
 };
 
 enum StackStatus {
-  STACK_UNKNOWN,
-  STACK_VALID,
-  STACK_INVALID
+  kStackStatusUnknown,
+  kStackStatusValid,
+  kStackStatusInvalid
 };
 
 enum StackStatusInheritanceConstraint {
@@ -324,18 +324,18 @@ enum StackStatusInheritanceConstraint {
 // Tracks stack usage info.
 struct StackUsageInfo {
   inline StackUsageInfo(void)
-      : status(STACK_UNKNOWN),
+      : status(kStackStatusUnknown),
         inherit_constraint(STACK_STATUS_INHERIT_UNI) {}
 
   inline explicit StackUsageInfo(StackStatus status_)
       : status(status_),
         inherit_constraint(STACK_STATUS_DONT_INHERIT) {
-    GRANARY_ASSERT(STACK_UNKNOWN != status_);
+    GRANARY_ASSERT(kStackStatusUnknown != status_);
   }
 
   inline explicit StackUsageInfo(
       StackStatusInheritanceConstraint inherit_constraint_)
-      : status(STACK_UNKNOWN),
+      : status(kStackStatusUnknown),
         inherit_constraint(inherit_constraint_) {
     GRANARY_ASSERT(STACK_STATUS_DONT_INHERIT != inherit_constraint_);
   }
@@ -443,9 +443,16 @@ class alignas(alignof(void *)) CodeAttributes {
 
 } __attribute__((packed));
 
-// Mapping of virtual registers to `SSANode`s.
-typedef TinyMap<VirtualRegister, SSANode *,
-                arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> SSANodeMap;
+// Mapping of virtual registers to `SSARegisterWeb`s.
+//
+// TODO(pag): Need a better data structure.
+typedef TinyMap<VirtualRegister, SSARegisterWeb *,
+                arch::NUM_GENERAL_PURPOSE_REGISTERS + 7> SSARegisterWebMap;
+
+// Using a vector is deliberate so that the *first* added entries relate to
+// later definitions in a fragment.
+typedef TinyVector<SSARegisterWeb *, arch::NUM_GENERAL_PURPOSE_REGISTERS>
+        SSARegisterWebList;
 
 // Set of spill slots.
 typedef BitSet<arch::MAX_NUM_SPILL_SLOTS> SpillSlotSet;
@@ -460,30 +467,17 @@ class SSAFragment : public Fragment {
 
   struct SSAInfo {
     inline SSAInfo(void)
-        : entry_nodes(),
-          exit_nodes() {}
+        : entry_reg_webs(),
+          exit_reg_webs(),
+          internal_reg_webs() {}
 
-    SSANodeMap entry_nodes;
-    SSANodeMap exit_nodes;
+    SSARegisterWebMap entry_reg_webs;
+    SSARegisterWebMap exit_reg_webs;
+
+    // Webs for definitions are in reverse order of the instructions in a
+    // fragment (last def to first def).
+    SSARegisterWebList internal_reg_webs;
   } ssa;
-
-  struct SpillInfo {
-    inline SpillInfo(void)
-        : used_slots(),
-          num_slots(0),
-          num_partition_slots(0) {}
-
-    // Tracks which spill slots are allocated.
-    SpillSlotSet used_slots;
-
-    // Number of spill slots used. This includes partition-local spill slots
-    // and fragment-local spill slots.
-    size_t num_slots;
-
-    // Number of partition-local spill slots used *before* this fragment
-    // scheduled its fragment-local registers.
-    size_t num_partition_slots;
-  } spill;
 };
 
 // A fragment of native or instrumentation instructions.

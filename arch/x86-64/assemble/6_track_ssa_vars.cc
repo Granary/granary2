@@ -17,37 +17,37 @@ namespace {
 
 // Look for the pattern `XOR A, A`.
 static void UpdateIfClearedByXor(const Operand *arch_ops,
-                                 SSAOperandPack &ssa_ops) {
+                                 SSAInstruction *instr) {
   if (arch_ops[0].reg != arch_ops[1].reg) {
-    ssa_ops[0].action = SSAOperandAction::kSSAOperandActionReadWrite;
-    ssa_ops[1].action = SSAOperandAction::kSSAOperandActionRead;
+    instr->ops[0].action = SSAOperandAction::kSSAOperandActionReadWrite;
+    instr->ops[1].action = SSAOperandAction::kSSAOperandActionRead;
   } else {
-    ssa_ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-    ssa_ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
+    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
+    instr->ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
   }
 }
 
 // Look for the pattern `SUB A, A`.
 static void UpdateIfClearedBySub(const Operand *arch_ops,
-                                 SSAOperandPack &ssa_ops) {
+                                 SSAInstruction *instr) {
   if (arch_ops[0].reg == arch_ops[1].reg) {
-    ssa_ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-    ssa_ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
+    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
+    instr->ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
   }
 }
 
 // Look for the pattern `AND A, 0`.
 static void UpdateIfClearedByAnd(const Operand *arch_ops,
-                                 SSAOperandPack &ssa_ops) {
+                                 SSAInstruction *instr) {
   if (0 == arch_ops[1].imm.as_uint &&
       !arch_ops[0].reg.PreservesBytesOnWrite()) {
-    ssa_ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
+    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
   }
 }
 
 // Look for things like `MOV R, R` and either elide them, or modify the
 // source register appropriately.
-static void UpdateRegCopy(Instruction *ni, SSAOperandPack &ssa_ops) {
+static void UpdateRegCopy(Instruction *ni, SSAInstruction *instr) {
   auto dst_reg = ni->ops[0].reg;
   auto src_reg = ni->ops[1].reg;
 
@@ -62,13 +62,10 @@ static void UpdateRegCopy(Instruction *ni, SSAOperandPack &ssa_ops) {
   //                        MOV A, B    <dont_encode>
   if (dst_reg != src_reg) return;
 
-  auto &ssa_op0(ssa_ops[0]);
-  auto &ssa_op1(ssa_ops[1]);
+  auto &ssa_op0(instr->ops[0]);
+  auto &ssa_op1(instr->ops[1]);
   ssa_op0.action = SSAOperandAction::kSSAOperandActionReadWrite;
-  if (kSSAOperandStateNode == ssa_op0.state) {
-    GRANARY_ASSERT(ssa_op0.node->reg == ssa_op1.node->reg);
-    ssa_op0.node->id.Union(ssa_op1.node->id);
-  }
+  ssa_op0.reg_web.Union(ssa_op1.reg_web);
 
   if (dst_reg.BitWidth() != src_reg.BitWidth() ||
       dst_reg.ByteWidth() != dst_reg.EffectiveWriteWidth()) {
@@ -81,7 +78,7 @@ static void UpdateRegCopy(Instruction *ni, SSAOperandPack &ssa_ops) {
 
 // Look for the pattern `LEA R, [R]` and make sure that the destination operand
 // is treated as a READ_WRITE.
-static void UpdateEffectiveAddress(Instruction *ni, SSAOperandPack &ssa_ops) {
+static void UpdateEffectiveAddress(Instruction *ni, SSAInstruction *instr) {
   GRANARY_ASSERT(2 == ni->num_explicit_ops);
   if (ni->ops[1].is_compound) return;
   if (ni->ops[1].IsPointer()) return;
@@ -96,23 +93,19 @@ static void UpdateEffectiveAddress(Instruction *ni, SSAOperandPack &ssa_ops) {
     // remain as an LEA so that it is an effective address.
     if (!src_reg.IsStackPointer()) {
       MOV_GPRv_GPRv_89(ni, dst_reg, src_reg);
-      ssa_ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-      ssa_ops[1].action = SSAOperandAction::kSSAOperandActionRead;
+      instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
+      instr->ops[1].action = SSAOperandAction::kSSAOperandActionRead;
     }
 
   // `LEA R, [R]`.
   } else {
-    auto &ssa_op0(ssa_ops[0]);
-    auto &ssa_op1(ssa_ops[1]);
+    auto &ssa_op0(instr->ops[0]);
+    auto &ssa_op1(instr->ops[1]);
     MOV_GPRv_GPRv_89(ni, dst_reg, dst_reg);
     ni->DontEncode();  // This instruction is useless.
     ssa_op0.action = SSAOperandAction::kSSAOperandActionReadWrite;
     ssa_op1.action = SSAOperandAction::kSSAOperandActionRead;
-
-    if (kSSAOperandStateNode == ssa_op0.state) {
-      GRANARY_ASSERT(ssa_op0.node->reg == ssa_op1.node->reg);
-      ssa_op0.node->id.Union(ssa_op1.node->id);
-    }
+    ssa_op0.reg_web.Union(ssa_op1.reg_web);
   }
 }
 
@@ -121,32 +114,33 @@ static void UpdateEffectiveAddress(Instruction *ni, SSAOperandPack &ssa_ops) {
 // Performs architecture-specific conversion of `SSAOperand` actions. The things
 // we want to handle here are instructions like `XOR A, A`, that can be seen as
 // clearing the value of `A` and not reading it for the sake of reading it.
-void ConvertOperandActions(NativeInstruction *instr,
-                           SSAOperandPack &operands) {
+void ConvertOperandActions(NativeInstruction *instr) {
   auto &ainstr(instr->instruction);
+  auto ssa_instr = instr->ssa;
+
   switch (ainstr.iform) {
     case XED_IFORM_XOR_GPR8_GPR8_30:
     case XED_IFORM_XOR_GPR8_GPR8_32:
     case XED_IFORM_XOR_GPRv_GPRv_31:
     case XED_IFORM_XOR_GPRv_GPRv_33:
-      UpdateIfClearedByXor(ainstr.ops, operands); return;
+      UpdateIfClearedByXor(ainstr.ops, ssa_instr); return;
     case XED_IFORM_SUB_GPR8_GPR8_28:
     case XED_IFORM_SUB_GPR8_GPR8_2A:
     case XED_IFORM_SUB_GPRv_GPRv_29:
     case XED_IFORM_SUB_GPRv_GPRv_2B:
-      UpdateIfClearedBySub(ainstr.ops, operands); return;
+      UpdateIfClearedBySub(ainstr.ops, ssa_instr); return;
     case XED_IFORM_AND_GPR8_IMMb_80r4:
     case XED_IFORM_AND_GPR8_IMMb_82r4:
     case XED_IFORM_AND_GPRv_IMMb:
     case XED_IFORM_AND_GPRv_IMMz:
-      UpdateIfClearedByAnd(ainstr.ops, operands); return;
+      UpdateIfClearedByAnd(ainstr.ops, ssa_instr); return;
     case XED_IFORM_MOV_GPR8_GPR8_88:
     case XED_IFORM_MOV_GPR8_GPR8_8A:
     case XED_IFORM_MOV_GPRv_GPRv_89:
     case XED_IFORM_MOV_GPRv_GPRv_8B:
-      UpdateRegCopy(&ainstr, operands); return;
+      UpdateRegCopy(&ainstr, ssa_instr); return;
     case XED_IFORM_LEA_GPRv_AGEN:
-      UpdateEffectiveAddress(&ainstr, operands); return;
+      UpdateEffectiveAddress(&ainstr, ssa_instr); return;
     default: return;
   }
 }

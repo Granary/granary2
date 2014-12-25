@@ -2,8 +2,8 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
@@ -20,48 +20,31 @@
 namespace granary {
 namespace {
 
-// Records the number of context switches into Granary.
-std::atomic<uint64_t> gNumContextSwitches(ATOMIC_VAR_INIT(0));
-
-enum IndexConstraint {
-  // Index all basic blocks in the control-flow graph.
-  kIndexAll,
-
-  // Index all blocks except for the entry block. This is used for indirect
-  // edges because we expect those to be `CompensationBasicBlocks` that
-  // are likely to be edge-specific, and we also don't want to pollute the
-  // cache with such blocks because then we'll see one compensation block
-  // pointing to another pointing to another... and then eventually getting
-  // to the intended destination block.
-  kIndexAllButEntry
-};
-
-// Add the decoded blocks to the code cache index.
-static void IndexBlocks(Index *index, LocalControlFlowGraph *cfg,
-                        IndexConstraint constraint=kIndexAll) {
+// Add the trace entrypoint to the index.
+static void IndexEntryBlock(Index *index, Trace *cfg) {
   const auto entry_block = cfg->EntryBlock();
   GRANARY_ASSERT(nullptr != entry_block);
 
-  auto trace_group = gNumContextSwitches.fetch_add(1);
-  for (auto block : cfg->ReverseBlocks()) {
-    if (kIndexAllButEntry == constraint && entry_block == block) continue;
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      GRANARY_ASSERT(nullptr != decoded_block->StartAppPC());
-      auto meta = decoded_block->MetaData();
-      index->Insert(meta);
-      TraceMetaData(trace_group, meta);
-    }
+  auto meta = entry_block->MetaData();
+  TraceMetaData(meta);
+
+  // Only index the meta-data if there's not already some suitable meta-data in
+  // the index.
+  auto response = index->Request(meta);
+  if (kUnificationStatusAccept != response.status) {
+    index->Insert(meta);
   }
 }
 
 // Compile and index blocks. This is used for direct edges and entrypoints.
-static CachePC CompileAndIndex(Context *context, LocalControlFlowGraph *cfg,
+static CachePC CompileAndIndex(Context *context, Trace *trace,
                                BlockMetaData *meta) {
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+    auto encoded_pc = Compile(context, trace);
+
     auto index = context->CodeCacheIndex();
-    auto encoded_pc = Compile(context, cfg);
-    IndexBlocks(index, cfg, kIndexAll);
+    IndexEntryBlock(index, trace);
     GRANARY_ASSERT(nullptr != cache_meta->start_pc);
     return encoded_pc;
   } else {
@@ -89,7 +72,7 @@ CachePC Translate(Context *context, AppPC pc, TargetStackValidity stack_valid) {
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(Context *context, BlockMetaData *meta) {
-  LocalControlFlowGraph cfg(context);
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentDirect();
   return CompileAndIndex(context, &cfg, meta);
@@ -107,12 +90,12 @@ CachePC Translate(Context *context, BlockMetaData *meta) {
 //      3) We need to prepend the out-edge code to the resulting code (by
 //         "instantiating" the out edge into a fragment).
 CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
-  LocalControlFlowGraph cfg(context);
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentIndirect();
   auto encoded_pc = Compile(context, &cfg, edge, meta);
   auto index = context->CodeCacheIndex();
-  IndexBlocks(index, &cfg, kIndexAllButEntry);
+  IndexEntryBlock(index, &cfg);
   return encoded_pc;
 }
 
@@ -121,7 +104,7 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
                             EntryPointKind kind, int category,
                             TargetStackValidity stack_valid) {
-  LocalControlFlowGraph cfg(context);
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   MarkStack(meta, stack_valid);
   inst.InstrumentEntryPoint(kind, category);

@@ -7,7 +7,7 @@
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "arch/decode.h"
@@ -43,7 +43,7 @@ bool InstructionDecoder::Decode(Instruction *instr, AppPC pc) {
 // mangling might involve adding many new instructions to deal with some
 // instruction set peculiarities, and sometimes we only want to speculatively
 // decode and instruction and not add these extra instructions to a block.
-void InstructionDecoder::Mangle(DecodedBasicBlock *block, Instruction *instr) {
+void InstructionDecoder::Mangle(DecodedBlock *block, Instruction *instr) {
   GRANARY_ASSERT(XED_ICLASS_INVALID != instr->iclass);
   MangleDecodedInstruction(block, instr);
 }

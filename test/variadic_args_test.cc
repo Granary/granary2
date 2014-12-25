@@ -7,7 +7,7 @@
 
 #include "test/util/simple_encoder.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"

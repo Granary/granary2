@@ -10,7 +10,7 @@ namespace granary {
 
 // Acquires the lock, knowing that the lock is currently contended.
 void SpinLock::ContendedAcquire(void) {
-  for (; is_locked.load(std::memory_order_relaxed) || !TryAcquire(); );
+  for (; is_locked.load(std::memory_order_relaxed) || !TryAcquire(); ) {}
 }
 
 // Returns true if the lock was acquired.

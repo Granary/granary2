@@ -98,7 +98,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   }
 
   // Instrument all of the instructions in a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) {
     if (GRANARY_UNLIKELY(!gShadowMemSize)) return;
     if (GRANARY_UNLIKELY(!gDescriptions)) return;
     if (GRANARY_UNLIKELY(!gShadowMem)) InitShadowMemory();

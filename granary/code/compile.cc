@@ -7,8 +7,8 @@
 
 #include "granary/base/option.h"
 
-#include "granary/cfg/control_flow_graph.h"
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/trace.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/assemble.h"
 #include "granary/code/compile.h"
@@ -190,7 +190,7 @@ static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
   if (cfi->instruction.HasIndirectTarget()) return;
 
   GRANARY_ASSERT(frag->branch_instr == cfi);
-  auto target_frag = frag->successors[FRAG_SUCC_BRANCH];
+  auto target_frag = frag->successors[kFragSuccBranch];
   GRANARY_ASSERT(nullptr != target_frag);
   auto target_pc = target_frag->encoded_pc;
   GRANARY_ASSERT(nullptr != target_pc);
@@ -211,7 +211,7 @@ static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
 static void RelativizeBranch(Fragment *frag, BranchInstruction *branch) {
   if (frag->branch_instr == branch) {
     branch->instruction.SetBranchTarget(
-        frag->successors[FRAG_SUCC_BRANCH]->encoded_pc);
+        frag->successors[kFragSuccBranch]->encoded_pc);
 
   } else {
     auto target = branch->TargetLabel();
@@ -293,7 +293,7 @@ static void ConnectEdgesToInstructions(FragmentList *frags) {
 
     // Try to get the direct edge (if any) that is targeted by `branch_instr`.
     auto edge_frag = DynamicCast<ExitFragment *>(
-        cfrag->successors[FRAG_SUCC_BRANCH]);
+        cfrag->successors[kFragSuccBranch]);
     if (!edge_frag) continue;
     if (EDGE_KIND_DIRECT != edge_frag->edge.kind) continue;
 
@@ -334,7 +334,7 @@ static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
 }  // namespace
 
 // Compile some instrumented code.
-CachePC Compile(Context *context, LocalControlFlowGraph *cfg) {
+CachePC Compile(Context *context, Trace *cfg) {
   auto frags = Assemble(context, cfg);
   auto encoded_pc = Encode(&frags, context->BlockCodeCache());
   FreeFragments(&frags);
@@ -342,7 +342,7 @@ CachePC Compile(Context *context, LocalControlFlowGraph *cfg) {
 }
 
 // Compile some instrumented code for an indirect edge.
-CachePC Compile(Context *context, LocalControlFlowGraph *cfg,
+CachePC Compile(Context *context, Trace *cfg,
                 IndirectEdge *edge, BlockMetaData *meta) {
   auto frags = Assemble(context, cfg);
   auto target_app_pc = MetaDataCast<AppMetaData *>(meta)->start_pc;

@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/lir.h"
@@ -53,7 +53,7 @@ namespace detail {
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
+std::unique_ptr<Instruction> InlineFunctionCall(DecodedBlock *block,
                                                 AppPC func_addr, Operand *ops,
                                                 size_t num_args) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(

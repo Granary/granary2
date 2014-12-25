@@ -5,7 +5,7 @@
 
 #include "arch/x86-64/operand.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/lir.h"
 
 #include "granary/code/inline_assembly.h"
@@ -19,7 +19,7 @@ namespace lir {
 // solution employed is to "pre allocated" the virtual register number when
 // it's requested here, then use that later when the virtual register is
 // needed.
-RegisterOperand InlineAssembly::Register(DecodedBasicBlock *block,
+RegisterOperand InlineAssembly::Register(DecodedBlock *block,
                                          int reg_num) const {
   auto &aop(*(scope->vars[reg_num]));
   if (!scope->var_is_initialized[reg_num]) {

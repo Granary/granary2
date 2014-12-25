@@ -10,7 +10,7 @@ class Watchpoints;
 
 class WatchedMemoryOperand {
  public:
-  granary::DecodedBasicBlock * const block;
+  granary::DecodedBlock * const block;
 
   // Instruction that contains the memory operand `mem_op`.
   granary::NativeInstruction * const instr;
@@ -27,7 +27,7 @@ class WatchedMemoryOperand {
  protected:
   friend class Watchpoints;
 
-  inline WatchedMemoryOperand(granary::DecodedBasicBlock *block_,
+  inline WatchedMemoryOperand(granary::DecodedBlock *block_,
                         granary::NativeInstruction *instr_,
                         const granary::MemoryOperand &mem_op_,
                         const granary::RegisterOperand &unwatched_reg_op_,

@@ -23,7 +23,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~KernelSpaceInstrumenter(void) = default;
 
-  void InstrumentSyscall(BlockFactory *factory, CompensationBasicBlock *block,
+  void InstrumentSyscall(BlockFactory *factory, CompensationBlock *block,
                          int syscall) {
     // Allow the user to specify `--attach_to_syscalls=*,-1,-2` to mean all
     // system calls except 1 and 2.
@@ -41,7 +41,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
   }
 
   virtual void InstrumentEntryPoint(BlockFactory *factory,
-                                    CompensationBasicBlock *block,
+                                    CompensationBlock *block,
                                     EntryPointKind kind, int category) {
     if (kEntryPointKernelSyscall == kind) {
       InstrumentSyscall(factory, block, category);

@@ -7,7 +7,7 @@
 
 #include "granary/base/cstring.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/inline_assembly.h"
 
@@ -52,7 +52,7 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
 }
 
 // Initialize the inline function call.
-InlineFunctionCall::InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
+InlineFunctionCall::InlineFunctionCall(DecodedBlock *block, AppPC target,
                                        Operand ops[kMaxNumFuncOperands],
                                        size_t num_args_)
     : target_app_pc(target),

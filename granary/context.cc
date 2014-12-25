@@ -9,7 +9,7 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
@@ -116,7 +116,7 @@ static void UnlinkEdgeList(EdgeT *edge) {
 }
 
 template <typename T>
-static void FreeCallbacks(T &callback_map) {
+static void FreeCallbacks(const T &callback_map) {
   for (auto cb : callback_map.Values()) {
     delete cb;
   }

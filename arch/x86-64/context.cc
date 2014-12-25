@@ -137,11 +137,13 @@ CodeFragment *CreateContextCallFragment(Context *context,
 
   exit_frag->encoded_pc = nullptr;  // !!!!
 
-  pred->successors[FRAG_SUCC_FALL_THROUGH] = call_frag;
-  call_frag->successors[FRAG_SUCC_BRANCH] = exit_frag;
+  pred->successors[kFragSuccFallThrough] = call_frag;
+  call_frag->successors[kFragSuccBranch] = exit_frag;
 
   // This distinguishes a context call from something like a outline call,
-  // because the context call ends up being forced into its own partition.
+  // because the context call ends up being forced into its own partition. We
+  // force it into its own partition so that we get the native machine regs
+  // on entry.
   pred->attr.can_add_succ_to_partition = false;
   call_frag->attr.can_add_pred_to_partition = false;
   call_frag->attr.can_add_succ_to_partition = false;

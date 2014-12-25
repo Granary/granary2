@@ -55,10 +55,10 @@ class MutableMetaData : public ToolMetaData<T> {};
 //
 // Note: The particular values are significant, as they allow us to do a `MAX`
 //       operation to find what the status is of many "sub meta-datas".
-enum class UnificationStatus : int {
-  ACCEPT  = 0,  // Unifies perfectly.
-  ADAPT   = 1,  // Does not unify perfectly, but can be adapted.
-  REJECT  = 2  // Cannot be unified / adapted.
+enum UnificationStatus {
+  kUnificationStatusAccept  = 0, // Unifies perfectly.
+  kUnificationStatusAdapt   = 1, // Doesn't unify perfectly, but can be adapted.
+  kUnificationStatusReject  = 2 // Cannot be unified / adapted.
 };
 
 // Unifiable meta-data, i.e. meta-data that behaves a bit like indexable meta-
@@ -307,7 +307,7 @@ void AddMetaData(MetaDataDescription *desc);
 
 // Adds this meta-data to a trace log of recently translated meta-data blocks.
 GRANARY_INTERNAL_DEFINITION
-void TraceMetaData(uint64_t group, const BlockMetaData *meta);
+void TraceMetaData(const BlockMetaData *meta);
 
 // Useful for linked lists of meta-data.
 template <typename T>

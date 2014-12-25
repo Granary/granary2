@@ -6,7 +6,7 @@
 
 #include "granary/base/option.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
@@ -32,7 +32,7 @@ class FunctionTool : public InstrumentationTool {
  public:
   virtual ~FunctionTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (!succ.cfi->IsFunctionCall()) {
@@ -48,7 +48,7 @@ class CallTool : public InstrumentationTool {
  public:
   virtual ~CallTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsFunctionCall()) {
@@ -68,7 +68,7 @@ class CallUnrollerTool : public InstrumentationTool {
       : num_to_unroll(10) {}
   virtual ~CallUnrollerTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsFunctionCall()) {
@@ -91,7 +91,7 @@ class JumpUnrollerTool : public InstrumentationTool {
       : num_to_unroll(10) {}
   virtual ~JumpUnrollerTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                       LocalControlFlowGraph *cfg) {
+                                       Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsJump()) {
@@ -109,7 +109,7 @@ class NativeCallTool : public InstrumentationTool {
  public:
   virtual ~NativeCallTool(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsFunctionCall()) {
@@ -147,7 +147,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
   }
 
   // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) {
     MemoryOperand mloc1, mloc2;
 
     for (auto instr : bb->ReversedAppInstructions()) {

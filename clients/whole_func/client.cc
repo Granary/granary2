@@ -9,7 +9,7 @@ class WholeFunctionDecoder : public InstrumentationTool {
  public:
   virtual ~WholeFunctionDecoder(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsSystemCall() || succ.cfi->IsInterruptCall()) {

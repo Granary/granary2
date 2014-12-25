@@ -5,7 +5,7 @@
 
 namespace granary {
 
-class DecodedBasicBlock;
+class DecodedBlock;
 
 namespace arch {
 
@@ -13,7 +13,7 @@ class Instruction;
 
 // Perform "early" mangling of some instructions. This is primary to make the
 // task of virtual register allocation tractable.
-void MangleDecodedInstruction(DecodedBasicBlock *block, Instruction *instr,
+void MangleDecodedInstruction(DecodedBlock *block, Instruction *instr,
                               bool is_recursive_call=false);
 
 }  // namespace arch

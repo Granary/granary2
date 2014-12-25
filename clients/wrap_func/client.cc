@@ -67,7 +67,7 @@ static FunctionWrapper **FunctionWrapperInsertPoint(
 }
 
 // Find the wrapper associated with a given block.
-static FunctionWrapper *FunctionWrapperFor(DirectBasicBlock *block) {
+static FunctionWrapper *FunctionWrapperFor(DirectBlock *block) {
   auto offset = os::ModuleOffsetOfPC(block->StartAppPC());
   if (!offset.module) return nullptr;
 
@@ -117,29 +117,29 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   }
 
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     if (!wrappers) return;
     for (auto block : cfg->NewBlocks()) {
-      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
         WrapDecodedBlock(factory, decoded_block);
       }
     }
   }
 
  protected:
-  void WrapDecodedBlock(BlockFactory *factory, DecodedBasicBlock *block) {
+  void WrapDecodedBlock(BlockFactory *factory, DecodedBlock *block) {
     for (auto succ : block->Successors()) {
 
       // Don't allow anyone to materialize blocks that represent code that
       // will be wrapped.
-      auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
+      auto direct_block = DynamicCast<DirectBlock *>(succ.block);
       if (!direct_block) continue;
 
       auto wrapper = FunctionWrapperFor(direct_block);
       if (!wrapper) continue;
 
       if (!succ.cfi->IsConditionalJump()) {
-        WrapBlock(factory, wrapper, DynamicCast<DecodedBasicBlock *>(block),
+        WrapBlock(factory, wrapper, DynamicCast<DecodedBlock *>(block),
                   succ.cfi, direct_block);
       }
     }
@@ -165,7 +165,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   // Pass the native address of the function being wrapped (through `R10`)
   // to the wrapper.
   void WrapNative(ControlFlowInstruction *cfi,
-                  DirectBasicBlock *target_block) {
+                  DirectBlock *target_block) {
 
     ImmediateOperand native_addr(target_block->StartAppPC());
     lir::InlineAssembly asm_(native_addr);
@@ -177,9 +177,9 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   //
   // This is careful to preserve the expected meta-data by passing the address
   // of a label that leads to a jump to the instrumented function.
-  void WrapInstrumented(BlockFactory *factory, DecodedBasicBlock *block,
+  void WrapInstrumented(BlockFactory *factory, DecodedBlock *block,
                         ControlFlowInstruction *cfi,
-                        DirectBasicBlock *target_block) {
+                        DirectBlock *target_block) {
     auto label = new LabelInstruction;
     LabelOperand instrumented_addr(label);
     lir::InlineAssembly asm_(instrumented_addr);
@@ -191,7 +191,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
     // Move the original CFI to the end of the block.
     block->AppendInstruction(label);
-    block->AppendInstruction(DecodedBasicBlock::Unlink(cfi));
+    block->AppendInstruction(DecodedBlock::Unlink(cfi));
     if (cfi->IsFunctionCall()) lir::ConvertFunctionCallToJump(cfi);
 
     auto meta = GetMetaData<NextWrapperId>(target_block);
@@ -225,8 +225,8 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
 
   // Try to wrap a block.
   void WrapBlock(BlockFactory *factory, FunctionWrapper *wrapper,
-                 DecodedBasicBlock *block, ControlFlowInstruction *cfi,
-                 DirectBasicBlock *target_block) {
+                 DecodedBlock *block, ControlFlowInstruction *cfi,
+                 DirectBlock *target_block) {
     WrapReturnAddress(cfi);
 
     if (PASS_NATIVE_WRAPPED_FUNCTION == wrapper->action) {
@@ -246,7 +246,7 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
     if (PASS_INSTRUMENTED_WRAPPED_FUNCTION == wrapper->action) {
       WrapInstrumented(factory, block, cfi, target_block);
     } else {
-      DecodedBasicBlock::Unlink(cfi);
+      DecodedBlock::Unlink(cfi);
     }
   }
 };

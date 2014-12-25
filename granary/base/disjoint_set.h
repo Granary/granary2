@@ -47,10 +47,14 @@ class DisjointSet {
   void Union(SelfT *that) {
     auto this_root = Find();
     auto that_root = that->Find();
-    if (this_root->value) {
-      that_root->parent = this_root;
-    } else if (that_root->value) {
+
+    if (this_root == that_root) return;
+
+    const auto default_value = T();
+    if (default_value == this_root->value) {
       this_root->parent = that_root;
+    } else if (default_value == that_root->value) {
+      that_root->parent = this_root;
     } else if (this_root < that_root) {
       that_root->parent = this_root;
     } else if (this_root > that_root) {
@@ -89,6 +93,14 @@ class DisjointSet {
     return Find()->value;
   }
 
+  inline T &operator*(void) {
+    return Find()->value;
+  }
+
+  inline const T &operator*(void) const {
+    return Find()->value;
+  }
+
   inline T *operator->(void) {
     return &Value();
   }
@@ -100,6 +112,8 @@ class DisjointSet {
  private:
   mutable SelfT *parent;
   mutable T value;
+
+  GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(DisjointSet, (T));
 };
 
 }  // namespace granary

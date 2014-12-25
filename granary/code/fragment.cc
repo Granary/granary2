@@ -154,8 +154,7 @@ Fragment::Fragment(void)
 
 SSAFragment::SSAFragment(void)
     : Fragment(),
-      ssa(),
-      spill() {}
+      ssa() {}
 
 SSAFragment::~SSAFragment(void) {}
 
@@ -274,11 +273,10 @@ static void LogInstructionNote(LogLevel level, const arch::Instruction *instr) {
 static void LogSSANodes(LogLevel level, const SSAInstruction *instr) {
   if (!instr) return;
   if (!FLAG_debug_log_ssa) return;
-  for (auto &op : instr->operands) {
-    if (kSSAOperandStateNode == op.state) {
-      LogRegister(level, op.node->reg, "    ");
-      Log(level, " %p" NEW_LINE, op.node->id.Find());
-    }
+  for (auto &op : instr->ops) {
+    if (kSSAOperandActionInvalid == op.action) return;
+    LogRegister(level, *(op.reg_web), "    ");
+    Log(level, " %p" NEW_LINE, op.reg_web.Find());
   }
 }
 
@@ -329,11 +327,8 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@save";
   } else if (kAnnotSSARestoreRegister == instr->annotation) {
     kind = "@restore";
-  } else if (kAnnotSSANodeKill == instr->annotation) {
+  } else if (kAnnotSSARegisterKill == instr->annotation) {
     kind = "@undef";
-  } else if (kAnnotSSAFragLocalBegin == instr->annotation) {
-    Log(level, FONT_BLUE "@ssa_begin_local" END_FONT NEW_LINE);
-    return;
   } else if (kAnnotSSAPartitionLocalBegin == instr->annotation) {
     Log(level, FONT_BLUE "@ssa_begin_global" END_FONT NEW_LINE);
     return;
@@ -403,7 +398,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     if (code->attr.branches_to_code) Log(level, "-&gt;code ");
     if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
     if (code->attr.follows_cfi) Log(level, "cfi~&gt; ");
-    if (STACK_INVALID == code->stack.status) Log(level, "badstack ");
+    if (kStackStatusInvalid == code->stack.status) Log(level, "badstack ");
     if (code->encoded_size) Log(level, "size=%lu ", code->encoded_size);
     if (code->branch_instr) {
       Log(level, "binstr=%s ", code->branch_instr->OpCodeName());
@@ -427,15 +422,13 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 static void LogLiveVRs(LogLevel level , const Fragment *frag) {
   auto ssa_frag = DynamicCast<SSAFragment *>(frag);
   if (!ssa_frag) return;
-  auto logged = false;
-  auto sep = "";
-  for (auto vr : ssa_frag->ssa.entry_nodes.Keys()) {
+  auto sep = "|";
+  for (auto web : ssa_frag->ssa.entry_reg_webs.Values()) {
+    auto vr = web->Value();
     if (vr.IsVirtual()) {
-      if (!logged) {
-        Log(level, "|");
-        logged = true;
-      }
       LogRegister(level, vr, sep);
+      if (vr.IsScheduled()) Log(level, " (s)");
+
       sep = ",";
     }
   }

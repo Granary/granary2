@@ -10,10 +10,10 @@
 namespace granary {
 
 // Forward declarations.
-class LocalControlFlowGraph;
+class Trace;
 
-// Relativize the native instructions within a LCFG.
-void MangleInstructions(LocalControlFlowGraph* cfg);
+// Relativize the native instructions within a trace.
+void MangleInstructions(Trace* cfg);
 
 }  // namespace granary
 

@@ -7,7 +7,7 @@
 # error "This code is internal to Granary."
 #endif
 
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/factory.h"
 
 #include "granary/entry.h"
@@ -19,7 +19,7 @@ class BlockMetaData;
 class Context;
 class InstrumentationTool;
 
-// Instrument some initial code (described by `meta`) and fills a LCFG `cfg`
+// Instrument some initial code (described by `meta`) and fills a trace `cfg`
 // with the instrumented code. `meta` is taken as being "owned", i.e. no one
 // should be concurrently modifying `meta`!
 //
@@ -28,7 +28,7 @@ class InstrumentationTool;
 //       meta-data hereafter.
 class BinaryInstrumenter {
  public:
-  BinaryInstrumenter(Context *context_, LocalControlFlowGraph *cfg_,
+  BinaryInstrumenter(Context *context_, Trace *cfg_,
                      BlockMetaData **meta_);
   ~BinaryInstrumenter(void);
 
@@ -43,25 +43,25 @@ class BinaryInstrumenter {
   void InstrumentEntryPoint(EntryPointKind kind, int category);
 
  private:
-  // Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
+  // Repeatedly apply trace-wide instrumentation for every tool, where tools are
   // allowed to materialize direct basic blocks into other forms of basic
   // blocks.
   void InstrumentControlFlow(void);
 
-  // Apply LCFG-wide instrumentation for every tool.
+  // Apply trace-wide instrumentation for every tool.
   void InstrumentBlocks(void);
 
   // Apply instrumentation to every block for every tool.
   //
   // Note: This applies tool-specific instrumentation for all tools to a single
-  //       block before moving on to the next block in the LCFG.
+  //       block before moving on to the next block in the trace.
   void InstrumentBlock(void);
 
   Context *context;
   InstrumentationTool *tools;
   BlockMetaData **meta;
 
-  LocalControlFlowGraph *cfg;
+  Trace *cfg;
   BlockFactory factory;
 };
 

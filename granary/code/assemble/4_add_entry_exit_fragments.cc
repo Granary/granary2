@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
@@ -106,12 +106,12 @@ static LiveFlags LiveFlagsOnExit(Fragment *frag) {
     return LiveFlags(arch::AllArithmeticFlags(), 0);
   } else if (frag->branch_instr) {
     if (!frag->branch_instr->IsConditionalJump()) {
-      return LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+      return LiveFlagsOnEntry(frag->successors[kFragSuccBranch]);
     }
   }
 
-  auto fall_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]);
-  auto branch_live = LiveFlagsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+  auto fall_live = LiveFlagsOnEntry(frag->successors[kFragSuccFallThrough]);
+  auto branch_live = LiveFlagsOnEntry(frag->successors[kFragSuccBranch]);
   return {
     fall_live.app_flags | branch_live.app_flags,
     fall_live.inst_flags | branch_live.inst_flags
@@ -211,7 +211,7 @@ static void UnionFlagZones(FragmentList *frags) {
 }
 
 // Allocate flag zones for instrumentation fragments.
-static void LabelFlagZones(LocalControlFlowGraph *cfg, FragmentList *frags) {
+static void LabelFlagZones(Trace *cfg, FragmentList *frags) {
   UnionFlagZones(frags);
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
@@ -419,7 +419,7 @@ template <typename T>
 static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
   Fragment *frag = new T;
 
-  frag->successors[FRAG_SUCC_FALL_THROUGH] = succ;
+  frag->successors[kFragSuccFallThrough] = succ;
   frag->partition.Union(frag, inherit);
   frag->flag_zone.Union(frag, inherit);
 
@@ -465,7 +465,7 @@ static void LabelPartitionsAndTrackFlagRegs(FragmentList *frags) {
 // around groups of instrumentation code fragments. First we add entry/exits
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
-void AddEntryAndExitFragments(LocalControlFlowGraph *cfg, FragmentList *frags) {
+void AddEntryAndExitFragments(Trace *cfg, FragmentList *frags) {
   PropagateFragKinds(frags);
   AnalyzeFlagsUse(frags);
   LabelFlagZones(cfg, frags);

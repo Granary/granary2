@@ -11,7 +11,7 @@ class DirectMappedShadowMemory;
 class ShadowedMemoryOperand {
  public:
   // Block that contains `instr`.
-  granary::DecodedBasicBlock * const block;
+  granary::DecodedBlock * const block;
 
   // Instruction that contains the memory operand `native_mem_op`.
   granary::NativeInstruction * const instr;

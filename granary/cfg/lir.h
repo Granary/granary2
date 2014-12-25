@@ -17,8 +17,8 @@
 
 namespace granary {
 
-class BasicBlock;
-class DecodedBasicBlock;
+class Block;
+class DecodedBlock;
 class Instruction;
 class AnnotationInstruction;
 class ControlFlowInstruction;
@@ -27,12 +27,12 @@ class Operand;
 namespace lir {
 
 // Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
+std::unique_ptr<Instruction> IndirectJump(Block *target_block,
                                           const Operand &op);
 
 // Call / jump to existing basic blocks.
-std::unique_ptr<Instruction> FunctionCall(BasicBlock *target_block);
-std::unique_ptr<Instruction> Jump(BasicBlock *target_block);
+std::unique_ptr<Instruction> FunctionCall(Block *target_block);
+std::unique_ptr<Instruction> Jump(Block *target_block);
 
 // Materialize a direct basic block and insert a direct jump to that
 // basic block.
@@ -134,7 +134,7 @@ inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
 // Insert a "outline" call to some client code. This call can have access to
 // virtual registers by means of its arguments. At least one argument is
 // required.
-std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
+std::unique_ptr<Instruction> InlineFunctionCall(DecodedBlock *block,
                                                 AppPC func_addr, Operand *ops,
                                                 size_t num_args);
 
@@ -145,7 +145,7 @@ std::unique_ptr<Instruction> InlineFunctionCall(DecodedBasicBlock *block,
 // required.
 template <typename FuncT, typename... Args>
 inline static std::unique_ptr<Instruction> InlineFunctionCall(
-    DecodedBasicBlock *block, FuncT func, Args... args) {
+    DecodedBlock *block, FuncT func, Args... args) {
   Operand ops[kMaxNumFuncOperands];
   auto num_args = sizeof...(args);
   detail::InitInlineOps(ops, 0UL, num_args, args...);
@@ -219,7 +219,7 @@ class InlineAssembly {
   // Gives access to one of the registers defined within the inline assembly.
   //
   // Note: This function has an architecture-specific implementation.
-  RegisterOperand Register(DecodedBasicBlock *block, int reg_num) const;
+  RegisterOperand Register(DecodedBlock *block, int reg_num) const;
 
  private:
   GRANARY_POINTER(InlineAssemblyScope) *scope;

@@ -46,7 +46,7 @@ class Watchpoints : public InstrumentationTool {
   }
 
   // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) {
     MemoryOperand mloc1, mloc2;
     for (auto instr : bb->AppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
@@ -61,7 +61,7 @@ class Watchpoints : public InstrumentationTool {
   }
 
  private:
-  void InstrumentMemOp(DecodedBasicBlock *bb, NativeInstruction *instr,
+  void InstrumentMemOp(DecodedBlock *bb, NativeInstruction *instr,
                        const MemoryOperand &mloc) {
     // Doesn't read from or write to memory.
     if (mloc.IsEffectiveAddress()) return;

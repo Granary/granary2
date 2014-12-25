@@ -42,7 +42,7 @@ class CallStackTracer : public InstrumentationTool {
   }
 
   // Add in instrumentation at the target of function calls
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
+  virtual void InstrumentBlock(DecodedBlock *block) {
     for (auto succ : block->Successors()) {
 
       // Push the return address on the stack.

@@ -61,7 +61,8 @@ union alignas(alignof(void *)) VirtualRegister {
         byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
         preserved_byte_mask(0),
         is_segment_offset(false),
-        is_legacy(false) {
+        is_legacy(false),
+        is_scheduled(VR_KIND_VIRTUAL_GPR != kind) {
     GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
   }
 
@@ -180,6 +181,16 @@ union alignas(alignof(void *)) VirtualRegister {
     return is_legacy;
   }
 
+  // Has this register been scheduled?
+  GRANARY_INTERNAL_DEFINITION inline bool IsScheduled(void) const {
+    return is_scheduled;
+  }
+
+  // Mark this register as scheduled.
+  GRANARY_INTERNAL_DEFINITION inline void MarkAsScheduled(void) {
+    is_scheduled = true;
+  }
+
   // Is this the stack pointer?
   //
   // Note: This has an architecture-specific implementation.
@@ -290,6 +301,9 @@ union alignas(alignof(void *)) VirtualRegister {
 
     // Is this register a legacy register?
     bool is_legacy:1;
+
+    // Has this register been scheduled?
+    bool is_scheduled:1;
   } __attribute__((packed));
 #pragma clang diagnostic pop
   uint64_t value;

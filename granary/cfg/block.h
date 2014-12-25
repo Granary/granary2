@@ -1,7 +1,7 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#ifndef GRANARY_CFG_BASIC_BLOCK_H_
-#define GRANARY_CFG_BASIC_BLOCK_H_
+#ifndef GRANARY_CFG_BLOCK_H_
+#define GRANARY_CFG_BLOCK_H_
 
 #include "arch/base.h"
 
@@ -23,15 +23,15 @@ namespace granary {
 class Instruction;
 
 // Forward declarations.
-class BasicBlock;
-class CachedBasicBlock;
-class DecodedBasicBlock;
+class Block;
+class CachedBlock;
+class DecodedBlock;
 class BlockMetaData;
-class LocalControlFlowGraph;
+class Trace;
 class ControlFlowInstruction;
 class BlockFactory;
-class BasicBlockIterator;
-class ReverseBasicBlockIterator;
+class BlockIterator;
+class ReverseBlockIterator;
 GRANARY_INTERNAL_DEFINITION class Fragment;
 
 namespace detail {
@@ -40,10 +40,10 @@ class SuccessorBlockIterator;
 
 // A successor of a basic block. A successor is a pair defined as a control-flow
 // instruction and the basic block that it targets.
-class BasicBlockSuccessor {
+class BlockSuccessor {
  public:
-  BasicBlockSuccessor(void) = delete;
-  BasicBlockSuccessor(const BasicBlockSuccessor &) = default;
+  BlockSuccessor(void) = delete;
+  BlockSuccessor(const BlockSuccessor &) = default;
 
   // Control-flow instruction leading to the target basic block.
   //
@@ -52,18 +52,18 @@ class BasicBlockSuccessor {
   ControlFlowInstruction * const cfi;
 
   // The basic block targeted by `cfi`.
-  BasicBlock * const block;
+  Block * const block;
 
  private:
-  friend class LocalControlFlowGraph;
+  friend class Trace;
   friend class SuccessorBlockIterator;
 
-  inline BasicBlockSuccessor(ControlFlowInstruction *cfi_,
-                             BasicBlock *block_)
+  inline BlockSuccessor(ControlFlowInstruction *cfi_,
+                             Block *block_)
       : cfi(cfi_),
         block(block_) {}
 
-  GRANARY_DISALLOW_ASSIGN(BasicBlockSuccessor);
+  GRANARY_DISALLOW_ASSIGN(BlockSuccessor);
 };
 
 // Iterator to find the successors of a basic block.
@@ -81,12 +81,12 @@ class SuccessorBlockIterator {
     return cursor != that.cursor;
   }
 
-  BasicBlockSuccessor operator*(void) const;
+  BlockSuccessor operator*(void) const;
   void operator++(void);
 
  private:
-  friend class granary::BasicBlock;
-  friend class granary::DecodedBasicBlock;
+  friend class granary::Block;
+  friend class granary::DecodedBlock;
 
   inline SuccessorBlockIterator(void)
       : cursor(nullptr),
@@ -103,11 +103,11 @@ class SuccessorBlockIterator {
 }  // namespace detail
 
 // Abstract basic block of instructions.
-class BasicBlock {
+class Block {
  public:
-  virtual ~BasicBlock(void) = default;
+  virtual ~Block(void) = default;
 
-  GRANARY_INTERNAL_DEFINITION BasicBlock(void);
+  GRANARY_INTERNAL_DEFINITION Block(void);
 
   // Find the successors of this basic block. This can be used as follows:
   //
@@ -116,7 +116,7 @@ class BasicBlock {
   //      succ.cti
   //    }
   //
-  // Note: This method is only usefully defined for `DecodedBasicBlock`. All
+  // Note: This method is only usefully defined for `DecodedBlock`. All
   //       other basic block types are treated as having no successors.
   virtual detail::SuccessorBlockIterator Successors(void) const;
 
@@ -127,34 +127,34 @@ class BasicBlock {
   // cache.
   virtual CachePC StartCachePC(void) const = 0;
 
-  // Retunrs a unique ID for this basic block within the LCFG. This can be
+  // Retunrs a unique ID for this basic block within the trace. This can be
   // useful for client tools to implement data flow passes.
   int Id(void) const;
 
-  GRANARY_DECLARE_BASE_CLASS(BasicBlock)
+  GRANARY_DECLARE_BASE_CLASS(Block)
 
  protected:
   template <typename> friend class ListHead;
   template <typename> friend class ListOfListHead;
-  friend class BasicBlockIterator;
-  friend class ReverseBasicBlockIterator;
+  friend class BlockIterator;
+  friend class ReverseBlockIterator;
   friend class ControlFlowInstruction;
-  friend class LocalControlFlowGraph;  // For `list` and `id`.
+  friend class Trace;  // For `list` and `id`.
   friend class BlockFactory;
 
-  GRANARY_IF_EXTERNAL( BasicBlock(void) = delete; )
+  GRANARY_IF_EXTERNAL( Block(void) = delete; )
 
-  // Connects together lists of basic blocks in the LCFG.
-  GRANARY_INTERNAL_DEFINITION ListHead<BasicBlock> list;
+  // Connects together lists of basic blocks in the trace.
+  GRANARY_INTERNAL_DEFINITION ListHead<Block> list;
 
   // Unique ID for this block within its local control-flow graph. Defaults to
-  // `-1` if the block does not belong to an LCFG.
+  // `-1` if the block does not belong to an trace.
   GRANARY_INTERNAL_DEFINITION int id;
 
   // The generation number for where this block was materialized.
   GRANARY_INTERNAL_DEFINITION int generation;
 
-  // Is this block reachable from the entry node of the LCFG?
+  // Is this block reachable from the entry node of the trace?
   GRANARY_INTERNAL_DEFINITION bool is_reachable;
 
  GRANARY_PROTECTED:
@@ -162,17 +162,17 @@ class BasicBlock {
   // The fragment associated with the entrypoint of this block.
   GRANARY_INTERNAL_DEFINITION Fragment *fragment;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(BasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(Block);
 };
 
 // An instrumented basic block, i.e. a basic block that has been instrumented,
 // is in the process of being instrumented, or will (likely) be instrumented.
-class InstrumentedBasicBlock : public BasicBlock {
+class InstrumentedBlock : public Block {
  public:
   GRANARY_INTERNAL_DEFINITION
-  InstrumentedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
+  InstrumentedBlock(Trace *cfg_, BlockMetaData *meta_);
 
-  virtual ~InstrumentedBasicBlock(void);
+  virtual ~InstrumentedBlock(void);
 
   // Return this basic block's meta-data.
   virtual BlockMetaData *MetaData(void);
@@ -187,12 +187,12 @@ class InstrumentedBasicBlock : public BasicBlock {
   // cache.
   virtual CachePC StartCachePC(void) const override;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, InstrumentedBasicBlock)
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, InstrumentedBlock)
 
  GRANARY_PROTECTED:
 
   // The local control-flow graph to which this block belongs.
-  GRANARY_INTERNAL_DEFINITION LocalControlFlowGraph * const cfg;
+  GRANARY_INTERNAL_DEFINITION Trace * const cfg;
 
   // The meta-data associated with this basic block. Points to some (usually)
   // interned meta-data that is valid on entry to this basic block.
@@ -201,41 +201,41 @@ class InstrumentedBasicBlock : public BasicBlock {
  private:
   friend class BlockFactory;
 
-  InstrumentedBasicBlock(void) = delete;
+  InstrumentedBlock(void) = delete;
 
   // The starting PC of this basic block, if any.
   GRANARY_INTERNAL_DEFINITION AppPC native_pc;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(InstrumentedBlock);
 };
 
 // A basic block that has already been committed to the code cache.
-class CachedBasicBlock final : public InstrumentedBasicBlock {
+class CachedBlock final : public InstrumentedBlock {
  public:
-  virtual ~CachedBasicBlock(void) = default;
+  virtual ~CachedBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  using InstrumentedBasicBlock::InstrumentedBasicBlock;
+  using InstrumentedBlock::InstrumentedBlock;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CachedBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CachedBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CachedBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CachedBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
  private:
-  CachedBasicBlock(void) = delete;
+  CachedBlock(void) = delete;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(CachedBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(CachedBlock);
 };
 
 // A basic block that has been decoded but not yet committed to the code cache.
-class DecodedBasicBlock : public InstrumentedBasicBlock {
+class DecodedBlock : public InstrumentedBlock {
  public:
-  virtual ~DecodedBasicBlock(void);
+  virtual ~DecodedBlock(void);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit DecodedBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
+  explicit DecodedBlock(Trace *cfg_, BlockMetaData *meta_);
 
   // Return an iterator of the successor blocks of this basic block.
   virtual detail::SuccessorBlockIterator Successors(void) const override;
@@ -245,8 +245,8 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   VirtualRegister AllocateVirtualRegister(
       size_t num_bytes=arch::GPR_WIDTH_BYTES);
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DecodedBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DecodedBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DecodedBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DecodedBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -288,9 +288,9 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
 
  private:
   friend class BlockFactory;
-  friend class LocalControlFlowGraph;
+  friend class Trace;
 
-  DecodedBasicBlock(void) = delete;
+  DecodedBlock(void) = delete;
 
   // List of instructions in this basic block. Basic blocks have sole ownership
   // over their instructions.
@@ -303,19 +303,19 @@ class DecodedBasicBlock : public InstrumentedBasicBlock {
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST first;
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST last;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBlock);
 };
 
 // Represents a decoded basic block that is meant as compensation code that
 // points to an existing block.
-class CompensationBasicBlock : public DecodedBasicBlock {
+class CompensationBlock : public DecodedBlock {
  public:
   GRANARY_INTERNAL_DEFINITION
-  CompensationBasicBlock(LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
+  CompensationBlock(Trace *cfg_, BlockMetaData *meta_);
 
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, CompensationBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CompensationBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CompensationBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CompensationBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -331,14 +331,14 @@ class CompensationBasicBlock : public DecodedBasicBlock {
 enum BlockRequestKind : uint8_t;
 
 // A basic block that has not yet been decoded, and might eventually be decoded.
-class DirectBasicBlock final : public InstrumentedBasicBlock {
+class DirectBlock final : public InstrumentedBlock {
  public:
-  virtual ~DirectBasicBlock(void);
-  GRANARY_INTERNAL_DEFINITION DirectBasicBlock(
-      LocalControlFlowGraph *cfg_, BlockMetaData *meta_);
+  virtual ~DirectBlock(void);
+  GRANARY_INTERNAL_DEFINITION DirectBlock(
+      Trace *cfg_, BlockMetaData *meta_);
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, DirectBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DirectBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DirectBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DirectBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -346,24 +346,24 @@ class DirectBasicBlock final : public InstrumentedBasicBlock {
  private:
   friend class BlockFactory;
 
-  DirectBasicBlock(void) = delete;
+  DirectBlock(void) = delete;
 
   // How should we materialize this block, and if what block resulted from the
   // materialization?
-  GRANARY_INTERNAL_DEFINITION BasicBlock *materialized_block;
+  GRANARY_INTERNAL_DEFINITION Block *materialized_block;
   GRANARY_INTERNAL_DEFINITION BlockRequestKind materialize_strategy;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(DirectBlock);
 };
 
 // A basic block that has not yet been decoded, and which we don't know about
 // at this time because it's the target of an indirect jump/call.
-class IndirectBasicBlock final : public InstrumentedBasicBlock {
+class IndirectBlock final : public InstrumentedBlock {
  public:
-  virtual ~IndirectBasicBlock(void) = default;
+  virtual ~IndirectBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  using InstrumentedBasicBlock::InstrumentedBasicBlock;
+  using InstrumentedBlock::InstrumentedBlock;
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override final;
@@ -372,25 +372,25 @@ class IndirectBasicBlock final : public InstrumentedBasicBlock {
   // cache.
   virtual CachePC StartCachePC(void) const override final;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, IndirectBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(IndirectBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, IndirectBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(IndirectBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
  private:
-  IndirectBasicBlock(void) = delete;
+  IndirectBlock(void) = delete;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(IndirectBlock);
 };
 
 // A basic block that has not yet been decoded, and which we don't know about
 // at this time because it's the target of an indirect jump/call.
-class ReturnBasicBlock final : public InstrumentedBasicBlock {
+class ReturnBlock final : public InstrumentedBlock {
  public:
-  GRANARY_INTERNAL_DEFINITION ReturnBasicBlock(LocalControlFlowGraph *cfg_,
+  GRANARY_INTERNAL_DEFINITION ReturnBlock(Trace *cfg_,
                                                BlockMetaData *meta_);
-  virtual ~ReturnBasicBlock(void);
+  virtual ~ReturnBlock(void);
 
   // Returns true if this return basic block has meta-data. If it has meta-data
   // then the way that the branch is resolved is slightly more complicated.
@@ -407,32 +407,32 @@ class ReturnBasicBlock final : public InstrumentedBasicBlock {
   // cache.
   virtual CachePC StartCachePC(void) const override final;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, ReturnBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ReturnBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, ReturnBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ReturnBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
  private:
-  ReturnBasicBlock(void) = delete;
+  ReturnBlock(void) = delete;
 
   // The meta-data of this block, but where we only assign the `lazy_meta` to
-  // `BasicBlock::meta` when a request of `MetaData` is made. This is so that
+  // `Block::meta` when a request of `MetaData` is made. This is so that
   // the default behavior is to not propagate meta-data through function
   // returns.
   GRANARY_INTERNAL_DEFINITION BlockMetaData *lazy_meta;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReturnBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(ReturnBlock);
 };
 
 // A native basic block, i.e. this points to either native code, or some stub
 // code that leads to native code.
-class NativeBasicBlock final : public BasicBlock {
+class NativeBlock final : public Block {
  public:
-  virtual ~NativeBasicBlock(void) = default;
+  virtual ~NativeBlock(void) = default;
 
   GRANARY_INTERNAL_DEFINITION
-  explicit NativeBasicBlock(AppPC native_pc_);
+  explicit NativeBlock(AppPC native_pc_);
 
   // Returns the starting PC of this basic block in the (native) application.
   virtual AppPC StartAppPC(void) const override final;
@@ -441,20 +441,20 @@ class NativeBasicBlock final : public BasicBlock {
   // cache.
   virtual CachePC StartCachePC(void) const override final;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(BasicBlock, NativeBasicBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeBasicBlock, {
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Block, NativeBlock)
+  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
 
  private:
-  NativeBasicBlock(void) = delete;
+  NativeBlock(void) = delete;
 
   GRANARY_INTERNAL_DEFINITION const AppPC native_pc;
 
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeBasicBlock);
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeBlock);
 };
 
 }  // namespace granary
 
-#endif  // GRANARY_CFG_BASIC_BLOCK_H_
+#endif  // GRANARY_CFG_BLOCK_H_

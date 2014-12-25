@@ -7,15 +7,15 @@
 #include "granary/base/cstring.h"
 #include "granary/base/pc.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 
 #include "granary/context.h"
 #include "granary/breakpoint.h"
 
 namespace granary {
 
-LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
+Trace::Trace(Context *context_)
     : context(context_),
       entry_block(nullptr),
       blocks(),
@@ -25,41 +25,41 @@ LocalControlFlowGraph::LocalControlFlowGraph(Context *context_)
       generation(0) {}
 
 // Destroy the CFG and all basic blocks in the CFG.
-LocalControlFlowGraph::~LocalControlFlowGraph(void) {
-  for (BasicBlock *block(blocks.First()), *next(nullptr); block; block = next) {
+Trace::~Trace(void) {
+  for (Block *block(blocks.First()), *next(nullptr); block; block = next) {
     next = block->list.Next();
     delete block;
   }
 }
 
 // Return the entry basic block of this control-flow graph.
-DecodedBasicBlock *LocalControlFlowGraph::EntryBlock(void) const {
-  return DynamicCast<DecodedBasicBlock *>(entry_block);
+DecodedBlock *Trace::EntryBlock(void) const {
+  return DynamicCast<DecodedBlock *>(entry_block);
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-BasicBlockIterator LocalControlFlowGraph::Blocks(void) const {
-  return BasicBlockIterator(blocks.First());
+BlockIterator Trace::Blocks(void) const {
+  return BlockIterator(blocks.First());
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-ReverseBasicBlockIterator LocalControlFlowGraph::ReverseBlocks(void) const {
-  return ReverseBasicBlockIterator(blocks.Last());
+ReverseBlockIterator Trace::ReverseBlocks(void) const {
+  return ReverseBlockIterator(blocks.Last());
 }
 
 // Returns an object that can be used inside of a range-based for loop.
-BasicBlockIterator LocalControlFlowGraph::NewBlocks(void) const {
-  return BasicBlockIterator(first_new_block);
+BlockIterator Trace::NewBlocks(void) const {
+  return BlockIterator(first_new_block);
 }
 
 // Add a block to the CFG. If the block has successors that haven't yet been
 // added, then add those too.
-void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
+void Trace::AddBlock(Block *block) {
   if (block->list.IsLinked()) {
     GRANARY_ASSERT(-1 != block->Id());
   } else {
     // We might already have a block id if this block inherits the id of the
-    // `DirectBasicBlock` that led to its materialization.
+    // `DirectBlock` that led to its materialization.
     if (-1 == block->id) block->id = num_basic_blocks++;
 
     // Distinguishes old from new blocks across iterations of
@@ -72,8 +72,8 @@ void LocalControlFlowGraph::AddBlock(BasicBlock *block) {
   }
 }
 
-// Add a block to the LCFG as the entry block.
-void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
+// Add a block to the trace as the entry block.
+void Trace::AddEntryBlock(Block *block) {
   entry_block = block;
   AddBlock(block);
   if (blocks.First() != block) {
@@ -85,7 +85,7 @@ void LocalControlFlowGraph::AddEntryBlock(BasicBlock *block) {
 }
 
 // Allocate a new virtual register.
-VirtualRegister LocalControlFlowGraph::AllocateVirtualRegister(
+VirtualRegister Trace::AllocateVirtualRegister(
     size_t num_bytes) {
   GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
   GRANARY_ASSERT((1 << 16) > num_virtual_regs);

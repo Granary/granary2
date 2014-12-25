@@ -6,7 +6,7 @@
 
 #include "granary/base/option.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/control_flow_graph.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
@@ -82,10 +82,10 @@ class AllFuncBlocks : public InstrumentationTool {
  public:
   virtual ~AllFuncBlocks(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        factory->RequestBlock(succ.block, BlockRequestKind::kRequestBlockFromCFG);
+        factory->RequestBlock(succ.block, BlockRequestKind::kRequestBlockFromTrace);
       }
     }
   }

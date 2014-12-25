@@ -33,7 +33,7 @@ GRANARY_DEFINE_uint(num_copy_propagations, 2,
 namespace granary {
 
 // Assemble the local control-flow graph.
-FragmentList Assemble(Context *context, LocalControlFlowGraph *cfg) {
+FragmentList Assemble(Context *context, Trace *cfg) {
 
   // Compile all inline assembly instructions by parsing the inline assembly
   // instructions and doing code generation for them.
@@ -46,9 +46,9 @@ FragmentList Assemble(Context *context, LocalControlFlowGraph *cfg) {
 
   FragmentList frags;
 
-  // Split the LCFG into fragments. The relativization step might introduce its
+  // Split the trace into fragments. The relativization step might introduce its
   // own control flow, as well as instrumentation tools. This means that
-  // `DecodedBasicBlock`s no longer represent "true" basic blocks because they
+  // `DecodedBlock`s no longer represent "true" basic blocks because they
   // can contain internal control-flow. This makes further analysis more
   // complicated, so to simplify things we re-split up the blocks into fragments
   // that represent the "true" basic blocks.

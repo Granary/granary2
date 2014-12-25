@@ -88,7 +88,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   virtual ~MemoryWriteInstrumenter(void) = default;
 
   // Writing an immediate constant to memory. Avoid a check on the value mask.
-  void InstrumentMemoryWrite(DecodedBasicBlock *block, os::ModuleOffset loc,
+  void InstrumentMemoryWrite(DecodedBlock *block, os::ModuleOffset loc,
                              NativeInstruction *instr, VirtualRegister dst_addr,
                              MemoryOperand &mloc, ImmediateOperand &value) {
     if (FLAG_value_mask && !(FLAG_value_mask & value.UInt())) return;
@@ -111,7 +111,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   }
 
   // Writing the value of a register to memory.
-  void InstrumentMemoryWrite(DecodedBasicBlock *block, os::ModuleOffset loc,
+  void InstrumentMemoryWrite(DecodedBlock *block, os::ModuleOffset loc,
                              NativeInstruction *instr, VirtualRegister dst_addr,
                              MemoryOperand &mloc, RegisterOperand &value) {
     RegisterOperand address(dst_addr);
@@ -141,7 +141,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
   }
 
   // Instrument every memory write instruction.
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
+  virtual void InstrumentBlock(DecodedBlock *block) {
     auto module = os::ModuleContainingPC(block->StartAppPC());
     for (auto instr : block->AppInstructions()) {
       if (!StringsMatch("MOV", instr->OpCodeName())) continue;

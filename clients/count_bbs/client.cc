@@ -84,15 +84,15 @@ class BBCount : public InstrumentationTool {
   }
 
   // Add an execution counter to each block.
-  static void AddExecCounter(DecodedBasicBlock *block,
+  static void AddExecCounter(DecodedBlock *block,
                              CounterMetaData *count_meta) {
     MemoryOperand counter_addr(&(count_meta->count));
     lir::InlineAssembly asm_({&counter_addr});
     asm_.InlineAfter(block->FirstInstruction(), "INC m64 %0;"_x86_64);
   }
 
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
-    if (IsA<CompensationBasicBlock *>(block)) return;
+  virtual void InstrumentBlock(DecodedBlock *block) {
+    if (IsA<CompensationBlock *>(block)) return;
 
     NUM_BBS.fetch_add(1);
 

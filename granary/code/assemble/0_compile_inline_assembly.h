@@ -10,11 +10,11 @@
 namespace granary {
 
 // Forward declaration.
-class LocalControlFlowGraph;
+class Trace;
 
 // Compile all inline assembly instructions by parsing the inline assembly
 // instructions and doing code generation for them.
-void CompileInlineAssembly(LocalControlFlowGraph *cfg);
+void CompileInlineAssembly(Trace *cfg);
 
 }  // namespace granary
 

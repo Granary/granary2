@@ -25,8 +25,8 @@ namespace granary {
 // Forward declarations.
 class BlockMetaData;
 class CodeCache;
-class CompensationBasicBlock;
-class DecodedBasicBlock;
+class CompensationBlock;
+class DecodedBlock;
 class DirectEdge;
 class IndirectEdge;
 class Instruction;
@@ -122,6 +122,9 @@ class Context {
   IndirectEdge *indirect_edge_list;
 
   // Code cache index for normal blocks.
+  //
+  // TODO(pag): Make this into a global that is available via `index.h` rather
+  //            than going through the `Context`.
   Index *code_cache_index;
 
   // Mapping of context callback functions to their code cache equivalents. In

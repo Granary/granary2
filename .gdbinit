@@ -324,9 +324,8 @@ define print-meta-entry
   set language c++
   set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
   set $__i = ($__i - 1) % GRANARY_META_LOG_LENGTH
-  set $__m = (granary::BlockMetaData *) granary_meta_log[$__i].meta
-  set $__g = (unsigned long) granary_meta_log[$__i].group
-  printf "Meta-data %p in group %lu:\n", $__m, $__g
+  set $__m = (granary::BlockMetaData *) granary_meta_log[$__i]
+  printf "Meta-data %p:\n", $__m
   print-block-meta $__m
   dont-repeat
 end
@@ -346,7 +345,7 @@ define save-meta-pcs
   set logging redirect on
   set $__i = 0
   while $__i < GRANARY_META_LOG_LENGTH && $__i < granary_meta_log_index
-    set $__m = (unsigned long *) granary_meta_log[$__i].meta
+    set $__m = (unsigned long *) granary_meta_log[$__i]
     if $__m[1]
       x/i $__m[1]
     end
@@ -395,12 +394,11 @@ define find-meta-entry
   set $__m = (granary::BlockMetaData *) 0
 
   while $__i < GRANARY_META_LOG_LENGTH
-    set $__sm = (char *) granary_meta_log[$__i].meta
+    set $__sm = (char *) granary_meta_log[$__i]
     if $__sm
       set $__fpc_app = *((granary::AppPC *) &($__sm[8]))
       set $__fpc_cache = *((granary::CachePC *) &($__sm[16]))
       if $__fpc_app == $__pc || $__fpc_cache == $__pc
-        set $__g = granary_meta_log[$__i].group
         set $__m = (granary::BlockMetaData *) $__sm
         set $__i = GRANARY_META_LOG_LENGTH
       end
@@ -409,7 +407,7 @@ define find-meta-entry
   end
 
   if $__m
-    printf "Meta-data %p in group %lu:\n", $__m, $__g
+    printf "Meta-data %p:\n", $__m
     print-block-meta $__m
   end
   dont-repeat
@@ -837,11 +835,11 @@ end
 
 # get-next-block
 #
-# Treat `$arg0` as a pointer to a `BasicBlock`, and update the variable `$__b`
+# Treat `$arg0` as a pointer to a `Block`, and update the variable `$__b`
 # to point to the next basic block in the list to which `$arg0` belongs.
 define get-next-block
   set language c++
-  set $__b = (granary::BasicBlock *) $arg0
+  set $__b = (granary::Block *) $arg0
   if $__b
     set $__b = $__b->list.next
   end

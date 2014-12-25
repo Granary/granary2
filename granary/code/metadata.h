@@ -16,7 +16,7 @@
 namespace granary {
 
 // Forward declarations.
-class DecodedBasicBlock;
+class DecodedBlock;
 
 // Meta-data that tracks whether or not the stack is "safe" and behaves like a
 // C-style call stack.

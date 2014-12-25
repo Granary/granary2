@@ -5,8 +5,8 @@
 #include "granary/base/base.h"
 #include "granary/base/option.h"
 
-#include "granary/cfg/control_flow_graph.h"
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/trace.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/factory.h"
 
 #include "granary/instrument.h"
@@ -25,7 +25,7 @@ namespace granary {
 
 // Initialize a binary instrumenter.
 BinaryInstrumenter::BinaryInstrumenter(Context *context_,
-                                       LocalControlFlowGraph *cfg_,
+                                       Trace *cfg_,
                                        BlockMetaData **meta_)
     : context(context_),
       tools(AllocateTools()),
@@ -46,7 +46,7 @@ void BinaryInstrumenter::InstrumentDirect(void) {
 
   *meta = nullptr;  // Potentially undefined after this point.
 
-  if (IsA<DecodedBasicBlock *>(entry_block)) {  // Instrument decoded blocks.
+  if (IsA<DecodedBlock *>(entry_block)) {  // Instrument decoded blocks.
     InstrumentControlFlow();
     InstrumentBlocks();
     InstrumentBlock();
@@ -70,7 +70,7 @@ void BinaryInstrumenter::InstrumentIndirect(void) {
 void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
                                               int category) {
   factory.MaterializeIndirectEntryBlock(*meta);
-  auto entry_block = DynamicCast<CompensationBasicBlock *>(cfg->EntryBlock());
+  auto entry_block = DynamicCast<CompensationBlock *>(cfg->EntryBlock());
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentEntryPoint(&factory, entry_block, kind, category);
   }
@@ -84,13 +84,13 @@ void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
 namespace {
 
 // Try to finalize the control-flow by converting any remaining
-// `DirectBasicBlock`s into `CachedBasicBlock`s (which are potentially preceded
-// by `CompensationBasicBlock`.
+// `DirectBlock`s into `CachedBlock`s (which are potentially preceded
+// by `CompensationBlock`.
 static bool FinalizeControlFlow(BlockFactory *factory,
-                                LocalControlFlowGraph *cfg) {
+                                Trace *cfg) {
   for (auto block : cfg->Blocks()) {
-    if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
-      factory->RequestBlock(direct_block, kRequestBlockFromIndexOrCFGOnly);
+    if (auto direct_block = DynamicCast<DirectBlock *>(block)) {
+      factory->RequestBlock(direct_block, kRequestBlockFromIndexOrTraceOnly);
     }
   }
   return factory->HasPendingMaterializationRequest();
@@ -98,7 +98,7 @@ static bool FinalizeControlFlow(BlockFactory *factory,
 
 }  // namespace
 
-// Repeatedly apply LCFG-wide instrumentation for every tool, where tools are
+// Repeatedly apply trace-wide instrumentation for every tool, where tools are
 // allowed to materialize direct basic blocks into other forms of basic
 // blocks.
 void BinaryInstrumenter::InstrumentControlFlow(void) {
@@ -122,7 +122,7 @@ void BinaryInstrumenter::InstrumentControlFlow(void) {
   }
 }
 
-// Apply LCFG-wide instrumentation for every tool.
+// Apply trace-wide instrumentation for every tool.
 void BinaryInstrumenter::InstrumentBlocks(void) {
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentBlocks(cfg);
@@ -132,11 +132,11 @@ void BinaryInstrumenter::InstrumentBlocks(void) {
 // Apply instrumentation to every block for every tool.
 //
 // Note: This applies tool-specific instrumentation for all tools to a single
-//       block before moving on to the next block in the LCFG.
+//       block before moving on to the next block in the trace.
 void BinaryInstrumenter::InstrumentBlock(void) {
   for (auto block : cfg->Blocks()) {
     for (auto tool : ToolIterator(tools)) {
-      if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+      if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
         tool->InstrumentBlock(decoded_block);
       }
     }

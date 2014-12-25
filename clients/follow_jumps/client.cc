@@ -9,7 +9,7 @@ class JumpFollower : public InstrumentationTool {
  public:
   virtual ~JumpFollower(void) = default;
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->IsConditionalJump()) {

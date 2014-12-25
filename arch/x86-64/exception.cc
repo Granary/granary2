@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
@@ -33,7 +33,7 @@ namespace arch {
 
 // Save some architectural state before `instr` executes, so that if a
 // recoverable exception occurs while executing `instr`, we can handle it.
-void SaveStateForExceptionCFI(DecodedBasicBlock *block,
+void SaveStateForExceptionCFI(DecodedBlock *block,
                               ExceptionalControlFlowInstruction *instr,
                               granary::Instruction *before_instr) {
   Instruction ni;
@@ -259,7 +259,7 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   // End the fragment with `instr`. This ideally ensures that all regs that
   // need to be scheduled will be in there correct places before any of the
   // above mess.
-  auto recovery_frag = MakeCodeSuccessor(frags, frag, FRAG_SUCC_BRANCH);
+  auto recovery_frag = MakeCodeSuccessor(frags, frag, kFragSuccBranch);
   recovery_frag->attr.can_add_succ_to_partition = false;
   recovery_frag->instrs.Append(fault_label);
 
@@ -270,7 +270,7 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   // path.
   auto except_frag = instr->TargetBlock()->fragment;
   GRANARY_ASSERT(nullptr != except_frag);
-  recovery_frag->successors[FRAG_SUCC_FALL_THROUGH] = except_frag;
+  recovery_frag->successors[kFragSuccFallThrough] = except_frag;
 
   return frag;
 }

@@ -13,12 +13,14 @@
 
 namespace granary {
 
+#if 0
+
 // Convert writes to register operates into read/writes if there is another
 // read from the same register (that isn't a memory operand) in the current
 // operand pack.
 //
 // Note: This function is defined by `6_track_ssa_vars`.
-extern bool ConvertOperandActions(SSAOperandPack &operands);
+extern void ConvertOperandActions(NativeInstruction *instr);
 
 namespace arch {
 
@@ -29,14 +31,6 @@ namespace arch {
 extern bool GetCopiedOperand(const NativeInstruction *instr,
                              SSAInstruction *ssa_instr, SSAOperand **def,
                              SSAOperand **use0, SSAOperand **use1);
-
-// Performs architecture-specific conversion of `SSAOperand` actions. The things
-// we want to handle here are instructions like `XOR A, A`, that can be seen as
-// clearing the value of `A` and not reading it for the sake of reading it.
-//
-// Note: This function has an architecture-specific implementation.
-extern void ConvertOperandActions(NativeInstruction *instr,
-                                  SSAOperandPack &operands);
 
 // Invalidates the stack analysis property of `instr`.
 extern void InvalidateStackAnalysis(NativeInstruction *instr);
@@ -56,13 +50,13 @@ namespace {
 // Represents a potentially copy-able operand.
 struct RegisterValue {
   inline RegisterValue(void)
-      : defined_node(nullptr),
+      : defined_reg_web(nullptr),
         copied_value(nullptr),
         copied_value2(nullptr) {}
 
   // A pointer to an operand in an `SSAInstruction` where this register is
   // defined.
-  SSANode *defined_node;
+  SSARegisterWeb *defined_reg_web;
 
   // A pointer to an operand in an `SSAInstruction` that has the value of the
   // defined register.
@@ -83,7 +77,7 @@ static void UpdateAnnotationDefs(ReachingDefinintions &defs, SSANode *node) {
   node = UnaliasedNode(node);
 
   auto &reg_value(defs[node->reg]);
-  reg_value.defined_node = node;
+  reg_value.defined_reg_web = node;
 
   // Always treat these as null. The idea here is that even though in some
   // cases we can do cross-fragment propagation, we won't because then we'd
@@ -103,7 +97,7 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
         kSSAOperandActionReadWrite == op.action) {
       auto reg = op.node->reg;
       auto &reg_value(defs[reg]);
-      reg_value.defined_node = op.node;
+      reg_value.defined_reg_web = op.node;
       reg_value.copied_value = nullptr;
       reg_value.copied_value2 = nullptr;
     }
@@ -115,7 +109,7 @@ static void UpdateInstructionDefs(ReachingDefinintions &defs,
 static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
   // Inherit this definition from a predecessor fragment.
   if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-    if (kAnnotSSANodeOwner == ainstr->annotation ||
+    if (kAnnotSSARegisterWebOwner == ainstr->annotation ||
         kAnnotSSARestoreRegister == ainstr->annotation) {
       UpdateAnnotationDefs(defs, GetMetaData<SSANode *>(ainstr));
     }
@@ -134,7 +128,7 @@ static void UpdateDefs(ReachingDefinintions &defs, Instruction *instr) {
     auto defined_node = def->node;
     auto &copied_value(defs[defined_node->reg]);
 
-    copied_value.defined_node = def->node;
+    copied_value.defined_reg_web = def->node;
     copied_value.copied_value = use0;
     copied_value.copied_value2 = use1;
   }
@@ -154,7 +148,7 @@ static bool NodeAtValueAndAtCopyMatch(ReachingDefinintions &defs,
   // one).
   if (!defs.Exists(reg)) return true;
 
-  auto reg_node_at_instr = defs[reg].defined_node;
+  auto reg_node_at_instr = defs[reg].defined_reg_web;
   GRANARY_ASSERT(nullptr != reg_node_at_instr);
   return UnaliasedNode(copied_node) == UnaliasedNode(reg_node_at_instr);
 }
@@ -170,7 +164,7 @@ static bool CopyPropagateReg(ReachingDefinintions &defs,
   if (!defs.Exists(reg)) return false;
 
   const auto &reg_value(defs[reg]);
-  GRANARY_ASSERT(reg == reg_value.defined_node->reg);
+  GRANARY_ASSERT(reg == reg_value.defined_reg_web->reg);
 
   auto copied_value = reg_value.copied_value;
   if (!copied_value) return false;
@@ -280,7 +274,7 @@ static bool CopyPropagateMem(ReachingDefinintions &defs,
   if (!defs.Exists(reg)) return false;
 
   const auto &reg_value(defs[reg]);
-  GRANARY_ASSERT(reg == reg_value.defined_node->reg);
+  GRANARY_ASSERT(reg == reg_value.defined_reg_web->reg);
 
   auto copied_value0 = reg_value.copied_value;
   if (!copied_value0) return false;
@@ -363,8 +357,7 @@ static bool PropagateRegisterCopies(CodeFragment *frag) {
     }
 
     if (UpdateUses(defs, ssa_instr, ninstr)) {
-      ConvertOperandActions(ssa_instr->operands);
-      arch::ConvertOperandActions(ninstr, ssa_instr->operands);
+      ConvertOperandActions(ninstr);
       arch::InvalidateStackAnalysis(ninstr);
       ret = true;
     }
@@ -374,6 +367,7 @@ static bool PropagateRegisterCopies(CodeFragment *frag) {
 }
 
 }  // namespace
+#endif
 
 // Perform the following kinds of copy-propagation.
 //    1) Register -> register.
@@ -383,6 +377,9 @@ static bool PropagateRegisterCopies(CodeFragment *frag) {
 //
 // Returns true if anything was done.
 bool PropagateRegisterCopies(FragmentList *frags) {
+  (void) frags;
+  return false;
+#if 0
   auto ret = false;
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
@@ -391,6 +388,7 @@ bool PropagateRegisterCopies(FragmentList *frags) {
     }
   }
   return ret;
+#endif
 }
 
 }  // namespace granary

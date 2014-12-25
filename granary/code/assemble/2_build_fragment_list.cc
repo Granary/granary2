@@ -5,8 +5,8 @@
 
 #include "granary/base/new.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/edge.h"
@@ -31,10 +31,10 @@ namespace arch {
 // into basic blocks (e.g. via inline assembly). By the time we get around to
 // wanting to convert instrumented blocks into machine code, we hit a wall
 // where we can't assume that control flows linearly through the instructions
-// of a `DecodedBasicBlock`, and this really complicates virtual register
+// of a `DecodedBlock`, and this really complicates virtual register
 // allocation (which is a prerequisite to encoding).
 //
-// Therefore, it's necessary to "re-split up" `DecodedBasicBlocks` into actual
+// Therefore, it's necessary to "re-split up" `DecodedBlocks` into actual
 // basic blocks. However, we go further than the typical definition of a basic
 // block, hence the name `Fragment`.
 //
@@ -123,7 +123,7 @@ struct FragmentInProgress {
 struct FragmentBuilder {
   FragmentInProgress *next;
   FragmentList *frags;
-  LocalControlFlowGraph *cfg;
+  Trace *cfg;
   Context *context;
 };
 
@@ -132,7 +132,7 @@ struct FragmentBuilder {
 static void AddBlockTailToWorkList(
     FragmentBuilder *builder, CodeFragment *predecessor,
     LabelInstruction *label, Instruction *first_instr, StackUsageInfo stack,
-    FragmentSuccessorSelector succ_sel=FRAG_SUCC_FALL_THROUGH) {
+    FragmentSuccessorSelector succ_sel=kFragSuccFallThrough) {
   Fragment *tail_frag(nullptr);
 
   // Already added to work list.
@@ -169,7 +169,7 @@ static void AddBlockTailToWorkList(
     // partitioning to make sure that code following a function call or system
     // call is not placed in the same partition as code that jumps around the
     // function or system call.
-    if (FRAG_SUCC_FALL_THROUGH == succ_sel && predecessor->attr.follows_cfi) {
+    if (kFragSuccFallThrough == succ_sel && predecessor->attr.follows_cfi) {
       code_tail_frag->attr.follows_cfi = true;
     }
   }
@@ -197,7 +197,7 @@ static void AddBlockStragglerToWorkList(FragmentBuilder *builder,
   auto cfrag = new CodeFragment;
   cfrag->attr.block_meta = source_block_meta;
 
-  frag->successors[FRAG_SUCC_FALL_THROUGH] = cfrag;
+  frag->successors[kFragSuccFallThrough] = cfrag;
 
   auto elm = new FragmentInProgress;
   elm->frag = cfrag;
@@ -215,7 +215,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
                               AnnotationInstruction *instr) {
   auto next_instr = instr->Next();
   switch (instr->annotation) {
-    case kAnnotEndBasicBlock: granary_curiosity(); return false;
+    case kAnnotEndBlock: granary_curiosity(); return false;
 
     // Should not have an `AnnotationInstruction` with `kAnnotLabel` that is
     // not also a `LabelInstruction`.
@@ -223,12 +223,12 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
 
     // An upcoming instruction makes this stack valid.
     case kAnnotValidStack:
-      if (STACK_INVALID == frag->stack.status) {
+      if (kStackStatusInvalid == frag->stack.status) {
         AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                               StackUsageInfo(STACK_VALID));
+                               StackUsageInfo(kStackStatusValid));
         return false;
       } else {
-        frag->stack.status = STACK_VALID;
+        frag->stack.status = kStackStatusValid;
         return true;
       }
 
@@ -236,13 +236,13 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // by the value stored in a register, or displaced by the value stored in
     // a register.
     case kAnnotInvalidStack:
-      if (STACK_VALID == frag->stack.status || frag->attr.has_native_instrs) {
+      if (kStackStatusValid == frag->stack.status || frag->attr.has_native_instrs) {
         frag->attr.can_add_succ_to_partition = false;
         AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                               StackUsageInfo(STACK_INVALID));
+                               StackUsageInfo(kStackStatusInvalid));
         return false;
       } else {
-        frag->stack.status = STACK_INVALID;
+        frag->stack.status = kStackStatusInvalid;
         return true;
       }
 
@@ -267,7 +267,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // by the stack undefinedness of the `MOV RSP, [X]`.
     case kAnnotUnknownStackAbove:
       frag->attr.can_add_succ_to_partition = false;
-      frag->stack.status = STACK_INVALID;
+      frag->stack.status = kStackStatusInvalid;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
                              StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
       return false;
@@ -297,7 +297,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case kAnnotInterruptDeliveryStateChange:
       frag->attr.can_add_succ_to_partition = false;
       AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo(GRANARY_IF_KERNEL(STACK_VALID)));
+                             StackUsageInfo(GRANARY_IF_KERNEL(kStackStatusValid)));
       return false;
 
     // Calls out to some client code. This creates a new fragment that cannot
@@ -344,7 +344,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
     if (FRAG_TYPE_INST == frag->type) {
       auto frag_with_branch = new CodeFragment;
       frag_with_branch->attr.block_meta = frag->attr.block_meta;
-      frag->successors[FRAG_SUCC_FALL_THROUGH] = frag_with_branch;
+      frag->successors[kFragSuccFallThrough] = frag_with_branch;
       builder->frags->InsertAfter(frag, frag_with_branch);
       frag = frag_with_branch;
     }
@@ -359,7 +359,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
 
   // Add the branch target.
   AddBlockTailToWorkList(builder, frag, target_label, target_label->Next(),
-                         StackUsageInfo(), FRAG_SUCC_BRANCH);
+                         StackUsageInfo(), kFragSuccBranch);
 
   // Handle the fall-through.
   if (instr->IsFunctionCall() || instr->IsConditionalJump()) {
@@ -408,7 +408,7 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   auto pred_frag = frag;
   frag = new CodeFragment;
 
-  pred_frag->successors[FRAG_SUCC_FALL_THROUGH] = frag;
+  pred_frag->successors[kFragSuccFallThrough] = frag;
   pred_frag->attr.can_add_succ_to_partition = false;
 
   builder->frags->InsertAfter(pred_frag, frag);
@@ -426,15 +426,15 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   if (instr->IsFunctionCall() || instr->IsFunctionReturn() ||
       instr->IsInterruptReturn()
       GRANARY_IF_KERNEL( || instr->IsInterruptCall() )) {
-    frag->stack.status = STACK_VALID;
+    frag->stack.status = kStackStatusValid;
   }
 
   // Specialized return, indirect call/jump.
   if (!target_frag) {
     GRANARY_ASSERT(frag->attr.branch_is_indirect);
-    GRANARY_ASSERT(IsA<ReturnBasicBlock *>(target_block) ||
-                   IsA<IndirectBasicBlock *>(target_block));
-    auto inst_target = DynamicCast<InstrumentedBasicBlock *>(target_block);
+    GRANARY_ASSERT(IsA<ReturnBlock *>(target_block) ||
+                   IsA<IndirectBlock *>(target_block));
+    auto inst_target = DynamicCast<InstrumentedBlock *>(target_block);
     auto target_meta = inst_target->UnsafeMetaData();
     auto edge = builder->context->AllocateIndirectEdge(target_meta);
 
@@ -459,11 +459,11 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
   // Going to a decoded basic block.
   } else {
     GRANARY_ASSERT(IsA<CodeFragment *>(target_frag));
-    GRANARY_ASSERT(IsA<DecodedBasicBlock *>(target_block));
+    GRANARY_ASSERT(IsA<DecodedBlock *>(target_block));
     frag->attr.can_add_succ_to_partition = false;
   }
 
-  frag->successors[FRAG_SUCC_BRANCH] = target_frag;
+  frag->successors[kFragSuccBranch] = target_frag;
 
   // Add in a fall-through successor.
   if (instr->IsFunctionCall() || instr->IsConditionalJump() ||
@@ -471,7 +471,7 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
     AddBlockTailToWorkList(builder, frag, nullptr, instr->Next(), frag->stack);
 
     auto fall_through_frag = DynamicCast<CodeFragment *>(
-        frag->successors[FRAG_SUCC_FALL_THROUGH]);
+        frag->successors[kFragSuccFallThrough]);
 
     fall_through_frag->attr.can_add_pred_to_partition = false;
     fall_through_frag->attr.follows_cfi = true;
@@ -540,7 +540,7 @@ static void ProcessFragment(FragmentBuilder *builder, CodeFragment *frag,
                             Instruction *instr) {
   Instruction *next_instr(nullptr);
   for (; instr; instr = next_instr) {
-    GRANARY_ASSERT(!frag->successors[FRAG_SUCC_FALL_THROUGH]);
+    GRANARY_ASSERT(!frag->successors[kFragSuccFallThrough]);
     next_instr = instr->Next();
 
     // Blocks are split up by labels, but only if labels are targeted by
@@ -589,10 +589,10 @@ static bool HasUsefulInstruction(Instruction *instr_) {
   return false;
 }
 
-// Look for remaining, potentially reachable code in the LCFG, and add it in.
+// Look for remaining, potentially reachable code in the trace, and add it in.
 static void AddStragglerFragments(FragmentBuilder *builder) {
   for (auto block : builder->cfg->ReverseBlocks()) {
-    auto decoded_block = DynamicCast<DecodedBasicBlock *>(block);
+    auto decoded_block = DynamicCast<DecodedBlock *>(block);
     if (!decoded_block) continue;
 
     for (auto instr : decoded_block->Instructions()) {
@@ -610,7 +610,7 @@ static void AddStragglerFragments(FragmentBuilder *builder) {
 // Adds a decoded basic block to the fragment work list as an empty
 // `CodeFragment`.
 static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
-                                      DecodedBasicBlock *block) {
+                                      DecodedBlock *block) {
   auto frag = new CodeFragment;
   frag->attr.block_meta = block->MetaData();
   frag->attr.is_block_head = true;
@@ -628,7 +628,7 @@ static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
 
 // Adds a direct edge to the end of the fragment list as an `ExitFragment`.
 static void AddDirectBlockToFragList(FragmentBuilder *builder,
-                                     DirectBasicBlock *block) {
+                                     DirectBlock *block) {
   auto meta = block->MetaData();
   auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
   auto edge = builder->context->AllocateDirectEdge(meta);
@@ -647,7 +647,7 @@ static void AddDirectBlockToFragList(FragmentBuilder *builder,
 // Adds a cached basic block to the end of the fragment list as an
 // `ExitFragment`.
 static void AddCachedBlockToFragList(FragmentBuilder *builder,
-                                     CachedBasicBlock *block) {
+                                     CachedBlock *block) {
   auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
   frag->encoded_pc = block->StartCachePC();
   frag->encoded_size = 0;
@@ -662,7 +662,7 @@ static void AddCachedBlockToFragList(FragmentBuilder *builder,
 // Adds a native basic block to the end of the fragment list as an
 // `ExitFragment`.
 static void AddNativeBlockToFragList(FragmentBuilder *builder,
-                                     BasicBlock *block,
+                                     Block *block,
                                      AppPC start_pc) {
   auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
   frag->encoded_pc = UnsafeCast<CachePC>(start_pc);
@@ -680,16 +680,16 @@ static void AddNativeBlockToFragList(FragmentBuilder *builder,
 //
 // Note: This arranges for all `ExitFragment`s to be located at the end of
 //       the fragment list.
-static void InitBlockFragment(FragmentBuilder *builder, BasicBlock *block) {
-  if (auto direct_block = DynamicCast<DirectBasicBlock *>(block)) {
+static void InitBlockFragment(FragmentBuilder *builder, Block *block) {
+  if (auto direct_block = DynamicCast<DirectBlock *>(block)) {
     AddDirectBlockToFragList(builder, direct_block);
-  } else if (auto cached_block = DynamicCast<CachedBasicBlock *>(block)) {
+  } else if (auto cached_block = DynamicCast<CachedBlock *>(block)) {
     AddCachedBlockToFragList(builder, cached_block);
-  } else if (auto native_block = DynamicCast<NativeBasicBlock *>(block)) {
+  } else if (auto native_block = DynamicCast<NativeBlock *>(block)) {
     AddNativeBlockToFragList(builder, native_block, native_block->StartAppPC());
-  } else if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+  } else if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
     AddDecodedBlockToWorkList(builder, decoded_block);
-  } else if (auto return_block = DynamicCast<ReturnBasicBlock *>(block)) {
+  } else if (auto return_block = DynamicCast<ReturnBlock *>(block)) {
     if (!return_block->UsesMetaData()) {
       AddNativeBlockToFragList(builder, return_block, nullptr);
     }
@@ -706,7 +706,7 @@ static void InitializeFragAndWorklist(FragmentBuilder *builder) {
 }  // namespace
 
 // Build a fragment list out of a set of basic blocks.
-void BuildFragmentList(Context *context, LocalControlFlowGraph *cfg,
+void BuildFragmentList(Context *context, Trace *cfg,
                        FragmentList *frags) {
   FragmentBuilder builder = {
     nullptr,

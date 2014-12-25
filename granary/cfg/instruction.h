@@ -19,7 +19,7 @@
 namespace granary {
 
 // Forward declarations.
-class BasicBlock;
+class Block;
 class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
@@ -145,8 +145,8 @@ enum InstructionAnnotation {
 
   // Dummy annotations representing the beginning and end of a given basic
   // block.
-  kAnnotBeginBasicBlock,
-  kAnnotEndBasicBlock,
+  kAnnotBeginBlock,
+  kAnnotEndBlock,
 
   // Target of a branch instruction.
   kAnnotationLabel,
@@ -157,25 +157,27 @@ enum InstructionAnnotation {
   kAnnotUnknownStackBelow,
   kAnnotValidStack,
 
-  // Represents the definition of some `SSANode`, used in later assembly stages
-  // so that all nodes are owned by some `Fragment`.
+  // Represents the definition of some `SSARegisterWeb`, used in later assembly
+  // stages so that all nodes are owned by some `Fragment`.
   //
-  // The data associated with this annotation is a `VirtualRegister`.
-  kAnnotSSANodeOwner,
+  // The meta-data associated with this annotation is an owned
+  // `SSARegisterWeb *`.
+  kAnnotSSARegisterWebOwner,
 
   // An kill of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
   //
-  // The data associated with this annotation is a `VirtualRegister`.
-  kAnnotSSANodeKill,
+  // The data associated with this annotation is a `VirtualRegister`. The meta-
+  // data associated with this annotation is an un-owned `SSARegisterWeb *`.
+  kAnnotSSARegisterKill,
 
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
-  kAnnotSSAFragLocalBegin,
   kAnnotSSAPartitionLocalBegin,
 
   // Save and restore instructions for a register into a slot. The data
-  // associated with this annotation is a `VirtualRegister`.
+  // associated with this annotation is a `VirtualRegister`. The meta-data
+  // associated with these annotations are owned `SSARegisterWeb *`.
   //
   // Note: Saves and restores only operate on architectural GPRs.
   kAnnotSSASaveRegister,
@@ -505,12 +507,12 @@ class ControlFlowInstruction : public NativeInstruction {
 
   GRANARY_INTERNAL_DEFINITION
   ControlFlowInstruction(const arch::Instruction *instruction_,
-                         BasicBlock *target_);
+                         Block *target_);
 
   virtual bool HasIndirectTarget(void) const;
 
   // Return the target block of this CFI.
-  BasicBlock *TargetBlock(void) const;
+  Block *TargetBlock(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ControlFlowInstruction, {
@@ -528,10 +530,10 @@ class ControlFlowInstruction : public NativeInstruction {
   ControlFlowInstruction(void) = delete;
 
   // Target block of this CFI.
-  GRANARY_INTERNAL_DEFINITION mutable BasicBlock *target;
+  GRANARY_INTERNAL_DEFINITION mutable Block *target;
 
   GRANARY_INTERNAL_DEFINITION
-  void ChangeTarget(BasicBlock *new_target) const;
+  void ChangeTarget(Block *new_target) const;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };
@@ -544,7 +546,7 @@ class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
   GRANARY_INTERNAL_DEFINITION
   ExceptionalControlFlowInstruction(const arch::Instruction *instruction_,
                                     const arch::Instruction *orig_instruction_,
-                                    BasicBlock *exception_target_,
+                                    Block *exception_target_,
                                     AppPC emulation_pc_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction,

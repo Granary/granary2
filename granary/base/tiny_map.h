@@ -62,11 +62,11 @@ class TinyMap {
       return it != that.it;
     }
 
-    inline MapPair &operator*(void) {
+    inline MapPair operator*(void) const {
       return *it;
     }
 
-    inline const MapPair operator*(void) const {
+    inline MapPair &operator*(void) {
       return *it;
     }
 
@@ -120,11 +120,11 @@ class TinyMap {
     inline explicit KeyIterator(const ConstIterator &it_)
         : it(it_) {}
 
-    inline KeyIterator begin(void) {
+    inline KeyIterator begin(void) const {
       return *this;
     }
 
-    inline KeyIterator end(void) {
+    inline KeyIterator end(void) const {
       return KeyIterator();
     }
 
@@ -149,14 +149,14 @@ class TinyMap {
     inline ValueIterator(void)
         : it() {}
 
-    inline explicit ValueIterator(const Iterator &it_)
+    inline explicit ValueIterator(const ConstIterator &it_)
         : it(it_) {}
 
-    inline ValueIterator begin(void) {
+    inline ValueIterator begin(void) const {
       return *this;
     }
 
-    inline ValueIterator end(void) {
+    inline ValueIterator end(void) const {
       return ValueIterator();
     }
 
@@ -164,7 +164,7 @@ class TinyMap {
       ++it;
     }
 
-    inline V operator*(void) {
+    inline V operator*(void) const {
       return (*it).value;
     }
 
@@ -172,14 +172,14 @@ class TinyMap {
       return it != that.it;
     }
    private:
-    Iterator it;
+    ConstIterator it;
   };
 
   KeyIterator Keys(void) const {
     return KeyIterator(begin());
   }
 
-  ValueIterator Values(void) {
+  ValueIterator Values(void) const {
     return ValueIterator(begin());
   }
 

@@ -5,7 +5,7 @@
 GRANARY_USING_NAMESPACE granary;
 
 // Instrument all of the instructions in a basic block.
-void MemOpInstrumentationTool::InstrumentBlock(DecodedBasicBlock *bb) {
+void MemOpInstrumentationTool::InstrumentBlock(DecodedBlock *bb) {
   MemoryOperand mloc1, mloc2;
   for (auto instr : bb->AppInstructions()) {
     auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
@@ -20,7 +20,7 @@ void MemOpInstrumentationTool::InstrumentBlock(DecodedBasicBlock *bb) {
 }
 
 // Instrument a memory operation.
-void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
+void MemOpInstrumentationTool::InstrumentMemOp(DecodedBlock *bb,
                                                NativeInstruction *instr,
                                                MemoryOperand &mloc,
                                                size_t op_num) {
@@ -47,7 +47,7 @@ void MemOpInstrumentationTool::InstrumentMemOp(DecodedBasicBlock *bb,
 
 // Instrument a memory operand that accesses some memory through a register.
 void MemOpInstrumentationTool::InstrumentRegMemOp(
-    granary::DecodedBasicBlock *bb, granary::NativeInstruction *instr,
+    granary::DecodedBlock *bb, granary::NativeInstruction *instr,
     granary::MemoryOperand &mloc, granary::VirtualRegister addr_reg,
     size_t op_num) {
   RegisterOperand addr_reg_op(addr_reg);
@@ -58,7 +58,7 @@ void MemOpInstrumentationTool::InstrumentRegMemOp(
 // Instrument a memory operand that accesses some memory through an offset of
 // a segment register. We assume that the first quadword stored in the segment
 // points to the segment base address.
-void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBasicBlock *bb,
+void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBlock *bb,
                                                   NativeInstruction *instr,
                                                   MemoryOperand &mloc,
                                                   VirtualRegister seg_offs,
@@ -79,7 +79,7 @@ void MemOpInstrumentationTool::InstrumentSegMemOp(DecodedBasicBlock *bb,
 }
 
 // Instrument a memory operand that accesses some absolute memory address.
-void MemOpInstrumentationTool::InstrumentAddrMemOp(DecodedBasicBlock *bb,
+void MemOpInstrumentationTool::InstrumentAddrMemOp(DecodedBlock *bb,
                                                    NativeInstruction *instr,
                                                    MemoryOperand &mloc,
                                                    const void *addr,
@@ -93,7 +93,7 @@ void MemOpInstrumentationTool::InstrumentAddrMemOp(DecodedBasicBlock *bb,
 }
 
 void MemOpInstrumentationTool::InstrumentCompoundMemOp(
-    DecodedBasicBlock *bb, NativeInstruction *instr,
+    DecodedBlock *bb, NativeInstruction *instr,
     MemoryOperand &mloc, size_t op_num) {
 
   // Track stack pointer propagation.

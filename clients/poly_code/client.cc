@@ -183,8 +183,8 @@ class PolyCode : public InstrumentationTool {
   }
 
   // Build a global chain of all basic block meta-data.
-  virtual void InstrumentBlock(DecodedBasicBlock *block) {
-    if (IsA<CompensationBasicBlock *>(block)) return;
+  virtual void InstrumentBlock(DecodedBlock *block) {
+    if (IsA<CompensationBlock *>(block)) return;
 
     auto meta = block->MetaData();
     auto type_meta = MetaDataCast<TypeMetaData *>(meta);

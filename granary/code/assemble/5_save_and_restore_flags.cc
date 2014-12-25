@@ -49,10 +49,10 @@ static LiveRegisterSet LiveRegsOnExit(Fragment *frag) {
     regs = LiveRegsOnEntry(frag);
   } else if (frag->branch_instr) {
     if (frag->branch_instr->IsConditionalJump()) {
-      regs = LiveRegsOnEntry(frag->successors[FRAG_SUCC_FALL_THROUGH]);
-      regs.Union(LiveRegsOnEntry(frag->successors[FRAG_SUCC_BRANCH]));
+      regs = LiveRegsOnEntry(frag->successors[kFragSuccFallThrough]);
+      regs.Union(LiveRegsOnEntry(frag->successors[kFragSuccBranch]));
     } else {
-      regs = LiveRegsOnEntry(frag->successors[FRAG_SUCC_BRANCH]);
+      regs = LiveRegsOnEntry(frag->successors[kFragSuccBranch]);
     }
   } else {
     for (auto succ : frag->successors) {
@@ -75,7 +75,7 @@ static bool AnalyzeFragRegs(Fragment *frag) {
   for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       if (seen_native_instr && frag->branch_instr == instr) {
-        auto branch = frag->successors[FRAG_SUCC_BRANCH];
+        auto branch = frag->successors[kFragSuccBranch];
         if (frag->branch_instr->IsConditionalJump()) {
           regs.Union(LiveRegsOnEntry(branch));
         } else {

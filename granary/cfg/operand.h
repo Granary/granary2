@@ -14,7 +14,7 @@ namespace granary {
 
 // Forward declarations.
 class AnnotationInstruction;
-class DecodedBasicBlock;
+class DecodedBlock;
 class NativeInstruction;
 class Operand;
 class MemoryOperand;

@@ -21,13 +21,12 @@ namespace arch {
 // clearing the value of `A` and not reading it for the sake of reading it.
 //
 // Note: This function has an architecture-specific implementation.
-extern void ConvertOperandActions(NativeInstruction *instr,
-                                  SSAOperandPack &operands);
+extern void ConvertOperandActions(NativeInstruction *instr);
 }  // namespace arch
 namespace {
 
 // Adds `reg` as an `SSAOperand` to the `operands` operand pack.
-static void AddSSAOperand(SSAOperandPack &operands, Operand *op,
+static void AddSSAOperand(SSAInstruction *instr, Operand *op,
                           VirtualRegister reg
                           _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
   if (!reg.IsGeneralPurpose() && !reg.IsStackPointer()) {
@@ -35,13 +34,13 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op,
   }
 
   GRANARY_IF_DEBUG( if (reg.IsVirtual()) partition->used_vrs.Add(reg); )
-
-  SSAOperand ssa_op;
-
   GRANARY_ASSERT(op->Ref().IsValid());
+
+  auto &ssa_op(instr->ops[instr->num_ops++]);
   ssa_op.operand = op->UnsafeExtract();
-  ssa_op.reg = reg;
-  ssa_op.state = kSSAOperandStateReg;
+
+  GRANARY_ASSERT(ssa_op.reg_web.Find() == &(ssa_op.reg_web));
+  *(ssa_op.reg_web) = reg;
 
   // Figure out the action that should be associated with all dependencies
   // of this operand. Later we'll also do minor post-processing of all
@@ -64,19 +63,16 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op,
   } else {
     ssa_op.action = kSSAOperandActionRead;
   }
-
-  operands.Append(ssa_op);
 }
 
 // Add an `SSAOperand` to an operand pack.
-static void AddSSAOperand(SSAOperandPack &operands, Operand *op
+static void AddSSAOperand(SSAInstruction *instr, Operand *op
                           _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
 
   // Ignore all non general-purpose registers, as they cannot be scheduled with
   // virtual registers.
   if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-    AddSSAOperand(operands, op, reg_op->Register()
-                  _GRANARY_IF_DEBUG(partition));
+    AddSSAOperand(instr, op, reg_op->Register() _GRANARY_IF_DEBUG(partition));
 
   // Only use memory operands that contain general-purpose registers.
   } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
@@ -84,8 +80,8 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op
 
     VirtualRegister r1, r2;
     if (mem_op->CountMatchedRegisters({&r1, &r2})) {
-      AddSSAOperand(operands, op, r1 _GRANARY_IF_DEBUG(partition));
-      AddSSAOperand(operands, op, r2 _GRANARY_IF_DEBUG(partition));
+      AddSSAOperand(instr, op, r1 _GRANARY_IF_DEBUG(partition));
+      AddSSAOperand(instr, op, r2 _GRANARY_IF_DEBUG(partition));
     }
   }
 }
@@ -95,13 +91,12 @@ static void AddSSAOperand(SSAOperandPack &operands, Operand *op
 //
 // Note: This assumes that `op` refers to a register operand whose action is
 //       a `WRITE`.
-static bool FindReadFromReg(const SSAOperandPack &ops, VirtualRegister reg) {
-  for (const auto &op : ops) {
+static bool FindReadFromReg(const SSAInstruction *instr, VirtualRegister reg) {
+  for (const auto &op : instr->ops) {
     if (kSSAOperandActionRead == op.action ||
         kSSAOperandActionMemoryRead == op.action ||
         kSSAOperandActionReadWrite == op.action) {
-      auto op_reg = kSSAOperandStateReg == op.state ? op.reg : op.node->reg;
-      if (op_reg == reg) return true;
+      if (reg == *(op.reg_web)) return true;
     }
   }
   return false;
@@ -114,18 +109,19 @@ static bool FindReadFromReg(const SSAOperandPack &ops, VirtualRegister reg) {
 // operand pack.
 //
 // Note: This function is also used by `7_propagate_copies`.
-bool ConvertOperandActions(SSAOperandPack &operands) {
+void ConvertOperandActions(NativeInstruction *instr) {
+  auto ssa_instr = instr->ssa;
   auto changed = false;
-  for (auto &op : operands) {
+  for (auto &op : ssa_instr->ops) {
     if (kSSAOperandActionWrite == op.action) {
-      auto reg = kSSAOperandStateReg == op.state ? op.reg : op.node->reg;
-      if (FindReadFromReg(operands, reg)) {
+      auto reg = *(op.reg_web);
+      if (FindReadFromReg(ssa_instr, reg)) {
         op.action = kSSAOperandActionReadWrite;
         changed = true;
       }
     }
   }
-  return changed;
+  arch::ConvertOperandActions(instr);
 }
 
 namespace {
@@ -134,12 +130,11 @@ namespace {
 static void CreateSSAInstruction(NativeInstruction *instr
                                  _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
   auto ssa_instr = new SSAInstruction;
-  instr->ForEachOperand([=] (Operand *op) {
-    AddSSAOperand(ssa_instr->operands, op _GRANARY_IF_DEBUG(partition));
-  });
-  ConvertOperandActions(ssa_instr->operands);
-  arch::ConvertOperandActions(instr, ssa_instr->operands);
   instr->ssa = ssa_instr;
+  instr->ForEachOperand([=] (Operand *op) {
+    AddSSAOperand(ssa_instr, op _GRANARY_IF_DEBUG(partition));
+  });
+  ConvertOperandActions(instr);
 }
 
 // Create the `SSAOperandPack`s for every native instruction in `SSAFragment`
@@ -157,158 +152,51 @@ static void CreateSSAInstructions(FragmentList *frags) {
   }
 }
 
-// Converts a `node` into an `SSADataPhiNode`, on the assumption that it's a
-// `SSAControlPhiNode`.
-static void ConvertControlPhiToDataPhi(SSAFragment *frag, SSANode *node,
-                                       SSANode *parent_node) {
-  GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-  GRANARY_ASSERT(node->reg == parent_node->reg);
-  auto storage = node->id;
-  new (node) SSADataPhiNode(frag, parent_node);
-  node->id = storage;
-  node->id.Union(parent_node->id);
-}
-
-// For every `SSAFragment` that targets a non `SSAFragment` successor, add the
-// live GPRs on exit from the `SSAFragment` as initial `SSAControlPhiNode`s to
-// the fragment's `ssa.entry_nodes` map.
-static void InitEntryNodesFromLiveExitRegs(FragmentList *frags) {
-  for (auto frag : ReverseFragmentListIterator(frags)) {
-    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-      auto is_exit = false;
-      for (auto succ : frag->successors) {
-        if (succ && !IsA<SSAFragment *>(succ)) {
-          is_exit = true;
-          break;
-        }
-      }
-      if (is_exit) {
-        for (auto reg : ssa_frag->regs.live_on_exit) {
-          auto &node(ssa_frag->ssa.entry_nodes[reg]);
-          auto new_node = new SSAControlPhiNode(ssa_frag, reg);
-          if (node) ConvertControlPhiToDataPhi(ssa_frag, node, new_node);
-          node = new_node;
-        }
-      }
-    }
-  }
-}
-
-// Returns the `SSANode` that should be associated with a write to register
-// `reg` by instruction `instr`.
-static SSANode *LVNWrite(SSAFragment *frag, SSANode *node,
-                         VirtualRegister reg) {
-  // Some later (in this fragment) instruction reads from this register,
-  // and so it created an `SSAControlPhiNode` for that use so that it could
-  // signal that a concrete definition of that use was missing. We now have
-  // a concrete definition, so convert the existing memory into a register
-  // node.
-  if (node) {
-    auto new_node = new SSARegisterNode(frag, reg);
-    ConvertControlPhiToDataPhi(frag, node, new_node);
-    return new_node;
-
-  // No use (in the current fragment) depends on this register, but when
-  // we later to global value numbering, we might need to forward-propagate
-  // this definition to a use in a successor fragment.
+// Update or create a register web.
+static void UpdateOrCreateWeb(SSAFragment *frag, SSARegisterWeb *web) {
+  auto reg = web->Value();
+  auto &entry_web(frag->ssa.entry_reg_webs[reg]);
+  if (!entry_web) {
+    entry_web = web;
   } else {
-    return new SSARegisterNode(frag, reg);
+    GRANARY_ASSERT(reg == entry_web->Value());
+    entry_web->Union(web);
   }
 }
 
 // Perform local value numbering for definitions.
 static void LVNDefs(SSAFragment *frag, SSAInstruction *ssa_instr) {
-  // Update any existing nodes on writes to be `SSARegisterNode`s, and share
-  // the register nodes with `CLEAR`ed operands.
-  for (auto &op : ssa_instr->operands) {
-    if (kSSAOperandActionWrite != op.action &&
-        kSSAOperandActionCleared != op.action) {
-      continue;
+  for (auto &op : ssa_instr->ops) {
+    if (kSSAOperandActionInvalid == op.action) break;
+    if (kSSAOperandActionWrite == op.action ||
+        kSSAOperandActionCleared == op.action) {
+      UpdateOrCreateWeb(frag, &(op.reg_web));
     }
-    GRANARY_ASSERT(kSSAOperandStateReg == op.state);
-
-    if (kSSAOperandActionWrite == op.action) {
-      auto reg = op.reg;
-      auto &node(frag->ssa.entry_nodes[reg]);
-
-      node = LVNWrite(frag, node, reg);
-      GRANARY_ASSERT(node->reg == reg);
-      op.node = node;
-
-    } else if (kSSAOperandActionCleared == op.action) {
-      auto reg = op.reg;
-      auto &node(frag->ssa.entry_nodes[reg]);
-      GRANARY_ASSERT(IsA<SSARegisterNode *>(node));
-      GRANARY_ASSERT(node->reg == reg);
-      op.node = node;
-    }
-
-    op.state = kSSAOperandStateNode;
   }
 
-  // Clear out the written `SSARegisterNode`s, as we don't want them to be
-  // inherited by other instructions.
-  for (auto &op : ssa_instr->operands) {
+  // Kill this web for all preceding instructions.
+  for (auto &op : ssa_instr->ops) {
+    if (kSSAOperandActionInvalid == op.action) break;
     if (kSSAOperandActionWrite == op.action) {
-      frag->ssa.entry_nodes.Remove(op.node->reg);
+      auto web = &(op.reg_web);
+      frag->ssa.internal_reg_webs.Append(web);
+      frag->ssa.entry_reg_webs.Remove(web->Value());
     }
   }
 }
 
 // Perform local value numbering for uses.
 static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
-  for (auto &op : ssa_instr->operands) {
-    if (kSSAOperandActionWrite == op.action ||
-        kSSAOperandActionCleared == op.action) {
-      continue;
+  for (auto &op : ssa_instr->ops) {
+    if (kSSAOperandActionInvalid == op.action) break;
+    if (kSSAOperandActionWrite != op.action &&
+        kSSAOperandActionCleared != op.action) {
+      UpdateOrCreateWeb(frag, &(op.reg_web));
     }
-
-    GRANARY_ASSERT(kSSAOperandStateReg == op.state);
-
-    // We're doing a read/write, so while we are making a new definition, it
-    // will need to depend on some as-of-yet to be determined definition.
-    auto reg = op.reg;
-    auto new_node = new SSAControlPhiNode(frag, reg);
-    auto &node(frag->ssa.entry_nodes[reg]);
-
-    // Some later instruction (in the current fragment) uses this register,
-    // and so created a placeholder version of the register to be filled in
-    // later. Now we've got a definition, so we can replace the existing
-    // control-PHI with a data-PHI.
-    if (node) {
-      ConvertControlPhiToDataPhi(frag, node, new_node);
-      op.node = node;
-
-    // No instructions (in the current fragment) that follow `instr` use the
-    // register `reg`, but later when we do GVN, we might need to propagate
-    // this definition to a successor.
-    } else {
-      op.node = new SSADataPhiNode(frag, new_node);
-      GRANARY_ASSERT(op.node->reg == new_node->reg);
-      op.node->id.Union(new_node->id);
-    }
-
-    GRANARY_ASSERT(op.node->reg == reg);
-    node = new_node;
-
-    // `op.reg` is now invalid and `op.node` is now valid.
-    op.state = kSSAOperandStateNode;
   }
 }
 
-// Add the missing definitions as annotation instructions. This is so that all
-// nodes are owned by *some* fragment, which simplifies later memory
-// reclamation.
-static void AddMissingDefsAsAnnotations(SSAFragment *frag) {
-  for (auto node : frag->ssa.entry_nodes.Values()) {
-    GRANARY_ASSERT(IsA<SSAControlPhiNode *>(node));
-    auto instr = new AnnotationInstruction(kAnnotSSANodeOwner, node->reg);
-    SetMetaData(instr, node);
-    frag->instrs.Prepend(instr);
-  }
-}
-
-// Create an `SSANode` for a save.
+// Create an `SSARegisterWeb` for a save.
 //
 // Note: Save and restore registers must be native so that we don't end up with
 //       the case where virtual registers get back-propagated to the head of a
@@ -317,25 +205,29 @@ static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
   auto reg = instr->Data<VirtualRegister>();
   GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
   GRANARY_ASSERT(reg.IsNative());
-  auto new_node = new SSAControlPhiNode(frag, reg);
-  auto &node(frag->ssa.entry_nodes[reg]);
-  if (node) ConvertControlPhiToDataPhi(frag, node, new_node);
-  node = new_node;
-  SetMetaData(instr, new_node);
+  auto web = new SSARegisterWeb(reg);
+  UpdateOrCreateWeb(frag, web);
+  SetMetaData(instr, web);
 }
 
-// Create an `SSANode` for a restore.
+// Create an `SSARegisterWeb` for a restore.
 static void LVNRestore(SSAFragment *frag, AnnotationInstruction *instr) {
   auto reg = instr->Data<VirtualRegister>();
   GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
   GRANARY_ASSERT(reg.IsNative());
 
-  auto &node(frag->ssa.entry_nodes[reg]);
-  auto ret_node = LVNWrite(frag, node, reg);
+  auto web = new SSARegisterWeb(reg);
+  UpdateOrCreateWeb(frag, web);
+  SetMetaData(instr, web);
+
+  frag->ssa.internal_reg_webs.Append(web);
 
   // Update `entry_nodes` in place to contain a new, dummy node.
-  node = new SSAControlPhiNode(frag, reg);
-  SetMetaData(instr, ret_node);
+  web = new SSARegisterWeb(reg);
+  auto ainstr = new AnnotationInstruction(kAnnotSSARegisterWebOwner);
+  SetMetaData(ainstr, web);
+  frag->ssa.entry_reg_webs[reg] = web;
+  frag->instrs.InsertBefore(instr, ainstr);
 }
 
 // Perform a local-value numbering of all general-purpose register uses
@@ -357,61 +249,57 @@ static void LocalValueNumbering(FragmentList *frags) {
           }
         }
       }
-      AddMissingDefsAsAnnotations(ssa_frag);
     }
   }
-}
-
-// Returns the last `SSANode` defined within the fragment `frag` that
-// defines the register `reg`.
-static SSANode *FindDefForUse(SSAFragment *frag, VirtualRegister reg) {
-  for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
-    if (auto node = DefinedNodeForReg(instr, reg)) {
-      return node;
-    }
-  }
-  return nullptr;
 }
 
 // Back-propagate the entry nodes of `succ` into the exit nodes of `frag`, then
 // update the entry nodes of `succ` if necessary.
 static bool BackPropagateEntryDefs(SSAFragment *frag, SSAFragment *succ) {
   auto changed = false;
-  for (auto succ_node : succ->ssa.entry_nodes.Values()) {
-    auto reg = succ_node->reg;
+  for (auto entry : succ->ssa.entry_reg_webs) {
+    const auto reg = entry.key;
+    auto succ_web = UnsafeCast<SSARegisterWeb *>(entry.value->Find());
+    GRANARY_ASSERT(reg == succ_web->Value());
     GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
+
+    auto &exit_web(frag->ssa.exit_reg_webs[reg]);
 
     // Already inherited, either in a previous step, or by a different
     // successor of `frag` that we've already visited.
-    auto &exit_node(frag->ssa.exit_nodes[reg]);
-    if (exit_node) {
-      exit_node->id.Union(exit_node, succ_node);
+    if (exit_web) {
+      if (exit_web->Find() != succ_web) {
+        exit_web->Union(succ_web);
+        changed = true;
+      }
       continue;
     }
 
-    // Defined in `frag`, or used in `frag` but not defined.
-    if (auto node = FindDefForUse(frag, reg)) {
-      node->id.Union(node, succ_node);
-      exit_node = node;
-      continue;
+    // Local def of a register used in the successor.
+    for (auto internal_web : frag->ssa.internal_reg_webs) {
+      if (reg == internal_web->Value()) {
+        internal_web->Union(succ_web);
+        exit_web = internal_web;
+        changed = true;
+        break;
+      }
     }
 
-    // `FindDefForUse` didn't find it, so it means that `reg` was neither
-    // defined nor used in `frag`. We should similarly not find it in
-    // `entry_nodes`, because then that would imply a bug where something that
-    // should be both in the exit and entry nodes is present in the entry but
-    // not the exit nodes (which would have been caught by a check above).
-    auto &entry_node(frag->ssa.entry_nodes[reg]);
-    GRANARY_ASSERT(nullptr == entry_node);
+    if (changed) continue;
 
     // `frag` (predecessor of `succ`) doesn't define or use `reg`, so inherit
     // the node directly and pass it up through the `entry_nodes` as well.
-    entry_node = succ_node;
-    exit_node = succ_node;
+    auto &entry_web(frag->ssa.entry_reg_webs[reg]);
+    if (!entry_web) {
+      entry_web = succ_web;
+      exit_web = succ_web;
+      changed = true;
 
-    // Make a note that `entry_nodes` has changed, which could further change
-    // other fragments.
-    changed = true;
+    // Used in `frag` but not defined.
+    } else {
+      exit_web = entry_web;
+      exit_web->Union(succ_web);
+    }
   }
   return changed;
 }
@@ -433,51 +321,11 @@ static void BackPropagateEntryDefs(FragmentList *frags) {
   }
 }
 
-// Connects all control-PHI nodes between predecessors and successors.
-static void ConnectControlPhiNodes(SSAFragment *pred, SSAFragment *succ) {
-  for (auto succ_entry_node : succ->ssa.entry_nodes.Values()) {
-    if (auto succ_phi = DynamicCast<SSAControlPhiNode *>(succ_entry_node)) {
-      auto pred_exit_node = pred->ssa.exit_nodes[succ_phi->reg];
-      succ_phi->AddOperand(pred_exit_node);
-    }
-  }
-}
-
-// Connects all control-PHI nodes between predecessors and successors.
-static void ConnectControlPhiNodes(FragmentList *frags) {
-  for (auto frag : ReverseFragmentListIterator(frags)) {
-    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-      for (auto succ : frag->successors) {
-        if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
-          ConnectControlPhiNodes(ssa_frag, ssa_succ);
-        }
-      }
-    }
-  }
-}
-
-// Attempt to trivialise as many `SSAControlPhiNode`s as possible into either
-// `SSAAliasNode`s or into `SSARegisterNode`s.
-static void SimplifyControlPhiNodes(FragmentList *frags) {
-  for (auto changed = true; changed; ) {
-    changed = false;
-    for (auto frag : ReverseFragmentListIterator(frags)) {
-      if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-        for (auto entry_node : ssa_frag->ssa.entry_nodes.Values()) {
-          auto phi_entry_node = DynamicCast<SSAControlPhiNode *>(entry_node);
-          if (phi_entry_node) {
-            changed = phi_entry_node->UnsafeTryTrivialize() || changed;
-          }
-        }
-      }
-    }
-  }
-}
-
 static void AddCompensationRegKills(CodeFragment *frag) {
-  for (auto node : frag->ssa.entry_nodes.Values()) {
-    auto instr = new AnnotationInstruction(kAnnotSSANodeKill, node->reg);
-    SetMetaData(instr, node);
+  for (auto reg_web : frag->ssa.entry_reg_webs.Values()) {
+    auto instr = new AnnotationInstruction(kAnnotSSARegisterKill,
+                                           reg_web->Value());
+    SetMetaData(instr, reg_web);
     frag->instrs.Append(instr);
   }
 }
@@ -494,31 +342,42 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   GRANARY_ASSERT(nullptr != succ);
 
   auto comp = new CodeFragment;
-  for (auto &exit_node : pred->ssa.exit_nodes) {
+
+  // Fill the compensation fragment with default regs that should be
+  // inherited.
+  for (const auto &exit_node : pred->ssa.exit_reg_webs) {
     if (exit_node.key.IsVirtual()) {
-      comp->ssa.entry_nodes[exit_node.key] = exit_node.value;
+      GRANARY_ASSERT(nullptr != exit_node.value);
+      comp->ssa.entry_reg_webs[exit_node.key] = exit_node.value;
     }
   }
+
+  // Look for regs that are not in the exit regs, and kill those.
   if (auto ssa_succ = DynamicCast<SSAFragment *>(succ)) {
-    for (auto entry_reg : ssa_succ->ssa.entry_nodes.Keys()) {
+    for (auto entry_reg : ssa_succ->ssa.entry_reg_webs.Keys()) {
       if (entry_reg.IsVirtual()) {
-        comp->ssa.entry_nodes.Remove(entry_reg);
+        comp->ssa.entry_reg_webs.Remove(entry_reg);
       }
     }
   }
-  if (!comp->ssa.entry_nodes.Size()) {
+
+  // No "leaky" definitions to compensate for.
+  if (!comp->ssa.entry_reg_webs.Size()) {
     delete comp;
-    return;  // No "leaky" definitions to compensate for.
+    return;
   }
 
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
+
     if (code_pred->attr.branch_is_function_call &&
-        succ == pred->successors[FRAG_SUCC_FALL_THROUGH]) {
+        succ == pred->successors[kFragSuccFallThrough]) {
+      GRANARY_ASSERT(false);  // TODO(pag): I don't understand this anymore.
       delete comp;  // E.g. fall-through after an indirect CALL.
       return;
     }
+
     comp->attr.block_meta = code_pred->attr.block_meta;
     comp->stack.status = code_pred->stack.status;
   }
@@ -532,7 +391,7 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   comp->regs.live_on_exit = succ->regs.live_on_entry;
 
   // Chain it into the control-flow.
-  comp->successors[0] = succ;
+  comp->successors[kFragSuccFallThrough] = succ;
   succ = comp;
 
   frags->InsertAfter(pred, comp);  // Chain it into the fragment list.
@@ -548,35 +407,11 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
 // when building up the `SSAInstruction`s and by using the
 // `CLEARED` action.
 static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
-  for (auto reg : frag->ssa.entry_nodes.Keys()) {
+  for (auto reg : frag->ssa.entry_reg_webs.Keys()) {
     GRANARY_ASSERT(!reg.IsVirtual());
   }
 }
 #endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
-
-// For indirect control-flow instructions (e.g. call/jump through a register),
-// we need to share the register with the target fragment, assuming that the
-// target fragment is some edge code.
-static void ShareIndirectCFIReg(CodeFragment *source) {
-  if (!source->attr.branch_is_function_call &&
-      !source->attr.branch_is_jump) {
-    return;
-  }
-
-  RegisterOperand target_reg;
-  if (source->branch_instr->MatchOperands(ReadOnlyFrom(target_reg))) {
-    auto pc_reg = target_reg.Register();
-    if (pc_reg.IsVirtual()) {
-      if (auto node = FindDefForUse(source, pc_reg)) {
-        if (!source->ssa.exit_nodes.Exists(pc_reg)) {
-          source->ssa.exit_nodes[pc_reg] = node;
-        }
-        // Note: We don't add it into the `dest` fragment because later code
-        //       that injects compensations will do it for us.
-      }
-    }
-  }
-}
 
 // Goes and adds "compensating" fragments. The idea here is that if we have
 // an edge between a predecessor fragment P and its successor S, and some
@@ -587,15 +422,7 @@ static void ShareIndirectCFIReg(CodeFragment *source) {
 static void AddCompensatingFragments(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (code_frag->attr.is_compensation_code) {
-        continue;
-
-      // If we have a call through a register or a jump through a register,
-      // then make sure that register is live on exit.
-      } else if (code_frag->branch_instr &&
-                 code_frag->attr.branch_is_indirect) {
-        ShareIndirectCFIReg(code_frag);
-      }
+      if (code_frag->attr.is_compensation_code) continue;
     }
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       for (auto &succ : ssa_frag->successors) {
@@ -646,11 +473,8 @@ static void VerifyVRUsage(FragmentList *frags) {
 // Build a graph for the SSA definitions associated with the fragments.
 void TrackSSAVars(FragmentList * const frags) {
   CreateSSAInstructions(frags);
-  InitEntryNodesFromLiveExitRegs(frags);
   LocalValueNumbering(frags);
   BackPropagateEntryDefs(frags);
-  ConnectControlPhiNodes(frags);
-  SimplifyControlPhiNodes(frags);
   AddCompensatingFragments(frags);
   GRANARY_IF_DEBUG( VerifyVRUsage(frags); )
 }

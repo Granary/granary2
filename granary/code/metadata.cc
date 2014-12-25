@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/metadata.h"
@@ -35,7 +35,7 @@ UnificationStatus StackMetaData::CanUnifyWith(const StackMetaData &that) const {
     behaves_like_callstack = true;
   }
 
-  return UnificationStatus::ACCEPT;
+  return kUnificationStatusAccept;
 }
 
 }  // namespace granary

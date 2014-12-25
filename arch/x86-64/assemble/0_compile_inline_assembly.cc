@@ -5,8 +5,8 @@
 
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
@@ -34,9 +34,9 @@ namespace {
 // Granary's inline assembly instructions.
 class InlineAssemblyParser {
  public:
-  InlineAssemblyParser(LocalControlFlowGraph *cfg_,
+  InlineAssemblyParser(Trace *cfg_,
                        InlineAssemblyScope *scope_,
-                       DecodedBasicBlock *block_,
+                       DecodedBlock *block_,
                        Instruction *instr_,
                        const char *ch_)
       : op(nullptr),
@@ -570,12 +570,12 @@ class InlineAssemblyParser {
       new_instr = new BranchInstruction(
           &data, DynamicCast<LabelInstruction *>(data.ops[0].annotation_instr));
     } else if (data.IsFunctionCall()) {
-      auto bb = new NativeBasicBlock(
+      auto bb = new NativeBlock(
           data.HasIndirectTarget() ? nullptr : data.BranchTargetPC());
       cfg->AddBlock(bb);
       new_instr = new ControlFlowInstruction(&data, bb);
     } else if (data.IsFunctionReturn()) {
-      auto bb = new ReturnBasicBlock(cfg, nullptr /* no meta-data */);
+      auto bb = new ReturnBlock(cfg, nullptr /* no meta-data */);
       cfg->AddBlock(bb);
       new_instr = new ControlFlowInstruction(&data, bb);
 
@@ -656,14 +656,14 @@ class InlineAssemblyParser {
   arch::Operand *op;
 
   // The control-flow graph; used to materialize basic blocks.
-  LocalControlFlowGraph *cfg;
+  Trace *cfg;
 
   // Scope from which local/input variables can be looked up.
   InlineAssemblyScope * const scope;
 
   // Basic block into which instructions are being placed. Used to allocate
   // new virtual registers.
-  DecodedBasicBlock * const block;
+  DecodedBlock * const block;
 
   // Instruction before which all assembly instructions will be placed.
   Instruction * const instr;
@@ -684,8 +684,8 @@ namespace arch {
 // `block`. This places the inlined instructions before `instr`, which is
 // assumed to be the `AnnotationInstruction` containing the inline assembly
 // instructions.
-void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
-                                DecodedBasicBlock *block,
+void CompileInlineAssemblyBlock(Trace *cfg,
+                                DecodedBlock *block,
                                 granary::Instruction *instr,
                                 InlineAssemblyBlock *asm_block) {
   InlineAssemblyParser parser(cfg, asm_block->scope, block,

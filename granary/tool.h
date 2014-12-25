@@ -16,9 +16,9 @@ namespace granary {
 
 // Forward declarations.
 class BlockFactory;
-class CompensationBasicBlock;
-class DecodedBasicBlock;
-class LocalControlFlowGraph;
+class CompensationBlock;
+class DecodedBlock;
+class Trace;
 class InstrumentationTool;
 
 GRANARY_INTERNAL_DEFINITION enum : size_t {
@@ -42,7 +42,7 @@ class InstrumentationTool {
 
   // Used to instrument code entrypoints.
   virtual void InstrumentEntryPoint(BlockFactory *factory,
-                                    CompensationBasicBlock *entry_block,
+                                    CompensationBlock *entry_block,
                                     EntryPointKind kind, int category);
 
   // Used to instrument control-flow instructions and decide how basic blocks
@@ -51,13 +51,13 @@ class InstrumentationTool {
   // This method is repeatedly executed until no more materialization
   // requests are made.
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg);
+                                     Trace *cfg);
 
   // Used to implement more complex forms of instrumentation where tools need
   // to see the entire local control-flow graph.
   //
   // This method is executed once per tool per instrumentation session.
-  virtual void InstrumentBlocks(const LocalControlFlowGraph *cfg);
+  virtual void InstrumentBlocks(const Trace *cfg);
 
   // Used to implement the typical JIT-based model of single basic-block at a
   // time instrumentation.
@@ -65,7 +65,7 @@ class InstrumentationTool {
   // This method is executed for each decoded BB in the local CFG,
   // but is never re-executed for the same (tool, BB) pair in the current
   // instrumentation session.
-  virtual void InstrumentBlock(DecodedBasicBlock *block);
+  virtual void InstrumentBlock(DecodedBlock *block);
 
  GRANARY_PUBLIC:
 

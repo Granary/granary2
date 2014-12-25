@@ -6,7 +6,7 @@
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/lir.h"
 #include "granary/cfg/operand.h"
@@ -19,7 +19,7 @@ namespace granary {
 namespace lir {
 
 // Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
+std::unique_ptr<Instruction> IndirectJump(Block *target_block,
                                           const granary::Operand &op) {
 
   arch::Instruction ni;
@@ -43,7 +43,7 @@ std::unique_ptr<Instruction> IndirectJump(BasicBlock *target_block,
 }
 
 // Call to an existing basic block.
-std::unique_ptr<Instruction> FunctionCall(BasicBlock *target_block) {
+std::unique_ptr<Instruction> FunctionCall(Block *target_block) {
   arch::Instruction ni;
   CALL_NEAR_RELBRd(&ni, target_block->StartAppPC());
   return std::unique_ptr<Instruction>(
@@ -51,7 +51,7 @@ std::unique_ptr<Instruction> FunctionCall(BasicBlock *target_block) {
 }
 
 // Jump to an existing basic block.
-std::unique_ptr<Instruction> Jump(BasicBlock *target_block) {
+std::unique_ptr<Instruction> Jump(Block *target_block) {
   arch::Instruction ni;
   JMP_RELBRd(&ni, target_block->StartAppPC());
   return std::unique_ptr<Instruction>(

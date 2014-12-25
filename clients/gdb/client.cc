@@ -117,7 +117,7 @@ class GDBDebuggerHelper : public InstrumentationTool {
   //    rtld_db_dlactivity
   //    __dl_rtld_db_dlactivity
   //    _rtld_debug_state
-  static bool IsInternalBreakpointLocation(DirectBasicBlock *block) {
+  static bool IsInternalBreakpointLocation(DirectBlock *block) {
     auto decoded_pc = block->StartAppPC();
     auto module = os::ModuleContainingPC(decoded_pc);
     auto module_name = module->Name();
@@ -140,10 +140,10 @@ class GDBDebuggerHelper : public InstrumentationTool {
     GRANARY_ASSERT(cfi->DecodedPC() && cfi->DecodedLength());
     cfi->InsertBefore(lir::Jump(factory, cfi->DecodedPC() +
                                          cfi->DecodedLength()));
-    DecodedBasicBlock::Unlink(cfi);
+    DecodedBlock::Unlink(cfi);
   }
 
-  void DontInstrumentUndoDB(BlockFactory *factory, DirectBasicBlock *block) {
+  void DontInstrumentUndoDB(BlockFactory *factory, DirectBlock *block) {
     auto module = os::ModuleContainingPC(block->StartAppPC());
     if (StringsMatch("libundodb_autotracer_preload_x64", module->Name())) {
       factory->RequestBlock(block, kRequestBlockExecuteNatively);
@@ -151,11 +151,11 @@ class GDBDebuggerHelper : public InstrumentationTool {
   }
 
   virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
+                                     Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->HasIndirectTarget()) continue;
-        auto direct_block = DynamicCast<DirectBasicBlock *>(succ.block);
+        auto direct_block = DynamicCast<DirectBlock *>(succ.block);
         if (!direct_block) continue;
 
         if (IsInternalBreakpointLocation(direct_block)) {

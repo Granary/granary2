@@ -27,9 +27,8 @@ EXPORT_HEADERS = [
   
   "granary/code/register.h",  # Ordering issues :-/
   "granary/metadata.h",  # Ordering issues :-/
-
-  "granary/cfg/control_flow_graph.h",
-  "granary/cfg/basic_block.h",
+  "granary/cfg/trace.h",
+  "granary/cfg/block.h",
   "granary/cfg/instruction.h",
   "granary/cfg/factory.h",
   "granary/cfg/lir.h",

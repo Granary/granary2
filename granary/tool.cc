@@ -34,7 +34,7 @@ void InstrumentationTool::Exit(ExitReason) {}
 
 // Used to instrument code entrypoints.
 void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
-                                               CompensationBasicBlock *,
+                                               CompensationBlock *,
                                                EntryPointKind, int) {}
 
 // Used to instrument control-flow instructions and decide how basic blocks
@@ -43,13 +43,13 @@ void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
 // This method is repeatedly executed until no more materialization
 // requests are made.
 void InstrumentationTool::InstrumentControlFlow(BlockFactory *,
-                                                LocalControlFlowGraph *) {}
+                                                Trace *) {}
 
 // Used to implement more complex forms of instrumentation where tools need
 // to see the entire local control-flow graph.
 //
 // This method is executed once per tool per instrumentation session.
-void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
+void InstrumentationTool::InstrumentBlocks(const Trace *) {}
 
 // Used to implement the typical JIT-based model of single basic-block at a
 // time instrumentation.
@@ -57,7 +57,7 @@ void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // This method is executed for each decoded BB in the local CFG,
 // but is never re-executed for the same (tool, BB) pair in the current
 // instrumentation session.
-void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
+void InstrumentationTool::InstrumentBlock(DecodedBlock *) {}
 
 namespace {
 
