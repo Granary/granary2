@@ -5,7 +5,6 @@
 #include <granary.h>
 
 #include "clients/shadow_memory/client.h"
-#include "clients/util/instrument_memop.h"
 
 GRANARY_USING_NAMESPACE granary;
 
@@ -17,14 +16,16 @@ GRANARY_DEFINE_positive_int(shadow_granularity, 64,
     "direct_shadow_memory");
 
 namespace {
-
 enum : uint64_t {
   // TODO(pag): For kernel space, this really needs to be adjusted. While this
   //            is indeed the size of the address space, the usable size will
   //            ideally be much smaller (on the order of a few hundred
   //            megabytes, and probably only going into the gigabyte range if
   //            the buffer cache is heavily used).
-  kUnscaledShadowMemSize = 1ULL << 32UL
+  kUnscaledShadowMemSize = 1ULL << 32UL,
+
+  // Arbitrary maximum.
+  kMaxNumShadowStructures = 16
 };
 
 typedef LinkedListIterator<ShadowStructureDescription> ShadowStructureIterator;
@@ -32,6 +33,8 @@ typedef LinkedListIterator<ShadowStructureDescription> ShadowStructureIterator;
 // Descriptions of the meta-data structures.
 static ShadowStructureDescription *gDescriptions = nullptr;
 static ShadowStructureDescription **gNextDescription = &gDescriptions;
+static size_t gNumDescriptions = 0;
+
 static size_t gUnalignedSize = 0;
 static size_t gAlignedSize = 1;
 static size_t gScaleAmountLong = 0;
@@ -48,6 +51,7 @@ static size_t gShadowMemSize = 0;
 
 // Pointer to shadow memory.
 static char *gShadowMem = nullptr;
+GRANARY_IF_USER( static int gShadowFd = -1; )
 static SpinLock gShadowMemLock GRANARY_GLOBAL;
 
 }  // namespace
@@ -84,6 +88,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     }
 
     gNextDescription = &gDescriptions;
+    gNumDescriptions = 0;
     gUnalignedSize = 0;
     gAlignedSize = 1;
     gPrevOffset = 0;
@@ -95,10 +100,18 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     gShadowMemSize = 0;
     gShadowMemNumPages = 0;
     gShadowMem = nullptr;
+    GRANARY_IF_USER( gShadowFd = -1; )
+  }
+
+  virtual void InstrumentBlocks(Trace *trace) override {
+    shadow_addr_reg[0] = trace->AllocateVirtualRegister();
+    shadow_addr_reg[1] = trace->AllocateVirtualRegister();
+    shadow_base_reg = trace->AllocateVirtualRegister();
+    this->MemOpInstrumentationTool::InstrumentBlocks(trace);
   }
 
   // Instrument all of the instructions in a basic block.
-  virtual void InstrumentBlock(DecodedBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) override {
     if (GRANARY_UNLIKELY(!gShadowMemSize)) return;
     if (GRANARY_UNLIKELY(!gDescriptions)) return;
     if (GRANARY_UNLIKELY(!gShadowMem)) InitShadowMemory();
@@ -107,15 +120,25 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
 
  protected:
   virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) {
-    if (op.native_addr_op.IsStackPointer() ||
-        op.native_addr_op.IsStackPointerAlias()) {
-      return;
+
+    // Should we instrument this memory operand?
+    auto i = 0;
+    auto do_instrument = false;
+    bool instrument[kMaxNumShadowStructures] = {false};
+    for (auto desc : ShadowStructureIterator(gDescriptions)) {
+      if ((instrument[i++] = desc->predicate(op))) {
+        do_instrument = true;
+      }
     }
+    if (!do_instrument) return;  // No, we shouldn't.
 
     ImmediateOperand shift(gShiftAmount);
     ImmediateOperand scale(gScaleAmount);
     MemoryOperand shadow_base(gShadowMem);
-    lir::InlineAssembly asm_(shift, scale, shadow_base, op.native_addr_op);
+    RegisterOperand shadow_addr(shadow_addr_reg[op.operand_number]);
+    RegisterOperand shadow_base_addr(shadow_base_reg);
+    lir::InlineAssembly asm_(shift, scale, shadow_base, op.native_addr_op,
+                             shadow_addr, shadow_base_addr);
     asm_.InlineBefore(op.instr,
         "MOV r64 %4, r64 %3;"
         "LEA r64 %5, m64 %2;"_x86_64);
@@ -145,56 +168,79 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
         "ADD r64 %4, r64 %5;"_x86_64);
     auto native_addr_op(asm_.Register(op.block, 3));
     auto shadow_addr_op(asm_.Register(op.block, 4));
+    i = 0;
     for (auto desc : ShadowStructureIterator(gDescriptions)) {
 
       // Move `%4` (the offset/pointer) to point to this description's
       // structure.
       asm_.InlineBefore(op.instr, desc->offset_asm_instruction);
 
-      ShadowedMemoryOperand shadow_op{op.block, op.instr, op.native_mem_op,
-                                      shadow_addr_op, native_addr_op,
-                                      op.operand_number};
-      desc->instrumenter(shadow_op);
+      // Some shadow tools might want to instrument this memop while others
+      // might not.
+      if (instrument[i++]) {
+        ShadowedMemoryOperand shadow_op{op.block, op.instr, op.native_mem_op,
+                                        shadow_addr_op, native_addr_op,
+                                        op.operand_number};
+        desc->instrumenter(shadow_op);
+      }
     }
   }
 
+#ifdef GRANARY_WHERE_user
   // Initialize the shadow memory if it has not yet been initialized.
   static void InitShadowMemory(void) {
     SpinLockedRegion locker(&gShadowMemLock);
     if (gShadowMem) return;  // Double-checked locking ;-)
 
-#ifdef GRANARY_WHERE_user
     // Note: We don't use `os::AllocateDataPages` in user space because
-    //       we want these page to be lazily mapped.
+    //       we want these page to be lazily mapped. We use `/dev/zero` in
+    //       `O_RDONLY` so that all zero pages only use a single physical page.
+    gShadowFd = open("/dev/zero", O_RDONLY);
     gShadowMem = reinterpret_cast<char *>(mmap(
         nullptr, gShadowMemSize, PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0));
-#else
-    gShadowMem = os::AllocateDataPages(gShadowMemNumPages);
-#endif
+        MAP_PRIVATE | MAP_NORESERVE, gShadowFd, 0));
   }
 
   static void ExitShadowMemory(void) {
     if (gShadowMem) {
-      GRANARY_IF_USER_ELSE(munmap(gShadowMem, gShadowMemSize),
-                           os::FreeDataPages(gShadowMemNumPages));
+      munmap(gShadowMem, gShadowMemSize);
+      close(gShadowFd);
     }
   }
+#else
+// Initialize the shadow memory if it has not yet been initialized.
+  static void InitShadowMemory(void) {
+    SpinLockedRegion locker(&gShadowMemLock);
+    if (gShadowMem) return;  // Double-checked locking ;-)
+    gShadowMem = os::AllocateDataPages(gShadowMemNumPages);
+  }
+
+  static void ExitShadowMemory(void) {
+    if (gShadowMem) os::FreeDataPages(gShadowMemNumPages)
+  }
+#endif  // GRANARY_WHERE_user
+
+  VirtualRegister shadow_addr_reg[2];
+  VirtualRegister shadow_base_reg;
 };
 
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const ShadowedMemoryOperand &)) {
+                        void (*instrumenter)(const ShadowedMemoryOperand &),
+                        bool (*predicate)(const InstrumentedMemoryOperand &)) {
   GRANARY_ASSERT(!gShadowMem);
   GRANARY_ASSERT(!desc->next);
   GRANARY_ASSERT(!desc->instrumenter);
+  GRANARY_ASSERT(kMaxNumShadowStructures > gNumDescriptions);
 
   desc->instrumenter = instrumenter;
+  desc->predicate = predicate;
   desc->is_registered = true;
 
   *gNextDescription = desc;
   gNextDescription = &(desc->next);
+  ++gNumDescriptions;
 
   // Update the descriptions to more accurately represent the shadow unit
   // size.
@@ -242,6 +288,12 @@ uintptr_t ShadowOf(const ShadowStructureDescription *desc, uintptr_t addr) {
   addr &= 0xFFFFFFFFUL;
   return reinterpret_cast<uintptr_t>(gShadowMem) + addr + desc->offset;
 }
+
+namespace detail {
+bool AlwaysInstrumentMemOpPredicate(const InstrumentedMemoryOperand &) {
+  return true;
+}
+}  // namespace detail
 
 // Add the `shadow_memory` tool.
 GRANARY_ON_CLIENT_INIT() {

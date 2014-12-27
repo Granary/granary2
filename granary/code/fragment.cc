@@ -67,12 +67,12 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Fragment, ExitFragment)
 
 PartitionInfo::PartitionInfo(int id_)
-    : id(id_),
+    : entry_frag(nullptr),
       num_slots(0),
+      id(id_),
       GRANARY_IF_DEBUG_( num_partition_entry_frags(0) )
-      analyze_stack_frame(false),
       min_frame_offset(0),
-      entry_frag(nullptr) {}
+      analyze_stack_frame(false) {}
 
 RegisterUsageCounter::RegisterUsageCounter(void) {
   ClearGPRUseCounters();

@@ -35,6 +35,9 @@ class ReverseBlockIterator;
 GRANARY_INTERNAL_DEFINITION class Fragment;
 
 namespace detail {
+enum {
+  kMaxNumFuncOperands = 6
+};
 
 class SuccessorBlockIterator;
 
@@ -286,6 +289,10 @@ class DecodedBlock : public InstrumentedBlock {
   // allowed to be truncated. This will not remove such special cases.
   static void Truncate(Instruction *instr);
 
+  // Returns the Nth argument register for use by a lir function call.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister NthArgumentRegister(size_t arg_num) const;
+
  private:
   friend class BlockFactory;
   friend class Trace;
@@ -302,6 +309,11 @@ class DecodedBlock : public InstrumentedBlock {
   //       instructions).
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST first;
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST last;
+
+  // Virtual registers used within function calls injected into a basic block.
+  // We share these regs across all calls.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister arg_regs[detail::kMaxNumFuncOperands];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(DecodedBlock);
 };

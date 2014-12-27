@@ -378,7 +378,6 @@ enum {
 //       `IndirectEdge::out_edge_pc_lock`.
 void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
                              AppPC app_pc) {
-  InstructionDecoder decoder;
   Instruction ni;
   Instruction mov;
 
@@ -389,7 +388,8 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
   frag->successors[kFragSuccFallThrough] = first_frag;
 
   GRANARY_IF_DEBUG( auto added_mov_addr = false; )
-  for (auto pc = edge->out_edge_template; decoder.DecodeNext(&ni, &pc); ) {
+  for (auto pc = edge->out_edge_template;
+       InstructionDecoder::DecodeNext(&ni, &pc); ) {
 
     // Look for the `CMP` that compares the address with the target.
     if (XED_ICLASS_CMP == ni.iclass) {
@@ -410,12 +410,13 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 // Note: This function has an architecture-specific implementation.
 bool TryAtomicPatchEdge(Context *context, DirectEdge *edge) {
   Instruction ni;
-  InstructionDecoder decoder;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT_ATOMIC);
 
   // If we fail to decode the instruction then don't patch it.
-  if (!decoder.Decode(&ni, edge->patch_instruction_pc)) return false;
+  if (!InstructionDecoder::Decode(&ni, edge->patch_instruction_pc)) {
+    return false;
+  }
   const auto decoded_length = ni.decoded_length;
 
   // If the decoded length is greater than 8 bytes then don't patch it.

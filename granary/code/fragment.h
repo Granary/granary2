@@ -107,23 +107,23 @@ class PartitionInfo {
     ALIGNMENT = 1
   })
 
-  const int id;
+  // The first fragment in this partition. This will either be a
+  // `PartitionEntryFragment` or a `CodeFragment`.
+  Fragment *entry_frag;
 
   // The number of slots allocated in this partition. This includes fragment-
   // local and partition-local slots.
   size_t num_slots;
+
+  const int id;
 
   // For sanity checking: our stack analysis might yield undefined behavior of
   // a partition has more than one entry points.
   GRANARY_IF_DEBUG( int num_partition_entry_frags; )
 
   // Should we analyze the stack frames?
-  bool analyze_stack_frame;
   int min_frame_offset;
-
-  // The first fragment in this partition. This will either be a
-  // `PartitionEntryFragment` or a `CodeFragment`.
-  Fragment *entry_frag;
+  bool analyze_stack_frame;
 
  private:
   PartitionInfo(void) = delete;

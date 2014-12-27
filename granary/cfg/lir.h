@@ -10,6 +10,7 @@
 #include "granary/base/type_trait.h"
 
 #include "granary/cfg/factory.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/inline_assembly.h"
 
@@ -122,7 +123,7 @@ inline static void InitInlineOps(Operand *, size_t, size_t) {}
 template <typename T, typename... Args>
 inline static void InitInlineOps(Operand *ops, size_t i, size_t num,
                                  T arg, Args... args) {
-  if (i >= num || i >= kMaxNumFuncOperands) return;
+  if (i >= num || i >= ::granary::detail::kMaxNumFuncOperands) return;
   InitInlineOp(&(ops[i]), arg);
   InitInlineOps(ops, i + 1, num, args...);
 }
@@ -142,7 +143,7 @@ std::unique_ptr<Instruction> InlineFunctionCall(DecodedBlock *block,
 template <typename FuncT, typename... Args>
 inline static std::unique_ptr<Instruction> InlineFunctionCall(
     DecodedBlock *block, FuncT func, Args... args) {
-  Operand ops[kMaxNumFuncOperands];
+  Operand ops[::granary::detail::kMaxNumFuncOperands];
   auto num_args = sizeof...(args);
   detail::InitInlineOps(ops, 0UL, num_args, args...);
   return detail::InlineFunctionCall(block, UnsafeCast<AppPC>(func), ops,

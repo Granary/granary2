@@ -276,7 +276,7 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBlock *block,
 // instructions into the instruction list beginning with `instr`.
 void BlockFactory::DecodeInstructionList(DecodedBlock *block) {
   auto decode_pc = block->StartAppPC();
-  arch::InstructionDecoder decoder;
+  arch::InstructionDecoder decoder(block);
   arch::Instruction dinstr;
   arch::Instruction ainstr;
   Instruction *instr(nullptr);
@@ -302,7 +302,7 @@ void BlockFactory::DecodeInstructionList(DecodedBlock *block) {
     // Apply early mangling to the instruction, then add it in and annotate
     // it accordingly.
     memcpy(&ainstr, &dinstr, sizeof ainstr);
-    decoder.Mangle(block, &dinstr);
+    decoder.Mangle(&dinstr);
 
     block->AppendInstruction(MakeInstruction(&dinstr, &ainstr));
     AnnotateInstruction(this, block, before_instr, decode_pc);

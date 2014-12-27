@@ -12,7 +12,6 @@
 
 #include "arch/decode.h"
 #include "arch/x86-64/builder.h"
-#include "arch/x86-64/early_mangle.h"
 #include "arch/x86-64/instruction.h"
 
 #include "granary/breakpoint.h"
@@ -24,7 +23,8 @@ namespace arch {
 extern xed_state_t XED_STATE;
 
 // Initialize the instruction decoder.
-InstructionDecoder::InstructionDecoder(void) {}
+InstructionDecoder::InstructionDecoder(DecodedBlock *block)
+    : mangler(block) {}
 
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
@@ -43,9 +43,9 @@ bool InstructionDecoder::Decode(Instruction *instr, AppPC pc) {
 // mangling might involve adding many new instructions to deal with some
 // instruction set peculiarities, and sometimes we only want to speculatively
 // decode and instruction and not add these extra instructions to a block.
-void InstructionDecoder::Mangle(DecodedBlock *block, Instruction *instr) {
+void InstructionDecoder::Mangle(Instruction *instr) {
   GRANARY_ASSERT(XED_ICLASS_INVALID != instr->iclass);
-  MangleDecodedInstruction(block, instr);
+  mangler.MangleDecodedInstruction(instr);
 }
 
 namespace {

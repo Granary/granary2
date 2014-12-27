@@ -321,7 +321,7 @@ static bool GetUnscheduledVR(SSARegisterWeb *web, VirtualRegister *found_reg,
 
 // Try to find an as-of-yet unscheduled SSA register web in an iterable.
 template <typename Iterable>
-static bool GetUnscheduledVR(const Iterable it,
+static bool GetUnscheduledVR(const Iterable &it,
                              VirtualRegister *found_reg,
                              SSARegisterWeb **found_web) {
   for (auto web : it) {
@@ -333,9 +333,11 @@ static bool GetUnscheduledVR(const Iterable it,
 // Try to find an as-of-yet unscheduled SSA register web in a fragment.
 static bool GetUnscheduledVR(SSAFragment *frag, VirtualRegister *reg,
                              SSARegisterWeb **web) {
-  return GetUnscheduledVR(frag->ssa.exit_reg_webs.Values(), reg, web) ||
+  auto entry_webs(frag->ssa.entry_reg_webs.Values());
+  auto exit_webs(frag->ssa.exit_reg_webs.Values());
+  return GetUnscheduledVR(entry_webs, reg, web) ||
          GetUnscheduledVR(frag->ssa.internal_reg_webs, reg, web) ||
-         GetUnscheduledVR(frag->ssa.entry_reg_webs.Values(), reg, web);
+         GetUnscheduledVR(exit_webs, reg, web);
 }
 
 struct GPRScheduler {
@@ -612,9 +614,8 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
     if (ssa_instr) ReplaceUsesOfVR(ssa_instr, reg_web, vr_home.loc);
 
     // Inject the spill for this definition.
-    if (is_defined) {
+    if (is_defined && !is_live_on_entry) {
       GRANARY_ASSERT(kRegLocationTypeGpr == vr_home.type);
-      GRANARY_ASSERT(!is_live_on_entry);
       frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(vr_home.loc, slot));
       part_sched->Loc(vr_home.loc) = {vr_home.loc, kRegLocationTypeGpr};
       vr_home.loc = slot;
@@ -721,6 +722,41 @@ static void ScheduleSaveRestores(SaveRestoreScheduler *slot_sched,
   }
 }
 
+// Merge (potentially) distinct register webs, so long as the VR associated
+// with the web is the same.
+template <typename Iterable, typename WebSet>
+static void MergeWebs(const Iterable &it, WebSet &vr_webs) {
+  for (auto web : it) {
+    auto &vr_web(vr_webs[web->Value()]);
+    if (vr_web) {
+      web->Union(vr_web);
+    } else {
+      vr_web = web;
+    }
+  }
+}
+
+// Merge (potentially) distinct register webs, so long as the VR associated
+// with the web is the same.
+static void MergeWebs(Fragment *first, Fragment *last,
+                      PartitionInfo *partition) {
+  TinyMap<VirtualRegister, SSARegisterWeb *,
+          arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> vr_webs;
+
+  for (auto frag : ReverseFragmentListIterator(last)) {
+    if (frag == first) break;
+    if (frag->partition.Value() != partition) continue;
+    auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+    if (!ssa_frag) continue;
+
+    auto entry_webs(ssa_frag->ssa.entry_reg_webs.Values());
+    auto exit_webs(ssa_frag->ssa.exit_reg_webs.Values());
+    MergeWebs(entry_webs, vr_webs);
+    MergeWebs(exit_webs, vr_webs);
+    MergeWebs(ssa_frag->ssa.internal_reg_webs, vr_webs);
+  }
+}
+
 // Schedule all partition-local virtual registers within the fragments of a
 // given partition.
 static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
@@ -735,6 +771,7 @@ static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
   Fragment *first_frag(frags->First());
   Fragment *last_frag(nullptr);
   FindPartitionBounds(frags, partition, &first_frag, &last_frag);
+  MergeWebs(first_frag, last_frag, partition);
 
   auto slot_num = 0UL;
   auto found_reg = false;

@@ -10,15 +10,14 @@ namespace granary {
 
 // Finds the unique first fragment of each block.
 void FindBlockEntrypointFragments(FragmentList *frags) {
-  // Find the unique block head.
+  // Find the first block head. This might not actually be unique given that
+  // we can sometimes put two blocks in the same partition.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (!(cfrag->attr.is_block_head || cfrag->attr.is_return_target)) {
-        continue;
+      if (cfrag->attr.is_block_head || cfrag->attr.is_return_target) {
+        auto partition = cfrag->partition.Value();
+        if (!partition->entry_frag) partition->entry_frag = frag;
       }
-      auto partition = cfrag->partition.Value();
-      GRANARY_ASSERT(!partition->entry_frag);
-      partition->entry_frag = frag;
     }
   }
 

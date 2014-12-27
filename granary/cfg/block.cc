@@ -138,14 +138,16 @@ DecodedBlock::~DecodedBlock(void) {
 }
 
 // Initialize a decoded basic block.
-DecodedBlock::DecodedBlock(Trace *cfg_,
-                                     BlockMetaData *meta_)
+DecodedBlock::DecodedBlock(Trace *cfg_, BlockMetaData *meta_)
     : InstrumentedBlock(cfg_, meta_),
       first(new AnnotationInstruction(kAnnotBeginBlock,
                                       reinterpret_cast<void *>(&first))),
       last(new AnnotationInstruction(kAnnotEndBlock,
                                      reinterpret_cast<void *>(&last))) {
   first->InsertAfter(last);
+  for (auto &reg : arg_regs) {
+    reg = cfg->AllocateVirtualRegister();
+  }
 }
 
 InstrumentedBlock::~InstrumentedBlock(void) {
@@ -251,6 +253,11 @@ void DecodedBlock::Truncate(Instruction *instr) {
     next_instr = instr->Next();
     Unlink(instr);
   }
+}
+
+// Returns the Nth argument register for use by a lir function call.
+VirtualRegister DecodedBlock::NthArgumentRegister(size_t arg_num) const {
+  return arg_regs[arg_num];
 }
 
 CompensationBlock::CompensationBlock(Trace *cfg_,

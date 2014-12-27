@@ -12,12 +12,12 @@
 #include "clients/stack_trace/client.h"
 #include "clients/util/instrument_memop.h"
 
-#include "generated/clients/data_collider/offsets.h"
+#include "generated/clients/malcontent/offsets.h"
 
 GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_positive_uint(sample_rate, 500,
-    "The rate, in milliseconds, at which DataCollider changes its sample "
+    "The rate, in milliseconds, at which Malcontent changes its sample "
     "points. The default value is `500`, representing `500ms`.\n"
     "\n"
     "Note: This value is approximate, in that we do not guarantee that\n"
@@ -27,7 +27,7 @@ GRANARY_DEFINE_positive_uint(sample_rate, 500,
     "data_collider");
 
 GRANARY_DEFINE_positive_uint(num_sample_points, 64,
-    "The number of addresses that will be sampled by DataCollider. By default "
+    "The number of addresses that will be sampled by Malcontent. By default "
     "this is `64`. The maximum number of active sample points is `2^16 - 2`.",
 
     "data_collider");
@@ -282,7 +282,7 @@ static void Monitor(void) {
   }
 }
 
-// Initialize the monitoring process for DataCollider. This allows us to set
+// Initialize the monitoring process for Malcontent. This allows us to set
 // hardware watchpoints.
 //
 // TODO(pag): The only thing that makes this actually work is luck...
@@ -300,9 +300,9 @@ static void CreateMonitorThread(void) {
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
-class DataCollider : public InstrumentationTool {
+class Malcontent : public InstrumentationTool {
  public:
-  virtual ~DataCollider(void) = default;
+  virtual ~Malcontent(void) = default;
 
   // Initialize the few things that we can. We can't initialize the shadow
   // memory up-front because dependent tools won't yet be initialized, and
@@ -336,7 +336,8 @@ class DataCollider : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
     CreateMonitorThread();
-    AddShadowStructure<OnwershipTracker>(InstrumentMemOp);
+    AddShadowStructure<OnwershipTracker>(InstrumentMemOp,
+                                         ShouldInstrumentMemOp);
   }
 
   // Exit; this kills off the monitor thread.
@@ -380,6 +381,10 @@ class DataCollider : public InstrumentationTool {
     access.address = address;
     access.location = location;
     CopyStackTrace(access.stack_trace);
+  }
+
+  static bool ShouldInstrumentMemOp(const InstrumentedMemoryOperand &op) {
+    return !op.native_addr_op.IsStackPointerAlias();
   }
 
   static void InstrumentMemOp(const ShadowedMemoryOperand &op) {
@@ -432,9 +437,8 @@ class DataCollider : public InstrumentationTool {
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DataCollider>("data_collider", {"wrap_func",
-                                                         "stack_trace",
-                                                         "shadow_memory"});
+  AddInstrumentationTool<Malcontent>("malcontent", {"wrap_func", "stack_trace",
+                                                    "shadow_memory"});
 }
 
 #endif  // GRANARY_WHERE_user

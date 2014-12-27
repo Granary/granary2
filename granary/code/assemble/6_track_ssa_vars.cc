@@ -361,7 +361,6 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   // Make `comp` appear to be yet another `CodeFragment` to all future
   // assembly passes.
   if (auto code_pred = DynamicCast<CodeFragment *>(pred)) {
-
     if (code_pred->attr.branch_is_function_call &&
         succ == pred->successors[kFragSuccFallThrough]) {
       GRANARY_ASSERT(false);  // TODO(pag): I don't understand this anymore.

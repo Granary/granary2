@@ -53,7 +53,7 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
 
 // Initialize the inline function call.
 InlineFunctionCall::InlineFunctionCall(DecodedBlock *block, AppPC target,
-                                       Operand ops[kMaxNumFuncOperands],
+                                       Operand ops[detail::kMaxNumFuncOperands],
                                        size_t num_args_)
     : target_app_pc(target),
       num_args(num_args_) {
@@ -61,8 +61,9 @@ InlineFunctionCall::InlineFunctionCall(DecodedBlock *block, AppPC target,
 #pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
   memcpy(args, ops, sizeof(args));
 #pragma clang diagnostic pop
+  auto i = 0UL;
   for (auto &arg_reg : arg_regs) {
-    arg_reg = block->AllocateVirtualRegister();
+    arg_reg = block->NthArgumentRegister(i++);
   }
 }
 

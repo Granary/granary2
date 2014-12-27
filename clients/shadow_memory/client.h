@@ -3,7 +3,7 @@
 #ifndef CLIENTS_SHADOW_MEMORY_CLIENT_H_
 #define CLIENTS_SHADOW_MEMORY_CLIENT_H_
 
-#include <granary.h>
+#include "clients/util/instrument_memop.h"
 
 // Forward declaration.
 class DirectMappedShadowMemory;
@@ -38,7 +38,8 @@ class ShadowedMemoryOperand {
 class ShadowStructureDescription {
  public:
   ShadowStructureDescription *next;
-  void (*instrumenter)(const ShadowedMemoryOperand &);
+  void (*instrumenter)(const ShadowedMemoryOperand &op);
+  bool (*predicate)(const InstrumentedMemoryOperand &op);
   size_t offset;
   const size_t size;
   const size_t align;
@@ -65,10 +66,15 @@ class GetShadowStructureDescription {
   GetShadowStructureDescription(void) = delete;
 };
 
+namespace detail {
+bool AlwaysInstrumentMemOpPredicate(const InstrumentedMemoryOperand &);
+}  // namespace detail
+
 template <typename T>
 ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
   nullptr,
   nullptr,
+  &detail::AlwaysInstrumentMemOpPredicate,
   0,
   sizeof(T),
   alignof(T),
@@ -79,7 +85,8 @@ ShadowStructureDescription GetShadowStructureDescription<T>::kDescription = {
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
 void AddShadowStructure(ShadowStructureDescription *desc,
-                        void (*instrumenter)(const ShadowedMemoryOperand &));
+                        void (*instrumenter)(const ShadowedMemoryOperand &),
+                        bool (*predicate)(const InstrumentedMemoryOperand &));
 
 // Returns the address of the shadow memory descriptor.
 template <typename T>
@@ -89,8 +96,10 @@ inline static ShadowStructureDescription *ShadowDescription(void) {
 
 template <typename T>
 inline static void AddShadowStructure(
-    void (*instrumenter)(const ShadowedMemoryOperand &)) {
-  AddShadowStructure(ShadowDescription<T>(), instrumenter);
+    void (*instrumenter)(const ShadowedMemoryOperand &),
+    bool (*predicate)(const InstrumentedMemoryOperand &)=\
+        detail::AlwaysInstrumentMemOpPredicate) {
+  AddShadowStructure(ShadowDescription<T>(), instrumenter, predicate);
 }
 
 // Returns the address of some shadow object.

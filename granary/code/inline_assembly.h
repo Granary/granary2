@@ -17,8 +17,7 @@
 namespace granary {
 
 enum {
-  kMaxNumInlineVars = 16,
-  kMaxNumFuncOperands = 6
+  kMaxNumInlineVars = 16
 };
 
 #ifdef GRANARY_INTERNAL
@@ -91,7 +90,8 @@ class InlineAssemblyBlock {
 class InlineFunctionCall {
  public:
   InlineFunctionCall(DecodedBlock *block, AppPC target,
-                     Operand ops[kMaxNumFuncOperands], size_t num_args_);
+                     Operand ops[detail::kMaxNumFuncOperands],
+                     size_t num_args_);
 
   inline size_t NumArguments(void) const {
     return num_args;
@@ -104,8 +104,8 @@ class InlineFunctionCall {
 
   AppPC target_app_pc;
   size_t num_args;
-  Operand args[kMaxNumFuncOperands];
-  VirtualRegister arg_regs[kMaxNumFuncOperands];
+  Operand args[detail::kMaxNumFuncOperands];
+  VirtualRegister arg_regs[detail::kMaxNumFuncOperands];
 
  private:
   InlineFunctionCall(void) = delete;
