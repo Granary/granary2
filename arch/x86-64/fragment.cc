@@ -1,4 +1,4 @@
-/* Caopyright 2014 Peter Goodman, all rights reserved. */
+/* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL

@@ -20,6 +20,8 @@ namespace granary {
 // TODO(pag):  If we count the number of uses of a reg, then we can potentially
 //             back-propagate, and then "fake" constant-propagation.
 
+// TODO(pag): Only propagate through direct jumps?
+
 
 #if 0
 

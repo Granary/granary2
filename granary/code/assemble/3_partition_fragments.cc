@@ -19,7 +19,10 @@
 #ifdef GRANARY_WHERE_user
 GRANARY_DEFINE_bool(try_spill_VRs_to_stack, true,
     "Should Granary try to spill virtual registers onto the call stack? The "
-    "default is `yes`.");
+    "default is `yes`.\n"
+    "\n"
+    "Note: Disabling this is a good way to test if stack spilling/filling is\n"
+    "      the cause of a bug.");
 #endif  // GRANARY_WHERE_user
 
 namespace granary {

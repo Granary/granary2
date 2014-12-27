@@ -189,15 +189,15 @@ class InlineAssemblyParser {
           }
           if (Peek('+') || Peek(']')) {
             state = InterpretRegAsBase;
-            // Fall-through.
+            goto lInterpretRegAsBase;
 
           } else if (Peek('*')) {
             state = InterpretRegAsIndex;
-            break;
           }
+          break;
 
-        [[clang::fallthrough]];
         case InterpretRegAsBase:
+        lInterpretRegAsBase:
           GRANARY_ASSERT(reg.IsValid());
           op->mem.base = reg;
           if (Peek('+')) {
@@ -210,6 +210,7 @@ class InlineAssemblyParser {
           break;
 
         case InterpretRegAsIndex:
+        lInterpretRegAsIndex:
           GRANARY_ASSERT(reg.IsValid());
           op->mem.index = reg;
           op->mem.scale = 1;
@@ -221,7 +222,7 @@ class InlineAssemblyParser {
             Accept('+');
             ConsumeWhiteSpace();
             state = ParseDisp;
-          } else {
+          } else if (!Peek(']')) {
             GRANARY_ASSERT(false);
           }
           break;
@@ -233,19 +234,21 @@ class InlineAssemblyParser {
           } else if (PeekAlpha()) {  // Index arch reg.
             reg = ParseArchRegister();
             state = InterpretRegAsIndex;
+            goto lInterpretRegAsIndex;
 
           } else if (Peek('%')) {  // Index var reg, or displacement imm reg.
             auto &aop(ParseOperandVar());
             if (aop.IsRegister()) {
               reg = aop.reg.WidenedTo(arch::GPR_WIDTH_BYTES);
               state = InterpretRegAsIndex;
+              goto lInterpretRegAsIndex;
 
             } else if (aop.IsImmediate()) {
               op->mem.disp = static_cast<int32_t>(aop.imm.as_int);
 
               // Make sure that we don't lost precision.
               GRANARY_ASSERT(op->mem.disp == aop.imm.as_int);
-              goto done;
+              goto lDone;
 
             } else {
               GRANARY_ASSERT(false);
@@ -270,7 +273,7 @@ class InlineAssemblyParser {
             ConsumeWhiteSpace();
             state = ParseDisp;
           } else {
-            goto done;
+            goto lDone;
           }
           break;
 
@@ -291,10 +294,10 @@ class InlineAssemblyParser {
           } else {
             GRANARY_ASSERT(false);
           }
-          goto done;
+          goto lDone;
       }
     }
-  done:
+  lDone:
     GRANARY_ASSERT(op->mem.base.IsValid() || op->mem.index.IsValid());
     ConsumeWhiteSpace();
     Accept(']');
@@ -305,7 +308,7 @@ class InlineAssemblyParser {
     if (6 == op->mem.disp) {
 
     }
-    // Canonicalise to use base reg over index reg when it makes sense.
+    // Canonicalize to use base reg over index reg when it makes sense.
     if (!op->is_compound && op->mem.index.IsValid()) {
       op->mem.base = op->mem.index;
       op->mem.index = VirtualRegister();
