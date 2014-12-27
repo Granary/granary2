@@ -68,8 +68,8 @@ class Trace final {
   GRANARY_INTERNAL_DEFINITION void AddEntryBlock(Block *block);
 
   // Allocate a new virtual register.
-  GRANARY_INTERNAL_DEFINITION
-  VirtualRegister AllocateVirtualRegister(size_t num_bytes);
+  VirtualRegister AllocateVirtualRegister(
+      size_t num_bytes=arch::GPR_WIDTH_BYTES);
 
  private:
   friend class BlockFactory;  // For `first_new_block`.

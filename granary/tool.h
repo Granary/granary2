@@ -49,15 +49,14 @@ class InstrumentationTool {
   // should be materialized.
   //
   // This method is repeatedly executed until no more materialization
-  // requests are made.
-  virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     Trace *cfg);
+  // requests are made, or until a pre-defined limit is reached.
+  virtual void InstrumentControlFlow(BlockFactory *factory, Trace *trace);
 
   // Used to implement more complex forms of instrumentation where tools need
-  // to see the entire local control-flow graph.
+  // to see the entire trace.
   //
   // This method is executed once per tool per instrumentation session.
-  virtual void InstrumentBlocks(const Trace *cfg);
+  virtual void InstrumentBlocks(Trace *trace);
 
   // Used to implement the typical JIT-based model of single basic-block at a
   // time instrumentation.

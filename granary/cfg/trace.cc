@@ -89,7 +89,8 @@ VirtualRegister Trace::AllocateVirtualRegister(
     size_t num_bytes) {
   GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
   GRANARY_ASSERT((1 << 16) > num_virtual_regs);
-  return VirtualRegister(VR_KIND_VIRTUAL_GPR, static_cast<uint8_t>(num_bytes),
+  return VirtualRegister(kVirtualRegisterKindVirtualGpr,
+                         static_cast<uint8_t>(num_bytes),
                          static_cast<uint16_t>(num_virtual_regs++));
 }
 

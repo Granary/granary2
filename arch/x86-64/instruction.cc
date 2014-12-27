@@ -366,18 +366,18 @@ static bool OperandMatchesAction(const OperandMatcher &m, const Operand &op) {
   const auto is_read = op.IsRead();
   const auto is_write = op.IsWrite();
   if (is_read && is_write) {
-    return OperandAction::READ_ONLY != m.action &&
-           OperandAction::WRITE_ONLY != m.action;
+    return kOperandActionReadOnly != m.action &&
+           kOperandActionWriteOnly != m.action;
 
   } else if (is_read) {
-    return OperandAction::WRITE != m.action &&
-           OperandAction::WRITE_ONLY != m.action &&
-           OperandAction::READ_AND_WRITE != m.action;
+    return kOperandActionWrite != m.action &&
+           kOperandActionWriteOnly != m.action &&
+           kOperandActionReadWrite != m.action;
 
   } else if (is_write) {
-    return OperandAction::READ != m.action &&
-           OperandAction::READ_ONLY != m.action &&
-           OperandAction::READ_AND_WRITE != m.action;
+    return kOperandActionRead != m.action &&
+           kOperandActionReadOnly != m.action &&
+           kOperandActionReadWrite != m.action;
 
   } else {
     GRANARY_ASSERT(false);
@@ -387,10 +387,13 @@ static bool OperandMatchesAction(const OperandMatcher &m, const Operand &op) {
 
 // Returns true of the operand is matched and bound to the operand in the
 // matcher.
+//
+// We use the `OperandMatcher::type` because we might have been passed an
+// invalid `Operand`, and so the `m.op` can't tell us its type.
 static bool BindOperand(const OperandMatcher &m, Operand *op) {
-  if ((op->IsRegister() && IsA<RegisterOperand *>(m.op)) ||
-      (op->IsMemory() && IsA<MemoryOperand *>(m.op)) ||
-      (op->IsImmediate() && IsA<ImmediateOperand *>(m.op))) {
+  if ((op->IsRegister() && kOperandTypeRegister == m.type) ||
+      (op->IsMemory() && kOperandTypeMemory == m.type) ||
+      (op->IsImmediate() && kOperandTypeImmediate == m.type)) {
     m.op->UnsafeReplace(op);
     return true;
   } else {
@@ -402,21 +405,18 @@ static bool BindOperand(const OperandMatcher &m, Operand *op) {
 //
 // TODO(pag): Extend matching beyond register operands.
 static bool MatchOperand(const OperandMatcher &m, const Operand &op) {
-  auto reg_op = DynamicCast<RegisterOperand *>(m.op);
-  return (op.IsRegister() && reg_op && op.reg == reg_op->Register());
+  return m.op->IsRegister() && op.IsRegister() &&
+         op.reg == UnsafeCast<RegisterOperand *>(m.op)->Register();
 }
 
 // Try to match an operand, and update the `MatchState` accordingly.
 bool TryMatchOperand(const OperandMatcher &m, Operand *op) {
   if (!OperandMatchesAction(m, *op)) return false;
-  if (GRANARY_LIKELY(OperandConstraint::BIND == m.constraint)) {
-    if (!BindOperand(m, op)) {
-      return false;
-    }
-  } else if (!MatchOperand(m, *op)) {
-    return false;
+  if (GRANARY_LIKELY(kOperandConstraintBind == m.constraint)) {
+    return BindOperand(m, op);
+  } else {
+    return MatchOperand(m, *op);
   }
-  return true;
 }
 
 }  // namespace
@@ -435,7 +435,7 @@ size_t Instruction::CountMatchedOperands(
 
   for (const auto max_i = matchers.size(); i < max_i; ++op_num) {
     auto &op(ops[op_num]);
-    if (XED_ENCODER_OPERAND_TYPE_INVALID == op.type) break;
+    if (!op.IsValid()) break;
     if (TryMatchOperand(matcher_array[i], &op)) {
       ++i;
     }

@@ -181,16 +181,10 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
              XED_REG_RSP != index_reg) {
     instr_op->reg.DecodeFromNative(index_reg);
     instr_op->is_compound = false;
-    if (XED_REG_INVALID != segment_reg) {
-      instr_op->reg.ConvertToSegmentOffset();
-    }
   } else if (XED_REG_INVALID == index_reg && !disp &&
              XED_REG_RSP != base_reg) {
     instr_op->reg.DecodeFromNative(base_reg);
     instr_op->is_compound = false;
-    if (XED_REG_INVALID != segment_reg) {
-      instr_op->reg.ConvertToSegmentOffset();
-    }
   } else {
     instr_op->mem.base.DecodeFromNative(base_reg);
     instr_op->mem.index.DecodeFromNative(index_reg);

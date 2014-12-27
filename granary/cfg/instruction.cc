@@ -77,6 +77,7 @@ AnnotationInstruction::~AnnotationInstruction(void) {
     case kAnnotSSARegisterWebOwner:
     case kAnnotSSASaveRegister:
     case kAnnotSSARestoreRegister:
+    case kAnnotSSASwapRestoreRegister:
       delete GetMetaData<SSARegisterWeb *>(this);
       ClearMetaData();
       break;

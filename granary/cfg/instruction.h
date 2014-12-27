@@ -182,6 +182,7 @@ enum InstructionAnnotation {
   // Note: Saves and restores only operate on architectural GPRs.
   kAnnotSSASaveRegister,
   kAnnotSSARestoreRegister,
+  kAnnotSSASwapRestoreRegister,
 
   // Force some registers to be live. This is useful for specifying that the
   // native values of some arch GPRs *must* be passed to something like an
@@ -331,7 +332,7 @@ class LabelInstruction final : public AnnotationInstruction {
   GRANARY_INTERNAL_DEFINITION Fragment *fragment;
 };
 
-// An instruction containing an driver-specific decoded instruction.
+// An instruction containing an architecture-specific decoded instruction.
 class NativeInstruction : public Instruction {
  public:
   virtual ~NativeInstruction(void);

@@ -32,8 +32,11 @@ class InstrumentedMemoryOperand {
 // Abstract tool for instrumenting memory operands.
 class MemOpInstrumentationTool : public granary::InstrumentationTool {
  public:
+  MemOpInstrumentationTool(void);
+
   virtual ~MemOpInstrumentationTool(void) = default;
 
+  virtual void InstrumentBlocks(granary::Trace *trace) override;
   virtual void InstrumentBlock(granary::DecodedBlock *bb) override;
 
  protected:
@@ -42,39 +45,30 @@ class MemOpInstrumentationTool : public granary::InstrumentationTool {
  private:
 
   // Instrument a memory operation.
-  void InstrumentMemOp(granary::DecodedBlock *bb,
-                       granary::NativeInstruction *instr,
-                       granary::MemoryOperand &mloc,
-                       size_t op_num);
+  void InstrumentMemOp(granary::MemoryOperand &mloc);
 
   // Instrument a memory operand that accesses some memory through a register.
-  void InstrumentRegMemOp(granary::DecodedBlock *bb,
-                          granary::NativeInstruction *instr,
-                          granary::MemoryOperand &mloc,
-                          granary::VirtualRegister reg,
-                          size_t op_num);
+  void InstrumentRegMemOp(granary::MemoryOperand &mloc,
+                          granary::VirtualRegister reg);
 
   // Instrument a memory operand that accesses some memory through an offset of
   // a segment register. We assume that the first quadword stored in the segment
   // points to the segment base address.
-  void InstrumentSegMemOp(granary::DecodedBlock *bb,
-                          granary::NativeInstruction *instr,
-                          granary::MemoryOperand &mloc,
+  void InstrumentSegMemOp(granary::MemoryOperand &mloc,
                           granary::VirtualRegister seg_offs,
-                          size_t op_num);
+                          granary::VirtualRegister seg_reg);
 
   // Instrument a memory operand that accesses some absolute memory address.
-  void InstrumentAddrMemOp(granary::DecodedBlock *bb,
-                           granary::NativeInstruction *instr,
-                           granary::MemoryOperand &mloc,
-                           const void *addr,
-                           size_t op_num);
+  void InstrumentAddrMemOp(granary::MemoryOperand &mloc, const void *addr);
 
   // Instrument a compound memory operation.
-  void InstrumentCompoundMemOp(granary::DecodedBlock *bb,
-                               granary::NativeInstruction *instr,
-                               granary::MemoryOperand &mloc,
-                               size_t op_num);
+  void InstrumentCompoundMemOp(granary::MemoryOperand &mloc);
+
+ private:
+  granary::DecodedBlock *bb;
+  granary::NativeInstruction *instr;
+  granary::VirtualRegister virt_addr_reg[2];
+  size_t op_num;
 };
 
 #endif  // CLIENTS_UTIL_INSTRUMENT_MEMOP_H_

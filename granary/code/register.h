@@ -23,27 +23,23 @@ class Operand;
 
 // The kind of a virtual register.
 enum VirtualRegisterKind : uint8_t {
-  VR_KIND_UNKNOWN = 0,
+  kVirtualRegisterKindInvalid = 0,
 
   // Architectural register that cannot be re-scheduled.
-  VR_KIND_ARCH_FIXED,
+  kVirtualRegisterKindUnschedulable,
 
   // Architectural general-purpose register.
-  VR_KIND_ARCH_GPR,
+  kVirtualRegisterKindArchGpr,
 
   // Virtual general-purpose register.
-  VR_KIND_VIRTUAL_GPR,
-
-  // Virtual register that represents the stack pointer, of some offset of the
-  // stack pointer.
-  VR_KIND_VIRTUAL_STACK
+  kVirtualRegisterKindVirtualGpr
 
   // Index into the virtual register storage location. This is used at virtual
   // register allocation time, and allows us to manage the differences between
   // user space and kernel space at a lower level.
   //
   // Note: This can and should only be used as a memory operand!!
-  _GRANARY_IF_INTERNAL( VR_KIND_VIRTUAL_SLOT )
+  _GRANARY_IF_INTERNAL( kVirtualRegisterKindSlot )
 };
 
 // Defines the different types of virtual registers.
@@ -55,14 +51,11 @@ union alignas(alignof(void *)) VirtualRegister {
   // Initialize a non-ARCH-specific virtual register.
   inline VirtualRegister(VirtualRegisterKind kind_, uint8_t num_bytes_,
                          uint16_t reg_num_)
-      : reg_num(reg_num_),
-        kind(kind_),
-        num_bytes(num_bytes_),
-        byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
-        preserved_byte_mask(0),
-        is_segment_offset(false),
-        is_legacy(false),
-        is_scheduled(VR_KIND_VIRTUAL_GPR != kind) {
+      : value(0) {
+    reg_num = reg_num_;
+    kind = kind_;
+    num_bytes = num_bytes_;
+    byte_mask = static_cast<uint8_t>(~(~0U << num_bytes));
     GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
   }
 
@@ -151,28 +144,29 @@ union alignas(alignof(void *)) VirtualRegister {
 
   // Is this an architectural register?
   inline bool IsNative(void) const {
-    return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_GPR == kind;
+    return kVirtualRegisterKindUnschedulable == kind ||
+           kVirtualRegisterKindArchGpr == kind;
   }
 
   // Is this a general purpose register?
   inline bool IsGeneralPurpose(void) const {
-    return VR_KIND_ARCH_GPR == kind || VR_KIND_VIRTUAL_GPR == kind ||
-           VR_KIND_VIRTUAL_STACK == kind;
+    return kVirtualRegisterKindArchGpr == kind ||
+           kVirtualRegisterKindVirtualGpr == kind;
   }
 
   // Is this a virtual register?
   inline bool IsVirtual(void) const {
-    return VR_KIND_VIRTUAL_GPR == kind || VR_KIND_VIRTUAL_STACK == kind;
+    return kVirtualRegisterKindVirtualGpr == kind;
   }
 
   inline bool IsValid(void) const {
-    return VR_KIND_UNKNOWN != kind;
+    return kVirtualRegisterKindInvalid != kind;
   }
 
   // Is this a virtual spill slot? Virtual spill slots are used to identify
   // memory locations that are used for virtual register spilling/filling.
   GRANARY_INTERNAL_DEFINITION inline bool IsVirtualSlot(void) const {
-    return VR_KIND_VIRTUAL_SLOT == kind;
+    return kVirtualRegisterKindSlot == kind;
   }
 
   // Is this a "legacy" register? These registers come from older versions of
@@ -195,20 +189,6 @@ union alignas(alignof(void *)) VirtualRegister {
   //
   // Note: This has an architecture-specific implementation.
   bool IsStackPointer(void) const;
-
-  // Is this a "virtual" stack pointer?
-  inline bool IsVirtualStackPointer(void) const {
-    return VR_KIND_VIRTUAL_STACK == kind;
-  }
-
-  // Is this register used as an offset from the base address of a memory
-  // segment (i.e. in the computation of a segmented address)?
-  //
-  // Note: If the architecture does not support memory segmentation then this
-  //       always returns `false`.
-  inline bool IsSegmentOffset(void) const {
-    return is_segment_offset;
-  }
 
   // Is this the instruction pointer?
   //
@@ -254,14 +234,16 @@ union alignas(alignof(void *)) VirtualRegister {
     return reg_num != that.reg_num || kind != that.kind;
   }
 
-  inline void ConvertToVirtualStackPointer(void) {
-    GRANARY_ASSERT(VR_KIND_VIRTUAL_GPR == kind);
-    kind = VR_KIND_VIRTUAL_STACK;
+  // Mark the value of this register as being an alias for some displacement of
+  // the stack pointer.
+  inline void MarkAsStackPointerAlias(void) {
+    is_stack_pointer = true;
   }
 
-  GRANARY_INTERNAL_DEFINITION
-  inline void ConvertToSegmentOffset(void) {
-    is_segment_offset = true;
+  // Does the current value of this register alias some displacement of the
+  // stack pointer?
+  inline bool IsStackPointerAlias(void) const {
+    return is_stack_pointer;
   }
 
  private:
@@ -269,7 +251,7 @@ union alignas(alignof(void *)) VirtualRegister {
 #pragma clang diagnostic ignored "-Wpacked"
   struct {
     // Register number. In the case of architectural registers, this is some
-    // identifier that maps back to the driver-specific description for
+    // identifier that maps back to the architecture-specific description for
     // architectural registers.
     uint16_t reg_num;
 
@@ -293,17 +275,14 @@ union alignas(alignof(void *)) VirtualRegister {
     // not represented by the register are not preserved.
     uint8_t preserved_byte_mask;
 
-    // Is this register an offset from a memory segment?
-    //
-    // Note: This is architecture-specific. If the architecture does not
-    //       support memory segmentation then this is always false.
-    bool is_segment_offset:1;
-
     // Is this register a legacy register?
     bool is_legacy:1;
 
     // Has this register been scheduled?
     bool is_scheduled:1;
+
+    // Is this a stack pointer / alias of the stack pointer?
+    bool is_stack_pointer:1;
   } __attribute__((packed));
 #pragma clang diagnostic pop
   uint64_t value;
@@ -338,7 +317,7 @@ class RegisterSetIterator {
 
   VirtualRegister operator*(void) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES, num);
+    return VirtualRegister(kVirtualRegisterKindArchGpr, arch::GPR_WIDTH_BYTES, num);
   }
 
   inline void operator++(void) {

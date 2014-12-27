@@ -69,7 +69,7 @@ enum {
 
   // Maximum number of spill slots that can be used for spilling GPRs for use
   // by virtual registers.
-  MAX_NUM_SPILL_SLOTS = 32,
+  MAX_NUM_SPILL_SLOTS = 64,
 
   // Byte value with which to poison executable memory. This should normally
   // correspond to something that .

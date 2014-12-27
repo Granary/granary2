@@ -286,23 +286,6 @@ class Instruction : public InstructionInterface {
     // Is this an atomic operation?
     bool is_atomic:1;
 
-    // Is this a register save/restore operation? This is an optimization for
-    // virtual register usage.
-    //
-    // Note: This flag should *only* be set if both the save and restore are
-    //       guaranteed to be within the same fragment. If no such guarantee
-    //       holds then the VR system will *really* screw things up (e.g.
-    //       optimizing the save but not the restore).
-    //
-    // Note: This affects the behavior of copy propagation and fragment-local
-    //       register scheduling. Specifically, a save/restore instruction
-    //       cannot be involved in copy propagation. Further, the fragment-
-    //       local register scheduler normally delays the spill of a register
-    //       until the beginning of a fragment, so as to re-use the stolen
-    //       register. With save/restore instructions, the spiller/filler is
-    //       greedy and always spills before and fills after.
-    bool is_save_restore:1;
-
     // Can this instruction be removed? This comes up in cases like late
     // mangling (`1_mangle.cc`) and VR slot allocation (`9_allocate_slots.cc`)
     // interacting with indirect calls and jumps, where the mangler has

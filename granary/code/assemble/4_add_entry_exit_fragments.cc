@@ -3,7 +3,6 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
@@ -25,15 +24,6 @@ extern void VisitInstructionFlags(const arch::Instruction &instr,
 //
 // Note: This has an architecture-specific implementation.
 extern uint32_t AllArithmeticFlags(void);
-
-// Returns the architectural register that is potentially killed by the
-// instructions injected to save/restore flags.
-//
-// Note: This must return a register with width `arch::GPR_WIDTH_BYTES` if the
-//       returned register is valid.
-//
-// Note: This has an architecture-specific implementation.
-extern VirtualRegister FlagKillReg(void);
 
 }  // namespace arch
 namespace {
@@ -193,7 +183,7 @@ static void AnalyzeFlagsUse(FragmentList *frags) {
 }
 
 // Group fragments together into flag zones.
-static void UnionFlagZones(FragmentList *frags) {
+static void CombineFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     auto code_frag = DynamicCast<CodeFragment *>(frag);
     if (!code_frag) continue;
@@ -202,27 +192,9 @@ static void UnionFlagZones(FragmentList *frags) {
       auto code_succ = DynamicCast<CodeFragment *>(succ);
       if (!code_succ) continue;
       if (frag->partition != succ->partition) continue;
-      if (frag->flag_zone == succ->flag_zone) continue;
       if (code_frag->type != code_succ->type) continue;
 
-      code_frag->flag_zone.Union(code_frag, code_succ);
-    }
-  }
-}
-
-// Allocate flag zones for instrumentation fragments.
-static void LabelFlagZones(Trace *cfg, FragmentList *frags) {
-  UnionFlagZones(frags);
-  for (auto frag : FragmentListIterator(frags)) {
-    if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (FRAG_TYPE_APP == code_frag->type) continue;
-
-      auto &flag_zone(frag->flag_zone.Value());
-      if (!flag_zone) {
-        flag_zone = new FlagZone(
-                    cfg->AllocateVirtualRegister(arch::GPR_WIDTH_BYTES),
-                    arch::FlagKillReg());
-      }
+      code_frag->flag_zone.Union(code_succ->flag_zone);
     }
   }
 }
@@ -233,16 +205,15 @@ static void LabelFlagZones(Trace *cfg, FragmentList *frags) {
 static void UpdateFlagZones(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (FRAG_TYPE_INST != frag->type) continue;
-    if (auto flag_zone = frag->flag_zone.Value()) {
+    auto &flag_zone(frag->flag_zone.Value());
 #if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
-      if (auto code = DynamicCast<CodeFragment *>(frag)) {
-        GRANARY_ASSERT(code->attr.modifies_flags ==
-                       !!frag->inst_flags.all_written_flags);
-      }
-#endif  // GRANARY_TARGET_debug
-      flag_zone->killed_flags |= frag->inst_flags.all_written_flags;
-      flag_zone->live_flags |= frag->app_flags.exit_live_flags;
+    if (auto code = DynamicCast<CodeFragment *>(frag)) {
+      GRANARY_ASSERT(code->attr.modifies_flags ==
+                     !!frag->inst_flags.all_written_flags);
     }
+#endif  // GRANARY_TARGET_debug
+    flag_zone.killed_flags |= frag->inst_flags.all_written_flags;
+    flag_zone.live_flags |= frag->app_flags.exit_live_flags;
   }
 }
 
@@ -251,7 +222,7 @@ static void UpdateFlagZones(FragmentList *frags) {
 static bool IsFlagInstCode(Fragment *frag) {
   if (FRAG_TYPE_INST != frag->type) return false;
   auto zone = frag->flag_zone.Value();
-  return zone->killed_flags;
+  return zone.killed_flags;
 }
 
 // Returns true if the transition between `curr` and `next` represents a flags
@@ -420,8 +391,8 @@ static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
   Fragment *frag = new T;
 
   frag->successors[kFragSuccFallThrough] = succ;
-  frag->partition.Union(frag, inherit);
-  frag->flag_zone.Union(frag, inherit);
+  frag->partition.Union(inherit->partition);
+  frag->flag_zone.Union(inherit->flag_zone);
 
   // Propagate flags usage info.
   frag->app_flags.exit_live_flags = succ->app_flags.entry_live_flags;
@@ -465,10 +436,10 @@ static void LabelPartitionsAndTrackFlagRegs(FragmentList *frags) {
 // around groups of instrumentation code fragments. First we add entry/exits
 // around instrumentation code fragments for saving/restoring flags, then we
 // add entry/exits around the partitions for saving/restoring registers.
-void AddEntryAndExitFragments(Trace *cfg, FragmentList *frags) {
+void AddEntryAndExitFragments(FragmentList *frags) {
   PropagateFragKinds(frags);
   AnalyzeFlagsUse(frags);
-  LabelFlagZones(cfg, frags);
+  CombineFlagZones(frags);
   UpdateFlagZones(frags);
 
   // Guarantee that there is a partition entry fragment. The one special case

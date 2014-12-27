@@ -61,14 +61,13 @@ END_FUNC(granary_arch_enter_direct_edge)
 // Note: We assume flags are save before this function is invoked.
 //
 // Note: On entry, `RDI` is a pointer to a `IndirectEdge` data structure and
-//       `RCX` is a pointer to the application code that must be translated.
+//       `RSI` is the native target PC.
 //
 // Note: `RDI` is live on exit, and so must be saved/restored.
 DEFINE_FUNC(granary_arch_enter_indirect_edge)
-    // Save all regs, except `RCX`.
     push    rax
-    push    rsi
     push    rdi
+    push    rcx
     push    rdx
     push    rbx
     push    rbp
@@ -80,8 +79,6 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
     push    r13
     push    r14
     push    r15
-
-    mov     rsi, rcx  // Move `RCX` into `arg2`.
 
     ALIGN_STACK_16(r15)
 
@@ -100,8 +97,8 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
     pop     rbp
     pop     rbx
     pop     rdx
+    pop     rcx
     pop     rdi
-    pop     rsi
     pop     rax
     ret
 END_FUNC(granary_arch_enter_indirect_edge)

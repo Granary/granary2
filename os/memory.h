@@ -25,16 +25,10 @@ void *AllocateDataPages(size_t num);
 void FreeDataPages(void *, size_t num);
 
 // Allocates `num` number of executable pages from the block code cache.
-CachePC AllocateBlockCachePages(size_t num);
+CachePC AllocateCodePages(size_t num);
 
 // Frees `num` pages back to the block code cache.
-void FreeBlockCachePages(CachePC, size_t num);
-
-// Allocates `num` number of executable pages from the block code cache.
-CachePC AllocateEdgeCachePages(size_t num);
-
-// Frees `num` pages back to the block code cache.
-void FreeEdgeCachePages(CachePC, size_t num);
+void FreeCodePages(CachePC, size_t num);
 
 // A single page-aligned data structure.
 struct alignas(arch::PAGE_SIZE_BYTES) PageFrame {
@@ -42,10 +36,10 @@ struct alignas(arch::PAGE_SIZE_BYTES) PageFrame {
 };
 
 // Used to dynamically allocate pages from a heap.
-template <int kNumPages>
-struct DynamicHeap {
+template <size_t kNumPages>
+struct PageAllocator {
  public:
-  explicit DynamicHeap(void *heap_)
+  explicit PageAllocator(void *heap_)
       : num_allocated_pages(ATOMIC_VAR_INIT(0U)),
         free_pages_lock(),
         heap(reinterpret_cast<PageFrame *>(heap_)) {}
@@ -53,21 +47,28 @@ struct DynamicHeap {
   void *AllocatePages(size_t num);
   void FreePages(void *addr, size_t num);
 
+  void *BeginAddress(void) const {
+    return heap;
+  }
+  void *EndAddress(void) const {
+    return &(heap[kNumPages]);
+  }
+
  private:
-  DynamicHeap(void) = delete;
+  PageAllocator(void) = delete;
 
   void *AllocatePagesSlow(size_t num);
   void FreePage(uintptr_t addr);
 
   enum {
-    NUM_PAGES_IN_HEAP = kNumPages,
-    NUM_BITS_PER_FREE_SET_SLOT = 64,
-    NUM_SLOTS_IN_FREE_SET = NUM_PAGES_IN_HEAP / NUM_BITS_PER_FREE_SET_SLOT
+    kNumPagesInHeap = kNumPages,
+    kNumBitsPerFreeSetSlot = 64,
+    kNumSlotsInFreeSet = (kNumPagesInHeap / kNumBitsPerFreeSetSlot) + 1
   };
 
   // Bitset of free pages. Free pages are marked as set bits. This is only
   // queried if no more pages remain to be allocated from the main heap.
-  uint64_t free_pages[NUM_SLOTS_IN_FREE_SET];
+  uint64_t free_pages[kNumSlotsInFreeSet];
 
   // Number of allocated pages.
   std::atomic<size_t> num_allocated_pages;
@@ -76,18 +77,7 @@ struct DynamicHeap {
   SpinLock free_pages_lock;
 
   // Pages in the heap;
-  PageFrame *heap;
-};
-
-// Implements a fixed-size heap that dishes out memory at the page granularity.
-template <int kNumPages>
-struct StaticHeap : public DynamicHeap<kNumPages> {
- public:
-  StaticHeap(void)
-      : DynamicHeap<kNumPages>(&(heap_pages[0])) {}
-
- protected:
-  PageFrame heap_pages[kNumPages];
+  PageFrame * const heap;
 };
 
 // Perform a slow scan of all free pages and look for a sequence of `num` set
@@ -96,20 +86,20 @@ struct StaticHeap : public DynamicHeap<kNumPages> {
 //
 // Note: This is not able to allocate logically consecutive free pages if those
 //       pages cross two slots.
-template <int kNumPages>
-void *DynamicHeap<kNumPages>::AllocatePagesSlow(size_t num) {
+template <size_t kNumPages>
+void *PageAllocator<kNumPages>::AllocatePagesSlow(size_t num) {
   SpinLockedRegion locker(&free_pages_lock);
   auto i = 0U;
-  auto first_set_bit_reset = static_cast<uint32_t>(NUM_BITS_PER_FREE_SET_SLOT);
+  auto first_set_bit_reset = static_cast<uint32_t>(kNumBitsPerFreeSetSlot);
   auto first_set_bit = first_set_bit_reset;
 
-  for (; i < NUM_SLOTS_IN_FREE_SET; ++i) {
+  for (; i < kNumSlotsInFreeSet; ++i) {
     if (!free_pages[i]) {
       continue;  // Nothing freed on this group of pages.
     }
 
     first_set_bit = first_set_bit_reset;
-    for (auto bit = 0U; bit < NUM_BITS_PER_FREE_SET_SLOT; ++bit) {
+    for (auto bit = 0U; bit < kNumBitsPerFreeSetSlot; ++bit) {
       if (free_pages[i] & (1UL << bit)) {
         if (bit < first_set_bit) {  // First free page found.
           first_set_bit = bit;
@@ -125,7 +115,7 @@ void *DynamicHeap<kNumPages>::AllocatePagesSlow(size_t num) {
       }
     }
 
-    if ((num <= (NUM_BITS_PER_FREE_SET_SLOT - first_set_bit))) {
+    if ((num <= (kNumBitsPerFreeSetSlot - first_set_bit))) {
       goto allocate;
     }
   }
@@ -139,25 +129,25 @@ allocate:
   }
 
   // Return the allocated memory.
-  return &(heap[first_set_bit + (i * NUM_BITS_PER_FREE_SET_SLOT)]);
+  return &(heap[first_set_bit + (i * kNumBitsPerFreeSetSlot)]);
 }
 
 // Free a page. Assumes that `free_pages_lock` is held.
-template <int kNumPages>
-void DynamicHeap<kNumPages>::FreePage(uintptr_t addr) {
+template <size_t kNumPages>
+void PageAllocator<kNumPages>::FreePage(uintptr_t addr) {
   auto base = reinterpret_cast<uintptr_t>(&(heap[0]));
-  auto slot = (addr - base) / NUM_BITS_PER_FREE_SET_SLOT;
-  auto bit = (addr - base) % NUM_BITS_PER_FREE_SET_SLOT;
+  auto slot = (addr - base) / kNumBitsPerFreeSetSlot;
+  auto bit = (addr - base) % kNumBitsPerFreeSetSlot;
   free_pages[slot] |= (1UL << bit);
 }
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
-template <int kNumPages>
-void *DynamicHeap<kNumPages>::AllocatePages(size_t num) {
+template <size_t kNumPages>
+void *PageAllocator<kNumPages>::AllocatePages(size_t num) {
   auto index = num_allocated_pages.fetch_add(num);
   void *mem = nullptr;
-  if (GRANARY_LIKELY(NUM_PAGES_IN_HEAP > (index + num))) {
+  if (GRANARY_LIKELY(kNumPagesInHeap > (index + num))) {
     mem = &(heap[index]);
   } else {
     mem = AllocatePagesSlow(num);
@@ -166,8 +156,8 @@ void *DynamicHeap<kNumPages>::AllocatePages(size_t num) {
 }
 
 // Frees `num` pages back to the OS.
-template <int kNumPages>
-void DynamicHeap<kNumPages>::FreePages(void *addr, size_t num) {
+template <size_t kNumPages>
+void PageAllocator<kNumPages>::FreePages(void *addr, size_t num) {
   auto addr_uint = reinterpret_cast<uintptr_t>(addr);
   auto num_pages = static_cast<uintptr_t>(num);
   SpinLockedRegion locker(&free_pages_lock);
@@ -175,6 +165,48 @@ void DynamicHeap<kNumPages>::FreePages(void *addr, size_t num) {
     FreePage(addr_uint + (i * arch::PAGE_SIZE_BYTES));
   }
 }
+
+// The type of memory allocated by a particular page allocator.
+enum MemoryType {
+  kMemoryTypeRW,
+  kMemoryTypeRWX
+};
+
+// An allocator for some statically specified number of pages of a specific
+// type.
+template <size_t kNumPages, typename Name, MemoryType kMemoryType>
+class StaticPageAllocator;
+
+template <size_t kNumPages, typename Name>
+class StaticPageAllocator<kNumPages, Name, kMemoryTypeRW>
+    : public PageAllocator<kNumPages> {
+ public:
+  StaticPageAllocator(void)
+      : PageAllocator<kNumPages>(&(heap_pages[0])) {}
+
+ protected:
+  static PageFrame heap_pages[kNumPages];
+};
+
+template <size_t kNumPages, typename Name>
+PageFrame __attribute__((section(".bss.granary_unprotected")))
+StaticPageAllocator<kNumPages, Name, kMemoryTypeRW>::heap_pages[kNumPages];
+
+// Implements a fixed-size heap that dishes out memory at the page granularity.
+template <size_t kNumPages, typename Name>
+class StaticPageAllocator<kNumPages, Name, kMemoryTypeRWX>
+    : public PageAllocator<kNumPages> {
+ public:
+  StaticPageAllocator(void)
+      : PageAllocator<kNumPages>(&(pages[0])) {}
+
+ protected:
+  static PageFrame pages[kNumPages];
+};
+
+template <size_t kNumPages, typename Name>
+PageFrame __attribute__((section(".writable_text")))
+StaticPageAllocator<kNumPages, Name, kMemoryTypeRWX>::pages[kNumPages];
 
 }  // namespace os
 }  // namespace granary

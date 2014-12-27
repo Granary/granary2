@@ -13,6 +13,14 @@
 
 namespace granary {
 
+// TODO(pag):  I think a simpler way to do copy propagation will be to track
+//             (somehow) that a register is defined once, and then only read
+//             thereafter, but never used in an RW operation.
+
+// TODO(pag):  If we count the number of uses of a reg, then we can potentially
+//             back-propagate, and then "fake" constant-propagation.
+
+
 #if 0
 
 // Convert writes to register operates into read/writes if there is another

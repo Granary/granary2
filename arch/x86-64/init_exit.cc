@@ -7,6 +7,7 @@
 #include "arch/x86-64/xed.h"
 #include "arch/x86-64/operand.h"
 #include "arch/x86-64/builder.h"
+#include "arch/x86-64/register.h"
 
 #include "granary/breakpoint.h"
 
@@ -45,7 +46,8 @@ extern void InitBlockTracer(void);
 namespace {
 
 // Number of pages allocates to hold the table of implicit operands.
-static size_t num_implicit_operand_pages = 0;
+static size_t gNumImplicitOperandPages = 0;
+static void *gImplicitOperandPages = nullptr;
 
 // Initialize the table of iclass categories.
 static void InitIclassTables(void) {
@@ -211,9 +213,9 @@ static Operand *AllocateImplicitOperands(void) {
   auto num_implicit_ops = CountImplicitOperands();
   auto ops_mem_size = num_implicit_ops * sizeof(Operand);
   auto aligned_ops_mem_size = ops_mem_size + arch::PAGE_SIZE_BYTES - 1;
-  num_implicit_operand_pages = aligned_ops_mem_size / arch::PAGE_SIZE_BYTES;
-  auto ops_mem_raw = os::AllocateDataPages(num_implicit_operand_pages);
-  return reinterpret_cast<Operand *>(ops_mem_raw);
+  gNumImplicitOperandPages = aligned_ops_mem_size / arch::PAGE_SIZE_BYTES;
+  gImplicitOperandPages = os::AllocateDataPages(gNumImplicitOperandPages);
+  return reinterpret_cast<Operand *>(gImplicitOperandPages);
 }
 
 // Fill in an operand as if it's a register operand.
@@ -369,25 +371,233 @@ static void InitOperandTables(void) {
   InitImplicitOperands(ops);
 }
 
-static bool gArchIsInitialized = false;
+// Initialize the register objects. This needs to be done after XED's internal
+// tables have been initialized.
+static void InitVirtualRegs(void) {
+  REG_RFLAGS = VirtualRegister::FromNative(XED_REG_RFLAGS);
+  REG_EFLAGS = VirtualRegister::FromNative(XED_REG_EFLAGS);
+  REG_FLAGS = VirtualRegister::FromNative(XED_REG_FLAGS);
+
+  REG_AX = VirtualRegister::FromNative(XED_REG_AX);
+  REG_CX = VirtualRegister::FromNative(XED_REG_CX);
+  REG_DX = VirtualRegister::FromNative(XED_REG_DX);
+  REG_BX = VirtualRegister::FromNative(XED_REG_BX);
+  REG_SP = VirtualRegister::FromNative(XED_REG_SP);
+  REG_BP = VirtualRegister::FromNative(XED_REG_BP);
+  REG_SI = VirtualRegister::FromNative(XED_REG_SI);
+  REG_DI = VirtualRegister::FromNative(XED_REG_DI);
+  REG_R8W = VirtualRegister::FromNative(XED_REG_R8W);
+  REG_R9W = VirtualRegister::FromNative(XED_REG_R9W);
+  REG_R10W = VirtualRegister::FromNative(XED_REG_R10W);
+  REG_R11W = VirtualRegister::FromNative(XED_REG_R11W);
+  REG_R12W = VirtualRegister::FromNative(XED_REG_R12W);
+  REG_R13W = VirtualRegister::FromNative(XED_REG_R13W);
+  REG_R14W = VirtualRegister::FromNative(XED_REG_R14W);
+  REG_R15W = VirtualRegister::FromNative(XED_REG_R15W);
+  REG_EAX = VirtualRegister::FromNative(XED_REG_EAX);
+  REG_ECX = VirtualRegister::FromNative(XED_REG_ECX);
+  REG_EDX = VirtualRegister::FromNative(XED_REG_EDX);
+  REG_EBX = VirtualRegister::FromNative(XED_REG_EBX);
+  REG_ESP = VirtualRegister::FromNative(XED_REG_ESP);
+  REG_EBP = VirtualRegister::FromNative(XED_REG_EBP);
+  REG_ESI = VirtualRegister::FromNative(XED_REG_ESI);
+  REG_EDI = VirtualRegister::FromNative(XED_REG_EDI);
+  REG_R8D = VirtualRegister::FromNative(XED_REG_R8D);
+  REG_R9D = VirtualRegister::FromNative(XED_REG_R9D);
+  REG_R10D = VirtualRegister::FromNative(XED_REG_R10D);
+  REG_R11D = VirtualRegister::FromNative(XED_REG_R11D);
+  REG_R12D = VirtualRegister::FromNative(XED_REG_R12D);
+  REG_R13D = VirtualRegister::FromNative(XED_REG_R13D);
+  REG_R14D = VirtualRegister::FromNative(XED_REG_R14D);
+  REG_R15D = VirtualRegister::FromNative(XED_REG_R15D);
+  REG_RAX = VirtualRegister::FromNative(XED_REG_RAX);
+  REG_RCX = VirtualRegister::FromNative(XED_REG_RCX);
+  REG_RDX = VirtualRegister::FromNative(XED_REG_RDX);
+  REG_RBX = VirtualRegister::FromNative(XED_REG_RBX);
+  REG_RSP = VirtualRegister::FromNative(XED_REG_RSP);
+  REG_RBP = VirtualRegister::FromNative(XED_REG_RBP);
+  REG_RSI = VirtualRegister::FromNative(XED_REG_RSI);
+  REG_RDI = VirtualRegister::FromNative(XED_REG_RDI);
+  REG_R8 = VirtualRegister::FromNative(XED_REG_R8);
+  REG_R9 = VirtualRegister::FromNative(XED_REG_R9);
+  REG_R10 = VirtualRegister::FromNative(XED_REG_R10);
+  REG_R11 = VirtualRegister::FromNative(XED_REG_R11);
+  REG_R12 = VirtualRegister::FromNative(XED_REG_R12);
+  REG_R13 = VirtualRegister::FromNative(XED_REG_R13);
+  REG_R14 = VirtualRegister::FromNative(XED_REG_R14);
+  REG_R15 = VirtualRegister::FromNative(XED_REG_R15);
+  REG_AL = VirtualRegister::FromNative(XED_REG_AL);
+  REG_CL = VirtualRegister::FromNative(XED_REG_CL);
+  REG_DL = VirtualRegister::FromNative(XED_REG_DL);
+  REG_BL = VirtualRegister::FromNative(XED_REG_BL);
+  REG_SPL = VirtualRegister::FromNative(XED_REG_SPL);
+  REG_BPL = VirtualRegister::FromNative(XED_REG_BPL);
+  REG_SIL = VirtualRegister::FromNative(XED_REG_SIL);
+  REG_DIL = VirtualRegister::FromNative(XED_REG_DIL);
+  REG_R8B = VirtualRegister::FromNative(XED_REG_R8B);
+  REG_R9B = VirtualRegister::FromNative(XED_REG_R9B);
+  REG_R10B = VirtualRegister::FromNative(XED_REG_R10B);
+  REG_R11B = VirtualRegister::FromNative(XED_REG_R11B);
+  REG_R12B = VirtualRegister::FromNative(XED_REG_R12B);
+  REG_R13B = VirtualRegister::FromNative(XED_REG_R13B);
+  REG_R14B = VirtualRegister::FromNative(XED_REG_R14B);
+  REG_R15B = VirtualRegister::FromNative(XED_REG_R15B);
+  REG_AH = VirtualRegister::FromNative(XED_REG_AH);
+  REG_CH = VirtualRegister::FromNative(XED_REG_CH);
+  REG_DH = VirtualRegister::FromNative(XED_REG_DH);
+  REG_BH = VirtualRegister::FromNative(XED_REG_BH);
+  REG_ERROR = VirtualRegister::FromNative(XED_REG_ERROR);
+  REG_RIP = VirtualRegister::FromNative(XED_REG_RIP);
+  REG_EIP = VirtualRegister::FromNative(XED_REG_EIP);
+  REG_IP = VirtualRegister::FromNative(XED_REG_IP);
+  REG_K0 = VirtualRegister::FromNative(XED_REG_K0);
+  REG_K1 = VirtualRegister::FromNative(XED_REG_K1);
+  REG_K2 = VirtualRegister::FromNative(XED_REG_K2);
+  REG_K3 = VirtualRegister::FromNative(XED_REG_K3);
+  REG_K4 = VirtualRegister::FromNative(XED_REG_K4);
+  REG_K5 = VirtualRegister::FromNative(XED_REG_K5);
+  REG_K6 = VirtualRegister::FromNative(XED_REG_K6);
+  REG_K7 = VirtualRegister::FromNative(XED_REG_K7);
+  REG_MMX0 = VirtualRegister::FromNative(XED_REG_MMX0);
+  REG_MMX1 = VirtualRegister::FromNative(XED_REG_MMX1);
+  REG_MMX2 = VirtualRegister::FromNative(XED_REG_MMX2);
+  REG_MMX3 = VirtualRegister::FromNative(XED_REG_MMX3);
+  REG_MMX4 = VirtualRegister::FromNative(XED_REG_MMX4);
+  REG_MMX5 = VirtualRegister::FromNative(XED_REG_MMX5);
+  REG_MMX6 = VirtualRegister::FromNative(XED_REG_MMX6);
+  REG_MMX7 = VirtualRegister::FromNative(XED_REG_MMX7);
+  REG_CS = VirtualRegister::FromNative(XED_REG_CS);
+  REG_DS = VirtualRegister::FromNative(XED_REG_DS);
+  REG_ES = VirtualRegister::FromNative(XED_REG_ES);
+  REG_SS = VirtualRegister::FromNative(XED_REG_SS);
+  REG_FS = VirtualRegister::FromNative(XED_REG_FS);
+  REG_GS = VirtualRegister::FromNative(XED_REG_GS);
+  REG_ST0 = VirtualRegister::FromNative(XED_REG_ST0);
+  REG_ST1 = VirtualRegister::FromNative(XED_REG_ST1);
+  REG_ST2 = VirtualRegister::FromNative(XED_REG_ST2);
+  REG_ST3 = VirtualRegister::FromNative(XED_REG_ST3);
+  REG_ST4 = VirtualRegister::FromNative(XED_REG_ST4);
+  REG_ST5 = VirtualRegister::FromNative(XED_REG_ST5);
+  REG_ST6 = VirtualRegister::FromNative(XED_REG_ST6);
+  REG_ST7 = VirtualRegister::FromNative(XED_REG_ST7);
+  REG_XCR0 = VirtualRegister::FromNative(XED_REG_XCR0);
+  REG_XMM0 = VirtualRegister::FromNative(XED_REG_XMM0);
+  REG_XMM1 = VirtualRegister::FromNative(XED_REG_XMM1);
+  REG_XMM2 = VirtualRegister::FromNative(XED_REG_XMM2);
+  REG_XMM3 = VirtualRegister::FromNative(XED_REG_XMM3);
+  REG_XMM4 = VirtualRegister::FromNative(XED_REG_XMM4);
+  REG_XMM5 = VirtualRegister::FromNative(XED_REG_XMM5);
+  REG_XMM6 = VirtualRegister::FromNative(XED_REG_XMM6);
+  REG_XMM7 = VirtualRegister::FromNative(XED_REG_XMM7);
+  REG_XMM8 = VirtualRegister::FromNative(XED_REG_XMM8);
+  REG_XMM9 = VirtualRegister::FromNative(XED_REG_XMM9);
+  REG_XMM10 = VirtualRegister::FromNative(XED_REG_XMM10);
+  REG_XMM11 = VirtualRegister::FromNative(XED_REG_XMM11);
+  REG_XMM12 = VirtualRegister::FromNative(XED_REG_XMM12);
+  REG_XMM13 = VirtualRegister::FromNative(XED_REG_XMM13);
+  REG_XMM14 = VirtualRegister::FromNative(XED_REG_XMM14);
+  REG_XMM15 = VirtualRegister::FromNative(XED_REG_XMM15);
+  REG_XMM16 = VirtualRegister::FromNative(XED_REG_XMM16);
+  REG_XMM17 = VirtualRegister::FromNative(XED_REG_XMM17);
+  REG_XMM18 = VirtualRegister::FromNative(XED_REG_XMM18);
+  REG_XMM19 = VirtualRegister::FromNative(XED_REG_XMM19);
+  REG_XMM20 = VirtualRegister::FromNative(XED_REG_XMM20);
+  REG_XMM21 = VirtualRegister::FromNative(XED_REG_XMM21);
+  REG_XMM22 = VirtualRegister::FromNative(XED_REG_XMM22);
+  REG_XMM23 = VirtualRegister::FromNative(XED_REG_XMM23);
+  REG_XMM24 = VirtualRegister::FromNative(XED_REG_XMM24);
+  REG_XMM25 = VirtualRegister::FromNative(XED_REG_XMM25);
+  REG_XMM26 = VirtualRegister::FromNative(XED_REG_XMM26);
+  REG_XMM27 = VirtualRegister::FromNative(XED_REG_XMM27);
+  REG_XMM28 = VirtualRegister::FromNative(XED_REG_XMM28);
+  REG_XMM29 = VirtualRegister::FromNative(XED_REG_XMM29);
+  REG_XMM30 = VirtualRegister::FromNative(XED_REG_XMM30);
+  REG_XMM31 = VirtualRegister::FromNative(XED_REG_XMM31);
+  REG_YMM0 = VirtualRegister::FromNative(XED_REG_YMM0);
+  REG_YMM1 = VirtualRegister::FromNative(XED_REG_YMM1);
+  REG_YMM2 = VirtualRegister::FromNative(XED_REG_YMM2);
+  REG_YMM3 = VirtualRegister::FromNative(XED_REG_YMM3);
+  REG_YMM4 = VirtualRegister::FromNative(XED_REG_YMM4);
+  REG_YMM5 = VirtualRegister::FromNative(XED_REG_YMM5);
+  REG_YMM6 = VirtualRegister::FromNative(XED_REG_YMM6);
+  REG_YMM7 = VirtualRegister::FromNative(XED_REG_YMM7);
+  REG_YMM8 = VirtualRegister::FromNative(XED_REG_YMM8);
+  REG_YMM9 = VirtualRegister::FromNative(XED_REG_YMM9);
+  REG_YMM10 = VirtualRegister::FromNative(XED_REG_YMM10);
+  REG_YMM11 = VirtualRegister::FromNative(XED_REG_YMM11);
+  REG_YMM12 = VirtualRegister::FromNative(XED_REG_YMM12);
+  REG_YMM13 = VirtualRegister::FromNative(XED_REG_YMM13);
+  REG_YMM14 = VirtualRegister::FromNative(XED_REG_YMM14);
+  REG_YMM15 = VirtualRegister::FromNative(XED_REG_YMM15);
+  REG_YMM16 = VirtualRegister::FromNative(XED_REG_YMM16);
+  REG_YMM17 = VirtualRegister::FromNative(XED_REG_YMM17);
+  REG_YMM18 = VirtualRegister::FromNative(XED_REG_YMM18);
+  REG_YMM19 = VirtualRegister::FromNative(XED_REG_YMM19);
+  REG_YMM20 = VirtualRegister::FromNative(XED_REG_YMM20);
+  REG_YMM21 = VirtualRegister::FromNative(XED_REG_YMM21);
+  REG_YMM22 = VirtualRegister::FromNative(XED_REG_YMM22);
+  REG_YMM23 = VirtualRegister::FromNative(XED_REG_YMM23);
+  REG_YMM24 = VirtualRegister::FromNative(XED_REG_YMM24);
+  REG_YMM25 = VirtualRegister::FromNative(XED_REG_YMM25);
+  REG_YMM26 = VirtualRegister::FromNative(XED_REG_YMM26);
+  REG_YMM27 = VirtualRegister::FromNative(XED_REG_YMM27);
+  REG_YMM28 = VirtualRegister::FromNative(XED_REG_YMM28);
+  REG_YMM29 = VirtualRegister::FromNative(XED_REG_YMM29);
+  REG_YMM30 = VirtualRegister::FromNative(XED_REG_YMM30);
+  REG_YMM31 = VirtualRegister::FromNative(XED_REG_YMM31);
+  REG_ZMM0 = VirtualRegister::FromNative(XED_REG_ZMM0);
+  REG_ZMM1 = VirtualRegister::FromNative(XED_REG_ZMM1);
+  REG_ZMM2 = VirtualRegister::FromNative(XED_REG_ZMM2);
+  REG_ZMM3 = VirtualRegister::FromNative(XED_REG_ZMM3);
+  REG_ZMM4 = VirtualRegister::FromNative(XED_REG_ZMM4);
+  REG_ZMM5 = VirtualRegister::FromNative(XED_REG_ZMM5);
+  REG_ZMM6 = VirtualRegister::FromNative(XED_REG_ZMM6);
+  REG_ZMM7 = VirtualRegister::FromNative(XED_REG_ZMM7);
+  REG_ZMM8 = VirtualRegister::FromNative(XED_REG_ZMM8);
+  REG_ZMM9 = VirtualRegister::FromNative(XED_REG_ZMM9);
+  REG_ZMM10 = VirtualRegister::FromNative(XED_REG_ZMM10);
+  REG_ZMM11 = VirtualRegister::FromNative(XED_REG_ZMM11);
+  REG_ZMM12 = VirtualRegister::FromNative(XED_REG_ZMM12);
+  REG_ZMM13 = VirtualRegister::FromNative(XED_REG_ZMM13);
+  REG_ZMM14 = VirtualRegister::FromNative(XED_REG_ZMM14);
+  REG_ZMM15 = VirtualRegister::FromNative(XED_REG_ZMM15);
+  REG_ZMM16 = VirtualRegister::FromNative(XED_REG_ZMM16);
+  REG_ZMM17 = VirtualRegister::FromNative(XED_REG_ZMM17);
+  REG_ZMM18 = VirtualRegister::FromNative(XED_REG_ZMM18);
+  REG_ZMM19 = VirtualRegister::FromNative(XED_REG_ZMM19);
+  REG_ZMM20 = VirtualRegister::FromNative(XED_REG_ZMM20);
+  REG_ZMM21 = VirtualRegister::FromNative(XED_REG_ZMM21);
+  REG_ZMM22 = VirtualRegister::FromNative(XED_REG_ZMM22);
+  REG_ZMM23 = VirtualRegister::FromNative(XED_REG_ZMM23);
+  REG_ZMM24 = VirtualRegister::FromNative(XED_REG_ZMM24);
+  REG_ZMM25 = VirtualRegister::FromNative(XED_REG_ZMM25);
+  REG_ZMM26 = VirtualRegister::FromNative(XED_REG_ZMM26);
+  REG_ZMM27 = VirtualRegister::FromNative(XED_REG_ZMM27);
+  REG_ZMM28 = VirtualRegister::FromNative(XED_REG_ZMM28);
+  REG_ZMM29 = VirtualRegister::FromNative(XED_REG_ZMM29);
+  REG_ZMM30 = VirtualRegister::FromNative(XED_REG_ZMM30);
+  REG_ZMM31 = VirtualRegister::FromNative(XED_REG_ZMM31);
+}
 
 }  // namespace
 
 // Initialize the driver (instruction encoder/decoder).
 void Init(void) {
-  if (!gArchIsInitialized) {
-    gArchIsInitialized = true;
-    xed_tables_init();
-    xed_state_zero(&XED_STATE);
-    xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
-                   XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
-    InitIclassTables();
-    InitIclassFlags();
-    InitIformFlags();
-    InitOperandTables();
-  }
+  xed_tables_init();
+  xed_state_zero(&XED_STATE);
+  xed_state_init(&XED_STATE, XED_MACHINE_MODE_LONG_64,
+                 XED_ADDRESS_WIDTH_64b, XED_ADDRESS_WIDTH_64b);
+  InitIclassTables();
+  InitIclassFlags();
+  InitIformFlags();
+  InitOperandTables();
+  InitVirtualRegs();
   InitBlockTracer();
 }
 
+// Exit the driver.
+void Exit(void) {
+  os::FreeDataPages(gImplicitOperandPages, gNumImplicitOperandPages);
+}
 }  // namespace arch
 }  // namespace granary

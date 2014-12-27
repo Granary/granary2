@@ -2,33 +2,41 @@
 
 SECTIONS
 {
-  . = ALIGN(16);
+  
   .text :
   {
     granary_begin_text = .;
-    *(.text)
+    KEEP (*(.text))
 
     /* Defines the boundaries of Granary / client code that is exported to
      * instrumentation, i.e. is allowed to be seen by code that gets
      * instrumented.
      */
     granary_begin_inst_exports = .;
-    KEEP(*(.text.inst_exports))
+    KEEP (*(.text.inst_exports))
     granary_end_inst_exports = .;
     granary_end_text = .;
+  }
+  
+  /* Used for code cache allocations */
+  . = ALIGN(16);
+  .writable_text :
+  {
+    granary_begin_writable_text = .;
+    KEEP (*(.writable_text))
   }
   
   . = ALIGN(16);
   .bss :
   {
-    *(.bss.granary_unprotected) 
+    KEEP(*(.bss.granary_unprotected))
     
     /* Defines the boundaries of Granary's global variables. We use these
      * symbols to detect some forms of memory corruption by allocators.
      */
     granary_begin_protected_bss = .;
-    *(.bss)
-    *(.bss.*)
+    KEEP (*(.bss))
+    KEEP (*(.bss.*))
     granary_end_protected_bss = .;
   }
   

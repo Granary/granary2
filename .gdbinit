@@ -98,6 +98,8 @@ define reset
   shell clear
 end
 
+python None ; \
+  XI_SYMBOLS = re.compile(r" <(.*)>:\t") ;
 
 # print-instructions
 #
@@ -108,9 +110,10 @@ define print-instructions
   python None ; \
     rip = str(gdb.parse_and_eval("$__rip")).lower() ; \
     ni = str(gdb.parse_and_eval("$__ni")).lower() ; \
-    gdb.execute( \
+    disas = gdb.execute( \
       "x/%si %s\n" % (ni, rip), \
-      from_tty=True, to_string=False) ;
+      from_tty=True, to_string=True) ; \
+    gdb.write(XI_SYMBOLS.sub(": ", disas)) ;
 end
 
 
@@ -447,10 +450,10 @@ end
 define print-virt-reg
   set language c++
   set $__vr = (granary::VirtualRegister) $arg0
-  if VR_KIND_ARCH_FIXED == $__vr.kind
+  if kVirtualRegisterKindUnschedulable == $__vr.kind
     print-xed-reg $__vr.reg_num
   end
-  if VR_KIND_ARCH_GPR == $__vr.kind
+  if kVirtualRegisterKindArchGpr == $__vr.kind
     set $__r = $__vr.reg_num + XED_REG_RAX
     if XED_REG_RSP <= $__r
       set $__r = $__r + 1
@@ -469,10 +472,10 @@ define print-virt-reg
     end
     print-xed-reg $__r
   end
-  if VR_KIND_VIRTUAL_GPR == $__vr.kind || VR_KIND_VIRTUAL_STACK == $__vr.kind
+  if kVirtualRegisterKindVirtualGpr == $__vr.kind
     printf "%%%u", $__vr.reg_num
   end
-  if VR_KIND_VIRTUAL_SLOT == $__vr.kind
+  if kVirtualRegisterKindSlot == $__vr.kind
     printf "SLOT:%u", $__vr.reg_num
   end
 end

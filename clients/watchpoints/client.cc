@@ -3,6 +3,7 @@
 #include <granary.h>
 
 #include "clients/util/closure.h"
+#include "clients/util/instrument_memop.h"
 #include "clients/watchpoints/client.h"
 
 GRANARY_USING_NAMESPACE granary;
@@ -13,7 +14,8 @@ namespace {
 
 // Hooks that other tools can use for interposing on memory operands that will
 // be instrumented for watchpoints.
-static ClosureList<const WatchedMemoryOperand &> watchpoint_hooks GRANARY_GLOBAL;
+static ClosureList<const WatchedMemoryOperand &>
+    watchpoint_hooks GRANARY_GLOBAL;
 
 }  // namespace
 
@@ -31,7 +33,7 @@ void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &)) {
 // watchpoints instrumentation injects instructions to detect dereferences of
 // tainted addresses and ensures that memory instructions don't raise faults
 // when they are accessed.
-class Watchpoints : public InstrumentationTool {
+class Watchpoints : public MemOpInstrumentationTool {
  public:
   virtual ~Watchpoints(void) = default;
 
@@ -45,54 +47,36 @@ class Watchpoints : public InstrumentationTool {
     watchpoint_hooks.Reset();
   }
 
-  // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBlock *bb) {
-    MemoryOperand mloc1, mloc2;
-    for (auto instr : bb->AppInstructions()) {
-      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
-                                                     ReadOrWriteTo(mloc2));
-      if (2 == num_matched) {
-        InstrumentMemOp(bb, instr, mloc1);
-        InstrumentMemOp(bb, instr, mloc2);
-      } else if (1 == num_matched) {
-        InstrumentMemOp(bb, instr, mloc1);
-      }
-    }
+  virtual void InstrumentBlocks(Trace *trace) override {
+    this->MemOpInstrumentationTool::InstrumentBlocks(trace);
+    unwatched_addr[0] = trace->AllocateVirtualRegister();
+    unwatched_addr[1] = trace->AllocateVirtualRegister();
   }
 
- private:
-  void InstrumentMemOp(DecodedBlock *bb, NativeInstruction *instr,
-                       const MemoryOperand &mloc) {
-    // Doesn't read from or write to memory.
-    if (mloc.IsEffectiveAddress()) return;
-
-    // Reads or writes from an absolute address, not through a register.
-    VirtualRegister watched_addr;
-    if (!mloc.MatchRegister(watched_addr)) return;
-
+  // Instrument an individual memory operand.
+  virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) override {
     // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
-    if (!watched_addr.IsGeneralPurpose()) return;
-    if (watched_addr.IsVirtualStackPointer()) return;
-    if (watched_addr.IsSegmentOffset()) return;
+    auto watched_addr = op.native_addr_op.Register();
+    if (watched_addr.IsStackPointerAlias()) return;
 
-    VirtualRegister unwatched_addr(bb->AllocateVirtualRegister());
-    RegisterOperand unwatched_addr_reg(unwatched_addr);
-    RegisterOperand watched_addr_reg(watched_addr);
-    WatchedMemoryOperand client_op(bb, instr, mloc, unwatched_addr_reg,
-                             watched_addr_reg);
+    RegisterOperand unwatched_addr_reg(unwatched_addr[op.operand_number]);
+    RegisterOperand watched_addr_reg(op.native_addr_op);
+    WatchedMemoryOperand client_op(op.block, op.instr, op.native_mem_op,
+                                   unwatched_addr_reg, watched_addr_reg);
 
     lir::InlineAssembly asm_(unwatched_addr_reg, watched_addr_reg);
 
     // Copy the original (%1).
-    asm_.InlineBefore(instr,
+    asm_.InlineBefore(op.instr,
         "MOV r64 %0, r64 %1;"_x86_64);
 
     // Might be accessing user space data.
-    asm_.InlineBeforeIf(instr, IsA<ExceptionalControlFlowInstruction *>(instr),
+    asm_.InlineBeforeIf(op.instr,
+                        IsA<ExceptionalControlFlowInstruction *>(op.instr),
         "BT r64 %0, i8 47;"
         "JNB l %2;"_x86_64);
 
-    asm_.InlineBefore(instr,
+    asm_.InlineBefore(op.instr,
         "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
         GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
         "  SHL r64 %0, i8 16;"
@@ -102,31 +86,37 @@ class Watchpoints : public InstrumentationTool {
     // address.
     watchpoint_hooks.ApplyAll(client_op);
 
-    asm_.InlineBefore(instr,
+    asm_.InlineBefore(op.instr,
         "LABEL %2:"_x86_64);
 
     // If it's an implicit memory location then we need to change the register
     // being used by the instruction in place, while keeping a copy around
     // for later.
-    asm_.InlineBeforeIf(instr, !mloc.IsModifiable(),
+    asm_.InlineBeforeIf(op.instr, !op.native_mem_op.IsModifiable(),
         "XCHG r64 %0, r64 %1;"_x86_64);
 
     // Replace the original memory operand with the unwatched address.
-    if (mloc.IsModifiable()) {
-      MemoryOperand unwatched_addr_mloc(unwatched_addr, mloc.ByteWidth());
-      mloc.Ref().ReplaceWith(unwatched_addr_mloc);
+    if (op.native_mem_op.IsModifiable()) {
+      MemoryOperand unwatched_addr_mloc(unwatched_addr[op.operand_number],
+                                        op.native_mem_op.ByteWidth());
+      GRANARY_IF_DEBUG( auto ret = ) op.native_mem_op.TryReplaceWith(
+          unwatched_addr_mloc);
+      GRANARY_ASSERT(ret);
 
     // Restore the tainted bits if the memory operand was implicit, and if the
     // watched address was not overwritten by the instruction.
-    } else if (!instr->MatchOperands(ExactWriteOnlyTo(watched_addr_reg))) {
+    } else if (!op.instr->MatchOperands(ExactWriteOnlyTo(watched_addr_reg))) {
       GRANARY_ASSERT(watched_addr.IsNative());
-      asm_.InlineAfter(instr,
+      asm_.InlineAfter(op.instr,
           "BSWAP r64 %1;"  // Swap bytes in unwatched address.
           "BSWAP r64 %0;"  // Swap bytes in watched address.
           "MOV r16 %1, r16 %0;"
           "BSWAP r64 %1;"_x86_64);
     }
   }
+
+ private:
+  VirtualRegister unwatched_addr[2];
 };
 
 namespace {

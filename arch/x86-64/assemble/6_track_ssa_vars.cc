@@ -19,11 +19,11 @@ namespace {
 static void UpdateIfClearedByXor(const Operand *arch_ops,
                                  SSAInstruction *instr) {
   if (arch_ops[0].reg != arch_ops[1].reg) {
-    instr->ops[0].action = SSAOperandAction::kSSAOperandActionReadWrite;
-    instr->ops[1].action = SSAOperandAction::kSSAOperandActionRead;
+    instr->ops[0].action = kSSAOperandActionReadWrite;
+    instr->ops[1].action = kSSAOperandActionRead;
   } else {
-    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-    instr->ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
+    instr->ops[0].action = kSSAOperandActionWrite;
+    instr->ops[1].action = kSSAOperandActionCleared;
   }
 }
 
@@ -31,8 +31,8 @@ static void UpdateIfClearedByXor(const Operand *arch_ops,
 static void UpdateIfClearedBySub(const Operand *arch_ops,
                                  SSAInstruction *instr) {
   if (arch_ops[0].reg == arch_ops[1].reg) {
-    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-    instr->ops[1].action = SSAOperandAction::kSSAOperandActionCleared;
+    instr->ops[0].action = kSSAOperandActionWrite;
+    instr->ops[1].action = kSSAOperandActionCleared;
   }
 }
 
@@ -41,7 +41,7 @@ static void UpdateIfClearedByAnd(const Operand *arch_ops,
                                  SSAInstruction *instr) {
   if (0 == arch_ops[1].imm.as_uint &&
       !arch_ops[0].reg.PreservesBytesOnWrite()) {
-    instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
+    instr->ops[0].action = kSSAOperandActionWrite;
   }
 }
 
@@ -64,7 +64,7 @@ static void UpdateRegCopy(Instruction *ni, SSAInstruction *instr) {
 
   auto &ssa_op0(instr->ops[0]);
   auto &ssa_op1(instr->ops[1]);
-  ssa_op0.action = SSAOperandAction::kSSAOperandActionReadWrite;
+  ssa_op0.action = kSSAOperandActionReadWrite;
   ssa_op0.reg_web.Union(ssa_op1.reg_web);
 
   if (dst_reg.BitWidth() != src_reg.BitWidth() ||
@@ -93,8 +93,8 @@ static void UpdateEffectiveAddress(Instruction *ni, SSAInstruction *instr) {
     // remain as an LEA so that it is an effective address.
     if (!src_reg.IsStackPointer()) {
       MOV_GPRv_GPRv_89(ni, dst_reg, src_reg);
-      instr->ops[0].action = SSAOperandAction::kSSAOperandActionWrite;
-      instr->ops[1].action = SSAOperandAction::kSSAOperandActionRead;
+      instr->ops[0].action = kSSAOperandActionWrite;
+      instr->ops[1].action = kSSAOperandActionRead;
     }
 
   // `LEA R, [R]`.
@@ -103,8 +103,8 @@ static void UpdateEffectiveAddress(Instruction *ni, SSAInstruction *instr) {
     auto &ssa_op1(instr->ops[1]);
     MOV_GPRv_GPRv_89(ni, dst_reg, dst_reg);
     ni->DontEncode();  // This instruction is useless.
-    ssa_op0.action = SSAOperandAction::kSSAOperandActionReadWrite;
-    ssa_op1.action = SSAOperandAction::kSSAOperandActionRead;
+    ssa_op0.action = kSSAOperandActionReadWrite;
+    ssa_op1.action = kSSAOperandActionRead;
     ssa_op0.reg_web.Union(ssa_op1.reg_web);
   }
 }

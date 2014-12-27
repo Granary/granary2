@@ -26,10 +26,6 @@ class Operand;
 
 namespace lir {
 
-// Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(Block *target_block,
-                                          const Operand &op);
-
 // Call / jump to existing basic blocks.
 std::unique_ptr<Instruction> FunctionCall(Block *target_block);
 std::unique_ptr<Instruction> Jump(Block *target_block);

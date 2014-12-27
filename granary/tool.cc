@@ -49,7 +49,7 @@ void InstrumentationTool::InstrumentControlFlow(BlockFactory *,
 // to see the entire local control-flow graph.
 //
 // This method is executed once per tool per instrumentation session.
-void InstrumentationTool::InstrumentBlocks(const Trace *) {}
+void InstrumentationTool::InstrumentBlocks(Trace *) {}
 
 // Used to implement the typical JIT-based model of single basic-block at a
 // time instrumentation.

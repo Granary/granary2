@@ -27,14 +27,9 @@ namespace {
 
 // Adds `reg` as an `SSAOperand` to the `operands` operand pack.
 static void AddSSAOperand(SSAInstruction *instr, Operand *op,
-                          VirtualRegister reg
-                          _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
-  if (!reg.IsGeneralPurpose() && !reg.IsStackPointer()) {
-    return;
-  }
-
-  GRANARY_IF_DEBUG( if (reg.IsVirtual()) partition->used_vrs.Add(reg); )
-  GRANARY_ASSERT(op->Ref().IsValid());
+                          VirtualRegister reg) {
+  if (!reg.IsGeneralPurpose() && !reg.IsStackPointer()) return;
+  GRANARY_ASSERT(op->IsValid());
 
   auto &ssa_op(instr->ops[instr->num_ops++]);
   ssa_op.operand = op->UnsafeExtract();
@@ -66,22 +61,23 @@ static void AddSSAOperand(SSAInstruction *instr, Operand *op,
 }
 
 // Add an `SSAOperand` to an operand pack.
-static void AddSSAOperand(SSAInstruction *instr, Operand *op
-                          _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
+static void AddSSAOperand(SSAInstruction *instr, Operand *op) {
 
   // Ignore all non general-purpose registers, as they cannot be scheduled with
   // virtual registers.
-  if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-    AddSSAOperand(instr, op, reg_op->Register() _GRANARY_IF_DEBUG(partition));
+  if (op->IsRegister()) {
+    auto reg_op = UnsafeCast<const RegisterOperand *>(op);
+    AddSSAOperand(instr, op, reg_op->Register());
 
   // Only use memory operands that contain general-purpose registers.
-  } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
+  } else if (op->IsMemory()) {
+    auto mem_op = UnsafeCast<MemoryOperand *>(op);
     if (mem_op->IsPointer()) return;
 
     VirtualRegister r1, r2;
-    if (mem_op->CountMatchedRegisters({&r1, &r2})) {
-      AddSSAOperand(instr, op, r1 _GRANARY_IF_DEBUG(partition));
-      AddSSAOperand(instr, op, r2 _GRANARY_IF_DEBUG(partition));
+    if (mem_op->CountMatchedRegisters(r1, r2)) {
+      AddSSAOperand(instr, op, r1);
+      AddSSAOperand(instr, op, r2);
     }
   }
 }
@@ -127,12 +123,11 @@ void ConvertOperandActions(NativeInstruction *instr) {
 namespace {
 
 // Create an `SSAInstruction` for a `NativeInstruction`.
-static void CreateSSAInstruction(NativeInstruction *instr
-                                 _GRANARY_IF_DEBUG(PartitionInfo *partition)) {
+static void CreateSSAInstruction(NativeInstruction *instr) {
   auto ssa_instr = new SSAInstruction;
   instr->ssa = ssa_instr;
   instr->ForEachOperand([=] (Operand *op) {
-    AddSSAOperand(ssa_instr, op _GRANARY_IF_DEBUG(partition));
+    AddSSAOperand(ssa_instr, op);
   });
   ConvertOperandActions(instr);
 }
@@ -142,10 +137,9 @@ static void CreateSSAInstruction(NativeInstruction *instr
 static void CreateSSAInstructions(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
-      GRANARY_IF_DEBUG( auto partition = frag->partition.Value(); )
       for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
         if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-          CreateSSAInstruction(ninstr _GRANARY_IF_DEBUG(partition));
+          CreateSSAInstruction(ninstr);
         }
       }
     }
@@ -156,12 +150,11 @@ static void CreateSSAInstructions(FragmentList *frags) {
 static void UpdateOrCreateWeb(SSAFragment *frag, SSARegisterWeb *web) {
   auto reg = web->Value();
   auto &entry_web(frag->ssa.entry_reg_webs[reg]);
-  if (!entry_web) {
-    entry_web = web;
-  } else {
+  if (entry_web) {
     GRANARY_ASSERT(reg == entry_web->Value());
     entry_web->Union(web);
   }
+  entry_web = UnsafeCast<SSARegisterWeb *>(web->Find());
 }
 
 // Perform local value numbering for definitions.
@@ -203,8 +196,7 @@ static void LVNUses(SSAFragment *frag, SSAInstruction *ssa_instr) {
 //       partition and end up missing definitions.
 static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
   auto reg = instr->Data<VirtualRegister>();
-  GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
-  GRANARY_ASSERT(reg.IsNative());
+  GRANARY_ASSERT(reg.IsGeneralPurpose() && reg.IsNative());
   auto web = new SSARegisterWeb(reg);
   UpdateOrCreateWeb(frag, web);
   SetMetaData(instr, web);
@@ -213,9 +205,7 @@ static void LVNSave(SSAFragment *frag, AnnotationInstruction *instr) {
 // Create an `SSARegisterWeb` for a restore.
 static void LVNRestore(SSAFragment *frag, AnnotationInstruction *instr) {
   auto reg = instr->Data<VirtualRegister>();
-  GRANARY_ASSERT(reg.IsGeneralPurpose() || reg.IsStackPointer());
-  GRANARY_ASSERT(reg.IsNative());
-
+  GRANARY_ASSERT(reg.IsGeneralPurpose() && reg.IsNative());
   auto web = new SSARegisterWeb(reg);
   UpdateOrCreateWeb(frag, web);
   SetMetaData(instr, web);
@@ -244,7 +234,8 @@ static void LocalValueNumbering(FragmentList *frags) {
         } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
           if (kAnnotSSASaveRegister == ainstr->annotation) {
             LVNSave(ssa_frag, ainstr);
-          } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
+          } else if (kAnnotSSARestoreRegister == ainstr->annotation ||
+                     kAnnotSSASwapRestoreRegister == ainstr->annotation) {
             LVNRestore(ssa_frag, ainstr);
           }
         }
@@ -386,10 +377,6 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
   comp->partition.Union(pred->partition);
   comp->flag_zone.Union(pred->flag_zone);
 
-  // Make sure we've got accurate regs info based on our predecessor/successor.
-  comp->regs.live_on_entry = pred->regs.live_on_exit;
-  comp->regs.live_on_exit = succ->regs.live_on_entry;
-
   // Chain it into the control-flow.
   comp->successors[kFragSuccFallThrough] = succ;
   succ = comp;
@@ -457,13 +444,6 @@ static void VerifyVRUsage(FragmentList *frags) {
 
       // Verify that there is only one partition entry fragment per partition.
       GRANARY_ASSERT(frag_partition != other_frag_partition);
-
-      const auto &other_regs(other_frag_partition->used_vrs);
-      for (auto reg : frag_partition->used_vrs) {
-        if (reg.IsValid()) {
-          GRANARY_ASSERT(!other_regs.Contains(reg));
-        }
-      }
     }
   }
 }

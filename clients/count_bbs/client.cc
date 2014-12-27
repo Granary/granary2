@@ -87,7 +87,7 @@ class BBCount : public InstrumentationTool {
   static void AddExecCounter(DecodedBlock *block,
                              CounterMetaData *count_meta) {
     MemoryOperand counter_addr(&(count_meta->count));
-    lir::InlineAssembly asm_({&counter_addr});
+    lir::InlineAssembly asm_(counter_addr);
     asm_.InlineAfter(block->FirstInstruction(), "INC m64 %0;"_x86_64);
   }
 

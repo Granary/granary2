@@ -2,6 +2,8 @@
 
 #define GRANARY_INTERNAL
 
+#include "arch/exit.h"
+
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/metadata.h"
@@ -50,6 +52,7 @@ void Exit(ExitReason reason) {
   ExitContext();
   ExitClients();
   ExitMetaData();
+  arch::Exit();
   os::ExitLog();
   os::ExitModuleManager();
   PostExit();  // Tricky tricky!

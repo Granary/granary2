@@ -60,7 +60,7 @@ FragmentList Assemble(Context *context, Trace *cfg) {
 
   // Add a bunch of entry/exit fragments at places where flags needs to be
   // saved/restored, and at places where GPRs need to be spilled / filled.
-  AddEntryAndExitFragments(cfg, &frags);
+  AddEntryAndExitFragments(&frags);
 
   // Add flags saving and restoring code around injected instrumentation
   // instructions.

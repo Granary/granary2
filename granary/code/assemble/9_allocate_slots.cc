@@ -234,12 +234,15 @@ static void VerifyAllSlotsScheduled(Fragment *frag) {
       if (!ninstr->instruction.WillBeEncoded()) continue;
       ninstr->ForEachOperand([=] (Operand *op) {
         if (!op->IsExplicit()) return;
-        if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-          VirtualRegister addr_reg;
-          if (mem_op->MatchRegister(addr_reg)) {
-            GRANARY_ASSERT(!addr_reg.IsVirtualSlot());
+        if (op->IsMemory()) {
+          auto mem_op = UnsafeCast<MemoryOperand *>(op);
+          VirtualRegister r1, r2;
+          if (mem_op->CountMatchedRegisters(r1, r2)) {
+            GRANARY_ASSERT(!r1.IsVirtualSlot());
+            GRANARY_ASSERT(!r2.IsVirtualSlot());
           }
-        } else if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+        } else if (op->IsRegister()) {
+          auto reg_op = UnsafeCast<RegisterOperand *>(op);
           GRANARY_ASSERT(!reg_op->Register().IsVirtual());
         }
       });

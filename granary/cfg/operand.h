@@ -30,50 +30,6 @@ class Operand;
 // Type of a string that can be used to convert an operand to a string.
 typedef FixedLengthString<31> OperandString;
 
-// A reference to an operand contained within a native instruction. Operand
-// references don't have a strict kind (i.e. memory, immediate, register)
-// because their backing operand can be replaced, and so the kind invariant
-// would change.
-class OperandRef {
- public:
-  // Initialize this operand.
-  GRANARY_INTERNAL_DEFINITION inline OperandRef(arch::Operand *op_)
-      : op(op_) {}
-
-  // Returns true if this `OperandRef` references a memory operand, and if so,
-  // updates `mem_op` to have the value of the referenced operand.
-  //
-  // Note: This operation is only valid if `OperandRef::IsValid` returns true.
-  bool Match(MemoryOperand &mem_op) const;
-
-  // Returns true if this `OperandRef` references a register operand, and if so,
-  // updates `reg_op` to have the value of the referenced operand.
-  //
-  // Note: This operation is only valid if `OperandRef::IsValid` returns true.
-  bool Match(RegisterOperand &reg_op) const;
-
-  // Returns true if this `OperandRef` references an immediate operand, and if
-  // so, updates `imm_op` to have the value of the referenced operand.
-  //
-  // Note: This operation is only valid if `OperandRef::IsValid` returns true.
-  bool Match(ImmediateOperand &imm_op) const;
-
-  // Try to replace the referenced operand with a concrete operand. Returns
-  // false if the referenced operand is not allowed to be replaced. For example,
-  // suppressed and implicit operands cannot be replaced.
-  //
-  // Note: This has a driver-specific implementation.
-  bool ReplaceWith(const Operand &repl_op);
-
-  // Returns true if this is a valid reference.
-  bool IsValid(void) const;
-
- private:
-  OperandRef(void) = delete;
-
-  GRANARY_POINTER(arch::Operand) * GRANARY_CONST op;
-};
-
 // A generic operand from a native instruction. A generic interface is provided
 // so that operands can be iterated.
 class Operand {
@@ -93,14 +49,17 @@ class Operand {
   // Initialize this operand.
   GRANARY_INTERNAL_DEFINITION Operand(const arch::Operand *op_);
 
-  virtual ~Operand(void);
-
   bool IsValid(void) const;
   bool IsRead(void) const;
   bool IsWrite(void) const;
   bool IsSemanticDefinition(void) const;
   bool IsConditionalRead(void) const;
   bool IsConditionalWrite(void) const;
+
+  GRANARY_INTERNAL_DEFINITION bool IsRegister(void) const;
+  GRANARY_INTERNAL_DEFINITION bool IsMemory(void) const;
+  GRANARY_INTERNAL_DEFINITION bool IsImmediate(void) const;
+  GRANARY_INTERNAL_DEFINITION bool IsLabel(void) const;
 
   // Conveniences.
   inline bool IsReadWrite(void) const {
@@ -109,7 +68,7 @@ class Operand {
 
   // Returns whether or not this operand can be replaced / modified.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool IsModifiable(void) const;
 
   // Returns whether or not this operand is explicit.
@@ -117,32 +76,25 @@ class Operand {
   // Note: This is only valid on operands matched from instructions and not on
   //       manually created operands.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool IsExplicit(void) const;
 
   // Return the width (in bits) of this operand, or 0 if its width is not
   // known.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   size_t BitWidth(void) const;
 
   // Return the width (in bytes) of this operand, or 0 if its width is not
   // known.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   size_t ByteWidth(void) const;
 
   // Convert this operand into a string.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   void EncodeToString(OperandString *str) const;
-
-  // Convert this operand into a reference, so that we can then replace it the
-  // backing operand.
-  //
-  // Note: This operation is only valid on operands matched from instructions,
-  //       and not manually created operands.
-  OperandRef Ref(void) const;
 
   // Replace the internal operand memory. This method is "unsafe" insofar
   // as it assumes the caller is maintaining the invariant that the current
@@ -160,7 +112,11 @@ class Operand {
   GRANARY_INTERNAL_DEFINITION
   arch::Operand *UnsafeExtract(void) const;
 
-  GRANARY_DECLARE_BASE_CLASS(Operand)
+  // Try to replace the current operand.
+  //
+  // Note: This has a architecture-specific implementation.
+  GRANARY_INTERNAL_DEFINITION
+  bool UnsafeTryReplaceOperand(const Operand &op);
 
  GRANARY_PROTECTED:
   GRANARY_CONST OpaqueContainer<arch::Operand, 32, 16> op;
@@ -200,8 +156,8 @@ class MemoryOperand : public Operand {
   // Initialize a new memory operand from a virtual register, where the
   // referenced memory has a width of `num_bytes`.
   //
-  // Note: This has a driver-specific implementation.
-  MemoryOperand(const VirtualRegister &ptr_reg, size_t num_bytes);
+  // Note: This has a architecture-specific implementation.
+  MemoryOperand(VirtualRegister ptr_reg, size_t num_bytes);
 
   // Generic initializer for a pointer to some data.
   template <typename T>
@@ -212,7 +168,7 @@ class MemoryOperand : public Operand {
   // Initialize a new memory operand from a pointer, where the
   // referenced memory has a width of `num_bytes`.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   MemoryOperand(const void *ptr, size_t num_bytes);
 
   // Returns true if this is a compound memory operation. Compound memory
@@ -220,22 +176,22 @@ class MemoryOperand : public Operand {
   // them. An example of a compound memory operand is a `base + index * scale`
   // (i.e. base/displacement) operand on x86.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool IsCompound(void) const;
 
   // Is this an effective address (instead of being an actual memory access).
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool IsEffectiveAddress(void) const;
 
   // Try to match this memory operand as a pointer value.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool IsPointer(void) const;
 
   // Try to match this memory operand as a pointer value.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool MatchPointer(const void *&ptr) const;
 
   // Try to match this memory operand as a register value. That is, the address
@@ -243,12 +199,12 @@ class MemoryOperand : public Operand {
   //
   // Note: This does not match segment registers.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool MatchRegister(VirtualRegister &reg) const;
 
   // Try to match a segment register.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   bool MatchSegmentRegister(VirtualRegister &reg) const;
 
   // Try to match several registers from the memory operand. This is applicable
@@ -257,7 +213,7 @@ class MemoryOperand : public Operand {
   //
   // Note: This has a architecture-specific implementation.
   template <typename... VRs>
-  inline size_t CountMatchedRegisters(VRs... regs) const {
+  inline size_t CountMatchedRegisters(VRs&... regs) const {
     return CountMatchedRegisters({&regs...});
   }
 
@@ -269,7 +225,10 @@ class MemoryOperand : public Operand {
   size_t CountMatchedRegisters(
       std::initializer_list<VirtualRegister *> regs) const;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, MemoryOperand)
+  // Tries to replace the memory operand.
+  //
+  // Note: This has a architecture-specific implementation.
+  bool TryReplaceWith(const MemoryOperand &repl_op);
 };
 
 static_assert(sizeof(MemoryOperand) == sizeof(Operand),
@@ -285,21 +244,24 @@ class RegisterOperand : public Operand {
 
   // Initialize a new register operand from a virtual register.
   //
-  // Note: This has a driver-specific implementation.
-  explicit RegisterOperand(const VirtualRegister reg);
+  // Note: This has a architecture-specific implementation.
+  explicit RegisterOperand(VirtualRegister reg);
 
   // Driver-specific implementations.
   bool IsNative(void) const;
   bool IsVirtual(void) const;
   bool IsStackPointer(void) const;
-  bool IsVirtualStackPointer(void) const;
+  bool IsStackPointerAlias(void) const;
 
   // Extract the register.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   VirtualRegister Register(void) const;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, RegisterOperand)
+  // Tries to replace the register operand.
+  //
+  // Note: This has a architecture-specific implementation.
+  bool TryReplaceWith(const RegisterOperand &repl_op);
 };
 
 static_assert(sizeof(RegisterOperand) == sizeof(Operand),
@@ -315,13 +277,13 @@ class ImmediateOperand : public Operand {
   // Initialize a immediate operand from a signed integer, where the value has
   // a width of `width_bytes`.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   ImmediateOperand(intptr_t imm, size_t width_bytes);
 
   // Initialize a immediate operand from a unsigned integer, where the value
   // has a width of `width_bytes`.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   ImmediateOperand(uintptr_t imm, size_t width_bytes);
 
 
@@ -340,15 +302,18 @@ class ImmediateOperand : public Operand {
 
   // Extract the value as an unsigned integer.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   uint64_t UInt(void);
 
   // Extract the value as a signed integer.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   int64_t Int(void);
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, ImmediateOperand)
+  // Tries to replace the immediate operand.
+  //
+  // Note: This has a architecture-specific implementation.
+  bool TryReplaceWith(const ImmediateOperand &repl_op);
 };
 
 static_assert(sizeof(ImmediateOperand) == sizeof(Operand),
@@ -361,15 +326,13 @@ class LabelOperand : public Operand {
 
   // Initialize a label operand from a non-null pointer to a label.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   explicit LabelOperand(LabelInstruction *label);
 
   // Target of a label operand.
   //
-  // Note: This has a driver-specific implementation.
+  // Note: This has a architecture-specific implementation.
   AnnotationInstruction *Target(void) const;
-
-  GRANARY_DECLARE_DERIVED_CLASS_OF(Operand, LabelOperand)
 
  private:
   LabelOperand(void) = delete;
@@ -390,19 +353,47 @@ static_assert(sizeof(LabelOperand) == sizeof(Operand),
 // Read/Write operand with two separate match operands, we make Read/Write
 // operands explicit, such that a Read(...) can't match against a Read/Write
 // operand.
-enum class OperandAction {
-  ANY,
-  READ,
-  WRITE,
-  READ_ONLY,
-  WRITE_ONLY,
-  READ_AND_WRITE
+enum OperandAction : uint8_t {
+  kOperandActionAny,
+  kOperandActionRead,
+  kOperandActionWrite,
+  kOperandActionReadOnly,
+  kOperandActionWriteOnly,
+  kOperandActionReadWrite
 };
 
-enum class OperandConstraint {
-  MATCH,
-  BIND
+enum OperandConstraint : uint8_t {
+  kOperandConstraintMatch,
+  kOperandConstraintBind
 };
+
+enum OperandType : uint8_t {
+  kOperandTypeRegister,
+  kOperandTypeMemory,
+  kOperandTypeImmediate
+};
+
+// Figure out the type of this operand.
+//
+// Note: We don't allow binding or matching with `LabelOperand`s.
+namespace detail {
+template <typename T> struct OperandTypeGetter;
+
+template <>
+struct OperandTypeGetter<RegisterOperand> {
+  static constexpr OperandType kType = kOperandTypeRegister;
+};
+
+template <>
+struct OperandTypeGetter<MemoryOperand> {
+  static constexpr OperandType kType = kOperandTypeMemory;
+};
+
+template <>
+struct OperandTypeGetter<ImmediateOperand> {
+  static constexpr OperandType kType = kOperandTypeImmediate;
+};
+}  // namespace detail
 
 // Generic operand matcher.
 class OperandMatcher {
@@ -410,68 +401,87 @@ class OperandMatcher {
   Operand * GRANARY_CONST op;
   const OperandAction action;
   const OperandConstraint constraint;
+  const OperandType type;
 };
 
 // Returns an operand matcher against an operand that is read.
-inline static OperandMatcher ReadFrom(Operand &op) {
-  return {&op, OperandAction::READ, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher ReadFrom(T &op) {
+  return {&op, kOperandActionRead, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // Returns an operand matcher against an operand that is only read.
-inline static OperandMatcher ReadOnlyFrom(Operand &op) {
-  return {&op, OperandAction::READ_ONLY, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher ReadOnlyFrom(T &op) {
+  return {&op, kOperandActionReadOnly, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // Returns an operand matcher against an operand that is written.
-inline static OperandMatcher WriteTo(Operand &op) {
-  return {&op, OperandAction::WRITE, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher WriteTo(T &op) {
+  return {&op, kOperandActionWrite, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // Returns an operand matcher against an operand that is only written.
-inline static OperandMatcher WriteOnlyTo(Operand &op) {
-  return {&op, OperandAction::WRITE_ONLY, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher WriteOnlyTo(T &op) {
+  return {&op, kOperandActionWriteOnly, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // Returns an operand matcher against an operand that is read and written.
-inline static OperandMatcher ReadAndWriteTo(Operand &op) {
-  return {&op, OperandAction::READ_AND_WRITE, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher ReadAndWriteTo(T &op) {
+  return {&op, kOperandActionReadWrite, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // Returns an operand matcher against an operand that is read and written.
-inline static OperandMatcher ReadOrWriteTo(Operand &op) {
-  return {&op, OperandAction::ANY, OperandConstraint::BIND};
+template <typename T>
+inline static OperandMatcher ReadOrWriteTo(T &op) {
+  return {&op, kOperandActionAny, kOperandConstraintBind,
+          detail::OperandTypeGetter<T>::kType};
 }
 
 // TODO(pag): Only doing exact matching on register operands.
 
 // Returns an operand matcher against an operand that is read.
 inline static OperandMatcher ExactReadFrom(RegisterOperand &op) {
-  return {&op, OperandAction::READ, OperandConstraint::MATCH};
+  return {&op, kOperandActionRead, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 // Returns an operand matcher against an operand that is only read.
 inline static OperandMatcher ExactReadOnlyFrom(RegisterOperand &op) {
-  return {&op, OperandAction::READ_ONLY, OperandConstraint::MATCH};
+  return {&op, kOperandActionReadOnly, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 // Returns an operand matcher against an operand that is written.
 inline static OperandMatcher ExactWriteTo(RegisterOperand &op) {
-  return {&op, OperandAction::WRITE, OperandConstraint::MATCH};
+  return {&op, kOperandActionWrite, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 // Returns an operand matcher against an operand that is only written.
 inline static OperandMatcher ExactWriteOnlyTo(RegisterOperand &op) {
-  return {&op, OperandAction::WRITE_ONLY, OperandConstraint::MATCH};
+  return {&op, kOperandActionWriteOnly, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 // Returns an operand matcher against an operand that is read and written.
 inline static OperandMatcher ExactReadAndWriteTo(RegisterOperand &op) {
-  return {&op, OperandAction::READ_AND_WRITE, OperandConstraint::MATCH};
+  return {&op, kOperandActionReadWrite, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 // Returns an operand matcher against an operand that is read and written.
 inline static OperandMatcher ExactReadOrWriteTo(RegisterOperand &op) {
-  return {&op, OperandAction::ANY, OperandConstraint::MATCH};
+  return {&op, kOperandActionAny, kOperandConstraintMatch,
+          kOperandTypeRegister};
 }
 
 }  // namespace granary

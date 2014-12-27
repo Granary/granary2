@@ -9,8 +9,8 @@
 #include "os/memory.h"
 
 extern "C" {
-extern const granary::CachePC granary_block_cache_begin;
-extern const granary::CachePC granary_block_cache_end;
+extern const granary::CachePC granary_code_cache_begin;
+extern const granary::CachePC granary_code_cache_end;
 }  // extern C
 namespace granary {
 namespace internal {
@@ -38,26 +38,18 @@ class CodeSlab {
 namespace {
 
 static const internal::CodeSlab *AllocateSlab(size_t num_pages,
-                                              CodeCacheKind kind,
                                               const internal::CodeSlab *next) {
-  CachePC addr(nullptr);
-  if (kBlockCodeCache == kind) {
-    addr = os::AllocateBlockCachePages(num_pages);
-  } else {
-    addr = os::AllocateEdgeCachePages(num_pages);
-  }
-  return new internal::CodeSlab(addr, next);
+  return new internal::CodeSlab(os::AllocateCodePages(num_pages), next);
 }
 
 }  // namespace
 
-CodeCache::CodeCache(size_t slab_size_, CodeCacheKind kind_)
+CodeCache::CodeCache(size_t slab_size_)
     : slab_num_pages(slab_size_),
       slab_num_bytes(slab_size_ * arch::PAGE_SIZE_BYTES),
       slab_byte_offset(0),
-      kind(kind_),
       slab_list_lock(),
-      slab_list(AllocateSlab(slab_num_pages, kind, nullptr)),
+      slab_list(AllocateSlab(slab_num_pages, nullptr)),
       code_lock() {}
 
 CodeCache::~CodeCache(void) {
@@ -76,7 +68,7 @@ CachePC CodeCache::AllocateBlock(size_t size) {
   auto aligned_offset = GRANARY_ALIGN_TO(old_offset, arch::CODE_ALIGN_BYTES);
   auto new_offset = aligned_offset + size;
   if (GRANARY_UNLIKELY(new_offset >= slab_num_bytes)) {
-    slab_list = AllocateSlab(slab_num_pages, kind, slab_list);
+    slab_list = AllocateSlab(slab_num_pages, slab_list);
     slab_byte_offset = 0;
     aligned_offset = 0;
     new_offset = size;
@@ -91,8 +83,8 @@ CachePC CodeCache::AllocateBlock(size_t size) {
 // by all code that computes whether or not an address is too far away from the
 // code cache.
 CachePC EstimatedCachePC(void) {
-  auto diff = (granary_block_cache_end - granary_block_cache_begin) / 2;
-  return granary_block_cache_begin + diff;
+  auto diff = (granary_code_cache_end - granary_code_cache_begin) / 2;
+  return granary_code_cache_begin + diff;
 }
 
 // Begin a transaction that will read or write to the code cache.

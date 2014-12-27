@@ -58,26 +58,15 @@ extern bool GetCopiedOperand(const NativeInstruction *instr,
 }  // namespace arch
 namespace {
 
-// Frees all flag zone data structures.
-static void FreeFlagZones(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    auto &flag_zone(frag->flag_zone.Value());
-    if (flag_zone) {
-      delete flag_zone;
-      flag_zone = nullptr;
-    }
-  }
-}
-
 // Return the Nth architectural GPR.
 static VirtualRegister NthArchGPR(size_t n) {
-  return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES,
+  return VirtualRegister(kVirtualRegisterKindArchGpr, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
 
 // Return the Nth spill slot.
 static VirtualRegister NthSpillSlot(size_t n) {
-  return VirtualRegister(VR_KIND_VIRTUAL_SLOT, arch::GPR_WIDTH_BYTES,
+  return VirtualRegister(kVirtualRegisterKindSlot, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
 
@@ -317,43 +306,42 @@ struct PartitionScheduler {
   VirtualRegister preferred_gpr;
 };
 
+// Get an unscheduled VR. This works on VRs *and* shadow GPRs. Shadow GPRs are
+// used for efficient save/restore of individual GPRs.
 static bool GetUnscheduledVR(SSARegisterWeb *web, VirtualRegister *found_reg,
                              SSARegisterWeb **found_web) {
   auto &reg(web->Value());
-  if (!reg.IsVirtual() || reg.IsScheduled()) return false;
+  if (!reg.IsVirtual()) return false;
+  if (reg.IsScheduled()) return false;
   reg.MarkAsScheduled();
   *found_reg = reg;
   *found_web = web;
   return true;
 }
 
-// Try to find an as-of-yet unscheduled SSA node in a node map.
-static bool GetUnscheduledVR(const SSARegisterWebMap &webs,
+// Try to find an as-of-yet unscheduled SSA register web in an iterable.
+template <typename Iterable>
+static bool GetUnscheduledVR(const Iterable it,
                              VirtualRegister *found_reg,
                              SSARegisterWeb **found_web) {
-  for (auto web : webs.Values()) {
+  for (auto web : it) {
     if (GetUnscheduledVR(web, found_reg, found_web)) return true;
   }
   return false;
 }
 
-// Try to find an as-of-yet unscheduled SSA node in a fragment.
-static bool GetUnscheduledVR(SSAFragment *frag, VirtualRegister *found_reg,
-                             SSARegisterWeb **found_web) {
-  if (GetUnscheduledVR(frag->ssa.exit_reg_webs, found_reg, found_web)) {
-    return true;
-  }
-  for (auto internal_web : frag->ssa.internal_reg_webs) {
-    if (GetUnscheduledVR(internal_web, found_reg, found_web)) return true;
-  }
-  return GetUnscheduledVR(frag->ssa.entry_reg_webs, found_reg, found_web);
+// Try to find an as-of-yet unscheduled SSA register web in a fragment.
+static bool GetUnscheduledVR(SSAFragment *frag, VirtualRegister *reg,
+                             SSARegisterWeb **web) {
+  return GetUnscheduledVR(frag->ssa.exit_reg_webs.Values(), reg, web) ||
+         GetUnscheduledVR(frag->ssa.internal_reg_webs, reg, web) ||
+         GetUnscheduledVR(frag->ssa.entry_reg_webs.Values(), reg, web);
 }
 
 struct GPRScheduler {
   GPRScheduler(void)
       : reg_counts(),
-        used_regs(),
-        restricted_regs() {}
+        used_regs() {}
 
   // Recounts the number of times each arch GPR is used within a partition.
   void RecountGPRUsage(const PartitionInfo *partition,
@@ -397,8 +385,8 @@ struct GPRScheduler {
     auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<size_t>::max();
     for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-      if (used_regs.IsLive(i) || restricted_regs.IsLive(i)) continue;
-      if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
+      if (used_regs.IsLive(i)) continue;
+      if (reg_counts.num_uses_of_gpr[i] < min_num_uses) {
         GRANARY_IF_DEBUG( found_reg = true; )
         min_gpr_num = i;
         min_num_uses = reg_counts.num_uses_of_gpr[i];
@@ -413,9 +401,6 @@ struct GPRScheduler {
 
   // Registers being used by an instruction.
   UsedRegisterSet used_regs;
-
-  // Registers that an instruction is not allowed to use.
-  UsedRegisterSet restricted_regs;
 };
 
 // Returns true if the virtual register associated with a particular SSA node
@@ -432,8 +417,7 @@ static bool IsLive(SSARegisterWebMap &mapped_webs, VirtualRegister reg,
 // Try to get a GPR for use by an instruction.
 static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
   VirtualRegister agpr;
-  if (pgpr.IsValid() && reg_sched->used_regs.IsDead(pgpr) &&
-      reg_sched->restricted_regs.IsDead(pgpr)) {
+  if (pgpr.IsValid() && reg_sched->used_regs.IsDead(pgpr)) {
     return pgpr;  // Try to use the preferred GPR if possible.
   } else {
     return reg_sched->GetGPR();
@@ -485,8 +469,7 @@ static void HomeUsedReg(PartitionScheduler *part_sched,
                         SSAFragment *frag,
                         Instruction *instr,
                         RegLocation *vr_home) {
-  if (!vr_home->loc.IsNative() ||
-      !reg_sched->restricted_regs.IsLive(vr_home->loc)) {
+  if (!vr_home->loc.IsNative() || !reg_sched->used_regs.IsLive(vr_home->loc)) {
     return; // Not used in this instruction.
   }
 
@@ -538,11 +521,11 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
     auto &vr_home(part_sched->Loc(vr));
 
     reg_sched->used_regs.KillAll();
-    reg_sched->restricted_regs.KillAll();
 
     // Annotation instructions can define/kill VRs.
     if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
       auto web = GetMetaData<const SSARegisterWeb *>(ainstr);
+
       // Note: `kAnnotSSANodeOwner` is not considered a definition because it
       //       is added by the local value numbering stage of SSA construction
       //       for the sake of making it easier to reclaim `SSANode` objects.
@@ -565,18 +548,15 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
           continue;
         }
 
-      // Don't allow save/restore regs to span more than one fragment.
+      // Handle a save/restore of a register.
       } else if (kAnnotSSASaveRegister == ainstr->annotation ||
-                 kAnnotSSARestoreRegister == ainstr->annotation) {
-        GRANARY_ASSERT(web->Find() != reg_web);
+                 kAnnotSSARestoreRegister == ainstr->annotation ||
+                 kAnnotSSASwapRestoreRegister == ainstr->annotation) {
         reg_sched->used_regs.Revive(ainstr->Data<VirtualRegister>());
-        HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
-        continue;
 
+      // Mark that a number of registers need to be live at a specific point.
       } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
         reg_sched->used_regs = ainstr->Data<UsedRegisterSet>();
-        HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
-        continue;
 
       // We can stop here.
       } else if (kAnnotSSAPartitionLocalBegin == ainstr->annotation) {
@@ -594,23 +574,20 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
       if (!ssa_instr) continue;
 
       reg_sched->used_regs.Visit(ninstr);
-      reg_sched->restricted_regs = reg_sched->used_regs;
 
       // If this instruction has no explicit operands, then we can't possibly
       // schedule a VR in, and so we don't need to add the constraint to the
       // system that restricted registers should not be used.
       if (ninstr->NumExplicitOperands()) {
-        reg_sched->restricted_regs.ReviveRestrictedRegisters(ninstr);
+        reg_sched->used_regs.ReviveRestrictedRegisters(ninstr);
       }
 
-      HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
-
-      // Make sure this is register is used or defined.
+      // Figure out if this instruction is defined or used.
       FindDefUse(ssa_instr, reg_web, &is_defined, &is_used);
-      if (!is_used && !is_defined) continue;
     }
 
-    GRANARY_ASSERT(is_used || is_defined);
+    HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
+    if (!is_used && !is_defined) continue;
 
     // Inject a fill for this instruction. Filling might restore a GPR if this
     // VR has a preferred GPR, or if there is no preferred GPR, then filling
@@ -682,30 +659,88 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
   }
 }
 
+// Find the bounds of a partition in the fragment list.
+static void FindPartitionBounds(FragmentList *frags, PartitionInfo *partition,
+                                Fragment **first_frag, Fragment **last_frag) {
+  for (auto frag : ReverseFragmentListIterator(frags)) {
+    if (frag->partition.Value() == partition) {
+      if (!*last_frag) *last_frag = frag;
+      *first_frag = frag;
+    }
+  }
+}
+
+// Used for scheduling slots for native GPR saves/restores.
+struct SaveRestoreScheduler {
+ public:
+  SaveRestoreScheduler(PartitionInfo *partition_)
+      : partition(partition_) {
+    memset(&(gpr_slots[0]), 0, sizeof gpr_slots);
+  }
+
+  VirtualRegister SlotForGPR(VirtualRegister gpr) {
+    GRANARY_ASSERT(gpr.IsNative() && gpr.IsGeneralPurpose());
+    auto &slot(gpr_slots[gpr.Number()]);
+    if (!slot.IsValid()) {
+      slot = NthSpillSlot(partition->num_slots++);
+    }
+    return slot;
+  }
+
+ protected:
+  PartitionInfo *partition;
+
+  VirtualRegister gpr_slots[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+
+ private:
+  SaveRestoreScheduler(void) = delete;
+};
+
+// Schedule the saves/restores of arch GPRs.
+static void ScheduleSaveRestores(SaveRestoreScheduler *slot_sched,
+                                 SSAFragment *frag) {
+  for (auto instr : InstructionListIterator(frag->instrs)) {
+    auto ainstr = DynamicCast<AnnotationInstruction *>(instr);
+    if (!ainstr) continue;
+
+    if (kAnnotSSASaveRegister == ainstr->annotation) {
+      auto gpr = ainstr->Data<VirtualRegister>();
+      auto slot = slot_sched->SlotForGPR(gpr);
+      frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(gpr, slot));
+
+    } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
+      auto gpr = ainstr->Data<VirtualRegister>();
+      auto slot = slot_sched->SlotForGPR(gpr);
+      frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(gpr, slot));
+
+    } else if (kAnnotSSASwapRestoreRegister == ainstr->annotation) {
+      auto gpr = ainstr->Data<VirtualRegister>();
+      auto slot = slot_sched->SlotForGPR(gpr);
+      frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(gpr, slot));
+    }
+  }
+}
+
 // Schedule all partition-local virtual registers within the fragments of a
 // given partition.
-static void ScheduleRegs(FragmentList *frags,
-                                       PartitionInfo *partition) {
+static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
   GPRScheduler gpr_sched;
   VirtualRegister reg;
   VirtualRegister preferred_gpr;
   SSARegisterWeb *reg_web(nullptr);
-
-  auto slot_num = 0UL;
+  UsedRegisterSet preferred_gprs;
 
   // Used to bound the iterating through the fragment list after the first
   // register has been scheduled.
   Fragment *first_frag(frags->First());
   Fragment *last_frag(nullptr);
-  for (auto frag : ReverseFragmentListIterator(frags)) {
-    if (frag->partition.Value() == partition) {
-      if (!last_frag) last_frag = frag;
-      first_frag = frag;
-    }
-  }
+  FindPartitionBounds(frags, partition, &first_frag, &last_frag);
 
-  UsedRegisterSet preferred_gprs;
+  auto slot_num = 0UL;
   auto found_reg = false;
+  auto orig_last_frag = last_frag;
+
+  // Schedule the virtual registers.
   do {
     found_reg = false;
     for (auto frag : ReverseFragmentListIterator(last_frag)) {
@@ -734,6 +769,18 @@ static void ScheduleRegs(FragmentList *frags,
       if (frag == first_frag) break;
     }
   } while (found_reg);
+
+  // Schedule the save/restores.
+  SaveRestoreScheduler slot_sched(partition);
+  for (auto frag : ReverseFragmentListIterator(orig_last_frag)) {
+    if (frag->partition.Value() == partition) {
+      if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
+        ScheduleSaveRestores(&slot_sched, ssa_frag);
+      }
+    } else if (frag == first_frag) {
+      break;
+    }
+  }
 }
 
 // Schedule fragment-local registers. We start by doing things one partition at
@@ -770,7 +817,6 @@ static void AddFragBeginAnnotations(FragmentList *frags) {
 void ScheduleRegisters(FragmentList *frags) {
   AddFragBeginAnnotations(frags);
   ScheduleRegs(frags);
-  FreeFlagZones(frags);
 }
 
 }  // namespace granary

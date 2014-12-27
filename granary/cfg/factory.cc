@@ -63,10 +63,8 @@ extern const uint8_t granary_end_text;
 extern const uint8_t granary_begin_inst_exports;
 extern const uint8_t granary_end_inst_exports;
 
-extern const AppPC granary_block_cache_begin;
-extern const AppPC granary_block_cache_end;
-extern const AppPC granary_edge_cache_begin;
-extern const AppPC granary_edge_cache_end;
+extern const AppPC granary_code_cache_begin;
+extern const AppPC granary_code_cache_end;
 
 // User space-specific functions. If we find that `_fini` is being invoked,
 // then we'll redirect execution to `exit_group`, which exit all
@@ -500,14 +498,9 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
 
   // Aagh! Indirect jump to some already cached code. For the time being,
   // give up and just go to the target and ignore the meta-data.
-  if (granary_block_cache_begin <= target_pc &&
-      target_pc < granary_block_cache_end) {
+  if (granary_code_cache_begin <= target_pc &&
+      target_pc < granary_code_cache_end) {
     granary_curiosity();  // TODO(pag): Issue #42.
-
-  // Execution should never go to the code cache.
-  } else if (granary_edge_cache_begin <= target_pc &&
-             target_pc < granary_edge_cache_begin) {
-    granary_unreachable("Fatal error: Trying to jump into edge cache.");
 
   // Target is an instrumentation-exported Granary function. These run
   // natively.

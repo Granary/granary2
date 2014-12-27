@@ -137,7 +137,7 @@ class WatchpointsLikeTool : public InstrumentationTool {
 
     // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
     if (!watched_addr.IsGeneralPurpose()) return;
-    if (watched_addr.IsVirtualStackPointer()) return;
+    if (watched_addr.IsStackPointerAlias()) return;
     if (watched_addr.IsSegmentOffset()) return;
 
     RegisterOperand watched_addr_reg(watched_addr);

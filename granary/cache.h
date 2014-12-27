@@ -24,15 +24,10 @@ class CodeSlab;
 // Forward declaration.
 class CodeCacheTransaction;
 
-enum CodeCacheKind {
-  kBlockCodeCache,
-  kEdgeCodeCache
-};
-
 // Implementation of Granary's code caches.
 class CodeCache {
  public:
-  CodeCache(size_t slab_size_, CodeCacheKind kind_);
+  CodeCache(size_t slab_size_);
   ~CodeCache(void);
 
   // Allocate a block of code from this code cache.
@@ -60,9 +55,6 @@ class CodeCache {
 
   // The offset into the current slab that's serving allocations.
   size_t slab_byte_offset;
-
-  // What type of code cache is this?
-  const CodeCacheKind kind;
 
   // Lock around the whole code cache, which prevents multiple people from
   // reading/writing to the cache at once.

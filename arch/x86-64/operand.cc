@@ -18,19 +18,6 @@ static arch::Operand * const TOMBSTONE = \
     reinterpret_cast<arch::Operand *>(0x1ULL);
 }  // namespace
 
-// Try to replace the referenced operand with a concrete operand. Returns
-// false if the referenced operand is not allowed to be replaced. For example,
-// suppressed and implicit operands cannot be replaced.
-bool OperandRef::ReplaceWith(const Operand &repl_op) {
-  GRANARY_ASSERT(op && TOMBSTONE != op && repl_op.op_ptr);
-  if (GRANARY_UNLIKELY(op->is_sticky || !op->is_explicit)) {
-    return false;
-  } else {
-    *op = *(repl_op.op.AddressOf());
-    return true;
-  }
-}
-
 // Returns whether or not this operand can be replaced / modified.
 bool Operand::IsModifiable(void) const {
   static_assert(sizeof(op) >= sizeof(arch::Operand) &&
@@ -62,6 +49,19 @@ size_t Operand::ByteWidth(void) const {
   return op->width / 8;
 }
 
+// Try to replace the current operand.
+bool Operand::UnsafeTryReplaceOperand(const Operand &repl_op) {
+  if (repl_op.IsValid() && op_ptr && TOMBSTONE != op_ptr &&
+      op_ptr->is_explicit && !op_ptr->is_sticky) {
+    auto repl_op_ptr = repl_op.op.AddressOf();
+    *op_ptr = *repl_op_ptr;
+    op.Construct<const arch::Operand &>(*op_ptr);
+    return true;
+  } else {
+    return false;
+  }
+}
+
 bool RegisterOperand::IsNative(void) const {
   return op->reg.IsNative();
 }
@@ -74,8 +74,8 @@ bool RegisterOperand::IsStackPointer(void) const {
   return op->reg.IsStackPointer();
 }
 
-bool RegisterOperand::IsVirtualStackPointer(void) const {
-  return op->reg.IsVirtualStackPointer();
+bool RegisterOperand::IsStackPointerAlias(void) const {
+  return op->reg.IsStackPointerAlias();
 }
 
 // Extract the register.
@@ -85,7 +85,8 @@ VirtualRegister RegisterOperand::Register(void) const {
 
 // Initialize a new memory operand from a virtual register, where the
 // referenced memory has a width of `num_bytes`.
-MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, size_t num_bytes) {
+MemoryOperand::MemoryOperand(VirtualRegister ptr_reg, size_t num_bytes) {
+  GRANARY_ASSERT(ptr_reg.IsValid());
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
   op->width = static_cast<uint16_t>(num_bytes * arch::BYTE_WIDTH_BITS);
   op->reg = ptr_reg;
@@ -173,15 +174,26 @@ size_t MemoryOperand::CountMatchedRegisters(
   return num_matched;
 }
 
+// Tries to replace the memory operand.
+bool MemoryOperand::TryReplaceWith(const MemoryOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
+}
+
 // Initialize a new register operand from a virtual register.
-RegisterOperand::RegisterOperand(const VirtualRegister reg)
+RegisterOperand::RegisterOperand(VirtualRegister reg)
     : Operand() {
+  GRANARY_ASSERT(reg.IsValid());
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
   op->width = static_cast<uint16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
+}
+
+// Tries to replace the register operand.
+bool RegisterOperand::TryReplaceWith(const RegisterOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
 }
 
 // Initialize a immediate operand from a signed integer, where the value has
@@ -218,6 +230,11 @@ int64_t ImmediateOperand::Int(void) {
   return op->imm.as_int;
 }
 
+// Tries to replace the register operand.
+bool ImmediateOperand::TryReplaceWith(const ImmediateOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
+}
+
 // Initialize a label operand from a non-null pointer to a label.
 LabelOperand::LabelOperand(LabelInstruction *label)
     : Operand() {
@@ -231,8 +248,6 @@ LabelOperand::LabelOperand(LabelInstruction *label)
 }
 
 // Target of a label operand.
-//
-// Note: This has a driver-specific implementation.
 AnnotationInstruction *LabelOperand::Target(void) const {
   return op->annotation_instr;
 }
@@ -248,16 +263,12 @@ Operand &Operand::operator=(const Operand &that) {
     const auto old_rw = rw;
     const auto old_width = width;
     const auto old_is_ea = is_effective_address;
-    const auto old_segment = segment;
     memcpy(this, &that, sizeof that);
     if (old_width) width = old_width;
     if (old_rw) rw = old_rw;
     is_effective_address = old_is_ea;
     is_explicit = true;
     is_sticky = false;
-    if (XED_REG_INVALID != old_segment && XED_REG_DS != old_segment) {
-      segment = old_segment;
-    }
   }
   return *this;
 }

@@ -74,10 +74,6 @@ PartitionInfo::PartitionInfo(int id_)
       min_frame_offset(0),
       entry_frag(nullptr) {}
 
-RegisterUsageInfo::RegisterUsageInfo(void)
-    : live_on_entry(),
-      live_on_exit() {}
-
 RegisterUsageCounter::RegisterUsageCounter(void) {
   ClearGPRUseCounters();
 }
@@ -87,30 +83,11 @@ void RegisterUsageCounter::ClearGPRUseCounters(void) {
   memset(&(num_uses_of_gpr[0]), 0, sizeof num_uses_of_gpr);
 }
 
-namespace {
-static void CountGPRUse(RegisterUsageCounter *counter, VirtualRegister reg) {
-  if (reg.IsNative() && reg.IsGeneralPurpose()) {
-    counter->num_uses_of_gpr[reg.Number()] += 1;
-  }
-}
-}  // namespace
-
 // Count the number of uses of the arch GPRs in this fragment.
 void RegisterUsageCounter::CountGPRUses(Fragment *frag) {
-  auto operand_counter = [=] (Operand *op) {
-    if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-      CountGPRUse(this, reg_op->Register());
-    } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-      VirtualRegister r1, r2;
-      if (mem_op->CountMatchedRegisters({&r1, &r2})) {
-        CountGPRUse(this, r1);
-        CountGPRUse(this, r2);
-      }
-    }
-  };
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      ninstr->ForEachOperand(operand_counter);
+      CountGPRUses(ninstr);
     }
   }
 }
@@ -131,7 +108,6 @@ CodeAttributes::CodeAttributes(void)
       is_compensation_code(false),
       is_in_edge_code(false),
       follows_cfi(false),
-      has_os_annotation(false),
       num_predecessors(0) {}
 
 Fragment::Fragment(void)
@@ -144,7 +120,7 @@ Fragment::Fragment(void)
       entry_label(nullptr),
       instrs(),
       partition(nullptr),
-      flag_zone(nullptr),
+      flag_zone(),
       app_flags(),
       inst_flags(),
       temp(),
@@ -171,15 +147,6 @@ FlagEntryFragment::~FlagEntryFragment(void) {}
 FlagExitFragment::~FlagExitFragment(void) {}
 NonLocalEntryFragment::~NonLocalEntryFragment(void) {}
 ExitFragment::~ExitFragment(void) {}
-
-FlagZone::FlagZone(VirtualRegister flag_save_reg_,
-                   VirtualRegister flag_killed_reg_)
-    : killed_flags(0),
-      live_flags(0),
-      flag_save_reg(flag_save_reg_),
-      flag_killed_reg(flag_killed_reg_),
-      used_regs(),
-      live_regs() {}
 
 namespace os {
 
@@ -236,7 +203,7 @@ static const char *FragmentBackground(const Fragment *frag) {
 static void LogOperand(LogLevel level, const Operand *op, const char *sep) {
   auto read_prefix = "";
   auto write_prefix = "";
-  if (IsA<RegisterOperand *>(op) || IsA<MemoryOperand *>(op)) {
+  if (op->IsRegister() || op->IsMemory()) {
     if (op->IsRead()) {
       read_prefix = op->IsConditionalRead() ? "cr" : "r";
     }
@@ -327,6 +294,8 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@save";
   } else if (kAnnotSSARestoreRegister == instr->annotation) {
     kind = "@restore";
+  } else if (kAnnotSSASwapRestoreRegister == instr->annotation) {
+    kind = "@swap_restore";
   } else if (kAnnotSSARegisterKill == instr->annotation) {
     kind = "@undef";
   } else if (kAnnotSSAPartitionLocalBegin == instr->annotation) {

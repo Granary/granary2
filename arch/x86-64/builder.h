@@ -55,6 +55,12 @@ class ImmediateBuilder {
   ImmediateBuilder(const ImmediateBuilder &that) = default;
   ImmediateBuilder(ImmediateBuilder &&that) = default;
 
+  template <typename T>
+  inline ImmediateBuilder(T *as_ptr, xed_encoder_operand_type_t type_)
+      : as_uint(reinterpret_cast<uintptr_t>(as_ptr)),
+        type(type_),
+        width(sizeof(T *) * arch::BYTE_WIDTH_BITS) {}
+
   template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_uint_, xed_encoder_operand_type_t type_)
       : as_uint(static_cast<uintptr_t>(as_uint_)),

@@ -18,30 +18,6 @@
 namespace granary {
 namespace lir {
 
-// Indirect jump to an existing basic block.
-std::unique_ptr<Instruction> IndirectJump(Block *target_block,
-                                          const granary::Operand &op) {
-
-  arch::Instruction ni;
-  if (auto mem = DynamicCast<granary::MemoryOperand *>(&op)) {
-    const void *ptr(nullptr);
-    VirtualRegister reg;
-    if (mem->MatchPointer(ptr)) {
-      JMP_MEMv(&ni, ptr);
-    } else if (mem->MatchRegister(reg)) {
-      JMP_MEMv(&ni, reg);
-    } else {
-      GRANARY_ASSERT(false);
-    }
-  } else if (auto reg = DynamicCast<granary::RegisterOperand *>(&op)) {
-    JMP_GPRv(&ni, reg->Register());
-  } else {
-    GRANARY_ASSERT(false);
-  }
-  return std::unique_ptr<Instruction>(
-      new ControlFlowInstruction(&ni, target_block));
-}
-
 // Call to an existing basic block.
 std::unique_ptr<Instruction> FunctionCall(Block *target_block) {
   arch::Instruction ni;

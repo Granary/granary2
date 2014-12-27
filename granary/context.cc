@@ -125,10 +125,8 @@ static void FreeCallbacks(const T &callback_map) {
 }  // namespace
 
 Context::Context(void)
-    : block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size),
-                       kBlockCodeCache),
-      edge_code_cache(static_cast<size_t>(FLAG_edge_cache_slab_size),
-                      kEdgeCodeCache),
+    : block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size)),
+      edge_code_cache(static_cast<size_t>(FLAG_edge_cache_slab_size)),
       direct_edge_entry_code(
           GenerateCode(&edge_code_cache, arch::GenerateDirectEdgeEntryCode,
                        arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),

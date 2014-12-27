@@ -46,17 +46,23 @@ namespace arch {
 
 namespace {
 
-// Mangle an indirect CALL or JMP through memory into a MOV of the memory
-// location into a virtual register, then an indirect call through the
-// virtual register.
+// Mangle an indirect CALL or JMP. This ensures that all indirect control flow
+// uses a virtual register.
 static void MangleIndirectCFI(DecodedBlock *block, Instruction *instr) {
-  if (instr->ops[0].IsMemory()) {
-    Instruction ni;
-    auto target_loc = block->AllocateVirtualRegister();
-    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, target_loc, instr->ops[0]));
-    instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
-    instr->ops[0].reg = target_loc;
-    instr->ops[0].is_sticky = false;
+  Instruction ni;
+  auto &aop(instr->ops[0]);
+  auto target_loc = block->AllocateVirtualRegister();
+  if (aop.IsMemory()) {
+    APP_NATIVE_MANGLED(MOV_GPRv_MEMv(&ni, target_loc, aop));
+    aop.type = XED_ENCODER_OPERAND_TYPE_REG;
+    aop.reg = target_loc;
+    aop.is_sticky = false;
+    aop.is_compound = false;
+    aop.segment = XED_REG_INVALID;
+
+  } else if (aop.IsRegister() && !aop.reg.IsVirtual()) {
+    APP(MOV_GPRv_GPRv_89(&ni, target_loc, aop.reg));
+    aop.reg = target_loc;
   }
 }
 
@@ -74,9 +80,6 @@ static void MangleExplicitMemOp(DecodedBlock *block, Operand &op) {
   // that virtual regs are spilled to the stack).
   if (!op.is_compound && !op.reg.IsStackPointer()) return;
 
-  auto is_seg_offset = XED_REG_INVALID != op.segment &&
-                       XED_REG_DS != op.segment;
-
   // All built-in memory operands, other than `XLAT`, a simple dereferences
   // of a single base register. We will convert most into non-compound
   // operands to make them easier to manipulate from the instrumentation
@@ -86,18 +89,15 @@ static void MangleExplicitMemOp(DecodedBlock *block, Operand &op) {
       GRANARY_ASSERT(!op.mem.base.IsStackPointer());
       op.is_compound = false;
       op.reg = op.mem.base;
-      if (is_seg_offset) op.reg.ConvertToSegmentOffset();
     }
   } else {
     // If it's not a compound memory operand, then don't split it apart.
     if (!op.is_compound) {
-      if (is_seg_offset) op.reg.ConvertToSegmentOffset();
       return;
     }
 
     auto mem_reg = block->AllocateVirtualRegister();
-    if (op.mem.base.IsStackPointer()) mem_reg.ConvertToVirtualStackPointer();
-    if (is_seg_offset) mem_reg.ConvertToSegmentOffset();
+    if (op.mem.base.IsStackPointer()) mem_reg.MarkAsStackPointerAlias();
 
     Instruction ni;
     LEA_GPRv_AGEN(&ni, mem_reg, op);
@@ -142,7 +142,7 @@ static void MangleExplicitStackPointerRegOp(DecodedBlock *block,
     } else {
       Instruction ni;
       auto sp = block->AllocateVirtualRegister();
-      sp.ConvertToVirtualStackPointer();
+      sp.MarkAsStackPointerAlias();
       APP(LEA_GPRv_AGEN(&ni, sp, BaseDispMemOp(0, XED_REG_RSP,
                                                arch::ADDRESS_WIDTH_BITS)));
       sp.Widen(op.reg.ByteWidth());
@@ -155,8 +155,6 @@ static void MangleExplicitStackPointerRegOp(DecodedBlock *block,
 static void MangleSegmentOffset(DecodedBlock *block, Operand &op) {
   Instruction ni;
   auto offset = block->AllocateVirtualRegister();
-  offset.ConvertToSegmentOffset();
-
   APP(MOV_GPRv_IMMv(&ni, offset, op.addr.as_uint));
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = false;
@@ -378,7 +376,7 @@ static void MangleEnter(DecodedBlock *block, Instruction *instr) {
   auto num_args = instr->ops[1].imm.as_uint & 0x1FUL;
   auto temp_rbp = block->AllocateVirtualRegister();
   auto decoded_pc = instr->decoded_pc;
-  temp_rbp.ConvertToVirtualStackPointer();
+  temp_rbp.MarkAsStackPointerAlias();
 
   APP_NATIVE(
       PUSH_GPRv_50(&ni, XED_REG_RBP);

@@ -6,6 +6,7 @@
 #include "arch/driver.h"
 #include "arch/util.h"
 #include "arch/x86-64/slot.h"
+#include "arch/x86-64/register.h"
 
 #include "granary/base/base.h"
 
@@ -210,9 +211,8 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
   // `3_partition_fragments.cc`.
   edge_frag->attr.has_native_instrs = true;
 
-  // Don't surround this code in flag save fragments as we don't modify the
-  // flags.
-  edge_frag->type = FRAG_TYPE_APP;
+  // Mark this code as instrumentation code as we do modify the flags.
+  edge_frag->type = FRAG_TYPE_INST;
 
   // Make sure that the edge code shares the same partition as the predecessor
   // so that virtual registers can be spread across both.
@@ -285,35 +285,12 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   in_edge->instrs.Append(
       new AnnotationInstruction(kAnnotCondLeaveNativeStack));
 
-  // Copy the target, just in case it's stored in `RCX` or `RDI`.
-  auto cfi_target = target_op.reg;
-  auto restore_rdx = false;
-  if (VirtualRegister::FromNative(XED_REG_RCX) == cfi_target ||
-      VirtualRegister::FromNative(XED_REG_RDI) == cfi_target) {
-    APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RDX);
-                 ni.is_stack_blind = true;
-                 ni.analyzed_stack_usage = false; );
-    APP(in_edge, MOV_GPRv_GPRv_89(&ni, XED_REG_RDX, cfi_target); );
-    cfi_target = VirtualRegister::FromNative(XED_REG_RDX);
-    restore_rdx = true;
-  }
+  auto save_rdi = new AnnotationInstruction(kAnnotSSASaveRegister, REG_RDI);
+  auto save_rsi = new AnnotationInstruction(kAnnotSSASaveRegister, REG_RSI);
+  in_edge->instrs.Append(save_rdi);
+  in_edge->instrs.Append(save_rsi);
 
-  // Spill `RCX` and `RDI` on the stack. If the stack isn't valid in this
-  // partition, then the stack pointer should have already been shifted.
-  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RCX);
-               ni.is_stack_blind = true;
-               ni.analyzed_stack_usage = false; );
-  APP(in_edge, PUSH_GPRv_50(&ni, XED_REG_RDI);
-               ni.is_stack_blind = true;
-               ni.analyzed_stack_usage = false; );
-
-  // Store the pointer to the `IndirectEdge` data structure in `RDI`
-  // (arg1 of the Itanium C++ ABI).
-  APP(in_edge, MOV_GPRv_IMMv(&ni, XED_REG_RDI,
-                                  reinterpret_cast<uint64_t>(edge)));
-  APP(in_edge, JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),
-                                           XED_REG_RDI,
-                                           arch::ADDRESS_WIDTH_BITS));
+  APP(in_edge, JMP_MEMv(&ni, &(edge->out_edge_pc));
                ni.is_sticky = true; );
   in_edge->branch_instr = DynamicCast<NativeInstruction *>(
       in_edge->instrs.Last());
@@ -331,10 +308,14 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // --------------------- go_to_granary --------------------------------
 
-  // Store the branch target into `RCX`. The address of the `IndirectEdge`
-  // data structure remains in `RDI`. Jump to `edge->in_edge_pc`, which is
-  // initialized to be the indirect edge entrypoint edge code.
-  APP(go_to_granary, MOV_GPRv_GPRv_89(&ni, XED_REG_RCX, cfi_target); );
+  // Store the branch target into `RSI` and theaddress of the `IndirectEdge`
+  // data structure in `RDI`. Jump to `edge->in_edge_pc`, which is initialized
+  // to be the indirect edge entrypoint edge code.
+  auto cfi_target = target_op.reg;
+  GRANARY_ASSERT(cfi_target.IsVirtual());
+
+  APP(go_to_granary, MOV_GPRv_IMMv(&ni, XED_REG_RDI, edge));
+  APP(go_to_granary, MOV_GPRv_GPRv_89(&ni, XED_REG_RSI, cfi_target); );
   APP(go_to_granary, JMP_RELBRd(&ni, edge->out_edge_pc);
                      ni.is_sticky = true; );
   go_to_granary->branch_instr = DynamicCast<NativeInstruction *>(
@@ -347,40 +328,28 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // --------------------- compare_target --------------------------------
 
+  compare_target->attr.reads_flags = true;
+  compare_target->attr.modifies_flags = true;
+
   // Gets updated later by:
-  //    1)  Moving the target of the control-flow instruction into `RCX`
+  //    1)  Moving the target of the control-flow instruction into `RSI`
   //        (first instruction).
   //    2)  Jumping directly to the targeted basic block (last instruction).
-  APP(compare_target, MOV_GPRv_IMMv(&ni, XED_REG_RCX, 0UL);
+  APP(compare_target, MOV_GPRv_IMMv(&ni, XED_REG_RSI, 0UL);
                       ni.dont_encode = true; );
-  APP(compare_target, LEA_GPRv_AGEN(&ni, XED_REG_RCX, XED_REG_RCX, cfi_target));
-  auto go_to_exit_to_block = new LabelInstruction;
-
-  // Note: We add the `JRCXZ` as the branch instruction, as opposed to the
-  //       next `JMP_RELBRd` (which should be the `branch_instr`) because then
-  //       later stages will see the `JRCXZ` as conditional, and propagate
-  //       registers / flags correctly.
-  APP(compare_target, JRCXZ_RELBRb(&ni, go_to_exit_to_block));
+  APP(compare_target, CMP_GPRv_GPRv_39(&ni, XED_REG_RSI, cfi_target));
+  APP(compare_target, JNZ_RELBRd(&ni, back_to_granary));
   compare_target->branch_instr = DynamicCast<NativeInstruction *>(
       compare_target->instrs.Last());
-  APP(compare_target, JMP_RELBRd(&ni, back_to_granary); ni.is_sticky = true; );
-
-  // LABEL: `go_to_exit_to_block`.
-  compare_target->instrs.Append(go_to_exit_to_block);
-
-  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDI);
-                      ni.is_stack_blind = true;
-                      ni.analyzed_stack_usage = false; );
-  APP(compare_target, POP_GPRv_51(&ni, XED_REG_RCX);
-                      ni.is_stack_blind = true;
-                      ni.analyzed_stack_usage = false; );
-  if (restore_rdx) {
-    APP(compare_target, POP_GPRv_51(&ni, XED_REG_RDX);
-                        ni.is_stack_blind = true;
-                        ni.analyzed_stack_usage = false; );
-  }
 
   // --------------------- about_to_exit --------------------------------
+
+  auto restore_rdi = new AnnotationInstruction(kAnnotSSARestoreRegister,
+                                               REG_RDI);
+  auto restore_rsi = new AnnotationInstruction(kAnnotSSARestoreRegister,
+                                               REG_RSI);
+  about_to_exit->instrs.Append(restore_rdi);
+  about_to_exit->instrs.Append(restore_rsi);
 
   // We separate this off so that if a compensation fragment needs to be
   // added, then it won't be added *after* the enter stack annotation.
@@ -419,45 +388,21 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
   frag->next = first_frag;
   frag->successors[kFragSuccFallThrough] = first_frag;
 
-  BranchInstruction *jrcxz(nullptr);
-  AppPC jrcxz_target(nullptr);
-
-  GRANARY_IF_DEBUG( auto added_lea = false;
-                    auto found_jrcxz_target = false; )
+  GRANARY_IF_DEBUG( auto added_mov_addr = false; )
   for (auto pc = edge->out_edge_template; decoder.DecodeNext(&ni, &pc); ) {
 
-    // Look for the `LEA` that adds the address to its complement, and then
-    // inject the move of the complemented address before the `LEA`.
-    if (XED_ICLASS_LEA == ni.iclass &&
-        VirtualRegister::FromNative(XED_REG_RCX) == ni.ops[0].reg) {
-
-      // Negate the pointer, so that when it's added to its non-negated self,
-      // they cancel out and trigger the `JRCXZ`.
-      MOV_GPRv_IMMv(&mov, XED_REG_RCX, -reinterpret_cast<intptr_t>(app_pc));
+    // Look for the `CMP` that compares the address with the target.
+    if (XED_ICLASS_CMP == ni.iclass) {
+      MOV_GPRv_IMMv(&mov, XED_REG_RSI, reinterpret_cast<intptr_t>(app_pc));
       frag->instrs.Append(new NativeInstruction(&mov));
+      GRANARY_IF_DEBUG( added_mov_addr = true; )
 
-      GRANARY_IF_DEBUG( added_lea = true; )
-
-    } else if (XED_ICLASS_JRCXZ == ni.iclass) {  // Need to relativize.
-      jrcxz = new BranchInstruction(&ni, new LabelInstruction);
-      jrcxz_target = ni.BranchTargetPC();
-      frag->instrs.Append(jrcxz);
-      continue;
-
-    } else if (XED_IFORM_JMP_RELBRd == ni.iform) {
+    // Re-target the failure case
+    } else if (XED_ICLASS_JNZ == ni.iclass) {
       ni.SetBranchTarget(edge->out_edge_pc);  // Miss! Jump to fall-back.
-
-    // Modify the target of the `JRCXZ`.
-    } else if (jrcxz_target == ni.DecodedPC()) {
-      GRANARY_ASSERT(nullptr != jrcxz);
-      frag->instrs.Append(jrcxz->TargetLabel());
-      GRANARY_IF_DEBUG( found_jrcxz_target = true; )
     }
     APP(frag);
   }
-  GRANARY_ASSERT(nullptr != jrcxz_target);
-  GRANARY_ASSERT(added_lea);
-  GRANARY_ASSERT(found_jrcxz_target);
 }
 
 // Patch a direct edge.

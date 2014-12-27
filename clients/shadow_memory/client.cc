@@ -108,7 +108,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
  protected:
   virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) {
     if (op.native_addr_op.IsStackPointer() ||
-        op.native_addr_op.IsVirtualStackPointer()) {
+        op.native_addr_op.IsStackPointerAlias()) {
       return;
     }
 

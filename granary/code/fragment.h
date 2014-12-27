@@ -30,7 +30,6 @@ namespace granary {
 class BlockMetaData;
 
 class SSASpillStorage;
-class FlagZone;
 class Fragment;
 class SSAFragment;
 class PartitionEntryFragment;
@@ -51,6 +50,30 @@ class StackFrameInfo {
 
   int entry_offset;
   int exit_offset;
+};
+
+
+// Maintains information about flags usage within a "zone" (a group of non-
+// application fragments that are directly connected by control flow). Flag
+// zones are delimited by `FlagEntry` and `FlagExit` fragments.
+union FlagZone {
+ public:
+  inline FlagZone(void)
+      : flags(0) {}
+
+  inline bool operator==(const FlagZone &that) const {
+    return flags == that.flags;
+  }
+
+  struct {
+    // All flags killed by any instruction within this flag zone.
+    uint32_t killed_flags;
+
+    // Live flags on exit from this flags zone.
+    uint32_t live_flags;
+  } __attribute__((packed));
+
+  uint64_t flags;
 };
 
 enum EdgeKind {
@@ -94,11 +117,6 @@ class PartitionInfo {
   // a partition has more than one entry points.
   GRANARY_IF_DEBUG( int num_partition_entry_frags; )
 
-  // Used to verify that a virtual register is not defined in one fragment
-  // and used in another.
-  GRANARY_IF_DEBUG( TinySet<VirtualRegister,
-                            arch::NUM_GENERAL_PURPOSE_REGISTERS> used_vrs; )
-
   // Should we analyze the stack frames?
   bool analyze_stack_frame;
   int min_frame_offset;
@@ -123,16 +141,6 @@ union TempData {
   Fragment *entry_exit_frag;
 };
 
-// Tracks registers used within fragments.
-class RegisterUsageInfo {
- public:
-  RegisterUsageInfo(void);
-
-  LiveRegisterSet live_on_entry;
-  LiveRegisterSet live_on_exit;
-
-};
-
 // Used to count the number of uses of each GPR within one or more fragments.
 class RegisterUsageCounter {
  public:
@@ -143,6 +151,11 @@ class RegisterUsageCounter {
 
   // Count the number of uses of the arch GPRs in this fragment.
   void CountGPRUses(Fragment *frag);
+
+  // Count the number of uses of the arch GPRs in a particular instruction.
+  //
+  // Note: This function has an architecture-specific implementation.
+  void CountGPRUses(const NativeInstruction *instr);
 
   size_t num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 };
@@ -229,7 +242,7 @@ class Fragment {
   DisjointSet<PartitionInfo *> partition;
 
   // The "flag zone" to which this fragment belongs.
-  DisjointSet<FlagZone *> flag_zone;
+  DisjointSet<FlagZone> flag_zone;
 
   // Tracks flag use within this fragment.
   FlagUsageInfo app_flags;
@@ -237,9 +250,6 @@ class Fragment {
 
   // Temporary, pass-specific data.
   TempData temp;
-
-  // Tracks register usage across fragments.
-  RegisterUsageInfo regs;
 
   // Tracks the successor fragments.
   Fragment *successors[2];
@@ -266,41 +276,6 @@ void Log(LogLevel level, FragmentList *frags);
 
 // Free all fragments, their instructions, etc.
 void FreeFragments(FragmentList *frags);
-
-// Maintains information about flags usage within a "zone" (a group of non-
-// application fragments that are directly connected by control flow). Flag
-// zones are delimited by `FlagEntry` and `FlagExit` fragments.
-class FlagZone {
- public:
-  FlagZone(VirtualRegister flag_save_reg_, VirtualRegister flag_killed_reg_);
-
-  // All flags killed by any instruction within this flag zone.
-  uint32_t killed_flags;
-
-  // Live flags on exit from this flags zone.
-  uint32_t live_flags;
-
-  // Register used for holding the flags state.
-  VirtualRegister flag_save_reg;
-
-  // General-purpose register used in the process of storing the flags. Might
-  // be invalid. Might also be a architectural GPR.
-  VirtualRegister flag_killed_reg;
-
-  // Registers used anywhere within this flag zone.
-  UsedRegisterSet used_regs;
-
-  // Live registers on exit from this flags zone.
-  LiveRegisterSet live_regs;
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(FlagZone, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-
- private:
-  FlagZone(void) = delete;
-};
 
 enum StackStatus {
   kStackStatusUnknown,
@@ -433,9 +408,6 @@ class alignas(alignof(void *)) CodeAttributes {
   // Does this fragment follow (via straight-line execution, e.g. through
   // fall-throughs) a `ControlFlowInstruction`?
   bool follows_cfi:1;
-
-  // Is there an instruction in this fragment with an OS-specific annotation?
-  bool has_os_annotation:1;
 
   // Count of the number of predecessors of this fragment (at fragment build
   // time).
