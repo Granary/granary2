@@ -8,7 +8,7 @@
 
 GRANARY_USING_NAMESPACE granary;
 
-GRANARY_DEFINE_positive_int(shadow_granularity, 64,
+GRANARY_DEFINE_positive_uint(shadow_granularity, 64,
     "The granularity (in bytes) of shadow memory. This must be a power of two. "
     "The default value is `64`, which means: 1 page of physical memory "
     "maps to one unit of shadow memory.",
@@ -69,7 +69,7 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   static void Init(InitReason reason) {
     if (kInitThread == reason) return;
     gShiftAmountLong = static_cast<size_t>(
-        __builtin_ctz(static_cast<unsigned>(FLAG_shadow_granularity)));
+        __builtin_ctz(FLAG_shadow_granularity));
     gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
     GRANARY_ASSERT(0 != gShiftAmount);
   }

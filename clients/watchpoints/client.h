@@ -59,6 +59,9 @@ void ForEachType(std::function<void(uint64_t type_id,
                                     granary::AppPC ret_address,
                                     size_t size_order)> func);
 
+// Returns the approximate size (in bytes) of a given type.
+size_t SizeOfType(uint64_t type_id);
+
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
 void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &));

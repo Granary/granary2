@@ -103,6 +103,11 @@ void ForEachType(std::function<void(uint64_t type_id,
   }
 }
 
+// Returns the approximate size (in bytes) of a given type.
+size_t SizeOfType(uint64_t type_id) {
+  return 1UL << types[type_id].size_order;
+}
+
 GRANARY_ON_CLIENT_INIT() {
   memset(types, 0, sizeof types);
   memset(sizes, 0, sizeof sizes);

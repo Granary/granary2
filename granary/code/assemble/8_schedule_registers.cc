@@ -319,26 +319,10 @@ static bool GetUnscheduledVR(SSARegisterWeb *web, VirtualRegister *found_reg,
   return true;
 }
 
-// Try to find an as-of-yet unscheduled SSA register web in an iterable.
-template <typename Iterable>
-static bool GetUnscheduledVR(const Iterable &it,
-                             VirtualRegister *found_reg,
-                             SSARegisterWeb **found_web) {
-  for (auto web : it) {
-    if (GetUnscheduledVR(web, found_reg, found_web)) return true;
-  }
-  return false;
-}
-
-// Try to find an as-of-yet unscheduled SSA register web in a fragment.
-static bool GetUnscheduledVR(SSAFragment *frag, VirtualRegister *reg,
-                             SSARegisterWeb **web) {
-  auto entry_webs(frag->ssa.entry_reg_webs.Values());
-  auto exit_webs(frag->ssa.exit_reg_webs.Values());
-  return GetUnscheduledVR(entry_webs, reg, web) ||
-         GetUnscheduledVR(frag->ssa.internal_reg_webs, reg, web) ||
-         GetUnscheduledVR(exit_webs, reg, web);
-}
+struct WebMerger {
+  SSARegisterWeb *web;
+  size_t num_uses;
+};
 
 struct GPRScheduler {
   GPRScheduler(void)
@@ -356,33 +340,10 @@ struct GPRScheduler {
     }
   }
 
-  // Try to get a preferred GPR for use by some VR. This will modify `*reg` and
-  // return `true` if a preferred GPR is found. Also, if a preferred GPR is
-  // found then the GPR will be marked as live in `min_gpr_num`, thus preventing
-  // it from being a preferred GPR again.
-  VirtualRegister GetPreferredGPR(UsedRegisterSet *preferred_gprs) {
-    auto ret = false;
-    auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
-    auto min_num_uses = std::numeric_limits<size_t>::max();
-    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-      if (preferred_gprs->IsLive(i)) continue;
-      if (reg_counts.num_uses_of_gpr[i] <= min_num_uses) {
-        ret = true;
-        min_gpr_num = i;
-        min_num_uses = reg_counts.num_uses_of_gpr[i];
-      }
-    }
-    if (ret) {
-      preferred_gprs->Revive(min_gpr_num);
-      return NthArchGPR(min_gpr_num);
-    } else {
-      return VirtualRegister();
-    }
-  }
-
-  // Get some GPR for use, so long as the GPR is not part of the
-  // `avoid_reg_set`.
-  VirtualRegister GetGPR(void) {
+  // Get the least used GPR for use that's not also used in `used_regs`, and
+  // store it in `*gpr`. Return the number of times that `*gpr` is used in
+  // the partition.
+  size_t GetGPR(VirtualRegister *gpr) {
     GRANARY_IF_DEBUG( auto found_reg = false; )
     auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<size_t>::max();
@@ -395,7 +356,91 @@ struct GPRScheduler {
       }
     }
     GRANARY_ASSERT(found_reg);
-    return NthArchGPR(min_gpr_num);
+    *gpr = NthArchGPR(min_gpr_num);
+    return min_num_uses;
+  }
+
+  // Get some GPR for use, so long as the GPR is not part of the
+  // `avoid_reg_set`.
+  VirtualRegister GetPreferredGPRForVR(VirtualRegister vr) {
+    VirtualRegister pgpr;
+    if (0 == GetGPR(&pgpr)) {
+
+      // TODO(pag): Eventually, try to make the web live in more areas.
+      GRANARY_UNUSED(vr);
+    }
+    return pgpr;
+  }
+
+  // Try to find an as-of-yet unscheduled SSA register web in an iterable.
+  //
+  // This gives minor preference to VR register webs that have been merged, but
+  // it could do better if we could sort the `vr_web_mergers` by counts, and
+  // then include a fragment count and a merge count.
+  bool GetUnscheduledVR(VirtualRegister *found_reg,
+                        SSARegisterWeb **found_web) {
+    for (const auto &merger : vr_web_mergers.Values()) {
+      if (!merger.num_uses) continue;
+      if (::granary::GetUnscheduledVR(merger.web, found_reg, found_web)) {
+        return true;
+      }
+    }
+    for (const auto &merger : vr_web_mergers.Values()) {
+      if (merger.num_uses) continue;
+      if (::granary::GetUnscheduledVR(merger.web, found_reg, found_web)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Merge (potentially) distinct register webs, so long as the VR associated
+  // with the web is the same.
+  template <typename Iterable>
+  void MergeWebs(const Iterable &it) {
+    for (auto web : it) {
+      auto reg = web->Value();
+      if (!reg.IsVirtual()) continue;
+      auto &vr_web_merger(vr_web_mergers[reg]);
+
+      if (vr_web_merger.web) {
+        if (*(vr_web_merger.web) != *web) {
+          web->Union(vr_web_merger.web);
+          vr_web_merger.num_uses++;
+        }
+      } else {
+        vr_web_merger.web = web;
+        vr_web_merger.num_uses = 0;
+      }
+    }
+  }
+
+  // Merge (potentially) distinct register webs, so long as the VR associated
+  // with the web is the same.
+  void MergeWebs(Fragment *first, Fragment *last, PartitionInfo *partition) {
+    for (auto frag : ReverseFragmentListIterator(last)) {
+      if (frag == first) break;
+      if (frag->partition.Value() != partition) continue;
+      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+      if (!ssa_frag) continue;
+
+      auto entry_webs(ssa_frag->ssa.entry_reg_webs.Values());
+      auto exit_webs(ssa_frag->ssa.exit_reg_webs.Values());
+      MergeWebs(entry_webs);
+      MergeWebs(exit_webs);
+      MergeWebs(ssa_frag->ssa.internal_reg_webs);
+    }
+
+    for (auto frag : ReverseFragmentListIterator(last)) {
+      if (frag == first) break;
+      if (frag->partition.Value() != partition) continue;
+      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
+      if (!ssa_frag) continue;
+
+      for (const auto &merger : vr_web_mergers) {
+        GRANARY_UNUSED(merger);
+      }
+    }
   }
 
   // Counts of the number of uses of each register.
@@ -403,6 +448,10 @@ struct GPRScheduler {
 
   // Registers being used by an instruction.
   UsedRegisterSet used_regs;
+
+  // Tracks the mergable register webs on a per-VR basis.
+  TinyMap<VirtualRegister, WebMerger,
+          arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> vr_web_mergers;
 };
 
 // Returns true if the virtual register associated with a particular SSA node
@@ -422,7 +471,8 @@ static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
   if (pgpr.IsValid() && reg_sched->used_regs.IsDead(pgpr)) {
     return pgpr;  // Try to use the preferred GPR if possible.
   } else {
-    return reg_sched->GetGPR();
+    reg_sched->GetGPR(&agpr);
+    return agpr;
   }
 }
 
@@ -674,7 +724,7 @@ static void FindPartitionBounds(FragmentList *frags, PartitionInfo *partition,
 // Used for scheduling slots for native GPR saves/restores.
 struct SaveRestoreScheduler {
  public:
-  SaveRestoreScheduler(PartitionInfo *partition_)
+  explicit SaveRestoreScheduler(PartitionInfo *partition_)
       : partition(partition_) {
     memset(&(gpr_slots[0]), 0, sizeof gpr_slots);
   }
@@ -722,41 +772,6 @@ static void ScheduleSaveRestores(SaveRestoreScheduler *slot_sched,
   }
 }
 
-// Merge (potentially) distinct register webs, so long as the VR associated
-// with the web is the same.
-template <typename Iterable, typename WebSet>
-static void MergeWebs(const Iterable &it, WebSet &vr_webs) {
-  for (auto web : it) {
-    auto &vr_web(vr_webs[web->Value()]);
-    if (vr_web) {
-      web->Union(vr_web);
-    } else {
-      vr_web = web;
-    }
-  }
-}
-
-// Merge (potentially) distinct register webs, so long as the VR associated
-// with the web is the same.
-static void MergeWebs(Fragment *first, Fragment *last,
-                      PartitionInfo *partition) {
-  TinyMap<VirtualRegister, SSARegisterWeb *,
-          arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> vr_webs;
-
-  for (auto frag : ReverseFragmentListIterator(last)) {
-    if (frag == first) break;
-    if (frag->partition.Value() != partition) continue;
-    auto ssa_frag = DynamicCast<SSAFragment *>(frag);
-    if (!ssa_frag) continue;
-
-    auto entry_webs(ssa_frag->ssa.entry_reg_webs.Values());
-    auto exit_webs(ssa_frag->ssa.exit_reg_webs.Values());
-    MergeWebs(entry_webs, vr_webs);
-    MergeWebs(exit_webs, vr_webs);
-    MergeWebs(ssa_frag->ssa.internal_reg_webs, vr_webs);
-  }
-}
-
 // Schedule all partition-local virtual registers within the fragments of a
 // given partition.
 static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
@@ -764,48 +779,37 @@ static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
   VirtualRegister reg;
   VirtualRegister preferred_gpr;
   SSARegisterWeb *reg_web(nullptr);
-  UsedRegisterSet preferred_gprs;
 
   // Used to bound the iterating through the fragment list after the first
   // register has been scheduled.
   Fragment *first_frag(frags->First());
   Fragment *last_frag(nullptr);
   FindPartitionBounds(frags, partition, &first_frag, &last_frag);
-  MergeWebs(first_frag, last_frag, partition);
+  gpr_sched.MergeWebs(first_frag, last_frag, partition);
 
   auto slot_num = 0UL;
-  auto found_reg = false;
   auto orig_last_frag = last_frag;
 
   // Schedule the virtual registers.
-  do {
-    found_reg = false;
-    for (auto frag : ReverseFragmentListIterator(last_frag)) {
+  for (; gpr_sched.GetUnscheduledVR(&reg, &reg_web); ) {
+    gpr_sched.RecountGPRUsage(partition, first_frag, last_frag);
+    gpr_sched.used_regs.KillAll();
+    preferred_gpr = gpr_sched.GetPreferredGPRForVR(reg);
+    slot_num = partition->num_slots++;
 
+    for (auto frag : ReverseFragmentListIterator(last_frag)) {
       // Filter on only a specific partition.
       if (frag->partition.Value() != partition) continue;
 
       auto ssa_frag = DynamicCast<SSAFragment *>(frag);
       if (!ssa_frag) continue;
 
-      // Go find the register to schedule if we don't have one yet.
-      if (!found_reg) {
-        last_frag = frag;
-        if (!(found_reg = GetUnscheduledVR(ssa_frag, &reg, &reg_web))) {
-          continue;
-        }
-
-        gpr_sched.RecountGPRUsage(partition, first_frag, last_frag);
-        preferred_gpr = gpr_sched.GetPreferredGPR(&preferred_gprs);
-        slot_num = partition->num_slots++;
-      }
-
       PartitionScheduler sched(reg, reg_web, slot_num, preferred_gpr);
       ScheduleRegs(&sched, &gpr_sched, ssa_frag);
 
       if (frag == first_frag) break;
     }
-  } while (found_reg);
+  }
 
   // Schedule the save/restores.
   SaveRestoreScheduler slot_sched(partition);

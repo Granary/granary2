@@ -27,7 +27,7 @@ class CodeCacheTransaction;
 // Implementation of Granary's code caches.
 class CodeCache {
  public:
-  CodeCache(size_t slab_size_);
+  explicit CodeCache(size_t slab_size_);
   ~CodeCache(void);
 
   // Allocate a block of code from this code cache.

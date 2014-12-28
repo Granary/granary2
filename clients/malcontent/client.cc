@@ -32,6 +32,8 @@ GRANARY_DEFINE_positive_uint(num_sample_points, 64,
 
     "data_collider");
 
+GRANARY_DECLARE_positive_uint(shadow_granularity);
+
 namespace {
 enum : size_t {
   // Stack size of monitor thread.
@@ -49,18 +51,18 @@ enum : size_t {
 };
 
 // Shadow memory for ownership tracking.
-union OnwershipTracker {
+union OwnershipTracker {
   struct {
     uint64_t thread_base:48;
-    uint64_t type_id:16;
+    uint64_t sample_id:16;
   };
 
   uint64_t value;
 
 } __attribute__((packed));
 
-static_assert(8 == sizeof(OnwershipTracker),
-              "Error: Invalid structure packing of `struct OnwershipTracker`.");
+static_assert(8 == sizeof(OwnershipTracker),
+              "Error: Invalid structure packing of `struct OwnershipTracker`.");
 
 // Represents a memory access operand in an application.
 union MemoryOperandDescriptor {
@@ -87,7 +89,10 @@ struct MemoryAccess {
 
 // Represents
 struct SamplePoint {
-  OnwershipTracker *tracker;
+  uint64_t type_id;
+  OwnershipTracker *tracker;
+  uintptr_t base_address;
+  uintptr_t limit_address;
   MemoryAccess accesses[2];
 };
 
@@ -96,7 +101,7 @@ alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
 // Set of all shadow locations that can be sampled. This corresponds to recent
 // memory allocations.
-static OnwershipTracker *gRecentAllocations[kNumSamplePoints] = {nullptr};
+static void *gRecentAllocations[kNumSamplePoints] = {nullptr};
 
 // Set of active sample points.
 static SamplePoint gSamplePoints[kNumSamplePoints];
@@ -111,10 +116,10 @@ static pid_t gMonitorThread = -1;
 // round-robin through the sample points to make sure all types are sampled.
 static size_t gCurrSourceIndex = 0;
 
-// Add an address for sampling.
-static void AddSamplePoint(uintptr_t type_id, void *ptr) {
+// Add an address to our potential sample population.
+static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
   if (type_id < kNumUsableSamplePoints) {
-    gRecentAllocations[type_id + 1] = ShadowOf<OnwershipTracker>(ptr);
+    gRecentAllocations[type_id + 1] = ptr;
   }
 }
 
@@ -125,7 +130,7 @@ static void AddSamplePoint(uintptr_t type_id, void *ptr) {
 #define SAMPLE_AND_RETURN_ADDRESS \
   if (addr) { \
     auto type_id = TypeIdFor(ret_address, size); \
-    AddSamplePoint(type_id, addr); \
+    AddRecentAllocation(type_id, addr); \
   } \
   return addr
 
@@ -174,7 +179,7 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
   auto ret = posix_memalign(addr_ptr, align, size);
   if (!ret) {
     auto type_id = TypeIdFor(ret_address, size);
-    AddSamplePoint(type_id, *addr_ptr);
+    AddRecentAllocation(type_id, *addr_ptr);
   }
   return ret;
 }
@@ -186,23 +191,59 @@ static void ClearActiveSamplePoints(void) {
   memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
 }
 
+static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
+  auto alloc_addr = gRecentAllocations[type_id];
+  if (!alloc_addr) return;
+
+  auto tracker = ShadowOf<OwnershipTracker>(alloc_addr);
+  auto base_address = reinterpret_cast<uintptr_t>(tracker);
+  auto limit_address = base_address + SizeOfType(type_id);
+
+  for (; num_sample_points < FLAG_num_sample_points; ) {
+    const auto tracker_addr = reinterpret_cast<uintptr_t>(tracker);
+    if (tracker_addr >= limit_address) return;
+
+    auto sample_tracker = tracker;
+    auto sample_id = num_sample_points++;
+    auto &sample(gSamplePoints[sample_id]);
+
+    sample.type_id = type_id;
+    sample.tracker = tracker++;
+    sample.base_address = reinterpret_cast<uintptr_t>(alloc_addr);
+    sample.limit_address = sample.base_address + FLAG_shadow_granularity;
+
+    // We'll enable the sample later. We want to avoid the case of adding two
+    // samples to a given object; our approach will be that the last sample
+    // wins.
+    sample_tracker->value = sample_id;
+  }
+}
+
 // Samples up to `FLAG_num_sample_points` object trackers.
 static void ActivateSamplePoints(void) {
 
   // Figure out where the "end" of the sampling should be.
   auto end_id = (gCurrSourceIndex + kNumSamplePoints - 1) % kNumSamplePoints;
-  if (!end_id) end_id++;
+  if (!end_id) end_id++;  // Never have a zero type id.
 
-  for (auto num_samples = 0U; num_samples < FLAG_num_sample_points; ) {
+  // Add the sample points.
+  auto num_samples = 0UL;
+  for (; num_samples < FLAG_num_sample_points; ) {
     auto type_id = gCurrSourceIndex++ % kNumSamplePoints;
     if (!type_id) continue;  // Type ID 0 means unwatched.
-    if (auto tracker = gRecentAllocations[type_id]) {
-      gSamplePoints[type_id].tracker = tracker;
-      tracker->value = 0;
-      tracker->type_id = type_id;
-      ++num_samples;
-    }
+    AddSamplesForType(type_id, num_samples);
     if (type_id == end_id) break;
+  }
+
+  // Activate the sample points.
+  for (auto sample_id = 0UL; sample_id < num_samples; ++sample_id) {
+    const auto &sample(gSamplePoints[sample_id]);
+    auto tracker = sample.tracker;
+    if (tracker->value == sample_id) {
+      tracker->value = 0;
+      std::atomic_thread_fence(std::memory_order_acquire);
+      tracker->sample_id = sample_id;
+    }
   }
 }
 
@@ -225,11 +266,11 @@ static void LogStackTrace(const StackTrace &trace) {
 
 // Log an individual memory access.
 static void LogMemoryAccess(const MemoryAccess &access) {
-  auto is_atomic = access.location.is_atomic ? " ATOMIC" : "";
-  auto is_read = access.location.is_read ? " READ" : "";
-  auto is_write = access.location.is_write ? " WRITE" : "";
+  auto is_atomic = access.location.is_atomic ? " atomic" : "";
+  auto is_read = access.location.is_read ? " read" : "";
+  auto is_write = access.location.is_write ? " write" : "";
 
-  os::Log("  Operand %u accessing %u bytes at %p using %s%s%s:\n",
+  os::Log("  Operand %u accessing %u bytes at %p using%s%s%s:\n",
           access.location.op_num, access.location.size, access.address,
           is_atomic, is_read, is_write);
   LogPC(reinterpret_cast<AppPC>(access.location.accessing_pc));
@@ -252,10 +293,11 @@ static void ReportSamplePoints(void) {
 
     // Different cache lines.
     auto cl0 = reinterpret_cast<uintptr_t>(sample.accesses[0].address) >> 6UL;
-    auto cl1 = reinterpret_cast<uintptr_t>(sample.accesses[0].address) >> 6UL;
+    auto cl1 = reinterpret_cast<uintptr_t>(sample.accesses[1].address) >> 6UL;
     if (cl0 != cl1) continue;
 
-    os::Log("Contention detected!\n\n");
+    os::Log("Contention detected in watched range [%p,%p)\n\n",
+            sample.base_address, sample.limit_address);
     LogMemoryAccess(sample.accesses[0]);
     os::Log("\n");
     LogMemoryAccess(sample.accesses[1]);
@@ -277,7 +319,6 @@ static void Monitor(void) {
     ReportSamplePoints();
     ClearActiveSamplePoints();
     gSamplePointsLock.WriteRelease();
-
     ActivateSamplePoints();
   }
 }
@@ -336,7 +377,7 @@ class Malcontent : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
     CreateMonitorThread();
-    AddShadowStructure<OnwershipTracker>(InstrumentMemOp,
+    AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
                                          ShouldInstrumentMemOp);
   }
 
@@ -353,23 +394,25 @@ class Malcontent : public InstrumentationTool {
   }
 
  protected:
-  static void InstrumentContention(const OnwershipTracker tracker,
+  static void InstrumentContention(const OwnershipTracker tracker,
                                    const MemoryOperandDescriptor location,
                                    const void *address) {
 
     // Race happened and we missed it. This case comes up when someone just
     // took ownership of the line, and a contender also tried to take
     // ownership. If we've reached here, then we're the contender.
-    if (!tracker.type_id) return;
+    if (!tracker.sample_id) return;
 
     ReadLockedRegion locker(&gSamplePointsLock);
 
-    auto &sample_point(gSamplePoints[tracker.type_id]);
+    auto &sample_point(gSamplePoints[tracker.sample_id]);
+    if (!sample_point.type_id) return;
+
     const int trace = !!tracker.thread_base;
 
     // We just took ownership; re-add the watchpoint.
     if (!trace) {
-      sample_point.tracker->type_id = tracker.type_id;
+      sample_point.tracker->sample_id = tracker.sample_id;
 
     // We're the contender, remove the watchpoint and all info.
     } else {
@@ -403,7 +446,7 @@ class Malcontent : public InstrumentationTool {
     lir::InlineAssembly asm_(op.shadow_addr_op, tracker);
 
     asm_.InlineBefore(op.instr,
-        // Start with a racy read of `OnwershipTracker::type_id`. This allows
+        // Start with a racy read of `OwnershipTracker::type_id`. This allows
         // us to optimize the common case, which is that type = 0 (which is
         // reserved for unwatched memory).
         "CMP m16 [%0 + 6], i8 0;"

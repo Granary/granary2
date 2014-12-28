@@ -192,7 +192,15 @@ static void CombineFlagZones(FragmentList *frags) {
       auto code_succ = DynamicCast<CodeFragment *>(succ);
       if (!code_succ) continue;
       if (frag->partition != succ->partition) continue;
-      if (code_frag->type != code_succ->type) continue;
+
+      // Try to convert app frags into inst frags.
+      if (code_frag->type != code_succ->type) {
+        if (FRAG_TYPE_APP != code_succ->type) continue;
+        if (code_succ->branch_instr) continue;
+        if (code_succ->app_flags.all_read_flags) continue;
+        if (code_succ->app_flags.all_written_flags) continue;
+        code_succ->type = FRAG_TYPE_INST;
+      }
 
       code_frag->flag_zone.Union(code_succ->flag_zone);
     }
