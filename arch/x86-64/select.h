@@ -16,7 +16,7 @@ namespace arch {
 // won't necessarily return a perfect selection. That is, all that is required
 // of the returned selection is that the types of the operands match
 // (independent of the sizes of operands).
-const xed_inst_t *SelectInstruction(const Instruction *instr);
+const xed_inst_t *SelectInstruction(Instruction *instr);
 
 }  // namespace arch
 }  // namespace granary

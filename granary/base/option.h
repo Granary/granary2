@@ -21,8 +21,8 @@
       "" __VA_ARGS__ \
   }; \
   __attribute__((constructor(101), used)) \
-  static void GRANARY_CAT(RegisterOption_, name)(void) { \
-    granary::detail::RegisterOption(&GRANARY_CAT(OPTION_, name)); \
+  static void GRANARY_CAT(AddOption_, name)(void) { \
+    granary::detail::AddOption(&GRANARY_CAT(OPTION_, name)); \
   }
 
 #define GRANARY_DEFINE_string(name, default_value, docstring, ...) \
@@ -49,6 +49,18 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern bool GRANARY_FLAG_NAME(name)
 
+#define GRANARY_DEFINE_int(name, default_value, docstring, ...) \
+  GRANARY_DECLARE_int(name); \
+  namespace { \
+  GRANARY_REGISTER_OPTION(name, ParseIntOption, docstring, ##__VA_ARGS__) \
+  } \
+  bool GRANARY_HAS_FLAG_NAME(name) = false; \
+  int GRANARY_FLAG_NAME(name)(default_value)
+
+#define GRANARY_DECLARE_int(name) \
+  extern bool GRANARY_HAS_FLAG_NAME(name); \
+  extern int GRANARY_FLAG_NAME(name)
+
 #define GRANARY_DEFINE_positive_int(name, default_value, docstring, ...) \
   GRANARY_DECLARE_positive_int(name); \
   namespace { \
@@ -61,15 +73,27 @@
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern int GRANARY_FLAG_NAME(name)
 
-#define GRANARY_DEFINE_unsigned(name, default_value, docstring, ...) \
-  GRANARY_DECLARE_unsigned(name); \
+#define GRANARY_DEFINE_uint(name, default_value, docstring, ...) \
+  GRANARY_DECLARE_positive_uint(name); \
   namespace { \
-  GRANARY_REGISTER_OPTION(name, ParseUnsignedIntOption, docstring, ##__VA_ARGS__) \
+  GRANARY_REGISTER_OPTION(name, ParseUintOption, docstring, ##__VA_ARGS__) \
   } \
   bool GRANARY_HAS_FLAG_NAME(name) = false; \
   unsigned GRANARY_FLAG_NAME(name)(default_value)
 
-#define GRANARY_DECLARE_unsigned(name) \
+#define GRANARY_DECLARE_uint(name) \
+  extern bool GRANARY_HAS_FLAG_NAME(name); \
+  extern unsigned GRANARY_FLAG_NAME(name)
+
+#define GRANARY_DEFINE_positive_uint(name, default_value, docstring, ...) \
+  GRANARY_DECLARE_positive_uint(name); \
+  namespace { \
+  GRANARY_REGISTER_OPTION(name, ParsePositiveUintOption, docstring, ##__VA_ARGS__) \
+  } \
+  bool GRANARY_HAS_FLAG_NAME(name) = false; \
+  unsigned GRANARY_FLAG_NAME(name)(default_value)
+
+#define GRANARY_DECLARE_positive_uint(name) \
   extern bool GRANARY_HAS_FLAG_NAME(name); \
   extern unsigned GRANARY_FLAG_NAME(name)
 
@@ -113,7 +137,7 @@ GRANARY_INTERNAL_DEFINITION void PrintAllOptions(void);
 namespace detail {
 
 // Initialize an option.
-void RegisterOption(Option *option);
+void AddOption(Option *option);
 
 // Parse an option that is a string.
 void ParseStringOption(Option *option);
@@ -121,12 +145,19 @@ void ParseStringOption(Option *option);
 // Parse an option that will be interpreted as a boolean value.
 void ParseBoolOption(Option *option);
 
+// Parse an option that will be interpreted as an integer.
+void ParseIntOption(Option *option);
+
 // Parse an option that will be interpreted as an unsigned integer but stored
-// as a signed integer, and whose valid is >= 1.
+// as a signed integer, and whose value is >= 1.
 void ParsePositiveIntOption(Option *option);
 
 // Parse an option that will be interpreted as an unsigned integer.
-void ParseUnsignedIntOption(Option *option);
+void ParseUintOption(Option *option);
+
+// Parse an option that will be interpreted as an unsigned integer whose
+// value is >= 1.
+void ParsePositiveUintOption(Option *option);
 
 // Parse an option as a bitmask. Bitmasks are hexadecimal numbers that
 void ParseBitMaskOption(Option *option);

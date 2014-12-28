@@ -18,22 +18,8 @@ static arch::Operand * const TOMBSTONE = \
     reinterpret_cast<arch::Operand *>(0x1ULL);
 }  // namespace
 
-// Try to replace the referenced operand with a concrete operand. Returns
-// false if the referenced operand is not allowed to be replaced. For example,
-// suppressed and implicit operands cannot be replaced.
-bool OperandRef::ReplaceWith(const Operand &repl_op) {
-  GRANARY_ASSERT(op && TOMBSTONE != op && repl_op.op_ptr);
-  if (GRANARY_UNLIKELY(op->is_sticky || !op->is_explicit)) {
-    return false;
-  } else {
-    *op = *(repl_op.op.AddressOf());
-    return true;
-  }
-}
-
 // Returns whether or not this operand can be replaced / modified.
 bool Operand::IsModifiable(void) const {
-
   static_assert(sizeof(op) >= sizeof(arch::Operand) &&
                 alignof(op) >= alignof(arch::Operand) &&
                 0 == (alignof(op) % alignof(arch::Operand)),
@@ -51,16 +37,29 @@ bool Operand::IsExplicit(void) const {
   return op_ptr->is_explicit;
 }
 
-// Return the width (in bits) of this operand, or -1 if its width is not
+// Return the width (in bits) of this operand, or 0 if its width is not
 // known.
-int Operand::BitWidth(void) const {
+size_t Operand::BitWidth(void) const {
   return op->width;
 }
 
-// Return the width (in bytes) of this operand, or -1 if its width is not
+// Return the width (in bytes) of this operand, or 0 if its width is not
 // known.
-int Operand::ByteWidth(void) const {
-  return -1 != op->width ? op->width / 8 : op->width;
+size_t Operand::ByteWidth(void) const {
+  return op->width / 8;
+}
+
+// Try to replace the current operand.
+bool Operand::UnsafeTryReplaceOperand(const Operand &repl_op) {
+  if (repl_op.IsValid() && op_ptr && TOMBSTONE != op_ptr &&
+      op_ptr->is_explicit && !op_ptr->is_sticky) {
+    auto repl_op_ptr = repl_op.op.AddressOf();
+    *op_ptr = *repl_op_ptr;
+    op.Construct<const arch::Operand &>(*op_ptr);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool RegisterOperand::IsNative(void) const {
@@ -71,6 +70,14 @@ bool RegisterOperand::IsVirtual(void) const {
   return op->reg.IsVirtual();
 }
 
+bool RegisterOperand::IsStackPointer(void) const {
+  return op->reg.IsStackPointer();
+}
+
+bool RegisterOperand::IsStackPointerAlias(void) const {
+  return op->reg.IsStackPointerAlias();
+}
+
 // Extract the register.
 VirtualRegister RegisterOperand::Register(void) const {
   return op->reg;
@@ -78,9 +85,10 @@ VirtualRegister RegisterOperand::Register(void) const {
 
 // Initialize a new memory operand from a virtual register, where the
 // referenced memory has a width of `num_bytes`.
-MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
+MemoryOperand::MemoryOperand(VirtualRegister ptr_reg, size_t num_bytes) {
+  GRANARY_ASSERT(ptr_reg.IsValid());
   op->type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<uint16_t>(num_bytes * arch::BYTE_WIDTH_BITS);
   op->reg = ptr_reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -90,9 +98,9 @@ MemoryOperand::MemoryOperand(const VirtualRegister &ptr_reg, int num_bytes) {
 
 // Initialize a new memory operand from a pointer, where the
 // referenced memory has a width of `num_bytes`.
-MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
+MemoryOperand::MemoryOperand(const void *ptr, size_t num_bytes) {
   op->type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op->width = static_cast<int16_t>(0 < num_bytes ? num_bytes * 8 : -1);
+  op->width = static_cast<uint16_t>(num_bytes * arch::BYTE_WIDTH_BITS);
   op->addr.as_ptr = ptr;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
@@ -105,12 +113,12 @@ MemoryOperand::MemoryOperand(const void *ptr, int num_bytes) {
 // them. An example of a compound memory operand is a `base + index * scale`
 // (i.e. base/displacement) operand on x86.
 bool MemoryOperand::IsCompound(void) const {
-  return XED_ENCODER_OPERAND_TYPE_MEM == op->type && op->is_compound;
+  return op->IsCompoundMemory();
 }
 
 // Is this an effective address (instead of being an actual memory access).
 bool MemoryOperand::IsEffectiveAddress(void) const {
-  return op->is_effective_address;  // Applies to PTR and MEM types.
+  return op->IsEffectiveAddress();  // Applies to PTR and MEM types.
 }
 
 // Try to match this memory operand as a pointer value.
@@ -139,52 +147,61 @@ bool MemoryOperand::MatchRegister(VirtualRegister &reg) const {
   return false;
 }
 
-namespace {
-// Match the next register in the compound memory operand.
-static void MatchNextRegister(xed_reg_enum_t reg,
-                              std::initializer_list<VirtualRegister *> regs,
-                              size_t *next) {
-  if (XED_REG_INVALID != reg && *next < regs.size()) {
-    regs.begin()[*next]->DecodeFromNative(static_cast<int>(reg));
-    *next += 1;
+// Try to match a segment register.
+bool MemoryOperand::MatchSegmentRegister(VirtualRegister &reg) const {
+  if (XED_REG_INVALID != op->segment && XED_REG_DS != op->segment) {
+    reg.DecodeFromNative(op->segment);
+    return true;
   }
+  return false;
 }
-}  // namespace
 
 // Try to match this memory operand as a register value. That is, the address
 // is stored in the matched register.
 size_t MemoryOperand::CountMatchedRegisters(
-    std::initializer_list<VirtualRegister *> regs) const {
+    std::initializer_list<VirtualRegister *> regs_) const {
+  GRANARY_ASSERT(2 <= regs_.size());
   size_t num_matched(0);
+  auto regs = regs_.begin();
   if (XED_ENCODER_OPERAND_TYPE_MEM == op->type) {
     if (op->is_compound) {
-      MatchNextRegister(op->mem.reg_base, regs, &num_matched);
-      MatchNextRegister(op->mem.reg_index, regs, &num_matched);
-    } else if (0 < regs.size()) {
-      *(regs.begin()[0]) = op->reg;
-      num_matched = 1;
+      if (op->mem.base.IsValid()) *(regs[num_matched++]) = op->mem.base;
+      if (op->mem.index.IsValid()) *(regs[num_matched++]) = op->mem.index;
+    } else {
+      *(regs[num_matched++]) = op->reg;
     }
   }
   return num_matched;
 }
 
+// Tries to replace the memory operand.
+bool MemoryOperand::TryReplaceWith(const MemoryOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
+}
+
 // Initialize a new register operand from a virtual register.
-RegisterOperand::RegisterOperand(const VirtualRegister reg)
+RegisterOperand::RegisterOperand(VirtualRegister reg)
     : Operand() {
+  GRANARY_ASSERT(reg.IsValid());
   op->type = XED_ENCODER_OPERAND_TYPE_REG;
-  op->width = static_cast<int16_t>(reg.BitWidth());
+  op->width = static_cast<uint16_t>(reg.BitWidth());
   op->reg = reg;
   op->rw = XED_OPERAND_ACTION_INVALID;
   op->is_sticky = false;
   op_ptr = TOMBSTONE;
 }
 
+// Tries to replace the register operand.
+bool RegisterOperand::TryReplaceWith(const RegisterOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
+}
+
 // Initialize a immediate operand from a signed integer, where the value has
 // a width of `width_bytes`.
-ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
+ImmediateOperand::ImmediateOperand(intptr_t imm, size_t width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_SIMM0;
-  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->width = static_cast<uint16_t>(width_bytes * arch::BYTE_WIDTH_BITS);
   op->imm.as_int = imm;
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
@@ -193,10 +210,10 @@ ImmediateOperand::ImmediateOperand(intptr_t imm, int width_bytes)
 
 // Initialize a immediate operand from a unsigned integer, where the value
 // has a width of `width_bytes`.
-ImmediateOperand::ImmediateOperand(uintptr_t imm, int width_bytes)
+ImmediateOperand::ImmediateOperand(uintptr_t imm, size_t width_bytes)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_IMM0;
-  op->width = static_cast<int16_t>(width_bytes * 8);
+  op->width = static_cast<uint16_t>(width_bytes * arch::BYTE_WIDTH_BITS);
   op->imm.as_uint = imm;
   op->rw = XED_OPERAND_ACTION_R;
   op->is_sticky = false;
@@ -213,11 +230,16 @@ int64_t ImmediateOperand::Int(void) {
   return op->imm.as_int;
 }
 
+// Tries to replace the register operand.
+bool ImmediateOperand::TryReplaceWith(const ImmediateOperand &repl_op) {
+  return UnsafeTryReplaceOperand(repl_op);
+}
+
 // Initialize a label operand from a non-null pointer to a label.
 LabelOperand::LabelOperand(LabelInstruction *label)
     : Operand() {
   op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-  op->width = -1;
+  op->width = 0;
   op->annotation_instr = label;
   op->is_annotation_instr = true;
   op->rw = XED_OPERAND_ACTION_R;
@@ -226,8 +248,6 @@ LabelOperand::LabelOperand(LabelInstruction *label)
 }
 
 // Target of a label operand.
-//
-// Note: This has a driver-specific implementation.
 AnnotationInstruction *LabelOperand::Target(void) const {
   return op->annotation_instr;
 }
@@ -243,35 +263,49 @@ Operand &Operand::operator=(const Operand &that) {
     const auto old_rw = rw;
     const auto old_width = width;
     const auto old_is_ea = is_effective_address;
-    const auto old_segment = segment;
     memcpy(this, &that, sizeof that);
-    if (-1 != old_width) width = old_width;
-    rw = old_rw;
+    if (old_width) width = old_width;
+    if (old_rw) rw = old_rw;
     is_effective_address = old_is_ea;
     is_explicit = true;
     is_sticky = false;
-    if (XED_REG_INVALID != old_segment && XED_REG_DS != old_segment) {
-      segment = old_segment;
-    }
   }
   return *this;
 }
 
 namespace {
+
+static void EncodeRegToString(VirtualRegister reg, OperandString *str,
+                              const char *prefix, const char *suffix) {
+  if (reg.IsNative()) {
+    auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
+    str->UpdateFormat("%sr%lu %s%s", prefix, reg.BitWidth(),
+                      xed_reg_enum_t2str(arch_reg), suffix);
+  } else if (reg.IsVirtual()) {
+    str->UpdateFormat("%sr%lu %%%lu%s", prefix, reg.BitWidth(),
+                      reg.Number(), suffix);
+  } else if (reg.IsVirtualSlot()) {
+    str->UpdateFormat("%sSLOT:%lu%s", prefix, reg.Number(), suffix);
+  } else {
+    str->UpdateFormat("%s?reg?%s", prefix, suffix);
+  }
+}
+
 // Encode a compressed memory operand into a string.
 static void EncodeMemOpToString(const Operand *op, OperandString *str) {
   str->UpdateFormat("[");
-  if (op->mem.reg_base) {
-    str->UpdateFormat("%s%s", xed_reg_enum_t2str(op->mem.reg_base),
-                      op->mem.reg_index ? " + " : "");
+  if (op->mem.base.IsValid()) {
+    EncodeRegToString(op->mem.base, str, "",
+                      op->mem.index.IsValid() ? " + " : "");
   }
-  if (op->mem.reg_index) {
-    str->UpdateFormat("%s * %u", xed_reg_enum_t2str(op->mem.reg_index),
-                      op->mem.scale);
+  if (op->mem.index.IsValid()) {
+    GRANARY_ASSERT(0 != op->mem.scale);
+    EncodeRegToString(op->mem.index, str, "", "");
+    str->UpdateFormat(" * %u", op->mem.scale);
   }
   if (op->mem.disp) {
     if (op->mem.disp > 0) {
-      GRANARY_ASSERT(op->mem.reg_base || op->mem.reg_index);
+      GRANARY_ASSERT(op->mem.base.IsValid() || op->mem.index.IsValid());
       str->UpdateFormat(" + 0x%x", op->mem.disp);
     } else {
       str->UpdateFormat(" - 0x%x", -op->mem.disp);
@@ -301,7 +335,7 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_MEM:
-      str->UpdateFormat("m%d ", static_cast<int>(width));
+      str->UpdateFormat("m%u ", static_cast<unsigned>(width));
       if (XED_REG_INVALID != segment) {
         str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
       }
@@ -316,17 +350,7 @@ void Operand::EncodeToString(OperandString *str) const {
     case XED_ENCODER_OPERAND_TYPE_REG:
     case XED_ENCODER_OPERAND_TYPE_SEG0:
     case XED_ENCODER_OPERAND_TYPE_SEG1:
-      if (reg.IsNative()) {
-        auto arch_reg = static_cast<xed_reg_enum_t>(reg.EncodeToNative());
-        str->UpdateFormat("%sr%d %s%s", prefix, reg.BitWidth(),
-                          xed_reg_enum_t2str(arch_reg), suffix);
-      } else if (reg.IsVirtual()) {
-        str->UpdateFormat("%s%%%u%s", prefix, reg.Number(), suffix);
-      } else if (reg.IsVirtualSlot()) {
-        str->UpdateFormat("%sSLOT:%d%s", prefix, reg.Number(), suffix);
-      } else {
-        str->UpdateFormat("%s?reg?%s", prefix, suffix);
-      }
+      EncodeRegToString(reg, str, prefix, suffix);
       break;
 
     case XED_ENCODER_OPERAND_TYPE_IMM0:
@@ -340,7 +364,7 @@ void Operand::EncodeToString(OperandString *str) const {
       break;
 
     case XED_ENCODER_OPERAND_TYPE_PTR:
-      str->UpdateFormat("m%d ", static_cast<int>(width));
+      str->UpdateFormat("m%u ", static_cast<unsigned>(width));
       if (XED_REG_INVALID != segment) {
         str->UpdateFormat("%s:", xed_reg_enum_t2str(segment));
       }

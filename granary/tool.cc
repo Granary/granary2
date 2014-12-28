@@ -5,76 +5,23 @@
 #include "arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/new.h"
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
-#include "granary/cfg/instruction.h"
-
 #include "granary/breakpoint.h"
-#include "granary/context.h"
 #include "granary/tool.h"
 
-#include "os/module.h"
+#include "os/logging.h"
 
 GRANARY_DEFINE_string(tools, "",
     "Comma-seprated list of tools to dynamically load on start-up. "
-    "For example: `--tools=print_bbs,follow_jumps`.");
+    "For example: `--tools=poly_code,count_bbs`.");
 
 namespace granary {
 
-// Iterator to loop over tool instances.
-typedef LinkedListIterator<ToolDescription> ToolDescriptionIterator;
-
-namespace {
-
-// Unique ID assigned to a tool.
-static std::atomic<int> next_tool_id(ATOMIC_VAR_INIT(0));
-
-// Dependency graph between tools. If `depends_on[t1][t2]` is `true` then `t2`
-// must be run before `t1` when instrumenting code.
-static bool depends_on[MAX_NUM_TOOLS][MAX_NUM_TOOLS] = {{false}};
-
-// Tools names.
-static char tool_names[MAX_NUM_TOOLS][MAX_TOOL_NAME_LEN] = {{'\0'}};
-
-// Registered tools, indexed by ID.
-static ToolDescription *registered_tools[MAX_NUM_TOOLS] = {nullptr};
-
-// Find a tool's ID given its name. Returns -1 if a tool
-static int ToolId(const char *name) {
-  //auto descs = descriptions.load(std::memory_order_acquire);
-  //for (auto desc : ToolDescriptionIterator(descs)) {
-  for (auto i = 0; i < MAX_NUM_TOOLS; ++i) {
-    if (StringsMatch(name, tool_names[i])) {
-      return i;
-    }
-  }
-
-  // Allocate a new ID for this tool, even if it isn't registered yet.
-  auto id = next_tool_id.fetch_add(1);
-  GRANARY_ASSERT(MAX_NUM_TOOLS > id);
-  CopyString(&(tool_names[id][0]), MAX_TOOL_NAME_LEN, name);
-  return id;
-}
-
-}  // namespace
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wuninitialized"
-// Dummy implementations of the tool API, so that tools don't need to define
-// every API function.
-//
-// Note: This uses a hack to make sure that the `metadata_manager` field is
-//       initialized with whatever its current value is. The
-//       `ToolManager::Allocate` makes sure these field is initialized before
-//       a `Tool` derived class constructor is invoked, so that the derived
-//       tool class can register tool-specific meta-data.
 InstrumentationTool::InstrumentationTool(void)
-    : next(nullptr),
-      context(context) {
-  GRANARY_ASSERT(nullptr != context);
-}
-#pragma clang diagnostic pop
+    : next(nullptr) {}
 
 // Closes any open inline assembly scopes.
 InstrumentationTool::~InstrumentationTool(void) {}
@@ -82,12 +29,12 @@ InstrumentationTool::~InstrumentationTool(void) {}
 // Initialize this tool.
 void InstrumentationTool::Init(InitReason) {}
 
-// Exit this tool.
+// Tear down this tool.
 void InstrumentationTool::Exit(ExitReason) {}
 
 // Used to instrument code entrypoints.
 void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
-                                               CompensationBasicBlock *,
+                                               CompensationBlock *,
                                                EntryPointKind, int) {}
 
 // Used to instrument control-flow instructions and decide how basic blocks
@@ -96,13 +43,13 @@ void InstrumentationTool::InstrumentEntryPoint(BlockFactory *,
 // This method is repeatedly executed until no more materialization
 // requests are made.
 void InstrumentationTool::InstrumentControlFlow(BlockFactory *,
-                                                LocalControlFlowGraph *) {}
+                                                Trace *) {}
 
-// Used to implement more complex forms of instrumentation where tools need to
-// see the entire local control-flow graph.
+// Used to implement more complex forms of instrumentation where tools need
+// to see the entire local control-flow graph.
 //
 // This method is executed once per tool per instrumentation session.
-void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
+void InstrumentationTool::InstrumentBlocks(Trace *) {}
 
 // Used to implement the typical JIT-based model of single basic-block at a
 // time instrumentation.
@@ -110,136 +57,228 @@ void InstrumentationTool::InstrumentBlocks(const LocalControlFlowGraph *) {}
 // This method is executed for each decoded BB in the local CFG,
 // but is never re-executed for the same (tool, BB) pair in the current
 // instrumentation session.
-void InstrumentationTool::InstrumentBlock(DecodedBasicBlock *) {}
+void InstrumentationTool::InstrumentBlock(DecodedBlock *) {}
 
-// Register some meta-data with the meta-data manager associated with this
-// tool.
-void InstrumentationTool::RegisterMetaData(const MetaDataDescription *desc) {
-  context->RegisterMetaData(desc);
-}
+namespace {
 
-// Initialize an empty tool manager.
-InstrumentationManager::InstrumentationManager(ContextInterface *context_)
-    : max_align(0),
-      max_size(0),
-      is_finalized(false),
-      num_registered(0),
-      allocator(),
-      context(context_) {
-  memset(&(is_registered[0]), 0, sizeof is_registered);
-  memset(&(descriptions[0]), 0, sizeof descriptions);
-}
+// Iterator to loop over tool instances.
+typedef LinkedListIterator<ToolDescription> ToolDescriptionIterator;
 
-InstrumentationManager::~InstrumentationManager(void) {
-  allocator.Destroy();
-}
+static size_t gNextToolId = 0;
 
-// Register a tool given its name.
-void InstrumentationManager::Register(const char *name) {
-  GRANARY_ASSERT(!is_finalized);
-  if (auto desc = registered_tools[ToolId(name)]) {
-    is_registered[desc->id] = true;
-    Register(desc);
-    descriptions[num_registered++] = desc;
-    max_size = GRANARY_MAX(max_size, desc->size);
-    max_align = GRANARY_MAX(max_align, desc->align);
-  }
-}
+// Unordered array of registered tools. When a tool is registered, its
+// descriptor's `id` is an index into this array. When a tool name is
+// referenced before its tool is registered, then the associated slot will be
+// allocated, and its name will be stored in the `id`th entry to the
+// `gToolNames` array.
+static ToolDescription *gRegisteredTools[kMaxNumTools] = {nullptr};
 
-// Register a tool with this manager using the tool's description.
-void InstrumentationManager::Register(const ToolDescription *desc) {
-  if (!is_registered[desc->id]) {
-    is_registered[desc->id] = true;
-    for (auto required_id = 0; required_id < MAX_NUM_TOOLS; ++required_id) {
-      if (depends_on[desc->id][required_id]) {
-        if (auto required_desc = registered_tools[required_id]) {
-          Register(required_desc);
-        }
-      }
+// Unordered array of tool names. When a tool is registered, its name is copied
+// into here and put at the `ToolDescription::id`th entry. If a tool is
+// referenced before it is registered, then its name is copied in here, and the
+// name's index will serve as the tool's ID when that tool is eventually
+// registered.
+static char gToolNames[kMaxNumTools][kMaxToolNameLength] = {{'\0'}};
+
+// Ordered list of active tools. The ordering respects `gToolDependencies`.
+static ToolDescription *gActiveTools[kMaxNumTools] = {nullptr};
+static size_t gNextActiveTool = 0;
+static size_t gToolDependencies[kMaxNumTools][kMaxNumTools] = {{0}};
+
+// The last requested tool. We use this to add extra dependency edges.
+static ToolDescription *gPrevRequestedTool = nullptr;
+
+// The total size and maximum alignment needed for all tools.
+static size_t gAllocationSize = 0;
+static size_t gAllocationAlign = 0;
+
+// Slab gToolAllocator for allocating tool instrumentation objects.
+static Container<internal::SlabAllocator> gToolAllocator;
+
+// Get the name for a registered tool.
+static size_t IdForName(const char *name) {
+  for (auto i = 0UL; i < kMaxNumTools; ++i) {
+    if (StringsMatch(name, gToolNames[i])) {
+      return i;
     }
-    descriptions[num_registered++] = desc;
+  }
+
+  // Allocate a new ID for this tool, even if it isn't registered yet.
+  auto id = gNextToolId++;
+  GRANARY_ASSERT(kMaxNumTools > id);
+  CopyString(&(gToolNames[id][0]), kMaxToolNameLength, name);
+  return id;
+}
+
+// Get the descriptor for a tool, given the tool's name.
+static ToolDescription *DescForName(const char *name) {
+  for (auto i = 0UL; i < kMaxNumTools; ++i) {
+    if (StringsMatch(name, gToolNames[i])) {
+      return gRegisteredTools[i];
+    }
+  }
+  return nullptr;
+}
+
+// Request that a specific tool be used for instrumentation.
+static void RequestTool(const char *name) {
+  auto desc = DescForName(name);
+  if (!desc) {
+    os::Log(os::LogDebug, "Error: Could not find requested tool `%s`.\n", name);
+    return;
+  }
+
+  // Add an implicit dependency based on how tools are ordered at the
+  // command-line.
+  if (gPrevRequestedTool) {
+    gToolDependencies[desc->id][0] = gPrevRequestedTool->id;
+  }
+  gPrevRequestedTool = desc;
+}
+
+// Activate a tool and recursively activate the tool's dependencies. Tool
+// dependencies are activated in-order.
+static void ActivateTool(ToolDescription *desc) {
+  if (desc->is_active) return;
+  desc->is_active = true;
+
+  for (auto i = 0ULL; i < desc->next_dependency_offset; ++i) {
+    auto dep_id = gToolDependencies[desc->id][i];
+    auto dep_desc = gRegisteredTools[dep_id];
+    if (!dep_desc) {
+      os::Log(os::LogDebug,
+              "Error: Could not find tool `%s`, needed by tool `%s`.",
+              gToolNames[dep_id], desc->name);
+      continue;
+    }
+    ActivateTool(dep_desc);
+  }
+
+  gAllocationSize += GRANARY_ALIGN_FACTOR(gAllocationSize, desc->align);
+  desc->allocation_offset = gAllocationSize;
+  gAllocationSize += desc->size;
+  gAllocationAlign = GRANARY_MAX(desc->align, gAllocationAlign);
+  gActiveTools[gNextActiveTool++] = desc;
+}
+
+// Request that some tools be used for instrumentation.
+static void RequestTools(void) {
+  // Force register some tools that should get priority over all others.
+  RequestTool(GRANARY_IF_KERNEL_ELSE("kernel", "user"));
+
+#ifdef GRANARY_WITH_VALGRIND
+  // Auto-registered so that `aligned_alloc` and `free` are always wrapped to
+  // execute natively (and so are ideally instrumented by Valgrind to help
+  // catch memory access bugs).
+  RequestTool("valgrind", prev_tool);
+#endif  // GRANARY_WITH_VALGRIND
+
+  // Register tools specified at the command-line.
+  if (FLAG_tools) {
+    ForEachCommaSeparatedString<kMaxToolNameLength>(
+        FLAG_tools,
+        [=] (const char *tool_name) {
+          RequestTool(tool_name);
+        });
   }
 }
 
-// Allocate all the tools managed by this `ToolManager` instance, and chain
-// then into a linked list.
-InstrumentationTool *InstrumentationManager::AllocateTools(void) {
-  if (GRANARY_UNLIKELY(!is_finalized)) {
-    InitAllocator();
+}  // namespace
+
+// Register a tool with Granary given its description.
+void AddInstrumentationTool(
+    ToolDescription *desc, const char *name,
+    std::initializer_list<const char *> required_tools) {
+  auto id = IdForName(name);
+  desc->id = id;
+  desc->next_dependency_offset = 1;
+  desc->is_active = false;
+  desc->name = &(gToolNames[id][0]);
+  desc->allocation_offset = 0;
+  gRegisteredTools[id] = desc;
+
+  // Add the (ordered) dependencies.
+  gToolDependencies[id][0] = id;
+  for (auto dep_name : required_tools) {
+    auto dep_id = IdForName(dep_name);
+    gToolDependencies[id][desc->next_dependency_offset++] = dep_id;
   }
+}
+
+// Initialize the tool manager.
+void InitToolManager(void) {
+  RequestTools();
+  ActivateTool(gPrevRequestedTool);
+
+  auto size = GRANARY_ALIGN_TO(gAllocationSize, gAllocationAlign);
+  auto allocation_offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList),
+                                            gAllocationAlign);
+  auto remaining_size = internal::kNewAllocatorNumBytesPerSlab -
+                        allocation_offset;
+  auto max_num_allocs = (remaining_size - size + 1) / size;
+  auto max_offset = allocation_offset + max_num_allocs * size;
+  gToolAllocator.Construct(allocation_offset, max_offset, size, size);
+}
+
+// Exit the tool manager.
+void ExitToolManager(void) {
+  gToolAllocator.Destroy();
+  gNextToolId = 0;
+  memset(gRegisteredTools, 0, sizeof gRegisteredTools);
+  memset(gActiveTools, 0, sizeof gActiveTools);
+  gNextActiveTool = 0;
+  memset(gToolDependencies, 0, sizeof gToolDependencies);
+  gPrevRequestedTool = nullptr;
+  gAllocationSize = 0;
+  gAllocationAlign = 0;
+}
+
+// Initialize all tools. Tool initialization is typically where tools will
+// register their specific their block meta-data, therefore it is important
+// to initialize all tools before finalizing the meta-data manager.
+void InitTools(InitReason reason) {
+  for (auto desc : gActiveTools) {
+    if (!desc) return;
+    desc->init(reason);
+  }
+}
+
+// Exit all tools. Tool `Exit` methods should restore any global state to
+// their initial values.
+void ExitTools(ExitReason reason) {
+  for (auto desc : gActiveTools) {
+    if (!desc) return;
+    desc->exit(reason);
+  }
+}
+
+// Allocates all tools, and returns a pointer to the first tool allocated.
+InstrumentationTool *AllocateTools(void) {
+  auto mem = gToolAllocator->Allocate();
   InstrumentationTool *tools(nullptr);
-  if (max_size) {
-    InstrumentationTool **next_tool(&tools);
-    for (auto desc : descriptions) {
-      if (!desc) {
-        break;
-      } else {
-        auto mem = allocator->Allocate();
-        auto tool = reinterpret_cast<InstrumentationTool *>(mem);
-        tool->context = context;  // Initialize before constructing!
-        desc->initialize(mem);
-        GRANARY_ASSERT(context == tool->context);
+  auto prev_tool = &tools;
+  for (auto desc : gActiveTools) {
+    if (!desc) break;
+    auto tool = reinterpret_cast<InstrumentationTool *>(
+        reinterpret_cast<uintptr_t>(mem) + desc->allocation_offset);
 
-        *next_tool = tool;
-        next_tool = &(tool->next);
-      }
-    }
+    desc->construct(tool);
+
+    *prev_tool = tool;
+    prev_tool = &(tool->next);
   }
   return tools;
 }
 
-// Free a tool.
-void InstrumentationManager::FreeTools(InstrumentationTool *tool) {
-  GRANARY_ASSERT(!!is_finalized == !!tool);
-  for (InstrumentationTool *next_tool(nullptr); tool; tool = next_tool) {
-    next_tool = tool->next;
-    tool->~InstrumentationTool();
-    allocator->Free(tool);
+// Frees all tools, given a pointer to the first tool allocated.
+void FreeTools(InstrumentationTool *tools) {
+  for (auto desc : gActiveTools) {
+    if (!desc) break;
+    auto tool = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(tools) +
+                                         desc->allocation_offset);
+    desc->destruct(tool);
   }
-}
-
-// Initialize the allocator for meta-data managed by this manager.
-void InstrumentationManager::InitAllocator(void) {
-  if (max_size) {
-    auto size = GRANARY_ALIGN_TO(max_size, max_align);
-    auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
-    auto remaining_size = arch::PAGE_SIZE_BYTES - offset;
-    auto max_num_allocs = remaining_size / size;
-    allocator.Construct(max_num_allocs, offset, size, size);
-
-    is_finalized = true;
-  }
-}
-
-
-// Registers a tool description with Granary. This assigns the tool an ID if
-// it hasn't already got an ID, and then adds the tool into the global list of
-// all registered tools.
-void RegisterInstrumentationTool(
-    ToolDescription *desc, const char *name,
-    std::initializer_list<const char *> required_tools) {
-  auto &id(desc->id);
-  if (-1 == id) {
-    id = ToolId(name);
-    desc->id = id;
-    desc->name = name;
-    registered_tools[id] = desc;
-  }
-
-  // Add in the dependencies. This might end up allocating ids for tool
-  // descriptions that have yet to be loaded. This is because the initialization
-  // order of the static constructors is a priori undefined.
-  for (auto tool_name : required_tools) {
-    if (auto required_id = ToolId(tool_name)) {
-      GRANARY_ASSERT(!depends_on[required_id][id]);
-      depends_on[id][required_id] = true;
-    }
-  }
-}
-
-// Initialize all Granary tools for the active Granary context.
-void InitTools(InitReason reason) {
-  GlobalContext()->InitTools(reason, FLAG_tools);
+  gToolAllocator->Free(tools);
 }
 
 }  // namespace granary

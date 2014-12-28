@@ -10,6 +10,10 @@
 a.out
 bin
 
+# Python compiled stuff
+__pycache__/
+*.py[cod]
+
 # Debugging and dependencies
 *.trace
 *.d

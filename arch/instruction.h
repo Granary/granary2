@@ -23,8 +23,8 @@ namespace arch {
 // interface class cannot be used as-is as the methods don't exist.
 class InstructionInterface {
  public:
-
-  int DecodedLength(void) const;
+  size_t EncodedLength(void) const;
+  size_t DecodedLength(void) const;
 
   PC DecodedPC(void) const;
   void SetDecodedPC(PC decoded_pc_);
@@ -42,6 +42,8 @@ class InstructionInterface {
   void SetBranchTarget(AnnotationInstruction *instr);
 
   bool IsFunctionCall(void) const;
+
+  bool IsFunctionTailCall(void) const;
 
   bool IsFunctionReturn(void) const;
 
@@ -100,18 +102,11 @@ class InstructionInterface {
   // Returns true if an instruction writes to the flags.
   bool WritesFlags(void) const;
 
-  // Is this a specially inserted virtual register save or restore instruction?
-  bool IsVirtualRegSaveRestore(void) const;
-
   // Mark this instruction as not encodable.
   void DontEncode(void);
 
   // Will this instruction be encoded?
   bool WillBeEncoded(void) const;
-
-  // Can this instruction not be the cause of a fragment split? This has to
-  // do with `granary/code/assemble/2_build_fragment_list.cc`.
-  bool CantSplitFragment(void);
 
   const char *OpCodeName(void) const;
   const char *ISelName(void) const;
@@ -133,6 +128,15 @@ class InstructionInterface {
   // Can this instruction change the interrupt status to either of enabled or
   // disabled?
   bool CanEnableOrDisableInterrupts(void) const;
+
+  // Does this instruction perform an atomic read/modify/write?
+  bool IsAtomic(void) const;
+
+  // Returns the total number of operands.
+  size_t NumOperands(void) const;
+
+  // Returns the total number of explicit operands.
+  size_t NumExplicitOperands(void) const;
 };
 
 }  // namespace arch

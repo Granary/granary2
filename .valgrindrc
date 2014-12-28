@@ -1,7 +1,8 @@
---leak-check=full
+--tool=memcheck
+--leak-check=no
 --track-origins=yes
---show-reachable=yes
+--show-reachable=no
 --suppressions=dependencies/valgrind/valgrind.supp
 --trace-children=yes
 --smc-check=all
---read-var-info=yes
+--read-var-info=no

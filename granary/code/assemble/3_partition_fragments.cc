@@ -19,7 +19,10 @@
 #ifdef GRANARY_WHERE_user
 GRANARY_DEFINE_bool(try_spill_VRs_to_stack, true,
     "Should Granary try to spill virtual registers onto the call stack? The "
-    "default is `yes`.");
+    "default is `yes`.\n"
+    "\n"
+    "Note: Disabling this is a good way to test if stack spilling/filling is\n"
+    "      the cause of a bug.");
 #endif  // GRANARY_WHERE_user
 
 namespace granary {
@@ -51,11 +54,6 @@ static Fragment *UnlinkUselessFrag(FragmentList *frags, Fragment *prev,
   return prev;
 }
 
-// Returns `true` if `frag` is linked in to a larger list of fragments.
-static bool IsLinked(Fragment *frag) {
-  return frag->list.GetNext(frag) || frag->list.GetPrevious(frag);
-}
-
 // Assuming that `frag` is not linked to a fragment list, this function returns
 // a pointer to the next linked fragment that is reachable by following one or
 // more fall-through branches.
@@ -65,12 +63,12 @@ static bool IsLinked(Fragment *frag) {
 //            empty infinite loop.
 static Fragment *NextLinkedFallThrough(Fragment *frag) {
   do {
-    if (auto fall_through = frag->successors[FRAG_SUCC_FALL_THROUGH]) {
+    if (auto fall_through = frag->successors[kFragSuccFallThrough]) {
       frag = fall_through;
     } else {
-      frag = frag->successors[FRAG_SUCC_BRANCH];
+      frag = frag->successors[kFragSuccBranch];
     }
-  } while (!IsLinked(frag));
+  } while (!frag->list.IsLinked());
   return frag;
 }
 
@@ -79,7 +77,7 @@ static void FreeInstructions(Fragment *frag) {
   auto instr = frag->instrs.First();
   for (Instruction *next_instr(nullptr); instr; instr = next_instr) {
     next_instr = instr->Next();
-    instr->UnsafeUnlink();  // Will self-destruct.
+    Instruction::Unlink(instr);  // Will self-destruct.
   }
 }
 
@@ -88,7 +86,7 @@ static void FreeInstructions(Fragment *frag) {
 // otherwise empty fragment.
 static void RemoveUselessFrags(FragmentList *frags) {
   auto prev = frags->First();
-  auto curr = prev->list.GetNext(prev);
+  auto curr = prev->list.Next();
   Fragment *removed_list(nullptr);
 
   // Find the fragments that we want to remove, and unlink them from the
@@ -101,13 +99,13 @@ static void RemoveUselessFrags(FragmentList *frags) {
       if (!cfrag->attr.can_add_succ_to_partition) break;
       if (!cfrag->attr.can_add_pred_to_partition) break;
       if (cfrag->branch_instr) break;
-      if (cfrag->successors[FRAG_SUCC_BRANCH]) break;
+      if (cfrag->successors[kFragSuccBranch]) break;
       if (HasUsefulInstructions(cfrag)) break;
       curr = UnlinkUselessFrag(frags, prev, cfrag, &removed_list);
       break;
     }
     prev = curr;
-    curr = prev->list.GetNext(prev);
+    curr = prev->list.Next();
   }
 
   if (!removed_list) return;
@@ -115,7 +113,7 @@ static void RemoveUselessFrags(FragmentList *frags) {
   // Unlink the fragments that we want to remove from the control-flow graph.
   for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
-      if (!IsA<CodeFragment *>(succ) || IsLinked(succ)) continue;
+      if (!IsA<CodeFragment *>(succ) || succ->list.IsLinked()) continue;
       succ = NextLinkedFallThrough(succ);
     }
   }
@@ -134,7 +132,7 @@ static void InheritMetaDataStackValidity(StackUsageInfo *stack,
                                          BlockMetaData *meta) {
   auto stack_meta = MetaDataCast<StackMetaData *>(meta);
   if (stack_meta->has_stack_hint && stack_meta->behaves_like_callstack) {
-    stack->status = STACK_VALID;
+    stack->status = kStackStatusValid;
   }
 }
 
@@ -145,7 +143,7 @@ static void InitStackValidity(FragmentList *frags) {
     if (!cfrag) continue;
 
     auto stack = &(cfrag->stack);
-    if (STACK_UNKNOWN != stack->status) continue;
+    if (kStackStatusUnknown != stack->status) continue;
 
     for (auto succ : cfrag->successors) {
       auto exit_succ = DynamicCast<ExitFragment *>(succ);
@@ -153,7 +151,7 @@ static void InitStackValidity(FragmentList *frags) {
 
       // In kernel space, all exits are seen as going to a valid stack.
       if (GRANARY_IF_KERNEL_ELSE(!arch::REDZONE_SIZE_BYTES, false)) {
-        stack->status = STACK_VALID;
+        stack->status = kStackStatusValid;
 
       // Try to get the validity based on the successor block's stack
       // validity as recorded in its meta-data.
@@ -175,13 +173,13 @@ static bool BackPropagateValidity(FragmentList *frags) {
 
     auto stack = &(cfrag->stack);
 
-    if (STACK_UNKNOWN != stack->status) continue;
+    if (kStackStatusUnknown != stack->status) continue;
     if (!(STACK_STATUS_INHERIT_SUCC & stack->inherit_constraint)) continue;
 
     for (auto succ : cfrag->successors) {
       if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
-        if (STACK_VALID == code_succ->stack.status) {
-          stack->status = STACK_VALID;  // Might lead to forward propagation.
+        if (kStackStatusValid == code_succ->stack.status) {
+          stack->status = kStackStatusValid;  // Might lead to forward propagation.
           made_progess = true;
           break;
         }
@@ -199,14 +197,14 @@ static bool ForwardPropagateValidity(FragmentList *frags) {
     if (!cfrag) continue;
 
     auto stack = &(cfrag->stack);
-    if (STACK_VALID != stack->status) continue;
+    if (kStackStatusValid != stack->status) continue;
 
     for (auto succ : frag->successors) {
       if (auto code_succ = DynamicCast<CodeFragment *>(succ)) {
         auto succ_stack = &(code_succ->stack);
-        if (STACK_UNKNOWN != succ_stack->status) continue;
+        if (kStackStatusUnknown != succ_stack->status) continue;
         if (0 != (STACK_STATUS_INHERIT_PRED & succ_stack->inherit_constraint)) {
-          succ_stack->status = STACK_VALID;
+          succ_stack->status = kStackStatusValid;
           made_progess = true;
         }
       }
@@ -233,7 +231,7 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
 
       // If we haven't made progress, try to get the first fragment's validity
       // from its meta-data.
-      if (!changed && first_frag && STACK_UNKNOWN == first_frag->stack.status) {
+      if (!changed && first_frag && kStackStatusUnknown == first_frag->stack.status) {
         InheritMetaDataStackValidity(&(first_frag->stack),
                                      first_frag->attr.block_meta);
         first_frag = nullptr;
@@ -246,9 +244,9 @@ static void AnalyzeStackUsage(FragmentList * const frags) {
   // Mark all remaining unchecked fragments as being on invalid stacks.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (STACK_UNKNOWN == cfrag->stack.status
+      if (kStackStatusUnknown == cfrag->stack.status
           GRANARY_IF_USER( || !FLAG_try_spill_VRs_to_stack )) {
-        cfrag->stack.status = STACK_INVALID;
+        cfrag->stack.status = kStackStatusInvalid;
       }
     }
   }
@@ -271,12 +269,6 @@ static void GroupFragments(FragmentList *frags) {
         if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ)) {
           if (frag->partition == succ->partition) continue;
 
-          // Note: There is one case where the above condition is true, but this
-          //       is false: indirect edge code, that has a meta-data template.
-          //       In this case, the above condition is forced to be true by
-          //       the code that generates the indirect edge code fragments.
-          if (succ_cfrag->attr.block_meta != cfrag->attr.block_meta) continue;
-
           // Can't put this fragment into the same partition as any of its
           // predecessors. This happens if this fragment is the fall-through of
           // a control-flow instruction.
@@ -290,6 +282,7 @@ static void GroupFragments(FragmentList *frags) {
               succ_cfrag->attr.follows_cfi != cfrag->attr.follows_cfi) {
             continue;
           }
+
           cfrag->partition.Union(cfrag, succ_cfrag);
         }
       }
@@ -308,7 +301,7 @@ static void PropagateValidityToExitFragments(CodeFragment *frag) {
     auto stack_meta = MetaDataCast<StackMetaData *>(exit_succ->block_meta);
     if (stack_meta->has_stack_hint) continue;
 
-    if (STACK_VALID == frag->stack.status) {
+    if (kStackStatusValid == frag->stack.status) {
       stack_meta->MarkStackAsValid();
     } else {
       stack_meta->MarkStackAsInvalid();
@@ -322,7 +315,7 @@ static void UpdateMetaData(FragmentList *frags) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (cfrag->attr.is_block_head) {
         auto stack_meta = MetaDataCast<StackMetaData *>(cfrag->attr.block_meta);
-        if (STACK_VALID == cfrag->stack.status) {
+        if (kStackStatusValid == cfrag->stack.status) {
           stack_meta->MarkStackAsValid();
         } else {
           stack_meta->MarkStackAsInvalid();

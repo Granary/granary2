@@ -17,50 +17,27 @@
 namespace granary {
 
 enum {
-  MAX_NUM_INLINE_VARS = 16,
-  MAX_NUM_FUNC_OPERANDS = 6
+  kMaxNumInlineVars = 16
 };
 
 #ifdef GRANARY_INTERNAL
+
 // Forward declarations.
-class LocalControlFlowGraph;
-class DecodedBasicBlock;
+class Trace;
+class DecodedBlock;
 class LabelInstruction;
 class Instruction;
 
-// A variable in the inline assembly. Variables are untyped, and assumed to
-// be used in the correct way from the inline assembly instructions themselves.
-union InlineAssemblyVariable {
- public:
-  InlineAssemblyVariable(void) = default;
-
-  // Initialize the inline assembly variable with a particular operand.
-  explicit InlineAssemblyVariable(Operand *op);
-
-  Container<RegisterOperand> reg;
-  Container<MemoryOperand> mem;
-  Container<ImmediateOperand> imm;
-  AnnotationInstruction *label;
-};
-
-static_assert(0 == offsetof(InlineAssemblyVariable, reg),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, mem),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, imm),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
-
-static_assert(0 == offsetof(InlineAssemblyVariable, label),
-    "Invalid structure packing of `union InlineAssemblyVariable`.");
+namespace arch {
+class Operand;
+}  // namespace arch
 
 // Represents a scope of inline assembly. Within this scope, several virtual
 // registers are live.
 class InlineAssemblyScope : public UnownedCountedObject {
  public:
   // Initialize the input variables to the scope.
-  explicit InlineAssemblyScope(std::initializer_list<Operand *> inputs);
+  explicit InlineAssemblyScope(std::initializer_list<const Operand *> inputs);
   virtual ~InlineAssemblyScope(void);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
@@ -69,8 +46,8 @@ class InlineAssemblyScope : public UnownedCountedObject {
   })
 
   // Variables used/referenced/created within the scope.
-  InlineAssemblyVariable vars[MAX_NUM_INLINE_VARS];
-  bool var_is_initialized[MAX_NUM_INLINE_VARS];
+  OpaqueContainer<arch::Operand, 32, 16> vars[kMaxNumInlineVars];
+  bool var_is_initialized[kMaxNumInlineVars];
 
  private:
   InlineAssemblyScope(void) = delete;
@@ -112,10 +89,11 @@ class InlineAssemblyBlock {
 // `target_app_pc` is added.
 class InlineFunctionCall {
  public:
-  InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
-                     Operand ops[MAX_NUM_FUNC_OPERANDS]);
+  InlineFunctionCall(DecodedBlock *block, AppPC target,
+                     Operand ops[detail::kMaxNumFuncOperands],
+                     size_t num_args_);
 
-  inline int NumArguments(void) const {
+  inline size_t NumArguments(void) const {
     return num_args;
   }
 
@@ -125,10 +103,9 @@ class InlineFunctionCall {
   })
 
   AppPC target_app_pc;
-  int num_args;
-  Operand args[MAX_NUM_FUNC_OPERANDS];
-  VirtualRegister saved_regs[MAX_NUM_FUNC_OPERANDS];
-  VirtualRegister arg_regs[MAX_NUM_FUNC_OPERANDS];
+  size_t num_args;
+  Operand args[detail::kMaxNumFuncOperands];
+  VirtualRegister arg_regs[detail::kMaxNumFuncOperands];
 
  private:
   InlineFunctionCall(void) = delete;
@@ -142,6 +119,7 @@ class InlineFunctionCall {
     return ret; \
   }
 
+#ifndef GRANARY_ECLIPSE
 GRANARY_DEFINE_ASM_OP(x86, , nullptr)  // 32-bit x86.
 GRANARY_DEFINE_ASM_OP(x86_64, lines, lines)  // 64-bit x86.
 GRANARY_DEFINE_ASM_OP(arm, , nullptr)
@@ -150,6 +128,7 @@ GRANARY_DEFINE_ASM_OP(thumb, , nullptr)
 GRANARY_DEFINE_ASM_OP(mips, , nullptr)
 GRANARY_DEFINE_ASM_OP(sparc, , nullptr)
 GRANARY_DEFINE_ASM_OP(ppc, , nullptr)
+#endif  // GRANARY_ECLIPSE
 }  // namespace granary
 
 // Fake user defined literals, needed until this Eclipse syntax highlighting

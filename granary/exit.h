@@ -6,9 +6,17 @@
 namespace granary {
 
 enum ExitReason : int {
-  EXIT_PROGRAM = 0,
-  EXIT_DETACH = 1
+  // This says we're completely exiting the program.
+  kExitProgram = 0,
+
+  // This says we're completely detaching from the program, but might
+  // re-attach at a later time. Therefore,
+  kExitDetach = 1,
+  kExitThread,
+  kExitTestCase
 };
+
+void Exit(ExitReason reason);
 
 }  // namespace granary
 

@@ -5,104 +5,89 @@
 
 #include "granary/base/base.h"
 #include "granary/base/type_trait.h"
-
-#ifdef GRANARY_TARGET_debug
-# include "granary/breakpoint.h"
-#endif
+#include "granary/breakpoint.h"
 
 namespace granary {
 
 // Forward declaration.
-template <typename T>
-class ListOfListHead;
+template <typename T> class ListOfListHead;
 
-// Generic, type-safe, embeddable list implementation, similar to in the
-// Linux kernel.
+template <typename T>
 class ListHead {
  public:
-  ListHead(void);
+  inline ListHead(void)
+      : next(nullptr),
+        prev(nullptr) {}
 
-#ifdef GRANARY_TARGET_debug
-  // Ensure that the correct `object` pointer is being passed to the `ListHead`
-  // public APIs.
-  template <typename T>
-  void CheckObject(const T *object) const {
-    const void *obj_ptr(object);
-    const void *next_obj_ptr(object + 1);
-    const void *this_ptr(this);
-    const void *next_this_ptr(this + 1);
-    GRANARY_ASSERT(obj_ptr <= this_ptr && next_this_ptr <= next_obj_ptr);
+  T *Last(void) const {
+    auto curr = this;
+    for (; curr->next; curr = &(curr->next->list)) {}
+    return ContainerOf(curr);
   }
-#endif // GRANARY_TARGET_debug
+
+  T *First(void) const {
+    auto curr = this;
+    for (; curr->prev; curr = &(curr->prev->list)) {}
+    return ContainerOf(curr);
+  }
+
+  inline T *Next(void) const {
+    return next;
+  }
+
+  inline T *Previous(void) const {
+    return prev;
+  }
+
+  void SetNext(T *new_next) {
+    GRANARY_ASSERT(nullptr != new_next);
+    GRANARY_ASSERT(!new_next->list.IsLinked());
+    auto self = ContainerOf(this);
+
+    new_next->list.next = next;
+    new_next->list.prev = self;
+    if (next) next->list.prev = new_next;
+    next = new_next;
+  }
+
+  void SetPrevious(T *new_prev) {
+    GRANARY_ASSERT(nullptr != new_prev);
+    GRANARY_ASSERT(!new_prev->list.IsLinked());
+    auto self = ContainerOf(this);
+
+    new_prev->list.next = self;
+    new_prev->list.prev = prev;
+    if (prev) prev->list.next = new_prev;
+    prev = new_prev;
+  }
+
+  void Unlink(void) {
+    if (prev) prev->list.next = next;
+    if (next) next->list.prev = prev;
+    next = nullptr;
+    prev = nullptr;
+  }
 
   // Returns true if this list element is attached to any other list elements.
-  inline bool IsAttached(void) const {
+  inline bool IsLinked(void) const {
     return nullptr != prev || nullptr != next;
   }
 
-  // Get the object that comes after the object that contains this list head.
-  template <typename T>
-  inline T *GetNext(const T *object) const {
-    GRANARY_IF_DEBUG( CheckObject(object); )
-    if (!next) {
-      return nullptr;
-    }
-    return reinterpret_cast<T *>(GetObject(object, next));
-  }
-
-  // Set the object that should go after this object's list head.
-  template <typename T>
-  void SetNext(const T *this_object, const T *that_object) {
-    GRANARY_IF_DEBUG( CheckObject(this_object); )
-    if (!that_object) {
-      return;
-    }
-    ListHead *that_list(GetList(this_object, that_object));
-    Chain(that_list->GetLast(), next);
-    Chain(this, that_list->GetFirst());
-  }
-
-  // Get the object that comes before the object that contains this list head.
-  template <typename T>
-  inline T *GetPrevious(const T *object) const {
-    GRANARY_IF_DEBUG( CheckObject(object); )
-    if (!prev) {
-      return nullptr;
-    }
-    return reinterpret_cast<T *>(GetObject(object, prev));
-  }
-
-  // Set the object that should go before this object's list head.
-  template <typename T>
-  void SetPrevious(const T *this_object, const T *that_object) {
-    GRANARY_IF_DEBUG( CheckObject(this_object); )
-    if (!that_object) {
-      return;
-    }
-    ListHead *that_list(GetList(this_object, that_object));
-    Chain(prev, that_list->GetFirst());
-    Chain(that_list->GetLast(), this);
-  }
-
-  // Unlink this list head from the list.
-  void Unlink(void);
-
  private:
-  template <typename> friend class ListOfListHead;
+  GRANARY_EXTERNAL_FRIEND class ListOfListHead<T>;
 
-  ListHead *GetFirst(void);
-  ListHead *GetLast(void);
-  uintptr_t GetListOffset(const void *object) const;
-  uintptr_t GetObject(const void *object, const ListHead *other_list) const;
-  ListHead *GetList(const void *this_object, const void *that_object) const;
-  static void Chain(ListHead *first, ListHead *second);
+  // Return the object associated with this list head.
+  inline static T *ContainerOf(const ListHead<T> *list) {
+    enum {
+      kListHeadOffset = offsetof(T, list)
+    };
+    return reinterpret_cast<T *>(reinterpret_cast<uintptr_t>(list) -
+                                 kListHeadOffset);
+  }
 
-  ListHead *prev;
-  ListHead *next;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(ListHead);
+  T *next;
+  T *prev;
 };
-
 
 // Interface for managing doubly-linked lists. Assumes that type there exists a
 // pulbic `T::list` with type `ListHead`.
@@ -124,21 +109,15 @@ class ListOfListHead {
   }
 
   void Prepend(T *elm) {
-    if (first) {
-      GRANARY_ASSERT(!first->list.prev);
-      first->list.template SetPrevious<T>(first, elm);
-    }
-    first = elm;
+    if (first) first->list.SetPrevious(elm);
     if (!last) last = elm;
+    first = elm;
   }
 
   void Append(T *elm) {
-    if (last) {
-      GRANARY_ASSERT(!last->list.next);
-      last->list.template SetNext<T>(last, elm);
-    }
-    last = elm;
+    if (last) last->list.SetNext(elm);
     if (!first) first = elm;
+    last = elm;
   }
 
   void InsertBefore(T *before_elm, T *new_elm) {
@@ -147,7 +126,7 @@ class ListOfListHead {
     } else {
       GRANARY_ASSERT(nullptr != before_elm);
       GRANARY_ASSERT(nullptr != first);
-      before_elm->list.template SetPrevious<T>(before_elm, new_elm);
+      before_elm->list.SetPrevious(new_elm);
     }
   }
 
@@ -157,20 +136,38 @@ class ListOfListHead {
     } else {
       GRANARY_ASSERT(nullptr != after_elm);
       GRANARY_ASSERT(nullptr != last);
-      after_elm->list.template SetNext<T>(after_elm, new_elm);
+      after_elm->list.SetNext(new_elm);
     }
   }
 
   void Remove(T *elm) {
-    auto elm_next = elm->list.template GetNext<T>(elm);
-    auto elm_prev = elm->list.template GetPrevious<T>(elm);
+    auto elm_next = elm->list.Next();
+    auto elm_prev = elm->list.Previous();
     elm->list.Unlink();
-    if (last == elm) {
-      last = elm_prev;
+    if (last == elm) last = elm_prev;
+    if (first == elm) first = elm_next;
+  }
+
+  ListOfListHead<T> &operator=(const ListOfListHead<T> &that) {
+    if (this != &that) {
+      GRANARY_ASSERT(!first);
+      first = that.first;
+      last = that.last;
     }
-    if (first == elm) {
-      first = elm_next;
+    return *this;
+  }
+
+  void Extend(ListOfListHead<T> &that) {
+    if (!first) {
+      first = that.first;
+      last = that.last;
+    } else if (that.first) {
+      last->list.next = that.first;
+      that.first->list.prev = last;
+      last = that.last;
     }
+    that.first = nullptr;
+    that.last = nullptr;
   }
 
  private:
@@ -212,7 +209,7 @@ class ListHeadIterator {
   }
 
   inline void operator++(void) {
-    curr = curr->list.template GetNext<T>(curr);
+    curr = curr->list.Next();
   }
 
   inline bool operator!=(const Iterator &that) const {
@@ -225,16 +222,14 @@ class ListHeadIterator {
 
   // Returns the last valid element from an iterator.
   static T *Last(Iterator elems) {
-    T *last(nullptr);
-    for (auto elem : elems) {
-      last = elem;
-    }
-    return last;
+    if (!elems.curr) return nullptr;
+    return elems.curr->list.Last();
   }
 
   // Returns the last valid element from an iterator.
   static inline T *Last(T *elems_ptr) {
-    return Last(Iterator(elems_ptr));
+    GRANARY_ASSERT(nullptr != elems_ptr);
+    return elems_ptr->list.Last();
   }
 
  private:
@@ -275,7 +270,7 @@ class ReverseListHeadIterator {
   }
 
   inline void operator++(void) {
-    curr = curr->list.template GetPrevious<T>(curr);
+    curr = curr->list.Previous();
   }
 
   inline bool operator!=(const Iterator &that) const {
@@ -288,16 +283,14 @@ class ReverseListHeadIterator {
 
   // Returns the last valid element from an iterator.
   static T *First(Iterator elems) {
-    T *last(nullptr);
-    for (auto elem : elems) {
-      last = elem;
-    }
-    return last;
+    if (!elems.curr) return nullptr;
+    return elems.curr->list.First();
   }
 
   // Returns the last valid element from an iterator.
   static inline T *First(T *elems_ptr) {
-    return First(Iterator(elems_ptr));
+    GRANARY_ASSERT(nullptr != elems_ptr);
+    return elems_ptr->list.First();
   }
 
  private:

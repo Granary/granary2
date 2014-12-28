@@ -37,5 +37,5 @@ END_LEGAL */
 #if !defined(_XED_INIT_POINTER_NAMES_H_)
 # define _XED_INIT_POINTER_NAMES_H_
 #include "xed-internal-header.h"
-#define XED_MAX_POINTER_NAMES 33
+#define XED_MAX_POINTER_NAMES 65
 #endif

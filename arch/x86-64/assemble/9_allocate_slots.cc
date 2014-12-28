@@ -18,13 +18,50 @@
     instrs->Append(new NativeInstruction(&ni)); \
   } while (0)
 
+#define BEFORE(...) \
+  do { \
+    __VA_ARGS__ ; \
+    instrs->InsertBefore(instr, new NativeInstruction(&ni)); \
+  } while (0)
+
 namespace granary {
 namespace arch {
+
+// Inserts code before `instr` in `instrs` to switch off of the native stack.
+//
+// Note: This function has an architecture-specific implementation.
+void SwitchOffStack(InstructionList *instrs, granary::Instruction *instr) {
+  if (REDZONE_SIZE_BYTES) {
+    Instruction ni;
+    BEFORE(SHIFT_REDZONE(&ni);
+           ni.is_stack_blind = true;
+           ni.analyzed_stack_usage = false; );
+  } else {
+    // TODO(pag): Should we do stack switching here??
+    granary_curiosity();
+  }
+}
+
+// Inserts code before `instr` in `instrs` to switch on to the native stack.
+//
+// Note: This function has an architecture-specific implementation.
+void SwitchOnStack(InstructionList *instrs, granary::Instruction *instr) {
+  if (REDZONE_SIZE_BYTES) {
+    Instruction ni;
+    BEFORE(UNSHIFT_REDZONE(&ni);
+           ni.is_stack_blind = true;
+           ni.analyzed_stack_usage = false; );
+  } else {
+    // TODO(pag): Should we do stack switching here??
+    granary_curiosity();
+  }
+}
+
+#ifdef GRANARY_WHERE_kernel
 
 // Returns a new instruction that will "allocate" the spill slots by disabling
 // interrupts.
 void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
-  GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
       CALL_NEAR_RELBRd(&ni, GlobalContext()->DisableInterruptCode())));
@@ -33,11 +70,12 @@ void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
 // Returns a new instruction that will "allocate" the spill slots by enabling
 // interrupts.
 void AllocateEnableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
-  GRANARY_IF_USER(GRANARY_ASSERT(false));
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
       CALL_NEAR_RELBRd(&ni, GlobalContext()->EnableInterruptCode())));
 }
+
+#endif  // GRANARY_WHERE_kernel
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -46,7 +84,6 @@ NativeInstruction *AllocateStackSpace(int num_bytes) {
   arch::LEA_GPRv_AGEN(
       &ni, XED_REG_RSP,
       arch::BaseDispMemOp(num_bytes, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
-  ni.AnalyzeStackUsage();
   return new NativeInstruction(&ni);
 }
 
@@ -166,15 +203,25 @@ static void ManglePopFlags(Fragment *frag, NativeInstruction *instr,
 
 // Adjust a memory operand if it refers to the stack pointer.
 static void AdjustMemOp(arch::Operand *mem_op, int adjusted_offset) {
+  if (!mem_op->IsExplicit()) return;
   if (mem_op->IsPointer()) return;
 
   if (mem_op->is_compound) {
-    if (XED_REG_RSP == mem_op->mem.reg_base) {
+    GRANARY_ASSERT(!mem_op->mem.index.IsStackPointer());
+    if (mem_op->mem.base.IsStackPointer()) {
       mem_op->mem.disp += adjusted_offset;
     }
   } else if (mem_op->reg.IsStackPointer()) {
     *mem_op = arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP,
                                   arch::GPR_WIDTH_BITS);
+  }
+}
+
+static void GenericAdjustMemOps(arch::Instruction *instr, int adjusted_offset) {
+  GRANARY_ASSERT(!instr->WritesToStackPointer());
+  if (!instr->ReadsFromStackPointer()) return;
+  for (auto &op : instr->ops) {
+    if (op.IsMemory()) AdjustMemOp(&op, adjusted_offset);
   }
 }
 
@@ -191,7 +238,8 @@ static void MangleMov(NativeInstruction *instr, int adjusted_offset) {
   }
   if (mem_op) {  // Found a spill slot.
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
+        static_cast<int32_t>(mem_op->reg.Number()) * arch::GPR_WIDTH_BYTES,
+        XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
     return;
@@ -217,7 +265,8 @@ static void MangleXchg(NativeInstruction *instr, int adjusted_offset) {
 
   if (IsSpillSlot(ainstr.ops[0])) {
     const auto new_mem_op = arch::BaseDispMemOp(
-        mem_op->reg.Number() * 8, XED_REG_RSP, arch::GPR_WIDTH_BITS);
+        static_cast<int32_t>(mem_op->reg.Number()) * arch::GPR_WIDTH_BYTES,
+        XED_REG_RSP, arch::GPR_WIDTH_BITS);
     mem_op->mem = new_mem_op.mem;
     mem_op->is_compound = new_mem_op.is_compound;
   } else  {
@@ -233,9 +282,8 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
   auto &src(ainstr.ops[1]);
   if (dst.reg.IsStackPointer()) {  // Stack pointer shift.
     if (src.is_compound) {
-      GRANARY_ASSERT(XED_REG_RSP == src.mem.reg_base &&
-                     XED_REG_INVALID == src.mem.reg_index);
-    } else {  // Nop.
+      GRANARY_ASSERT(src.mem.base.IsStackPointer() && !src.mem.index.IsValid());
+    } else {  // No-op.
       GRANARY_ASSERT(src.reg.IsStackPointer());
     }
     GRANARY_ASSERT(!ainstr.is_sticky);
@@ -248,10 +296,13 @@ static void MangleLEA(NativeInstruction *instr, int adjusted_offset) {
 // Mangle simple arithmetic instructions that make constant changes to the
 // stack pointer into `TEST` instructions based on the stack pointer, so as
 // to approximately conserve the flags behavior.
-static void MangleArith(NativeInstruction *instr) {
+static void MangleArith(NativeInstruction *instr, int adjusted_offset) {
   auto &ainstr(instr->instruction);
-  if (!ainstr.ops[0].IsRegister()) return;
-  if (!ainstr.ops[0].reg.IsStackPointer()) return;
+  if (!ainstr.ops[0].IsRegister() || !ainstr.ops[0].reg.IsStackPointer()) {
+    GenericAdjustMemOps(&ainstr, adjusted_offset);
+    return;
+  }
+
   if (XED_ICLASS_ADD == ainstr.iclass || XED_ICLASS_SUB == ainstr.iclass) {
     GRANARY_ASSERT(ainstr.ops[1].IsImmediate());
   }
@@ -317,7 +368,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
     case XED_ICLASS_ADD:
     case XED_ICLASS_INC:
     case XED_ICLASS_DEC:
-      MangleArith(instr);
+      MangleArith(instr, adjusted_offset);
       break;
 
     // Shouldn't be seen!
@@ -334,8 +385,7 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
 
     default:
-      GRANARY_ASSERT(!ainstr.ReadsFromStackPointer() &&
-                     !ainstr.WritesToStackPointer());
+      GenericAdjustMemOps(&ainstr, adjusted_offset);
       break;
   }
 }
@@ -381,9 +431,19 @@ void AllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (IsA<SSAFragment *>(frag)) {
       auto partition = frag->partition.Value();
+
+      // Only do stack switching if the stack isn't valid. Same thing with
+      // slot allocation
       if (partition->analyze_stack_frame) continue;
+
       for (auto instr : InstructionListIterator(frag->instrs)) {
-        if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+          if (kAnnotCondLeaveNativeStack == ainstr->annotation) {
+            SwitchOffStack(&(frag->instrs), instr);
+          } else if (kAnnotCondEnterNativeStack == ainstr->annotation) {
+            SwitchOnStack(&(frag->instrs), instr);
+          }
+        } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
           AllocateSlots(ninstr);
         }
       }

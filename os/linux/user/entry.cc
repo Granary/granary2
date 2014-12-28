@@ -25,15 +25,9 @@ extern "C" {
 // Dynamically imported from `libc`.
 extern char ** __attribute__((weak)) environ;
 
-// Path to the loaded Granary library. Code cache `mmap`s are associated with
-// this file.
-extern char granary_mmap_path[];
-
 // Defined in `os/linux/arch/*/syscall.asm`.
-extern void exit_group(int) __attribute__((noreturn));
-
+[[noreturn]] extern void exit_group(int);
 }  // extern C
-
 namespace granary {
 namespace {
 // Searches for a specific environment variable.
@@ -62,10 +56,9 @@ static const char *GetEnv(const char *var_name) {
 // See `os/linux/arch/*/init.asm` to see the definition of `_init` and the
 // pass-through to `granary_init`.
 static void Attach(AppPC *start_pc_ptr) {
-  if (auto context = GlobalContext()) {
-    auto meta = context->AllocateBlockMetaData(*start_pc_ptr);
-    *start_pc_ptr = TranslateEntryPoint(context, meta, ENTRYPOINT_USER_LOAD);
-  }
+  auto context = GlobalContext();
+  *start_pc_ptr = TranslateEntryPoint(context, *start_pc_ptr,
+                                      kEntryPointUserAttach);
 
   // TODO(pag): Attach to signals.
 }
@@ -84,18 +77,18 @@ static void DisplayHelpMessage(void) {
 extern "C" {
 
 // Initialize and attach Granary. Invoked by means of a tail-call from `_init`.
-void granary_init(granary::AppPC *attach_pc_ptr) {
+GRANARY_ENTRYPOINT void granary_init(granary::AppPC *attach_pc_ptr) {
   GRANARY_USING_NAMESPACE granary;
   PreInit();
-  strncpy(&(granary_mmap_path[0]), GetEnv("GRANARY_PATH"), 1023);
   InitOptions(GetEnv("GRANARY_OPTIONS"));
   if (FLAG_help) {
     DisplayHelpMessage();
     GRANARY_ASSERT(false);  // Not reached.
   }
-  Init(INIT_PROGRAM);
+  Init(kInitAttach);
   Attach(attach_pc_ptr);
 }
+
 }  // extern "C"
 
 #endif  // GRANARY_TARGET_test

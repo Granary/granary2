@@ -43,13 +43,13 @@ static void ProcessInit(const char *options) {
     seen_first_init = 1;
   }
   _ZN7granary11InitOptionsEPKc(options);  // `granary::InitOptions`.
-  _ZN7granary4InitENS_10InitReasonE(1 /* INIT_ATTACH */);  // `granary::Init`.
+  _ZN7granary4InitENS_10InitReasonE(1 /* kInitAttach */);  // `granary::Init`.
   printk("[granary] Initialized.\n");
 }
 
-extern void granary_exit_slow(int reason);
+extern void _ZN7granary4ExitENS_10ExitReasonE(int);
 static void ProcessExit(void) {
-  granary_exit_slow(1 /* EXIT_DETACH */);
+  _ZN7granary4ExitENS_10ExitReasonE(1 /* kExitDetach */);
   printk("[granary] Exited.\n");
 }
 

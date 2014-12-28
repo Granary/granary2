@@ -2,10 +2,6 @@
 
 #include <gmock/gmock.h>
 
-#define _BSD_SOURCE 1
-#include <signal.h>
-#include <unistd.h>
-
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
@@ -18,19 +14,15 @@ using namespace granary;
 extern "C" {
 extern void RunFunctionInContext(void *func, IsolatedRegState *inout);
 
+// Useful debugging aid to "break" on the first difference using a hardware
+// watchpoint.
 int watchpoint = 0;
+
 }  // extern "C"
 
 namespace {
-static char signal_stack[SIGSTKSZ];
-static stack_t alternate_stack = {
-  .ss_size = SIGSTKSZ,
-  .ss_sp = &(signal_stack[0])
-};
-
-SpinLock regs_lock;
-IsolatedRegState regs1, regs2, regs3;
-
+static SpinLock regs_lock;
+static IsolatedRegState regs1, regs2, regs3;
 }  // namespace
 
 // Runs a function and an instrumented function in an "isolated" context
@@ -38,16 +30,15 @@ IsolatedRegState regs1, regs2, regs3;
 void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
                          void *func,
                          void *instrumented_func) {
-  // Switch the signal stack so that the isolated regs stack is not signalled.
-  stack_t orig_signal_stack;
-  sigaltstack(&alternate_stack, &orig_signal_stack);
-
   SpinLockedRegion locker(&regs_lock);
 
   memset(&regs1, 0, sizeof regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
+  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
+  VALGRIND_ENABLE_ERROR_REPORTING;
+  VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
   memcpy(&regs2, &regs1, sizeof regs1);
 
   // Make the initial values of everything on the stack different so that we
@@ -56,14 +47,20 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   memset(&(regs1.stack), 0xAB, sizeof regs1.stack);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
+  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
+  VALGRIND_ENABLE_ERROR_REPORTING;
+  VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
   memcpy(&regs3, &regs1, sizeof regs1);
 
   memset(&regs1, 0, sizeof regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
   watchpoint = 1;
+  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(instrumented_func), &regs1);
+  VALGRIND_ENABLE_ERROR_REPORTING;
+  VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
 
   // Compare bytes that are the same across the two native runs. This ensures
   // that stuff in regs3 that falls outside of the redzone is not part of the
@@ -80,8 +77,5 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
       }
     }
   }
-
-  // Switch back to the original stack.
-  sigaltstack(&orig_signal_stack, 0);
 }
 

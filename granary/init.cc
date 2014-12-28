@@ -9,6 +9,7 @@
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
+#include "granary/metadata.h"
 
 #include "os/logging.h"
 #include "os/memory.h"
@@ -28,20 +29,14 @@ extern InitFuncPtr granary_end_init_array[];
 }  // extern "C"
 namespace granary {
 namespace {
-
-// Have we already pre-initialized Granary? This is mostly only relevant for
-// the test cases, where a given test fixture might initialize Granary, and
-// so the initialization will happen for each of that fixture's tests.
-static bool done_preinit = false;
-
+static bool gDonePreInit = false;
 }  // namespace
 
 // Runs the constructors from the initialization array.
 void PreInit(void) {
-  if (done_preinit) return;
-  done_preinit = true;
-
-  InitFuncPtr *init_func = granary_begin_init_array;
+  if (gDonePreInit) return;
+  gDonePreInit = true;
+  auto init_func = granary_begin_init_array;
   for (; init_func < granary_end_init_array; ++init_func) {
     (*init_func)();
   }
@@ -49,6 +44,8 @@ void PreInit(void) {
 
 // Initialize Granary.
 void Init(InitReason reason) {
+  PreInit();  // Run the pre-init just in case it hasn't been run yet.
+  gDonePreInit = false;
   os::InitHeap();  // Initialize the Granary heap.
   os::InitModuleManager();  // Initialize the global module manager.
   os::InitLog();  // Initialize the logging infrastructure.
@@ -58,8 +55,10 @@ void Init(InitReason reason) {
   // are enabled. This depends on heap allocation.
   arch::Init();
 
-  InitContext();
+  InitMetaData();
   InitClients();
+  InitContext();
+  InitToolManager();
   InitTools(reason);
 }
 

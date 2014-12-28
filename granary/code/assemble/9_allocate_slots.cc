@@ -13,6 +13,8 @@
 namespace granary {
 namespace arch {
 
+#ifdef GRANARY_WHERE_kernel
+
 // Returns a new instruction that will "allocate" the spill slots by disabling
 // interrupts.
 //
@@ -24,6 +26,8 @@ extern void AllocateDisableInterrupts(InstructionList *);
 //
 // Note: This function has an architecture-specific implementation.
 extern void AllocateEnableInterrupts(InstructionList *);
+
+#endif  // GRANARY_WHERE_kernel
 
 // Returns a new instruction that will allocate some stack space for virtual
 // register slots.
@@ -74,22 +78,27 @@ static void InitStackFrameAnalysis(FragmentList *frags) {
       partition->analyze_stack_frame = true;
     }
   }
+
+  // TODO(pag): What about initialization of fragments without partition
+  //            entry/exit? They might have `kAnnotCondLeaveNativeStack` or
+  //            `kAnnotCondEnterNativeStack` annotations.
+
   for (auto frag : FragmentListIterator(frags)) {
     if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (STACK_VALID != code_frag->stack.status) {
+      if (kStackStatusValid != code_frag->stack.status) {
         if (auto partition = frag->partition.Value()) {
           partition->analyze_stack_frame = false;
         }
       }
     }
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
     // Simple verification step.
     if (IsA<PartitionEntryFragment *>(frag)) {
       auto partition = frag->partition.Value();
       ++partition->num_partition_entry_frags;
       GRANARY_ASSERT(1 == partition->num_partition_entry_frags);
     }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
   }
 }
 
@@ -200,8 +209,9 @@ static void AdjustStackInstructions(Fragment *frag, int frame_space) {
 // Allocate space when the stack is valid.
 static void AllocateStackSlotsStackValid(PartitionInfo *partition,
                                          Fragment *frag) {
-  const auto vr_space = partition->num_slots * arch::GPR_WIDTH_BYTES +
-                        arch::REDZONE_SIZE_BYTES;
+  const auto vr_space = static_cast<int>(partition->num_slots *
+                                         arch::GPR_WIDTH_BYTES +
+                                         arch::REDZONE_SIZE_BYTES);
 
   const auto frame_space = GRANARY_ALIGN_TO(
       partition->min_frame_offset - vr_space, -arch::GPR_WIDTH_BYTES);
@@ -216,26 +226,30 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
   }
 }
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 // Very that no instructions in this region use virtual registers.
 static void VerifyAllSlotsScheduled(Fragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+      if (!ninstr->instruction.WillBeEncoded()) continue;
       ninstr->ForEachOperand([=] (Operand *op) {
         if (!op->IsExplicit()) return;
-        if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-          VirtualRegister addr_reg;
-          if (mem_op->MatchRegister(addr_reg)) {
-            GRANARY_ASSERT(!addr_reg.IsVirtualSlot());
+        if (op->IsMemory()) {
+          auto mem_op = UnsafeCast<MemoryOperand *>(op);
+          VirtualRegister r1, r2;
+          if (mem_op->CountMatchedRegisters(r1, r2)) {
+            GRANARY_ASSERT(!r1.IsVirtualSlot());
+            GRANARY_ASSERT(!r2.IsVirtualSlot());
           }
-        } else if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
+        } else if (op->IsRegister()) {
+          auto reg_op = UnsafeCast<RegisterOperand *>(op);
           GRANARY_ASSERT(!reg_op->Register().IsVirtual());
         }
       });
     }
   }
 }
-#endif  // GRANARY_TARGET_debug
+#endif  // GRANARY_TARGET_debug, GRANARY_TARGET_test
 
 #ifdef GRANARY_WHERE_kernel
 #ifdef GRANARY_TARGET_debug
@@ -273,7 +287,7 @@ static void AllocateStackSlots(FragmentList *frags) {
       GRANARY_IF_DEBUG( VerifyAllSlotsScheduled(frag); )
       continue;
     }
-    if (!partition->analyze_stack_frame)  {
+    if (!partition->analyze_stack_frame) {
       GRANARY_IF_KERNEL( AllocateSlotsStackInvalid(frag); )
     } else {
       AllocateStackSlotsStackValid(partition, frag);

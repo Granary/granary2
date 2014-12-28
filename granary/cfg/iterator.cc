@@ -2,7 +2,7 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 namespace granary {
@@ -59,23 +59,23 @@ void ReverseAppInstructionIterator::operator++(void) {
 
 
 // Move the iterator to the next basic block.
-void BasicBlockIterator::operator++(void) {
-  cursor = cursor->list.GetNext(cursor);
+void BlockIterator::operator++(void) {
+  cursor = cursor->list.Next();
 }
 
 // Get a basic block out of the iterator.
-BasicBlock *BasicBlockIterator::operator*(void) const {
+Block *BlockIterator::operator*(void) const {
   return cursor;
 }
 
 
 // Move the iterator to the previous basic block.
-void ReverseBasicBlockIterator::operator++(void) {
-  cursor = cursor->list.GetPrevious(cursor);
+void ReverseBlockIterator::operator++(void) {
+  cursor = cursor->list.Previous();
 }
 
 // Get a basic block out of the iterator.
-BasicBlock *ReverseBasicBlockIterator::operator*(void) const {
+Block *ReverseBlockIterator::operator*(void) const {
   return cursor;
 }
 

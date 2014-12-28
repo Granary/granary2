@@ -45,7 +45,8 @@ class EarlyMangleTest : public SimpleEncoderTest {};
         setup, \
         reinterpret_cast<void *>(TestEarlyMangle_ ## name), \
         reinterpret_cast<void *>( \
-            InstrumentAndEncode(TestEarlyMangle_ ## name))); \
+            granary::TranslateEntryPoint(context, TestEarlyMangle_ ## name, \
+                                         granary::kEntryPointTestCase))); \
   }
 
 TEST_EARLY_MANGLE(PushMem_GPR,
@@ -103,7 +104,6 @@ TEST_EARLY_MANGLE(AccesTLSBase_Indirect64)
 TEST_EARLY_MANGLE(XLAT,
     regs->RBX = reinterpret_cast<uint64_t>(&DEADBEEF);
     regs->RAX = 1; )
-#endif  // GRANARY_WITH_VALGRIND
 
 TEST_EARLY_MANGLE(ENTER_0,
     regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEF); )
@@ -120,6 +120,9 @@ TEST_EARLY_MANGLE(ENTER_16_LEAVE,
     regs->RBP = reinterpret_cast<uint64_t>(&DEADBEEFS[16]); )
 
 TEST_EARLY_MANGLE(PUSHFW)
+
+#endif  // GRANARY_WITH_VALGRIND
+
 TEST_EARLY_MANGLE(PUSHFQ)
 
 TEST_EARLY_MANGLE(PREFETCH,

@@ -4,7 +4,7 @@
 
 #include <granary.h>
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 // Callback that is invoked when a user space address is accessed when it
 // shouldn't be.
@@ -21,7 +21,7 @@ class TrapBadUserAccess : public InstrumentationTool {
  public:
   virtual ~TrapBadUserAccess(void) = default;
 
-  void InstrumentMemOp(DecodedBasicBlock *bb, NativeInstruction *instr,
+  void InstrumentMemOp(DecodedBlock *bb, NativeInstruction *instr,
                        const MemoryOperand &mloc) {
 
     // Exceptional control-flow instructions are allowed to access user data.
@@ -50,21 +50,21 @@ class TrapBadUserAccess : public InstrumentationTool {
     if (addr.IsSegmentOffset()) return;
 
     RegisterOperand addr_reg(addr);
-    lir::InlineAssembly asm_({&addr_reg});
+    lir::InlineAssembly asm_(addr_reg);
 
     asm_.InlineBefore(instr,
         // Test bit 47, which should be sign-extended to the value of all other
         // bits.
         "BT r64 %0, i8 47;"
         "JB l %1;"_x86_64);
-    instr->InsertBefore(lir::CallWithArgs(bb, TrapOnBadUserAccess, addr_reg,
-                                          instr->DecodedPC()));
+    instr->InsertBefore(lir::InlineFunctionCall(bb, TrapOnBadUserAccess,
+                                                addr_reg, instr->DecodedPC()));
     asm_.InlineBefore(instr,
         "LABEL %1:"_x86_64);
   }
 
   // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBasicBlock *bb) {
+  virtual void InstrumentBlock(DecodedBlock *bb) {
     MemoryOperand mloc1, mloc2;
     for (auto instr : bb->AppInstructions()) {
       auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
@@ -80,8 +80,8 @@ class TrapBadUserAccess : public InstrumentationTool {
 };
 
 // Initialize the `trap_bad_user_access` tool.
-GRANARY_CLIENT_INIT({
-  RegisterInstrumentationTool<TrapBadUserAccess>("trap_bad_user_access");
-})
+GRANARY_ON_CLIENT_INIT() {
+  AddInstrumentationTool<TrapBadUserAccess>("trap_bad_user_access");
+}
 
 #endif   // GRANARY_WHERE_kernel

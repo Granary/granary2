@@ -10,10 +10,11 @@
 #include "arch/base.h"
 
 #include "granary/base/base.h"
-#include "granary/base/lock.h"
 #include "granary/base/pc.h"
 
 #include "granary/metadata.h"
+
+#include "os/lock.h"
 
 namespace granary {
 
@@ -30,7 +31,7 @@ class IndexMetaData : public MutableMetaData<IndexMetaData> {
   // When an indirect CFI targets a translated block, don't copy over its
   // various `next_*` pointer links otherwise that would lead to disastrous
   // behavior.
-  void Join(const IndexMetaData *) {}
+  void Join(const IndexMetaData &) {}
 
   // The next meta-data chunk stored in the same spot in the code cache index.
   //
@@ -60,26 +61,13 @@ namespace internal {
 enum {
   NUM_POINTERS_PER_PAGE = arch::PAGE_SIZE_BYTES / sizeof(void *)
 };
-
-// Memory management for any index-related class.
-class IndexArrayMem {
- public:
-  static void *operator new(std::size_t);
-  static void operator delete(void *address);
-
-  static void *operator new[](std::size_t) = delete;
-  static void operator delete[](void *) = delete;
-};
-
 class MetaDataArray;
-
 }  // namespace internal
 
 // Implements Granary's code cache.
 //
-// Note: This class does not handle concurrent access/modification. That must
-//       be handled at a higher layer.
-class Index : public internal::IndexArrayMem {
+// Note: This class does allows readers to execute concurrently with respect
+class Index {
  public:
   Index(void) = default;
 
@@ -99,86 +87,24 @@ class Index : public internal::IndexArrayMem {
   // a linked list (via `IndexMetaData`) of all removed block meta-data.
   BlockMetaData *RemoveRange(AppPC begin, AppPC end);
 
+  static void *operator new(std::size_t);
+  static void operator delete(void *address);
+
+  static void *operator new[](std::size_t) = delete;
+  static void operator delete[](void *) = delete;
+
  private:
+  // Array of arrays of lists of meta-data.
   internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE];
+
+  // Array of locks for *modifying* the last-level lists of meta-data.
+  os::Lock second_level_locks[internal::NUM_POINTERS_PER_PAGE];
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Index);
 };
 
-static_assert(sizeof(Index) == arch::PAGE_SIZE_BYTES,
+static_assert(sizeof(Index) <= 2 * arch::PAGE_SIZE_BYTES,
               "The size of `Index` must be exactly one page.");
-
-// Forward declaration.
-class LockedIndexTransaction;
-
-// Represents a locked code cache index that is safe to use in a multi-threaded
-// environment.
-class LockedIndex {
- public:
-  explicit LockedIndex(Index *index_)
-      : index(index_),
-        index_lock() {}
-
-  ~LockedIndex(void) {
-    delete index;
-  }
-
-  // Perform a lookup in the index. Lookups can execute concurrently.
-  inline IndexFindResponse Request(BlockMetaData *meta) {
-    ReadLockedRegion locker(&index_lock);
-    return index->Request(meta);
-  }
-
- private:
-  friend class LockedIndexTransaction;
-
-  LockedIndex(void) = delete;
-
-  // Index backing this `LockedIndex`.
-  Index * const index;
-
-  // Reader/write lock that guards the index. This allows concurrent reads, but
-  // gives writers mutual exclusion.
-  ReaderWriterLock index_lock;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(LockedIndex);
-};
-
-// Allows multiple operations to be "atomically" performed on a code cache
-// index.
-class LockedIndexTransaction {
- public:
-  explicit LockedIndexTransaction(LockedIndex *index_)
-      : index(index_->index),
-        lock(&(index_->index_lock)) {
-    lock->WriteAcquire();
-  }
-
-  inline IndexFindResponse Request(BlockMetaData *meta) {
-    return index->Request(meta);
-  }
-
-  inline BlockMetaData *RemoveRange(AppPC begin, AppPC end) {
-    return index->RemoveRange(begin, end);
-  }
-
-  inline void Insert(BlockMetaData *meta) {
-    index->Insert(meta);
-  }
-
-  inline ~LockedIndexTransaction(void) {
-    lock->WriteRelease();
-  }
-
- private:
-  LockedIndexTransaction(void) = delete;
-
-  Index * const index;
-  ReaderWriterLock * const lock;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(LockedIndexTransaction);
-};
-
 }  // namespace granary
 
 #endif  // GRANARY_INDEX_H_

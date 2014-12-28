@@ -52,16 +52,21 @@ bool IsNearRelativeJump(NativeInstruction *instr) {
 # ifdef GRANARY_WHERE_user
 extern "C" {
 extern int getpid(void);
+extern ssize_t write (int filedes, const void *buffer, size_t size);
 extern long long read(int __fd, void *__buf, size_t __nbytes);
 }  // extern C
 
 namespace {
 
 static void TrapOnBadFallThrough(void) {
-  char buff[2];
-  os::Log(os::LogOutput, "Fell off the end of a basic block!\n"
-                         "Process ID for attaching GDB: %d\n", getpid());
+  char buff[1024];
+  auto num_bytes = Format(
+      buff, sizeof buff,
+      "Fell off the end of a basic block!\n"
+     "Process ID for attaching GDB: %d\n", getpid());
+  write(1, buff, num_bytes);
   while (true) read(0, buff, 1);  // Never return!
+
   GRANARY_ASSERT(false);
 }
 

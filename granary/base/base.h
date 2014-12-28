@@ -21,11 +21,16 @@
 # include <memory>
 # include <new>
 # include <type_traits>
+typedef long int ssize_t;
 #endif
+
+// Serves as documentation of the key entrypoints into Granary.
+#define GRANARY_ENTRYPOINT
 
 #define GRANARY_EARLY_GLOBAL __attribute__((init_priority(102)))
 #define GRANARY_GLOBAL __attribute__((init_priority(103)))
-#define GRANARY_UNPROTECTED_GLOBAL __attribute__((section(".bss.granary_unprotected")))
+#define GRANARY_UNPROTECTED_GLOBAL \
+  __attribute__((section(".bss.granary_unprotected")))
 
 // Useful for Valgrind-based debugging.
 #if !defined(GRANARY_EXTERNAL) && !defined(GRANARY_ASSEMBLY)
@@ -33,6 +38,7 @@
 #   include <valgrind/valgrind.h>
 #   include <valgrind/memcheck.h>
 #   define GRANARY_IF_VALGRIND(...) __VA_ARGS__
+#   define GRANARY_IF_NOT_VALGRIND(...)
 # else
 #   define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)
 #   define VALGRIND_FREELIKE_BLOCK(addr, rzB)
@@ -44,6 +50,9 @@
 #   define VALGRIND_MAKE_MEM_NOACCESS(addr,size)
 #   define VALGRIND_CHECK_MEM_IS_DEFINED(addr,size)
 #   define GRANARY_IF_VALGRIND(...)
+#   define GRANARY_IF_NOT_VALGRIND(...) __VA_ARGS__
+#   define VALGRIND_ENABLE_ERROR_REPORTING
+#   define VALGRIND_DISABLE_ERROR_REPORTING
 # endif
 #endif
 
@@ -59,20 +68,25 @@
 
 // For use only when editing text with Eclipse CDT (my version doesn't handle
 // `decltype` or `alignof` well)
+#define IF_ECLIPSE_alignas(...)
+#define IF_ECLIPSE_alignof(...) 16
 #ifdef GRANARY_ECLIPSE
 # define alignas(...)
 # define alignof(...) 16
 # define GRANARY_ENABLE_IF(...) int
+# define GRANARY_IF_NOT_ECLIPSE(...)
 #else
 # define GRANARY_ENABLE_IF(...) __VA_ARGS__
+# define GRANARY_IF_NOT_ECLIPSE(...) __VA_ARGS__
 #endif
 
-#ifdef GRANARY_TARGET_debug
+#if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
 # define GRANARY_IF_DEBUG(...) __VA_ARGS__
 # define GRANARY_IF_DEBUG_(...) __VA_ARGS__ ,
 # define _GRANARY_IF_DEBUG(...) , __VA_ARGS__
 # define GRANARY_IF_DEBUG_ELSE(a, b) a
-# define GRANARY_ASSERT(...) granary_break_on_fault_if(!(__VA_ARGS__))
+# define GRANARY_ASSERT(...) \
+  granary_break_on_fault_if(!(__VA_ARGS__),#__VA_ARGS__)
 #else
 # define GRANARY_IF_DEBUG(...)
 # define GRANARY_IF_DEBUG_(...)
@@ -82,16 +96,13 @@
 #endif  // GRANARY_TARGET_debug
 
 #ifdef GRANARY_TARGET_test
-# define GRANARY_TEST_VIRTUAL virtual
 # define GRANARY_IF_TEST(...) __VA_ARGS__
+# define GRANARY_IF_NOT_TEST(...)
 # define _GRANARY_IF_TEST(...) , __VA_ARGS__
 #else
-# define GRANARY_TEST_VIRTUAL
 # define GRANARY_IF_TEST(...)
+# define GRANARY_IF_NOT_TEST(...) __VA_ARGS__
 # define _GRANARY_IF_TEST(...)
-# ifndef ContextInterface
-#   define ContextInterface Context  // Minor hack!
-# endif
 #endif  // GRANARY_TARGET_test
 
 #ifdef GRANARY_ARCH_INTERNAL
@@ -113,6 +124,7 @@
 # define _GRANARY_IF_EXTERNAL(...)
 # define GRANARY_IF_INTERNAL(...) __VA_ARGS__
 # define _GRANARY_IF_INTERNAL(...) , __VA_ARGS__
+# define GRANARY_IF_INTERNAL_(...) __VA_ARGS__ ,
 # define GRANARY_EXTERNAL_DELETE
 
 // Not defined if `GRANARY_INTERNAL` isn't defined.
@@ -130,6 +142,7 @@
 # define _GRANARY_IF_EXTERNAL(...) , __VA_ARGS__
 # define GRANARY_IF_INTERNAL(...)
 # define _GRANARY_IF_INTERNAL(...)
+# define GRANARY_IF_INTERNAL_(...)
 # define GRANARY_EXTERNAL_DELETE = delete
 #endif
 
@@ -176,6 +189,11 @@
 #define GRANARY_NUM_PARAMS(...) \
   GRANARY_NUM_PARAMS_(, ##__VA_ARGS__,9,8,7,6,5,4,3,2,1,0)
 
+// Splats out the arguments passed into the macro function. This assumes one
+// is doing something like: `GRANARY_SPLAT((x, y))`, then what you will get
+// is `x, y`.
+#define GRANARY_SPLAT(params) GRANARY_PARAMS params
+
 // Spits back out the arguments passed into the macro function.
 #define GRANARY_PARAMS(...) __VA_ARGS__
 
@@ -191,16 +209,18 @@
 #define GRANARY_EXPORT_TO_INSTRUMENTATION \
   __attribute__((noinline, used, section(".text.inst_exports")))
 
+// Granary function that is to be instrumented as part of a test case.
+#define GRANARY_TEST_CASE \
+  __attribute__((noinline, used, section(".text.test_cases")))
+
 // Determine how much should be added to a value `x` in order to align `x` to
 // an `align`-byte boundary.
 #define GRANARY_ALIGN_FACTOR(x, align) \
   (((x) % (align)) ? ((align) - ((x) % (align))) : 0)
 
-
 // Align a value `x` to an `align`-byte boundary.
 #define GRANARY_ALIGN_TO(x, align) \
   ((x) + GRANARY_ALIGN_FACTOR(x, align))
-
 
 // Return the maximum or minimum of two values.
 #define GRANARY_MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -211,18 +231,15 @@
   cls(const cls &) = delete; \
   cls(const cls &&) = delete
 
-
 // Disallow assigning of instances of a specific class.
 #define GRANARY_DISALLOW_ASSIGN(cls) \
   void operator=(const cls &) = delete; \
   void operator=(const cls &&) = delete
 
-
 // Disallow copying and assigning of instances of a specific class.
 #define GRANARY_DISALLOW_COPY_AND_ASSIGN(cls) \
   GRANARY_DISALLOW_COPY(cls); \
   GRANARY_DISALLOW_ASSIGN(cls)
-
 
 // Disallow copying of instances of a class generated by a specific
 // class template.
@@ -230,13 +247,16 @@
   cls(const cls<GRANARY_PARAMS params> &) = delete; \
   cls(const cls<GRANARY_PARAMS params> &&) = delete
 
+// Disallow assigning of instances of a specific class.
+#define GRANARY_DISALLOW_ASSIGN_TEMPLATE(cls, params) \
+  void operator=(const cls<GRANARY_PARAMS params> &) = delete; \
+  void operator=(const cls<GRANARY_PARAMS params> &&) = delete
 
 // Disallow copying and assigning of instances of a class generated by a
 // specific class template.
 #define GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(cls, params) \
   GRANARY_DISALLOW_COPY_TEMPLATE(cls, params); \
-  void operator=(const cls<GRANARY_PARAMS params> &) = delete; \
-  void operator=(const cls<GRANARY_PARAMS params> &&) = delete
+  GRANARY_DISALLOW_ASSIGN_TEMPLATE(cls, params)
 
 
 // Mark a result / variable as being used.
@@ -246,7 +266,6 @@
     GRANARY_INLINE_ASSEMBLY("" :: "m"(var)); \
     GRANARY_UNUSED(var); \
   } while (0)
-
 
 #define GRANARY_COMMA() ,
 

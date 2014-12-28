@@ -43,9 +43,6 @@ template <
   >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
-  static_assert(sizeof(FromT) == sizeof(ToT),
-    "Dangerous unsafe cast between two types of different sizes.");
-
   ToT dest;
   __builtin_memcpy(&dest, &v, sizeof(ToT));
   return dest;
@@ -65,9 +62,6 @@ template <
   >::Type=0
 >
 inline ToT UnsafeCast(const FromT v) {
-  static_assert(sizeof(FromT) == sizeof(ToT),
-    "Dangerous unsafe cast between two types of different sizes.");
-
   ToT dest;
   __builtin_memcpy(&dest, &v, sizeof(ToT));
   return dest;

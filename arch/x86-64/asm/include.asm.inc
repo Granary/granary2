@@ -2,8 +2,10 @@
 #include "granary/base/base.h"
 
 #define START_FILE \
+    .file __FILE__ @N@\
     .text
 #define START_FILE_INTEL \
+    .file __FILE__ @N@\
     .intel_syntax noprefix @N@\
     .text
     
@@ -28,6 +30,14 @@
 
 #define DEFINE_INST_FUNC(x) \
     .section .text.inst_exports @N@\
+    .align 16 @N@\
+    .globl SYMBOL(x) @N@\
+    .type SYMBOL(x), @function @N@\
+    x: @N@\
+    .cfi_startproc
+
+#define DEFINE_TEST_FUNC(x) \
+    .section .text.test_cases @N@\
     .align 16 @N@\
     .globl SYMBOL(x) @N@\
     .type SYMBOL(x), @function @N@\

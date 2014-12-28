@@ -2,7 +2,7 @@
 
 #include "test/arch/x86-64/util/include.S"
 
-    .text
+    .section .text.test_cases
 
 #define CF (1 << 0)  // carry
 #define PF (1 << 2)  // parity

@@ -19,20 +19,22 @@
 namespace granary {
 
 // Forward declarations.
-class BasicBlock;
+class Block;
 class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class Fragment;
+GRANARY_INTERNAL_DEFINITION class SSAInstruction;
+GRANARY_INTERNAL_DEFINITION enum alignas(16) UntypedData : uint64_t {
+};
 
 // Represents an abstract instruction.
 class Instruction {
  public:
-
   GRANARY_INTERNAL_DEFINITION
   inline Instruction(void)
       : list(),
-        transient_meta(0) {}
+        transient_meta() {}
 
   virtual ~Instruction(void) = default;
 
@@ -43,41 +45,43 @@ class Instruction {
 
   // Used to get around issues with Eclipse's indexer.
 #ifdef GRANARY_ECLIPSE
-  uintptr_t MetaData(void);  // Fake, non-const.
+  UntypedData MetaData(void);  // Fake, non-const.
   template <typename T> T MetaData(void) const;
   template <typename T> void SetMetaData(T);
 #else
   // Get the transient, tool-specific instruction meta-data as an arbitrary,
-  // `uintptr_t`-sized type.
+  // `uint64_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uint64_t>::RESULT>::Type=0
   >
   inline T MetaData(void) const {
-    static_assert(sizeof(T) <= sizeof(uintptr_t),
+    GRANARY_INTERNAL_DEFINITION
+    static_assert(sizeof(uint64_t) >= sizeof(T),
         "Transient meta-data type is too big. Client tools can only store "
-        "a pointer-sized object as meta-data inside of an instruction.");
+        "a `uint64_t`-sized object as meta-data inside of an instruction.");
     return UnsafeCast<T>(MetaData());
   }
 
   // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-  uintptr_t MetaData(void) const;
+  uint64_t MetaData(void) const;
 
   // Set the transient, tool-specific instruction meta-data as an arbitrary,
-  // `uintptr_t`-sized type.
+  // `uint64_t`-sized type.
   template <
     typename T,
-    typename EnableIf<!TypesAreEqual<T, uintptr_t>::RESULT>::Type=0
+    typename EnableIf<!TypesAreEqual<T, uint64_t>::RESULT>::Type=0
   >
   inline void SetMetaData(T meta) {
-    static_assert(sizeof(T) <= sizeof(uintptr_t),
+    GRANARY_INTERNAL_DEFINITION
+    static_assert(sizeof(T) <= sizeof(uint64_t),
         "Transient meta-data type is too big. Client tools can only store "
-        "a pointer-sized object as meta-data inside of an instruction.");
-    return SetMetaData(UnsafeCast<uintptr_t>(meta));
+        "a `uint64_t`-sized object as meta-data inside of an instruction.");
+    return SetMetaData(UnsafeCast<uint64_t>(meta));
   }
 
   // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
-  void SetMetaData(uintptr_t meta);
+  void SetMetaData(uint64_t meta);
 #endif
 
   // Clear out the meta-data. This should be done by tools using instruction-
@@ -90,21 +94,21 @@ class Instruction {
   // (unowned) pointer to the inserted instruction.
   virtual Instruction *InsertBefore(Instruction *);
   virtual Instruction *InsertAfter(Instruction *);
-  virtual Instruction *InsertBefore(std::unique_ptr<Instruction>);
-  virtual Instruction *InsertAfter(std::unique_ptr<Instruction>);
+
+  inline Instruction *InsertBefore(std::unique_ptr<Instruction> instr) {
+    return InsertBefore(instr.release());
+  }
+
+  inline Instruction *InsertAfter(std::unique_ptr<Instruction> instr) {
+    return InsertAfter(instr.release());
+  }
 
   // Unlink an instruction from an instruction list.
+  GRANARY_INTERNAL_DEFINITION
   static std::unique_ptr<Instruction> Unlink(Instruction *);
 
-  // Unlink an instruction in an unsafe way. The normal unlink process exists
-  // for ensuring some amount of safety, whereas this is meant to be used only
-  // in internal cases where Granary is safely doing an "unsafe" thing (e.g.
-  // when it's stealing instructions for `Fragment`s.
-  GRANARY_INTERNAL_DEFINITION
-  std::unique_ptr<Instruction> UnsafeUnlink(void);
-
   // Used to put instructions into lists.
-  GRANARY_INTERNAL_DEFINITION mutable ListHead list;
+  GRANARY_INTERNAL_DEFINITION mutable ListHead<Instruction> list;
 
  protected:
   // Transient, tool-specific meta-data stored in this instruction. The lifetime
@@ -113,7 +117,7 @@ class Instruction {
   // meta-data is the backing storage for tools to temporarily attach small
   // amounts of data (e.g. pointers to data structures, bit sets of live regs)
   // to instructions for a short period of time. 
-  GRANARY_INTERNAL_DEFINITION uintptr_t transient_meta;
+  GRANARY_INTERNAL_DEFINITION UntypedData transient_meta;
 
  private:
 
@@ -125,8 +129,10 @@ class Instruction {
 // mostly used later during the code assembly process.
 GRANARY_INTERNAL_DEFINITION
 typedef ListOfListHead<Instruction> InstructionList;
+
 GRANARY_INTERNAL_DEFINITION
 typedef ListHeadIterator<Instruction> InstructionListIterator;
+
 GRANARY_INTERNAL_DEFINITION
 typedef ReverseListHeadIterator<Instruction> ReverseInstructionListIterator;
 
@@ -135,74 +141,96 @@ GRANARY_INTERNAL_DEFINITION
 enum InstructionAnnotation {
   // Used when we "kill" off meaningful annotations but want to leave the
   // associated instructions around.
-  IA_NOOP,
+  kAnnotNoOp,
 
   // Dummy annotations representing the beginning and end of a given basic
   // block.
-  IA_BEGIN_BASIC_BLOCK,
-  IA_END_BASIC_BLOCK,
-
-  // Represents an inline assembly instruction.
-  IA_INLINE_ASSEMBLY,
+  kAnnotBeginBlock,
+  kAnnotEndBlock,
 
   // Target of a branch instruction.
-  IA_LABEL,
-
-  // A special label that refers to the location of a return address after
-  // a function call instruction. This is primarily used during late mangling
-  // of indirect call instructions.
-  //
-  // When created, the value of this annotation is the address of the native
-  // code associated with this return address.
-  //
-  // When compiling / encoding instructions, the value of this annotation
-  // becomes the address at which this annotation is logically encoded.
-  IA_RETURN_ADDRESS,
+  kAnnotationLabel,
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
-  IA_INVALID_STACK,
-  IA_UNKNOWN_STACK_ABOVE,
-  IA_UNKNOWN_STACK_BELOW,
-  IA_VALID_STACK,
+  kAnnotInvalidStack,
+  kAnnotUnknownStackAbove,
+  kAnnotUnknownStackBelow,
+  kAnnotValidStack,
 
-  // Represents the definition of some `SSANode`, used in later assembly stages
-  // so that all nodes are owned by some `Fragment`.
-  IA_SSA_NODE_DEF,
+  // Represents the definition of some `SSARegisterWeb`, used in later assembly
+  // stages so that all nodes are owned by some `Fragment`.
+  //
+  // The meta-data associated with this annotation is an owned
+  // `SSARegisterWeb *`.
+  kAnnotSSARegisterWebOwner,
 
-  // An "undefinition" of a node that appears in a compensating fragment.
+  // An kill of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
-  IA_SSA_NODE_UNDEF,
-
-  // A "removed" or junk `SSAInstruction`. We keep some useless
-  // `SSAInstruction`s around because pointers from outside `SSANode`s might
-  // point to nodes that the `SSAInstruction` owns.
-  IA_SSA_USELESS_INSTR,
+  //
+  // The data associated with this annotation is a `VirtualRegister`. The meta-
+  // data associated with this annotation is an un-owned `SSARegisterWeb *`.
+  kAnnotSSARegisterKill,
 
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
-  IA_SSA_FRAG_BEGIN_LOCAL,
-  IA_SSA_FRAG_BEGIN_GLOBAL,
+  kAnnotSSAPartitionLocalBegin,
+
+  // Save and restore instructions for a register into a slot. The data
+  // associated with this annotation is a `VirtualRegister`. The meta-data
+  // associated with these annotations are owned `SSARegisterWeb *`.
+  //
+  // Note: Saves and restores only operate on architectural GPRs.
+  kAnnotSSASaveRegister,
+  kAnnotSSARestoreRegister,
+  kAnnotSSASwapRestoreRegister,
+
+  // Force some registers to be live. This is useful for specifying that the
+  // native values of some arch GPRs *must* be passed to something like an
+  // inline call.
+  //
+  // The data associated with this annotation is a `UsedRegisterSet`.
+  kAnnotSSAReviveRegisters,
+
+  // Inject a "late" stack switch instruction if the stack is not safe. Before
+  // we do the stack analysis, we can realize that some things (e.g. inline/
+  // context calls) might need to swap stacks, but not necessarily. These are
+  // a hint for injecting stack switches later when we have verified things.
+  kAnnotCondLeaveNativeStack,
+  kAnnotCondEnterNativeStack,
 
   // An annotation that, when encoded, updates the value of some pointer with
   // the encoded address.
-  IA_UPDATE_ENCODED_ADDRESS,
+  //
+  // The data associated with this annotation is a pointer to a pointer.
+  kAnnotUpdateAddressWhenEncoded,
 
   // Represents a point between two logical instructions. This exists to
   // document the logical boundaries between native instructions.
-  IA_BEGIN_LOGICAL_INSTRUCTION,
+  kAnnotLogicalInstructionBoundary,
 
   // Represents a definite change in the interrupt delivery state. If this
   // happens then we must break a fragment and isolate the instruction that
   // is changing the interrupt state.
-  IA_CHANGES_INTERRUPT_STATE,
+  kAnnotInterruptDeliveryStateChange,
+
+  // Represents an inline assembly instruction.
+  //
+  // The data associated with this instruction is a pointer to a
+  // `InlineAssemblyBlock`.
+  kAnnotInlineAssembly,
 
   // Represents a call to a client function that saves and restores the
   // entire machine context.
-  IA_CONTEXT_CALL,
+  //
+  // The data associated with this annotation is a function pointer.
+  kAnnotContextFunctionCall,
 
   // Represents a call to a client function that passes along some arguments
   // as well.
-  IA_OUTLINE_CALL
+  //
+  // The data associated with this annotation is a pointer to a
+  // `InlineFunctionCall`.
+  kAnnotInlineFunctionCall
 };
 
 // An annotation instruction is an environment-specific and implementation-
@@ -213,19 +241,19 @@ enum InstructionAnnotation {
 // Annotation instructions should not be removed by instrumentation.
 class AnnotationInstruction : public Instruction {
  public:
-  virtual ~AnnotationInstruction(void) = default;
+  virtual ~AnnotationInstruction(void);
 
   GRANARY_INTERNAL_DEFINITION
   inline explicit AnnotationInstruction(InstructionAnnotation annotation_)
       : annotation(annotation_),
-        data(0) {}
+        data() {}
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
   inline AnnotationInstruction(InstructionAnnotation annotation_,
                                T data_)
       : annotation(annotation_),
-        data(UnsafeCast<uintptr_t>(data_)) {}
+        data(UnsafeCast<UntypedData>(data_)) {}
 
   virtual Instruction *InsertBefore(Instruction *) override;
   virtual Instruction *InsertAfter(Instruction *) override;
@@ -243,7 +271,7 @@ class AnnotationInstruction : public Instruction {
   InstructionAnnotation annotation;
 
   GRANARY_INTERNAL_DEFINITION GRANARY_CONST
-  uintptr_t data;
+  UntypedData data;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
@@ -259,8 +287,26 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_INTERNAL_DEFINITION
   template <typename T>
-  inline T *DataPtr(void) const {
+  inline void SetData(T new_data) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
+    data = UnsafeCast<UntypedData>(new_data);
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline T *DataPtr(void) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
     return UnsafeCast<T *>(&data);
+  }
+
+  GRANARY_INTERNAL_DEFINITION
+  template <typename T>
+  inline T &DataRef(void) {
+    static_assert(sizeof(T) <= sizeof(uintptr_t),
+                  "Cannot store data inside of annotation.");
+    return *UnsafeCast<T *>(&data);
   }
 
  private:
@@ -278,7 +324,7 @@ class LabelInstruction final : public AnnotationInstruction {
   LabelInstruction(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
-  GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(LabelInstruction, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(LabelInstruction, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -286,7 +332,7 @@ class LabelInstruction final : public AnnotationInstruction {
   GRANARY_INTERNAL_DEFINITION Fragment *fragment;
 };
 
-// An instruction containing an driver-specific decoded instruction.
+// An instruction containing an architecture-specific decoded instruction.
 class NativeInstruction : public Instruction {
  public:
   virtual ~NativeInstruction(void);
@@ -309,7 +355,13 @@ class NativeInstruction : public Instruction {
   // length of the encoded instruction, which could be wildly different as a
   // single decoded instruction might map to many encoded instructions. If the
   // instruction was not decoded then this returns 0.
-  int DecodedLength(void) const;
+  size_t DecodedLength(void) const;
+
+  // Returns the total number of operands.
+  size_t NumOperands(void) const;
+
+  // Returns the total number of explicit operands.
+  size_t NumExplicitOperands(void) const;
 
   // Returns true if this instruction is essentially a no-op, i.e. it does
   // nothing and has no observable side-effects.
@@ -319,6 +371,7 @@ class NativeInstruction : public Instruction {
   bool ReadsConditionCodes(void) const;
   bool WritesConditionCodes(void) const;
   bool IsFunctionCall(void) const;
+  bool IsFunctionTailCall(void) const;  // A call converted into a jump.
   bool IsFunctionReturn(void) const;
   bool IsInterruptCall(void) const;
   bool IsInterruptReturn(void) const;
@@ -329,12 +382,17 @@ class NativeInstruction : public Instruction {
   bool IsConditionalJump(void) const;
   virtual bool HasIndirectTarget(void) const;
 
+  // Does this instruction perform an atomic read/modify/write?
+  bool IsAtomic(void) const;
+
   // Note: See `NativeInstruction::DecodedPC` for some details related to
   //       how native instructions might be decoded into many instructions, not
   //       all of which necessarily have a non-NULL `DecodedPC`.
   bool IsAppInstruction(void) const;
 
   GRANARY_INTERNAL_DEFINITION void MakeAppInstruction(PC decoded_pc);
+  GRANARY_INTERNAL_DEFINITION bool ReadsFromStackPointer(void) const;
+  GRANARY_INTERNAL_DEFINITION bool WritesToStackPointer(void) const;
 
   // Get the opcode name. The opcode name of an instruction is a semantic
   // name that conveys the meaning of the instruction, but not necessarily
@@ -383,6 +441,9 @@ class NativeInstruction : public Instruction {
   // Mid-level IR that represents the instruction.
   GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
 
+  // High-level SSA form for this instruction. Focuses only on register usage.
+  GRANARY_INTERNAL_DEFINITION SSAInstruction *ssa;
+
   // OS-specific annotation for this instruction. For example, in the Linux
   // kernel, this would be an exception table entry.
   GRANARY_INTERNAL_DEFINITION const void *os_annotation;
@@ -398,7 +459,7 @@ class NativeInstruction : public Instruction {
   // Try to match and bind one or more operands from this instruction. Returns
   // the number of operands matched, starting from the first operand.
   size_t CountMatchedOperandsImpl(
-      std::initializer_list<OperandMatcher> &&matchers);
+      std::initializer_list<OperandMatcher> matchers);
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(NativeInstruction);
 };
@@ -447,12 +508,12 @@ class ControlFlowInstruction : public NativeInstruction {
 
   GRANARY_INTERNAL_DEFINITION
   ControlFlowInstruction(const arch::Instruction *instruction_,
-                         BasicBlock *target_);
+                         Block *target_);
 
   virtual bool HasIndirectTarget(void) const;
 
   // Return the target block of this CFI.
-  BasicBlock *TargetBlock(void) const;
+  Block *TargetBlock(void) const;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ControlFlowInstruction, {
@@ -470,10 +531,10 @@ class ControlFlowInstruction : public NativeInstruction {
   ControlFlowInstruction(void) = delete;
 
   // Target block of this CFI.
-  GRANARY_INTERNAL_DEFINITION mutable BasicBlock *target;
+  GRANARY_INTERNAL_DEFINITION mutable Block *target;
 
   GRANARY_INTERNAL_DEFINITION
-  void ChangeTarget(BasicBlock *new_target) const;
+  void ChangeTarget(Block *new_target) const;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ControlFlowInstruction);
 };
@@ -486,7 +547,7 @@ class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
   GRANARY_INTERNAL_DEFINITION
   ExceptionalControlFlowInstruction(const arch::Instruction *instruction_,
                                     const arch::Instruction *orig_instruction_,
-                                    BasicBlock *exception_target_,
+                                    Block *exception_target_,
                                     AppPC emulation_pc_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction,

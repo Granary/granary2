@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 GRANARY_MERGED_BC_BC = $(GRANARY_BIN_DIR)/granary/merged_ll.bc
 GRANARY_MERGED_BC_OBJ = $(GRANARY_BIN_DIR)/granary/merged_ll.o
@@ -16,12 +16,12 @@ GRANARY_OBJ_FILES = $(GRANARY_CC_OBJ_FILES)
 
 # Link together all compiled .bc files into a single .bc file.
 $(GRANARY_MERGED_BC_OBJ) :: $(GRANARY_OBJ_FILES)
-	@echo "Linking intermediate bitcode files into $(GRANARY_MERGED_BC_OBJ)."
-	@$(GRANARY_LLVM_LINK) $(GRANARY_OBJ_FILES) \
+	@echo "Linking intermediate bitcode files into $@."
+	@$(GRANARY_LLVM_LINK) $^ \
 		-o $(GRANARY_MERGED_BC_BC)
 	@$(GRANARY_CXX) -Qunused-arguments $(GRANARY_CXX_FLAGS) \
 		-c $(GRANARY_MERGED_BC_BC) \
-		-o $(GRANARY_MERGED_BC_OBJ)
+		-o $@
 
 # Link together the merged .o files, the .o files related to arch-specific
 # assembly files, and any archives into a single large object file.

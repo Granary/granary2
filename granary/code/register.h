@@ -23,27 +23,23 @@ class Operand;
 
 // The kind of a virtual register.
 enum VirtualRegisterKind : uint8_t {
-  VR_KIND_UNKNOWN = 0,
+  kVirtualRegisterKindInvalid = 0,
 
   // Architectural register that cannot be re-scheduled.
-  VR_KIND_ARCH_FIXED,
+  kVirtualRegisterKindUnschedulable,
 
   // Architectural general-purpose register.
-  VR_KIND_ARCH_GPR,
+  kVirtualRegisterKindArchGpr,
 
   // Virtual general-purpose register.
-  VR_KIND_VIRTUAL_GPR,
-
-  // Virtual register that represents the stack pointer, of some offset of the
-  // stack pointer.
-  VR_KIND_VIRTUAL_STACK
+  kVirtualRegisterKindVirtualGpr
 
   // Index into the virtual register storage location. This is used at virtual
   // register allocation time, and allows us to manage the differences between
   // user space and kernel space at a lower level.
   //
   // Note: This can and should only be used as a memory operand!!
-  _GRANARY_IF_INTERNAL( VR_KIND_VIRTUAL_SLOT )
+  _GRANARY_IF_INTERNAL( kVirtualRegisterKindSlot )
 };
 
 // Defines the different types of virtual registers.
@@ -55,12 +51,11 @@ union alignas(alignof(void *)) VirtualRegister {
   // Initialize a non-ARCH-specific virtual register.
   inline VirtualRegister(VirtualRegisterKind kind_, uint8_t num_bytes_,
                          uint16_t reg_num_)
-      : reg_num(reg_num_),
-        kind(kind_),
-        num_bytes(num_bytes_),
-        byte_mask(static_cast<uint8_t>(~(~0U << num_bytes))),
-        preserved_byte_mask(0),
-        is_segment_offset(false) {
+      : value(0) {
+    reg_num = reg_num_;
+    kind = kind_;
+    num_bytes = num_bytes_;
+    byte_mask = static_cast<uint8_t>(~(~0U << num_bytes));
     GRANARY_ASSERT(num_bytes && !(num_bytes & (num_bytes - 1)));
   }
 
@@ -74,24 +69,36 @@ union alignas(alignof(void *)) VirtualRegister {
     return *this;
   }
 
+  template <typename T,
+            typename EnableIf<!IsUnsignedInteger<T>::RESULT>::Type=0>
+  inline void DecodeFromNative(T arch_reg_id) {
+    DecodeFromNative(static_cast<uint32_t>(arch_reg_id));
+  }
+
   // Convert an architectural register into a virtual register.
   //
   // Note: This has a architecture-specific implementation. See
   //       `arch/*/register.cc` for the implementation.
-  void DecodeFromNative(int arch_reg_id);
+  void DecodeFromNative(uint32_t arch_reg_id);
 
   // Returns a new virtual register that was created from an architectural
   // register.
-  static VirtualRegister FromNative(int arch_reg_id) {
-    VirtualRegister reg;
-    reg.DecodeFromNative(arch_reg_id);
-    return reg;
+  inline static VirtualRegister FromNative(uint32_t arch_reg_id) {
+    VirtualRegister vr;
+    vr.DecodeFromNative(arch_reg_id);
+    return vr;
+  }
+
+  template <typename T,
+            typename EnableIf<!IsUnsignedInteger<T>::RESULT>::Type=0>
+  inline static VirtualRegister FromNative(T arch_reg_id) {
+    return FromNative(static_cast<uint32_t>(arch_reg_id));
   }
 
   // Convert a virtual register into its associated architectural register.
   //
   // Note: This has an architecture-specific implementation.
-  int EncodeToNative(void) const;
+  uint32_t EncodeToNative(void) const;
 
   // Return the flags register as a virtual register.
   //
@@ -114,13 +121,13 @@ union alignas(alignof(void *)) VirtualRegister {
   static VirtualRegister FramePointer(void);
 
   // Return the width (in bits) of this register.
-  inline int BitWidth(void) const {
-    return static_cast<int>(num_bytes) * 8;
+  inline size_t BitWidth(void) const {
+    return num_bytes * 8UL;
   }
 
   // Return the width (in bytes) of this register.
-  inline int ByteWidth(void) const {
-    return static_cast<int>(num_bytes);
+  inline size_t ByteWidth(void) const {
+    return num_bytes;
   }
 
   // Returns true if this register preserves any of the bytes of the backing
@@ -129,50 +136,59 @@ union alignas(alignof(void *)) VirtualRegister {
     return 0 != preserved_byte_mask;
   }
 
+  // Returns the effective size (in bytes) of a write to this register. This
+  // could be bigger than the width of the register in bytes.
+  //
+  // Note: This has an architecture-specific implementation.
+  size_t EffectiveWriteWidth(void) const;
+
   // Is this an architectural register?
   inline bool IsNative(void) const {
-    return VR_KIND_ARCH_FIXED == kind || VR_KIND_ARCH_GPR == kind;
+    return kVirtualRegisterKindUnschedulable == kind ||
+           kVirtualRegisterKindArchGpr == kind;
   }
 
   // Is this a general purpose register?
   inline bool IsGeneralPurpose(void) const {
-    return VR_KIND_ARCH_GPR == kind || VR_KIND_VIRTUAL_GPR == kind ||
-           VR_KIND_VIRTUAL_STACK == kind;
+    return kVirtualRegisterKindArchGpr == kind ||
+           kVirtualRegisterKindVirtualGpr == kind;
   }
 
   // Is this a virtual register?
   inline bool IsVirtual(void) const {
-    return VR_KIND_VIRTUAL_GPR == kind || VR_KIND_VIRTUAL_STACK == kind;
+    return kVirtualRegisterKindVirtualGpr == kind;
   }
 
   inline bool IsValid(void) const {
-    return VR_KIND_UNKNOWN != kind;
+    return kVirtualRegisterKindInvalid != kind;
   }
 
   // Is this a virtual spill slot? Virtual spill slots are used to identify
   // memory locations that are used for virtual register spilling/filling.
   GRANARY_INTERNAL_DEFINITION inline bool IsVirtualSlot(void) const {
-    return VR_KIND_VIRTUAL_SLOT == kind;
+    return kVirtualRegisterKindSlot == kind;
+  }
+
+  // Is this a "legacy" register? These registers come from older versions of
+  // the ISA.
+  inline bool IsLegacy(void) const {
+    return is_legacy;
+  }
+
+  // Has this register been scheduled?
+  GRANARY_INTERNAL_DEFINITION inline bool IsScheduled(void) const {
+    return is_scheduled;
+  }
+
+  // Mark this register as scheduled.
+  GRANARY_INTERNAL_DEFINITION inline void MarkAsScheduled(void) {
+    is_scheduled = true;
   }
 
   // Is this the stack pointer?
   //
   // Note: This has an architecture-specific implementation.
   bool IsStackPointer(void) const;
-
-  // Is this a "virtual" stack pointer?
-  inline bool IsVirtualStackPointer(void) const {
-    return VR_KIND_VIRTUAL_STACK == kind;
-  }
-
-  // Is this register used as an offset from the base address of a memory
-  // segment (i.e. in the computation of a segmented address)?
-  //
-  // Note: If the architecture does not support memory segmentation then this
-  //       always returns `false`.
-  inline bool IsSegmentOffset(void) const {
-    return is_segment_offset;
-  }
 
   // Is this the instruction pointer?
   //
@@ -185,16 +201,20 @@ union alignas(alignof(void *)) VirtualRegister {
   bool IsFlags(void) const;
 
   // Returns this register's internal number.
-  inline int Number(void) const {
-    return static_cast<int>(reg_num);
+  inline size_t Number(void) const {
+    return reg_num;
   }
 
   // Widen this virtual register to a specific bit width.
   //
+  // Note: This operates in place.
+  //
   // Note: This has an architecture-specific implementation.
-  void Widen(int dest_byte_width);
+  void Widen(size_t dest_byte_width);
 
-  inline VirtualRegister WidenedTo(int dest_byte_width) const {
+  // Return a copy of this virtual register, but where the new register has
+  // the specified bit width.
+  inline VirtualRegister WidenedTo(size_t dest_byte_width) const {
     auto widened = *this;
     widened.Widen(dest_byte_width);
     return widened;
@@ -214,15 +234,16 @@ union alignas(alignof(void *)) VirtualRegister {
     return reg_num != that.reg_num || kind != that.kind;
   }
 
-  GRANARY_INTERNAL_DEFINITION
-  inline void ConvertToVirtualStackPointer(void) {
-    GRANARY_ASSERT(VR_KIND_VIRTUAL_GPR == kind);
-    kind = VR_KIND_VIRTUAL_STACK;
+  // Mark the value of this register as being an alias for some displacement of
+  // the stack pointer.
+  inline void MarkAsStackPointerAlias(void) {
+    is_stack_pointer = true;
   }
 
-  GRANARY_INTERNAL_DEFINITION
-  inline void ConvertToSegmentOffset(void) {
-    is_segment_offset = true;
+  // Does the current value of this register alias some displacement of the
+  // stack pointer?
+  inline bool IsStackPointerAlias(void) const {
+    return is_stack_pointer;
   }
 
  private:
@@ -230,7 +251,7 @@ union alignas(alignof(void *)) VirtualRegister {
 #pragma clang diagnostic ignored "-Wpacked"
   struct {
     // Register number. In the case of architectural registers, this is some
-    // identifier that maps back to the driver-specific description for
+    // identifier that maps back to the architecture-specific description for
     // architectural registers.
     uint16_t reg_num;
 
@@ -254,11 +275,14 @@ union alignas(alignof(void *)) VirtualRegister {
     // not represented by the register are not preserved.
     uint8_t preserved_byte_mask;
 
-    // Is this register an offset from a memory segment?
-    //
-    // Note: This is architecture-specific. If the architecture does not
-    //       support memory segmentation then this is always false.
-    bool is_segment_offset;
+    // Is this register a legacy register?
+    bool is_legacy:1;
+
+    // Has this register been scheduled?
+    bool is_scheduled:1;
+
+    // Is this a stack pointer / alias of the stack pointer?
+    bool is_stack_pointer:1;
   } __attribute__((packed));
 #pragma clang diagnostic pop
   uint64_t value;
@@ -293,7 +317,7 @@ class RegisterSetIterator {
 
   VirtualRegister operator*(void) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return VirtualRegister(VR_KIND_ARCH_GPR, arch::GPR_WIDTH_BYTES, num);
+    return VirtualRegister(kVirtualRegisterKindArchGpr, arch::GPR_WIDTH_BYTES, num);
   }
 
   inline void operator++(void) {
@@ -340,9 +364,9 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   }
 
   // Kill a specific register.
-  inline void Kill(int num) {
+  inline void Kill(size_t num) {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    Set(static_cast<unsigned>(num), false);
+    Set(num, false);
   }
 
   // Kill a specific register.
@@ -354,9 +378,9 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   void WriteKill(VirtualRegister reg);
 
   // Returns true if a register is dead.
-  inline bool IsDead(int num) const {
+  inline bool IsDead(size_t num) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return !Get(static_cast<unsigned>(num));
+    return !Get(num);
   }
 
   // Returns true if a register is live.
@@ -365,18 +389,18 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   }
 
   // Revive a specific register.
-  inline void Revive(int num) {
+  inline void Revive(size_t num) {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    Set(static_cast<unsigned>(num), true);
+    Set(num, true);
   }
 
   // Kill a specific register.
   void Revive(VirtualRegister reg);
 
   // Returns true if a register is live.
-  inline bool IsLive(int num) const {
+  inline bool IsLive(size_t num) const {
     GRANARY_ASSERT(0 <= num && arch::NUM_GENERAL_PURPOSE_REGISTERS > num);
-    return Get(static_cast<unsigned>(num));
+    return Get(num);
   }
 
   // Returns true if a register is live.
@@ -409,11 +433,14 @@ class RegisterSet : protected BitSet<arch::NUM_GENERAL_PURPOSE_REGISTERS> {
   };
 };
 
+static_assert(sizeof(RegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
+
 namespace detail {
 template <bool kIsLive>
 void RegisterSetIterator<kIsLive>::Advance(void) {
   for (; num < arch::NUM_GENERAL_PURPOSE_REGISTERS &&
-         kIsLive != tracker->IsLive(static_cast<int>(num)); ++num) {}
+         kIsLive != tracker->IsLive(num); ++num) {}
 }
 }  // namespace detail
 
@@ -457,17 +484,20 @@ class UsedRegisterSet : public RegisterSet {
   void ReviveRestrictedRegisters(const NativeInstruction *instr);
 
   // Note: This function has an architecture-specific implementation.
+  //
+  // Note: This should be used in combination with `Visit` in order to extend
+  //       the "used set" to mark certain registers as off-limits (via marking
+  //       them as used).
   GRANARY_INTERNAL_DEFINITION
   void ReviveRestrictedRegisters(const arch::Instruction *instr);
-
-  // Note: This function has an architecture-specific implementation.
-  GRANARY_INTERNAL_DEFINITION
-  void ReviveRestrictedRegisters(const arch::Operand *op);
 
   inline void Join(const UsedRegisterSet &that) {
     Union(that);
   }
 };
+
+static_assert(sizeof(UsedRegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
 
 // A class that tracks conservatively live, general-purpose registers within a
 // straight-line sequence of instructions.
@@ -517,6 +547,9 @@ class LiveRegisterSet : public RegisterSet {
     Union(that);
   }
 };
+
+static_assert(sizeof(LiveRegisterSet) <= sizeof(uint64_t),
+              "Invalid structure packing of `RegisterSet`.");
 
 }  // namespace granary
 

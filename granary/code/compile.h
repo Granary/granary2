@@ -10,16 +10,16 @@
 namespace granary {
 
 // Forward declaration.
-class ContextInterface;
+class Context;
 class IndirectEdge;
-class LocalControlFlowGraph;
+class Trace;
 
 // Compile some instrumented code.
-void Compile(ContextInterface *context, LocalControlFlowGraph *cfg);
+CachePC Compile(Context *context, Trace *cfg);
 
 // Compile some instrumented code for an indirect edge.
-void Compile(ContextInterface *context, LocalControlFlowGraph *cfg,
-             IndirectEdge *edge, AppPC target_pc);
+CachePC Compile(Context *context, Trace *cfg,
+                IndirectEdge *edge, BlockMetaData *meta);
 
 }  // namespace granary
 

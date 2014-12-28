@@ -4,7 +4,7 @@
 
 #ifdef GRANARY_WHERE_kernel
 
-using namespace granary;
+GRANARY_USING_NAMESPACE granary;
 
 GRANARY_DEFINE_string(attach_to_syscalls, "*",
     "Comma-separated list of specific system call numbers "
@@ -23,7 +23,7 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~KernelSpaceInstrumenter(void) = default;
 
-  void InstrumentSyscall(BlockFactory *factory, CompensationBasicBlock *block,
+  void InstrumentSyscall(BlockFactory *factory, CompensationBlock *block,
                          int syscall) {
     // Allow the user to specify `--attach_to_syscalls=*,-1,-2` to mean all
     // system calls except 1 and 2.
@@ -36,41 +36,21 @@ class KernelSpaceInstrumenter : public InstrumentationTool {
       return;
     }
     for (auto succ : block->Successors()) {
-      factory->RequestBlock(succ.block, REQUEST_NATIVE);
+      factory->RequestBlock(succ.block, kRequestBlockExecuteNatively);
     }
   }
 
   virtual void InstrumentEntryPoint(BlockFactory *factory,
-                                    CompensationBasicBlock *block,
+                                    CompensationBlock *block,
                                     EntryPointKind kind, int category) {
-    if (ENTRYPOINT_KERNEL_SYSCALL == kind) {
+    if (kEntryPointKernelSyscall == kind) {
       InstrumentSyscall(factory, block, category);
     }
   }
-#if 1
-  virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     LocalControlFlowGraph *cfg) {
-    for (auto block : cfg->Blocks()) {
-      for (auto succ : block->Successors()) {
-        auto addr = reinterpret_cast<uintptr_t>(succ.cfi->DecodedPC());
-        if ((0xffffffff8100b480 <= addr && addr < 0xffffffff8100b9b0) ||
-            (0xffffffff810160c0 <= addr && addr < 0xffffffff81016220) ||
-            (0xffffffff8165c080 <= addr && addr < 0xffffffff8165c880) ||
-            //(0xffffffff81678760 <= addr && addr <= 0xffffffff81678ef7) ||  // __schedule
-            //(0xffffffff81678f00 <= addr && addr <= 0xffffffff81678f6c) ||  // schedule
-            //(0xffffffff816808a0 <= addr && addr <= 0xffffffff816808b9) ||  // native_load_gs_index
-            //(0xffffffff8167f5a6 <= addr && addr <= 0xffffffff8167f60a)) {  // int_with_check
-            false) {
-          factory->RequestBlock(succ.block, REQUEST_NATIVE);
-        }
-      }
-    }
-  }
-#endif
 };
 
 // Initialize the `kernel` tool.
-GRANARY_CLIENT_INIT({
+GRANARY_ON_CLIENT_INIT() {
 
   // TODO(pag): Distinguish between client load and tool init.
   if (HAS_FLAG_attach_to_syscalls) {
@@ -86,7 +66,7 @@ GRANARY_CLIENT_INIT({
           }
         });
   }
-  RegisterInstrumentationTool<KernelSpaceInstrumenter>("kernel");
-})
+  AddInstrumentationTool<KernelSpaceInstrumenter>("kernel");
+}
 
 #endif  // GRANARY_WHERE_kernel

@@ -3,7 +3,7 @@
 #ifndef GRANARY_UTIL_H_
 #define GRANARY_UTIL_H_
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 #include "granary/metadata.h"
 
@@ -11,31 +11,31 @@ namespace granary {
 
 // Get an instrumented basic block's meta-data.
 //
-// Note: This behaves specially with respect to `ReturnBasicBlock`s, which have
-//       lazily created meta-data. If a `ReturnBasicBlock` has no meta-data,
+// Note: This behaves specially with respect to `ReturnBlock`s, which have
+//       lazily created meta-data. If a `ReturnBlock` has no meta-data,
 //       then this function will not create meta-data on the return block.
 template <typename T>
-inline static T *GetMetaData(InstrumentedBasicBlock *block) {
+inline static T *GetMetaData(InstrumentedBlock *block) {
   auto meta = block->UnsafeMetaData();
   return meta ? MetaDataCast<T *>(meta) : nullptr;
 }
 
 // Get a basic block's meta-data.
 template <typename T>
-inline static T *GetMetaData(BasicBlock *block) {
-  return GetMetaData<T>(DynamicCast<InstrumentedBasicBlock *>(block));
+inline static T *GetMetaData(Block *block) {
+  return GetMetaData<T>(DynamicCast<InstrumentedBlock *>(block));
 }
 
 // Get an instrumented basic block's meta-data.
 template <typename T>
-inline static T *GetMetaDataStrict(InstrumentedBasicBlock *block) {
+inline static T *GetMetaDataStrict(InstrumentedBlock *block) {
   return block ? MetaDataCast<T *>(block->MetaData()) : nullptr;
 }
 
 // Get an instrumented basic block's meta-data.
 template <typename T>
-inline static T *GetMetaDataStrict(BasicBlock *block) {
-  return GetMetaDataStrict<T>(DynamicCast<InstrumentedBasicBlock *>(block));
+inline static T *GetMetaDataStrict(Block *block) {
+  return GetMetaDataStrict<T>(DynamicCast<InstrumentedBlock *>(block));
 }
 
 // For code editing purposes only. Sometimes Eclipse has trouble with all the

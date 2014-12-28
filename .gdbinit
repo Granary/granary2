@@ -98,6 +98,8 @@ define reset
   shell clear
 end
 
+python None ; \
+  XI_SYMBOLS = re.compile(r" <(.*)>:\t") ;
 
 # print-instructions
 #
@@ -108,9 +110,10 @@ define print-instructions
   python None ; \
     rip = str(gdb.parse_and_eval("$__rip")).lower() ; \
     ni = str(gdb.parse_and_eval("$__ni")).lower() ; \
-    gdb.execute( \
+    disas = gdb.execute( \
       "x/%si %s\n" % (ni, rip), \
-      from_tty=True, to_string=False) ;
+      from_tty=True, to_string=True) ; \
+    gdb.write(XI_SYMBOLS.sub(": ", disas)) ;
 end
 
 
@@ -264,6 +267,11 @@ define log-exec-entries
   dont-repeat
 end
 
+python None ; \
+  FIND_CONSTRUCT = re.compile(r"granary::Construct<([^>]+)>") ; \
+  FIND_TPL_ASSIGNS = re.compile(r"<(<(.*?)>|std::(.*?))> = ") ; \
+  EMPTY_BRACES = re.compile(r"\{[, ]*\}") ; \
+  MANY_BRACES = re.compile(r"\{\{(.*)\}\}") ;
 
 # print-block-meta
 #
@@ -272,7 +280,7 @@ end
 define print-block-meta
   set language c++
   set $__m = (granary::BlockMetaData *) $arg0
-  set $__man = *((granary::MetaDataManager **) $arg0)
+  set $__man = (granary::MetaDataManager *) &_ZN7granary12_GLOBAL__N_1L12gMetaManagerE
   set $__descs = &($__man->descriptions[0])
   set $__i = 0
   while $__descs[$__i]
@@ -281,16 +289,32 @@ define print-block-meta
     set $__bytes = ((char *) $__m) + $__offset
     python None ; \
       dstr = gdb.execute("p *$__desc\n", from_tty=True, to_string=True) ; \
-      m = re.search(r"granary::Construct<([^>]+)>", dstr) ; \
+      m = FIND_CONSTRUCT.search(dstr) ; \
       cls = m.group(1) ; \
       ms = gdb.execute("p *((%s *)$__bytes)" % cls, \
         from_tty=True, to_string=True) ; \
-      ms = re.sub(r"^\$[0-9]+ = \{.*, <No data fields>},", "{", ms) ; \
+      ms = ms.replace("<No data fields>", "") ; \
+      ms = ms.replace("granary::", "") ; \
+      ms = ms.replace("MutableMetaData", "") ; \
+      ms = ms.replace("IndexableMetaData", "") ; \
+      ms = ms.replace("UnifiableMetaData", "") ; \
+      ms = ms.replace("ToolMetaData", "") ; \
+      ms = FIND_TPL_ASSIGNS.sub("", ms) ; \
+      ms = EMPTY_BRACES.sub("", ms) ; \
+      ms = EMPTY_BRACES.sub("", ms) ; \
+      ms = ms.replace("{, ", "{") ; \
+      ms = ms.replace(", }", "}") ; \
+      ms = MANY_BRACES.sub(r"\1", ms) ; \
       gdb.write("   %s = %s" % (cls, ms)) ;
     set $__i = $__i + 1
   end
   dont-repeat
 end
+
+
+#      
+#      ms = FIND_TPL_ASSIGNS.sub("", ms) ; \
+#      ms = re.sub(r"^\$[0-9]+ = \{.*, <No data fields>[}]+,", "{", ms) ; \
 
 
 # print-meta-entry
@@ -303,9 +327,8 @@ define print-meta-entry
   set language c++
   set $__i = granary_meta_log_index + GRANARY_META_LOG_LENGTH - $arg0
   set $__i = ($__i - 1) % GRANARY_META_LOG_LENGTH
-  set $__m = (granary::BlockMetaData *) granary_meta_log[$__i].meta
-  set $__g = (unsigned long) granary_meta_log[$__i].group
-  printf "Meta-data %p in group %lu:\n", $__m, $__g
+  set $__m = (granary::BlockMetaData *) granary_meta_log[$__i]
+  printf "Meta-data %p:\n", $__m
   print-block-meta $__m
   dont-repeat
 end
@@ -325,7 +348,7 @@ define save-meta-pcs
   set logging redirect on
   set $__i = 0
   while $__i < GRANARY_META_LOG_LENGTH && $__i < granary_meta_log_index
-    set $__m = (unsigned long *) granary_meta_log[$__i].meta
+    set $__m = (unsigned long *) granary_meta_log[$__i]
     if $__m[1]
       x/i $__m[1]
     end
@@ -333,6 +356,14 @@ define save-meta-pcs
   end
   set logging off
   dont-repeat
+end
+
+
+# clear-log
+#
+# Clears the contents of Granary's log.
+define clear-log
+  set granary_log_buffer_index = 0
 end
 
 
@@ -366,12 +397,11 @@ define find-meta-entry
   set $__m = (granary::BlockMetaData *) 0
 
   while $__i < GRANARY_META_LOG_LENGTH
-    set $__sm = (char *) granary_meta_log[$__i].meta
+    set $__sm = (char *) granary_meta_log[$__i]
     if $__sm
       set $__fpc_app = *((granary::AppPC *) &($__sm[8]))
       set $__fpc_cache = *((granary::CachePC *) &($__sm[16]))
       if $__fpc_app == $__pc || $__fpc_cache == $__pc
-        set $__g = granary_meta_log[$__i].group
         set $__m = (granary::BlockMetaData *) $__sm
         set $__i = GRANARY_META_LOG_LENGTH
       end
@@ -380,12 +410,14 @@ define find-meta-entry
   end
 
   if $__m
-    printf "Meta-data %p in group %lu:\n", $__m, $__g
+    printf "Meta-data %p:\n", $__m
     print-block-meta $__m
   end
   dont-repeat
 end
 
+python None ; \
+  REG_NAME = re.compile(r"^\$.*= XED_REG_") 
 
 # print-xed-reg
 #
@@ -394,7 +426,7 @@ define print-xed-reg
   set $__r = (xed_reg_enum_t) $arg0
   python None ; \
     m = gdb.execute("p $__r", from_tty=True, to_string=True) ; \
-    m = re.sub(r"^\$.*= XED_REG_", "", m) ; \
+    m = REG_NAME.sub("", m) ; \
     gdb.write(m.strip("\n")) ;
 end
 
@@ -418,10 +450,10 @@ end
 define print-virt-reg
   set language c++
   set $__vr = (granary::VirtualRegister) $arg0
-  if VR_KIND_ARCH_FIXED == $__vr.kind
+  if kVirtualRegisterKindUnschedulable == $__vr.kind
     print-xed-reg $__vr.reg_num
   end
-  if VR_KIND_ARCH_GPR == $__vr.kind
+  if kVirtualRegisterKindArchGpr == $__vr.kind
     set $__r = $__vr.reg_num + XED_REG_RAX
     if XED_REG_RSP <= $__r
       set $__r = $__r + 1
@@ -440,10 +472,10 @@ define print-virt-reg
     end
     print-xed-reg $__r
   end
-  if VR_KIND_VIRTUAL_GPR == $__vr.kind || VR_KIND_VIRTUAL_STACK == $__vr.kind
+  if kVirtualRegisterKindVirtualGpr == $__vr.kind
     printf "%%%u", $__vr.reg_num
   end
-  if VR_KIND_VIRTUAL_SLOT == $__vr.kind
+  if kVirtualRegisterKindSlot == $__vr.kind
     printf "SLOT:%u", $__vr.reg_num
   end
 end
@@ -472,15 +504,15 @@ define print-arch-operand
     # Compound base + index * scale + displacement memory operand.
     if $__o->is_compound
       set $__pplus = 0
-      if XED_REG_INVALID != $__o->mem.reg_base
-        print-xed-reg $__o->mem.reg_base
+      if VR_KIND_UNKNOWN != $__o->mem.base.kind
+        print-virt-reg $__o->mem.base
         set $__pplus = 1
       end
-      if XED_REG_INVALID != $__o->mem.reg_index
+      if VR_KIND_UNKNOWN != $__o->mem.index.kind
         if $__pplus
           printf " + "
         end
-        print-xed-reg $__o->mem.reg_index
+        print-virt-reg $__o->mem.index
         printf " * %u", $__o->mem.scale
         set $__pplus = 1
       end
@@ -629,11 +661,8 @@ end
 define get-next-instr
   set language c++
   set $__i = (granary::Instruction *) $arg0
-  set $__nil = $__i->list.next
-  if $__nil
-    set $__i = (granary::Instruction *) (((char *) $__nil) - 8)
-  else
-    set $__i = (granary::Instruction *) 0
+  if $__i
+    set $__i = $__i->list.next
   end
 end
 
@@ -645,10 +674,8 @@ end
 define get-next-frag
   set language c++
   set $__f = (granary::Fragment *) $arg0
-  if $__f->list.next
-    set $__f = (granary::Fragment *) (((char *) $__f->list.next) - 8)
-  else
-    set $__f = (granary::Fragment *) 0
+  if $__f
+    set $__f = $__f->list.next
   end
 end
 
@@ -718,7 +745,7 @@ define print-frag
   if &_ZTVN7granary12CodeFragmentE == (((char *) $__f->_vptr$Fragment) - 16)
     set $__cf = (granary::CodeFragment *) $__f
     printf "head=%d, ", $__cf->attr.is_block_head
-    printf "app=%d, ", granary::CODE_TYPE_APP == $__cf->type ? 1 : 0
+    printf "app=%d, ", granary::FRAG_TYPE_APP == $__cf->type ? 1 : 0
     printf "addsucc2p=%d, ", $__cf->attr.can_add_succ_to_partition
     printf "stack=%d, ", granary::STACK_VALID == $__cf->stack.status ? 1 : 0
     printf "meta=%p", $__cf->attr.block_meta
@@ -780,30 +807,44 @@ define print-frags
 end
 
 
+# xdot-frags
+#
+# Treat `$arg0` as a pointer to a `FragmentList` and use a `granary::Log` to
+# write the fragments to the log, then output the log to a file, then visualize
+# that file with `xdot`.
+define xdot-frags
+  set language c++
+  set $__frags = (granary::FragmentList *) $arg0
+  clear-log
+  log-frags $__frags
+  shell rm -f /tmp/graph.dot
+  save-log /tmp/graph.dot
+  shell dot -Tpdf -o/tmp/graph.pdf /tmp/graph.dot
+  shell qpdfview /tmp/graph.pdf &
+end
+
+
 # log-frags
 #
 # Treat `$arg0` as a pointer to a `FragmentList` and use `granary::Log` to log
-# the fragments to `stdout` or `stderr`. 
+# the fragments to Granary's internal log.
 define log-frags
   set language c++
   set granary_log_buffer_index = 0
-  p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) frags)
+  p granary::os::Log(granary::os::LogOutput, (granary::FragmentList *) $arg0)
   dont-repeat
 end
 
 
 # get-next-block
 #
-# Treat `$arg0` as a pointer to a `BasicBlock`, and update the variable `$__b`
+# Treat `$arg0` as a pointer to a `Block`, and update the variable `$__b`
 # to point to the next basic block in the list to which `$arg0` belongs.
 define get-next-block
   set language c++
-  set $__bl = (granary::ListHead *) (((unsigned long) $arg0) + 8)
-  set $__nb = $__bl->next
-  if $__nb
-    set $__b = (granary::BasicBlock *) (((unsigned long) $__nb) - 8)
-  else
-    set $__b = (granary::BasicBlock *) 0
+  set $__b = (granary::Block *) $arg0
+  if $__b
+    set $__b = $__b->list.next
   end
 end
 

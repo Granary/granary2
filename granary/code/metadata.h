@@ -16,7 +16,7 @@
 namespace granary {
 
 // Forward declarations.
-class DecodedBasicBlock;
+class DecodedBlock;
 
 // Meta-data that tracks whether or not the stack is "safe" and behaves like a
 // C-style call stack.
@@ -29,7 +29,7 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
 
   // Tells us if we can unify our (uncommitted) meta-data with some existing
   // meta-data.
-  UnificationStatus CanUnifyWith(const StackMetaData *that) const;
+  UnificationStatus CanUnifyWith(const StackMetaData &that) const;
 
   inline void MarkStackAsValid(void) {
     // If we've already got a "bad" stack hint, then don't allow us to change
@@ -46,11 +46,11 @@ class alignas(1) StackMetaData : public UnifiableMetaData<StackMetaData> {
   }
 
   // Can we depend on the stack hint being setup?
-  mutable bool has_stack_hint;
+  mutable bool has_stack_hint:1;
 
   // Is the stack pointer being used in a way that is consistent with a
   // C-style call stack?
-  mutable bool behaves_like_callstack;
+  mutable bool behaves_like_callstack:1;
 
 } __attribute__((packed));
 

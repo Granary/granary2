@@ -14,6 +14,9 @@ namespace arch {
 // selection of that iclass.
 extern const FlagsSet IFORM_FLAGS[];
 
+// Table telling us how flags are used by a particular iclass.
+extern const FlagActions ICLASS_FLAG_ACTIONS[];
+
 enum : unsigned {
   ALL_AFLAGS_WITH_DF = 3285U,
   ALL_AFLAGS_WITHOUT_DF = 2261U,
@@ -36,7 +39,12 @@ void VisitInstructionFlags(const arch::Instruction &instr,
   flags->all_written_flags |= written_flags & ALL_AFLAGS_WITH_DF;
   flags->all_read_flags |= read_flags & ALL_AFLAGS_WITH_DF;
 
-  flags->entry_live_flags &= ~written_flags & ALL_AFLAGS_WITH_DF;
+  if (ICLASS_FLAG_ACTIONS[instr.iclass].is_conditional_write) {
+    flags->entry_live_flags |= written_flags & ALL_AFLAGS_WITH_DF;
+  } else {
+    flags->entry_live_flags &= ~written_flags & ALL_AFLAGS_WITH_DF;
+  }
+
   flags->entry_live_flags |= read_flags & ALL_AFLAGS_WITH_DF;
 }
 

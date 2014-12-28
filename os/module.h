@@ -15,7 +15,7 @@
 namespace granary {
 
 // Forward declarations.
-class ContextInterface;
+class Context;
 
 namespace os {
 class ModuleManager;
@@ -61,7 +61,7 @@ class ModuleOffset {
 // about modules that contain executable code.
 enum class ModuleKind {
   GRANARY,
-  GRANARY_CODE_CACHE,
+  GRANARY_CODE_CACHE = GRANARY,
   KERNEL,
   PROGRAM = KERNEL,
   KERNEL_MODULE,
@@ -91,7 +91,7 @@ class Module {
   // Initialize a new module with no ranges.
   GRANARY_INTERNAL_DEFINITION
   Module(ModuleKind kind_, const char *name_,
-         ContextInterface *context_=nullptr);
+         Context *context_=nullptr);
 
   GRANARY_INTERNAL_DEFINITION ~Module(void);
 
@@ -168,7 +168,7 @@ class Module {
   // Context to which this module belongs.
   //
   // Note: We say that a module is shared if and only if `context` is null.
-  GRANARY_INTERNAL_DEFINITION ContextInterface * const context;
+  GRANARY_INTERNAL_DEFINITION Context * const context;
 
   // The kind of this module (e.g. granary, client, kernel, etc.).
   GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
@@ -205,6 +205,9 @@ class ModuleManager {
 
   // Find a module given a program counter.
   Module *FindByAppPC(AppPC pc);
+
+  // Find the module and offset associated with a given program counter.
+  ModuleOffset FindOffsetOfPC(AppPC pc);
 
   // Find a module given its name.
   Module *FindByName(const char *name);
@@ -253,6 +256,9 @@ void ExitModuleManager(void);
 // Returns a pointer to the module containing some program counter.
 const Module *ModuleContainingPC(AppPC pc);
 
+// Find the module and offset associated with a given program counter.
+ModuleOffset ModuleOffsetOfPC(AppPC pc);
+
 // Returns a pointer to the first module whose name matches `name`.
 const Module *ModuleByName(const char *name);
 
@@ -261,7 +267,7 @@ ConstModuleIterator LoadedModules(void);
 
 // Invalidate all cache code related belonging to some module code. Returns
 // true if any module code was invalidated as a result of this operation.
-bool InvalidateModuleCode(AppPC start_pc, int num_bytes);
+bool InvalidateModuleCode(void *context, AppPC start_pc, uintptr_t num_bytes);
 
 }  // namespace os
 }  // namespace granary

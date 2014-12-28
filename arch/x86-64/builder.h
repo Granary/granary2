@@ -55,17 +55,23 @@ class ImmediateBuilder {
   ImmediateBuilder(const ImmediateBuilder &that) = default;
   ImmediateBuilder(ImmediateBuilder &&that) = default;
 
+  template <typename T>
+  inline ImmediateBuilder(T *as_ptr, xed_encoder_operand_type_t type_)
+      : as_uint(reinterpret_cast<uintptr_t>(as_ptr)),
+        type(type_),
+        width(sizeof(T *) * arch::BYTE_WIDTH_BITS) {}
+
   template <typename T, typename EnableIf<IsUnsignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_uint_, xed_encoder_operand_type_t type_)
       : as_uint(static_cast<uintptr_t>(as_uint_)),
         type(type_),
-        width(sizeof(T) * 8) {}
+        width(static_cast<uint16_t>(sizeof(T) * arch::BYTE_WIDTH_BITS)) {}
 
   template <typename T, typename EnableIf<IsSignedInteger<T>::RESULT>::Type=0>
   inline ImmediateBuilder(T as_int_, xed_encoder_operand_type_t type_)
       : as_int(static_cast<intptr_t>(as_int_)),
         type(type_),
-        width(sizeof(T) * 8) {}
+        width(static_cast<uint16_t>(sizeof(T) * arch::BYTE_WIDTH_BITS)) {}
 
   inline ImmediateBuilder(const Operand &that, xed_encoder_operand_type_t type_)
       : as_uint(that.imm.as_uint),
@@ -81,7 +87,7 @@ class ImmediateBuilder {
     intptr_t as_int;
   };
   xed_encoder_operand_type_t type;
-  int width;
+  uint16_t width;
 };
 
 // Builder for a memory operand.
@@ -144,6 +150,16 @@ class BranchTargetBuilder {
       : pc(nullptr),
         kind(BRANCH_TARGET_PC) {}
 
+  inline explicit BranchTargetBuilder(Operand op_) {
+    if (op_.is_annotation_instr) {
+      pc = op_.branch_target.as_pc;
+      kind = BRANCH_TARGET_PC;
+    } else {
+      label = op_.annotation_instr;
+      kind = BRANCH_TARGET_LABEL;
+    }
+  }
+
   inline explicit BranchTargetBuilder(PC pc_)
       : pc(pc_),
         kind(BRANCH_TARGET_PC) {}
@@ -177,6 +193,8 @@ void BuildInstruction(Instruction *instr, xed_iclass_enum_t iclass,
                       xed_iform_enum_t iform, unsigned isel,
                       xed_category_enum_t category);
 
+void FinalizeInstruction(Instruction *instr);
+
 // TODO(pag): These must be manually checked/updated any time XED is updated.
 //
 // These numbers can be found by running XED's tables example.
@@ -188,15 +206,34 @@ enum : unsigned {
   BNDMK_BND_AGEN_ISEL = 1170U
 };
 
+inline static VirtualRegister GetRegister(VirtualRegister reg) {
+  return reg;
+}
+
+inline static VirtualRegister GetRegister(xed_reg_enum_t reg) {
+  return VirtualRegister::FromNative(reg);
+}
+
 // Custom LEA instruction builder for source register operands. This is like
 // doing `dest = src1 + src2`.
 template <typename A0, typename A1, typename A2>
-inline static void LEA_GPRv_GPRv_GPRv(Instruction *instr, A0 a0, A1 a1, A2 a2) {
+inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, A1 a1, A2 a2) {
   BuildInstruction(instr, XED_ICLASS_LEA, XED_IFORM_LEA_GPRv_AGEN,
                    LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
-  RegisterBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
-  RegisterBuilder(a2, XED_OPERAND_ACTION_R).Build(instr);
+  auto &aop(instr->ops[1]);
+  aop.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  aop.mem.base = GetRegister(a1);
+  aop.mem.index = GetRegister(a2);
+  aop.mem.disp = 0;
+  aop.mem.scale = 1;
+  aop.width = ADDRESS_WIDTH_BITS;
+  aop.is_compound = true;
+  aop.is_explicit = true;
+  aop.is_effective_address = true;
+  aop.rw = XED_OPERAND_ACTION_R;
+  instr->num_explicit_ops = 2;
+  FinalizeInstruction(instr);
 }
 
 // Custom LEA instruction builder for source immediate operands.
@@ -206,6 +243,7 @@ inline static void LEA_GPRv_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    LEA_GPRv_AGEN_ISEL, XED_CATEGORY_MISC);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCN instruction builder for source immediate operands.
@@ -215,6 +253,7 @@ inline static void BNDCN_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCN_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCU instruction builder for source immediate operands.
@@ -224,6 +263,7 @@ inline static void BNDCU_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCU_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDCL instruction builder for source immediate operands.
@@ -233,6 +273,7 @@ inline static void BNDCL_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDCL_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_R).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Custom BNDMK instruction builder for source immediate operands.
@@ -242,35 +283,66 @@ inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
                    BNDMK_BND_AGEN_ISEL, XED_CATEGORY_MPX);
   RegisterBuilder(a0, XED_OPERAND_ACTION_W).Build(instr);
   MemoryBuilder(a1, XED_OPERAND_ACTION_R).Build(instr);
+  FinalizeInstruction(instr);
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    int width=-1) {
+                                    size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
     op.is_compound = true;
     op.mem.disp = disp;
-    op.mem.reg_base = base_reg;
+    op.mem.base.DecodeFromNative(base_reg);
   } else {
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
   }
-  op.width = static_cast<int16_t>(width);
+  op.width = static_cast<uint16_t>(width);
+  return op;
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
+                                    size_t width=0) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  if (disp) {
+    op.is_compound = true;
+    op.mem.disp = disp;
+    op.mem.base = base_reg;
+  } else {
+    op.is_compound = false;
+    op.reg = base_reg;
+  }
+  op.width = static_cast<uint16_t>(width);
   return op;
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    xed_reg_enum_t index_reg, int width=-1) {
+                                    xed_reg_enum_t index_reg, size_t width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
   op.mem.disp = disp;
-  op.mem.reg_base = base_reg;
-  op.mem.reg_index = index_reg;
-  op.width = static_cast<int16_t>(width);
+  op.mem.base.DecodeFromNative(base_reg);
+  op.mem.index.DecodeFromNative(index_reg);
+  op.width = static_cast<uint16_t>(width);
+  return op;
+}
+
+// Make a simple base/displacement memory operand.
+inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
+                                    VirtualRegister index_reg, size_t width=0) {
+  Operand op;
+  op.type = XED_ENCODER_OPERAND_TYPE_MEM;
+  op.is_compound = true;
+  op.mem.disp = disp;
+  op.mem.base = base_reg;
+  op.mem.index = index_reg;
+  op.width = static_cast<uint16_t>(width);
   return op;
 }
 

@@ -10,7 +10,7 @@ namespace granary {
 // Forward declarations.
 class Instruction;
 class NativeInstruction;
-class BasicBlock;
+class Block;
 
 // Iterator that moves forward through a list of instructions.
 class InstructionIterator {
@@ -134,61 +134,61 @@ class ReverseAppInstructionIterator {
 };
 
 // An iterator for basic blocks that implements C++11 range-based for loops.
-class BasicBlockIterator {
+class BlockIterator {
  public:
   GRANARY_INTERNAL_DEFINITION
-  inline explicit BasicBlockIterator(BasicBlock *block_)
+  inline explicit BlockIterator(Block *block_)
       : cursor(block_) {}
 
-  inline BasicBlockIterator begin(void) const {
+  inline BlockIterator begin(void) const {
     return *this;
   }
 
-  inline BasicBlockIterator end(void) const {
-    return BasicBlockIterator();
+  inline BlockIterator end(void) const {
+    return BlockIterator();
   }
 
-  inline bool operator!=(const BasicBlockIterator &that) const {
+  inline bool operator!=(const BlockIterator &that) const {
     return cursor != that.cursor;
   }
 
   void operator++(void);
-  BasicBlock *operator*(void) const;
+  Block *operator*(void) const;
 
  private:
-  inline BasicBlockIterator(void)
+  inline BlockIterator(void)
       : cursor(nullptr) {}
 
-  GRANARY_POINTER(BasicBlock) *cursor;
+  GRANARY_POINTER(Block) *cursor;
 };
 
 // An iterator for basic blocks that implements C++11 range-based for loops.
-class ReverseBasicBlockIterator {
+class ReverseBlockIterator {
  public:
   GRANARY_INTERNAL_DEFINITION
-  inline explicit ReverseBasicBlockIterator(BasicBlock *block_)
+  inline explicit ReverseBlockIterator(Block *block_)
       : cursor(block_) {}
 
-  inline ReverseBasicBlockIterator begin(void) const {
+  inline ReverseBlockIterator begin(void) const {
     return *this;
   }
 
-  inline ReverseBasicBlockIterator end(void) const {
-    return ReverseBasicBlockIterator();
+  inline ReverseBlockIterator end(void) const {
+    return ReverseBlockIterator();
   }
 
-  inline bool operator!=(const ReverseBasicBlockIterator &that) const {
+  inline bool operator!=(const ReverseBlockIterator &that) const {
     return cursor != that.cursor;
   }
 
   void operator++(void);
-  BasicBlock *operator*(void) const;
+  Block *operator*(void) const;
 
  private:
-  inline ReverseBasicBlockIterator(void)
+  inline ReverseBlockIterator(void)
       : cursor(nullptr) {}
 
-  GRANARY_POINTER(BasicBlock) *cursor;
+  GRANARY_POINTER(Block) *cursor;
 };
 
 }  // namespace granary

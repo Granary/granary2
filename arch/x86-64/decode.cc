@@ -7,11 +7,11 @@
 #include "granary/base/base.h"
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "arch/decode.h"
-#include "arch/x86-64/early_mangle.h"
+#include "arch/x86-64/builder.h"
 #include "arch/x86-64/instruction.h"
 
 #include "granary/breakpoint.h"
@@ -23,7 +23,8 @@ namespace arch {
 extern xed_state_t XED_STATE;
 
 // Initialize the instruction decoder.
-InstructionDecoder::InstructionDecoder(void) {}
+InstructionDecoder::InstructionDecoder(DecodedBlock *block)
+    : mangler(block) {}
 
 // Decode an instruction, and update the program counter by reference to point
 // to the next logical instruction. Returns `true` iff the instruction was
@@ -42,9 +43,9 @@ bool InstructionDecoder::Decode(Instruction *instr, AppPC pc) {
 // mangling might involve adding many new instructions to deal with some
 // instruction set peculiarities, and sometimes we only want to speculatively
 // decode and instruction and not add these extra instructions to a block.
-void InstructionDecoder::Mangle(DecodedBasicBlock *block, Instruction *instr) {
+void InstructionDecoder::Mangle(Instruction *instr) {
   GRANARY_ASSERT(XED_ICLASS_INVALID != instr->iclass);
-  MangleDecodedInstruction(block, instr);
+  mangler.MangleDecodedInstruction(instr);
 }
 
 namespace {
@@ -88,11 +89,7 @@ static void ConvertRegisterOperand(Instruction *instr, Operand *instr_op,
   auto reg = xed_decoded_inst_get_reg(xedd, op_name);
   instr_op->type = XED_ENCODER_OPERAND_TYPE_REG;
   instr_op->reg.DecodeFromNative(reg);
-  instr_op->width = static_cast<int16_t>(xed_get_register_width_bits64(reg));
-
-  if (XED_REG_AH <= reg && reg <= XED_REG_BH) {
-    instr->uses_legacy_registers = true;
-  }
+  instr_op->width = static_cast<uint16_t>(xed_get_register_width_bits64(reg));
 
   // Update the stack pointer tracking.
   if (GRANARY_UNLIKELY(instr_op->reg.IsStackPointer())) {
@@ -182,30 +179,42 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
   // Try to simplify the memory operand to a non-compound one.
   } else if (XED_REG_INVALID == base_reg && !disp && 1 == scale &&
              XED_REG_RSP != index_reg) {
-    instr_op->reg.DecodeFromNative(static_cast<int>(index_reg));
+    instr_op->reg.DecodeFromNative(index_reg);
     instr_op->is_compound = false;
-    if (XED_REG_INVALID != segment_reg) {
-      instr_op->reg.ConvertToSegmentOffset();
-    }
   } else if (XED_REG_INVALID == index_reg && !disp &&
              XED_REG_RSP != base_reg) {
-    instr_op->reg.DecodeFromNative(static_cast<int>(base_reg));
+    instr_op->reg.DecodeFromNative(base_reg);
     instr_op->is_compound = false;
-    if (XED_REG_INVALID != segment_reg) {
-      instr_op->reg.ConvertToSegmentOffset();
-    }
   } else {
+    instr_op->mem.base.DecodeFromNative(base_reg);
+    instr_op->mem.index.DecodeFromNative(index_reg);
     instr_op->mem.disp = static_cast<int32_t>(disp);
-    instr_op->mem.reg_base = base_reg;
-    instr_op->mem.reg_index = index_reg;
     instr_op->mem.scale = static_cast<uint8_t>(scale);
     instr_op->is_compound = true;
   }
 
   instr_op->segment = segment_reg;
-  instr_op->width = static_cast<int16_t>(xed3_operand_get_mem_width(xedd) * 8);
   instr_op->is_sticky = instr_op->is_sticky || is_sticky;
-  instr_op->is_effective_address = XED_ICLASS_LEA == instr->iclass;
+
+  // Should we mark this memory operand as not actually reading / writing to
+  // memory, and instead computing an address?
+  //
+  // Note: These need to be kept consistent with `MemoryBuilder::Build` and
+  //       with `InlineAssemblyParser::ParseMemoryOperand`.
+  //
+  // TODO(pag): Might be better to express this as asking XED if the `xedd`
+  //            accesses memory or not.
+  if (XED_ICLASS_BNDCL == instr->iclass ||
+      XED_ICLASS_BNDCN == instr->iclass ||
+      XED_ICLASS_BNDCU == instr->iclass ||
+      XED_ICLASS_BNDMK == instr->iclass ||
+      XED_ICLASS_CLFLUSH == instr->iclass ||
+      XED_ICLASS_CLFLUSHOPT == instr->iclass ||
+      XED_ICLASS_LEA == instr->iclass ||
+      (XED_ICLASS_PREFETCHNTA <= instr->iclass &&
+          XED_ICLASS_PREFETCH_RESERVED >= instr->iclass)) {
+    instr_op->is_effective_address = true;
+  }
 }
 
 // Pull out an effective address from a LEA_GPRv_AGEN instruction. We actually
@@ -215,27 +224,20 @@ static void ConvertMemoryOperand(Instruction *instr, Operand *instr_op,
 // Note: XED_OPERAND_AGEN's memory operand index is 0. See docs for function
 //       `xed_agen`.
 static void ConvertBaseDisp(Instruction *instr, Operand *instr_op,
-                            const xed_decoded_inst_t *xedd, unsigned index) {
-  auto mem_op_width = static_cast<int16_t>(
-      xed3_operand_get_mem_width(xedd) * 8);
+                            const xed_decoded_inst_t *xedd, unsigned index,
+                            unsigned op_num) {
+  instr_op->width = static_cast<uint16_t>(
+      xed_decoded_inst_operand_length_bits(xedd, op_num));
+  if (!instr_op->width && instr->effective_operand_width) {
+    instr_op->width = instr->effective_operand_width;
+  }
+
   if (RegIsInstructionPointer(xed_decoded_inst_get_base_reg(xedd, index))) {
     instr_op->type = XED_ENCODER_OPERAND_TYPE_PTR;  // Overloaded meaning.
     instr_op->addr.as_ptr = GetPCRelativeMemoryAddress(instr, xedd, index);
     instr_op->segment = XED_REG_DS;
-    instr_op->width = mem_op_width; // Width of addressed memory.
-
-    if (!instr_op->width) {
-      instr_op->width = instr->effective_operand_width;
-    }
   } else {
     ConvertMemoryOperand(instr, instr_op, xedd, index);
-  }
-  if (GRANARY_UNLIKELY(!instr_op->width)) {
-    if (XED_ICLASS_LEA == instr->iclass) {
-      instr_op->width = instr->effective_operand_width;
-    } else if (mem_op_width) {
-      instr_op->width = mem_op_width;
-    }
   }
   GRANARY_ASSERT(0 != instr_op->width);
 }
@@ -263,7 +265,7 @@ static void ConvertImmediateOperand(Instruction *instr,
   } else {
     GRANARY_ASSERT(false);
   }
-  instr_op->width = static_cast<int16_t>(
+  instr_op->width = static_cast<uint16_t>(
       xed_decoded_inst_get_immediate_width_bits(xedd));
 
   // Ensure that we reflect the size of the stack pointer change in the size of
@@ -331,9 +333,9 @@ static bool ConvertDecodedOperand(Instruction *instr,
   } else if (XED_OPERAND_RELBR == op_name) {
     ConvertRelativeBranch(instr, instr_op, xedd);
   } else if (XED_OPERAND_MEM0 == op_name || XED_OPERAND_AGEN == op_name) {
-    ConvertBaseDisp(instr, instr_op, xedd, 0);
+    ConvertBaseDisp(instr, instr_op, xedd, 0, op_num);
   } else if (XED_OPERAND_MEM1 == op_name) {
-    ConvertBaseDisp(instr, instr_op, xedd, 1);
+    ConvertBaseDisp(instr, instr_op, xedd, 1, op_num);
   } else if (XED_OPERAND_TYPE_IMM == op_type ||
              XED_OPERAND_TYPE_IMM_CONST == op_type) {
     ConvertImmediateOperand(instr, instr_op, xedd, op_name);
@@ -348,10 +350,9 @@ static bool ConvertDecodedOperand(Instruction *instr,
 
 // Convert the operands of a `xed_decoded_inst_t` to `Operand` types.
 static void ConvertDecodedOperands(Instruction *instr,
-                                   const xed_decoded_inst_t *xedd,
-                                   unsigned num_ops) {
-  for (auto o = 0U; o < num_ops; ++o) {
-    if (!ConvertDecodedOperand(instr, xedd, o)) {
+                                   const xed_decoded_inst_t *xedd) {
+  for (uint8_t o = 0; o < instr->num_ops; ++o) {
+    if (!ConvertDecodedOperand(instr, xedd, static_cast<unsigned>(o))) {
       break;
     }
   }
@@ -389,10 +390,11 @@ static void ConvertDecodedInstruction(Instruction *instr,
   ConvertDecodedPrefixes(instr, xedd);
   instr->is_atomic = xed_operand_values_get_atomic(xedd) ||
                      instr->has_prefix_lock;
-  instr->effective_operand_width = static_cast<int16_t>(
+  instr->effective_operand_width = static_cast<uint16_t>(
       xed_decoded_inst_get_operand_width(xedd));
-  ConvertDecodedOperands(instr, xedd, xed_inst_noperands(xedi));
-  instr->AnalyzeStackUsage();
+  instr->num_ops = static_cast<uint8_t>(xed_inst_noperands(xedi));
+  ConvertDecodedOperands(instr, xedd);
+  FinalizeInstruction(instr);
   GRANARY_IF_DEBUG( instr->note_create = __builtin_return_address(0); )
 }
 }  // namespace

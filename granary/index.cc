@@ -17,31 +17,22 @@ namespace granary {
 namespace {
 
 // Tombstone pointer representing the last meta-data block in a meta-data array.
-static BlockMetaData * const META_ARRAY_END = \
+static BlockMetaData * const kMetaArrayEnd = \
     reinterpret_cast<BlockMetaData *>(1ULL);
-
-}  // namespace
-namespace internal {
 
 enum {
   DEALLOCATED_MEMORY_POISON = 0xFA
 };
 
-void *IndexArrayMem::operator new(std::size_t) {
-  return memset(os::AllocatePages(1), 0, arch::PAGE_SIZE_BYTES);
-}
+}  // namespace
+namespace internal {
 
-void IndexArrayMem::operator delete(void *address) {
-  memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
-  return os::FreePages(address, 1);
-}
-
-class MetaDataArray : public IndexArrayMem {
+class MetaDataArray {
  public:
   // Deletes all meta-data linked into this array.
   ~MetaDataArray(void) {
     for (auto meta : metas) {
-      while (meta && meta != META_ARRAY_END) {
+      while (meta && kMetaArrayEnd != meta) {
         auto index_meta = MetaDataCast<IndexMetaData *>(meta);
         auto next_meta = index_meta->next;
         delete meta;
@@ -50,7 +41,16 @@ class MetaDataArray : public IndexArrayMem {
     }
   }
 
-  BlockMetaData *metas[NUM_POINTERS_PER_PAGE];
+  static void *operator new(std::size_t) {
+    return memset(os::AllocateDataPages(1), 0, arch::PAGE_SIZE_BYTES);
+  }
+
+  static void operator delete(void *address) {
+    memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
+    return os::FreeDataPages(address, 1);
+  }
+
+  BlockMetaData * volatile metas[NUM_POINTERS_PER_PAGE];
 };
 
 static_assert(sizeof(MetaDataArray) == arch::PAGE_SIZE_BYTES,
@@ -106,35 +106,32 @@ static AppPC GetAppPC(BlockMetaData *meta) {
   return meta ? MetaDataCast<AppMetaData *>(meta)->start_pc : nullptr;
 }
 
+typedef MetaDataLinkedListIterator<IndexMetaData> IndexMetaDataIterator;
+
 // Match some meta-data that we are search for (`search`) against a linked
 // list of potential meta-data.
 static IndexFindResponse MatchMetaData(BlockMetaData *ls,
                                        BlockMetaData *search) {
-  IndexFindResponse response = {
-    UnificationStatus::REJECT,
-    nullptr
-  };
-  while (ls != META_ARRAY_END) {
-    GRANARY_ASSERT(nullptr != ls);
-    if (search->Equals(ls)) {
-      switch (search->CanUnifyWith(ls)) {
-        case UnificationStatus::ACCEPT:
-          response.status = UnificationStatus::ACCEPT;
-          response.meta = ls;
-          return response;
+  IndexFindResponse response = {kUnificationStatusReject, nullptr};
+  for (auto meta : IndexMetaDataIterator(ls)) {
+    if (kMetaArrayEnd == meta) break;
+    if (!search->Equals(meta)) continue;
+    switch (search->CanUnifyWith(ls)) {
+      case kUnificationStatusAccept:
+        response.status = kUnificationStatusAccept;
+        response.meta = meta;
+        return response;
 
-        case UnificationStatus::ADAPT:
-          if (UnificationStatus::ADAPT != response.status) {
-            response.status = UnificationStatus::ADAPT;
-            response.meta = ls;
-          }
-          break;
+      case kUnificationStatusAdapt:
+        if (kUnificationStatusAdapt != response.status) {
+          response.status = kUnificationStatusAdapt;
+          response.meta = meta;
+        }
+        break;
 
-        case UnificationStatus::REJECT:
-          break;
-      }
+      case kUnificationStatusReject:
+        break;
     }
-    ls = MetaDataCast<IndexMetaData *>(ls)->next;
   }
   return response;
 }
@@ -148,7 +145,7 @@ static BlockMetaData *UnlinkMetaData(BlockMetaData **prev_ptr,
                                      BlockMetaData *removed,
                                      AppPC begin, AppPC end) {
   auto meta = *prev_ptr;
-  while (meta && meta != META_ARRAY_END) {
+  while (meta && kMetaArrayEnd != meta) {
     auto index_meta = MetaDataCast<IndexMetaData *>(meta);
     auto next_meta = index_meta->next;
     auto meta_pc = GetAppPC(meta);
@@ -176,22 +173,21 @@ Index::~Index(void) {
 // not return exact matches, as hinted at by the `status` field of the
 // `IndexFindResponse` structure. This has to do with block unification.
 IndexFindResponse Index::Request(BlockMetaData *meta) {
-  if (GRANARY_UNLIKELY(!meta)) {
-    return {UnificationStatus::REJECT, meta};
-  }
+  if (GRANARY_UNLIKELY(!meta)) return {kUnificationStatusReject, nullptr};
 
+  // The index guarantees that the `next` pointer is always non-null.
   auto index_meta = MetaDataCast<IndexMetaData *>(meta);
-  if (index_meta->next) {
-    return {UnificationStatus::ACCEPT, meta};  // It must be in the index.
-  }
+  if (index_meta->next) return {kUnificationStatusAccept, meta};
 
   const auto index = GetIndex(meta);
   if (auto array = arrays[index.first]) {
+    std::atomic_thread_fence(std::memory_order_acquire);
     if (auto metas = array->metas[index.second]) {
+      std::atomic_thread_fence(std::memory_order_release);
       return MatchMetaData(metas, meta);
     }
   }
-  return {UnificationStatus::REJECT, nullptr};  // Not in the index
+  return {kUnificationStatusReject, nullptr};  // Not in the index
 }
 
 // Insert a block into the code cache index.
@@ -206,8 +202,9 @@ void Index::Insert(BlockMetaData *meta) {
   auto &array(arrays[index.first]);
   if (GRANARY_UNLIKELY(!array)) array = new internal::MetaDataArray;
 
+  os::LockedRegion locker(&(second_level_locks[index.second]));
   auto &metas(array->metas[index.second]);
-  if (GRANARY_UNLIKELY(!metas)) metas = META_ARRAY_END;
+  if (GRANARY_UNLIKELY(!metas)) metas = kMetaArrayEnd;
 
   index_meta->next = metas;  // Add it in.
   metas = meta;
@@ -225,11 +222,22 @@ BlockMetaData *Index::RemoveRange(AppPC begin, AppPC end) {
   for (; index != end_index; index = NextIndex(index)) {
     auto array = arrays[index.first];
     if (!array) continue;
+
+    os::LockedRegion locker(&(second_level_locks[index.second]));
     auto &metas(array->metas[index.second]);
     if (!metas) continue;
-    ret = UnlinkMetaData(&metas, ret, begin, end);
+    ret = UnlinkMetaData(const_cast<BlockMetaData **>(&metas), ret, begin, end);
   }
   return ret;
+}
+
+void *Index::operator new(std::size_t) {
+  return memset(os::AllocateDataPages(2), 0, arch::PAGE_SIZE_BYTES);
+}
+
+void Index::operator delete(void *address) {
+  memset(address, DEALLOCATED_MEMORY_POISON, arch::PAGE_SIZE_BYTES);
+  return os::FreeDataPages(address, 2);
 }
 
 }  // namespace granary

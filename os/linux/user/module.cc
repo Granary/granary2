@@ -14,6 +14,8 @@ extern "C" {
 extern int open(const char *__file, int __oflag, void *);
 extern int close(int __fd);
 extern long long read(int __fd, void *__buf, size_t __nbytes);
+extern unsigned char granary_begin_text;
+extern unsigned char granary_end_text;
 
 }  // extern C
 namespace granary {
@@ -140,12 +142,11 @@ static ModuleKind KindFromName(const char *name, int num_modules) {
     return ModuleKind::PROGRAM;
   } else if ('[' == name[0]) {  // [vdso], [vsyscall], [stack], [heap].
     return ModuleKind::DYNAMIC;
+  } else if (StringsMatch("lib" GRANARY_NAME_STRING, name)) {
+    return ModuleKind::GRANARY;
   } else {
-    if (StringsMatch("lib" GRANARY_NAME_STRING, name)) {
-      return ModuleKind::GRANARY;
-    }
+    return ModuleKind::SHARED_LIBRARY;
   }
-  return ModuleKind::SHARED_LIBRARY;
 }
 
 // Parse the `/proc/self/maps` file for information about mapped modules.

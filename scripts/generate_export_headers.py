@@ -12,6 +12,7 @@ EXPORT_HEADERS = [
   "arch/context.h",
   "arch/cpu.h",
   "arch/util.h",
+  "arch/register.h",
 
   "granary/base/abi.h",
   "granary/base/base.h",
@@ -26,9 +27,8 @@ EXPORT_HEADERS = [
   
   "granary/code/register.h",  # Ordering issues :-/
   "granary/metadata.h",  # Ordering issues :-/
-
-  "granary/cfg/control_flow_graph.h",
-  "granary/cfg/basic_block.h",
+  "granary/cfg/trace.h",
+  "granary/cfg/block.h",
   "granary/cfg/instruction.h",
   "granary/cfg/factory.h",
   "granary/cfg/lir.h",
@@ -46,6 +46,8 @@ EXPORT_HEADERS = [
   "os/abi.h",
   "os/logging.h",
   "os/module.h",
+  "os/lock.h",
+  "os/thread.h",
 ]
 
 OPEN_BRACE = re.compile("[^{]")
@@ -101,11 +103,29 @@ def filter_macros(file1, file2):
   for line in lines:
     line = line.strip("\r\n\t ")
     if not line.endswith("_H_"):
+      # Eclipse-aware macro renamers.
       if "IF_ECLIPSE_" in line:
         new_lines.append("#ifdef GRANARY_ECLIPSE")
         line = line.replace("IF_ECLIPSE_", "")
         new_lines.append(line)
         new_lines.append("#endif")
+
+      elif "IF_NOT_ECLIPSE_" in line:
+        new_lines.append("#ifndef GRANARY_ECLIPSE")
+        line = line.replace("IF_NOT_ECLIPSE_", "")
+        new_lines.append(line)
+        new_lines.append("#endif")
+
+      # Special case for this macro that is sometimes convenient for tricking
+      # Eclipse.
+      elif "GRANARY_IF_NOT_ECLIPSE" in line:
+        new_lines.append("#ifdef GRANARY_ECLIPSE")
+        new_lines.append("# define GRANARY_IF_NOT_ECLIPSE(...)")
+        new_lines.append("#else")
+        new_lines.append("# define GRANARY_IF_NOT_ECLIPSE(...)  __VA_ARGS__")
+        new_lines.append("#endif")
+
+      # Just a normal line.
       else:
         new_lines.append(line)
   return new_lines

@@ -42,7 +42,7 @@ static void InitEncoderInstruction(const Instruction *instr,
   xede->mode = XED_STATE;
   xede->iclass = instr->iclass;
   xede->effective_operand_width = 0;
-  if (-1 < instr->effective_operand_width) {
+  if (instr->effective_operand_width) {
     xede->effective_operand_width = static_cast<uint32_t>(
         instr->effective_operand_width);
   }
@@ -76,7 +76,7 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
   intptr_t target = 0;
   auto next_addr = reinterpret_cast<intptr_t>(next_pc);
   if (op.is_annotation_instr) {
-    target = static_cast<intptr_t>(op.annotation_instr->data);
+    target = op.annotation_instr->Data<intptr_t>();
   } else {
     target = op.branch_target.as_int;
   }
@@ -85,6 +85,7 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
   const auto brdisp_32 = static_cast<int32_t>(brdisp_64);
 
   GRANARY_ASSERT(!check_reachable || (brdisp_32 == brdisp_64));
+  GRANARY_ASSERT(!check_reachable || (0 <= brdisp_32 || -5 > brdisp_32));
 
   switch (iclass) {
     case XED_ICLASS_JRCXZ:
@@ -127,20 +128,28 @@ static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo,
 }
 
 // Encode a memory operand.
-static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
+static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
+                      xed_iclass_enum_t iclass) {
   GRANARY_ASSERT(!op.is_annotation_instr);
   xedo->type = op.type;
   xedo->u.mem.seg = XED_REG_DS != op.segment ? op.segment : XED_REG_INVALID;
   if (op.is_compound) {
-    xedo->u.mem.base = op.mem.reg_base;
+    if (op.mem.base.IsValid()) {
+      xedo->u.mem.base = static_cast<xed_reg_enum_t>(
+          op.mem.base.EncodeToNative());
+    }
+    if (op.mem.index.IsValid()) {
+      GRANARY_ASSERT(0 != op.mem.scale);
+      xedo->u.mem.index = static_cast<xed_reg_enum_t>(
+          op.mem.index.EncodeToNative());
+    }
+    xedo->u.mem.scale = op.mem.scale;
     if (op.mem.disp) {
       xedo->u.mem.disp.displacement = static_cast<uint64_t>(op.mem.disp);
       auto width = ImmediateWidthBits(op.mem.disp);
       width = 16 == width ? 32 : std::min(32, width);
       xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(width);
     }
-    xedo->u.mem.index = op.mem.reg_index;
-    xedo->u.mem.scale = op.mem.scale;
 
     if (!xedo->u.mem.base && xedo->u.mem.index && 1 == xedo->u.mem.scale) {
       xedo->u.mem.base = xedo->u.mem.index;
@@ -157,6 +166,13 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo) {
 
   } else {
     xedo->u.mem.base = static_cast<xed_reg_enum_t>(op.reg.EncodeToNative());
+  }
+  if (op.is_effective_address) {
+    if (XED_ICLASS_LEA == iclass) {
+      xedo->width = arch::ADDRESS_WIDTH_BITS;
+    } else if (!xedo->width) {
+      xedo->width = 8;
+    }
   }
 }
 
@@ -179,7 +195,7 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
 
   // RIP-relative address.
   } else if (op.is_annotation_instr) {
-    auto addr = static_cast<intptr_t>(op.annotation_instr->data);
+    auto addr = op.annotation_instr->Data<intptr_t>();
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
     xedo->u.mem.disp.displacement_width = 32;
     xedo->u.mem.base = XED_REG_RIP;
@@ -212,31 +228,10 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
       xedo->u.mem.base = XED_REG_RIP;
     }
   }
-}
-
-// Perform late-mangling of an LEA instruction.
-static void LateMangleLEA(Instruction *instr) {
-  GRANARY_ASSERT(3 == instr->num_explicit_ops);
-  GRANARY_ASSERT(instr->ops[1].IsRegister());
-  GRANARY_ASSERT(instr->ops[2].IsRegister());
-  GRANARY_ASSERT(instr->ops[1].reg.IsNative());
-  GRANARY_ASSERT(instr->ops[2].reg.IsNative());
-  GRANARY_ASSERT(instr->ops[1].reg.IsGeneralPurpose());
-  GRANARY_ASSERT(instr->ops[2].reg.IsGeneralPurpose());
-  auto base_reg = static_cast<xed_reg_enum_t>(
-      instr->ops[1].reg.EncodeToNative());
-  auto index_reg = static_cast<xed_reg_enum_t>(
-      instr->ops[2].reg.EncodeToNative());
-  auto &op1(instr->ops[1]);
-  instr->ops[2].type = XED_ENCODER_OPERAND_TYPE_INVALID;
-  op1.type = XED_ENCODER_OPERAND_TYPE_MEM;
-  op1.is_effective_address = true;
-  op1.is_compound = true;
-  op1.mem.disp = 0;
-  op1.mem.reg_base = base_reg;
-  op1.mem.reg_index = index_reg;
-  op1.mem.scale = 1;
-  instr->num_explicit_ops = 2;
+  if (op.is_effective_address) {
+    xedo->width = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+                           xedo->width);
+  }
 }
 
 // Encode the operands of the instruction.
@@ -244,11 +239,10 @@ static void EncodeOperands(const Instruction *instr,
                            xed_encoder_instruction_t *xede, CachePC pc
                            GRANARY_IF_DEBUG(, bool check_reachable)) {
   auto op_width = 0U;
-  auto op_index = 0;
-
-  for (auto &op : instr->ops) {
-    auto &xedo(xede->operands[op_index++]);
-    xedo.width = static_cast<uint32_t>(std::max<int>(0, op.BitWidth()));
+  for (uint16_t op_index = 0; op_index < instr->num_explicit_ops; ++op_index) {
+    const auto &op(instr->ops[op_index]);
+    auto &xedo(xede->operands[op_index]);
+    xedo.width = static_cast<uint32_t>(std::max(0UL, op.BitWidth()));
 
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
@@ -264,12 +258,7 @@ static void EncodeOperands(const Instruction *instr,
         EncodeImm(op, &xedo, instr->iclass);
         break;
       case XED_ENCODER_OPERAND_TYPE_MEM:
-        EncodeMem(op, &xedo);
-        if (op.is_effective_address) {
-          xedo.width = std::min(
-              static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
-              xedo.width);
-        }
+        EncodeMem(op, &xedo, instr->iclass);
         break;
       case XED_ENCODER_OPERAND_TYPE_PTR:
         // TODO(pag): Do reachability checks in `EncodePtr`, as is
@@ -284,7 +273,7 @@ static void EncodeOperands(const Instruction *instr,
   }
 
   // Make sure that we've got an effective operand width.
-  if (GRANARY_UNLIKELY(0 >= instr->effective_operand_width && op_width)) {
+  if (GRANARY_UNLIKELY(!instr->effective_operand_width && op_width)) {
     xede->effective_operand_width = op_width;
   }
 }
@@ -315,6 +304,17 @@ static void EncodeSpecialCases(const Instruction *instr,
   }
 }
 
+// Try to atomically write an instruction into the code cache.
+static void AtomicCommit(CachePC pc, uint8_t itext[], uint8_t len) {
+  GRANARY_ASSERT(8 >= len);
+  uint64_t old_itext_val(0);
+  memcpy(&old_itext_val, pc, 8);
+  memcpy(&old_itext_val, itext, len);
+  std::atomic_thread_fence(std::memory_order_acquire);
+  *reinterpret_cast<uint64_t *>(pc) = old_itext_val;
+  std::atomic_thread_fence(std::memory_order_release);
+}
+
 }  // namespace
 
 // Encode a XED instruction intermediate representation into an x86
@@ -333,19 +333,10 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
   xed_encoder_instruction_t xede;
   const auto is_stage_encoding = InstructionEncodeKind::STAGED == encode_kind;
 
-  // Make sure that something like the `LEA` produced from mangling `XLAT` is
-  // correctly handled.
-  if (GRANARY_UNLIKELY(XED_ICLASS_LEA == instr->iclass &&
-                       2 != instr->num_explicit_ops)) {
-    LateMangleLEA(instr);
-  }
-
   // Step 1: Convert Granary IR into XED encoder IR.
   InitEncoderInstruction(instr, &xede);
   EncodeOperands(instr, &xede, pc GRANARY_IF_DEBUG(, !is_stage_encoding));
   EncodeSpecialCases(instr, &xede);
-
-  auto old_encoded_pc = instr->encoded_pc;
 
   // Ensure that we're always stage-encoding before encoding. Stage encoding
   // is used to compute the length of every instruction, as well as to ensure
@@ -357,12 +348,11 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
     GRANARY_ASSERT(0 < instr->encoded_length);
   }
 
-  xed_state_t dstate;
   xed_encoder_request_t enc_req;
 
   // Step 2: Convert XED encoder IR into XED decoder IR.
-  dstate = XED_STATE;
-  xed_encoder_request_zero_set_mode(&enc_req, &dstate);
+  memset(&enc_req, 0, sizeof enc_req);
+  xed_encoder_request_zero_set_mode(&enc_req, &XED_STATE);
 
   GRANARY_IF_DEBUG( auto ret = ) xed_convert_to_encoder_request(
       &enc_req, &xede);
@@ -379,8 +369,9 @@ CachePC InstructionEncoder::EncodeInternal(Instruction *instr, CachePC pc) {
 
   if (InstructionEncodeKind::COMMIT == encode_kind) {
     memcpy(pc, &(itext[0]), instr->encoded_length);
+  } else if (InstructionEncodeKind::COMMIT_ATOMIC == encode_kind) {
+    AtomicCommit(pc, &(itext[0]), instr->encoded_length);
   }
-  GRANARY_USED(old_encoded_pc);
   return pc + instr->encoded_length;
 }
 

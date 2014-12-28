@@ -325,9 +325,9 @@ TEST(FormatTest, FormatPointer) {
   TestBuffer x;
 
   memset(&x, 0, sizeof x);
-  EXPECT_EQ(5, Format(x.buffer, 10, "%p", nullptr));
+  EXPECT_EQ(3, Format(x.buffer, 10, "%p", nullptr));
   EXPECT_TRUE(AllCharsAreExactly(x.before_buffer, '\0', 10));
-  EXPECT_TRUE(StringsMatch(x.buffer, "(nil)"));
+  EXPECT_TRUE(StringsMatch(x.buffer, "0x0"));
   EXPECT_TRUE(AllCharsAreExactly(x.after_buffer, '\0', 10));
 
   memset(&x, 0, sizeof x);

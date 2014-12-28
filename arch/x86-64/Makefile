@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 # Find assembly files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_ASM_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.asm')
@@ -10,6 +10,7 @@ ARCH_ASM_OBJ_FILES = $(subst $(GRANARY_ARCH_SRC_DIR),$(GRANARY_ARCH_BIN_DIR),$(A
 
 # Find C++ files specific to the architecture being instrumented (e.g. x86-64).
 ARCH_CC_SRC_FILES = $(shell find $(GRANARY_ARCH_SRC_DIR) -type f -name '*.cc')
+ARCH_CC_SRC_FILES += $(GRANARY_SRC_DIR)/arch/early_mangle.cc
 ARCH_CC_OBJ_FILES = $(subst $(GRANARY_SRC_DIR),$(GRANARY_BIN_DIR),$(ARCH_CC_SRC_FILES:.cc=.bc))
 
 GRANARY_ARCH_MERGED_BC_BC = $(GRANARY_ARCH_BIN_DIR)/arch_ll.bc

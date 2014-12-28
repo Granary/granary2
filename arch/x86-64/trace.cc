@@ -68,11 +68,13 @@ uint64_t granary_extra_rip_offset = 0;
 
 // The recorded entries in the trace. This is a global variable so that GDB
 // can see it.
+alignas(CACHE_LINE_SIZE_BYTES)
 RegisterState granary_block_log[GRANARY_BLOCK_LOG_LENGTH];
 
 // The index into Granary's trace log. Also a global variable so that GDB can
 // easily see it.
-alignas(CACHE_LINE_SIZE_BYTES) unsigned granary_block_log_index = 0;
+alignas(CACHE_LINE_SIZE_BYTES)
+unsigned granary_block_log_index = 0;
 
 // Record an entry in Granary's trace log.
 void granary_trace_block_regs(const RegisterState *regs) {
@@ -100,6 +102,11 @@ void granary_trace_block_regs(const RegisterState *regs) {
     frag->instrs.Prepend(new NativeInstruction(&ni)); \
   } while (0)
 
+// Initialize the block tracer.
+void InitBlockTracer(void) {
+  memset(granary_block_log, 0, sizeof granary_block_log);
+}
+
 // Adds in some extra "tracing" instructions to the beginning of a basic block.
 void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
                     CachePC estimated_encode_pc) {
@@ -121,6 +128,8 @@ void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
 }
 
 #else
+
+void InitBlockTracer(void) {}
 
 // Adds in some extra "tracing" instructions to the beginning of a basic block.
 void AddBlockTracer(Fragment *, BlockMetaData *, CachePC) {}

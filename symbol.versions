@@ -1,6 +1,14 @@
 granary {
     global:
-        environ; _init;
+        environ;
+        _init;
+        malloc;
+        free;
+        granary_unreachable;
+        granary_curiosity;
+        granary_gdb_event1;
+        granary_gdb_event2;
+        granary_gdb_event3;
     local:
         *;
 };

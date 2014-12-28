@@ -16,8 +16,8 @@ namespace arch {
 
 // Used to access some kind of private slot, e.g. virtual register spill slot
 // as a memory operand.
-arch::Operand SlotMemOp(os::SlotCategory category, int sub_category=0,
-                        int width=-1);
+arch::Operand SlotMemOp(os::SlotCategory category, size_t sub_category=0,
+                        size_t width=0);
 
 }  // namespace arch
 }  // namespace granary

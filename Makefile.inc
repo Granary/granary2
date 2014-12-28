@@ -9,16 +9,19 @@ GRANARY_LD ?= gold
 GRANARY_LLVM_LINK ?= llvm-link-3.5
 GRANARY_AR ?= ar
 GRANARY_PYTHON ?= python2.7
+GRANARY_SH ?= sh
 GRANARY_SCAN_BUILD ?= 0
 
 GRANARY_ARCH ?= x86-64
 GRANARY_OS ?= linux
-GRANARY_TARGET ?= debug# release, debug, test
+GRANARY_TARGET ?= debug# release, opt, debug, test
 GRANARY_WHERE ?= user# user, kernel
 GRANARY_TRIPLE := $(GRANARY_TARGET)_$(GRANARY_OS)_$(GRANARY_WHERE)
+GRANARY_DOUBLE := $(GRANARY_OS)_$(GRANARY_WHERE)
 GRANARY_DRIVER ?= xed2-intel64
 GRANARY_NAME ?= granary
 GRANARY_WITH_VALGRIND ?= 0# 0, 1
+GRANARY_WITH_MSAN ?= 0# 0, 1
 GRANARY_LINT_CODE ?= 1# 0, 1
 GRANARY_HEADER_MACRO_DEFS =
 GRANARY_RECURSIVE ?= 0
@@ -52,9 +55,12 @@ GRANARY_KERNEL_DIR ?= $(GRANARY_SRC_DIR)/dependencies/linux
 
 GRANARY_SRC_DIR ?= $(shell pwd)
 
+GRANARY_PYTHON := PYTHONPATH=$(PYTHONPATH):$(GRANARY_SRC_DIR) $(GRANARY_PYTHON)
+
 # Find all of Granary's clients.
-GRANARY_CLIENT_DIR ?= $(GRANARY_SRC_DIR)/clients
-GRANARY_CLIENTS ?= $(notdir $(shell find $(GRANARY_CLIENT_DIR) -mindepth 1 -maxdepth 1 -type d))
+GRANARY_CLIENTS_SRC_DIR ?= $(GRANARY_SRC_DIR)/clients
+GRANARY_CLIENTS_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
+GRANARY_CLIENTS ?= $(notdir $(shell find $(GRANARY_CLIENTS_SRC_DIR) -mindepth 1 -maxdepth 1 -type d))
 
 # Make the binary directory target-specific.
 GRANARY_BIN_DIR ?= $(GRANARY_SRC_DIR)/bin
@@ -77,6 +83,9 @@ GRANARY_GTEST_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googletest
 GRANARY_GMOCK_SRC_DIR := $(GRANARY_SRC_DIR)/dependencies/googlemock/trunk
 GRANARY_GMOCK_BIN_DIR := $(GRANARY_BIN_DIR)/dependencies/googlemock
 
+# CParser dir.
+GRANARY_CPARSER_DIR := $(GRANARY_SRC_DIR)/dependencies/cparser
+
 # Convenient way to totally ignore output of a shell command that might fail.
 GRANARY_DEV_NULL = > /dev/null 2>&1 ||:
 
@@ -87,8 +96,7 @@ GRANARY_GEN_BIN_DIR = $(GRANARY_BIN_DIR)/generated
 GRANARY_EXTRA_CXX_FLAGS ?=
 GRANARY_EXTRA_CC_FLAGS ?=
 
-GRANARY_LD_FLAGS =
-GRANARY_LD_FLAGS_EARLY =
+GRANARY_LD_FLAGS = -nostartfiles
 GRANARY_LD_FLAGS_LATE =
 GRANARY_CC_FLAGS = $(GRANARY_EXTRA_CC_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
 GRANARY_CXX_FLAGS = $(GRANARY_EXTRA_CXX_FLAGS) -isystem $(GRANARY_HEADERS_DIR)
@@ -99,11 +107,7 @@ GRANARY_COMMON_WARN_FLAGS =
 GRANARY_DEBUG_FLAGS =
 GRANARY_HEADERS_DIR = $(GRANARY_SRC_DIR)/generated/$(GRANARY_TRIPLE)
 GRANARY_HEADERS = $(GRANARY_HEADERS_DIR)/granary.h
-
-ifdef GRANARY_CLIENT_NAME
-	GRANARY_CLIENT_BIN_DIR ?= $(GRANARY_BIN_DIR)/clients
-	GRANARY_LD_FLAGS_EARLY += -shared
-endif
+GRANARY_OS_TYPES = $(GRANARY_SRC_DIR)/generated/$(GRANARY_DOUBLE)/types.h
 
 # Include path. All source files should use relative imports, with respect to
 # `GRANARY_SRC_DIR`.
@@ -120,10 +124,22 @@ GRANARY_COMMON_MACROS += -DGRANARY_OS_$(GRANARY_OS)
 GRANARY_CC_FLAGS += -std=$(GRANARY_CC_STD)
 GRANARY_COMMON_CXX_FLAGS = -std=$(GRANARY_CXX_STD) -stdlib=$(GRANARY_CXX_LIB)
 
-# Enable valgrind checking of code.
+# If we're checking with MSan, then assume we're also checking with Valgrind.
+ifeq (1,$(GRANARY_WITH_MSAN))
+	GRANARY_WITH_VALGRIND := 1 
+	GRANARY_COMMON_CXX_FLAGS += -fsanitize=memory
+	GRANARY_CC_FLAGS += -fsanitize=memory
+endif
+
+# Enable Valgrind checking of code.
 ifeq (1,$(GRANARY_WITH_VALGRIND))
 	GRANARY_COMMON_MACROS += -DGRANARY_WITH_VALGRIND
-	GRANARY_CXX_FLAGS += -fno-inline
+	GRANARY_COMMON_CXX_FLAGS += -fno-inline
+	GRANARY_DEBUG_FLAGS += -g3
+else
+	GRANARY_LD_FLAGS += -nodefaultlibs
+	GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -nostdlib
+	GRANARY_DEBUG_FLAGS += -g3
 endif
 
 # Enable recursive instrumentation (Granary instrumenting Granary).
@@ -133,6 +149,7 @@ endif
 
 GRANARY_HEADER_MACRO_DEFS += $(GRANARY_COMMON_MACROS)
 GRANARY_COMMON_FLAGS += $(GRANARY_COMMON_MACROS)
+GRANARY_LD_FLAGS_LATE += "-Wl,-g" $(GRANARY_DEBUG_FLAGS)
 
 # Get the opposite of the where-directory.
 ifeq (kernel,$(GRANARY_WHERE))
@@ -144,19 +161,19 @@ endif
 
 # Enable/disable features based on whether or not this is a debug or release
 # build.
+GRANARY_OPT_FLAGS = -O0
 ifeq (release,$(GRANARY_TARGET))  # release
-	GRANARY_DEBUG_FLAGS += -g3
-	GRANARY_COMMON_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS += -O3 $(GRANARY_DEBUG_FLAGS)
-else  # debug, test
-	GRANARY_DEBUG_FLAGS += -g3
-	GRANARY_COMMON_FLAGS += -O0 $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS += $(GRANARY_DEBUG_FLAGS)
-	GRANARY_LD_FLAGS_LATE += "-Wl,-g"
+	GRANARY_OPT_FLAGS = -O3
+endif
+ifeq (opt,$(GRANARY_TARGET))  # opt
+	GRANARY_OPT_FLAGS = -O3
 endif
 
+GRANARY_COMMON_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
+GRANARY_LD_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
+
 # Make sure certain architectural features are disabled.
-GRANARY_COMMON_ARCH_FLAGS += -ffreestanding -fno-common -fno-builtin
+GRANARY_COMMON_ARCH_FLAGS += -fno-common -fno-builtin
 GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
 GRANARY_COMMON_ARCH_FLAGS += -minline-all-stringops
@@ -167,9 +184,8 @@ ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-sse4.1 -mno-sse4.2 -mno-sse4 -mno-sse4a
 	GRANARY_COMMON_ARCH_FLAGS += -mno-avx -mno-3dnow
 endif
+
 ifeq (kernel,$(GRANARY_WHERE))
-	GRANARY_COMMON_ARCH_FLAGS += -nostdlib
-	GRANARY_LD_FLAGS_EARLY += -nodefaultlibs
 	GRANARY_COMMON_ARCH_FLAGS += -mkernel -mcmodel=kernel
 endif
 
@@ -203,7 +219,7 @@ GRANARY_COMMON_WARN_FLAGS += -Wuninitialized -Wsometimes-uninitialized
 GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
-GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast
+GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast -Wnull-conversion
 GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 
 # Disable various warnings and errors.
@@ -219,10 +235,14 @@ GRANARY_ASM_FLAGS += $(GRANARY_COMMON_FLAGS)
 GRANARY_LD_FLAGS += -fPIC $(GRANARY_COMMON_ARCH_FLAGS)
 GRANARY_LD_FLAGS_LATE += "-Wl,-flat_namespace"
 
+# Figure out the name of the symbol versions file.
+GRANARY_VERSIONS_FILE := $(GRANARY_SRC_DIR)/symbol.versions
+GRANARY_EXPORTS_FILE := $(GRANARY_SRC_DIR)/symbol.exports
+
 # Mask some of the libc and libc++ symbols with Granary equivalents.
-GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_SRC_DIR)/symbol.versions"
+GRANARY_LD_FLAGS_LATE += "-Wl,--version-script=$(GRANARY_VERSIONS_FILE)"
 ifeq (release,$(GRANARY_TARGET))
-	GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_SRC_DIR)/symbol.exports"
+	GRANARY_LD_FLAGS_LATE += "-Wl,--retain-symbols-file=$(GRANARY_EXPORTS_FILE)"
 endif
 
 # Code linting.
@@ -235,11 +255,11 @@ GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary.o
 GRANARY_DRIVER_OBJ = $(GRANARY_BIN_DIR)/driver.o
 GRANARY_ARCH_OBJ = $(GRANARY_BIN_DIR)/arch.o
 GRANARY_OS_OBJ = $(GRANARY_BIN_DIR)/os.o
-GRANARY_CLIENT_OBJS = $(addsuffix _client.o,$(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_CLIENTS)))
+GRANARY_CLIENT_OBJ = $(GRANARY_BIN_DIR)/clients.o
 
 # Objects that must be combined into the final Granary executable.
 GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DRIVER_OBJ)
-GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJS)
+GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJ)
 
 GRANARY_LINT_TARGET =
 
@@ -274,6 +294,14 @@ $(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.c
 	@echo "Building C object $@"
 	@mkdir -p $(@D)
 	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+
+# Compile a simple, single-file client to an object.
+#
+# Note: This enables link-time optimization.
+$(GRANARY_BIN_DIR)/%_client.bc :: $(GRANARY_CLIENTS_SRC_DIR)/%/client.cc
+	@echo "Building CXX object $@"
+	@mkdir -p $(@D)
+	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 
 # Compile C++ files to LLVM bitcode.
 #

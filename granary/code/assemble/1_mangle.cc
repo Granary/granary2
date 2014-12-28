@@ -9,10 +9,12 @@
 
 #include "granary/base/base.h"
 #include "granary/base/list.h"
+#include "granary/base/option.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
+#include "granary/cfg/lir.h"
 #include "granary/cfg/operand.h"
 
 #include "granary/code/assemble/1_mangle.h"
@@ -20,6 +22,8 @@
 
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
+
+GRANARY_DECLARE_bool(transparent_returns);
 
 namespace granary {
 namespace arch {
@@ -40,27 +44,31 @@ extern void RelativizeDirectCFI(CacheMetaData *meta,
 // Performs mangling of an indirect CFI instruction.
 //
 // Note: This has an architecture-specific implementation.
-extern void MangleIndirectCFI(DecodedBasicBlock *block,
+extern void MangleIndirectCFI(DecodedBlock *block,
                               ControlFlowInstruction *cfi,
                               AnnotationInstruction *ret_address);
 
 // Performs mangling of an direct CFI instruction.
 //
 // Note: This has an architecture-specific implementation.
-extern void MangleDirectCFI(DecodedBasicBlock *block,
+extern void MangleDirectCFI(DecodedBlock *block,
                             ControlFlowInstruction *cfi, AppPC target_pc);
 
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`.
 //
 // Note: This has an architecture-specific implementation.
-extern void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
+extern void RelativizeMemOp(DecodedBlock *block, NativeInstruction *ninstr,
                             const MemoryOperand &op, const void *mem_addr);
+
+// Mangle a tail-call by pushing a return address onto the stack.
+extern void MangleTailCall(DecodedBlock *block,
+                           ControlFlowInstruction *cfi);
 
 // Mangle a "specialized" return so that is converted into an indirect jump.
 //
 // Note: This has an architecture-specific implementation.
-extern void MangleIndirectReturn(DecodedBasicBlock *block,
+extern void MangleIndirectReturn(DecodedBlock *block,
                                  ControlFlowInstruction *cfi);
 
 }  // namespace arch
@@ -69,7 +77,7 @@ namespace {
 // Manages simple relativization checks / tasks.
 class BlockMangler {
  public:
-  BlockMangler(DecodedBasicBlock *block_, PC estimated_encode_loc)
+  BlockMangler(DecodedBlock *block_, PC estimated_encode_loc)
       : block(block_),
         cache_pc(estimated_encode_loc) {}
 
@@ -111,19 +119,10 @@ class BlockMangler {
     }
   }
 
-  void MangleFunctionCall(ControlFlowInstruction *cfi) {
-
-    // Always add in an `IA_RETURN_ADDRESS` annotation. In a later stage,
-    // we ensure that this annotation is placed in the correct location, even
-    // if instructions are inserted between it and the function.
-    auto ret_address = new AnnotationInstruction(
-        IA_RETURN_ADDRESS, cfi->DecodedPC() + cfi->DecodedLength());
-    cfi->InsertAfter(ret_address);
-    cfi->return_address = ret_address;
-
-    // Ensure that targets of function calls have valid stack meta-data.
+  // Ensure that targets of function calls have valid stack meta-data.
+  void MangleFunctionCallTarget(ControlFlowInstruction *cfi) {
     auto target_generic = cfi->TargetBlock();
-    if (auto target = DynamicCast<InstrumentedBasicBlock *>(target_generic)) {
+    if (auto target = DynamicCast<InstrumentedBlock *>(target_generic)) {
       if (auto target_meta = target->UnsafeMetaData()) {
         auto stack_meta = MetaDataCast<StackMetaData *>(target_meta);
         stack_meta->MarkStackAsValid();
@@ -131,14 +130,20 @@ class BlockMangler {
     }
   }
 
+  void MangleFunctionCall(ControlFlowInstruction *cfi) {
+    if (FLAG_transparent_returns && cfi->IsAppInstruction()) {
+      lir::ConvertFunctionCallToJump(cfi);
+      arch::MangleTailCall(block, cfi);
+    }
+    MangleFunctionCallTarget(cfi);
+  }
+
   // Relativize a control-flow instruction.
   void MangleCFI(ControlFlowInstruction *cfi) {
-    if (cfi->IsFunctionCall()) {
-      MangleFunctionCall(cfi);
-    }
+    if (cfi->IsFunctionCall()) MangleFunctionCall(cfi);
 
     auto target_block = cfi->TargetBlock();
-    if (IsA<NativeBasicBlock *>(target_block)) {
+    if (IsA<NativeBlock *>(target_block)) {
       // We always defer to arch-specific relativization because some
       // instructions need to be relativized regardless of whether or not the
       // target PC is far away. For example, on x86, the `LOOP rel8`
@@ -154,7 +159,7 @@ class BlockMangler {
         //arch::MangleIndirectCFI(block, cfi, cfi->return_address);
       }
     // Indirect CFIs might read their target from a PC-relative address.
-    } else if (IsA<IndirectBasicBlock *>(target_block)) {
+    } else if (IsA<IndirectBlock *>(target_block)) {
       MemoryOperand mloc;
       if (cfi->MatchOperands(ReadFrom(mloc))) {
         RelativizeMemOp(cfi, mloc);
@@ -163,7 +168,7 @@ class BlockMangler {
 
     // Need to mangle the indirect direct (with meta-data) into a return to
     // a different program counter.
-    } else if (auto return_bb = DynamicCast<ReturnBasicBlock *>(target_block)) {
+    } else if (auto return_bb = DynamicCast<ReturnBlock *>(target_block)) {
       if (return_bb->UnsafeMetaData()) {
         arch::MangleIndirectReturn(block, cfi);
       }
@@ -171,7 +176,7 @@ class BlockMangler {
     // Some CFIs (e.g. very short conditional jumps) might need to be mangled
     // into a form that uses branches.
     } else {
-      if (IsA<CachedBasicBlock *>(target_block)) {
+      if (IsA<CachedBlock *>(target_block)) {
         arch::MangleDirectCFI(block, cfi, target_block->StartCachePC());
       } else {
         arch::MangleDirectCFI(block, cfi, target_block->StartAppPC());
@@ -213,16 +218,16 @@ class BlockMangler {
  private:
   BlockMangler(void) = delete;
 
-  DecodedBasicBlock *block;
+  DecodedBlock *block;
   PC cache_pc;
 };
 
 }  // namespace
 
-// Relativize the native instructions within a LCFG.
-void MangleInstructions(LocalControlFlowGraph* cfg) {
+// Relativize the native instructions within a trace.
+void MangleInstructions(Trace* cfg) {
   for (auto block : cfg->Blocks()) {
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
+    if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
       BlockMangler mangler(decoded_block, EstimatedCachePC());
       mangler.Mangle();
     }

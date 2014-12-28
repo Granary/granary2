@@ -5,6 +5,11 @@
 
 namespace granary {
 
+template <typename T>
+struct Identity {
+  typedef T Type;
+};
+
 class TrueType : public std::true_type {
  public:
   enum {
@@ -111,7 +116,7 @@ struct IsPointer<const volatile A *> : public TrueType {};
 GRANARY_DEFINE_TRAIT_REFERENCES(IsPointer);
 
 template <typename A>
-struct IsInteger : public FalseType {};
+struct IsInteger : public std::is_enum<A> {};
 
 template <typename A>
 struct IsSignedInteger : public FalseType {};

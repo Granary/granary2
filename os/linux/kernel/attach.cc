@@ -23,9 +23,8 @@ extern "C" {
 // Hook to attach granary to a system call function pointer.
 void granary_attach_to_syscall(AppPC *func_pc, int syscall_number) {
   if (auto context = GlobalContext()) {
-    auto meta = context->AllocateBlockMetaData(*func_pc);
-    *func_pc = TranslateEntryPoint(context, meta, ENTRYPOINT_KERNEL_SYSCALL,
-                                   syscall_number);
+    *func_pc = TranslateEntryPoint(context, *func_pc, kEntryPointKernelSyscall,
+                                   syscall_number, kTargetStackValid);
   }
 }
 }  // extern C

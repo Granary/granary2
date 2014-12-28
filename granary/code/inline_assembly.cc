@@ -1,10 +1,13 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 #define GRANARY_INTERNAL
+#define GRANARY_ARCH_INTERNAL
+
+#include "arch/driver.h"
 
 #include "granary/base/cstring.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 
 #include "granary/code/inline_assembly.h"
 
@@ -12,31 +15,17 @@
 
 namespace granary {
 
-InlineAssemblyVariable::InlineAssemblyVariable(Operand *op) {
-  if (auto reg_op = DynamicCast<RegisterOperand *>(op)) {
-    reg.Construct(*reg_op);
-  } else if (auto mem_op = DynamicCast<MemoryOperand *>(op)) {
-    mem.Construct(*mem_op);
-  } else if (auto imm_op = DynamicCast<ImmediateOperand *>(op)) {
-    imm.Construct(*imm_op);
-  } else if (auto label_op = DynamicCast<LabelOperand *>(op)) {
-    label = label_op->Target();
-  } else {
-    GRANARY_ASSERT(false);  // E.g. Passing in a `nullptr`.
-  }
-}
-
 // Initialize this inline assembly scope.
 InlineAssemblyScope::InlineAssemblyScope(
-    std::initializer_list<Operand *> inputs)
+    std::initializer_list<const Operand *> inputs)
     : UnownedCountedObject(),
       vars() {
   memset(&vars, 0, sizeof vars);
   memset(&(var_is_initialized[0]), 0, sizeof var_is_initialized);
 
-  for (auto i = 0U; i < MAX_NUM_INLINE_VARS && i < inputs.size(); ++i) {
+  for (auto i = 0U; i < kMaxNumInlineVars && i < inputs.size(); ++i) {
     if (auto op = inputs.begin()[i]) {
-      new (&(vars[i])) InlineAssemblyVariable(op);
+      vars[i].Construct(*op->Extract());
       var_is_initialized[i] = true;
     }
   }
@@ -63,22 +52,18 @@ InlineAssemblyBlock::~InlineAssemblyBlock(void) {
 }
 
 // Initialize the inline function call.
-InlineFunctionCall::InlineFunctionCall(DecodedBasicBlock *block, AppPC target,
-                                       Operand ops[MAX_NUM_FUNC_OPERANDS])
+InlineFunctionCall::InlineFunctionCall(DecodedBlock *block, AppPC target,
+                                       Operand ops[detail::kMaxNumFuncOperands],
+                                       size_t num_args_)
     : target_app_pc(target),
-      num_args(0) {
+      num_args(num_args_) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdynamic-class-memaccess"
   memcpy(args, ops, sizeof(args));
 #pragma clang diagnostic pop
-  for (; num_args < MAX_NUM_FUNC_OPERANDS; ++num_args) {
-    if (args[num_args].IsValid()) {
-      saved_regs[num_args] = block->AllocateVirtualRegister();
-      arg_regs[num_args] = block->AllocateVirtualRegister();
-    } else {
-      break;
-    }
-    if (!args[num_args].IsValid()) break;
+  auto i = 0UL;
+  for (auto &arg_reg : arg_regs) {
+    arg_reg = block->NthArgumentRegister(i++);
   }
 }
 

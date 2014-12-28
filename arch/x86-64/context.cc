@@ -32,12 +32,14 @@
     call_frag->instrs.Append(new NativeInstruction(&ni)); \
   } while (0)
 
+#define APP_INSTR(i) call_frag->instrs.Append(i)
+
 namespace granary {
 namespace arch {
 namespace {
 
 // Generates the wrapper code for a context callback.
-void GenerateContextCallCode(Callback *callback) {
+void GenerateContextCallCode(Context *context, Callback *callback) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -72,8 +74,9 @@ void GenerateContextCallCode(Callback *callback) {
   // Treat the pushed GPRs as `MachineContext`, and pass a pointer to them as
   // arg1.
   //
-  // TODO(pag): Remove ABI-specific use of RDI.
-  ENC(LEA_GPRv_AGEN(&ni, XED_REG_RDI, BaseDispMemOp(0, XED_REG_RSP,
+  // TODO(pag): Remove ABI-specific use of RDI and RSI.
+  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(context)));
+  ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSI, BaseDispMemOp(0, XED_REG_RSP,
                                                     ADDRESS_WIDTH_BITS)));
   // Call the callback.
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
@@ -112,19 +115,20 @@ void GenerateContextCallCode(Callback *callback) {
 }  // namespace
 
 // Generates the wrapper code for a context callback.
-Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
+Callback *GenerateContextCallback(Context *context, CodeCache *cache,
+                                  AppPC func_pc) {
   auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(func_pc, edge_code);
   CodeCacheTransaction transaction(
       cache, edge_code, edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
-  GenerateContextCallCode(callback);
+  GenerateContextCallCode(context, callback);
   return callback;
 }
 
 // Generates some code to target some client function. The generated code saves
 // the machine context and passes it directly to the client function for direct
 // manipulation.
-CodeFragment *CreateContextCallFragment(ContextInterface *context,
+CodeFragment *CreateContextCallFragment(Context *context,
                                         FragmentList *frags, CodeFragment *pred,
                                         AppPC func_pc) {
   auto call_frag = new CodeFragment;
@@ -133,11 +137,13 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
 
   exit_frag->encoded_pc = nullptr;  // !!!!
 
-  pred->successors[FRAG_SUCC_FALL_THROUGH] = call_frag;
-  call_frag->successors[FRAG_SUCC_BRANCH] = exit_frag;
+  pred->successors[kFragSuccFallThrough] = call_frag;
+  call_frag->successors[kFragSuccBranch] = exit_frag;
 
   // This distinguishes a context call from something like a outline call,
-  // because the context call ends up being forced into its own partition.
+  // because the context call ends up being forced into its own partition. We
+  // force it into its own partition so that we get the native machine regs
+  // on entry.
   pred->attr.can_add_succ_to_partition = false;
   call_frag->attr.can_add_pred_to_partition = false;
   call_frag->attr.can_add_succ_to_partition = false;
@@ -148,14 +154,16 @@ CodeFragment *CreateContextCallFragment(ContextInterface *context,
 
   Instruction ni;
 
-  if (REDZONE_SIZE_BYTES) APP(SHIFT_REDZONE(&ni));
+  APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
+
   GRANARY_ASSERT(nullptr != cc->wrapped_callback);
   CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
   ni.is_stack_blind = true;
   auto call = new NativeInstruction(&ni);
   call_frag->instrs.Append(call);
   call_frag->branch_instr = call;
-  if (REDZONE_SIZE_BYTES) APP(UNSHIFT_REDZONE(&ni));
+
+  APP_INSTR(new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   return call_frag;
 }

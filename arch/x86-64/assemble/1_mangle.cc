@@ -8,7 +8,7 @@
 #include "granary/base/base.h"
 #include "granary/base/new.h"
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "arch/x86-64/builder.h"
@@ -191,8 +191,28 @@ void RelativizeDirectCFI(CacheMetaData *meta, NativeInstruction *cfi,
   }
 }
 
+// Mangle a tail-call by pushing a return address onto the stack.
+void MangleTailCall(DecodedBlock *block, ControlFlowInstruction *cfi) {
+  Instruction ni;
+  auto ret_addr_pc = cfi->DecodedPC() + cfi->DecodedLength();
+  auto ret_addr = reinterpret_cast<uintptr_t>(ret_addr_pc);
+  auto ret_addr32 = static_cast<uint32_t>(ret_addr);
+  if (ret_addr32 == ret_addr) {
+    PUSH_IMMz(&ni, ret_addr32);
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+    cfi->InsertBefore(new NativeInstruction(&ni));
+  } else {
+    auto ret_addr_reg = block->AllocateVirtualRegister();
+    MOV_GPRv_IMMz(&ni, ret_addr_reg, ret_addr);
+    cfi->InsertBefore(new NativeInstruction(&ni));
+    PUSH_GPRv_50(&ni, ret_addr_reg);
+    ni.effective_operand_width = ADDRESS_WIDTH_BITS;
+    cfi->InsertBefore(new NativeInstruction(&ni));
+  }
+}
+
 // Mangle a specialized indirect return into an indirect jump.
-void MangleIndirectReturn(DecodedBasicBlock *block,
+void MangleIndirectReturn(DecodedBlock *block,
                           ControlFlowInstruction *cfi) {
   auto target = block->AllocateVirtualRegister();
   Instruction ni;
@@ -215,7 +235,7 @@ void MangleIndirectReturn(DecodedBasicBlock *block,
 }
 
 // Mangle an indirect function call.
-static void MangleIndirectCall(DecodedBasicBlock *block,
+static void MangleIndirectCall(DecodedBlock *block,
                                ControlFlowInstruction *cfi,
                                AnnotationInstruction *ret_address) {
   Instruction ni;
@@ -232,18 +252,17 @@ static void MangleIndirectCall(DecodedBasicBlock *block,
   cfi->InsertBefore(new NativeInstruction(&ni));
   PUSH_GPRv_50(&ni, ret_address_reg);
   ni.decoded_pc = decoded_pc;  // Mark as application.
-  ni.effective_operand_width = ADDRESS_WIDTH_BITS;
-  ni.AnalyzeStackUsage();
+  ni.effective_operand_width = GPR_WIDTH_BITS;
   cfi->InsertBefore(new NativeInstruction(&ni));
 }
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
 // target of any specialized indirect CFI instruction is stored in a register.
-void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
+void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi,
                        AnnotationInstruction *ret_address) {
   if (cfi->IsFunctionReturn()) {
     auto target_block = cfi->TargetBlock();
-    if (auto return_block = DynamicCast<ReturnBasicBlock *>(target_block)) {
+    if (auto return_block = DynamicCast<ReturnBlock *>(target_block)) {
       if (return_block->UsesMetaData()) MangleIndirectReturn(block, cfi);
     }
     return;
@@ -283,7 +302,7 @@ void MangleIndirectCFI(DecodedBasicBlock *block, ControlFlowInstruction *cfi,
 // Performs mangling of an direct CFI instruction.
 //
 // Note: This has an architecture-specific implementation.
-void MangleDirectCFI(DecodedBasicBlock *, ControlFlowInstruction *cfi,
+void MangleDirectCFI(DecodedBlock *, ControlFlowInstruction *cfi,
                      AppPC target_pc) {
   auto &instr(cfi->instruction);
   if (IsLoopInstruction(instr.iclass)) {
@@ -298,7 +317,7 @@ bool AddressNeedsRelativizing(const void *ptr) {
 
 // Relativize a instruction with a memory operand, where the operand loads some
 // value from `mem_addr`
-void RelativizeMemOp(DecodedBasicBlock *block, NativeInstruction *ninstr,
+void RelativizeMemOp(DecodedBlock *block, NativeInstruction *ninstr,
                      const MemoryOperand &mloc, const void *mem_addr) {
   auto &ainstr(ninstr->instruction);
   auto op = mloc.UnsafeExtract();

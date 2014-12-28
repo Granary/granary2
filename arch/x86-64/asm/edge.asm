@@ -2,41 +2,20 @@
 
 #include "arch/x86-64/asm/include.asm.inc"
 
-    .file "edge.asm"
 START_FILE_INTEL
 
 DECLARE_FUNC(granary_enter_direct_edge)
 DECLARE_FUNC(granary_enter_indirect_edge)
 
-#define DirectEdge_num_executions 16
-
-// Context switch into granary. This allows the runtime to select a profiled
-// and an unprofiled version of the edge entrypoint code. The profiled
-// version will increment edge counters, whereas the unprofiled version will
-// not.
+// Context switch into granary.
 //
 // Note: We assume flags are save before this function is invoked.
 //
-// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure, and
-//       `RSI` is a pointer to the `ContextInferface` data structure.
+// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure.
 DEFINE_FUNC(granary_arch_enter_direct_edge)
-
+    // Save all regs, except `RDI`.
     push    rax
-    mov     rax, 2
-    xaddq   [rdi + DirectEdge_num_executions], rax
-    jo      L(back_to_code_cache)  // Already executed.
-
-    test    rax, rax
-    jnz     L(back_to_code_cache)  // Already executed
-
-    // We'll assume that if the value before incrementing was zero that we "won"
-    // and that if two threads get in, then it is either because there is enough
-    // contention on this code to cause an overflow, or because we're in user
-    // space and we were de-scheduled, thus making time for the overflow to
-    // occur.
-
-L(translate_block):
-    // Save all regs, except `RDI` and `RSI`.
+    push    rsi
     push    rcx
     push    rdx
     push    rbx
@@ -56,7 +35,7 @@ L(translate_block):
 
     UNALIGN_STACK
 
-    // Restore the regs, except `RDI` and `RSI`.
+    // Restore the regs, except `RDI`.
     pop     r15
     pop     r14
     pop     r13
@@ -69,8 +48,7 @@ L(translate_block):
     pop     rbx
     pop     rdx
     pop     rcx
-
-L(back_to_code_cache):
+    pop     rsi
     pop     rax
     ret
 END_FUNC(granary_arch_enter_direct_edge)
@@ -82,15 +60,14 @@ END_FUNC(granary_arch_enter_direct_edge)
 //
 // Note: We assume flags are save before this function is invoked.
 //
-// Note: On entry, `RDI` is a pointer to a `DirectEdge` data structure,
-//       `RSI` is a pointer to the `ContextInferface` data structure, and
-//       `RCX` is a pointer to the application code that must be translated.
+// Note: On entry, `RDI` is a pointer to a `IndirectEdge` data structure and
+//       `RSI` is the native target PC.
 //
 // Note: `RDI` is live on exit, and so must be saved/restored.
 DEFINE_FUNC(granary_arch_enter_indirect_edge)
-    // Save all regs, except `RSI`, and `RCX`.
     push    rax
     push    rdi
+    push    rcx
     push    rdx
     push    rbx
     push    rbp
@@ -102,8 +79,6 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
     push    r13
     push    r14
     push    r15
-
-    mov     rdx, rcx  // Move `RCX` into `arg3`.
 
     ALIGN_STACK_16(r15)
 
@@ -122,6 +97,7 @@ DEFINE_FUNC(granary_arch_enter_indirect_edge)
     pop     rbp
     pop     rbx
     pop     rdx
+    pop     rcx
     pop     rdi
     pop     rax
     ret

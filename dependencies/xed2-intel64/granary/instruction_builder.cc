@@ -72,7 +72,6 @@ static void GenerateImplicitOperandBuilder(InstructionInfo *info,
 
 static void GenerateInstructionBuilder(InstructionInfo *info,
                                        const xed_inst_t *instr) {
-
   ops_bitset_t explicit_args;
   auto num_explicit_ops = ExplicitArgumentCount(instr, &explicit_args);
   auto max_num_explicit_ops = info->num_explicit_args;
@@ -121,6 +120,7 @@ static void GenerateInstructionBuilder(InstructionInfo *info,
       break;
     }
   }
+  std::cout << INDENT << "FinalizeInstruction(instr);\n";
   std::cout << "}\n";
 }
 

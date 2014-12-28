@@ -3,7 +3,7 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
@@ -33,7 +33,7 @@ namespace arch {
 
 // Save some architectural state before `instr` executes, so that if a
 // recoverable exception occurs while executing `instr`, we can handle it.
-void SaveStateForExceptionCFI(DecodedBasicBlock *block,
+void SaveStateForExceptionCFI(DecodedBlock *block,
                               ExceptionalControlFlowInstruction *instr,
                               granary::Instruction *before_instr) {
   Instruction ni;
@@ -56,7 +56,7 @@ static CodeFragment *MakeCodeSuccessor(FragmentList *frags, CodeFragment *frag,
   succ->attr.has_native_instrs = true;
   succ->attr.num_predecessors = 1;
   succ->stack = frag->stack;
-  succ->type = CODE_TYPE_INST;
+  succ->type = FRAG_TYPE_INST;
   succ->partition.Union(succ, frag);
   frag->successors[sel] = succ;
   frags->InsertAfter(frag, succ);
@@ -184,9 +184,9 @@ static void UnspillRegsOnFailure(CodeFragment *frag,  Instruction &ni,
   if (!num_pushed_ops) return;
   // Restore RSP if there was a fault.
   APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                  BaseDispMemOp(num_pushed_ops * 8,
-                                                XED_REG_RSP,
-                                                ADDRESS_WIDTH_BITS)));
+                                  BaseDispMemOp(
+                                      num_pushed_ops * GPR_WIDTH_BYTES,
+                                      XED_REG_RSP, ADDRESS_WIDTH_BITS)));
 }
 
 // Restore the stack pointer back to where it was supposed to be. This also
@@ -201,8 +201,9 @@ static void UnspillRegsOnSuccess(CodeFragment *frag, Instruction &ni,
                         ni.effective_operand_width = GPR_WIDTH_BITS;);
     } else {
       APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,
-                                      BaseDispMemOp(8, XED_REG_RSP,
-                                                    ADDRESS_WIDTH_BITS)));
+                                      BaseDispMemOp(
+                                          GPR_WIDTH_BYTES, XED_REG_RSP,
+                                          ADDRESS_WIDTH_BITS)));
     }
   }
 }
@@ -258,7 +259,7 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   // End the fragment with `instr`. This ideally ensures that all regs that
   // need to be scheduled will be in there correct places before any of the
   // above mess.
-  auto recovery_frag = MakeCodeSuccessor(frags, frag, FRAG_SUCC_BRANCH);
+  auto recovery_frag = MakeCodeSuccessor(frags, frag, kFragSuccBranch);
   recovery_frag->attr.can_add_succ_to_partition = false;
   recovery_frag->instrs.Append(fault_label);
 
@@ -269,7 +270,7 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
   // path.
   auto except_frag = instr->TargetBlock()->fragment;
   GRANARY_ASSERT(nullptr != except_frag);
-  recovery_frag->successors[FRAG_SUCC_FALL_THROUGH] = except_frag;
+  recovery_frag->successors[kFragSuccFallThrough] = except_frag;
 
   return frag;
 }

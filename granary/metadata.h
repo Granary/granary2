@@ -22,7 +22,6 @@ namespace granary {
 
 // Forward declarations.
 class BlockMetaData;
-GRANARY_INTERNAL_DEFINITION class MetaDataManager;
 
 // All types of meta-data.
 template <typename T>
@@ -33,8 +32,8 @@ class ToolMetaData {
   // with the meta-data template associated with some indirect basic block
   // (`this`). The default behavior here to to inherit all information from
   // the existing block's meta-data.
-  void Join(const T *existing) {
-    CopyConstruct<T>(this, existing);
+  void Join(const T &existing) {
+    CopyConstruct<T>(this, &existing);
   }
 };
 
@@ -44,7 +43,7 @@ class ToolMetaData {
 template <typename T>
 class IndexableMetaData : public ToolMetaData<T> {
  public:
-  bool Equals(const T *that) const;
+  bool Equals(const T &that) const;
 };
 
 // Mutable meta-data (i.e. mutable even after committed to the code cache)
@@ -56,10 +55,10 @@ class MutableMetaData : public ToolMetaData<T> {};
 //
 // Note: The particular values are significant, as they allow us to do a `MAX`
 //       operation to find what the status is of many "sub meta-datas".
-enum class UnificationStatus : int {
-  ACCEPT  = 0,  // Unifies perfectly.
-  ADAPT   = 1,  // Does not unify perfectly, but can be adapted.
-  REJECT  = 2  // Cannot be unified / adapted.
+enum UnificationStatus {
+  kUnificationStatusAccept  = 0, // Unifies perfectly.
+  kUnificationStatusAdapt   = 1, // Doesn't unify perfectly, but can be adapted.
+  kUnificationStatusReject  = 2 // Cannot be unified / adapted.
 };
 
 // Unifiable meta-data, i.e. meta-data that behaves a bit like indexable meta-
@@ -70,7 +69,7 @@ enum class UnificationStatus : int {
 template <typename T>
 class UnifiableMetaData : public ToolMetaData<T> {
  public:
-  UnificationStatus CanUnifyWith(const T *that) const;
+  UnificationStatus CanUnifyWith(const T &that) const;
 };
 
 // Describes whether some type is an indexable meta-data type.
@@ -141,7 +140,7 @@ class GetMetaDataDescription {
  public:
   static_assert(IsMetaData<T>::RESULT, "Type `T` must be a meta-data type.");
 
-  inline static const MetaDataDescription *Get(void) {
+  inline static MetaDataDescription *Get(void) {
     return &(MetaDataDescriptor<
       T,
       IsIndexableMetaData<T>::RESULT,
@@ -179,21 +178,21 @@ namespace detail {
 // Compare some meta-data for equality.
 template <typename T>
 bool CompareEquals(const void *a, const void *b) {
-  return reinterpret_cast<const T *>(a)->Equals(reinterpret_cast<const T *>(b));
+  return reinterpret_cast<const T *>(a)->Equals(*reinterpret_cast<const T *>(b));
 }
 
 // Join / combine two an existing meta-data `b` into a requested meta-data
 // template `a`.
 template <typename T>
 void Join(void *a, const void *b) {
-  return reinterpret_cast<T *>(a)->Join(reinterpret_cast<const T *>(b));
+  return reinterpret_cast<T *>(a)->Join(*reinterpret_cast<const T *>(b));
 }
 
 // Compare some meta-data for equality.
 template <typename T>
 UnificationStatus CanUnify(const void *a, const void *b) {
   return reinterpret_cast<const T *>(a)->CanUnifyWith(
-      reinterpret_cast<const T *>(b));
+      *reinterpret_cast<const T *>(b));
 }
 }  // namespace detail
 
@@ -245,11 +244,9 @@ MetaDataDescription MetaDataDescriptor<T, false, false, true>::kDescription = {
 // Meta-data about a basic block.
 class BlockMetaData {
  public:
-  BlockMetaData(void) = delete;
-
   // Initialize a new meta-data instance. This involves separately initializing
   // the contained meta-data within this generic meta-data.
-  GRANARY_INTERNAL_DEFINITION BlockMetaData(MetaDataManager *manager_);
+  GRANARY_INTERNAL_DEFINITION BlockMetaData(void);
 
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
@@ -271,11 +268,12 @@ class BlockMetaData {
   GRANARY_INTERNAL_DEFINITION
   void JoinWith(const BlockMetaData *meta);
 
-  // Free this metadata.
+  // Allocate and free this block meta-data.
+  GRANARY_INTERNAL_DEFINITION static void *operator new(size_t);
   GRANARY_INTERNAL_DEFINITION static void operator delete(void *address);
 
-  // Manager for this meta-data instance.
-  GRANARY_INTERNAL_DEFINITION MetaDataManager * const manager;
+ private:
+  GRANARY_IF_EXTERNAL( BlockMetaData(void) = delete; )
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(BlockMetaData);
 };
@@ -288,72 +286,84 @@ inline static T MetaDataCast(BlockMetaData *meta) {
                              GetMetaDataDescription<M>::Get()->offset);
 }
 
-#ifdef GRANARY_INTERNAL
-// Manages all metadata within a particular environment.
-class MetaDataManager {
+// Initialize the global meta-data manager.
+GRANARY_INTERNAL_DEFINITION
+void InitMetaData(void);
+
+// Destroy the global meta-data manager.
+GRANARY_INTERNAL_DEFINITION
+void ExitMetaData(void);
+
+// Register some meta-data with Granary that will be used with this tool.
+// This is a convenience method around the `AddMetaData` method that
+// operates directly on a meta-data description.
+template <typename T>
+inline static void AddMetaData(void) {
+  AddMetaData(GetMetaDataDescription<T>::Get());
+}
+
+// Register some meta-data with the meta-data manager.
+void AddMetaData(MetaDataDescription *desc);
+
+// Adds this meta-data to a trace log of recently translated meta-data blocks.
+GRANARY_INTERNAL_DEFINITION
+void TraceMetaData(const BlockMetaData *meta);
+
+// Useful for linked lists of meta-data.
+template <typename T>
+class MetaDataLinkedListIterator {
  public:
-  // Initialize an empty meta-data manager.
-  MetaDataManager(void);
+  typedef MetaDataLinkedListIterator<T> Iterator;
 
-  ~MetaDataManager(void);
+  MetaDataLinkedListIterator(void)
+      : curr(nullptr) {}
 
-  // Register some meta-data with Granary. This is a convenience method around
-  // the `Register` method that operates directly on a meta-data description.
-  template <typename T>
-  inline void Register(void) {
-    Register(const_cast<MetaDataDescription *>(
-        GetMetaDataDescription<T>::Get()));
+  MetaDataLinkedListIterator(const Iterator &that)  // NOLINT
+      : curr(that.curr) {}
+
+  MetaDataLinkedListIterator(const Iterator &&that)  // NOLINT
+      : curr(that.curr) {}
+
+  explicit MetaDataLinkedListIterator(BlockMetaData *first)
+      : curr(first) {}
+
+  inline Iterator begin(void) const {
+    return *this;
   }
 
-  // Register some meta-data with Granary.
-  void Register(MetaDataDescription *desc);
+  inline Iterator end(void) const {
+    return Iterator(static_cast<BlockMetaData *>(nullptr));
+  }
 
-  // Allocate some meta-data. If the manager hasn't been finalized then this
-  // returns nullptr.
-  BlockMetaData *Allocate(void);
+  inline void operator++(void) {
+    curr = MetaDataCast<T *>(curr)->next;
+  }
 
-  // Free some metadata.
-  void Free(BlockMetaData *meta);
+  inline bool operator!=(const Iterator &that) const {
+    return curr != that.curr;
+  }
 
-  inline size_t Size(void) const {
-    return size;
+  inline BlockMetaData *operator*(void) const {
+    return curr;
+  }
+
+  // Returns the last valid element from an iterator.
+  static BlockMetaData *Last(Iterator elems) {
+    BlockMetaData *last(nullptr);
+    for (auto elem : elems) {
+      last = elem;
+    }
+    return last;
+  }
+
+  // Returns the last valid element from an iterator.
+  static inline BlockMetaData *Last(BlockMetaData *elems_ptr) {
+    return Last(Iterator(elems_ptr));
   }
 
  private:
-  friend class BlockMetaData;
-
-  enum {
-    // Upper bound on the number of registerable meta-data instances.
-    MAX_NUM_MANAGED_METADATAS = 32
-  };
-
-  // Finalizes the meta-data structures, which determines the runtime layout
-  // of the packed meta-data structure. Once
-  void Finalize(void);
-
-  // Initialize the allocator for meta-data managed by this manager.
-  void InitAllocator(void);
-
-  // Size of the overall metadata structure managed by this manager.
-  size_t size;
-
-  // Whether or not this metadata has been finalized.
-  bool is_finalized;
-
-  // Info on all registered meta-data within this manager. These are indexed
-  // by the `MetaDataDescription::id` field.
-  MetaDataDescription *descriptions[MAX_NUM_MANAGED_METADATAS];
-
-  // Slab allocator for allocating meta-data objects.
-  Container<internal::SlabAllocator> allocator;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(MetaDataManager);
+  BlockMetaData *curr;
 };
-
-// Adds this meta-data to a trace log of recently translated meta-data blocks.
-void TraceMetaData(uint64_t group, const BlockMetaData *meta);
-
-#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 

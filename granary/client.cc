@@ -30,4 +30,9 @@ void InitClients(void) {
   }
 }
 
+// Exits the clients.
+void ExitClients(void) {
+  clients = nullptr;
+}
+
 }  // namespace granary

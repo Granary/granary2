@@ -34,16 +34,16 @@ class Instruction : public InstructionInterface {
   Instruction(const Instruction &that);
 
   // Get the decoded length of this instruction.
-  inline int DecodedLength(void) const {
-    return static_cast<int>(decoded_length);
+  inline size_t DecodedLength(void) const {
+    return decoded_length;
   }
 
   inline PC DecodedPC(void) const {
     return decoded_pc;
   }
 
-  inline int EncodedLength(void) const {
-   return static_cast<int>(encoded_length);
+  inline size_t EncodedLength(void) const {
+   return encoded_length;
  }
 
   inline CachePC EncodedPC(void) const {
@@ -84,6 +84,10 @@ class Instruction : public InstructionInterface {
 
   inline bool IsFunctionCall(void) const {
     return XED_CATEGORY_CALL == category;
+  }
+
+  inline bool IsFunctionTailCall(void) const {
+    return is_tail_call;
   }
 
   inline bool IsFunctionReturn(void) const {
@@ -175,12 +179,6 @@ class Instruction : public InstructionInterface {
   // Get the names of the prefixes.
   const char *PrefixNames(void) const;
 
-  // Is this a specially inserted virtual register save or restore instruction?
-  inline bool IsVirtualRegSaveRestore(void) const {
-    return false;
-    //return is_save_restore;  // TODO(pag): Fix issue #41.
-  }
-
   // Mark this instruction as not encodable.
   inline void DontEncode(void) {
     dont_encode = true;
@@ -191,18 +189,12 @@ class Instruction : public InstructionInterface {
     return !dont_encode;
   }
 
-  // Can this instruction not be the cause of a fragment split? This has to
-  // do with `granary/code/assemble/2_build_fragment_list.cc`.
-  inline bool CantSplitFragment(void) {
-    return dont_split_fragment;
-  }
-
   // Apply a function on every operand.
   void ForEachOperand(const std::function<void(granary::Operand *)> &func);
 
   // Operand matcher for multiple arguments. Returns the number of matched
   // arguments, starting from the first argument.
-  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> &&matchers);
+  size_t CountMatchedOperands(std::initializer_list<OperandMatcher> matchers);
 
   // Does this instruction enable interrupts?
   inline bool EnablesInterrupts(void) const {
@@ -210,18 +202,33 @@ class Instruction : public InstructionInterface {
   }
 
   // Does this instruction disable interrupts?
-  bool DisablesInterrupts(void) const {
+  inline bool DisablesInterrupts(void) const {
     return XED_ICLASS_CLI == iclass;
   }
 
   // Can this instruction change the interrupt status to either of enabled or
   // disabled?
-  bool CanEnableOrDisableInterrupts(void) const {
+  inline bool CanEnableOrDisableInterrupts(void) const {
     // `FWAIT` doesn't actually enable/disable interrupts, but it can cause
     // pending FP exceptions to be raised, so it is nicer if we don't
     // accidentally disable interrupts around the `FWAIT`.
     return XED_ICLASS_POPF == iclass || XED_ICLASS_WRMSR == iclass ||
            XED_ICLASS_FWAIT == iclass;
+  }
+
+  // Does this instruction perform an atomic read/modify/write?
+  inline bool IsAtomic(void) const {
+    return is_atomic;
+  }
+
+  // Returns the total number of operands.
+  inline size_t NumOperands(void) const {
+    return num_ops;
+  }
+
+  // Returns the total number of explicit operands.
+  inline size_t NumExplicitOperands(void) const {
+    return num_explicit_ops;
   }
 
   // Where was this instruction encoded/decoded. When debugging, it's helpful
@@ -232,24 +239,37 @@ class Instruction : public InstructionInterface {
     CachePC encoded_pc;
   };
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpacked"
-
   // Instruction class. This roughly corresponds to an opcode.
-  alignas(alignof(uint64_t)) struct {
+  alignas(Operand) struct {
+    xed_iclass_enum_t iclass;
+    mutable xed_iform_enum_t iform;  // Original `iform` at decode time.
+    mutable unsigned isel;  // Instruction selection at decode time.
+    xed_category_enum_t category;
 
-    xed_iclass_enum_t iclass:16;
-    mutable xed_iform_enum_t iform:16;  // Original iform at decode time.
-    mutable unsigned isel:16;  // Instruction selection at decode time.
-    xed_category_enum_t category:8;
+    // The effective operand width (in bits) at decode time, or 0 if unknown.
+    uint16_t effective_operand_width;
 
     // Decoded length of this instruction, or 0 if it wasn't decoded.
     uint8_t decoded_length;
     uint8_t encoded_length;
 
-  } __attribute__((packed));
+    // Number of explicit and total operands.
+    uint8_t num_explicit_ops;
+    uint8_t num_ops;
+  };
 
-  alignas(alignof(uint16_t)) struct {
+  // All operands that Granary can make sense of. This includes implicit and
+  // suppressed operands. The order between these and those referenced via
+  // `xed_inst_t` is maintained.
+  Operand ops[MAX_NUM_OPERANDS];
+
+  // Useful for debugging the creation location of an instruction and the
+  // alteration location of an instruction.
+  GRANARY_IF_DEBUG( void *note_create, *note_alter; )
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpacked"
+  alignas(uint16_t) struct {
     // Instruction prefixes.
     //
     // TODO(pag): Remove branch hints? Might be needed for special non-
@@ -263,29 +283,8 @@ class Instruction : public InstructionInterface {
     mutable bool writes_to_stack_pointer:1;
     mutable bool analyzed_stack_usage:1;
 
-    // Should we force this instruction to *not* split the fragment, even if
-    // other indicators make it seem like we should split the fragment?
-    bool dont_split_fragment:1;
-
     // Is this an atomic operation?
     bool is_atomic:1;
-
-    // Is this a register save/restore operation? This is an optimization for
-    // virtual register usage.
-    //
-    // Note: This flag should *only* be set if both the save and restore are
-    //       guaranteed to be within the same fragment. If no such guarantee
-    //       holds then the VR system will *really* screw things up (e.g.
-    //       optimizing the save but not the restore).
-    //
-    // Note: This affects the behavior of copy propagation and fragment-local
-    //       register scheduling. Specifically, a save/restore instruction
-    //       cannot be involved in copy propagation. Further, the fragment-
-    //       local register scheduler normally delays the spill of a register
-    //       until the beginning of a fragment, so as to re-use the stolen
-    //       register. With save/restore instructions, the spiller/filler is
-    //       greedy and always spills before and fills after.
-    bool is_save_restore:1;
 
     // Can this instruction be removed? This comes up in cases like late
     // mangling (`1_mangle.cc`) and VR slot allocation (`9_allocate_slots.cc`)
@@ -303,29 +302,12 @@ class Instruction : public InstructionInterface {
     // schedule, but never actually be encoded.
     bool dont_encode:1;
 
-    // Does this instruction use legacy registers (e.g. `AH`)? If so, then this
-    // likely restricts the usage of REX prefixes, and therefore restricts the
-    // virtual register scheduler to only the original 8 GPRs.
-    bool uses_legacy_registers:1;
-
-    // Number of explicit operands.
-    uint8_t num_explicit_ops:4;
+    // Was this a function call that was converted into a jump?
+    bool is_tail_call:1;
 
   } __attribute__((packed));
 
 #pragma clang diagnostic pop
-
-  // The effective operand width (in bits) at decode time, or -1 if unknown.
-  int16_t effective_operand_width;
-
-  // All operands that Granary can make sense of. This includes implicit and
-  // suppressed operands. The order between these and those referenced via
-  // `xed_inst_t` is maintained.
-  Operand ops[MAX_NUM_EXPLICIT_OPERANDS];
-
-  // Useful for debugging the creation location of an instruction and the
-  // alteration location of an instruction.
-  GRANARY_IF_DEBUG( void *note_create, *note_alter; )
 };
 
 }  // namespace arch

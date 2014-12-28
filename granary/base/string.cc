@@ -30,11 +30,6 @@ uint64_t CopyString(char * __restrict buffer, uint64_t buffer_len,
   }
 }
 
-uint64_t CopyString(char * __restrict buffer, const char * __restrict str) {
-  strcpy(buffer, str);
-  return strlen(buffer);
-}
-
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2) {
   return !strcmp(str1, str2);
@@ -137,8 +132,8 @@ static uint64_t DeFormatGenericInt(const char *buffer, void *data,
 }  // namespace
 
 // Similar to `vsnprintf`. Returns the number of formatted characters.
-uint64_t VarFormat(char * __restrict buffer, uint64_t len,
-                   const char * __restrict format, va_list args) {
+uint64_t VFormat(char * __restrict buffer, uint64_t len,
+                 const char * __restrict format, va_list args) {
   if (!buffer || !format || !len) {
     return 0;
   }
@@ -189,20 +184,13 @@ uint64_t VarFormat(char * __restrict buffer, uint64_t len,
         } else if ('p' == format_ch) {
           base = 16;
           is_long = true;
+          buff.Write("0x");
         }
         uint64_t generic_uint(0);
         if (is_long) {
           generic_uint = va_arg(args, uint64_t);
         } else {
           generic_uint = static_cast<uint64_t>(va_arg(args, unsigned));
-        }
-        if ('p' == format_ch) {
-          if (!generic_uint) {
-            buff.Write("(nil)");
-            continue;  // Don't change the state.
-          } else {
-            buff.Write("0x");
-          }
         }
         FormatGenericInt(buff, generic_uint, base);
       } else {
@@ -213,17 +201,6 @@ uint64_t VarFormat(char * __restrict buffer, uint64_t len,
   }
 
   return buff.NumCharsWritten();
-}
-
-// Similar to `snprintf`. Returns the number of formatted characters.
-__attribute__ ((format(printf, 3, 4)))
-uint64_t Format(char * __restrict buffer, uint64_t len,
-                     const char * __restrict format, ...) {
-  va_list args;
-  va_start(args, format);
-  auto ret = VarFormat(buffer, len, format, args);
-  va_end(args);
-  return ret;
 }
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.

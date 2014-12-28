@@ -2,7 +2,7 @@
 
 .PHONY: all lint
 
-include ../../../Makefile.inc
+include $(GRANARY_SRC_DIR)/Makefile.inc
 
 # Get all subdirectories of granary that contain source files to compile.
 GRANARY_CC_SRC_FILES := $(shell find $(GRANARY_WHERE_SRC_DIR) -type f -name '*.cc')
@@ -21,54 +21,52 @@ GRANARY_LIBRARY = $(GRANARY_BIN_DIR)/lib$(GRANARY_NAME).so
 
 # All objects that need to be put together to form the library.
 GRANARY_O_FILES = os.o granary.o arch.o driver.o
-ifneq (test,$(GRANARY_TARGET))
-	GRANARY_O_FILES += $(addsuffix _client.o,$(GRANARY_CLIENTS))
+ifneq ($(strip $(GRANARY_CLIENTS)),)
+	GRANARY_O_FILES += clients.o
 endif
 GRANARY_OBJS = $(addprefix $(GRANARY_BIN_DIR)/,$(GRANARY_O_FILES))
 
 $(GRANARY_OS_OBJ): $(GRANARY_CC_OBJ_FILES) $(GRANARY_ASM_OBJ_FILES)
 	@echo "Building object $(GRANARY_OS_OBJ)."
-	@$(GRANARY_LD) -g -r $^ -o $(GRANARY_OS_OBJ)
+	@$(GRANARY_LD) -g -r $^ -o $@
 
 # Lint all Granary OS code, independent of the OS, and independent of user or
 # kernel space.
 lint:
 	@echo "Linting OS-specific Granary files."
 	@$(GRANARY_LINT) $(shell find $(GRANARY_SRC_DIR)/os -type f -name '*.h' -or -name '*.cc')
-
-all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ)
+	
+all: $(GRANARY_LINT_TARGET) $(GRANARY_OS_OBJ) $(GRANARY_OS_TYPES)
 
 # Makes `grr`, the user-space injector if `libgranary.so`.
 $(GRANARY_INJECTOR): $(GRANARY_WHERE_SRC_DIR)/inject.c
-	@echo "Compiling injector $(GRANARY_INJECTOR)"
+	@echo "Compiling injector $@"
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
-        -c $(GRANARY_WHERE_SRC_DIR)/inject.c \
+		-c $(GRANARY_WHERE_SRC_DIR)/inject.c \
 		-o $(GRANARY_WHERE_BIN_DIR)/inject.o
 	@$(GRANARY_CC) $(GRANARY_INJECTOR_FLAGS) \
-        $(GRANARY_WHERE_BIN_DIR)/inject.o \
-        -o $(GRANARY_INJECTOR)
+		$(GRANARY_WHERE_BIN_DIR)/inject.o \
+		-o $(GRANARY_INJECTOR)
 
 # Makes a `libgranary.o` file that is the combination of all the other `.o`
 # files. We have this extra step so that we can add in the linker script at a
 # stage where it will have the desired effect, while also not causing any later
 # load-time issues due to R_386_RELATIVE (0x08) PLT relocation types.
 $(GRANARY_LIBRARY_OBJ): $(GRANARY_OBJS)
-	@echo "Building object $(GRANARY_LIBRARY_OBJ)."
-	@$(GRANARY_LD) -g \
+	@echo "Building object $@."
+	@$(GRANARY_LD) \
 		-z initfirst -z interpose -z nodelete -z noexecstack -z now \
 		-T $(GRANARY_SRC_DIR)/linker.lds \
-		-r $(GRANARY_OBJS) \
-		-o $(GRANARY_LIBRARY_OBJ)
+		-g -r $^ -o $@
 
 # Makes `libgranary.so`, the user-space shared library version of Granary.
 $(GRANARY_LIBRARY): $(GRANARY_LIBRARY_OBJ)
 	@echo "Compiling library $(GRANARY_LIBRARY)"
-	@$(GRANARY_CC) $(GRANARY_DEBUG_FLAGS) $(GRANARY_COMMON_ARCH_FLAGS) \
-		$(GRANARY_LD_FLAGS) \
-		-nodefaultlibs -nostartfiles $(GRANARY_LD_FLAGS_EARLY) -shared \
-		$(GRANARY_LIBRARY_OBJ) \
+	@$(GRANARY_CC) $(GRANARY_DEBUG_FLAGS) \
+		$(GRANARY_LD_FLAGS) -shared \
+		$^ \
 		$(GRANARY_LD_FLAGS_LATE) \
-		-o $(GRANARY_LIBRARY)
+		-o $@
 
 # Make the final granary executables.
 exec: $(GRANARY_INJECTOR) $(GRANARY_LIBRARY)

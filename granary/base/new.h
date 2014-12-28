@@ -10,38 +10,57 @@
 
 namespace granary {
 
-// Defines a global new allocator for a specific class.
+// Defines an in-line global new allocator for a specific class.
 #define GRANARY_DEFINE_NEW_ALLOCATOR(class_name, ...) \
  private: \
-  friend class granary::OperatorNewAllocator<class_name>; \
+  friend class ::granary::OperatorNewAllocator<class_name>; \
   enum class OperatorNewProperties : size_t __VA_ARGS__ ; \
  public: \
   static void *operator new(std::size_t, void *address) { \
     return address; \
   } \
   static void *operator new(std::size_t) { \
-    return granary::OperatorNewAllocator<class_name>::Allocate(); \
+    return ::granary::OperatorNewAllocator<class_name>::Allocate(); \
   } \
   static void operator delete(void *address) { \
-    return granary::OperatorNewAllocator<class_name>::Free(address); \
+    ::granary::OperatorNewAllocator<class_name>::Free(address); \
   } \
   static void *operator new[](std::size_t) = delete; \
   static void operator delete[](void *) = delete;
 
+// Internal-only definition of new allocators. When seen externally, the
+// symbols are deleted.
 #ifdef GRANARY_INTERNAL
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_NEW_ALLOCATOR
-# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR \
-    GRANARY_DEFINE_NEW_ALLOCATOR
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR GRANARY_DEFINE_NEW_ALLOCATOR
 #else
-# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(class_name, ...)
-# define GRANARY_DEFINE_EXTERNAL_NEW_ALLOCATOR(class_name, ...) \
-    static void *operator new(std::size_t, void *); \
-    static void *operator new(std::size_t); \
-    static void operator delete(void *address); \
-    static void *operator new[](std::size_t) = delete; \
-    static void operator delete[](void *) = delete;
+# define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(...)
 #endif
+
+// Declares an out-of-line global new allocator for a specific class. This
+// is useful for exporting allocators from granary to clients without actually
+// exposing the size of the class.
+#define GRANARY_DECLARE_NEW_ALLOCATOR(class_name, ...) \
+ GRANARY_IF_INTERNAL( private: \
+  friend class ::granary::OperatorNewAllocator<class_name>; \
+  enum class OperatorNewProperties : size_t __VA_ARGS__ ; ) \
+ public: \
+  static void *operator new(std::size_t, void *); \
+  static void *operator new(std::size_t); \
+  static void operator delete(void *address); \
+  static void *operator new[](std::size_t) = delete; \
+  static void operator delete[](void *) = delete;
+
+// Defines an out-of-line global new allocator for a specific class.
+#define GRANARY_IMPLEMENT_NEW_ALLOCATOR(class_name) \
+  void *class_name::operator new(std::size_t, void *address) { \
+    return address; \
+  } \
+  void *class_name::operator new(std::size_t) { \
+    return ::granary::OperatorNewAllocator<class_name>::Allocate(); \
+  } \
+  void class_name::operator delete(void *address) { \
+    ::granary::OperatorNewAllocator<class_name>::Free(address); \
+  }
 
 namespace internal {
 
@@ -51,25 +70,21 @@ class FreeList {
   FreeList *next;
 };
 
-enum {
-  SLAB_ALLOCATOR_SLAB_SIZE_PAGES = 4,
-  SLAB_ALLOCATOR_SLAB_SIZE_BYTES = arch::PAGE_SIZE_BYTES *
-                                   SLAB_ALLOCATOR_SLAB_SIZE_PAGES
-};
-
 // Meta-data for a memory slab. The meta-data of each slab knows the range of
 // allocation numbers that can be serviced by the allocator.
 class SlabList {
  public:
-  SlabList(const SlabList *next_slab_, size_t min_allocation_number_,
-           size_t slab_number_);
-
+  explicit SlabList(const SlabList *next_slab_);
   const SlabList * const next;
-  const size_t min_allocation_number;
-  const size_t number;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SlabList);
+};
+
+enum {
+  kNewAllocatorNumPagesPerSlab = 2,
+  kNewAllocatorNumBytesPerSlab = arch::PAGE_SIZE_BYTES *
+                                 kNewAllocatorNumPagesPerSlab
 };
 
 // Simple, lock-free allocator. This allocator operates at a page granularity,
@@ -77,37 +92,30 @@ class SlabList {
 // the (potentially) allocated data on the page.
 class SlabAllocator {
  public:
-  explicit SlabAllocator(size_t num_allocations_per_slab_,
-                         size_t start_offset_,
-                         size_t unaligned_size_,
-                         size_t aligned_size_);
+  SlabAllocator(size_t start_offset_, size_t max_offset_,
+                size_t allocation_size_, size_t object_size_);
+
+  ~SlabAllocator(void);
 
   void *Allocate(void);
   void Free(void *address);
 
-  // For those cases where a slab allocator is non-global.
-  void Destroy(void);
-
  private:
   void *AllocateFromFreeList(void);
 
-  const SlabList *AllocateSlab(const SlabList *prev_slab);
-  const SlabList *GetOrAllocateSlab(size_t slab_number);
+  const SlabList *SlabForAllocation(void);
 
-  const size_t num_allocations_per_slab;
+  size_t offset;
   const size_t start_offset;
-  const size_t aligned_size;
-  const size_t unaligned_size;
-  const SlabList slab_list_tail;
+  const size_t max_offset;
+  const size_t allocation_size;
+  const size_t object_size;
 
-  alignas(GRANARY_ARCH_CACHE_LINE_SIZE) \
-      std::atomic<const SlabList *> slab_list_head;
+  alignas(arch::CACHE_LINE_SIZE_BYTES) SpinLock slab_list_lock;
+  const SlabList *slab_list;
 
-  std::atomic<FreeList *> free_list;
-
-  SpinLock slab_lock;
-  size_t next_slab_number;
-  size_t next_allocation_number;
+  alignas(arch::CACHE_LINE_SIZE_BYTES) SpinLock free_list_lock;
+  FreeList *free_list;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SlabAllocator);
 };
@@ -119,7 +127,6 @@ class SlabAllocator {
 template <typename T>
 class OperatorNewAllocator {
  public:
-
   inline static void *Allocate(void) {
     return allocator.Allocate();
   }
@@ -141,30 +148,25 @@ class OperatorNewAllocator {
   typedef typename T::OperatorNewProperties Properties;
 
   enum : size_t {
-    MIN_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
-    ALIGNMENT = GRANARY_MAX(MIN_ALIGNMENT, alignof(T)),
-    OBJECT_SIZE = sizeof(T),
-    MIN_OBJECT_SIZE = GRANARY_MAX(OBJECT_SIZE, sizeof(internal::FreeList *)),
-    ALIGNED_OBJECT_SIZE = GRANARY_ALIGN_TO(MIN_OBJECT_SIZE, ALIGNMENT),
-
-    // The first offset in a page is for an object.
-    ALGINED_SLAB_LIST_SIZE = GRANARY_ALIGN_TO(
-        sizeof(internal::SlabList), ALIGNMENT),
-
-    // Figure out the number of allocations that can fit into a slab.
-    MAX_ALLOCATABLE_SPACE = internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES -
-                            ALGINED_SLAB_LIST_SIZE - ALIGNED_OBJECT_SIZE + 1,
-    NUM_ALLOCS_PER_SLAB = MAX_ALLOCATABLE_SPACE / ALIGNED_OBJECT_SIZE,
-
-    // Figure out how much space can actually be used.
-    PAGE_USAGE = ALGINED_SLAB_LIST_SIZE +
-                 (NUM_ALLOCS_PER_SLAB * ALIGNED_OBJECT_SIZE)
+    OBJECT_SIZE = GRANARY_MAX(sizeof(T), sizeof(internal::FreeList *)),
+    REQUESTED_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
+    OBJECT_ALIGNMENT = alignof(T),
+    MINIMUM_ALIGNMENT = GRANARY_MAX(REQUESTED_ALIGNMENT, OBJECT_ALIGNMENT),
+    ALIGNED_SIZE = GRANARY_ALIGN_TO(sizeof(T), MINIMUM_ALIGNMENT),
+    START_OFFSET = GRANARY_ALIGN_TO(sizeof(internal::SlabList),
+                                    MINIMUM_ALIGNMENT),
+    NUM_OBJS_PER_SLAB = (internal::kNewAllocatorNumBytesPerSlab -
+                         START_OFFSET - (ALIGNED_SIZE - 1)) / ALIGNED_SIZE,
+    END_OFFSET = START_OFFSET + (NUM_OBJS_PER_SLAB * ALIGNED_SIZE)
   };
 
-  static_assert(OBJECT_SIZE <= ALIGNED_OBJECT_SIZE,
+  static_assert(alignof(T) <= MINIMUM_ALIGNMENT,
+      "Error computing the alignment of the object.");
+
+  static_assert(sizeof(T) <= ALIGNED_SIZE,
       "Error computing the aligned object size.");
 
-  static_assert(PAGE_USAGE <= internal::SLAB_ALLOCATOR_SLAB_SIZE_BYTES,
+  static_assert(END_OFFSET <= internal::kNewAllocatorNumBytesPerSlab,
       "Error computing the layout of meta-data and objects on page frames.");
 
   OperatorNewAllocator(void) = delete;
@@ -180,10 +182,10 @@ class OperatorNewAllocator {
 // Static initialization of the (typeless) internal slab allocator.
 template <typename T>
 internal::SlabAllocator OperatorNewAllocator<T>::allocator(
-    OperatorNewAllocator<T>::NUM_ALLOCS_PER_SLAB,
-    OperatorNewAllocator<T>::ALGINED_SLAB_LIST_SIZE,
-    OperatorNewAllocator<T>::ALIGNED_OBJECT_SIZE,
-    OperatorNewAllocator<T>::OBJECT_SIZE);
+    OperatorNewAllocator<T>::START_OFFSET,
+    OperatorNewAllocator<T>::END_OFFSET,
+    OperatorNewAllocator<T>::ALIGNED_SIZE,
+    sizeof(T));
 
 #pragma clang diagnostic pop
 

@@ -5,13 +5,13 @@
 
 #include "granary/base/string.h"
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
 
-#include "arch/x86-64/instruction.h"
+#include "arch/x86-64/builder.h"
 #include "arch/x86-64/select.h"
 
 #include "granary/breakpoint.h"
@@ -34,214 +34,363 @@ namespace {
 // Granary's inline assembly instructions.
 class InlineAssemblyParser {
  public:
-  InlineAssemblyParser(LocalControlFlowGraph *cfg_,
+  InlineAssemblyParser(Trace *cfg_,
                        InlineAssemblyScope *scope_,
-                       DecodedBasicBlock *block_,
+                       DecodedBlock *block_,
                        Instruction *instr_,
                        const char *ch_)
       : op(nullptr),
-        num_immediates(0),
         cfg(cfg_),
         scope(scope_),
         block(block_),
         instr(instr_),
         ch(ch_),
-        branch_target(nullptr) {}
+        num_immediates(0) {}
 
-  // Parse the inline assembly as a sequence of instructions.
   void ParseInstructions(void) {
-    char buff[20] = {'\0'};
     while (*ch) {
-      bool is_locked = false;
-      bool is_rep = false;
-      bool is_repne = false;
-    get_opcode:
       ConsumeWhiteSpace();
-      ParseWord(buff);
-      if (buff[0]) {
-        if (StringsMatch(buff, "LOCK")) {
-          is_locked = true;
-          goto get_opcode;
-        } else if (StringsMatch(buff, "REP") || StringsMatch(buff, "REPE")) {
-          is_rep = true;
-          goto get_opcode;
-        } else if (StringsMatch(buff, "REPNE")) {
-          is_repne = true;
-          goto get_opcode;
-        } else if (StringsMatch(buff, "LABEL")) {
-          ParseLabel();
-          Accept(':');
-        } else {
-          memset(&data, 0, sizeof data);
-          auto iclass = str2xed_iclass_enum_t(buff);
-          GRANARY_ASSERT(XED_ICLASS_INVALID != iclass);
-          data.iclass = iclass;
-          data.category = arch::ICLASS_CATEGORIES[iclass];
-          op = &(data.ops[0]);
-          num_immediates = 0;
-          branch_target = nullptr;
-          do {
-            if (Peek(',')) {
-              Accept(',');
-            }
-            ConsumeWhiteSpace();
-          } while (ParseOperand());
-          Accept(';');
-          data.has_prefix_lock = is_locked;
-          data.has_prefix_rep = is_rep;
-          data.has_prefix_repne = is_repne;
-          FinalizeInstruction();
-        }
-      }
+      if (!*ch) break;
+      memset(&data, 0, sizeof data);
+      num_immediates = 0;
+      op = &(data.ops[0]);
+      ParseInstruction();
     }
   }
 
  private:
-
-  bool Peek(char next) {
-    return *ch == next;
-  }
-
-  void Accept(char GRANARY_IF_DEBUG(next)) {
-    GRANARY_ASSERT(Peek(next));
-    ch++;
-  }
-
-  bool PeekWhitespace(void) {
-    return ' ' == *ch || '\t' == *ch || '\n' == *ch;
-  }
-
-  void ConsumeWhiteSpace(void) {
-    for (; *ch && PeekWhitespace(); ++ch) {}
-  }
-
-  void ParseWord(char *buff) {
-    for (; *ch; ) {
-      if (PeekWhitespace() || Peek(';') || Peek(',') ||
-          Peek(':') || Peek('[') || Peek(']')) {
-        break;
-      }
-      *buff++ = *ch++;
-    }
-    *buff = '\0';
-  }
-
-  // Get a label.
-  AnnotationInstruction *GetLabel(unsigned var_num)  {
-    if (!scope->var_is_initialized[var_num]) {
-      scope->var_is_initialized[var_num] = true;
-      scope->vars[var_num].label = new LabelInstruction;
-    }
-    return scope->vars[var_num].label;
-  }
-
-  void ParseLabel(void) {
-    ConsumeWhiteSpace();
-    auto var_num = ParseVar();
-    auto label = GetLabel(var_num);
-    instr->InsertBefore(std::unique_ptr<Instruction>(label));
-  }
-
-  int ParseNumber(void) {
-    char buff[20] = {'\0'};
-    ParseWord(buff);
-    int num = -1;
-    GRANARY_IF_DEBUG( auto got = ) DeFormat(buff, "%d", &num);
-    GRANARY_ASSERT(1 == got);
-    return num;
+  // Returns true if this instruction uses an effective address operand.
+  //
+  // Note: These need to be kept consistent with `ConvertMemoryOperand` in
+  //       `decode.cc` and with `MemoryBuilder::Build`.
+  //
+  // TODO(pag): This should be turned into a utility function.
+  bool IsEffectiveAddress(void) {
+    return XED_ICLASS_BNDCL == data.iclass ||
+           XED_ICLASS_BNDCN == data.iclass ||
+           XED_ICLASS_BNDCU == data.iclass ||
+           XED_ICLASS_BNDMK == data.iclass ||
+           XED_ICLASS_CLFLUSH == data.iclass ||
+           XED_ICLASS_CLFLUSHOPT == data.iclass ||
+           XED_ICLASS_LEA == data.iclass ||
+           (XED_ICLASS_PREFETCHNTA <= data.iclass &&
+            XED_ICLASS_PREFETCH_RESERVED >= data.iclass);
   }
 
   unsigned ParseVar(void) {
     Accept('%');
-    auto num = ParseNumber();
-    GRANARY_ASSERT(0 <= num && MAX_NUM_INLINE_VARS > num);
-    return static_cast<unsigned>(num);
+    ParseWord();
+    unsigned var_num = kMaxNumInlineVars;
+    DeFormat(buff, "%u", &var_num);
+    GRANARY_ASSERT(kMaxNumInlineVars > var_num);
+    return var_num;
   }
 
-  int ParseWidth(void) {
-    auto width = ParseNumber();
-    GRANARY_ASSERT(8 == width || 16 == width || 32 == width || 64 == width);
-    return width;
+  // Get a label.
+  void InitLabelVar(unsigned var_num)  {
+    auto &aop(scope->vars[var_num]);
+    if (!scope->var_is_initialized[var_num]) {
+      scope->var_is_initialized[var_num] = true;
+      aop->annotation_instr = new LabelInstruction;
+      aop->is_annotation_instr = true;
+      aop->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
+      aop->width = arch::ADDRESS_WIDTH_BITS;
+    }
   }
 
-  void ParseArchReg(void) {
-    char buff[20] = {'\0'};
-    ParseWord(buff);
-    auto reg = str2xed_reg_enum_t(buff);
-    GRANARY_ASSERT(XED_REG_INVALID != reg);
-    op->type = XED_ENCODER_OPERAND_TYPE_REG;
-    op->reg.DecodeFromNative(static_cast<int>(reg));
+  // Get a virtual register.
+  void InitRegVar(unsigned var_num) {
+    auto &aop(scope->vars[var_num]);
+    if (!scope->var_is_initialized[var_num]) {
+      scope->var_is_initialized[var_num] = true;
+      aop->reg = block->AllocateVirtualRegister();
+      aop->type = XED_ENCODER_OPERAND_TYPE_REG;
+      aop->width = arch::GPR_WIDTH_BITS;
+    }
   }
 
-  void ParseInPlaceOp(void) {
+  // Parse a label instruction.
+  void ParseLabelInstruction(void) {
     auto var_num = ParseVar();
-    GRANARY_ASSERT(scope->var_is_initialized[var_num]);
-    auto &untyped_op(scope->vars[var_num].mem);  // Operand containers overlap.
-    memcpy(op, untyped_op->Extract(), sizeof *op);
+    InitLabelVar(var_num);
+    instr->InsertBefore(scope->vars[var_num]->annotation_instr);
   }
 
-  // TODO(pag): Only supports base form right now, i.e. `[%0]` and not the full
-  //            `segment:[disp + base + index * scale]` form.
-  void ParseMemoryOp(void) {
+  // Parse the next thing as an explicitly state architectural register.
+  VirtualRegister ParseArchRegister(void) {
+    ParseWord();
+    ConsumeWhiteSpace();
+    return VirtualRegister::FromNative(static_cast<uint32_t>(
+        str2xed_reg_enum_t(buff)));
+  }
+
+  // Parse the next thisng as an already initialized variable operand, and
+  // return the virtual register associated with that operand.
+  VirtualRegister ParseRegisterVar(void) {
+    auto var_num = ParseVar();
+    ConsumeWhiteSpace();
+    GRANARY_ASSERT(scope->var_is_initialized[var_num]);
+    GRANARY_ASSERT(scope->vars[var_num]->IsRegister());
+    return scope->vars[var_num]->reg.WidenedTo(arch::GPR_WIDTH_BYTES);
+  }
+
+  // Parse the next thing as a generic, already initialized variable.
+  const arch::Operand &ParseOperandVar(void) {
+    auto var_num = ParseVar();
+    ConsumeWhiteSpace();
+    GRANARY_ASSERT(scope->var_is_initialized[var_num]);
+    return *(scope->vars[var_num]);
+  }
+
+  // Treat this memory operand as a pointer.
+  void ParsePointerOperand(void) {
+    op->type = XED_ENCODER_OPERAND_TYPE_PTR;
+    ParseWord();
+    if ('0' == buff[0]) {
+      DeFormat(buff, "%lx", &(op->addr.as_uint));
+    } else {
+      DeFormat(buff, "%lu", &(op->addr.as_uint));
+    }
+  }
+
+  // Parse a compound memory operand. This is quite tricky and almost nearly
+  // handles the full generality of base/disp memory operands, with the ability
+  // to mix in input virtual registers and immediates, as well as literal
+  // registers and immediates for the various components.
+  void ParseCompoundMemoryOperand(void) {
+    enum {
+      ParseReg,
+      InterpretRegAsBase,
+      InterpretRegAsIndex,
+      TryParseIndexOrDisp,
+      ParseScale,
+      ParseDisp
+    } state = ParseReg;
+
+    VirtualRegister reg;
     Accept('[');
     ConsumeWhiteSpace();
-    if (Peek('%')) {
-      auto var_num = ParseVar();
-      GRANARY_ASSERT(scope->var_is_initialized[var_num]);
-      auto &reg_op(scope->vars[var_num].reg);
-      op->reg = reg_op->Register();
-    } else {
-      ParseArchReg();
+
+    if (PeekNumber()) {  // Pointer.
+      ParsePointerOperand();
       ConsumeWhiteSpace();
-      if (Peek('+')) {
-        op->is_compound = true;
-        op->mem.reg_base = static_cast<xed_reg_enum_t>(op->reg.EncodeToNative());
-        op->mem.reg_index = XED_REG_INVALID;
-        op->mem.scale = 0;
+      Accept(']');
+      return;
+    }
 
-        Accept('+');
-        ConsumeWhiteSpace();
+    for (; !Peek(']');) {
+      switch (state) {
+        case ParseReg:
+          if (Peek('%')) {
+            reg = ParseRegisterVar();
+          } else {
+            GRANARY_ASSERT(PeekAlpha());
+            reg = ParseArchRegister();
+          }
+          if (Peek('+') || Peek(']')) {
+            state = InterpretRegAsBase;
+            goto lInterpretRegAsBase;
 
-        char buff[20] = {'\0'};
-        ParseWord(buff);
-        if ('0' == buff[0] && ('x' == buff[1] || 'X' == buff[1])) {
-          DeFormat(buff, "%x", &(op->mem.disp));
-        } else {
-          DeFormat(buff, "%d", &(op->mem.disp));
-        }
+          } else if (Peek('*')) {
+            state = InterpretRegAsIndex;
+          }
+          break;
+
+        case InterpretRegAsBase:
+        lInterpretRegAsBase:
+          GRANARY_ASSERT(reg.IsValid());
+          op->mem.base = reg;
+          if (Peek('+')) {
+            Accept('+');
+            ConsumeWhiteSpace();
+            state = TryParseIndexOrDisp;
+          } else {
+            GRANARY_ASSERT(Peek(']'));
+          }
+          break;
+
+        case InterpretRegAsIndex:
+        lInterpretRegAsIndex:
+          GRANARY_ASSERT(reg.IsValid());
+          op->mem.index = reg;
+          op->mem.scale = 1;
+          if (Peek('*')) {
+            Accept('*');
+            ConsumeWhiteSpace();
+            state = ParseScale;
+          } else if (Peek('+')) {
+            Accept('+');
+            ConsumeWhiteSpace();
+            state = ParseDisp;
+          } else if (!Peek(']')) {
+            GRANARY_ASSERT(false);
+          }
+          break;
+
+        case TryParseIndexOrDisp:
+          if (PeekNumber()) {  // Literal displacement.
+            state = ParseDisp;
+
+          } else if (PeekAlpha()) {  // Index arch reg.
+            reg = ParseArchRegister();
+            state = InterpretRegAsIndex;
+            goto lInterpretRegAsIndex;
+
+          } else if (Peek('%')) {  // Index var reg, or displacement imm reg.
+            auto &aop(ParseOperandVar());
+            if (aop.IsRegister()) {
+              reg = aop.reg.WidenedTo(arch::GPR_WIDTH_BYTES);
+              state = InterpretRegAsIndex;
+              goto lInterpretRegAsIndex;
+
+            } else if (aop.IsImmediate()) {
+              op->mem.disp = static_cast<int32_t>(aop.imm.as_int);
+
+              // Make sure that we don't lost precision.
+              GRANARY_ASSERT(op->mem.disp == aop.imm.as_int);
+              goto lDone;
+
+            } else {
+              GRANARY_ASSERT(false);
+            }
+          } else {
+            GRANARY_ASSERT(false);
+          }
+          break;
+
+        case ParseScale:
+          ParseWord();
+          ConsumeWhiteSpace();
+          switch (buff[0]) {
+            case '1': op->mem.scale = 1; break;
+            case '2': op->mem.scale = 2; break;
+            case '4': op->mem.scale = 4; break;
+            case '8': op->mem.scale = 8; break;
+            default: GRANARY_ASSERT(false); break;
+          }
+          if (Peek('+')) {
+            Accept('+');
+            ConsumeWhiteSpace();
+            state = ParseDisp;
+          } else {
+            goto lDone;
+          }
+          break;
+
+        case ParseDisp:
+          if (PeekNumber()) {  // Literal displacement.
+            ParseWord();
+            if ('0' == buff[0]) {
+              DeFormat(buff, "%x", &(op->mem.disp));
+            } else {
+              DeFormat(buff, "%d", &(op->mem.disp));
+            }
+          } else if (Peek('%')) {
+            auto &aop(ParseOperandVar());
+            GRANARY_ASSERT(aop.IsImmediate());
+            op->mem.disp = static_cast<int32_t>(aop.imm.as_int);
+            GRANARY_ASSERT(op->mem.disp == aop.imm.as_int);
+
+          } else {
+            GRANARY_ASSERT(false);
+          }
+          goto lDone;
       }
     }
-    op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+  lDone:
+    GRANARY_ASSERT(op->mem.base.IsValid() || op->mem.index.IsValid());
     ConsumeWhiteSpace();
     Accept(']');
+
+    op->type = XED_ENCODER_OPERAND_TYPE_MEM;
+    op->is_compound = op->mem.disp || 1 < op->mem.scale ||
+                      (op->mem.base.IsValid() && op->mem.index.IsValid());
+    if (6 == op->mem.disp) {
+
+    }
+    // Canonicalize to use base reg over index reg when it makes sense.
+    if (!op->is_compound && op->mem.index.IsValid()) {
+      op->mem.base = op->mem.index;
+      op->mem.index = VirtualRegister();
+      op->mem.scale = 0;
+    }
+
+    // TODO(pag): Uggh, get rid of this nastiness.
+    if (!op->is_compound) {
+      op->reg = op->mem.base;
+    }
   }
 
-  // Like labels, this will create/initialize a new reg op if it isn't already
-  // initialized.
-  void ParseRegOp(void) {
-    auto is_def = false;
-    if (Peek('@')) {
-      char buff[20] = {'\0'};
-      ParseWord(buff);
-      is_def = StringsMatch("@def", buff);
-      ConsumeWhiteSpace();
+  // Parse a memory operand. This might be a compound memory operand, or it
+  // might reference an input operand. This alos might need to mark memory
+  // operands as not actually reading/writing from/to memory.
+  void ParseMemoryOperand(void) {
+    auto seg_reg = XED_REG_INVALID;
+    if (Peek('[')) {
+      ParseCompoundMemoryOperand();
+
+    } else if (Peek('F')) {
+      ParseWord();
+      GRANARY_ASSERT(StringsMatch(buff, "FS"));
+      seg_reg = XED_REG_FS;
+      Accept(':');
+      ParseCompoundMemoryOperand();
+
+    } else if (Peek('G')) {
+      ParseWord();
+      GRANARY_ASSERT(StringsMatch(buff, "GS"));
+      seg_reg = XED_REG_GS;
+      Accept(':');
+      ParseCompoundMemoryOperand();
+
+    } else if (Peek('%')) {
+      auto var_num = ParseVar();
+      auto &aop(scope->vars[var_num]);
+      if (aop->IsRegister()) {
+        seg_reg = static_cast<xed_reg_enum_t>(aop->reg.EncodeToNative());
+        GRANARY_ASSERT(seg_reg && XED_REG_DS != seg_reg);
+        Accept(':');
+        ParseCompoundMemoryOperand();
+      } else {
+        GRANARY_ASSERT(aop->IsMemory());
+        *op = *aop;
+      }
     }
+    op->segment = seg_reg;
+    op->is_effective_address = IsEffectiveAddress();
+    GRANARY_ASSERT(!(op->is_effective_address && op->segment));
+  }
+
+  // Parse a virtual register.
+  void ParseVirtRegisterOperand(void) {
     auto var_num = ParseVar();
-    auto &reg_op(scope->vars[var_num].reg);
-    if (!scope->var_is_initialized[var_num]) {
-      op->type = XED_ENCODER_OPERAND_TYPE_REG;
-      op->reg = block->AllocateVirtualRegister();
-      reg_op->UnsafeReplace(op);
-      scope->var_is_initialized[var_num] = true;
-    } else {
-      memcpy(op, reg_op->Extract(), sizeof *op);
-    }
-    op->is_definition = is_def;
+    InitRegVar(var_num);
+    *op = *(scope->vars[var_num]);
   }
 
-  void ParseImmediate(void) {
-    char buff[20] = {'\0'};
-    ParseWord(buff);
+  // Parse an explicitly specified architectural register.
+  void ParseArchRegisterOperand(void) {
+    ParseWord();
+    auto reg = str2xed_reg_enum_t(buff);
+    GRANARY_ASSERT(XED_REG_INVALID != reg);
+    op->reg.DecodeFromNative(static_cast<uint32_t>(reg));
+    op->type = XED_ENCODER_OPERAND_TYPE_REG;
+  }
+
+  // Parse a register operand. This might be a virtual or explicitly specified
+  // architectural register.
+  void ParseRegisterOperand(unsigned width) {
+    if (Peek('%')) {
+      ParseVirtRegisterOperand();
+    } else {
+      ParseArchRegisterOperand();
+    }
+    op->reg.Widen(width / arch::BYTE_WIDTH_BITS);
+  }
+
+  // Parse an immediate literal operand.
+  void ParseImmediateLiteralOperand(void) {
+    ParseWord();
     auto negate = false;
     auto offset = 0;
 
@@ -275,95 +424,142 @@ class InlineAssemblyParser {
     op->imm.as_uint = num;
   }
 
-  // Parse an inline assembly operand.
-  bool ParseOperand(void) {
-    auto op_type = *ch++;
-    if ('l' == op_type) {  // Handle labels as special cases.
-      ConsumeWhiteSpace();
-      branch_target = GetLabel(ParseVar());
-      op->type = XED_ENCODER_OPERAND_TYPE_BRDISP;
-      op->rw = XED_OPERAND_ACTION_R;
-      op->branch_target.as_app_pc = nullptr;
-      op->is_annotation_instr = true;
-      op->annotation_instr = branch_target;
-    } else if ('m' == op_type || 'i' == op_type || 'r' == op_type) {
-      auto width = ParseWidth();
-      ConsumeWhiteSpace();
-      switch (op_type) {
-        case 'm':  // Memory.
-          if (Peek('%')) {
-            ParseInPlaceOp();
-          } else {
-            ParseMemoryOp();
-          }
-          break;
-        case 'i':  // Immediate.
-          if (Peek('%')) {
-            ParseInPlaceOp();
-          } else {
-            ParseImmediate();
-          }
-          break;
-        case 'r':  // Register.
-          if (Peek('%')) {
-            ParseRegOp();
-          } else {
-            ParseArchReg();
-          }
-          op->reg.Widen(width / 8);
-          break;
-        default: break;
-      }
-      op->width = static_cast<decltype(op->width)>(width);
+  // Parse an immediate operand.
+  void ParseImmediateOperand(void) {
+    if (Peek('%')) {
+      auto var_num = ParseVar();
+      GRANARY_ASSERT(scope->var_is_initialized[var_num]);
+      auto &aop(scope->vars[var_num]);
+      GRANARY_ASSERT(aop->IsImmediate());
+      *op = *aop;
+
     } else {
-      ch--;
-      return false;
+      ParseImmediateLiteralOperand();
     }
-    ++data.num_explicit_ops;
-    ++op;
-    return true;
   }
+
+  // Used in branch targets and calculation of effective addresses, for later
+  // indirect jumps, return address stuff, etc.
+  void ParseLabelOperand(void) {
+    auto var_num = ParseVar();
+    InitLabelVar(var_num);
+    auto &aop(scope->vars[var_num]);
+    auto annot_instr = aop->annotation_instr;
+
+    // Increment the refcount; for branch instructions, the `BranchInstruction`
+    // class does this.
+    if (!data.IsJump()) {
+      if (auto label_instr = DynamicCast<LabelInstruction *>(annot_instr)) {
+        label_instr->DataRef<uintptr_t>() += 1;
+      }
+    }
+
+    *op = *aop;
+    if ((op->is_effective_address = IsEffectiveAddress())) {
+      op->type = XED_ENCODER_OPERAND_TYPE_PTR;
+    }
+  }
+
+  // Parse a generic operand.
+  void ParseOperand(void) {
+    char type = '\0';
+    unsigned width = 0;
+    ParseWord();
+    DeFormat(buff, "%c%u", &type, &width);
+    ConsumeWhiteSpace();
+    switch (type) {
+      case 'm': ParseMemoryOperand(); break;
+      case 'r': ParseRegisterOperand(width); break;
+      case 'i': ParseImmediateOperand(); break;
+      case 'l': ParseLabelOperand(); break;
+      default: GRANARY_ASSERT(false); break;
+    }
+
+    op->width = static_cast<uint16_t>(width);
+    op->rw = XED_OPERAND_ACTION_INVALID;
+    op->is_explicit = true;
+    op->is_sticky = false;
+  }
+
+  void ParseInstructionPrefixes(void) {
+    for (;;) {
+      ConsumeWhiteSpace();
+      ParseWord();
+      if (!buff[0]) return;
+
+      if (StringsMatch(buff, "LOCK")) {
+        data.has_prefix_lock = true;
+      } else if (StringsMatch(buff, "REP") || StringsMatch(buff, "REPE")) {
+        data.has_prefix_rep = true;
+      } else if (StringsMatch(buff, "REPNE")) {
+        data.has_prefix_repne = true;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Parse this instruction as a label instruction.
+  //
+  // Note: This re-uses `buff` from `ParseInstructionPrefixes`.
+  bool TryParseLabelInstruction(void) {
+    if (StringsMatch(buff, "LABEL")) {
+      ConsumeWhiteSpace();
+      ParseLabelInstruction();
+      Accept(':');
+      return true;
+    }
+    return false;
+  }
+
+  // Parse the opcode of the instruction.
+  //
+  // Note: This re-uses `buff` from `ParseInstructionPrefixes`.
+  void ParseInstructionOpcode(void) {
+    data.iclass = str2xed_iclass_enum_t(buff);
+    GRANARY_ASSERT(XED_ICLASS_INVALID != data.iclass);
+    data.category = arch::ICLASS_CATEGORIES[data.iclass];
+  }
+
 
   // Fix-up the operands by matching the instruction to a specific instruction
   // selection, and then super-imposing the r/w actions of those operands onto
   // the assembled operands.
   void FixupOperands(void) {
     auto xedi = SelectInstruction(&data);
-    int16_t op_size = 0;
     GRANARY_ASSERT(nullptr != xedi);
-    auto i = 0U;
-    for (auto &instr_op : data.ops) {
-      if (XED_ENCODER_OPERAND_TYPE_INVALID == instr_op.type) {
-        break;
-      } else {
-        auto xedi_op = xed_inst_operand(xedi, i++);
-        instr_op.rw = xed_operand_rw(xedi_op);
-        instr_op.is_explicit = true;
-        if (instr_op.IsRegister() && instr_op.reg.IsNative() &&
-            !instr_op.reg.IsGeneralPurpose()) {
-          instr_op.is_sticky = true;
-        }
-        op_size = std::max(op_size, instr_op.width);
-      }
+
+    FinalizeInstruction(&data);
+    uint16_t op_size = 0;
+
+    for (auto i = 0U; i < data.num_explicit_ops; ++i) {
+      auto &instr_op(data.ops[i]);
+      GRANARY_ASSERT(XED_ENCODER_OPERAND_TYPE_INVALID != instr_op.type);
+
+      auto xedi_op = xed_inst_operand(xedi, i);
+      instr_op.rw = xed_operand_rw(xedi_op);
+      instr_op.is_explicit = true;
+      instr_op.is_sticky = instr_op.IsRegister() && instr_op.reg.IsNative() &&
+                           !instr_op.reg.IsGeneralPurpose();
+
+      // Note: Things like label operands won't have a width.
+      op_size = std::max(op_size, instr_op.width);
     }
-    if (XED_CATEGORY_PUSH == data.category) {
-      op_size = arch::ADDRESS_WIDTH_BITS;
+
+    // TODO(pag): This is not right in all cases, e.g. PUSHFW, but then we'll
+    //            likely detect it and solve it when it's an issue.
+    if (XED_CATEGORY_PUSH == data.category ||
+        XED_CATEGORY_POP == data.category) {
+      op_size = arch::STACK_WIDTH_BITS;
     }
     data.effective_operand_width = op_size;
   }
 
   // Finalize the instruction by adding it to the basic block's instruction
   // list.
-  void FinalizeInstruction(void) {
+  void MakeInstruction(void) {
     Instruction *new_instr(nullptr);
     FixupOperands();
-
-    // TODO(pag): For the time being, I allow instrumentation instructions to
-    //            read/write from the stack pointer; however, this is valid
-    //            if and only if these instructions do not operate within a
-    //            loop. If they do get put inside a loop then step 9 in
-    //            `9_allocate_slots.cc` likely will not terminate.
-    data.AnalyzeStackUsage();
 
     // Ensure that instrumentation instructions do not alter the direction
     // flag! This is because we have no reliable way of saving and restoring
@@ -373,15 +569,16 @@ class InlineAssemblyParser {
     GRANARY_ASSERT(!flags.written.s.df);
 
     if (data.IsJump()) {
-      GRANARY_ASSERT(nullptr != branch_target);
-      new_instr = new BranchInstruction(&data, branch_target);
+      GRANARY_ASSERT(data.ops[0].is_annotation_instr);
+      new_instr = new BranchInstruction(
+          &data, DynamicCast<LabelInstruction *>(data.ops[0].annotation_instr));
     } else if (data.IsFunctionCall()) {
-      auto bb = new NativeBasicBlock(
+      auto bb = new NativeBlock(
           data.HasIndirectTarget() ? nullptr : data.BranchTargetPC());
       cfg->AddBlock(bb);
       new_instr = new ControlFlowInstruction(&data, bb);
     } else if (data.IsFunctionReturn()) {
-      auto bb = new ReturnBasicBlock(cfg, nullptr /* no meta-data */);
+      auto bb = new ReturnBlock(cfg, nullptr /* no meta-data */);
       cfg->AddBlock(bb);
       new_instr = new ControlFlowInstruction(&data, bb);
 
@@ -397,24 +594,79 @@ class InlineAssemblyParser {
     instr->InsertBefore(new_instr);
   }
 
+  // Parse a single inline assembly instructions.
+  void ParseInstruction(void) {
+    ParseInstructionPrefixes();
+    if (TryParseLabelInstruction()) return;
+    ParseInstructionOpcode();
+    ConsumeWhiteSpace();
+    while (!Peek(';')) {
+      if (data.num_explicit_ops) {
+        Accept(',');
+        ConsumeWhiteSpace();
+      }
+      ParseOperand();
+      ++data.num_explicit_ops;
+      ++op;
+      ConsumeWhiteSpace();
+    }
+    Accept(';');
+    MakeInstruction();
+  }
+
+ private:
+  inline bool Peek(char next) {
+    return *ch == next;
+  }
+
+  inline bool PeekNumber(void) {
+    return '0' <= *ch && '9' >= *ch;
+  }
+
+  inline bool PeekAlpha(void) {
+    return 'A' <= *ch && 'Z' >= *ch;
+  }
+
+  inline void Accept(char GRANARY_IF_DEBUG(next)) {
+    GRANARY_ASSERT(Peek(next));
+    ch++;
+  }
+
+  inline bool PeekWhitespace(void) {
+    return ' ' == *ch || '\t' == *ch || '\n' == *ch;
+  }
+
+  void ConsumeWhiteSpace(void) {
+    for (; *ch && PeekWhitespace(); ++ch) {}
+  }
+
+  void ParseWord(void) {
+    auto b = &(buff[0]);
+    for (; *ch; ) {
+      if (PeekWhitespace() || Peek(';') || Peek(',') ||
+          Peek(':') || Peek('[') || Peek(']')) {
+        break;
+      }
+      *b++ = *ch++;
+    }
+    *b = '\0';
+  }
+
   // Holds an in-progress instructions.
   arch::Instruction data;
 
   // The next operand to decode.
   arch::Operand *op;
 
-  // The number of immediates already seen.
-  int num_immediates;
-
   // The control-flow graph; used to materialize basic blocks.
-  LocalControlFlowGraph *cfg;
+  Trace *cfg;
 
   // Scope from which local/input variables can be looked up.
   InlineAssemblyScope * const scope;
 
   // Basic block into which instructions are being placed. Used to allocate
   // new virtual registers.
-  DecodedBasicBlock * const block;
+  DecodedBlock * const block;
 
   // Instruction before which all assembly instructions will be placed.
   Instruction * const instr;
@@ -422,20 +674,21 @@ class InlineAssemblyParser {
   // The next character to parse.
   const char *ch;
 
-  // Label that is the target of this instruction, in the event that this
-  // instruction is a branch.
-  AnnotationInstruction *branch_target;
-};
-}  // namespace
+  char buff[20];
 
+  // The number of immediates already seen.
+  int num_immediates;
+};
+
+}  // namespace
 namespace arch {
 
 // Compile this inline assembly into some instructions within the block
 // `block`. This places the inlined instructions before `instr`, which is
 // assumed to be the `AnnotationInstruction` containing the inline assembly
 // instructions.
-void CompileInlineAssemblyBlock(LocalControlFlowGraph *cfg,
-                                DecodedBasicBlock *block,
+void CompileInlineAssemblyBlock(Trace *cfg,
+                                DecodedBlock *block,
                                 granary::Instruction *instr,
                                 InlineAssemblyBlock *asm_block) {
   InlineAssemblyParser parser(cfg, asm_block->scope, block,

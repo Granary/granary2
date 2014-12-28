@@ -22,14 +22,14 @@ class MockTool : public granary::InstrumentationTool {
   // requests are made.
   MOCK_METHOD2(InstrumentControlFlow,
                void(granary::BlockFactory *materializer,
-                    granary::LocalControlFlowGraph *cfg));
+                    granary::Trace *cfg));
 
   // Used to implement more complex forms of instrumentation where tools need
   // to see the entire local control-flow graph.
   //
   // This method is executed once per tool per instrumentation session.
   MOCK_METHOD1(InstrumentBlocks,
-               void(const granary::LocalControlFlowGraph *cfg));
+               void(const granary::Trace *cfg));
 
   // Used to implement the typical JIT-based model of single basic-block at a
   // time instrumentation.
@@ -38,7 +38,7 @@ class MockTool : public granary::InstrumentationTool {
   // but is never re-executed for the same (tool, BB) pair in the current
   // instrumentation session.
   MOCK_METHOD1(InstrumentBlock,
-               void(granary::DecodedBasicBlock *block));
+               void(granary::DecodedBlock *block));
 };
 
 #endif  // TEST_TOOL_H_

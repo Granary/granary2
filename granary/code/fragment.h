@@ -20,6 +20,7 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
+#include "granary/code/ssa.h"
 
 #include "os/logging.h"
 
@@ -29,14 +30,12 @@ namespace granary {
 class BlockMetaData;
 
 class SSASpillStorage;
-class FlagZone;
 class Fragment;
 class SSAFragment;
 class PartitionEntryFragment;
 class PartitionExitFragment;
 class FlagEntryFragment;
 class FlagExitFragment;
-class SSANode;
 class DirectEdge;
 
 // Tracks the size of the stack frame within the current fragment/partition.
@@ -51,6 +50,30 @@ class StackFrameInfo {
 
   int entry_offset;
   int exit_offset;
+};
+
+
+// Maintains information about flags usage within a "zone" (a group of non-
+// application fragments that are directly connected by control flow). Flag
+// zones are delimited by `FlagEntry` and `FlagExit` fragments.
+union FlagZone {
+ public:
+  inline FlagZone(void)
+      : flags(0) {}
+
+  inline bool operator==(const FlagZone &that) const {
+    return flags == that.flags;
+  }
+
+  struct {
+    // All flags killed by any instruction within this flag zone.
+    uint32_t killed_flags;
+
+    // Live flags on exit from this flags zone.
+    uint32_t live_flags;
+  } __attribute__((packed));
+
+  uint64_t flags;
 };
 
 enum EdgeKind {
@@ -84,28 +107,23 @@ class PartitionInfo {
     ALIGNMENT = 1
   })
 
-  const int id;
+  // The first fragment in this partition. This will either be a
+  // `PartitionEntryFragment` or a `CodeFragment`.
+  Fragment *entry_frag;
 
   // The number of slots allocated in this partition. This includes fragment-
   // local and partition-local slots.
-  int num_slots;
+  size_t num_slots;
+
+  const int id;
 
   // For sanity checking: our stack analysis might yield undefined behavior of
   // a partition has more than one entry points.
   GRANARY_IF_DEBUG( int num_partition_entry_frags; )
 
-  // Used to verify that a virtual register is not defined in one fragment
-  // and used in another.
-  GRANARY_IF_DEBUG( TinySet<VirtualRegister,
-                            arch::NUM_GENERAL_PURPOSE_REGISTERS> used_vrs; )
-
   // Should we analyze the stack frames?
-  bool analyze_stack_frame;
   int min_frame_offset;
-
-  // The first fragment in this partition. This will either be a
-  // `PartitionEntryFragment` or a `CodeFragment`.
-  Fragment *entry_frag;
+  bool analyze_stack_frame;
 
  private:
   PartitionInfo(void) = delete;
@@ -123,16 +141,6 @@ union TempData {
   Fragment *entry_exit_frag;
 };
 
-// Tracks registers used within fragments.
-class RegisterUsageInfo {
- public:
-  RegisterUsageInfo(void);
-
-  LiveRegisterSet live_on_entry;
-  LiveRegisterSet live_on_exit;
-
-};
-
 // Used to count the number of uses of each GPR within one or more fragments.
 class RegisterUsageCounter {
  public:
@@ -144,7 +152,12 @@ class RegisterUsageCounter {
   // Count the number of uses of the arch GPRs in this fragment.
   void CountGPRUses(Fragment *frag);
 
-  int num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+  // Count the number of uses of the arch GPRs in a particular instruction.
+  //
+  // Note: This function has an architecture-specific implementation.
+  void CountGPRUses(const NativeInstruction *instr);
+
+  size_t num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 };
 
 // Tracks flag usage within a code fragment.
@@ -170,8 +183,24 @@ class FlagUsageInfo {
 
 // Targets in/out of this fragment.
 enum FragmentSuccessorSelector {
-  FRAG_SUCC_FALL_THROUGH = 0,
-  FRAG_SUCC_BRANCH = 1
+  kFragSuccFallThrough = 0,
+  kFragSuccBranch = 1
+};
+
+enum FragmentType {
+  // The code type of this fragment hasn't (yet) been decided.
+  FRAG_TYPE_UNKNOWN,
+
+  // Fragment containing application instructions and/or instrumentation
+  // instructions that don't modify the flags state.
+  FRAG_TYPE_APP,
+
+  // Fragment containing instrumentation instructions, and/or application
+  // instructions that don't read/write the flags state.
+  //
+  // Note: The extra condition of app instructions not *reading* the flags
+  //       state is super important!
+  FRAG_TYPE_INST
 };
 
 // Represents a fragment of instructions. Fragments are like basic blocks.
@@ -190,24 +219,30 @@ class Fragment {
   })
 
   // Connects together fragments into a `FragmentList`.
-  ListHead list;
+  ListHead<Fragment> list;
 
   // Connects together fragments into an `EncodeOrderedFragmentList`.
   Fragment *next;
   int encoded_order;
 
   // Where was this fragment encoded?
-  int encoded_size;
+  size_t encoded_size;
   CachePC encoded_pc;
 
+  // What kind of fragment is this? This is primarily used by `CodeFragment`
+  // fragments, but it helps to be able to recognize all other kinds of
+  // fragments as application fragments.
+  FragmentType type;
+
   // List of instructions in the fragment.
+  LabelInstruction *entry_label;
   InstructionList instrs;
 
   // The partition to which this fragment belongs.
   DisjointSet<PartitionInfo *> partition;
 
   // The "flag zone" to which this fragment belongs.
-  DisjointSet<FlagZone *> flag_zone;
+  DisjointSet<FlagZone> flag_zone;
 
   // Tracks flag use within this fragment.
   FlagUsageInfo app_flags;
@@ -215,9 +250,6 @@ class Fragment {
 
   // Temporary, pass-specific data.
   TempData temp;
-
-  // Tracks register usage across fragments.
-  RegisterUsageInfo regs;
 
   // Tracks the successor fragments.
   Fragment *successors[2];
@@ -245,45 +277,10 @@ void Log(LogLevel level, FragmentList *frags);
 // Free all fragments, their instructions, etc.
 void FreeFragments(FragmentList *frags);
 
-// Maintains information about flags usage within a "zone" (a group of non-
-// application fragments that are directly connected by control flow). Flag
-// zones are delimited by `FlagEntry` and `FlagExit` fragments.
-class FlagZone {
- public:
-  FlagZone(VirtualRegister flag_save_reg_, VirtualRegister flag_killed_reg_);
-
-  // All flags killed by any instruction within this flag zone.
-  uint32_t killed_flags;
-
-  // Live flags on exit from this flags zone.
-  uint32_t live_flags;
-
-  // Register used for holding the flags state.
-  VirtualRegister flag_save_reg;
-
-  // General-purpose register used in the process of storing the flags. Might
-  // be invalid. Might also be a architectural GPR.
-  VirtualRegister flag_killed_reg;
-
-  // Registers used anywhere within this flag zone.
-  UsedRegisterSet used_regs;
-
-  // Live registers on exit from this flags zone.
-  LiveRegisterSet live_regs;
-
-  GRANARY_DEFINE_NEW_ALLOCATOR(FlagZone, {
-    SHARED = false,
-    ALIGNMENT = 1
-  })
-
- private:
-  FlagZone(void) = delete;
-};
-
 enum StackStatus {
-  STACK_UNKNOWN,
-  STACK_VALID,
-  STACK_INVALID
+  kStackStatusUnknown,
+  kStackStatusValid,
+  kStackStatusInvalid
 };
 
 enum StackStatusInheritanceConstraint {
@@ -302,18 +299,18 @@ enum StackStatusInheritanceConstraint {
 // Tracks stack usage info.
 struct StackUsageInfo {
   inline StackUsageInfo(void)
-      : status(STACK_UNKNOWN),
+      : status(kStackStatusUnknown),
         inherit_constraint(STACK_STATUS_INHERIT_UNI) {}
 
   inline explicit StackUsageInfo(StackStatus status_)
       : status(status_),
         inherit_constraint(STACK_STATUS_DONT_INHERIT) {
-    GRANARY_ASSERT(STACK_UNKNOWN != status_);
+    GRANARY_ASSERT(kStackStatusUnknown != status_);
   }
 
   inline explicit StackUsageInfo(
       StackStatusInheritanceConstraint inherit_constraint_)
-      : status(STACK_UNKNOWN),
+      : status(kStackStatusUnknown),
         inherit_constraint(inherit_constraint_) {
     GRANARY_ASSERT(STACK_STATUS_DONT_INHERIT != inherit_constraint_);
   }
@@ -325,22 +322,6 @@ struct StackUsageInfo {
   // Should forward propagation of stack validity be disallowed into this
   // block?
   StackStatusInheritanceConstraint inherit_constraint;
-};
-
-enum CodeType {
-  // The code type of this fragment hasn't (yet) been decided.
-  CODE_TYPE_UNKNOWN,
-
-  // Fragment containing application instructions and/or instrumentation
-  // instructions that don't modify the flags state.
-  CODE_TYPE_APP,
-
-  // Fragment containing instrumentation instructions, and/or application
-  // instructions that don't read/write the flags state.
-  //
-  // Note: The extra condition of app instructions not *reading* the flags
-  //       state is super important!
-  CODE_TYPE_INST
 };
 
 // Attributes about a block of code.
@@ -428,18 +409,22 @@ class alignas(alignof(void *)) CodeAttributes {
   // fall-throughs) a `ControlFlowInstruction`?
   bool follows_cfi:1;
 
-  // Is there an instruction in this fragment with an OS-specific annotation?
-  bool has_os_annotation:1;
-
   // Count of the number of predecessors of this fragment (at fragment build
   // time).
   uint8_t num_predecessors;
 
 } __attribute__((packed));
 
-// Mapping of virtual registers to `SSANode`s.
-typedef TinyMap<VirtualRegister, SSANode *,
-                arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> SSANodeMap;
+// Mapping of virtual registers to `SSARegisterWeb`s.
+//
+// TODO(pag): Need a better data structure.
+typedef TinyMap<VirtualRegister, SSARegisterWeb *,
+                arch::NUM_GENERAL_PURPOSE_REGISTERS + 7> SSARegisterWebMap;
+
+// Using a vector is deliberate so that the *first* added entries relate to
+// later definitions in a fragment.
+typedef TinyVector<SSARegisterWeb *, arch::NUM_GENERAL_PURPOSE_REGISTERS>
+        SSARegisterWebList;
 
 // Set of spill slots.
 typedef BitSet<arch::MAX_NUM_SPILL_SLOTS> SpillSlotSet;
@@ -454,30 +439,17 @@ class SSAFragment : public Fragment {
 
   struct SSAInfo {
     inline SSAInfo(void)
-        : entry_nodes(),
-          exit_nodes() {}
+        : entry_reg_webs(),
+          exit_reg_webs(),
+          internal_reg_webs() {}
 
-    SSANodeMap entry_nodes;
-    SSANodeMap exit_nodes;
+    SSARegisterWebMap entry_reg_webs;
+    SSARegisterWebMap exit_reg_webs;
+
+    // Webs for definitions are in reverse order of the instructions in a
+    // fragment (last def to first def).
+    SSARegisterWebList internal_reg_webs;
   } ssa;
-
-  struct SpillInfo {
-    inline SpillInfo(void)
-        : used_slots(),
-          num_slots(0),
-          num_partition_slots(0) {}
-
-    // Tracks which spill slots are allocated.
-    SpillSlotSet used_slots;
-
-    // Number of spill slots used. This includes partition-local spill slots
-    // and fragment-local spill slots.
-    int num_slots;
-
-    // Number of partition-local spill slots used *before* this fragment
-    // scheduled its fragment-local registers.
-    int num_partition_slots;
-  } spill;
 };
 
 // A fragment of native or instrumentation instructions.
@@ -488,8 +460,6 @@ class CodeFragment : public SSAFragment {
 
   // Attributes relates to the code in this fragment.
   CodeAttributes attr;
-
-  CodeType type;
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
@@ -573,6 +543,22 @@ enum ExitFragmentKind {
   FRAG_EXIT_FUTURE_BLOCK_DIRECT,
   FRAG_EXIT_FUTURE_BLOCK_INDIRECT,
   FRAG_EXIT_EXISTING_BLOCK
+};
+
+// Special class of fragment for "straggler" fragments / instructions.
+class NonLocalEntryFragment : public Fragment {
+ public:
+  NonLocalEntryFragment(void) = default;
+  virtual ~NonLocalEntryFragment(void);
+
+  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
+  GRANARY_DEFINE_NEW_ALLOCATOR(NonLocalEntryFragment, {
+    SHARED = false,
+    ALIGNMENT = 1
+  })
+
+ private:
+  GRANARY_DISALLOW_COPY_AND_ASSIGN(NonLocalEntryFragment);
 };
 
 // A fragment representing either a native basic block, a future basic block

@@ -2,8 +2,8 @@
 
 #define GRANARY_INTERNAL
 
-#include "granary/cfg/basic_block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/block.h"
+#include "granary/cfg/trace.h"
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
@@ -20,107 +20,104 @@
 namespace granary {
 namespace {
 
-// Records the number of context switches into Granary.
-std::atomic<uint64_t> num_context_switches(ATOMIC_VAR_INIT(0));
+// Add the trace entrypoint to the index.
+static void IndexEntryBlock(Index *index, Trace *cfg) {
+  const auto entry_block = cfg->EntryBlock();
+  GRANARY_ASSERT(nullptr != entry_block);
 
-// In some cases, some blocks can become completely unreachable (via control
-// flow). In these cases, no code is generated for these blocks, and so delete
-// their meta-datas.
-static void ReapUnreachableBlocks(LocalControlFlowGraph *cfg) {
-  for (auto block : cfg->Blocks()) {
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      if (!decoded_block->StartCachePC()) {
-        delete decoded_block->meta;
-        decoded_block->meta = nullptr;
-      }
-    }
+  auto meta = entry_block->MetaData();
+  TraceMetaData(meta);
+
+  // Only index the meta-data if there's not already some suitable meta-data in
+  // the index.
+  auto response = index->Request(meta);
+  if (kUnificationStatusAccept != response.status) {
+    index->Insert(meta);
   }
 }
 
-// Add the decoded blocks to the code cache index.
-static void IndexBlocks(LockedIndex *index, LocalControlFlowGraph *cfg) {
-  LockedIndexTransaction transaction(index);
-  auto trace_group = num_context_switches.fetch_add(1);
-  auto reap_unreachable = false;
-  for (auto block : cfg->Blocks()) {
-    if (auto decoded_block = DynamicCast<DecodedBasicBlock *>(block)) {
-      if (decoded_block->StartCachePC()) {
-        auto meta = decoded_block->MetaData();
-        TraceMetaData(trace_group, meta);
-        transaction.Insert(meta);
-      } else {
-        reap_unreachable = true;
-      }
-    }
+// Compile and index blocks. This is used for direct edges and entrypoints.
+static CachePC CompileAndIndex(Context *context, Trace *trace,
+                               BlockMetaData *meta) {
+  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
+  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
+    auto encoded_pc = Compile(context, trace);
+
+    auto index = context->CodeCacheIndex();
+    IndexEntryBlock(index, trace);
+    GRANARY_ASSERT(nullptr != cache_meta->start_pc);
+    return encoded_pc;
+  } else {
+    return cache_meta->start_pc;
   }
-  if (reap_unreachable) ReapUnreachableBlocks(cfg);
+}
+
+// Mark the stack as being valid, i.e. behaving like a C-style call stack with
+// call/return and push/pop semantics, or as being unknown.
+static void MarkStack(BlockMetaData *meta, TargetStackValidity stack_valid) {
+  if (kTargetStackValid == stack_valid) {
+    auto stack_meta = MetaDataCast<StackMetaData *>(meta);
+    stack_meta->MarkStackAsValid();
+  }
 }
 
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
-CachePC Translate(ContextInterface *context, AppPC pc,
-                  TargetStackValidity stack_valid) {
+CachePC Translate(Context *context, AppPC pc, TargetStackValidity stack_valid) {
   auto meta = context->AllocateBlockMetaData(pc);
-  if (TRANSLATE_STACK_VALID == stack_valid) {
-    auto stack_meta = MetaDataCast<StackMetaData *>(meta);
-    stack_meta->MarkStackAsValid();
-  }
+  MarkStack(meta, stack_valid);
   return Translate(context, meta);
 }
 
 // Instrument, compile, and index some basic blocks.
-CachePC Translate(ContextInterface *context, BlockMetaData *meta) {
-  LocalControlFlowGraph cfg(context);
+CachePC Translate(Context *context, BlockMetaData *meta) {
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentDirect();
-
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
-    auto index = context->CodeCacheIndex();
-    Compile(context, &cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
-  return cache_meta->start_pc;
+  return CompileAndIndex(context, &cfg, meta);
 }
 
 // Instrument, compile, and index some basic blocks, where the entry block
 // is targeted by an indirect control-transfer instruction.
-CachePC Translate(ContextInterface *context, IndirectEdge *edge,
-                  AppPC target_app_pc) {
-  auto meta = context->AllocateBlockMetaData(edge->meta_template,
-                                             target_app_pc);
-  LocalControlFlowGraph cfg(context);
+//
+// This is special because we need to do a few things:
+//      1) We need to make a compensation fragment that directly jumps to
+//         `target_app_pc`.
+//      2) We need to set up the compensation fragment such that the direct
+//         jump has a default non-`kRequestBlockInFuture` materialization
+//         strategy.
+//      3) We need to prepend the out-edge code to the resulting code (by
+//         "instantiating" the out edge into a fragment).
+CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
   inst.InstrumentIndirect();
-
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {
-    auto index = context->CodeCacheIndex();
-    Compile(context, &cfg, edge, target_app_pc);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
-  return cache_meta->start_pc;
+  auto encoded_pc = Compile(context, &cfg, edge, meta);
+  auto index = context->CodeCacheIndex();
+  IndexEntryBlock(index, &cfg);
+  return encoded_pc;
 }
 
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
-CachePC TranslateEntryPoint(ContextInterface *context, BlockMetaData *meta,
-                            EntryPointKind kind, int category) {
-  LocalControlFlowGraph cfg(context);
+CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
+                            EntryPointKind kind, int category,
+                            TargetStackValidity stack_valid) {
+  Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
+  MarkStack(meta, stack_valid);
   inst.InstrumentEntryPoint(kind, category);
+  return CompileAndIndex(context, &cfg, meta);
+}
 
-  auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
-  if (!cache_meta->start_pc) {
-    auto index = context->CodeCacheIndex();
-    Compile(context, &cfg);
-    IndexBlocks(index, &cfg);
-  }
-  GRANARY_ASSERT(nullptr != cache_meta->start_pc);
-  return cache_meta->start_pc;
+// Instrument, compile, and index some basic blocks that are the entrypoints
+// to some native code.
+CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
+                            EntryPointKind kind, int category,
+                            TargetStackValidity stack_valid) {
+  auto meta = context->AllocateBlockMetaData(target_pc);
+  return TranslateEntryPoint(context, meta, kind, category, stack_valid);
 }
 
 }  // namespace granary

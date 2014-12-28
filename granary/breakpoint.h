@@ -5,14 +5,18 @@
 
 extern "C" {
 
-__attribute__((noreturn, analyzer_noreturn))
-void granary_unreachable(void);
+[[noreturn]]
+void granary_unreachable(const char *error=nullptr);
 
 void granary_curiosity(void);
 
-#define granary_break_on_fault_if(cond) \
+void granary_gdb_event1(uintptr_t);
+void granary_gdb_event2(uintptr_t, uintptr_t);
+void granary_gdb_event3(uintptr_t, uintptr_t, uintptr_t);
+
+#define granary_break_on_fault_if(cond, str) \
   if (cond) { \
-    granary_unreachable(); \
+    granary_unreachable(str); \
     __builtin_unreachable(); \
   }
 

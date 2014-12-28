@@ -23,20 +23,23 @@ class Client {
   GRANARY_CONST GRANARY_POINTER(Client) * const next;
 };
 
-#define GRANARY_CLIENT_INIT(...) \
+#define GRANARY_ON_CLIENT_INIT(...) \
+  static void OnClientInit(void); \
   namespace { \
   class : public Client { \
-   public: \
     using Client::Client; \
     virtual void Init(void) override { \
-     GRANARY_USING_NAMESPACE granary; \
-      __VA_ARGS__ \
-   } \
-  } static client GRANARY_EARLY_GLOBAL; \
-  }
+      OnClientInit(); \
+    } \
+  } static GRANARY_CAT(client,__LINE__) GRANARY_EARLY_GLOBAL; \
+  } \
+  static void OnClientInit(void)
 
 // Initializes the clients.
 GRANARY_INTERNAL_DEFINITION void InitClients(void);
+
+// Exits the clients.
+GRANARY_INTERNAL_DEFINITION void ExitClients(void);
 
 }  // namespace granary
 

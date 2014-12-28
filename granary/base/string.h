@@ -137,19 +137,50 @@ unsigned long StringLength(const char *ch);
 // Ensures that `buffer` is '\0'-terminated. Assumes `buffer_len > 0`.
 unsigned long CopyString(char * __restrict buffer, unsigned long buffer_len,
                          const char * __restrict str);
-unsigned long CopyString(char * __restrict buffer, const char * __restrict str);
+
+// Copy at most `kBuffLen` characters from the C string `str` into `buffer`.
+// Ensures that `buffer` is '\0'-terminated. Assumes `kBuffLen > 0`.
+template <const unsigned long kBuffLen>
+inline static unsigned long CopyString(char (&buffer)[kBuffLen],
+                                       const char * __restrict str) {
+  return CopyString(buffer, kBuffLen, str);
+}
 
 // Compares two C strings for equality.
 bool StringsMatch(const char *str1, const char *str2);
 
 // Similar to `vsnprintf`. Returns the number of formatted characters.
-unsigned long VarFormat(char * __restrict buffer, unsigned long len,
-                        const char * __restrict format, va_list args);
+unsigned long VFormat(char * __restrict buffer, unsigned long len,
+                      const char * __restrict format, va_list args);
 
-// Similar to `snprintf`. Returns the number of formatted characters.
-__attribute__ ((format(printf, 3, 4)))
-unsigned long Format(char * __restrict buffer, unsigned long len,
-                     const char * __restrict format, ...);
+// Similar to `vsnprintf`. Returns the number of formatted characters.
+template <const unsigned long kBuffLen>
+inline static unsigned long VFormat(char (&buffer)[kBuffLen],
+                                    const char * __restrict format,
+                                    va_list args) {
+  return VFormat(buffer, kBuffLen, format, args);
+}
+
+// Convenience for formatting.
+inline static unsigned long Format(char *buff, unsigned long len,
+                                   const char * __restrict format, ...) {
+  va_list arg_list;
+  va_start(arg_list, format);
+  auto ret = VFormat(buff, len, format, arg_list);
+  va_end(arg_list);
+  return ret;
+}
+
+// Convenience for formatting.
+template <unsigned long kBuffLen>
+inline static unsigned long Format(char (&buff)[kBuffLen],
+                                   const char * __restrict format, ...) {
+  va_list arg_list;
+  va_start(arg_list, format);
+  auto ret = VFormat(&(buff[0]), kBuffLen, format, arg_list);
+  va_end(arg_list);
+  return ret;
+}
 
 // Similar to `sscanf`. Returns the number of de-formatted arguments.
 __attribute__ ((format(scanf, 2, 3)))
@@ -208,7 +239,7 @@ class FixedLengthString {
   void Format(const char * __restrict format, ...) {
     va_list args;
     va_start(args, format);
-    len = VarFormat(Buffer(), MaxLength(), format, args);
+    len = VFormat(Buffer(), MaxLength(), format, args);
     va_end(args);
   }
 
@@ -217,7 +248,7 @@ class FixedLengthString {
   void UpdateFormat(const char * __restrict format, ...) {
     va_list args;
     va_start(args, format);
-    len += VarFormat(RemainingBuffer(), RemainingLength(), format, args);
+    len += VFormat(RemainingBuffer(), RemainingLength(), format, args);
     va_end(args);
   }
 

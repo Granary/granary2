@@ -3,9 +3,14 @@
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
 
-#include "granary/cfg/basic_block.h"
+#include "granary/cfg/block.h"
 #include "granary/cfg/instruction.h"
+
+#include "granary/code/inline_assembly.h"
+#include "granary/code/ssa.h"
+
 #include "granary/breakpoint.h"
+#include "granary/util.h"
 
 namespace granary {
 
@@ -26,70 +31,67 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
 
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
+
 Instruction *Instruction::Next(void) {
-  return list.GetNext(this);
+  GRANARY_ASSERT(nullptr != this);
+  return list.Next();
 }
 
 Instruction *Instruction::Previous(void) {
-  return list.GetPrevious(this);
+  GRANARY_ASSERT(nullptr != this);
+  return list.Previous();
 }
 
 // Get the transient, tool-specific instruction meta-data as a `uintptr_t`.
-uintptr_t Instruction::MetaData(void) const {
-  return transient_meta;
+uint64_t Instruction::MetaData(void) const {
+  return static_cast<uint64_t>(transient_meta);
 }
 
 // Set the transient, tool-specific instruction meta-data as a `uintptr_t`.
-void Instruction::SetMetaData(uintptr_t meta) {
-  transient_meta = meta;
+void Instruction::SetMetaData(uint64_t meta) {
+  transient_meta = UnsafeCast<UntypedData>(meta);
 }
 
 Instruction *Instruction::InsertBefore(Instruction *instr) {
-  list.SetPrevious(this, instr);
+  list.SetPrevious(instr);
   return instr;
 }
 
 Instruction *Instruction::InsertAfter(Instruction *instr) {
-  list.SetNext(this, instr);
+  list.SetNext(instr);
   return instr;
-}
-
-Instruction *Instruction::InsertBefore(std::unique_ptr<Instruction> instr) {
-  return InsertBefore(instr.release());
-}
-
-Instruction *Instruction::InsertAfter(std::unique_ptr<Instruction> instr) {
-  return InsertAfter(instr.release());
 }
 
 // Unlink an instruction from an instruction list.
 std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
-  if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-    if (IA_BEGIN_BASIC_BLOCK == annot->annotation ||
-        IA_END_BASIC_BLOCK == annot->annotation) {
-      return std::unique_ptr<Instruction>(nullptr);
-    }
-  }
-
   instr->list.Unlink();
-
-  // If we're unlinking a branch then make sure that the target itself does
-  // not continue to reference the branch.
-  if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-    GRANARY_ASSERT(1 <= branch->TargetLabel()->data);
-    branch->TargetLabel()->data -= 1;
-  }
-
   return std::unique_ptr<Instruction>(instr);
 }
 
-// Unlink an instruction in an unsafe way. The normal unlink process exists
-// for ensuring some amount of safety, whereas this is meant to be used only
-// in internal cases where Granary is safely doing an "unsafe" thing (e.g.
-// when it's stealing instructions for `Fragment`s.
-std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
-  list.Unlink();
-  return std::unique_ptr<Instruction>(this);
+// Clean up special annotation instructions if there is other data lying
+// around.
+AnnotationInstruction::~AnnotationInstruction(void) {
+  if (!data) return;
+  switch (annotation) {
+    case kAnnotSSARegisterWebOwner:
+    case kAnnotSSASaveRegister:
+    case kAnnotSSARestoreRegister:
+    case kAnnotSSASwapRestoreRegister:
+      delete GetMetaData<SSARegisterWeb *>(this);
+      ClearMetaData();
+      break;
+
+    case kAnnotInlineAssembly:
+      delete reinterpret_cast<InlineAssemblyBlock *>(data);
+      break;
+
+    case kAnnotInlineFunctionCall:
+      delete reinterpret_cast<InlineFunctionCall *>(data);
+      break;
+
+    default: break;
+  }
 }
 
 // Make it so that inserting an instruction before the designated first
@@ -97,13 +99,13 @@ std::unique_ptr<Instruction> Instruction::UnsafeUnlink(void) {
 // issue of maintaining a designated first instruction, whilst also avoiding the
 // issue of multiple `InsertBefore`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
-  if (GRANARY_UNLIKELY(IA_BEGIN_BASIC_BLOCK == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotBeginBlock == annotation)) {
     auto new_first = new AnnotationInstruction(annotation, data);
     auto block_first_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertBefore(new_first);
     *block_first_ptr = new_first;
-    annotation = IA_NOOP;
-    data = 0;
+    annotation = kAnnotNoOp;
+    data = UntypedData();
   }
   return this->Instruction::InsertBefore(instr);
 }
@@ -117,43 +119,49 @@ Instruction *AnnotationInstruction::InsertBefore(Instruction *instr) {
 // issue of maintaining a designated last instruction, whilst also avoiding the
 // issue of multiple `InsertAfter`s putting instructions in the wrong order.
 Instruction *AnnotationInstruction::InsertAfter(Instruction *instr) {
-  if (GRANARY_UNLIKELY(IA_END_BASIC_BLOCK == annotation)) {
+  if (GRANARY_UNLIKELY(kAnnotEndBlock == annotation)) {
     auto new_last = new AnnotationInstruction(annotation, data);
     auto block_last_ptr = UnsafeCast<Instruction **>(data);
     this->Instruction::InsertAfter(new_last);
     *block_last_ptr = new_last;
-    annotation = IA_NOOP;
-    data = 0;
+    annotation = kAnnotNoOp;
+    data = UntypedData();
   }
   return this->Instruction::InsertAfter(instr);
 }
 
 // Returns true if this instruction is a label.
 bool AnnotationInstruction::IsLabel(void) const {
-  return IA_LABEL == annotation;
+  return kAnnotationLabel == annotation;
 }
 
 // Returns true if this instruction is targeted by any branches.
 bool AnnotationInstruction::IsBranchTarget(void) const {
-  return IA_LABEL == annotation && 0 != data;
+  return kAnnotationLabel == annotation && 0 != data;
 }
 
 // Returns true if this represents the beginning of a new logical instruction.
 bool AnnotationInstruction::IsInstructionBoundary(void) const {
-  return IA_BEGIN_LOGICAL_INSTRUCTION == annotation;
+  return kAnnotLogicalInstructionBoundary == annotation;
 }
 
 LabelInstruction::LabelInstruction(void)
-    : AnnotationInstruction(IA_LABEL),
+    : AnnotationInstruction(kAnnotationLabel),
       fragment(nullptr) {}
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_),
+      ssa(nullptr),
       os_annotation(nullptr) {
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
-NativeInstruction::~NativeInstruction(void) {}
+NativeInstruction::~NativeInstruction(void) {
+  if (ssa) {
+    delete ssa;
+    ssa = nullptr;
+  }
+}
 
 // Return the address in the native code from which this instruction was
 // decoded.
@@ -162,8 +170,18 @@ AppPC NativeInstruction::DecodedPC(void) const {
 }
 
 // Get the length of the instruction.
-int NativeInstruction::DecodedLength(void) const {
+size_t NativeInstruction::DecodedLength(void) const {
   return instruction.DecodedLength();
+}
+
+// Returns the total number of operands.
+size_t NativeInstruction::NumOperands(void) const {
+  return instruction.NumOperands();
+}
+
+// Returns the total number of explicit operands.
+size_t NativeInstruction::NumExplicitOperands(void) const {
+  return instruction.NumExplicitOperands();
 }
 
 // Returns true if this instruction is essentially a no-op, i.e. it does
@@ -182,6 +200,10 @@ bool NativeInstruction::WritesConditionCodes(void) const {
 
 bool NativeInstruction::IsFunctionCall(void) const {
   return instruction.IsFunctionCall();
+}
+
+bool NativeInstruction::IsFunctionTailCall(void) const {
+  return instruction.IsFunctionTailCall();
 }
 
 bool NativeInstruction::IsFunctionReturn(void) const {
@@ -220,12 +242,25 @@ bool NativeInstruction::HasIndirectTarget(void) const {
   return instruction.HasIndirectTarget();
 }
 
+// Does this instruction perform an atomic read/modify/write?
+bool NativeInstruction::IsAtomic(void) const {
+  return instruction.IsAtomic();
+}
+
 bool NativeInstruction::IsAppInstruction(void) const {
   return nullptr != instruction.DecodedPC();
 }
 
 void NativeInstruction::MakeAppInstruction(PC decoded_pc) {
   instruction.SetDecodedPC(decoded_pc);
+}
+
+bool NativeInstruction::ReadsFromStackPointer(void) const {
+  return instruction.ReadsFromStackPointer();
+}
+
+bool NativeInstruction::WritesToStackPointer(void) const {
+  return instruction.WritesToStackPointer();
 }
 
 // Get the opcode name.
@@ -252,8 +287,8 @@ void NativeInstruction::ForEachOperandImpl(
 // Try to match and bind one or more operands from this instruction. Returns
 // the number of operands matched, starting from the first operand.
 size_t NativeInstruction::CountMatchedOperandsImpl(
-    std::initializer_list<OperandMatcher> &&matchers) {
-  return instruction.CountMatchedOperands(std::move(matchers));
+    std::initializer_list<OperandMatcher> matchers) {
+  return instruction.CountMatchedOperands(matchers);
 }
 
 BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
@@ -264,7 +299,7 @@ BranchInstruction::BranchInstruction(const arch::Instruction *instruction_,
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 
   // Mark this label as being targeted by some instruction.
-  target->data += 1;
+  target->DataRef<uintptr_t>() += 1;
 }
 
 // Return the targeted instruction of this branch.
@@ -274,14 +309,14 @@ LabelInstruction *BranchInstruction::TargetLabel(void) const {
 
 // Modify this branch to target a different label.
 void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
-  *target->DataPtr<uint64_t>() -= 1;
-  *label->DataPtr<uint64_t>() += 1;
+  target->DataRef<uint64_t>() -= 1;
+  label->DataRef<uint64_t>() += 1;
   target = label;
 }
 
 // Initialize a control-flow transfer instruction.
 ControlFlowInstruction::ControlFlowInstruction(
-    const arch::Instruction *instruction_, BasicBlock *target_)
+    const arch::Instruction *instruction_, Block *target_)
       : NativeInstruction(instruction_),
         return_address(nullptr),
         target(target_) {
@@ -300,9 +335,9 @@ ControlFlowInstruction::~ControlFlowInstruction(void) {
 // are still direct.
 bool ControlFlowInstruction::HasIndirectTarget(void) const {
   if (this->NativeInstruction::HasIndirectTarget()) {
-    if (auto native_target = DynamicCast<NativeBasicBlock *>(target)) {
+    if (auto native_target = DynamicCast<NativeBlock *>(target)) {
       return nullptr == native_target->StartAppPC();
-    } else if (IsA<CachedBasicBlock *>(target)) {
+    } else if (IsA<CachedBlock *>(target)) {
       return false;
     }
     return true;
@@ -311,20 +346,20 @@ bool ControlFlowInstruction::HasIndirectTarget(void) const {
 }
 
 // Return the target block of this CFI.
-BasicBlock *ControlFlowInstruction::TargetBlock(void) const {
+Block *ControlFlowInstruction::TargetBlock(void) const {
   return target;
 }
 
 // Change the target of a control-flow instruction. This can involve an
 // ownership transfer of the targeted basic block.
-void ControlFlowInstruction::ChangeTarget(BasicBlock *new_target) const {
+void ControlFlowInstruction::ChangeTarget(Block *new_target) const {
   target = new_target;
 }
 
 ExceptionalControlFlowInstruction::ExceptionalControlFlowInstruction(
     const arch::Instruction *instruction_,
     const arch::Instruction *orig_instruction_,
-    BasicBlock *exception_target_, AppPC emulation_pc_)
+    Block *exception_target_, AppPC emulation_pc_)
     : ControlFlowInstruction(instruction_, exception_target_),
       emulation_pc(emulation_pc_) {
   GRANARY_ASSERT(!orig_instruction_->WritesToStackPointer());

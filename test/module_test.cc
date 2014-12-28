@@ -4,11 +4,12 @@
 
 #define GRANARY_INTERNAL
 
-#include "test/util/simple_init.h"
-
 #include "granary/base/base.h"
 #include "granary/base/cast.h"
 #include "granary/base/string.h"
+
+#include "granary/exit.h"
+#include "granary/init.h"
 
 #include "os/module.h"
 
@@ -26,7 +27,11 @@ class ModuleManagerTest : public Test {
   }
 
   static void SetUpTestCase(void) {
-    SimpleInitGranary();
+    Init(kInitTestCase);
+  }
+
+  static void TearDownTestCase(void) {
+    Exit(kExitTestCase);
   }
 
   os::ModuleManager m1;
