@@ -25,13 +25,12 @@ TEST(EncodeTest, EncodeCommonInstructions) {
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);
 
-  arch::InstructionDecoder decoder;
   arch::InstructionEncoder staged_encoder(arch::InstructionEncodeKind::STAGED);
   arch::InstructionEncoder commit_encoder(arch::InstructionEncodeKind::COMMIT);
   arch::Instruction instr;
 
   while (begin < end) {
-    auto ret = decoder.DecodeNext(&instr, &begin);
+    auto ret = arch::InstructionDecoder::DecodeNext(&instr, &begin);
     if (!ret) break;
 
     uint8_t mem[XED_MAX_INSTRUCTION_BYTES] = {0};

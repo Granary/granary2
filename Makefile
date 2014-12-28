@@ -29,34 +29,34 @@ $(GRANARY_OS_TYPES):
 	$(MAKE) -C $(GRANARY_SRC_DIR)/os/$(GRANARY_OS) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) types
 
-build_driver:
-	@echo "Entering $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER)"
-	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies/$(GRANARY_DRIVER) \
+build_deps:
+	@echo "Entering $(GRANARY_SRC_DIR)/dependencies"
+	$(MAKE) -C $(GRANARY_SRC_DIR)/dependencies \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_dbt: build_driver
+build_dbt: build_deps
 	@echo "Entering $(GRANARY_SRC_DIR)/granary"
 	$(MAKE) -C $(GRANARY_SRC_DIR)/granary \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_arch: build_driver
+build_arch: build_deps
 	@echo "Entering $(GRANARY_ARCH_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_ARCH_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_os: build_driver $(GRANARY_OS_TYPES)
+build_os: build_deps $(GRANARY_OS_TYPES)
 	@echo "Entering $(GRANARY_WHERE_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_clients: build_os $(GRANARY_HEADERS)
-	@echo "Entering $(GRANARY_SRC_DIR)/clients"
-	$(MAKE) -C $(GRANARY_SRC_DIR)/clients \
-		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
+build_headers: $(GRANARY_HEADERS)
 
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.
-where_common: build_driver build_arch build_dbt build_os build_clients
+where_common: build_deps build_arch build_dbt build_os build_headers
+	@echo "Entering $(GRANARY_SRC_DIR)/clients"
+	$(MAKE) -C $(GRANARY_SRC_DIR)/clients \
+		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) exec
 
@@ -91,7 +91,12 @@ clean_generated:
 	@find $(GRANARY_GEN_SRC_DIR) -type f -execdir rm {} \;
 
 # Run all test cases.
+ifeq (test,$(GRANARY_TARGET))
 test: all
 	@echo "Entering $(GRANARY_TEST_SRC_DIR)"
 	$(MAKE) -C $(GRANARY_TEST_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) test
+else
+test:
+	$(MAKE) $(MFLAGS) test GRANARY_TARGET=test
+endif

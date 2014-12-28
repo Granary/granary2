@@ -52,7 +52,7 @@ Be sure to run Granary through its paces first. These tests are definitely not
 exhaustive, but can help to determine if things are generally in working order:
 
 ```
-make clean test GRANARY_TARGET=test
+make clean test
 ```
 
 #### User Space

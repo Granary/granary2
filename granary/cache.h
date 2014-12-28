@@ -21,6 +21,21 @@ namespace internal {
 class CodeSlab;
 }  // namespace internal
 
+enum CodeCacheKind {
+  // Generally filled with application code.
+  kCodeCacheHot,
+
+  // Filled with cold application code, or instrumentation code that is
+  // targeted by a branch instruction.
+  kCodeCacheCold,
+
+  // Filled with edge code, or instrumentation code that is targeted by a
+  // branch from a cold basic block.
+  kCodeCacheFrozen,
+
+  kNumCodeCacheKinds
+};
+
 // Forward declaration.
 class CodeCacheTransaction;
 
@@ -32,16 +47,6 @@ class CodeCache {
 
   // Allocate a block of code from this code cache.
   CachePC AllocateBlock(size_t size);
-
-  // Begin a transaction that will read or write to the code cache.
-  //
-  // Note: Transactions are distinct from allocations. Therefore, many threads/
-  //       cores can simultaneously allocate from a code cache, but only one
-  //       should be able to read/write data to the cache at a given time.
-  void BeginTransaction(CachePC begin, CachePC end);
-
-  // End a transaction that will read or write to the code cache.
-  void EndTransaction(CachePC begin, CachePC end);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeCache, {
     SHARED = true,
@@ -63,34 +68,24 @@ class CodeCache {
   // Allocator used to allocate blocks from this code cache.
   const internal::CodeSlab *slab_list;
 
-  // Lock around writes to the code cache.
-  SpinLock code_lock;
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
 };
 
-// Transaction on the code cache. Wrapper around `BeginTransaction` and
-// `EndTransaction` that ensures the two are lexically matched.
+// Transaction on the code cache.
 class CodeCacheTransaction {
  public:
-  inline CodeCacheTransaction(CodeCache *cache_, CachePC begin_, CachePC end_)
-      : cache(cache_),
-        begin(begin_),
-        end(end_) {
-    cache->BeginTransaction(begin, end);
-  }
+  // Begin a transaction that will read or write to the code cache.
+  //
+  // Note: Transactions are distinct from allocations. Therefore, many threads/
+  //       cores can simultaneously allocate from a code cache, but only one
+  //       should be able to read/write data to the cache at a given time.
+  CodeCacheTransaction(CachePC begin_, CachePC end_);
 
-  ~CodeCacheTransaction(void) {
-    cache->EndTransaction(begin, end);
-    arch::SynchronizePipeline();
-  }
+  // End a transaction that will read or write to the code cache.
+  ~CodeCacheTransaction(void);
 
  private:
   CodeCacheTransaction(void) = delete;
-
-  CodeCache *cache;
-  CachePC begin;
-  CachePC end;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCacheTransaction);
 };

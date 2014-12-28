@@ -46,23 +46,22 @@ static void UnmapMemory(SystemCallContext ctx) {
 }
 
 // Hooks that other clients can use for interposing on system calls.
-static ClosureList<SystemCallContext> entry_hooks GRANARY_GLOBAL;
-static ClosureList<SystemCallContext> exit_hooks GRANARY_GLOBAL;
+static ClosureList<SystemCallContext> gEntryHooks GRANARY_GLOBAL;
+static ClosureList<SystemCallContext> gExitHooks GRANARY_GLOBAL;
 
 // Deletes all hooks and restores the syscall hooking system to its original
 // state. This is done during `User::Exit`.
 static void RemoveAllHooks(void) {
-  entry_hooks.Reset();
-  exit_hooks.Reset();
+  gEntryHooks.Reset();
+  gExitHooks.Reset();
 }
 
 }  // namespace
 
 // Handle a system call entrypoint.
-void HookSystemCallEntry(lir::TranslationContext,
-                         arch::MachineContext *mcontext) {
+void HookSystemCallEntry(arch::MachineContext *mcontext) {
   SystemCallContext ctx(mcontext);
-  entry_hooks.ApplyAll(ctx);
+  gEntryHooks.ApplyAll(ctx);
 
   // Note: We apply these hooks *after* the `entry_hooks` so that client-added
   //       hooks can have visibility on all system calls before Granary mangles
@@ -85,21 +84,20 @@ void HookSystemCallEntry(lir::TranslationContext,
 }
 
 // Handle a system call exit.
-void HookSystemCallExit(lir::TranslationContext,
-                        arch::MachineContext *context) {
-  exit_hooks.ApplyAll(SystemCallContext(context));
+void HookSystemCallExit(arch::MachineContext *context) {
+  gExitHooks.ApplyAll(SystemCallContext(context));
 }
 
 // Register a function to be called before a system call is made.
 void AddSystemCallEntryFunction(SystemCallHook *callback) {
   if (!FLAG_hook_syscalls) return;
-  entry_hooks.Add(callback);
+  gEntryHooks.Add(callback);
 }
 
 // Register a function to be called after a system call is made.
 void AddSystemCallExitFunction(SystemCallHook *callback) {
   if (!FLAG_hook_syscalls) return;
-  exit_hooks.Add(callback);
+  gExitHooks.Add(callback);
 }
 
 // Tool that helps user-space instrumentation work.
@@ -141,7 +139,7 @@ class UserSpaceInstrumenter : public InstrumentationTool {
     // `exit_group`s.
     syscall->InsertBefore(lir::ContextFunctionCall(HookSystemCallEntry));
 
-    if (!exit_hooks.IsEmpty()) {
+    if (!gExitHooks.IsEmpty()) {
       syscall->InsertAfter(lir::ContextFunctionCall(HookSystemCallExit));
     }
   }

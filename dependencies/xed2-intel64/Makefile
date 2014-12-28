@@ -1,3 +1,4 @@
+# Copyright 2014 Peter Goodman, all rights reserved.
 
 .PHONY: all
 
@@ -33,7 +34,8 @@ $(foreach tool,$(XED_TOOLS),$(eval $(call GENRULE,$(tool))))
 # Unarchive libxed, then combine all of its object files into a single unified
 # object file.
 $(GRANARY_DRIVER_OBJ):
-	@mkdir -p $(dir $(GRANARY_DRIVER_OBJ))
+	@echo "Building C object $@"
+	@mkdir -p $(@D)
 	@mkdir -p $(XED_BIN_DIR)
 	@cd $(XED_BIN_DIR) ; \
 		$(GRANARY_AR) x $(XED_LIB_DIR)/libxed.a ; \

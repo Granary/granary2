@@ -408,7 +408,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-bool TryAtomicPatchEdge(Context *context, DirectEdge *edge) {
+bool TryAtomicPatchEdge(DirectEdge *edge) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT_ATOMIC);
@@ -434,8 +434,7 @@ bool TryAtomicPatchEdge(Context *context, DirectEdge *edge) {
   // If the instruction length changes then don't patch it.
   if (ni.encoded_length != decoded_length) return false;
 
-  CodeCacheTransaction transaction(context->BlockCodeCache(),
-                                   edge->patch_instruction_pc,
+  CodeCacheTransaction transaction(edge->patch_instruction_pc,
                                    edge->patch_instruction_pc + decoded_length);
   commit_enc.Encode(&ni, edge->patch_instruction_pc);
 

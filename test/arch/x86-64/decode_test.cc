@@ -25,12 +25,11 @@ TEST(DecodeTest, DecodeCommonInstructions) {
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);
 
-  arch::InstructionDecoder decoder;
   arch::Instruction instr;
 
   while (begin < end) {
     auto old_begin = begin;
-    auto ret = decoder.DecodeNext(&instr, &begin);
+    auto ret = arch::InstructionDecoder::DecodeNext(&instr, &begin);
     EXPECT_TRUE(ret);
     if (!ret) break;
     EXPECT_TRUE(old_begin < begin);

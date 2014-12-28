@@ -94,18 +94,42 @@ static const ModuleAddressRange *FindRange(const ModuleAddressRange *ranges,
   return FindRange(ranges, reinterpret_cast<uintptr_t>(addr));
 }
 
+// Returns a pointer to the name of a module. For example, we want to extract
+// `libacl` from `/lib/x86_64-linux-gnu/libacl.so.1.1.0`.
+static void PathToName(const char *path, char *buff) {
+  const char *after_last_slash = nullptr;
+  auto name = path;
+  for (; *path; ++path) {
+    if ('/' == *path) {
+      after_last_slash = path + 1;
+    }
+  }
+  if (after_last_slash) {
+    name = after_last_slash;  // Update the beginning of the name.
+  }
+  // Truncate the name at the first period (e.g. `*.so`).
+  for (auto ch(name); *ch; ) {
+    if ('.' == *ch || '-' == *ch) {
+      *buff = '\0';
+      break;
+    } else {
+      *buff++ = *ch++;
+    }
+  }
+}
+
 }  // namespace
 
 // Initialize a new module with no ranges.
-Module::Module(ModuleKind kind_, const char *name_, Context *context_)
+Module::Module(const char *path_)
     : next(nullptr),
       where_data(nullptr),
-      context(context_),
-      kind(kind_),
       ranges(nullptr),
       ranges_lock() {
-  checked_memset(&(name[0]), 0, MAX_NAME_LEN);
-  CopyString(&(name[0]), MAX_NAME_LEN, name_);
+  checked_memset(&(path[0]), 0, sizeof path);
+  checked_memset(&(name[0]), 0, sizeof name);
+  CopyString(&(path[0]), sizeof path, path_);
+  PathToName(path, &(name[0]));
 }
 
 Module::~Module(void) {
@@ -133,9 +157,9 @@ bool Module::Contains(AppPC pc) const {
   return nullptr != FindRange(ranges, pc);
 }
 
-// Returns the kind of this module.
-ModuleKind Module::Kind(void) const {
-  return kind;
+// Returns the path of this module.
+const char *Module::Path(void) const {
+  return &(path[0]);
 }
 
 // Returns the name of this module.
@@ -283,6 +307,17 @@ ModuleOffset ModuleManager::FindOffsetOfPC(AppPC pc) {
   return ModuleOffset();
 }
 
+// Find a module given its path.
+GRANARY_CONST Module *ModuleManager::FindByPath(const char *path) {
+  ReadLockedRegion locker(&modules_lock);
+  for (auto module : ModuleIterator(modules)) {
+    if (StringsMatch(module->path, path)) {
+      return module;
+    }
+  }
+  return nullptr;
+}
+
 // Find a module given its name.
 GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
   ReadLockedRegion locker(&modules_lock);
@@ -296,13 +331,6 @@ GRANARY_CONST Module *ModuleManager::FindByName(const char *name) {
 
 // Register a module with the module tracker.
 void ModuleManager::Register(Module *module) {
-#ifndef GRANARY_TARGET_test
-  if (auto existing_module = FindByName(module->name)) {
-    if (existing_module != module) {
-      GRANARY_ASSERT(existing_module->context != module->context);
-    }
-  }
-#endif  // GRANARY_TARGET_test
   WriteLockedRegion locker(&modules_lock);
   module->next = modules;
   modules = module;

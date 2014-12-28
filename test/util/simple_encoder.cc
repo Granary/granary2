@@ -7,7 +7,7 @@
 
 #include "test/util/simple_encoder.h"
 
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/trace.h"
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"

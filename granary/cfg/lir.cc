@@ -44,7 +44,7 @@ CachePC TranslationContext::TranslateEntryPoint(AppPC target_pc,
 // Call to a client function that takes in an argument to a granary context and
 // to an `arch::MachineContext` pointer.
 std::unique_ptr<Instruction> ContextFunctionCall(
-    void (*func)(TranslationContext, arch::MachineContext *)) {
+    void (*func)(arch::MachineContext *)) {
   return std::unique_ptr<Instruction>(new AnnotationInstruction(
       kAnnotContextFunctionCall, func));
 }

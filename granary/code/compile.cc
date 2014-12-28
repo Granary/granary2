@@ -115,7 +115,10 @@ static size_t StageEncode(FragmentList *frags) {
   }
 
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
-    if (frag->encoded_pc) continue;
+    if (frag->encoded_pc) {
+      GRANARY_ASSERT(!IsA<CodeFragment *>(frag));
+      continue;
+    }
     frag->encoded_size = StageEncodeNativeInstructions(frag);
     num_bytes += frag->encoded_size;
   }
@@ -125,9 +128,7 @@ static size_t StageEncode(FragmentList *frags) {
 // Relativize the instructions of a fragment.
 static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
                                    bool *update_encode_addresses) {
-  if (frag->entry_label) {
-    SetEncodedPC(frag->entry_label, curr_pc);
-  }
+  if (frag->entry_label) SetEncodedPC(frag->entry_label, curr_pc);
   for (auto instr : InstructionListIterator(frag->instrs)) {
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->instruction.SetEncodedPC(curr_pc);
@@ -170,6 +171,7 @@ static void UpdateEncodeAddresses(FragmentList *frags) {
 // Assign program counters to every fragment and instruction.
 static void RelativizeCode(FragmentList *frags, CachePC cache_code,
                            bool *update_addresses) {
+  GRANARY_ASSERT(nullptr != cache_code);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     if (!frag->encoded_pc) {
       frag->encoded_pc = cache_code;
@@ -181,7 +183,7 @@ static void RelativizeCode(FragmentList *frags, CachePC cache_code,
 
 // Relativize a control-flow instruction.
 static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
-  if (cfi->IsNoOp() || !cfi->instruction.WillBeEncoded()) return;  // Elided.
+  if (!cfi->instruction.WillBeEncoded()) return;  // Elided.
 
   // Note: We use the `arch::Instruction::HasIndirectTarget` instead of
   //       `ControlFlowInstruction::HasIndirectTarget` because the latter
@@ -241,8 +243,10 @@ static void RelativizeControlFlow(FragmentList *frags) {
 static void Encode(FragmentList *frags) {
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::COMMIT);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
+    GRANARY_ASSERT(nullptr != frag->encoded_pc);
     for (auto instr : InstructionListIterator(frag->instrs)) {
       if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
+        if (!ninstr->instruction.WillBeEncoded()) continue;
         GRANARY_IF_DEBUG( auto expected_length =
             ninstr->instruction.EncodedLength(); )
         GRANARY_IF_DEBUG( auto encoded = ) encoder.Encode(
@@ -318,7 +322,7 @@ static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
   RelativizeControlFlow(frags);
 
   do {
-    CodeCacheTransaction transaction(block_cache, cache_code, cache_code_end);
+    CodeCacheTransaction transaction(cache_code, cache_code_end);
     Encode(frags);
   } while (0);
 

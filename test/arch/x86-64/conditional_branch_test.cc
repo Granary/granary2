@@ -7,7 +7,7 @@
 #include "granary/base/option.h"
 
 #include "granary/cfg/block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
 

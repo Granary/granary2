@@ -159,8 +159,8 @@ static void CopyOperand(CodeFragment *frag, Instruction &ni,
 Callback *GenerateInlineCallback(CodeCache *cache, InlineFunctionCall *call) {
   auto edge_code = cache->AllocateBlock(INLINE_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(call->target_app_pc, edge_code);
-  CodeCacheTransaction transaction(
-      cache, edge_code, edge_code + INLINE_CALL_CODE_SIZE_BYTES);
+  CodeCacheTransaction transaction(edge_code,
+                                   edge_code + INLINE_CALL_CODE_SIZE_BYTES);
   GenerateInlineCallCode(callback, call->NumArguments());
   return callback;
 }

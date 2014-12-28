@@ -252,13 +252,14 @@ GRANARY_LINT = $(GRANARY_PYTHON) $(GRANARY_LINT_DIR)/cpplint.py $(GRANARY_LINT_F
 
 # Specific files that are used by user space, kernel space, and test cases.
 GRANARY_MERGED_OBJ = $(GRANARY_BIN_DIR)/granary.o
-GRANARY_DRIVER_OBJ = $(GRANARY_BIN_DIR)/driver.o
 GRANARY_ARCH_OBJ = $(GRANARY_BIN_DIR)/arch.o
 GRANARY_OS_OBJ = $(GRANARY_BIN_DIR)/os.o
 GRANARY_CLIENT_OBJ = $(GRANARY_BIN_DIR)/clients.o
+GRANARY_DRIVER_OBJ := $(GRANARY_BIN_DIR)/dependencies/$(GRANARY_DRIVER).o
+GRANARY_DEPENDENCIES_OBJ := $(GRANARY_BIN_DIR)/dependencies.o
 
 # Objects that must be combined into the final Granary executable.
-GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DRIVER_OBJ)
+GRANARY_OBJS = $(GRANARY_MERGED_OBJ) $(GRANARY_DEPENDENCIES_OBJ)
 GRANARY_OBJS += $(GRANARY_OS_OBJ) $(GRANARY_CLIENT_OBJ)
 
 GRANARY_LINT_TARGET =
@@ -293,7 +294,7 @@ $(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.cc
 $(GRANARY_BIN_DIR)/%.o :: $(GRANARY_SRC_DIR)/%.c
 	@echo "Building C object $@"
 	@mkdir -p $(@D)
-	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -c $< -o $@
+	@$(GRANARY_CC) $(GRANARY_CC_FLAGS) -c $< -o $@
 
 # Compile a simple, single-file client to an object.
 #

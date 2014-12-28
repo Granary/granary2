@@ -21,8 +21,7 @@ class ModuleManagerTest : public Test {
   ModuleManagerTest(void)
       : m1(),
         m2(),
-        mod(new os::Module(os::ModuleKind::KERNEL_MODULE,
-                           GRANARY_NAME_STRING)) {
+        mod(new os::Module(GRANARY_NAME_STRING)) {
     m2.RegisterAllBuiltIn();
   }
 
@@ -85,7 +84,7 @@ TEST_F(ModuleManagerTest, FindRegisteredModulePC) {
 class ModuleTest : public Test {
  protected:
   ModuleTest(void)
-      : mod(os::ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {}
+      : mod(GRANARY_NAME_STRING) {}
   os::Module mod;
 };
 
@@ -99,10 +98,6 @@ TEST_F(ModuleTest, ReturnsInvalidOffset) {
   EXPECT_TRUE(0 == offset.offset);
 }
 
-TEST_F(ModuleTest, HasInitializedKind) {
-  ASSERT_TRUE(os::ModuleKind::KERNEL_MODULE == mod.Kind());
-}
-
 TEST_F(ModuleTest, HasInitializedName) {
   ASSERT_TRUE(StringsMatch(GRANARY_NAME_STRING, mod.Name()));
 }
@@ -110,7 +105,7 @@ TEST_F(ModuleTest, HasInitializedName) {
 class ModuleRangeTest : public Test {
  protected:
   ModuleRangeTest(void)
-      : mod(os::ModuleKind::KERNEL_MODULE, GRANARY_NAME_STRING) {
+      : mod(GRANARY_NAME_STRING) {
     mod.AddRange(100, 200, 0, 0);
   }
 

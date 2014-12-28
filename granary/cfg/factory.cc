@@ -520,15 +520,8 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
                         "non-exported Granary function.");
 
   // All remaining targets should always be associated with valid module code.
-  } else if (auto module = os::ModuleContainingPC(target_pc)) {
-     if (os::ModuleKind::GRANARY == module->Kind()) {
-       GRANARY_IF_NOT_TEST( granary_unreachable(
-           "Fatal error: Trying to jump into non-exported Granary function."); )
-
-     // Everything looks good! Take the input materialization kind.
-     } else {
-       request_kind = default_kind;
-     }
+  } else if (nullptr != os::ModuleContainingPC(target_pc)) {
+    request_kind = default_kind;
 
   // Trying to translate non-executable code.
   } else {

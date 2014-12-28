@@ -6,6 +6,7 @@
 
 #include "granary/cache.h"
 
+#include "os/lock.h"
 #include "os/memory.h"
 
 extern "C" {
@@ -42,6 +43,9 @@ static const internal::CodeSlab *AllocateSlab(size_t num_pages,
   return new internal::CodeSlab(os::AllocateCodePages(num_pages), next);
 }
 
+// Lock around all code cache transactions.
+static os::Lock gCodeCacheLock;
+
 }  // namespace
 
 CodeCache::CodeCache(size_t slab_size_)
@@ -49,8 +53,7 @@ CodeCache::CodeCache(size_t slab_size_)
       slab_num_bytes(slab_size_ * arch::PAGE_SIZE_BYTES),
       slab_byte_offset(0),
       slab_list_lock(),
-      slab_list(AllocateSlab(slab_num_pages, nullptr)),
-      code_lock() {}
+      slab_list(AllocateSlab(slab_num_pages, nullptr)) {}
 
 CodeCache::~CodeCache(void) {
   auto slab = slab_list;
@@ -76,6 +79,7 @@ CachePC CodeCache::AllocateBlock(size_t size) {
   }
   auto addr = &(slab_list->begin[aligned_offset]);
   slab_byte_offset = new_offset;
+  GRANARY_ASSERT(nullptr != addr);
   return addr;
 }
 
@@ -92,13 +96,13 @@ CachePC EstimatedCachePC(void) {
 // Note: Transactions are distinct from allocations. Therefore, many threads/
 //       cores can simultaneously allocate from a code cache, but only one
 //       should be able to read/write data to the cache at a given time.
-void CodeCache::BeginTransaction(CachePC, CachePC) {
-  code_lock.Acquire();
+CodeCacheTransaction::CodeCacheTransaction(CachePC, CachePC) {
+  gCodeCacheLock.Acquire();
 }
 
 // End a transaction that will read or write to the code cache.
-void CodeCache::EndTransaction(CachePC, CachePC) {
-  code_lock.Release();
+CodeCacheTransaction::~CodeCacheTransaction(void) {
+  gCodeCacheLock.Release();
 }
 
 // Initialize Granary's internal translation cache meta-data.

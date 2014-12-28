@@ -102,7 +102,7 @@ class Lexer {
   }
 
   // Buffers for holding data read from the file and in-progress token data.
-  char token_buffer[Module::MAX_NAME_LEN];
+  char token_buffer[Module::kMaxModulePathLength];
 
   int fd;  // File descriptor of file being tokenized.
   int file_offset;  // Offset into the `file_buffer`.
@@ -112,48 +112,9 @@ class Lexer {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Lexer);
 };
 
-// Returns a pointer to the name of a module. For example, we want to extract
-// `acl` from `/lib/x86_64-linux-gnu/libacl.so.1.1.0`.
-static const char *PathToName(char *path) {
-  char *after_last_slash = nullptr;
-  auto name = path;
-  for (; *path; ++path) {
-    if ('/' == *path) {
-      after_last_slash = path + 1;
-    }
-  }
-  if (after_last_slash) {
-    name = after_last_slash;  // Update the beginning of the name.
-  }
-  // Truncate the name at the first period (e.g. `*.so`).
-  for (auto ch(name); *ch; ++ch) {
-    if ('.' == *ch || '-' == *ch) {
-      *ch = '\0';
-      break;
-    }
-  }
-  return name;
-}
-
-// Get the module kind given a module path and the number of modules already
-// seen.
-static ModuleKind KindFromName(const char *name, int num_modules) {
-  if (!num_modules) {
-    return ModuleKind::PROGRAM;
-  } else if ('[' == name[0]) {  // [vdso], [vsyscall], [stack], [heap].
-    return ModuleKind::DYNAMIC;
-  } else if (StringsMatch("lib" GRANARY_NAME_STRING, name)) {
-    return ModuleKind::GRANARY;
-  } else {
-    return ModuleKind::SHARED_LIBRARY;
-  }
-}
-
 // Parse the `/proc/self/maps` file for information about mapped modules.
 static void ParseMapsFile(ModuleManager *manager) {
   Lexer lexer;
-  int num_found_modules(0);
-
   for (;;) {
     uintptr_t module_base(0);
     uintptr_t module_limit(0);
@@ -181,10 +142,9 @@ static void ParseMapsFile(ModuleManager *manager) {
       continue;
     }
 
-    auto name = PathToName(token);
-    auto module = manager->FindByName(name);
+    auto module = manager->FindByPath(token);
     if (!module) {
-      module = new Module(KindFromName(name, num_found_modules++), name);
+      module = new Module(token);
       manager->Register(module);
     }
 

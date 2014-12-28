@@ -39,7 +39,7 @@ namespace arch {
 namespace {
 
 // Generates the wrapper code for a context callback.
-void GenerateContextCallCode(Context *context, Callback *callback) {
+void GenerateContextCallCode(Callback *callback) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -75,9 +75,10 @@ void GenerateContextCallCode(Context *context, Callback *callback) {
   // arg1.
   //
   // TODO(pag): Remove ABI-specific use of RDI and RSI.
-  ENC(MOV_GPRv_IMMz(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(context)));
-  ENC(LEA_GPRv_AGEN(&ni, XED_REG_RSI, BaseDispMemOp(0, XED_REG_RSP,
-                                                    ADDRESS_WIDTH_BITS)));
+  ENC(MOV_GPRv_GPRv_89(&ni, XED_REG_RDI, XED_REG_RSP));
+
+  // TODO(pag): Alignment?
+
   // Call the callback.
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
 
@@ -115,13 +116,12 @@ void GenerateContextCallCode(Context *context, Callback *callback) {
 }  // namespace
 
 // Generates the wrapper code for a context callback.
-Callback *GenerateContextCallback(Context *context, CodeCache *cache,
-                                  AppPC func_pc) {
+Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
   auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(func_pc, edge_code);
-  CodeCacheTransaction transaction(
-      cache, edge_code, edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
-  GenerateContextCallCode(context, callback);
+  CodeCacheTransaction transaction(edge_code,
+                                   edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
+  GenerateContextCallCode(callback);
   return callback;
 }
 

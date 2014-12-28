@@ -48,10 +48,10 @@ struct heap_memory_tag {};
 
 // Slab allocators for block and edge cache code.
 static StaticPageAllocator<kBlockCacheNumPages, code_cache_tag, kMemoryTypeRWX>
-    block_memory GRANARY_EARLY_GLOBAL;
+    gBlockMemory GRANARY_EARLY_GLOBAL;
 
 static StaticPageAllocator<kHeapNumPages, heap_memory_tag, kMemoryTypeRW>
-    heap_memory GRANARY_EARLY_GLOBAL;
+    gHeapMemory GRANARY_EARLY_GLOBAL;
 
 }  // namespace
 
@@ -60,12 +60,12 @@ void InitHeap(void) {
 
   // Initialize the block code cache.
   granary_code_cache_begin = reinterpret_cast<char *>(
-      block_memory.BeginAddress());
+      gBlockMemory.BeginAddress());
   granary_code_cache_end = reinterpret_cast<char *>(
-      block_memory.EndAddress());
+      gBlockMemory.EndAddress());
 
-  granary_heap_begin = heap_memory.BeginAddress();
-  granary_heap_end = heap_memory.EndAddress();
+  granary_heap_begin = gHeapMemory.BeginAddress();
+  granary_heap_end = gHeapMemory.EndAddress();
 }
 
 // Destroys the Granary heap.
@@ -76,32 +76,32 @@ void ExitHeap(void) {
   granary_heap_begin = nullptr;
   granary_heap_end = nullptr;
 
-  memset(&block_memory, 0, sizeof block_memory);
-  memset(&heap_memory, 0, sizeof heap_memory);
+  memset(&gBlockMemory, 0, sizeof gBlockMemory);
+  memset(&gHeapMemory, 0, sizeof gHeapMemory);
 
-  new (&block_memory) decltype(block_memory);
-  new (&heap_memory) decltype(block_memory);
+  new (&gBlockMemory) decltype(gBlockMemory);
+  new (&gHeapMemory) decltype(gHeapMemory);
 }
 
 // Allocates `num` number of pages from the OS with `MEMORY_READ_WRITE`
 // protection.
 void *AllocateDataPages(size_t num) {
-  return heap_memory.AllocatePages(num);
+  return gHeapMemory.AllocatePages(num);
 }
 
 // Frees `num` pages back to the OS.
 void FreeDataPages(void *addr, size_t num) {
-  heap_memory.FreePages(addr, num);
+  gHeapMemory.FreePages(addr, num);
 }
 
 // Allocates `num` number of executable pages from the block code cache.
 CachePC AllocateCodePages(size_t num) {
-  return reinterpret_cast<CachePC>(block_memory.AllocatePages(num));
+  return reinterpret_cast<CachePC>(gBlockMemory.AllocatePages(num));
 }
 
 // Frees `num` pages back to the block code cache.
 void FreeCodePages(CachePC addr, size_t num) {
-  block_memory.FreePages(addr, num);
+  gBlockMemory.FreePages(addr, num);
 }
 }  // namespace os
 }  // namespace granary

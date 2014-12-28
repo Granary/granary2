@@ -134,7 +134,7 @@ static void InitIclassFlags(void) {
   ICLASS_FLAG_ACTIONS[XED_ICLASS_INT3].is_conditional_write = false;
 }
 
-// Initialize the table of iform flags.
+// Initialize the table of `iform` flags.
 static void InitIformFlags(void) {
   memset(&(IFORM_FLAGS[0]), 0, sizeof IFORM_FLAGS);
 
@@ -155,12 +155,8 @@ static void InitIformFlags(void) {
     // assume all flags are read/written.
     if (!flags || xedi->_flag_complex) {
       const auto actions = ICLASS_FLAG_ACTIONS[xed_inst_iclass(xedi)];
-      if (actions.is_read) {
-        iform_flags.read.flat |= all_flags;
-      }
-      if (actions.is_write) {
-        iform_flags.written.flat |= all_flags;
-      }
+      if (actions.is_read) iform_flags.read.flat |= all_flags;
+      if (actions.is_write) iform_flags.written.flat |= all_flags;
 
     // We've got precise flags information.
     } else {
@@ -168,9 +164,7 @@ static void InitIformFlags(void) {
       iform_flags.written.flat |= flags->written.flat;
 
       // Turns conditionally written flags into read flags.
-      if (flags->may_write) {
-        iform_flags.read.flat |= flags->written.flat;
-      }
+      if (flags->may_write) iform_flags.read.flat |= flags->written.flat;
     }
   }
 }
@@ -187,6 +181,13 @@ static void ForEachImplicitOperand(FuncT func) {
     auto num_ops = xed_inst_noperands(instr);
     for (auto i = 0U; i < num_ops; ++i) {
       auto op = xed_inst_operand(instr, i);
+      // Ignore `BASE0` and `BASE1` mem ops because we'll record the same info
+      // in the memory operand itself.
+      auto op_name = xed_operand_name(op);
+      if (XED_OPERAND_BASE0 == op_name ||
+          XED_OPERAND_BASE1 == op_name) {
+        continue;
+      }
       if (XED_OPVIS_EXPLICIT != xed_operand_operand_visibility(op) &&
           !IsAmbiguousOperand(iclass, iform, i)) {
         func(instr, op, i, isel);
@@ -597,6 +598,8 @@ void Init(void) {
 
 // Exit the driver.
 void Exit(void) {
+  memset(IMPLICIT_OPERANDS, 0, sizeof IMPLICIT_OPERANDS);
+  memset(NUM_IMPLICIT_OPERANDS, 0, sizeof NUM_IMPLICIT_OPERANDS);
   os::FreeDataPages(gImplicitOperandPages, gNumImplicitOperandPages);
 }
 }  // namespace arch

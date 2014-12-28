@@ -504,11 +504,11 @@ define print-arch-operand
     # Compound base + index * scale + displacement memory operand.
     if $__o->is_compound
       set $__pplus = 0
-      if VR_KIND_UNKNOWN != $__o->mem.base.kind
+      if kVirtualRegisterKindInvalid != $__o->mem.base.kind
         print-virt-reg $__o->mem.base
         set $__pplus = 1
       end
-      if VR_KIND_UNKNOWN != $__o->mem.index.kind
+      if kVirtualRegisterKindInvalid != $__o->mem.index.kind
         if $__pplus
           printf " + "
         end

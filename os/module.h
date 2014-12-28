@@ -57,18 +57,6 @@ class ModuleOffset {
         offset(offset_) {}
 };
 
-// Different kinds of recognized modules. For the most part, Granary only cares
-// about modules that contain executable code.
-enum class ModuleKind {
-  GRANARY,
-  GRANARY_CODE_CACHE = GRANARY,
-  KERNEL,
-  PROGRAM = KERNEL,
-  KERNEL_MODULE,
-  SHARED_LIBRARY = KERNEL_MODULE,
-  DYNAMIC  // E.g. because of `mmap`.
-};
-
 #ifdef GRANARY_INTERNAL
 class ModuleAddressRange;
 enum {
@@ -85,13 +73,12 @@ enum {
 class Module {
  public:
   enum {
-    MAX_NAME_LEN = 256
+    kMaxModulePathLength = 256
   };
 
   // Initialize a new module with no ranges.
   GRANARY_INTERNAL_DEFINITION
-  Module(ModuleKind kind_, const char *name_,
-         Context *context_=nullptr);
+  explicit Module(const char *path_);
 
   GRANARY_INTERNAL_DEFINITION ~Module(void);
 
@@ -104,8 +91,8 @@ class Module {
   // address is marked as executable.
   bool Contains(AppPC pc) const;
 
-  // Returns the kind of this module.
-  ModuleKind Kind(void) const;
+  // Returns the path of this module.
+  const char *Path(void) const;
 
   // Returns the name of this module.
   const char *Name(void) const;
@@ -165,16 +152,9 @@ class Module {
   GRANARY_INTERNAL_DEFINITION
   void AddRangeNoConflict(ModuleAddressRange *range);
 
-  // Context to which this module belongs.
-  //
-  // Note: We say that a module is shared if and only if `context` is null.
-  GRANARY_INTERNAL_DEFINITION Context * const context;
-
-  // The kind of this module (e.g. granary, client, kernel, etc.).
-  GRANARY_INTERNAL_DEFINITION ModuleKind const kind;
-
   // Name/path of this module.
-  GRANARY_INTERNAL_DEFINITION char name[MAX_NAME_LEN];
+  GRANARY_INTERNAL_DEFINITION char name[kMaxModulePathLength];
+  GRANARY_INTERNAL_DEFINITION char path[kMaxModulePathLength];
 
   // The address ranges of this module.
   GRANARY_INTERNAL_DEFINITION ModuleAddressRange *ranges;
@@ -208,6 +188,9 @@ class ModuleManager {
 
   // Find the module and offset associated with a given program counter.
   ModuleOffset FindOffsetOfPC(AppPC pc);
+
+  // Find a module given its path.
+  Module *FindByPath(const char *path);
 
   // Find a module given its name.
   Module *FindByName(const char *name);

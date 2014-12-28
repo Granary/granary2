@@ -76,7 +76,7 @@ class TranslationContext {
 // This limits there applicability to places where the instrumentation code
 // wants to see the native machine context as it would be without
 std::unique_ptr<Instruction> ContextFunctionCall(
-    void (*func)(TranslationContext, arch::MachineContext *));
+    void (*func)(arch::MachineContext *));
 
 namespace detail {
 

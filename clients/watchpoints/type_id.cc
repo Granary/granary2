@@ -6,35 +6,35 @@ GRANARY_USING_NAMESPACE granary;
 
 namespace {
 enum {
-  kMaxSetBit = 31
+  kMaxSetBit = 31,
+  kTypeTableSize = 4096
 };
 
 // Uses a combination of (return address, log2 size) to identify a type.
 struct Type {
   const Type *next;
-  size_t size_order:16;
-  uintptr_t ret_address:48;
-} __attribute__((packed));
+  size_t size_order;
+  uintptr_t ret_address;
+};
 
 typedef LinkedListIterator<const Type> ConstTypeIterator;
 
-static_assert(2 * sizeof(uint64_t) == sizeof(Type),
-    "Invalid structure packing for type `struct Type`.");
-
 // Array of types for serving type allocations.
-Type types[kMaxWatchpointTypeId + 1];
+static Type gTypes[kMaxWatchpointTypeId + 1];
+
+// Did we run out of type ids?
+static bool gNoMoreTypeIds = false;
 
 // Array of `Type` lists, with locks protecting each list.
 struct TypeList {
   ReaderWriterLock types_lock;
   const Type *types;
-} sizes[kMaxSetBit + 1];
+} static gTypeTable[kTypeTableSize];
 
 // Search the type lists for the matching type.
-static const Type *FindType(TypeList *ls, uint64_t ret_address_) {
-  auto ret_address = ret_address_ & 0xFFFFFFFFFFFFULL;
+static const Type *FindType(TypeList *ls, uint64_t ret_address, size_t size) {
   for (auto type : ConstTypeIterator(ls->types)) {
-    if (type->ret_address == ret_address) {
+    if (type->ret_address == ret_address && type->size_order == size) {
       return type;
     }
   }
@@ -42,26 +42,27 @@ static const Type *FindType(TypeList *ls, uint64_t ret_address_) {
 }
 
 // The next type Id that can be assigned.
-static std::atomic<uint64_t> gNextTypeId = ATOMIC_VAR_INIT(0);
-
-// Allocate a new type id.
-static uint64_t AllocateTypeId(void) {
-  auto id = gNextTypeId.fetch_add(1);
-  GRANARY_ASSERT(kMaxWatchpointTypeId >= id);
-  return id;
-}
+static std::atomic<uint64_t> gNextTypeId;
 
 static uint16_t IdOf(const Type *type) {
-  return static_cast<uint16_t>(type - &(types[0]));
+  return static_cast<uint16_t>(type - &(gTypes[0]));
 }
 
 // Create a new type.
 static const Type *CreateType(TypeList *ls, uint64_t ret_address,
                               size_t size_order) {
-  if (auto type = FindType(ls, ret_address)) {
-    return type;  // Double check to resolve a race.
+  // Double check to resolve a race.
+  if (auto type = FindType(ls, ret_address, size_order)) return type;
+
+  auto type_id = gNextTypeId.fetch_add(1);
+  if (kMaxWatchpointTypeId <= type_id) {
+    if (!gNoMoreTypeIds) {
+      gNoMoreTypeIds = true;
+      os::Log(os::LogDebug, "WARNING: Ran out of type IDs.");
+    }
+    return nullptr;
   }
-  auto new_type = &(types[AllocateTypeId()]);
+  auto new_type = &(gTypes[type_id]);
   new_type->ret_address = ret_address;
   new_type->size_order = size_order;
   new_type->next = ls->types;
@@ -78,15 +79,17 @@ uint64_t TypeIdFor(uintptr_t ret_address, size_t num_bytes) {
     size_order = 63UL - static_cast<size_t>(__builtin_clzl(num_bytes));
     GRANARY_ASSERT(size_order <= kMaxSetBit);
   }
-  const auto type_list = &(sizes[size_order]);
+  const auto type_list = &(gTypeTable[ret_address % kTypeTableSize]);
   const Type *type(nullptr);
   {
     ReadLockedRegion locker(&(type_list->types_lock));
-    type = FindType(type_list, ret_address);
+    type = FindType(type_list, ret_address, size_order);
   }
   if (!type) {
     WriteLockedRegion locker(&(type_list->types_lock));
-    type = CreateType(type_list, ret_address, size_order);
+    if (!(type = CreateType(type_list, ret_address, size_order))) {
+      return kMaxWatchpointTypeId;
+    }
   }
   return IdOf(type);
 }
@@ -97,7 +100,7 @@ void ForEachType(std::function<void(uint64_t type_id,
                                     size_t size_order)> func) {
   const auto max_id = gNextTypeId.load(std::memory_order_relaxed);
   auto id = 0ULL;
-  for (const auto &type : types) {
+  for (const auto &type : gTypes) {
     func(id, reinterpret_cast<AppPC>(type.ret_address), type.size_order);
     if (++id >= max_id) return;
   }
@@ -105,10 +108,12 @@ void ForEachType(std::function<void(uint64_t type_id,
 
 // Returns the approximate size (in bytes) of a given type.
 size_t SizeOfType(uint64_t type_id) {
-  return 1UL << types[type_id].size_order;
+  return 1UL << gTypes[type_id].size_order;
 }
 
 GRANARY_ON_CLIENT_INIT() {
-  memset(types, 0, sizeof types);
-  memset(sizes, 0, sizeof sizes);
+  gNoMoreTypeIds = false;
+  gNextTypeId.store(0);
+  memset(gTypes, 0, sizeof gTypes);
+  memset(gTypeTable, 0, sizeof gTypeTable);
 }

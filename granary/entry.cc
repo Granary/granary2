@@ -26,7 +26,7 @@ namespace arch {
 // Patch a direct edge.
 //
 // Note: This function has an architecture-specific implementation.
-extern bool TryAtomicPatchEdge(Context *context, DirectEdge *edge);
+extern bool TryAtomicPatchEdge(DirectEdge *edge);
 
 }  // namespace arch
 namespace {
@@ -65,8 +65,7 @@ GRANARY_ENTRYPOINT void granary_enter_direct_edge(DirectEdge *edge) {
       auto context = GlobalContext();
       edge->entry_target_pc = Translate(context, edge->dest_meta);
       edge->dest_meta = nullptr;
-      if (!FLAG_unsafe_patch_edges ||
-          !arch::TryAtomicPatchEdge(context, edge)) {
+      if (!FLAG_unsafe_patch_edges || !arch::TryAtomicPatchEdge(edge)) {
         context->PreparePatchDirectEdge(edge);
       }
     }

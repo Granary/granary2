@@ -75,14 +75,13 @@ extern void GenerateInterruptEnableCode(CachePC pc);
 // Generates the wrapper code for a context callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateContextCallback(Context *, CodeCache *cache,
-                                         AppPC func_pc);
+extern Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc);
 
 // Generates the wrapper code for an outline callback.
 //
 // Note: This has an architecture-specific implementation.
 extern Callback *GenerateInlineCallback(CodeCache *cache,
-                                         InlineFunctionCall *call);
+                                        InlineFunctionCall *call);
 
 }  // namespace arch
 namespace {
@@ -90,7 +89,7 @@ namespace {
 template <typename T>
 static CachePC GenerateCode(CodeCache *cache, T generator, size_t size) {
   auto code = cache->AllocateBlock(size);
-  CodeCacheTransaction transaction(cache, code, code + size);
+  CodeCacheTransaction transaction(code, code + size);
   generator(code);
   return code;
 }
@@ -203,7 +202,7 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
 
   // Generate a small stub of code specific to this `DirectEdge`.
   CodeCacheTransaction transaction(
-      &edge_code_cache, edge->edge_code_pc,
+      edge->edge_code_pc,
       edge->edge_code_pc + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
   arch::GenerateDirectEdgeCode(edge, direct_edge_entry_code);
 
@@ -257,7 +256,7 @@ void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
 const arch::Callback *Context::ContextCallback(AppPC func_pc) {
   os::LockedRegion locker(&context_callbacks_lock);
   auto *&cb(context_callbacks[func_pc]);
-  if (!cb) cb = arch::GenerateContextCallback(this, &edge_code_cache, func_pc);
+  if (!cb) cb = arch::GenerateContextCallback(&edge_code_cache, func_pc);
   return cb;
 }
 

@@ -42,7 +42,9 @@ struct PageAllocator {
   explicit PageAllocator(void *heap_)
       : num_allocated_pages(ATOMIC_VAR_INIT(0U)),
         free_pages_lock(),
-        heap(reinterpret_cast<PageFrame *>(heap_)) {}
+        heap(reinterpret_cast<PageFrame *>(heap_)) {
+    memset(free_pages, 0, sizeof free_pages);
+  }
 
   void *AllocatePages(size_t num);
   void FreePages(void *addr, size_t num);
@@ -97,7 +99,6 @@ void *PageAllocator<kNumPages>::AllocatePagesSlow(size_t num) {
     if (!free_pages[i]) {
       continue;  // Nothing freed on this group of pages.
     }
-
     first_set_bit = first_set_bit_reset;
     for (auto bit = 0U; bit < kNumBitsPerFreeSetSlot; ++bit) {
       if (free_pages[i] & (1UL << bit)) {
@@ -114,7 +115,6 @@ void *PageAllocator<kNumPages>::AllocatePagesSlow(size_t num) {
         }
       }
     }
-
     if ((num <= (kNumBitsPerFreeSetSlot - first_set_bit))) {
       goto allocate;
     }
@@ -127,7 +127,6 @@ allocate:
   for (auto bit = first_set_bit; bit < (first_set_bit + num); ++bit) {
     free_pages[i] &= ~(1UL << bit);
   }
-
   // Return the allocated memory.
   return &(heap[first_set_bit + (i * kNumBitsPerFreeSetSlot)]);
 }

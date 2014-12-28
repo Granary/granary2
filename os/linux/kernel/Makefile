@@ -24,7 +24,7 @@ GRANARY_SHIPPED_BIN = $(GRANARY_MOD_BIN_DIR)/granary_bin.o_shipped
 GRANARY_SHIPPED_CMD = $(GRANARY_MOD_BIN_DIR)/.granary_bin.o.cmd
 
 # All objects that need to be put together to form the library.
-GRANARY_O_FILES = os.o granary.o arch.o driver.o
+GRANARY_O_FILES = os.o granary.o arch.o dependencies.o
 ifneq ($(strip $(GRANARY_CLIENTS)),)
 	GRANARY_O_FILES += clients.o
 endif

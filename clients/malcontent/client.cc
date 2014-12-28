@@ -6,6 +6,8 @@
 
 #ifdef GRANARY_WHERE_user
 
+#include "dependencies/fasthash/fasthash.h"
+
 #include "clients/watchpoints/client.h"  // For type ID stuff.
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
@@ -24,13 +26,22 @@ GRANARY_DEFINE_positive_uint(sample_rate, 500,
     "      sampling will indeed occur every N ms, but rather, approximately\n"
     "      every N ms, given a fair scheduler.",
 
-    "data_collider");
+    "malcontent");
 
 GRANARY_DEFINE_positive_uint(num_sample_points, 64,
     "The number of addresses that will be sampled by Malcontent. By default "
     "this is `64`. The maximum number of active sample points is `2^16 - 2`.",
 
-    "data_collider");
+    "malcontent");
+
+GRANARY_DEFINE_positive_uint(sample_pause_time, 0,
+    "The amount of time (in microseconds) that the owning thread of a cache "
+    "line pauses in order to wait for a contending thread to access the same "
+    "cache line. This is used to detect truly concurrent accesses to the same "
+    "cache line, where neither access happens-before the other. The default "
+    "value is `0`, meaning that no pausing is done.",
+
+    "malcontent");
 
 GRANARY_DECLARE_positive_uint(shadow_granularity);
 
@@ -91,10 +102,13 @@ struct MemoryAccess {
 struct SamplePoint {
   uint64_t type_id;
   OwnershipTracker *tracker;
-  uintptr_t base_address;
-  uintptr_t limit_address;
+  size_t offset_in_object;
+  uintptr_t native_address;
   MemoryAccess accesses[2];
 };
+
+// Stack traces per type.
+static StackTrace gTypeTraces[kNumUsableSamplePoints] = {{nullptr}};
 
 // The stack on which the monitor thread executes.
 alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
@@ -116,22 +130,38 @@ static pid_t gMonitorThread = -1;
 // round-robin through the sample points to make sure all types are sampled.
 static size_t gCurrSourceIndex = 0;
 
+// Pause time (in microseconds).
+static long gPauseTime = 0;
+
 // Add an address to our potential sample population.
 static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
-  if (type_id < kNumUsableSamplePoints) {
-    gRecentAllocations[type_id + 1] = ptr;
+  if (type_id) gRecentAllocations[type_id] = ptr;
+}
+
+// Returns the type id for an allocation size. This is also responsible for
+// initializing the stack trace for the type information.
+static uint64_t TypeId(StackTrace trace, size_t size) {
+  CopyStackTrace(&(trace[2]), sizeof(StackTrace) - 2 * sizeof trace[0]);
+  auto trace_hash = fasthash64(trace, sizeof(StackTrace), 0);
+  auto type_id = TypeIdFor(trace_hash, size);
+  if (kMaxWatchpointTypeId <= type_id) return 0;
+  auto adjusted_type_id = type_id + 1;
+  if (!gRecentAllocations[adjusted_type_id]) {
+    memcpy(gTypeTraces[adjusted_type_id], trace, sizeof(StackTrace));
   }
+  return adjusted_type_id;
 }
 
 #define GET_ALLOCATOR(name) \
   auto name = WRAPPED_FUNCTION; \
-  auto ret_address = NATIVE_RETURN_ADDRESS
+  auto ret_address = NATIVE_RETURN_ADDRESS; \
+  StackTrace trace; \
+  memset(trace, 0, sizeof trace); \
+  trace[0] = reinterpret_cast<AppPC>(name); \
+  trace[1] = ret_address
 
 #define SAMPLE_AND_RETURN_ADDRESS \
-  if (addr) { \
-    auto type_id = TypeIdFor(ret_address, size); \
-    AddRecentAllocation(type_id, addr); \
-  } \
+  if (addr) AddRecentAllocation(TypeId(trace, size), addr); \
   return addr
 
 #define SAMPLE_ALLOCATOR(lib, name) \
@@ -177,10 +207,7 @@ WRAP_NATIVE_FUNCTION(libc, posix_memalign, (int), (void **addr_ptr,
                                                    size_t align, size_t size)) {
   GET_ALLOCATOR(posix_memalign);
   auto ret = posix_memalign(addr_ptr, align, size);
-  if (!ret) {
-    auto type_id = TypeIdFor(ret_address, size);
-    AddRecentAllocation(type_id, *addr_ptr);
-  }
+  if (!ret) AddRecentAllocation(TypeId(trace, size), *addr_ptr);
   return ret;
 }
 
@@ -196,21 +223,24 @@ static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
   if (!alloc_addr) return;
 
   auto tracker = ShadowOf<OwnershipTracker>(alloc_addr);
-  auto base_address = reinterpret_cast<uintptr_t>(tracker);
-  auto limit_address = base_address + SizeOfType(type_id);
+  const auto base_address = reinterpret_cast<uintptr_t>(alloc_addr);
+  const auto limit_address = base_address + SizeOfType(type_id);
 
-  for (; num_sample_points < FLAG_num_sample_points; ) {
-    const auto tracker_addr = reinterpret_cast<uintptr_t>(tracker);
-    if (tracker_addr >= limit_address) return;
+  for (auto offset_in_object = 0UL;
+       num_sample_points < FLAG_num_sample_points;
+       offset_in_object += FLAG_shadow_granularity) {
 
-    auto sample_tracker = tracker;
+    const auto native_address = base_address + offset_in_object;
+    if (native_address >= limit_address) return;
+
+    auto sample_tracker = tracker++;
     auto sample_id = num_sample_points++;
     auto &sample(gSamplePoints[sample_id]);
 
     sample.type_id = type_id;
-    sample.tracker = tracker++;
-    sample.base_address = reinterpret_cast<uintptr_t>(alloc_addr);
-    sample.limit_address = sample.base_address + FLAG_shadow_granularity;
+    sample.tracker = sample_tracker;
+    sample.offset_in_object = offset_in_object;
+    sample.native_address = native_address;
 
     // We'll enable the sample later. We want to avoid the case of adding two
     // samples to a given object; our approach will be that the last sample
@@ -251,9 +281,9 @@ static void ActivateSamplePoints(void) {
 static void LogPC(AppPC pc) {
   auto offset = os::ModuleOffsetOfPC(pc);
   if (offset.module) {
-    os::Log("    %s:%lu\n", offset.module->Name(), offset.offset);
+    os::Log("    %p\t%s:%lx\n", pc, offset.module->Path(), offset.offset);
   } else {
-    os::Log("    %p\n", pc);
+    os::Log("    %p\t\n", pc);
   }
 }
 
@@ -277,6 +307,14 @@ static void LogMemoryAccess(const MemoryAccess &access) {
   LogStackTrace(access.stack_trace);
 }
 
+static void LogTypeInfo(const SamplePoint &sample) {
+  os::Log("  Watched offsets [%lu,%lu) of object of size %lu allocated at:\n",
+          sample.offset_in_object,
+          sample.offset_in_object + FLAG_shadow_granularity,
+          SizeOfType(sample.type_id));
+  LogStackTrace(gTypeTraces[sample.type_id]);
+}
+
 // Reports stack reports for found issues.
 static void ReportSamplePoints(void) {
   for (auto &sample : gSamplePoints) {
@@ -296,12 +334,11 @@ static void ReportSamplePoints(void) {
     auto cl1 = reinterpret_cast<uintptr_t>(sample.accesses[1].address) >> 6UL;
     if (cl0 != cl1) continue;
 
-    os::Log("Contention detected in watched range [%p,%p)\n\n",
-            sample.base_address, sample.limit_address);
+    os::Log("\nContention detected in watched range [%p,%p)\n",
+            sample.native_address, sample.native_address + FLAG_shadow_granularity);
+    LogTypeInfo(sample);
     LogMemoryAccess(sample.accesses[0]);
-    os::Log("\n");
     LogMemoryAccess(sample.accesses[1]);
-    os::Log("\n");
   }
 }
 
@@ -325,8 +362,6 @@ static void Monitor(void) {
 
 // Initialize the monitoring process for Malcontent. This allows us to set
 // hardware watchpoints.
-//
-// TODO(pag): The only thing that makes this actually work is luck...
 static void CreateMonitorThread(void) {
   auto ret = sys_clone(CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|
                        CLONE_THREAD|CLONE_SYSVSEM,
@@ -379,6 +414,8 @@ class Malcontent : public InstrumentationTool {
     CreateMonitorThread();
     AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
                                          ShouldInstrumentMemOp);
+
+    gPauseTime = 1000 * FLAG_sample_pause_time;
   }
 
   // Exit; this kills off the monitor thread.
@@ -389,7 +426,8 @@ class Malcontent : public InstrumentationTool {
     }
     gMonitorThread = -1;
     gCurrSourceIndex = 0;
-    memset(&(gRecentAllocations[0]), 0, sizeof gRecentAllocations);
+    gPauseTime = 0;
+    memset(gRecentAllocations, 0, sizeof gRecentAllocations);
     ClearActiveSamplePoints();
   }
 
@@ -413,6 +451,11 @@ class Malcontent : public InstrumentationTool {
     // We just took ownership; re-add the watchpoint.
     if (!trace) {
       sample_point.tracker->sample_id = tracker.sample_id;
+      if (gPauseTime) {
+        const timespec pause_time = {0, gPauseTime};
+        nanosleep(&pause_time, nullptr);
+        if (!sample_point.accesses[1].address) return;  // No data-race.
+      }
 
     // We're the contender, remove the watchpoint and all info.
     } else {

@@ -7,7 +7,7 @@
 #include "granary/base/option.h"
 
 #include "granary/cfg/block.h"
-#include "granary/cfg/control_flow_graph.h"
+#include "granary/cfg/trace.h"
 #include "granary/cfg/factory.h"
 #include "granary/cfg/instruction.h"
 #include "granary/cfg/lir.h"
@@ -120,49 +120,6 @@ class NativeCallTool : public InstrumentationTool {
   }
 };
 
-// Forces execution to go native on function calls.
-class WatchpointsLikeTool : public InstrumentationTool {
- public:
-  virtual ~WatchpointsLikeTool(void) = default;
-
-  void InstrumentMemOp(NativeInstruction *instr, const MemoryOperand &mloc) {
-    //FLAG_debug_log_fragments = true;
-
-    // Doesn't read from or write to memory.
-    if (mloc.IsEffectiveAddress()) return;
-
-    // Reads or writes from an absolute address, not through a register.
-    VirtualRegister watched_addr;
-    if (!mloc.MatchRegister(watched_addr)) return;
-
-    // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
-    if (!watched_addr.IsGeneralPurpose()) return;
-    if (watched_addr.IsStackPointerAlias()) return;
-    if (watched_addr.IsSegmentOffset()) return;
-
-    RegisterOperand watched_addr_reg(watched_addr);
-
-    lir::InlineAssembly asm_({&watched_addr_reg});
-    asm_.InlineBefore(instr, "BT r64 %0, i8 48;");
-  }
-
-  // Instrument a basic block.
-  virtual void InstrumentBlock(DecodedBlock *bb) {
-    MemoryOperand mloc1, mloc2;
-
-    for (auto instr : bb->ReversedAppInstructions()) {
-      auto num_matched = instr->CountMatchedOperands(ReadOrWriteTo(mloc1),
-                                                     ReadOrWriteTo(mloc2));
-      if (2 == num_matched) {
-        InstrumentMemOp(instr, mloc1);
-        InstrumentMemOp(instr, mloc2);
-      } else if (1 == num_matched) {
-        InstrumentMemOp(instr, mloc1);
-      }
-    }
-  }
-};
-
 #define TOOL_HARNESS(tool_name) \
     class tool_name ## _DirectControlFlowTest : public SimpleEncoderTest { \
      public: \
@@ -181,7 +138,6 @@ TOOL_HARNESS(CallTool);
 TOOL_HARNESS(CallUnrollerTool);
 TOOL_HARNESS(JumpUnrollerTool);
 TOOL_HARNESS(NativeCallTool);
-TOOL_HARNESS(WatchpointsLikeTool);
 
 namespace {
 
@@ -243,11 +199,11 @@ static int last_val_iterative(int n, int *nums) {
     TEST_F(CallTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
     TEST_F(CallUnrollerTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
     TEST_F(JumpUnrollerTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
-    TEST_F(NativeCallTool_DirectControlFlowTest, test_name) __VA_ARGS__ \
-    TEST_F(WatchpointsLikeTool_DirectControlFlowTest, test_name) __VA_ARGS__
+    TEST_F(NativeCallTool_DirectControlFlowTest, test_name) __VA_ARGS__
 
 TEST_WITH_TOOLS(RecursiveFibonacci, {
-  auto inst = TranslateEntryPoint(context, fibonacci_rec, kEntryPointTestCase);
+  auto inst = TranslateEntryPoint(this->context, fibonacci_rec,
+                                  kEntryPointTestCase);
   auto fibonacci_rec_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
     EXPECT_EQ(fibonacci_rec(i), fibonacci_rec_inst(i));
@@ -255,7 +211,8 @@ TEST_WITH_TOOLS(RecursiveFibonacci, {
 })
 
 TEST_WITH_TOOLS(IterativeFibonacci, {
-  auto inst = TranslateEntryPoint(context, fibonacci_iter, kEntryPointTestCase);
+  auto inst = TranslateEntryPoint(this->context, fibonacci_iter,
+                                  kEntryPointTestCase);
   auto fibonacci_iter_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
     EXPECT_EQ(fibonacci_iter(i), fibonacci_iter_inst(i));
@@ -263,7 +220,8 @@ TEST_WITH_TOOLS(IterativeFibonacci, {
 })
 
 TEST_WITH_TOOLS(RecursiveFactorial, {
-  auto inst = TranslateEntryPoint(context, factorial_rec, kEntryPointTestCase);
+  auto inst = TranslateEntryPoint(this->context, factorial_rec,
+                                  kEntryPointTestCase);
   auto factorial_rec_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
     EXPECT_EQ(factorial_rec(i), factorial_rec_inst(i));
@@ -271,7 +229,8 @@ TEST_WITH_TOOLS(RecursiveFactorial, {
 })
 
 TEST_WITH_TOOLS(IterativeFactorial, {
-  auto inst = TranslateEntryPoint(context, factorial_iter, kEntryPointTestCase);
+  auto inst = TranslateEntryPoint(this->context, factorial_iter,
+                                  kEntryPointTestCase);
   auto factorial_iter_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
     EXPECT_EQ(factorial_iter(i), factorial_iter_inst(i));
@@ -279,7 +238,7 @@ TEST_WITH_TOOLS(IterativeFactorial, {
 })
 
 TEST_WITH_TOOLS(LastValueIterative, {
-  auto inst = TranslateEntryPoint(context, last_val_iterative,
+  auto inst = TranslateEntryPoint(this->context, last_val_iterative,
                                   kEntryPointTestCase);
   auto last_val_iterative_inst = UnsafeCast<int(*)(int, int *)>(inst);
   int vals[] = {0, 1, 2, 3, 4, 5};
