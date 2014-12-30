@@ -145,11 +145,10 @@ static uint64_t TypeId(StackTrace trace, size_t size) {
   auto trace_hash = fasthash64(trace, sizeof(StackTrace), 0);
   auto type_id = TypeIdFor(trace_hash, size);
   if (kMaxWatchpointTypeId <= type_id) return 0;
-  auto adjusted_type_id = type_id + 1;
-  if (!gRecentAllocations[adjusted_type_id]) {
-    memcpy(gTypeTraces[adjusted_type_id], trace, sizeof(StackTrace));
+  if (!gRecentAllocations[type_id]) {
+    memcpy(gTypeTraces[type_id], trace, sizeof(StackTrace));
   }
-  return adjusted_type_id;
+  return type_id;
 }
 
 #define GET_ALLOCATOR(name) \
@@ -254,19 +253,17 @@ static void ActivateSamplePoints(void) {
 
   // Figure out where the "end" of the sampling should be.
   auto end_id = (gCurrSourceIndex + kNumSamplePoints - 1) % kNumSamplePoints;
-  if (!end_id) end_id++;  // Never have a zero type id.
 
   // Add the sample points.
-  auto num_samples = 0UL;
-  for (; num_samples < FLAG_num_sample_points; ) {
+  auto num_samples = 1UL;
+  for (; num_samples <= FLAG_num_sample_points; ) {
     auto type_id = gCurrSourceIndex++ % kNumSamplePoints;
-    if (!type_id) continue;  // Type ID 0 means unwatched.
     AddSamplesForType(type_id, num_samples);
     if (type_id == end_id) break;
   }
 
   // Activate the sample points.
-  for (auto sample_id = 0UL; sample_id < num_samples; ++sample_id) {
+  for (auto sample_id = 1UL; sample_id < num_samples; ++sample_id) {
     const auto &sample(gSamplePoints[sample_id]);
     auto tracker = sample.tracker;
     if (tracker->value == sample_id) {
@@ -489,23 +486,23 @@ class Malcontent : public InstrumentationTool {
     lir::InlineAssembly asm_(op.shadow_addr_op, tracker);
 
     asm_.InlineBefore(op.instr,
-        // Start with a racy read of `OwnershipTracker::type_id`. This allows
-        // us to optimize the common case, which is that type = 0 (which is
-        // reserved for unwatched memory).
+        // Start with a racy read of `OwnershipTracker::sample_id`.
+        // This allows us to optimize the common case, which is that
+        // sample_id = 0 (which is reserved for unwatched memory).
         "CMP m16 [%0 + 6], i8 0;"
         "JZ l %2;"
 
-        // Racy check that we don't own the cache line. Compare only the low
-        // order 32 bits.
+        // Racy check that we don't own the cache line. Compare only
+        // the low order 32 bits.
         "@COLD;"
         "MOV r64 %1, m64 FS:[0];"
         "CMP m32 [%0], r32 %1;"
         "JZ l %2;"
 
-        // Okay, we might be taking ownership, or detecting contention. So,
-        // we'll add ourselves to the shadow and pull out the old value.
-        // Because of user space addresses have all 16 high order bits as 0,
-        // we'll end up marking the shadow as unwatched. If in
+        // Okay, we might be taking ownership, or detecting contention.
+        // So, we'll add ourselves to the shadow and pull out the old
+        // value. Because of user space addresses have all 16 high order
+        // bits as 0, we'll end up marking the shadow as unwatched. If in
         // `InstrumentContention` we detect that we should take ownership,
         // then we'll re-watch the memory.
         "@FROZEN;"
