@@ -87,8 +87,7 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 // Granary.
 class IndirectEdge {
  public:
-  IndirectEdge(const BlockMetaData *dest_meta_,
-               CachePC indirect_edge_entrypoint);
+  explicit IndirectEdge(const BlockMetaData *dest_meta_);
   ~IndirectEdge(void);
 
   // The entrypoint to the in-edge code. The value changes as follows:

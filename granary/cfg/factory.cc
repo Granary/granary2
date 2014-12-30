@@ -37,7 +37,7 @@ GRANARY_DEFINE_bool(transparent_returns, GRANARY_IF_USER_ELSE(true, false),
     "      program isn't being comprehensively instrumented, then return\n"
     "      address transparency can likely be enabled."));
 
-GRANARY_DEFINE_positive_uint(max_decoded_instructions_per_block, 16,
+GRANARY_DEFINE_positive_uint(max_num_instructions_per_block, 16,
     "The maximum number of instructions to decode per basic block. The default "
     "value is `16`.");
 
@@ -191,38 +191,33 @@ NativeInstruction *BlockFactory::MakeInstruction(
 void BlockFactory::AddFallThroughInstruction(DecodedBlock *block,
                                              Instruction *last_instr,
                                              AppPC pc) {
-  Block *fall_through_block(nullptr);
-
-  // If the last instruction isn't a CFI, then we need to add a fall-through.
-  auto add_fall_through_block = true;
-
-  // Should we auto-submit a request to look up the fall-through block?
-  auto request_fall_through_block = false;
 
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
-  if (cfi) {
-    GRANARY_ASSERT(!cfi->IsInterruptCall());
 
-    // Force us to request the fall through if we have an exceptional
-    // control-flow instruction (kernel space faultable instruction) that is
-    // otherwise not explicitly a control-flow instruction).
-    add_fall_through_block = IsA<ExceptionalControlFlowInstruction *>(cfi);
-    request_fall_through_block = add_fall_through_block;
-
-    if (cfi->IsFunctionCall() && !FLAG_transparent_returns) {
-      add_fall_through_block = false;
-    }
-  }
-
-  if (add_fall_through_block || cfi->IsConditionalJump() ||
-      cfi->IsSystemCall()) {
+  // Add in a fall-through block.
+  const auto is_exceptional = IsA<ExceptionalControlFlowInstruction *>(cfi);
+  if (!cfi || (cfi->IsFunctionCall() && !FLAG_transparent_returns)) {
     auto meta = context->AllocateBlockMetaData(pc);
-    fall_through_block = new DirectBlock(cfg, meta);
+    auto fall_through_block = new DirectBlock(cfg, meta);
     block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
-  }
 
-  if (request_fall_through_block) {
-    RequestBlock(fall_through_block, kRequestBlockFromIndexOrTrace);
+  // Auto-request the fall-through if it's a straight jump.
+  } else if (cfi->IsUnconditionalJump()) {
+    RequestBlock(cfi->TargetBlock(), kRequestBlockFromIndexOrTrace);
+
+  // CFIs that have special fall-through behavior.
+  } else if (cfi->IsSystemCall() || cfi->IsInterruptCall() ||
+             cfi->IsConditionalJump() || is_exceptional) {
+    auto meta = context->AllocateBlockMetaData(pc);
+    auto fall_through_block = new DirectBlock(cfg, meta);
+    block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
+
+    if (is_exceptional) {
+      RequestBlock(fall_through_block, kRequestBlockDecodeNow);
+
+    } else if (cfi->IsSystemCall() || cfi->IsInterruptCall()) {
+      RequestBlock(fall_through_block, kRequestBlockInFuture);
+    }
   }
 }
 
@@ -280,7 +275,7 @@ void BlockFactory::DecodeInstructionList(DecodedBlock *block) {
   arch::Instruction dinstr;
   arch::Instruction ainstr;
   Instruction *instr(nullptr);
-  auto num_instrs = FLAG_max_decoded_instructions_per_block;
+  auto num_instrs = FLAG_max_num_instructions_per_block;
   do {
     auto decoded_pc = decode_pc;
     auto before_instr = new AnnotationInstruction(

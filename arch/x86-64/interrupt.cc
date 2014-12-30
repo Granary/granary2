@@ -57,12 +57,6 @@ extern "C" {
 extern const unsigned char granary_interrupts_enabled;
 
 }  // extern C
-namespace {
-
-// TODO(pag): Potential leak.
-static NativeAddress *interrupts_enabled_addr = nullptr;
-
-}  // namespace
 #endif  // GRANARY_TARGET_debug
 
 // Generates code that re-enables interrupts (if they were disabled by the
@@ -79,21 +73,11 @@ void GenerateInterruptEnableCode(CachePC pc) {
   ENC(PUSHFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
 #ifdef GRANARY_TARGET_debug
-  // Test to see if interrupts were erroneosly re-enabled.
+  // Test to see if interrupts were erroneously re-enabled.
   ENC(BT_MEMv_IMMb(&ni, BaseDispMemOp(0, XED_REG_RSP, GPR_WIDTH_BITS),
                         static_cast<uint8_t>(9)));
-
-  // JNB_RELBRd (6) + CALL_REBRd (5)
-  if (AddrIsOffsetReachable(pc, &granary_interrupts_enabled)) {
-    ENC(JNB_RELBRd(&ni, pc + 6 + 5));
-    ENC(CALL_NEAR_RELBRd(&ni, &granary_interrupts_enabled));
-
-  // JNB_RELBRd (6) + CALL_MEMv (7)
-  } else {
-    ENC(JNB_RELBRd(&ni, pc + 6 + 7));
-    ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_interrupts_enabled,
-                                  &interrupts_enabled_addr));
-  }
+  ENC(JNB_RELBRd(&ni, pc + 6 + 5));  // JNB_RELBRd (6) + CALL_REBRd (5)
+  ENC(CALL_NEAR_RELBRd(&ni, &granary_interrupts_enabled));
 #endif  // GRANARY_TARGET_debug
 
   // Test to see if we should re-enable interrupts.

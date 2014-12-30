@@ -611,7 +611,7 @@ static void ScheduleRegs(PartitionScheduler *part_sched,
         reg_sched->used_regs = ainstr->Data<UsedRegisterSet>();
 
       // We can stop here.
-      } else if (kAnnotSSAPartitionLocalBegin == ainstr->annotation) {
+      } else if (kAnnotSSARegisterSpillAnchor == ainstr->annotation) {
         first_instr = instr;
         break;
 
@@ -839,16 +839,29 @@ static void ScheduleRegs(FragmentList *frags) {
 }
 
 // Add annotations to the fragment that marks the "beginning" of the fragment
-// to the register scheduler. This is so that we can know where the first
-// spills need to be placed, as well as knowing how to order local and global
-// spills.
+// to the register scheduler. This is so that we order the spills in a
+// meaningful way.
+//
+// Note: We want to be sensitive about not placing the "begin" instruction too
+//       soon because there might be labels that are targeted by branches in
+//       other fragments.
 static void AddFragBeginAnnotations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       auto global_annot = new AnnotationInstruction(
-          kAnnotSSAPartitionLocalBegin);
-      ssa_frag->instrs.Prepend(global_annot);
+          kAnnotSSARegisterSpillAnchor);
+      for (auto instr : InstructionListIterator(frag->instrs)) {
+        if (IsA<NativeInstruction *>(instr) ||
+            !IsA<LabelInstruction *>(instr)) {
+          ssa_frag->instrs.InsertBefore(instr, global_annot);
+          goto next;
+        }
+      }
+      ssa_frag->instrs.Append(global_annot);
     }
+
+  next:
+    continue;
   }
 }
 

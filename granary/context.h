@@ -51,7 +51,7 @@ class Context {
   // Allocate and initialize some `BlockMetaData`, based on some existing
   // meta-data template `meta_template`.
   BlockMetaData *InstantiateBlockMetaData(const BlockMetaData *meta_template,
-                                       AppPC start_pc);
+                                          AppPC start_pc);
 
   // Allocates a direct edge data structure, as well as the code needed to
   // back the direct edge.
@@ -62,10 +62,6 @@ class Context {
 
   // Allocates an indirect edge data structure.
   IndirectEdge *AllocateIndirectEdge(const BlockMetaData *dest_block_meta);
-
-  // Returns a pointer to the code cache that is used for allocating code for
-  // basic blocks.
-  CodeCache *BlockCodeCache(void);
 
   // Get a pointer to this context's code cache index.
   Index *CodeCacheIndex(void);
@@ -94,21 +90,6 @@ class Context {
 #endif  // GRANARY_WHERE_kernel
 
  private:
-  // Manages all basic block code allocated/understood by this environment.
-  CodeCache block_code_cache;
-
-  // Manages all edge code allocated/understood by this environment.
-  CodeCache edge_code_cache;
-
-  // Pointer to the code that performs the flag saving and stack switching for
-  // in/direct edge code. This code is is the first step in entering Granary
-  // via a direct edge code stub / in-edge jump.
-  const CachePC direct_edge_entry_code;
-  const CachePC indirect_edge_entry_code;
-
-  // Pointer to the code that performs interrupt enabling and disabling.
-  const CachePC disable_interrupts_code;
-  const CachePC enable_interrupts_code;
 
   // List of patched and not-yet-patched direct edges, as well as a lock that
   // protects both lists.

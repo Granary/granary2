@@ -22,6 +22,8 @@
 #include "granary/code/register.h"
 #include "granary/code/ssa.h"
 
+#include "granary/cache.h"
+
 #include "os/logging.h"
 
 namespace granary {
@@ -74,27 +76,6 @@ union FlagZone {
   } __attribute__((packed));
 
   uint64_t flags;
-};
-
-enum EdgeKind {
-  EDGE_KIND_INVALID,
-  EDGE_KIND_DIRECT,
-  EDGE_KIND_INDIRECT
-};
-
-// Edge information about a partition or fragment.
-struct EdgeInfo {
- public:
-  inline EdgeInfo(void)
-      : kind(EDGE_KIND_INVALID),
-        direct(nullptr) {}
-
-  // Should this partition be allocated in some direct edge code location?
-  EdgeKind kind;
-
-  union {
-    DirectEdge *direct;
-  };
 };
 
 // Information about the partition to which a fragment belongs.
@@ -187,20 +168,20 @@ enum FragmentSuccessorSelector {
   kFragSuccBranch = 1
 };
 
-enum FragmentType {
+enum FragmentKind {
   // The code type of this fragment hasn't (yet) been decided.
-  FRAG_TYPE_UNKNOWN,
+  kFragmentKindInvalid,
 
   // Fragment containing application instructions and/or instrumentation
   // instructions that don't modify the flags state.
-  FRAG_TYPE_APP,
+  kFragmentKindApp,
 
   // Fragment containing instrumentation instructions, and/or application
   // instructions that don't read/write the flags state.
   //
   // Note: The extra condition of app instructions not *reading* the flags
   //       state is super important!
-  FRAG_TYPE_INST
+  kFragmentKindInst
 };
 
 // Represents a fragment of instructions. Fragments are like basic blocks.
@@ -225,14 +206,25 @@ class Fragment {
   Fragment *next;
   int encoded_order;
 
+  // Number of predecessor fragments. Doesn't actually need to be perfectly
+  // accurate/consistent. We use to propagate code cache kinds. Here, we want
+  // to propagate code cache kinds to successors when our successor only has
+  // a single predecessor.
+  int num_predecessors;
+
   // Where was this fragment encoded?
   size_t encoded_size;
   CachePC encoded_pc;
 
+  // The meta-data associated with the basic block that this fragment
+  // originates from.
+  BlockMetaData *block_meta;
+
   // What kind of fragment is this? This is primarily used by `CodeFragment`
   // fragments, but it helps to be able to recognize all other kinds of
   // fragments as application fragments.
-  FragmentType type;
+  FragmentKind kind;
+  CodeCacheKind cache;
 
   // List of instructions in the fragment.
   LabelInstruction *entry_label;
@@ -254,6 +246,7 @@ class Fragment {
   // Tracks the successor fragments.
   Fragment *successors[2];
   NativeInstruction *branch_instr;
+  NativeInstruction *fall_through_instr;
 
   // Tracks information gathered about the current function's activation frame
   // within this fragment.
@@ -329,20 +322,8 @@ class alignas(alignof(void *)) CodeAttributes {
  public:
   CodeAttributes(void);
 
-  // The meta-data associated with the basic block that this code fragment
-  // originates from.
-  BlockMetaData *block_meta;
-
-  // Does this fragment branch to direct edge code, native code, or an
-  // existing basic block?
-  bool branches_to_code:1;
-
-  // Does this fragment use an indirect branch?
-  bool branch_is_indirect:1;
-
   // Is the branch instruction a function call or a jump (direct or indirect)?
   bool branch_is_function_call:1;
-  bool branch_is_jump:1;
 
   // Can this fragment be added into another partition? We use this to prevent
   // fragments that only contain things like IRET, RET, etc. from being added
@@ -387,31 +368,6 @@ class alignas(alignof(void *)) CodeAttributes {
 
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head:1;
-
-  // Does this fragment represent the target of a return from a function call
-  // or interrupt call?
-  bool is_return_target:1;
-
-  // Is this a "compensating" fragment. This is used during register allocation
-  // when we have a case like: P -> S1, P -> S2, and the register R is live from
-  // P -> S1 but dead from P -> S2. In this case, we add a compensating
-  // fragment P -> C -> S2, wherein we treat R as list on entry to C and
-  // explicit "kill" it in C with an annotation instruction.
-  bool is_compensation_code:1;
-
-  // Is this fragment some in-edge code? If so, that means that it will indirect
-  // jump to some *incomplete* out-edge code, i.e. it will jump to a flag exit/
-  // partition exit fragment. This tail will NOT be emitted along with the
-  // rest of code, but will be emitted to a special cache.
-  bool is_in_edge_code:1;
-
-  // Does this fragment follow (via straight-line execution, e.g. through
-  // fall-throughs) a `ControlFlowInstruction`?
-  bool follows_cfi:1;
-
-  // Count of the number of predecessors of this fragment (at fragment build
-  // time).
-  uint8_t num_predecessors;
 
 } __attribute__((packed));
 
@@ -538,13 +494,6 @@ class FlagExitFragment : public SSAFragment {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(FlagExitFragment);
 };
 
-enum ExitFragmentKind {
-  FRAG_EXIT_NATIVE,
-  FRAG_EXIT_FUTURE_BLOCK_DIRECT,
-  FRAG_EXIT_FUTURE_BLOCK_INDIRECT,
-  FRAG_EXIT_EXISTING_BLOCK
-};
-
 // Special class of fragment for "straggler" fragments / instructions.
 class NonLocalEntryFragment : public Fragment {
  public:
@@ -567,11 +516,11 @@ class NonLocalEntryFragment : public Fragment {
 // fragment control-flow graph.
 class ExitFragment : public Fragment {
  public:
-  explicit ExitFragment(ExitFragmentKind kind_)
+  ExitFragment(void)
       : Fragment(),
-        kind(kind_),
-        block_meta(nullptr),
-        edge() {}
+        direct_edge(nullptr) {
+    this->kind = kFragmentKindApp;
+  }
 
   virtual ~ExitFragment(void);
 
@@ -581,13 +530,8 @@ class ExitFragment : public Fragment {
     ALIGNMENT = 1
   })
 
-  ExitFragmentKind kind;
-
-  // Meta-data associated with the block targeted by this exit.
-  BlockMetaData *block_meta;
-
   // Pointer to one of the edge structures associated with this fragment.
-  EdgeInfo edge;
+  DirectEdge *direct_edge;
 
  private:
   GRANARY_DISALLOW_COPY_AND_ASSIGN(ExitFragment);

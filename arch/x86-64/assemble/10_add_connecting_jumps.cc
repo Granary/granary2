@@ -17,22 +17,19 @@
 namespace granary {
 namespace arch {
 
-// Don't encode `instr`, but leave it in place.
-void ElideInstruction(Instruction *instr) {
-  instr->dont_encode = true;
-}
-
 // Adds a fall-through jump, if needed, to this fragment.
-NativeInstruction *AddFallThroughJump(Fragment *frag,
-                                      Fragment *fall_through_frag) {
-  auto label = new LabelInstruction;
-  fall_through_frag->instrs.Prepend(label);
-
-  arch::Instruction ni;
-  JMP_RELBRd(&ni, label);
-  auto instr = new BranchInstruction(&ni, label);
-  frag->instrs.Append(instr);
-  return instr;
+void AddFallThroughJump(Fragment *frag, Fragment *fall_through_frag) {
+  Instruction ni;
+  if (fall_through_frag->encoded_pc) {
+    JMP_RELBRd(&ni, fall_through_frag->encoded_pc);
+  } else {
+    auto &label(frag->entry_label);
+    if (!label) label = new LabelInstruction;
+    fall_through_frag->instrs.Prepend(label);
+    JMP_RELBRd(&ni, label);
+  }
+  frag->fall_through_instr = new NativeInstruction(&ni);
+  frag->instrs.Append(frag->fall_through_instr);
 }
 
 // Returns true if the target of a jump must be encoded in a nearby location.
@@ -48,49 +45,59 @@ bool IsNearRelativeJump(NativeInstruction *instr) {
   }
 }
 
-#ifdef GRANARY_TARGET_debug
-# ifdef GRANARY_WHERE_user
-extern "C" {
-extern int getpid(void);
-extern ssize_t write (int filedes, const void *buffer, size_t size);
-extern long long read(int __fd, void *__buf, size_t __nbytes);
-}  // extern C
-
 namespace {
 
-static void TrapOnBadFallThrough(void) {
-  char buff[1024];
-  auto num_bytes = Format(
-      buff, sizeof buff,
-      "Fell off the end of a basic block!\n"
-     "Process ID for attaching GDB: %d\n", getpid());
-  write(1, buff, num_bytes);
-  while (true) read(0, buff, 1);  // Never return!
-
-  GRANARY_ASSERT(false);
-}
-
-// A pointer to a native address, that points to `TrapOnBadFallThrough`. This
-// will be a memory leak, but that is fine.
-static NativeAddress *trap_func_ptr = nullptr;
+// Instruction iclass reversers for conditional branches, indexed by
+// `instr->iclass - XED_ICLASS_JB`.
+typedef void (CFIBuilder)(Instruction *, PC);
+static CFIBuilder * const kReversedCFIBuilderss[] = {
+  JNB_RELBRd<PC>,
+  JNBE_RELBRd<PC>,
+  JNL_RELBRd<PC>,
+  JNLE_RELBRd<PC>,
+  nullptr,
+  nullptr,
+  JB_RELBRd<PC>,
+  JBE_RELBRd<PC>,
+  JL_RELBRd<PC>,
+  JLE_RELBRd<PC>,
+  JO_RELBRd<PC>,
+  JP_RELBRd<PC>,
+  JS_RELBRd<PC>,
+  JZ_RELBRd<PC>,
+  JNO_RELBRd<PC>,
+  JNP_RELBRd<PC>,
+  nullptr,
+  JNS_RELBRd<PC>,
+  JNZ_RELBRd<PC>
+};
 
 }  // namespace
-# endif  // GRANARY_WHERE_user
+
+// Try to negate the branch condition. Returns `false` if the branch condition
+// was not merged.
+bool TryNegateBranchCondition(NativeInstruction *instr) {
+  if (!instr) return false;
+  if (IsNearRelativeJump(instr)) return false;
+  if (instr->HasIndirectTarget()) return false;
+  if (!instr->IsConditionalJump()) return false;
+  auto &ainstr(instr->instruction);
+  kReversedCFIBuilderss[ainstr.iclass - XED_ICLASS_JB](&ainstr, nullptr);
+  return true;
+}
+
+#ifdef GRANARY_TARGET_debug
+extern "C" {
+void granary_break_on_bad_fall_through(void) {
+  GRANARY_ASSERT(false);
+}
+}  // extern C
 
 // Catches erroneous fall-throughs off the end of the basic block.
 void AddFallThroughTrap(Fragment *frag) {
   arch::Instruction ni;
-# ifdef GRANARY_WHERE_user
-  if (GRANARY_UNLIKELY(!trap_func_ptr)) {
-    new NativeAddress(UnsafeCast<PC>(TrapOnBadFallThrough), &trap_func_ptr);
-  }
-  CALL_NEAR_MEMv(&ni, &(trap_func_ptr->addr));
+  CALL_NEAR_RELBRd(&ni, granary_break_on_bad_fall_through);
   frag->instrs.Append(new NativeInstruction(&ni));
-
-# else  // GRANARY_WHERE_kernel
-  UD2(&ni);
-  frag->instrs.Append(new NativeInstruction(&ni));
-# endif
 }
 #endif  // GRANARY_TARGET_debug
 

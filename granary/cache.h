@@ -10,66 +10,60 @@
 #include "arch/cpu.h"
 
 #include "granary/base/base.h"
-#include "granary/base/lock.h"
 #include "granary/base/new.h"
 #include "granary/base/pc.h"
 
 #include "metadata.h"
 
 namespace granary {
-namespace internal {
-class CodeSlab;
-}  // namespace internal
 
+// Different levels of code caches.
 enum CodeCacheKind {
   // Generally filled with application code.
-  kCodeCacheHot,
+  kCodeCacheKindHot,
 
   // Filled with cold application code, or instrumentation code that is
   // targeted by a branch instruction.
-  kCodeCacheCold,
+  kCodeCacheKindCold,
 
-  // Filled with edge code, or instrumentation code that is targeted by a
-  // branch from a cold basic block.
-  kCodeCacheFrozen,
+  // Filled with instrumentation code that is targeted by a branch from a
+  // cold basic block.
+  kCodeCacheKindFrozen,
 
-  kNumCodeCacheKinds
+  // Filled with instrumentation code that is marked as frozen and is contained
+  // within a cold basic block.
+  kCodeCacheKindSubZero,
+
+  // Filled with edge code.
+  kCodeCacheKindEdge
+};
+enum {
+  kNumCodeCacheKinds = 5
 };
 
-// Forward declaration.
-class CodeCacheTransaction;
+// Used to allocate code from a code cache.
+CachePC AllocateCode(CodeCacheKind kind, size_t num_bytes);
 
-// Implementation of Granary's code caches.
-class CodeCache {
- public:
-  explicit CodeCache(size_t slab_size_);
-  ~CodeCache(void);
+// Returns the address of the code that exits the code cache via a direct edge.
+CachePC DirectExitFunction(void);
 
-  // Allocate a block of code from this code cache.
-  CachePC AllocateBlock(size_t size);
+// TODO(pag): Some of the following should be in the `arch` namespace.
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(CodeCache, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
-  })
+// Returns the address of the code that exits the code cache via an indirect
+// edge.
+CachePC IndirectExitFunction(void);
 
- private:
-  // The size of a slab.
-  const size_t slab_num_pages;
-  const size_t slab_num_bytes;
+// Returns the address of the code that disables the interrupts.
+CachePC DisableInterruptsFunction(void);
 
-  // The offset into the current slab that's serving allocations.
-  size_t slab_byte_offset;
+// Returns the address of the code that enables the interrupts.
+CachePC EnableInterruptsFunction(void);
 
-  // Lock around the whole code cache, which prevents multiple people from
-  // reading/writing to the cache at once.
-  SpinLock slab_list_lock;
+// Initialize the code caches.
+void InitCodeCache(void);
 
-  // Allocator used to allocate blocks from this code cache.
-  const internal::CodeSlab *slab_list;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCache);
-};
+// Exit the code caches.
+void ExitCodeCache(void);
 
 // Transaction on the code cache.
 class CodeCacheTransaction {
@@ -79,18 +73,15 @@ class CodeCacheTransaction {
   // Note: Transactions are distinct from allocations. Therefore, many threads/
   //       cores can simultaneously allocate from a code cache, but only one
   //       should be able to read/write data to the cache at a given time.
-  CodeCacheTransaction(CachePC begin_, CachePC end_);
+  CodeCacheTransaction(void);
 
   // End a transaction that will read or write to the code cache.
   ~CodeCacheTransaction(void);
 
  private:
-  CodeCacheTransaction(void) = delete;
-
   GRANARY_DISALLOW_COPY_AND_ASSIGN(CodeCacheTransaction);
 };
 
-#ifdef GRANARY_INTERNAL
 // Provides a good estimation of the location of the code cache. This is used
 // by all code that computes whether or not an address is too far away from the
 // code cache.
@@ -158,7 +149,6 @@ class CacheMetaData : public MutableMetaData<CacheMetaData> {
   // Far-away code addresses referenced by code in this block.
   NativeAddress *native_addresses;
 };
-#endif  // GRANARY_INTERNAL
 
 }  // namespace granary
 

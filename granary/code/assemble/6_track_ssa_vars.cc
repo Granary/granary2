@@ -368,11 +368,11 @@ static void AddCompensatingFragment(FragmentList *frags, SSAFragment *pred,
       return;
     }
 
-    comp->attr.block_meta = code_pred->attr.block_meta;
+    comp->block_meta = code_pred->block_meta;
     comp->stack.status = code_pred->stack.status;
   }
 
-  comp->attr.is_compensation_code = true;
+  comp->cache = pred->cache;
   comp->partition.Union(pred->partition);
   comp->flag_zone.Union(pred->flag_zone);
 
@@ -407,16 +407,12 @@ static void CheckForUndefinedVirtualRegs(SSAFragment *frag) {
 // a dummy compensating fragment.
 static void AddCompensatingFragments(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (code_frag->attr.is_compensation_code) continue;
-    }
     if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
       for (auto &succ : ssa_frag->successors) {
         if (succ) {
           AddCompensatingFragment(frags, ssa_frag, succ);
         }
       }
-
     } else if (IsA<PartitionEntryFragment *>(frag)) {
 #if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)
       for (auto succ : frag->successors) {

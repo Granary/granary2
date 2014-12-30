@@ -148,6 +148,13 @@ enum InstructionAnnotation {
   kAnnotBeginBlock,
   kAnnotEndBlock,
 
+  // The code that follows this code is "cold". The value of this annotation
+  // is a `CodeCacheKind`.
+  kAnnotationCodeCacheKind,
+
+  // The code that follows this code is "frozen".
+  kAnnotationFrozenCode,
+
   // Target of a branch instruction.
   kAnnotationLabel,
 
@@ -173,7 +180,7 @@ enum InstructionAnnotation {
 
   // Used when spilling/filling. This annotation marks a specific point where
   // spilling/filling at the beginning of a fragment should be placed.
-  kAnnotSSAPartitionLocalBegin,
+  kAnnotSSARegisterSpillAnchor,
 
   // Save and restore instructions for a register into a slot. The data
   // associated with this annotation is a `VirtualRegister`. The meta-data
@@ -520,10 +527,6 @@ class ControlFlowInstruction : public NativeInstruction {
     SHARED = false,
     ALIGNMENT = 1
   })
-
-  // Return address instruction after this instruction, assuming that this
-  // instruction is a function call (either direct or indirect).
-  GRANARY_INTERNAL_DEFINITION AnnotationInstruction *return_address;
 
  private:
   friend class BlockFactory;

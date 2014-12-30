@@ -60,7 +60,7 @@ class TrapBadUserAccess : public InstrumentationTool {
     instr->InsertBefore(lir::InlineFunctionCall(bb, TrapOnBadUserAccess,
                                                 addr_reg, instr->DecodedPC()));
     asm_.InlineBefore(instr,
-        "LABEL %1:"_x86_64);
+        "@LABEL %1:"_x86_64);
   }
 
   // Instrument a basic block.

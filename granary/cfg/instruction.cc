@@ -318,7 +318,6 @@ void BranchInstruction::SetTargetInstruction(LabelInstruction *label) {
 ControlFlowInstruction::ControlFlowInstruction(
     const arch::Instruction *instruction_, Block *target_)
       : NativeInstruction(instruction_),
-        return_address(nullptr),
         target(target_) {
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }

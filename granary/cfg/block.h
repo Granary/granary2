@@ -280,6 +280,12 @@ class DecodedBlock : public InstrumentedBlock {
   void AppendInstruction(std::unique_ptr<Instruction> instr);
   void AppendInstruction(Instruction *instr);
 
+  // Mark the code of this block as being cold.
+  void MarkAsColdCode(void);
+
+  // Is this cold code?
+  bool IsColdCode(void) const;
+
   // Remove and return single instruction. Some special kinds of instructions
   // can't be removed.
   static std::unique_ptr<Instruction> Unlink(Instruction *instr);
@@ -309,6 +315,9 @@ class DecodedBlock : public InstrumentedBlock {
   //       instructions).
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST first;
   GRANARY_INTERNAL_DEFINITION Instruction * GRANARY_CONST last;
+
+  // Does this block contain cold code?
+  GRANARY_INTERNAL_DEFINITION bool is_cold_code;
 
   // Virtual registers used within function calls injected into a basic block.
   // We share these regs across all calls.

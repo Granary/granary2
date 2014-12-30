@@ -5,6 +5,8 @@
 
 #include "arch/driver.h"
 #include "arch/util.h"
+
+#include "arch/x86-64/builder.h"
 #include "arch/x86-64/slot.h"
 #include "arch/x86-64/register.h"
 
@@ -21,9 +23,6 @@
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
 #include "granary/context.h"
-
-// After `cache.h` to get `NativeAddress`.
-#include "arch/x86-64/builder.h"
 
 #define ENC(...) \
   do { \
@@ -51,10 +50,6 @@ extern const unsigned char granary_arch_enter_indirect_edge;
 namespace granary {
 namespace arch {
 namespace {
-
-// TODO(pag): Potential leak.
-static NativeAddress *enter_direct_addr = nullptr;
-static NativeAddress *enter_indirect_addr = nullptr;
 
 // Helps us distinguish call going through an edge from an un/conditional
 // jump.
@@ -88,8 +83,7 @@ void GenerateDirectEdgeEntryCode(CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_arch_enter_direct_edge,
-                       &enter_direct_addr));
+  ENC(CALL_NEAR_RELBRd(&ni, &granary_arch_enter_direct_edge));
 
   // Swap stacks.
   if (GRANARY_IF_USER_ELSE(false, true)) {
@@ -106,7 +100,7 @@ void GenerateDirectEdgeEntryCode(CachePC pc) {
 }
 
 // Generates the direct edge code for a given `DirectEdge` structure.
-void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
+void GenerateDirectEdgeCode(DirectEdge *edge) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
   InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
@@ -140,7 +134,7 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
 
   // Call into the direct edge entry code, which might disable interrupts, and
   // will transfer control to a private stack.
-  ENC(CALL_NEAR_RELBRd(&ni, edge_entry_code));
+  ENC(CALL_NEAR_RELBRd(&ni, DirectExitFunction()));
 
   // Restore the stolen `RDI`.
   ENC(POP_GPRv_51(&ni, XED_REG_RDI));
@@ -159,10 +153,6 @@ void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code) {
 
 // Generates the indirect edge entry code for getting onto a Granary private
 // stack, disabling interrupts, etc.
-//
-// This code takes a pointer to the context so that the code generated will
-// be able to pass the context pointer directly to `granary::EnterGranary`.
-// This allows us to avoid saving the context pointer in the `IndirectEdge`.
 void GenerateIndirectEdgeEntryCode(CachePC pc) {
   Instruction ni;
   InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
@@ -180,8 +170,7 @@ void GenerateIndirectEdgeEntryCode(CachePC pc) {
 
   // Transfer control to a generic Granary direct edge entrypoint. Try to be
   // smart about encoding the target.
-  ENC(CALL_NEAR_GLOBAL(&ni, pc, &granary_arch_enter_indirect_edge,
-                                &enter_indirect_addr));
+  ENC(CALL_NEAR_RELBRd(&ni, &granary_arch_enter_indirect_edge));
 
   if (GRANARY_IF_USER_ELSE(false, true)) {
     // Swap back to the native stack.
@@ -205,14 +194,14 @@ void GenerateIndirectEdgeEntryCode(CachePC pc) {
 static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
                                    CodeFragment *pred_frag,
                                    BlockMetaData *dest_block_meta) {
-  edge_frag->attr.block_meta = dest_block_meta;
+  edge_frag->block_meta = dest_block_meta;
 
   // Prevent this fragment from being reaped by `RemoveUselessFrags` in
   // `3_partition_fragments.cc`.
   edge_frag->attr.has_native_instrs = true;
 
   // Mark this code as instrumentation code as we do modify the flags.
-  edge_frag->type = FRAG_TYPE_INST;
+  edge_frag->kind = kFragmentKindInst;
 
   // Make sure that the edge code shares the same partition as the predecessor
   // so that virtual registers can be spread across both.
@@ -235,7 +224,7 @@ static void UpdateIndirectEdgeFrag(CodeFragment *edge_frag,
 //
 CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
                                        ControlFlowInstruction *cfi,
-                                       CodeFragment *predecessor_frag,
+                                       CodeFragment *pred_frag,
                                        BlockMetaData *dest_block_meta) {
   GRANARY_ASSERT(!cfi->IsFunctionReturn());
   cfi->instruction.DontEncode();
@@ -244,20 +233,24 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
   auto about_to_exit = new CodeFragment;
-  auto exit_to_block = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_INDIRECT);
+  auto exit_to_block = new ExitFragment;
+
+  // Set the code cache types.
+  go_to_granary->cache = kCodeCacheKindEdge;
+  compare_target->cache = kCodeCacheKindEdge;
+  about_to_exit->cache = kCodeCacheKindEdge;
+  exit_to_block->cache = kCodeCacheKindEdge;
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
   // we will often use the combination of a `branch_instr` and
   // `FRAG_SUCC_BRANCH` to trick `10_add_connecting_jumps.cc` to put the
   // fragments in the desired order.
-  in_edge->successors[kFragSuccFallThrough] = go_to_granary;
-  in_edge->successors[kFragSuccBranch] = compare_target;
-  go_to_granary->successors[kFragSuccBranch] = compare_target;
+  in_edge->successors[kFragSuccBranch] = go_to_granary;
+  go_to_granary->successors[kFragSuccFallThrough] = compare_target;
   compare_target->successors[kFragSuccFallThrough] = about_to_exit;
   compare_target->successors[kFragSuccBranch] = go_to_granary;
   about_to_exit->successors[kFragSuccFallThrough] = exit_to_block;
 
-  exit_to_block->edge.kind = EDGE_KIND_INDIRECT;
   exit_to_block->block_meta = dest_block_meta;
 
   // Add the fragments, and set some of their attributes.
@@ -267,12 +260,10 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   frags->Append(about_to_exit);
   frags->Append(exit_to_block);
 
-  UpdateIndirectEdgeFrag(in_edge, predecessor_frag, dest_block_meta);
-  UpdateIndirectEdgeFrag(go_to_granary, predecessor_frag, dest_block_meta);
-  UpdateIndirectEdgeFrag(compare_target, predecessor_frag, dest_block_meta);
-  UpdateIndirectEdgeFrag(about_to_exit, predecessor_frag, dest_block_meta);
-
-  in_edge->attr.is_in_edge_code = true;
+  UpdateIndirectEdgeFrag(in_edge, pred_frag, dest_block_meta);
+  UpdateIndirectEdgeFrag(go_to_granary, pred_frag, dest_block_meta);
+  UpdateIndirectEdgeFrag(compare_target, pred_frag, dest_block_meta);
+  UpdateIndirectEdgeFrag(about_to_exit, pred_frag, dest_block_meta);
 
   Instruction ni;
 
@@ -290,23 +281,28 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   in_edge->instrs.Append(save_rdi);
   in_edge->instrs.Append(save_rsi);
 
-  APP(in_edge, JMP_MEMv(&ni, &(edge->out_edge_pc));
-               ni.is_sticky = true; );
+  if (cfi->IsFunctionCall()) {
+    APP(in_edge, CALL_NEAR_MEMv(&ni, &(edge->out_edge_pc));
+                   ni.is_sticky = true; );
+  } else if (cfi->IsUnconditionalJump()) {
+    APP(in_edge, JMP_MEMv(&ni, &(edge->out_edge_pc));
+                   ni.is_sticky = true; );
+  } else {
+    GRANARY_ASSERT(false);
+  }
+
+  // We put this in so that `10_add_connecting_jumps` is tricked into thinking
+  // that it doesn't need to add in a fall-through / branch instruction.
   in_edge->branch_instr = DynamicCast<NativeInstruction *>(
       in_edge->instrs.Last());
 
-  // First execution of the indirect jump will target this label, which will
-  // lead to a context switch into Granary.
-  auto back_to_granary = new LabelInstruction;
-  in_edge->instrs.Append(back_to_granary);
+  // --------------------- go_to_granary --------------------------------
 
   // For the fall-through; want to make sure no weird register allocation
   // stuff gets in the way.
   auto miss_addr = new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
                                              &(edge->out_edge_pc));
-  in_edge->instrs.Append(miss_addr);
-
-  // --------------------- go_to_granary --------------------------------
+  go_to_granary->instrs.Append(miss_addr);
 
   // Store the branch target into `RSI` and theaddress of the `IndirectEdge`
   // data structure in `RDI`. Jump to `edge->in_edge_pc`, which is initialized
@@ -316,10 +312,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   APP(go_to_granary, MOV_GPRv_IMMv(&ni, XED_REG_RDI, edge));
   APP(go_to_granary, MOV_GPRv_GPRv_89(&ni, XED_REG_RSI, cfi_target); );
-  APP(go_to_granary, JMP_RELBRd(&ni, edge->out_edge_pc);
+  APP(go_to_granary, JMP_RELBRd(&ni, IndirectExitFunction());
                      ni.is_sticky = true; );
-  go_to_granary->branch_instr = DynamicCast<NativeInstruction *>(
-      go_to_granary->instrs.Last());
   APP(go_to_granary, UD2(&ni));
 
   auto begin_template = new AnnotationInstruction(
@@ -338,7 +332,7 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   APP(compare_target, MOV_GPRv_IMMv(&ni, XED_REG_RSI, 0UL);
                       ni.dont_encode = true; );
   APP(compare_target, CMP_GPRv_GPRv_39(&ni, XED_REG_RSI, cfi_target));
-  APP(compare_target, JNZ_RELBRd(&ni, back_to_granary));
+  APP(compare_target, JNZ_RELBRd(&ni, nullptr));
   compare_target->branch_instr = DynamicCast<NativeInstruction *>(
       compare_target->instrs.Last());
 
@@ -434,10 +428,8 @@ bool TryAtomicPatchEdge(DirectEdge *edge) {
   // If the instruction length changes then don't patch it.
   if (ni.encoded_length != decoded_length) return false;
 
-  CodeCacheTransaction transaction(edge->patch_instruction_pc,
-                                   edge->patch_instruction_pc + decoded_length);
+  CodeCacheTransaction transaction;
   commit_enc.Encode(&ni, edge->patch_instruction_pc);
-
   return true;
 }
 

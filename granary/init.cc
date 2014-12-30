@@ -6,6 +6,7 @@
 
 #include "granary/base/option.h"
 
+#include "granary/cache.h"
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/init.h"
@@ -56,6 +57,7 @@ void Init(InitReason reason) {
   arch::Init();
 
   InitMetaData();
+  InitCodeCache();
   InitClients();
   InitContext();
   InitToolManager();

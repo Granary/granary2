@@ -156,11 +156,11 @@ static void CopyOperand(CodeFragment *frag, Instruction &ni,
 }  // namespace
 
 // Generates the wrapper code for an outline callback.
-Callback *GenerateInlineCallback(CodeCache *cache, InlineFunctionCall *call) {
-  auto edge_code = cache->AllocateBlock(INLINE_CALL_CODE_SIZE_BYTES);
+Callback *GenerateInlineCallback(InlineFunctionCall *call) {
+  auto edge_code = AllocateCode(kCodeCacheKindCold,
+                                INLINE_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(call->target_app_pc, edge_code);
-  CodeCacheTransaction transaction(edge_code,
-                                   edge_code + INLINE_CALL_CODE_SIZE_BYTES);
+  CodeCacheTransaction transaction;
   GenerateInlineCallCode(callback, call->NumArguments());
   return callback;
 }

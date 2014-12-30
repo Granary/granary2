@@ -23,76 +23,32 @@
 
 #include "os/module.h"
 
-GRANARY_DEFINE_positive_int(block_cache_slab_size, 512,
-    "The number of pages allocated at once to store basic block code. Each "
-    "context maintains its own block code allocator. The default value is "
-    "`512` pages per slab (2MiB).");
-
-GRANARY_DEFINE_positive_int(edge_cache_slab_size, 256,
-    "The number of pages allocated at once to store edge code. Each "
-    "context maintains its own edge code allocator. The default value is "
-    "`256` pages per slab (1MiB).");
-
 namespace granary {
 namespace arch {
-
-// Generates the direct edge entry code for getting onto a Granary private
-// stack, disabling interrupts, etc.
-//
-// This code takes a pointer to the context so that the code generated will
-// be able to pass the context pointer directly to `granary::EnterGranary`.
-// This allows us to avoid saving the context pointer in the `DirectEdge`.
-//
-// Note: This has an architecture-specific implementation.
-extern void GenerateDirectEdgeEntryCode(CachePC edge);
 
 // Generates the direct edge code for a given `DirectEdge` structure.
 //
 // Note: This has an architecture-specific implementation.
-extern void GenerateDirectEdgeCode(DirectEdge *edge, CachePC edge_entry_code);
+void GenerateDirectEdgeCode(DirectEdge *edge);
 
 // Generates the indirect edge entry code for getting onto a Granary private
 // stack, disabling interrupts, etc.
 //
-// This code takes a pointer to the context so that the code generated will
-// be able to pass the context pointer directly to `granary::EnterGranary`.
-// This allows us to avoid saving the context pointer in the `IndirectEdge`.
-//
 // Note: This has an architecture-specific implementation.
-extern void GenerateIndirectEdgeEntryCode(CachePC edge);
-
-// Generates code that disables interrupts.
-//
-// Note: This has an architecture-specific implementation.
-extern void GenerateInterruptDisableCode(CachePC pc);
-
-// Generates code that re-enables interrupts (if they were disabled by the
-// interrupt disabling routine).
-//
-// Note: This has an architecture-specific implementation.
-extern void GenerateInterruptEnableCode(CachePC pc);
+void GenerateIndirectEdgeEntryCode(CachePC pc);
 
 // Generates the wrapper code for a context callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc);
+extern Callback *GenerateContextCallback(AppPC func_pc);
 
 // Generates the wrapper code for an outline callback.
 //
 // Note: This has an architecture-specific implementation.
-extern Callback *GenerateInlineCallback(CodeCache *cache,
-                                        InlineFunctionCall *call);
+extern Callback *GenerateInlineCallback(InlineFunctionCall *call);
 
 }  // namespace arch
 namespace {
-
-template <typename T>
-static CachePC GenerateCode(CodeCache *cache, T generator, size_t size) {
-  auto code = cache->AllocateBlock(size);
-  CodeCacheTransaction transaction(code, code + size);
-  generator(code);
-  return code;
-}
 
 // Free a linked list of edges.
 template <typename EdgeT>
@@ -124,21 +80,7 @@ static void FreeCallbacks(const T &callback_map) {
 }  // namespace
 
 Context::Context(void)
-    : block_code_cache(static_cast<size_t>(FLAG_block_cache_slab_size)),
-      edge_code_cache(static_cast<size_t>(FLAG_edge_cache_slab_size)),
-      direct_edge_entry_code(
-          GenerateCode(&edge_code_cache, arch::GenerateDirectEdgeEntryCode,
-                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
-      indirect_edge_entry_code(
-          GenerateCode(&edge_code_cache, arch::GenerateIndirectEdgeEntryCode,
-                       arch::INDIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
-      disable_interrupts_code(
-          GenerateCode(&edge_code_cache, arch::GenerateInterruptDisableCode,
-                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
-      enable_interrupts_code(
-          GenerateCode(&edge_code_cache, arch::GenerateInterruptEnableCode,
-                       arch::DIRECT_EDGE_ENTRY_CODE_SIZE_BYTES)),
-      edge_list_lock(),
+    : edge_list_lock(),
       edge_list(nullptr),
       unpatched_edge_list(nullptr),
       patched_edge_list(nullptr),
@@ -192,8 +134,8 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
 
   // Allocate a new edge and chain it into the global list of edges.
   if (!edge) {
-    auto edge_code = edge_code_cache.AllocateBlock(
-        arch::DIRECT_EDGE_CODE_SIZE_BYTES);
+    auto edge_code = AllocateCode(kCodeCacheKindFrozen,
+                                  arch::DIRECT_EDGE_CODE_SIZE_BYTES);
     edge = new DirectEdge(dest_block_meta, edge_code);
     SpinLockedRegion locker(&edge_list_lock);
     edge->next = edge_list;
@@ -201,11 +143,8 @@ DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
   }
 
   // Generate a small stub of code specific to this `DirectEdge`.
-  CodeCacheTransaction transaction(
-      edge->edge_code_pc,
-      edge->edge_code_pc + arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-  arch::GenerateDirectEdgeCode(edge, direct_edge_entry_code);
-
+  CodeCacheTransaction transaction;
+  arch::GenerateDirectEdgeCode(edge);
   return edge;
 }
 
@@ -218,17 +157,11 @@ void Context::PreparePatchDirectEdge(DirectEdge *edge) {
 
 // Allocates an indirect edge data structure.
 IndirectEdge *Context::AllocateIndirectEdge(const BlockMetaData *meta) {
-  auto edge = new IndirectEdge(meta, indirect_edge_entry_code);
+  auto edge = new IndirectEdge(meta);
   SpinLockedRegion locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;
   indirect_edge_list = edge;
   return edge;
-}
-
-// Returns a pointer to the code cache that is used for allocating code for
-// basic blocks.
-CodeCache *Context::BlockCodeCache(void) {
-  return &block_code_cache;
 }
 
 // Get a pointer to this context's code cache index.
@@ -256,7 +189,7 @@ void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
 const arch::Callback *Context::ContextCallback(AppPC func_pc) {
   os::LockedRegion locker(&context_callbacks_lock);
   auto *&cb(context_callbacks[func_pc]);
-  if (!cb) cb = arch::GenerateContextCallback(&edge_code_cache, func_pc);
+  if (!cb) cb = arch::GenerateContextCallback(func_pc);
   return cb;
 }
 
@@ -265,7 +198,7 @@ const arch::Callback *Context::ContextCallback(AppPC func_pc) {
 const arch::Callback *Context::InlineCallback(InlineFunctionCall *call) {
   os::LockedRegion locker(&inline_callbacks_lock);
   auto &cb(inline_callbacks[call->target_app_pc]);
-  if (!cb) cb = arch::GenerateInlineCallback(&edge_code_cache, call);
+  if (!cb) cb = arch::GenerateInlineCallback(call);
   return cb;
 }
 

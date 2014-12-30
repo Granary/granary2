@@ -93,30 +93,24 @@ void RegisterUsageCounter::CountGPRUses(Fragment *frag) {
 }
 
 CodeAttributes::CodeAttributes(void)
-    : block_meta(nullptr),
-      branches_to_code(false),
-      branch_is_indirect(false),
-      branch_is_function_call(false),
-      branch_is_jump(false),
+    : branch_is_function_call(false),
       can_add_succ_to_partition(true),
       can_add_pred_to_partition(true),
       has_native_instrs(false),
       reads_flags(false),
       modifies_flags(false),
-      is_block_head(false),
-      is_return_target(false),
-      is_compensation_code(false),
-      is_in_edge_code(false),
-      follows_cfi(false),
-      num_predecessors(0) {}
+      is_block_head(false) {}
 
 Fragment::Fragment(void)
     : list(),
       next(nullptr),
       encoded_order(0),
+      num_predecessors(0),
       encoded_size(0),
       encoded_pc(nullptr),
-      type(FRAG_TYPE_UNKNOWN),
+      block_meta(nullptr),
+      kind(kFragmentKindInvalid),
+      cache(kCodeCacheKindHot),
       entry_label(nullptr),
       instrs(),
       partition(nullptr),
@@ -126,6 +120,7 @@ Fragment::Fragment(void)
       temp(),
       successors{nullptr, nullptr},
       branch_instr(nullptr),
+      fall_through_instr(nullptr),
       stack_frame() { }
 
 SSAFragment::SSAFragment(void)
@@ -298,8 +293,8 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@swap_restore";
   } else if (kAnnotSSARegisterKill == instr->annotation) {
     kind = "@undef";
-  } else if (kAnnotSSAPartitionLocalBegin == instr->annotation) {
-    Log(level, FONT_BLUE "@ssa_begin_global" END_FONT NEW_LINE);
+  } else if (kAnnotSSARegisterSpillAnchor == instr->annotation) {
+    Log(level, FONT_BLUE "@ssa_spill_anchor" END_FONT NEW_LINE);
     return;
   } else if (kAnnotSSAReviveRegisters == instr->annotation) {
     return LogUsedRegs(level, instr);
@@ -308,6 +303,9 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     return;
   } else if (kAnnotCondEnterNativeStack == instr->annotation) {
     Log(level, FONT_BLUE "@onstack" END_FONT NEW_LINE);
+    return;
+  } else if (kAnnotUpdateAddressWhenEncoded == instr->annotation) {
+    Log(level, FONT_BLUE "@update_addr_with_encoded_pc" END_FONT NEW_LINE);
     return;
   } else {
     return;
@@ -336,7 +334,13 @@ static void LogInstructions(LogLevel level, const Fragment *frag) {
 // entry address.
 static void LogBlockHeader(LogLevel level, const Fragment *frag) {
   if (frag->encoded_order) Log(level, "%d ", frag->encoded_order);
-
+  switch (frag->cache) {
+    case kCodeCacheKindHot: Log(level, "hot "); break;
+    case kCodeCacheKindCold: Log(level, "cold "); break;
+    case kCodeCacheKindFrozen: Log(level, "frozen "); break;
+    case kCodeCacheKindSubZero: Log(level, "sub zero "); break;
+    case kCodeCacheKindEdge: Log(level, "edge "); break;
+  }
   if (IsA<PartitionEntryFragment *>(frag)) {
     Log(level, "allocate space|");
   } else if (IsA<PartitionExitFragment *>(frag)) {
@@ -345,28 +349,16 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     Log(level, "save flags|");
   } else if (IsA<FlagExitFragment *>(frag)) {
     Log(level, "restore flags|");
-  } else if (auto exit_frag = DynamicCast<ExitFragment *>(frag)) {
-    switch (exit_frag->kind) {
-      case FRAG_EXIT_NATIVE: Log(level, "native"); break;
-      case FRAG_EXIT_FUTURE_BLOCK_DIRECT:
-        Log(level, "direct edge -&gt; app %p",
-            MetaDataCast<AppMetaData *>(exit_frag->block_meta)->start_pc);
-        break;
-      case FRAG_EXIT_FUTURE_BLOCK_INDIRECT: Log(level, "indirect edge"); break;
-      case FRAG_EXIT_EXISTING_BLOCK: Log(level, "existing block"); break;
-    }
+  } else if (IsA<ExitFragment *>(frag)) {
+    Log(level, "exit");
 
   } else if (auto code = DynamicCast<CodeFragment *>(frag)) {
     auto partition = code->partition.Value();
-    Log(level, FRAG_TYPE_APP == code->type ? "app " : "inst ");
+    Log(level, kFragmentKindApp == code->kind ? "app " : "inst ");
     if (partition) Log(level, "p%u ", partition->id);
-    if (code->attr.is_in_edge_code) Log(level, "inedge ");
     if (code->attr.modifies_flags) Log(level, "mflags ");
     if (!code->attr.can_add_succ_to_partition) Log(level, "!addsucc2p ");
     if (!code->attr.can_add_pred_to_partition) Log(level, "!add2predp ");
-    if (code->attr.branches_to_code) Log(level, "-&gt;code ");
-    if (code->attr.branch_is_indirect) Log(level, "-&gt;ind ");
-    if (code->attr.follows_cfi) Log(level, "cfi~&gt; ");
     if (kStackStatusInvalid == code->stack.status) Log(level, "badstack ");
     if (code->encoded_size) Log(level, "size=%lu ", code->encoded_size);
     if (code->branch_instr) {
@@ -379,11 +371,9 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
       Log(level, "iflags=%x ", code->inst_flags.entry_live_flags);
     }
 
-    if (code->attr.block_meta && code->attr.is_block_head) {
-      auto meta = MetaDataCast<AppMetaData *>(code->attr.block_meta);
+    if (code->block_meta && code->attr.is_block_head) {
+      auto meta = MetaDataCast<AppMetaData *>(code->block_meta);
       Log(level, "|%p", meta->start_pc);
-    } else if (code->attr.is_compensation_code) {
-      Log(level, "|compensation code");
     }
   }
 }

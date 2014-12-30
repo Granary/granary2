@@ -497,6 +497,7 @@ class Malcontent : public InstrumentationTool {
 
         // Racy check that we don't own the cache line. Compare only the low
         // order 32 bits.
+        "@COLD;"
         "MOV r64 %1, m64 FS:[0];"
         "CMP m32 [%0], r32 %1;"
         "JZ l %2;"
@@ -507,6 +508,7 @@ class Malcontent : public InstrumentationTool {
         // we'll end up marking the shadow as unwatched. If in
         // `InstrumentContention` we detect that we should take ownership,
         // then we'll re-watch the memory.
+        "@FROZEN;"
         "XCHG m64 [%0], r64 %1;"_x86_64);
 
     op.instr->InsertBefore(
@@ -517,7 +519,7 @@ class Malcontent : public InstrumentationTool {
 
     asm_.InlineBefore(op.instr,
         // Done, fall-through to instruction.
-        "LABEL %2:"_x86_64);
+        "@LABEL %2:"_x86_64);
   }
 };
 

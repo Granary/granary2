@@ -52,11 +52,10 @@ namespace {
 static CodeFragment *MakeCodeSuccessor(FragmentList *frags, CodeFragment *frag,
                                        FragmentSuccessorSelector sel) {
   auto succ = new CodeFragment;
-  succ->attr.block_meta = frag->attr.block_meta;
+  succ->block_meta = frag->block_meta;
   succ->attr.has_native_instrs = true;
-  succ->attr.num_predecessors = 1;
   succ->stack = frag->stack;
-  succ->type = FRAG_TYPE_INST;
+  succ->kind = kFragmentKindInst;
   succ->partition.Union(succ, frag);
   frag->successors[sel] = succ;
   frags->InsertAfter(frag, succ);
@@ -218,7 +217,7 @@ CodeFragment *ProcessExceptionalCFI(FragmentList *frags, CodeFragment *frag,
                                     ExceptionalControlFlowInstruction *instr) {
   Instruction ni;
   auto &ainstr(instr->instruction);
-  auto meta = MetaDataCast<CacheMetaData *>(frag->attr.block_meta);
+  auto meta = MetaDataCast<CacheMetaData *>(frag->block_meta);
   VirtualRegister pop_on_sucess[] = {VirtualRegister(), VirtualRegister()};
   auto num_pushed_ops = PushOperands(frag, instr, ni, pop_on_sucess);
 

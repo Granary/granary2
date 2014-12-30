@@ -79,6 +79,7 @@ class Watchpoints : public MemOpInstrumentationTool {
     asm_.InlineBefore(op.instr,
         "BT r64 %0, i8 48;"  // Test the discriminating bit (bit 48).
         GRANARY_IF_USER_ELSE("JNB", "JB") " l %2;"
+        "  @COLD;"
         "  SHL r64 %0, i8 16;"
         "  SAR r64 %0, i8 16;"_x86_64);
 
@@ -87,7 +88,7 @@ class Watchpoints : public MemOpInstrumentationTool {
     watchpoint_hooks.ApplyAll(client_op);
 
     asm_.InlineBefore(op.instr,
-        "LABEL %2:"_x86_64);
+        "@LABEL %2:"_x86_64);
 
     // If it's an implicit memory location then we need to change the register
     // being used by the instruction in place, while keeping a copy around

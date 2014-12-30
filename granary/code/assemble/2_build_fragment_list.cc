@@ -142,7 +142,7 @@ static void AddBlockTailToWorkList(
   // Not already processed / part of the work list.
   } else {
     auto frag = new CodeFragment;
-    frag->attr.block_meta = predecessor->attr.block_meta;
+    frag->block_meta = predecessor->block_meta;
     frag->stack = stack;
 
     auto elm = new FragmentInProgress;
@@ -162,20 +162,9 @@ static void AddBlockTailToWorkList(
     tail_frag = frag;
   }
 
-  if (auto code_tail_frag = DynamicCast<CodeFragment *>(tail_frag)) {
-    code_tail_frag->attr.num_predecessors += 1;
-
-    // Propagate the "follows a CFI" condition. This is used later when
-    // partitioning to make sure that code following a function call or system
-    // call is not placed in the same partition as code that jumps around the
-    // function or system call.
-    if (kFragSuccFallThrough == succ_sel && predecessor->attr.follows_cfi) {
-      code_tail_frag->attr.follows_cfi = true;
-    }
-  }
-
   // Add it to the fragment control-flow graph.
   GRANARY_ASSERT(!predecessor->successors[succ_sel]);
+  GRANARY_ASSERT(tail_frag->list.IsLinked());
   predecessor->successors[succ_sel] = tail_frag;
 }
 
@@ -191,11 +180,12 @@ static void AddBlockStragglerToWorkList(FragmentBuilder *builder,
   // want to allow our labels to get lost inside partition entry/flag entry
   // fragments and allow control to jump into weird places.
   auto frag = new NonLocalEntryFragment;
+  frag->cache = kCodeCacheKindFrozen;
   frag->entry_label = label;
   label->fragment = frag;
 
   auto cfrag = new CodeFragment;
-  cfrag->attr.block_meta = source_block_meta;
+  cfrag->block_meta = source_block_meta;
 
   frag->successors[kFragSuccFallThrough] = cfrag;
 
@@ -216,6 +206,10 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
   auto next_instr = instr->Next();
   switch (instr->annotation) {
     case kAnnotEndBlock: granary_curiosity(); return false;
+
+    case kAnnotationCodeCacheKind:
+      frag->cache = instr->Data<CodeCacheKind>();
+      return true;
 
     // Should not have an `AnnotationInstruction` with `kAnnotLabel` that is
     // not also a `LabelInstruction`.
@@ -296,8 +290,9 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //       to be valid.
     case kAnnotInterruptDeliveryStateChange:
       frag->attr.can_add_succ_to_partition = false;
-      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo(GRANARY_IF_KERNEL(kStackStatusValid)));
+      AddBlockTailToWorkList(
+          builder, frag, nullptr, next_instr,
+          StackUsageInfo(GRANARY_IF_KERNEL(kStackStatusValid)));
       return false;
 
     // Calls out to some client code. This creates a new fragment that cannot
@@ -341,20 +336,18 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
   if (instr->IsAppInstruction() &&
       (instr->IsConditionalJump() ||
        instr->instruction.WritesToStackPointer())) {
-    if (FRAG_TYPE_INST == frag->type) {
+    if (kFragmentKindInst == frag->kind) {
       auto frag_with_branch = new CodeFragment;
-      frag_with_branch->attr.block_meta = frag->attr.block_meta;
+      frag_with_branch->block_meta = frag->block_meta;
       frag->successors[kFragSuccFallThrough] = frag_with_branch;
       builder->frags->InsertAfter(frag, frag_with_branch);
       frag = frag_with_branch;
     }
-    frag->type = FRAG_TYPE_APP;
+    frag->kind = kFragmentKindApp;
   }
 
   frag->branch_instr = instr;
   frag->attr.branch_is_function_call = instr->IsFunctionCall();
-  frag->attr.branch_is_indirect = instr->HasIndirectTarget();
-  frag->attr.branch_is_jump = instr->IsJump();
   frag->attr.has_native_instrs = true;  // The branch.
 
   // Add the branch target.
@@ -398,29 +391,136 @@ static void ProcessExceptionalCFI(FragmentBuilder *builder, CodeFragment *frag,
   AddBlockTailToWorkList(builder, frag, nullptr, next_instr, frag->stack);
 }
 
-// Process a control-flow instruction.
-static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
-                       ControlFlowInstruction *instr) {
+// Add an indirect edge. This is used for specialized returns (which by now
+// should have been converted into indirect jumps, indirect jumps, and indirect
+// function calls. This is *not* used for syscalls/sysreturns/HTM aborts.
+static CodeFragment *AddIndirectEdge(FragmentBuilder *builder,
+                                     CodeFragment *pred_frag,
+                                     ControlFlowInstruction *cfi) {
+  auto target_block = cfi->TargetBlock();
+  auto inst_target = DynamicCast<InstrumentedBlock *>(target_block);
+  auto target_meta = inst_target->UnsafeMetaData();
+  auto edge = builder->context->AllocateIndirectEdge(target_meta);
+  auto frag = arch::GenerateIndirectEdgeCode(builder->frags, edge, cfi,
+                                             pred_frag, target_meta);
+  return frag;
+}
 
-  auto target_block = instr->TargetBlock();
+static void ProcessJump(FragmentBuilder *builder, CodeFragment *pred_frag,
+                        ControlFlowInstruction *cfi) {
+  auto target_block = cfi->TargetBlock();
   auto target_frag = target_block->fragment;
+
+  // Indirect jump.
+  if (cfi->HasIndirectTarget()) {
+    GRANARY_ASSERT(!target_frag);
+    target_frag = AddIndirectEdge(builder, pred_frag, cfi);
+
+  // Direct jump.
+  } else {
+    GRANARY_ASSERT(!cfi->HasIndirectTarget());
+    GRANARY_ASSERT(nullptr != target_frag);
+    pred_frag->attr.can_add_succ_to_partition =
+        pred_frag->block_meta == target_frag->block_meta;
+  }
+  pred_frag->successors[kFragSuccFallThrough] = target_frag;
+}
+
+static CodeFragment *MakeCFIFrag(FragmentBuilder *builder,
+                                 CodeFragment *pred_frag,
+                                 ControlFlowInstruction *cfi) {
+  auto frag = new CodeFragment;
+  frag->kind = kFragmentKindApp;  // Force it to application code.
+  frag->branch_instr = cfi;
+  frag->block_meta = pred_frag->block_meta;
+
+  frag->attr.has_native_instrs = true;
+  frag->attr.branch_is_function_call = cfi->IsFunctionCall();
+  frag->attr.can_add_succ_to_partition = false;
+  frag->attr.can_add_pred_to_partition = false;
+  pred_frag->attr.can_add_succ_to_partition = false;
+
+  // Chain it in.
+  pred_frag->successors[kFragSuccFallThrough] = frag;
+  builder->frags->InsertAfter(pred_frag, frag);
+
+  // Add in the CFI.
+  frag->instrs.Append(Instruction::Unlink(cfi).release());
+  return frag;
+}
+
+static void ProcessTwoWayCFITail(FragmentBuilder *builder,
+                                 CodeFragment *pred_frag,
+                                 Instruction *next_instr) {
+  auto cfi = DynamicCast<ControlFlowInstruction *>(next_instr);
+  if (cfi && cfi->IsJump() && cfi->IsUnconditionalJump()) {
+    ProcessJump(builder, pred_frag, cfi);
+  } else {
+    AddBlockTailToWorkList(builder, pred_frag, nullptr, next_instr,
+                           pred_frag->stack);
+  }
+}
+
+// Process a control-flow instruction.
+static void ProcessCFI(FragmentBuilder *builder, CodeFragment *pred_frag,
+                       ControlFlowInstruction *cfi) {
+  auto target_block = cfi->TargetBlock();
+  auto target_frag = target_block->fragment;
+  auto next_instr = cfi->Next();
+
+  if (cfi->IsJump() && cfi->IsUnconditionalJump()) {
+    ProcessJump(builder, pred_frag, cfi);
+
+  } else if (cfi->IsFunctionCall()) {
+    auto frag = MakeCFIFrag(builder, pred_frag, cfi);
+    if (cfi->HasIndirectTarget()) {
+      GRANARY_ASSERT(!target_frag);
+      frag->attr.can_add_pred_to_partition = true;  // For target reg/mem!
+      pred_frag->partition.Union(frag->partition);
+      target_frag = AddIndirectEdge(builder, frag, cfi);
+    }
+    GRANARY_ASSERT(nullptr != target_frag);
+    frag->successors[kFragSuccBranch] = target_frag;
+    ProcessTwoWayCFITail(builder, frag, next_instr);
+
+  } else if (cfi->IsConditionalJump()) {
+    GRANARY_ASSERT(nullptr != target_frag);
+    auto frag = MakeCFIFrag(builder, pred_frag, cfi);
+    frag->successors[kFragSuccBranch] = target_frag;
+    ProcessTwoWayCFITail(builder, frag, next_instr);
+
+  } else if (cfi->IsSystemCall() || cfi->IsInterruptCall()) {
+    GRANARY_ASSERT(!target_frag);
+    auto frag = new CodeFragment;
+    frag->attr.can_add_succ_to_partition = false;
+    frag->attr.can_add_pred_to_partition = false;
+    frag->attr.has_native_instrs = true;
+    frag->instrs.Append(Instruction::Unlink(cfi).release());
+
+    pred_frag->successors[kFragSuccFallThrough] = frag;
+    builder->frags->InsertAfter(pred_frag, frag);
+    ProcessTwoWayCFITail(builder, frag, next_instr);
+
+  } else if (cfi->IsSystemReturn() || cfi->IsInterruptReturn() ||
+             cfi->IsFunctionReturn()) {
+    GRANARY_ASSERT(!target_frag);
+    auto frag = new ExitFragment;
+    frag->instrs.Append(Instruction::Unlink(cfi).release());
+    pred_frag->successors[kFragSuccFallThrough] = frag;
+
+  } else {
+    GRANARY_ASSERT(false);
+  }
+
+#if 0
+
 
   auto pred_frag = frag;
   frag = new CodeFragment;
 
-  pred_frag->successors[kFragSuccFallThrough] = frag;
-  pred_frag->attr.can_add_succ_to_partition = false;
 
-  builder->frags->InsertAfter(pred_frag, frag);
 
-  frag->type = FRAG_TYPE_APP;  // Force it to application code.
-  frag->branch_instr = instr;
-  frag->attr.block_meta = pred_frag->attr.block_meta;
-  frag->attr.has_native_instrs = true;
-  frag->attr.branch_is_function_call = instr->IsFunctionCall();
-  frag->attr.branch_is_indirect = instr->HasIndirectTarget();
-  frag->attr.branch_is_jump = instr->IsJump();
-  frag->attr.can_add_succ_to_partition = false;
+
 
   // Update stack validity.
   if (instr->IsFunctionCall() || instr->IsFunctionReturn() ||
@@ -431,7 +531,6 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
 
   // Specialized return, indirect call/jump.
   if (!target_frag) {
-    GRANARY_ASSERT(frag->attr.branch_is_indirect);
     GRANARY_ASSERT(IsA<ReturnBlock *>(target_block) ||
                    IsA<IndirectBlock *>(target_block));
     auto inst_target = DynamicCast<InstrumentedBlock *>(target_block);
@@ -452,14 +551,8 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
     // fall-throughs into the same partition.
     frag->partition.Union(reinterpret_cast<Fragment *>(frag), target_frag);
 
-  // Something going to native/cached/direct edge code.
-  } else if (IsA<ExitFragment *>(target_frag)) {
-    frag->attr.branches_to_code = true;
-
-  // Going to a decoded basic block.
+  // Going to a decoded basic block or native/cached/direct edge code.
   } else {
-    GRANARY_ASSERT(IsA<CodeFragment *>(target_frag));
-    GRANARY_ASSERT(IsA<DecodedBlock *>(target_block));
     frag->attr.can_add_succ_to_partition = false;
   }
 
@@ -477,8 +570,8 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *frag,
     fall_through_frag->attr.follows_cfi = true;
   }
 
-  // Add in the CFI.
-  frag->instrs.Append(Instruction::Unlink(instr).release());
+
+#endif
 }
 
 // Process a native instruction. Returns `true` if the instruction is added
@@ -490,18 +583,18 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
   auto writes_flags = instr->WritesConditionCodes();
   auto writes_stack_ptr = instr->instruction.WritesToStackPointer();
 
-  if (FRAG_TYPE_UNKNOWN == frag->type) {
-    frag->type = is_app ? FRAG_TYPE_APP : FRAG_TYPE_INST;
+  if (kFragmentKindInvalid == frag->kind) {
+    frag->kind = is_app ? kFragmentKindApp : kFragmentKindInst;
 
   // Instrumentation instructions in an application fragment are allowed to
   // read but not write the flags.
-  } else if (FRAG_TYPE_APP == frag->type && !is_app && writes_flags) {
+  } else if (kFragmentKindApp == frag->kind && !is_app && writes_flags) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
 
   // Application instructions in an instrumentation fragment are not allowed
   // to read or write the flags, or to change the stack pointer.
-  } else if (FRAG_TYPE_INST == frag->type && is_app &&
+  } else if (kFragmentKindInst == frag->kind && is_app &&
              (reads_flags || writes_flags || writes_stack_ptr)) {
     AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
     return false;
@@ -612,8 +705,10 @@ static void AddStragglerFragments(FragmentBuilder *builder) {
 static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
                                       DecodedBlock *block) {
   auto frag = new CodeFragment;
-  frag->attr.block_meta = block->MetaData();
+  frag->block_meta = block->MetaData();
   frag->attr.is_block_head = true;
+
+  if (block->IsColdCode()) frag->cache = kCodeCacheKindCold;
 
   auto elm = new FragmentInProgress;
   elm->frag = frag;
@@ -630,13 +725,13 @@ static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
 static void AddDirectBlockToFragList(FragmentBuilder *builder,
                                      DirectBlock *block) {
   auto meta = block->MetaData();
-  auto frag = new ExitFragment(FRAG_EXIT_FUTURE_BLOCK_DIRECT);
+  auto frag = new ExitFragment;
   auto edge = builder->context->AllocateDirectEdge(meta);
 
+  frag->cache = kCodeCacheKindEdge;
   frag->encoded_pc = edge->edge_code_pc;
   frag->block_meta = meta;
-  frag->edge.kind = EDGE_KIND_DIRECT;
-  frag->edge.direct = edge;
+  frag->direct_edge = edge;
 
   GRANARY_ASSERT(nullptr != frag->encoded_pc);
 
@@ -648,8 +743,9 @@ static void AddDirectBlockToFragList(FragmentBuilder *builder,
 // `ExitFragment`.
 static void AddCachedBlockToFragList(FragmentBuilder *builder,
                                      CachedBlock *block) {
-  auto frag = new ExitFragment(FRAG_EXIT_EXISTING_BLOCK);
+  auto frag = new ExitFragment;
   frag->encoded_pc = block->StartCachePC();
+  frag->cache = kCodeCacheKindEdge;
   frag->encoded_size = 0;
   frag->block_meta = block->MetaData();
 
@@ -664,7 +760,10 @@ static void AddCachedBlockToFragList(FragmentBuilder *builder,
 static void AddNativeBlockToFragList(FragmentBuilder *builder,
                                      Block *block,
                                      AppPC start_pc) {
-  auto frag = new ExitFragment(FRAG_EXIT_NATIVE);
+  if (!start_pc) return;  // Syscalls, interrupt calls, returns, etc.
+
+  auto frag = new ExitFragment;
+  frag->cache = kCodeCacheKindEdge;
   frag->encoded_pc = UnsafeCast<CachePC>(start_pc);
   frag->encoded_size = 0;
   frag->block_meta = nullptr;
@@ -689,11 +788,9 @@ static void InitBlockFragment(FragmentBuilder *builder, Block *block) {
     AddNativeBlockToFragList(builder, native_block, native_block->StartAppPC());
   } else if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
     AddDecodedBlockToWorkList(builder, decoded_block);
-  } else if (auto return_block = DynamicCast<ReturnBlock *>(block)) {
-    if (!return_block->UsesMetaData()) {
-      AddNativeBlockToFragList(builder, return_block, nullptr);
-    }
   }
+
+  // Ignore `ReturnBlock`s and `IndirectBlock`s.
 }
 
 // Initialize the work list for each basic block.

@@ -4,6 +4,7 @@
 
 #include "arch/exit.h"
 
+#include "granary/cache.h"
 #include "granary/client.h"
 #include "granary/context.h"
 #include "granary/metadata.h"
@@ -52,6 +53,7 @@ void Exit(ExitReason reason) {
   ExitContext();
   ExitClients();
   ExitMetaData();
+  ExitCodeCache();
   arch::Exit();
   os::ExitLog();
   os::ExitModuleManager();

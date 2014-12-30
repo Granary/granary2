@@ -15,6 +15,7 @@
 #include "arch/x86-64/select.h"
 
 #include "granary/breakpoint.h"
+#include "granary/cache.h"
 
 namespace granary {
 namespace arch {
@@ -499,17 +500,30 @@ class InlineAssemblyParser {
     }
   }
 
-  // Parse this instruction as a label instruction.
+  // Parse this instruction as an annotation instruction.
   //
   // Note: This re-uses `buff` from `ParseInstructionPrefixes`.
-  bool TryParseLabelInstruction(void) {
-    if (StringsMatch(buff, "LABEL")) {
+  bool TryParseAnnotationInstruction(void) {
+    if (StringsMatch(buff, "@LABEL")) {
       ConsumeWhiteSpace();
       ParseLabelInstruction();
       Accept(':');
       return true;
+    } else if (StringsMatch(buff, "@COLD")) {
+      instr->InsertBefore(new AnnotationInstruction(
+          kAnnotationCodeCacheKind,
+          block->IsColdCode() ? kCodeCacheKindFrozen : kCodeCacheKindCold));
+      Accept(';');
+      return true;
+    } else if (StringsMatch(buff, "@FROZEN")) {
+      instr->InsertBefore(new AnnotationInstruction(
+          kAnnotationCodeCacheKind,
+          block->IsColdCode() ? kCodeCacheKindSubZero : kCodeCacheKindFrozen));
+      Accept(';');
+      return true;
+    } else {
+      return false;
     }
-    return false;
   }
 
   // Parse the opcode of the instruction.
@@ -597,7 +611,7 @@ class InlineAssemblyParser {
   // Parse a single inline assembly instructions.
   void ParseInstruction(void) {
     ParseInstructionPrefixes();
-    if (TryParseLabelInstruction()) return;
+    if (TryParseAnnotationInstruction()) return;
     ParseInstructionOpcode();
     ConsumeWhiteSpace();
     while (!Peek(';')) {

@@ -14,7 +14,7 @@ void FindBlockEntrypointFragments(FragmentList *frags) {
   // we can sometimes put two blocks in the same partition.
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
-      if (cfrag->attr.is_block_head || cfrag->attr.is_return_target) {
+      if (cfrag->attr.is_block_head) {
         auto partition = cfrag->partition.Value();
         if (!partition->entry_frag) partition->entry_frag = frag;
       }

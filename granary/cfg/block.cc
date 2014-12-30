@@ -143,7 +143,8 @@ DecodedBlock::DecodedBlock(Trace *cfg_, BlockMetaData *meta_)
       first(new AnnotationInstruction(kAnnotBeginBlock,
                                       reinterpret_cast<void *>(&first))),
       last(new AnnotationInstruction(kAnnotEndBlock,
-                                     reinterpret_cast<void *>(&last))) {
+                                     reinterpret_cast<void *>(&last))),
+      is_cold_code(false) {
   first->InsertAfter(last);
   for (auto &reg : arg_regs) {
     reg = cfg->AllocateVirtualRegister();
@@ -217,6 +218,16 @@ void DecodedBlock::PrependInstruction(Instruction *instr) {
 // Add a new instruction to the end of the instruction list.
 void DecodedBlock::AppendInstruction(Instruction *instr) {
   LastInstruction()->InsertBefore(instr);
+}
+
+// Mark the code of this block as being cold.
+void DecodedBlock::MarkAsColdCode(void) {
+  is_cold_code = true;
+}
+
+// Is this cold code?
+bool DecodedBlock::IsColdCode(void) const {
+  return is_cold_code;
 }
 
 // Remove and return single instruction. Some special kinds of instructions

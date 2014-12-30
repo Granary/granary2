@@ -9,7 +9,7 @@
 
 // Stages of assembly.
 #include "granary/code/assemble/0_compile_inline_assembly.h"
-#include "granary/code/assemble/1_mangle.h"
+#include "granary/code/assemble/1_late_mangle.h"
 #include "granary/code/assemble/2_build_fragment_list.h"
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"

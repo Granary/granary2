@@ -116,11 +116,11 @@ void GenerateContextCallCode(Callback *callback) {
 }  // namespace
 
 // Generates the wrapper code for a context callback.
-Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
-  auto edge_code = cache->AllocateBlock(CONTEXT_CALL_CODE_SIZE_BYTES);
+Callback *GenerateContextCallback(AppPC func_pc) {
+  auto edge_code = AllocateCode(kCodeCacheKindCold,
+                                CONTEXT_CALL_CODE_SIZE_BYTES);
   auto callback = new Callback(func_pc, edge_code);
-  CodeCacheTransaction transaction(edge_code,
-                                   edge_code + DIRECT_EDGE_CODE_SIZE_BYTES);
+  CodeCacheTransaction transaction;
   GenerateContextCallCode(callback);
   return callback;
 }
@@ -131,38 +131,21 @@ Callback *GenerateContextCallback(CodeCache *cache, AppPC func_pc) {
 CodeFragment *CreateContextCallFragment(Context *context,
                                         FragmentList *frags, CodeFragment *pred,
                                         AppPC func_pc) {
-  auto call_frag = new CodeFragment;
-  auto exit_frag = new ExitFragment(FRAG_EXIT_NATIVE);
-  auto cc = context->ContextCallback(func_pc);
+  Instruction ni;
+  UsedRegisterSet all_regs;
 
-  exit_frag->encoded_pc = nullptr;  // !!!!
+  auto call_frag = new CodeFragment;
+  auto cc = context->ContextCallback(func_pc);
+  GRANARY_ASSERT(nullptr != cc->wrapped_callback);
 
   pred->successors[kFragSuccFallThrough] = call_frag;
-  call_frag->successors[kFragSuccBranch] = exit_frag;
-
-  // This distinguishes a context call from something like a outline call,
-  // because the context call ends up being forced into its own partition. We
-  // force it into its own partition so that we get the native machine regs
-  // on entry.
-  pred->attr.can_add_succ_to_partition = false;
-  call_frag->attr.can_add_pred_to_partition = false;
-  call_frag->attr.can_add_succ_to_partition = false;
-  call_frag->attr.branch_is_function_call = true;
-
   frags->InsertAfter(pred, call_frag);
-  frags->Append(exit_frag);
-
-  Instruction ni;
+  all_regs.ReviveAll();
 
   APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
-
-  GRANARY_ASSERT(nullptr != cc->wrapped_callback);
-  CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
-  ni.is_stack_blind = true;
-  auto call = new NativeInstruction(&ni);
-  call_frag->instrs.Append(call);
-  call_frag->branch_instr = call;
-
+  APP_INSTR(new AnnotationInstruction(kAnnotSSAReviveRegisters, all_regs));
+  APP(CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
+      ni.is_stack_blind = true);
   APP_INSTR(new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   return call_frag;

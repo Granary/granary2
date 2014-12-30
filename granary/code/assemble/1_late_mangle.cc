@@ -17,7 +17,7 @@
 #include "granary/cfg/lir.h"
 #include "granary/cfg/operand.h"
 
-#include "granary/code/assemble/1_mangle.h"
+#include "granary/code/assemble/1_late_mangle.h"
 #include "granary/code/metadata.h"
 
 #include "granary/cache.h"  // For `CacheMetaData`.
@@ -45,8 +45,7 @@ extern void RelativizeDirectCFI(CacheMetaData *meta,
 //
 // Note: This has an architecture-specific implementation.
 extern void MangleIndirectCFI(DecodedBlock *block,
-                              ControlFlowInstruction *cfi,
-                              AnnotationInstruction *ret_address);
+                              ControlFlowInstruction *cfi);
 
 // Performs mangling of an direct CFI instruction.
 //
@@ -140,8 +139,6 @@ class BlockMangler {
 
   // Relativize a control-flow instruction.
   void MangleCFI(ControlFlowInstruction *cfi) {
-    if (cfi->IsFunctionCall()) MangleFunctionCall(cfi);
-
     auto target_block = cfi->TargetBlock();
     if (IsA<NativeBlock *>(target_block)) {
       // We always defer to arch-specific relativization because some
@@ -164,7 +161,7 @@ class BlockMangler {
       if (cfi->MatchOperands(ReadFrom(mloc))) {
         RelativizeMemOp(cfi, mloc);
       }
-      arch::MangleIndirectCFI(block, cfi, cfi->return_address);
+      arch::MangleIndirectCFI(block, cfi);
 
     // Need to mangle the indirect direct (with meta-data) into a return to
     // a different program counter.
@@ -182,6 +179,10 @@ class BlockMangler {
         arch::MangleDirectCFI(block, cfi, target_block->StartAppPC());
       }
     }
+
+    // Placed *after* normal mangling so that we handle things like
+    // `CALL [RSP]`.
+    if (cfi->IsFunctionCall()) MangleFunctionCall(cfi);
   }
 
   // Relativizes an individual instruction by replacing addresses that are too

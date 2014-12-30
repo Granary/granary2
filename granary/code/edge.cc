@@ -5,7 +5,6 @@
 #include "granary/code/edge.h"
 
 #include "granary/breakpoint.h"
-#include "granary/cache.h"
 #include "granary/index.h"
 #include "granary/metadata.h"
 
@@ -24,9 +23,8 @@ DirectEdge::~DirectEdge(void) {
   if (dest_meta) delete dest_meta;
 }
 
-IndirectEdge::IndirectEdge(const BlockMetaData *dest_meta_,
-                           CachePC indirect_edge_entrypoint)
-    : out_edge_pc(indirect_edge_entrypoint),
+IndirectEdge::IndirectEdge(const BlockMetaData *dest_meta_)
+    : out_edge_pc(nullptr),
       meta_template(dest_meta_),
       next(nullptr),
       out_edge_template(nullptr),

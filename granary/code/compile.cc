@@ -62,11 +62,15 @@ extern void AddBlockTracer(Fragment *frag, BlockMetaData *meta,
 }  // namespace arch
 namespace {
 
+struct CodeCacheUse {
+  size_t cache_size[kNumCodeCacheKinds];
+  CachePC cache_code[kNumCodeCacheKinds];
+};
+
 // Set the encoded address for a label or return address instruction.
-static void SetEncodedPC(AnnotationInstruction *instr, CachePC pc) {
-  if (kAnnotationLabel == instr->annotation) {
-    instr->SetData(pc);
-  }
+static void SetEncodedPC(LabelInstruction *instr, CachePC pc) {
+  instr->SetData(pc);
+  SetMetaData(instr, pc);
 }
 
 // Mark an estimated encode address on all labels/return address annotations.
@@ -77,8 +81,8 @@ static void StageEncodeLabels(Fragment *frag) {
     SetEncodedPC(frag->entry_label, estimated_encode_pc);
   }
   for (auto instr : InstructionListIterator(frag->instrs)) {
-    if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      SetEncodedPC(annot, estimated_encode_pc);
+    if (auto label = DynamicCast<LabelInstruction *>(instr)) {
+      SetEncodedPC(label, estimated_encode_pc);
     }
   }
 }
@@ -105,45 +109,50 @@ static size_t StageEncodeNativeInstructions(Fragment *frag) {
 // Performs stage encoding of a fragment list. This determines the size of each
 // fragment and returns the size (in bytes) of the block-specific and edge-
 // specific instructions.
-static size_t StageEncode(FragmentList *frags) {
+static void StageEncode(FragmentList *frags, CodeCacheUse *use) {
   auto first_frag = frags->First();
-  auto num_bytes = 0UL;
 
+  // Start by giving every label some plausible location.
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
-    // Don't omit `ExitFragment`s in case they contain labels.
     StageEncodeLabels(frag);
   }
 
+  // Now that all labels have a plausible encoded location, update every native
+  // instruction.
   for (auto frag : EncodeOrderedFragmentIterator(first_frag)) {
     if (frag->encoded_pc) {
       GRANARY_ASSERT(!IsA<CodeFragment *>(frag));
       continue;
     }
     frag->encoded_size = StageEncodeNativeInstructions(frag);
-    num_bytes += frag->encoded_size;
+    use->cache_size[frag->cache] += frag->encoded_size;
   }
-  return num_bytes;
 }
 
 // Relativize the instructions of a fragment.
 static void RelativizeInstructions(Fragment *frag, CachePC curr_pc,
                                    bool *update_encode_addresses) {
   if (frag->entry_label) SetEncodedPC(frag->entry_label, curr_pc);
+
   for (auto instr : InstructionListIterator(frag->instrs)) {
+
+    // `curr_pc` moves forward with the encoded length of instructions.
     if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
       ninstr->instruction.SetEncodedPC(curr_pc);
       curr_pc += ninstr->instruction.EncodedLength();
 
-    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
+    // All labels need to know where they are encoded.
+    } else if (auto label = DynamicCast<LabelInstruction *>(instr)) {
+      SetEncodedPC(label, curr_pc);
 
-      // Record the `curr_pc` for later updating by `UpdateEncodeAddresses`.
+    // Record the `curr_pc` for later updating by `UpdateEncodeAddresses`.
+    // We update *after* encoding all instructions lest we face a nasty race
+    // where some thread sees the updated value of the data and then decides
+    // to jump to an incompletely generated block.
+    } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
       if (kAnnotUpdateAddressWhenEncoded == annot->annotation) {
         SetMetaData(annot, curr_pc);
         *update_encode_addresses = true;
-
-      // Make labels and return addresses aware of their encoded addresses.
-      } else {
-        SetEncodedPC(annot, curr_pc);
       }
     }
   }
@@ -169,11 +178,12 @@ static void UpdateEncodeAddresses(FragmentList *frags) {
 }
 
 // Assign program counters to every fragment and instruction.
-static void RelativizeCode(FragmentList *frags, CachePC cache_code,
+static void RelativizeCode(FragmentList *frags, CodeCacheUse *use,
                            bool *update_addresses) {
-  GRANARY_ASSERT(nullptr != cache_code);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     if (!frag->encoded_pc) {
+      auto &cache_code(use->cache_code[frag->cache]);
+      GRANARY_ASSERT(nullptr != cache_code);
       frag->encoded_pc = cache_code;
       cache_code += frag->encoded_size;
     }
@@ -181,66 +191,27 @@ static void RelativizeCode(FragmentList *frags, CachePC cache_code,
   }
 }
 
-// Relativize a control-flow instruction.
-static void RelativizeCFI(Fragment *frag, ControlFlowInstruction *cfi) {
-  if (!cfi->instruction.WillBeEncoded()) return;  // Elided.
-
-  // Note: We use the `arch::Instruction::HasIndirectTarget` instead of
-  //       `ControlFlowInstruction::HasIndirectTarget` because the latter
-  //       sometimes "lies" in order to hide us from the details of mangling
-  //       far-away targets.
-  if (cfi->instruction.HasIndirectTarget()) return;
-
-  GRANARY_ASSERT(frag->branch_instr == cfi);
-  auto target_frag = frag->successors[kFragSuccBranch];
-  GRANARY_ASSERT(nullptr != target_frag);
-  auto target_pc = target_frag->encoded_pc;
-  GRANARY_ASSERT(nullptr != target_pc);
-  cfi->instruction.SetBranchTarget(target_pc);
-}
-
-// Relativize a branch instruction.
-//
-// TODO(pag): This is a bit ugly. `2_build_fragment_list.cc` leaves labels
-//            behind (in their respective basic block instruction lists), so
-//            that all fragments are correctly connected. However, some
-//            branch instructions are introduced at a later point in time,
-//            e.g. `10_add_connecting_jumps.cc`, to make sure there are
-//            fall-through jumps for everything.
-//
-//            Perhaps one solution would be to move the labels into the
-//            correct fragments at some point.
-static void RelativizeBranch(Fragment *frag, BranchInstruction *branch) {
-  if (frag->branch_instr == branch) {
-    branch->instruction.SetBranchTarget(
-        frag->successors[kFragSuccBranch]->encoded_pc);
-
-  } else {
-    auto target = branch->TargetLabel();
-    auto target_pc = target->Data<CachePC>();
-    GRANARY_ASSERT(nullptr != target_pc);
-    // Doesn't look like a refcount.
-    GRANARY_ASSERT(4096UL < target->Data<uintptr_t>());
-    branch->instruction.SetBranchTarget(target_pc);
+// Relativize a CFI/Branch instruction.
+static void RelativizeBranch(NativeInstruction *cfi, Fragment *succ) {
+  if (cfi && !cfi->HasIndirectTarget()) {
+    GRANARY_ASSERT(succ);
+    cfi->instruction.SetBranchTarget(succ->encoded_pc);
   }
 }
 
 // Relativize all control-flow instructions.
 static void RelativizeControlFlow(FragmentList *frags) {
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
-    for (auto instr : InstructionListIterator(frag->instrs)) {
-      if (auto cfi = DynamicCast<ControlFlowInstruction *>(instr)) {
-        RelativizeCFI(frag, cfi);
-      } else if (auto branch = DynamicCast<BranchInstruction *>(instr)) {
-        RelativizeBranch(frag, branch);
-      }
-    }
+    RelativizeBranch(frag->fall_through_instr,
+                     frag->successors[kFragSuccFallThrough]);
+    RelativizeBranch(frag->branch_instr, frag->successors[kFragSuccBranch]);
   }
 }
 
 // Encode all fragments associated with basic block code and not with direct
 // edge or out-edge code.
 static void Encode(FragmentList *frags) {
+  CodeCacheTransaction transaction;
   arch::InstructionEncoder encoder(arch::InstructionEncodeKind::COMMIT);
   for (auto frag : EncodeOrderedFragmentIterator(frags->First())) {
     GRANARY_ASSERT(nullptr != frag->encoded_pc);
@@ -266,7 +237,7 @@ static void AddBlockTracers(FragmentList *frags) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
       auto partition = cfrag->partition.Value();
-      auto block_meta = cfrag->attr.block_meta;
+      auto block_meta = cfrag->block_meta;
       auto block_frag = partition->entry_frag;
       arch::AddBlockTracer(block_frag, block_meta, estimated_encode_pc);
     }
@@ -278,7 +249,7 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
     if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
       if (!cfrag->attr.is_block_head) continue;
-      auto cache_meta = MetaDataCast<CacheMetaData *>(cfrag->attr.block_meta);
+      auto cache_meta = MetaDataCast<CacheMetaData *>(cfrag->block_meta);
       auto partition = cfrag->partition.Value();
       auto entry_frag = partition->entry_frag;
       GRANARY_ASSERT(!cache_meta->start_pc);
@@ -289,42 +260,41 @@ static void AssignBlockCacheLocations(FragmentList *frags) {
 
 // Update all direct/indirect edge data structures to know about where their
 // data is encoded.
+static void ConnectEdgesToInstructions(Fragment *succ, NativeInstruction *br) {
+  if (!succ) return;
+  if (auto exit = DynamicCast<ExitFragment *>(succ)) {
+    if (!exit->direct_edge) return;
+    GRANARY_ASSERT(nullptr != br);
+    GRANARY_ASSERT(!exit->direct_edge->patch_instruction_pc);
+    exit->direct_edge->patch_instruction_pc = br->instruction.EncodedPC();
+  }
+}
+
+// Update all direct/indirect edge data structures to know about where their
+// data is encoded.
 static void ConnectEdgesToInstructions(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    auto cfrag = DynamicCast<CodeFragment *>(frag);
-    if (!cfrag) continue;
-    if (!cfrag->branch_instr) continue;
-
-    // Try to get the direct edge (if any) that is targeted by `branch_instr`.
-    auto edge_frag = DynamicCast<ExitFragment *>(
-        cfrag->successors[kFragSuccBranch]);
-    if (!edge_frag) continue;
-    if (EDGE_KIND_DIRECT != edge_frag->edge.kind) continue;
-
-    GRANARY_ASSERT(IsA<ControlFlowInstruction *>(cfrag->branch_instr));
-
-    // Tell the edge data structure what instruction will eventually need to
-    // be patched (after that instruction's target is eventually resolved)
-    auto edge = edge_frag->edge.direct;
-    edge->patch_instruction_pc = cfrag->branch_instr->instruction.EncodedPC();
+    ConnectEdgesToInstructions(frag->successors[kFragSuccFallThrough],
+                               frag->fall_through_instr);
+    ConnectEdgesToInstructions(frag->successors[kFragSuccBranch],
+                               frag->branch_instr);
   }
 }
 
 // Encodes the fragments into the specified code caches.
-static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
+static CachePC EncodeAndFree(FragmentList *frags) {
   if (GRANARY_UNLIKELY(FLAG_debug_trace_exec)) AddBlockTracers(frags);
-  auto num_bytes = StageEncode(frags);
-  GRANARY_ASSERT(0 < num_bytes);
-  const auto cache_code = block_cache->AllocateBlock(num_bytes);
-  auto cache_code_end = cache_code + num_bytes;
+  CodeCacheUse cache_use = {{0}, {nullptr}};
+  StageEncode(frags, &cache_use);
+  for (auto i = 0; i < kNumCodeCacheKinds; ++i) {
+    cache_use.cache_code[i] = AllocateCode(static_cast<CodeCacheKind>(i),
+                                           cache_use.cache_size[i]);
+  }
   auto update_addresses = false;
-  RelativizeCode(frags, cache_code, &update_addresses);
+  RelativizeCode(frags, &cache_use, &update_addresses);
   RelativizeControlFlow(frags);
-
-  do {
-    CodeCacheTransaction transaction(cache_code, cache_code_end);
-    Encode(frags);
-  } while (0);
+  Encode(frags);
+  auto entry_pc = frags->First()->encoded_pc;
 
   // Go through all `kAnnotUpdateAddressWhenEncoded` annotations and update
   // the associated pointers with their resolved addresses.
@@ -332,7 +302,8 @@ static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
 
   AssignBlockCacheLocations(frags);
   ConnectEdgesToInstructions(frags);
-  return cache_code;
+  FreeFragments(frags);
+  return entry_pc;
 }
 
 }  // namespace
@@ -340,9 +311,7 @@ static CachePC Encode(FragmentList *frags, CodeCache *block_cache) {
 // Compile some instrumented code.
 CachePC Compile(Context *context, Trace *cfg) {
   auto frags = Assemble(context, cfg);
-  auto encoded_pc = Encode(&frags, context->BlockCodeCache());
-  FreeFragments(&frags);
-  return encoded_pc;
+  return EncodeAndFree(&frags);
 }
 
 // Compile some instrumented code for an indirect edge.
@@ -351,9 +320,7 @@ CachePC Compile(Context *context, Trace *cfg,
   auto frags = Assemble(context, cfg);
   auto target_app_pc = MetaDataCast<AppMetaData *>(meta)->start_pc;
   arch::InstantiateIndirectEdge(edge, &frags, target_app_pc);
-  auto encoded_pc = Encode(&frags, context->BlockCodeCache());
-  FreeFragments(&frags);
-  return encoded_pc;
+  return EncodeAndFree(&frags);
 }
 
 }  // namespace granary

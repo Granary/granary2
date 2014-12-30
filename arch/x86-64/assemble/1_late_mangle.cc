@@ -234,32 +234,9 @@ void MangleIndirectReturn(DecodedBlock *block,
   JMP_GPRv(&(cfi->instruction), target);
 }
 
-// Mangle an indirect function call.
-static void MangleIndirectCall(DecodedBlock *block,
-                               ControlFlowInstruction *cfi,
-                               AnnotationInstruction *ret_address) {
-  Instruction ni;
-  Operand op;
-
-  auto ret_address_reg = block->AllocateVirtualRegister();
-  auto decoded_pc = cfi->instruction.decoded_pc;
-  op.type = XED_ENCODER_OPERAND_TYPE_PTR;
-  op.is_effective_address = true;
-  op.is_annotation_instr = true;
-  op.annotation_instr = ret_address;
-  op.width = ADDRESS_WIDTH_BITS;
-  LEA_GPRv_AGEN(&ni, ret_address_reg, op);
-  cfi->InsertBefore(new NativeInstruction(&ni));
-  PUSH_GPRv_50(&ni, ret_address_reg);
-  ni.decoded_pc = decoded_pc;  // Mark as application.
-  ni.effective_operand_width = GPR_WIDTH_BITS;
-  cfi->InsertBefore(new NativeInstruction(&ni));
-}
-
 // Performs mangling of an indirect CFI instruction. This ensures that the
 // target of any specialized indirect CFI instruction is stored in a register.
-void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi,
-                       AnnotationInstruction *ret_address) {
+void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi) {
   if (cfi->IsFunctionReturn()) {
     auto target_block = cfi->TargetBlock();
     if (auto return_block = DynamicCast<ReturnBlock *>(target_block)) {
@@ -270,14 +247,12 @@ void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi,
   } else if (cfi->IsFunctionCall()) {
     Instruction ni;
     auto &orig_target_op(cfi->instruction.ops[0]);
-    MangleIndirectCall(block, cfi, ret_address);
     if (orig_target_op.IsMemory()) {
       auto new_target_reg = block->AllocateVirtualRegister();
       MOV_GPRv_MEMv(&ni, new_target_reg, orig_target_op);
       cfi->InsertBefore(new NativeInstruction(&ni));
       CALL_NEAR_GPRv(&(cfi->instruction), new_target_reg);
     }
-
     cfi->instruction.is_stack_blind = true;
     cfi->instruction.analyzed_stack_usage = false;
     cfi->instruction.dont_encode = true;
@@ -294,9 +269,6 @@ void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi,
   } else {
     // System call/return, interrupt call/return.
   }
-
-  // Note: The final mangling of indirect calls and indirect jumps happens in
-  //       `9_allocate_slots.cc` in the function `RemoveIndirectCallsAndJumps`.
 }
 
 // Performs mangling of an direct CFI instruction.

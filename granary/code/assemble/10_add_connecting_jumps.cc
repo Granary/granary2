@@ -12,21 +12,21 @@
 namespace granary {
 namespace arch {
 
-// Don't encode `instr`, but leave it in place.
-//
-// Note: This has an architecture-specific implementation.
-extern void ElideInstruction(Instruction *instr);
-
 // Adds a fall-through jump, if needed, to this fragment.
 //
 // Note: This has an architecture-specific implementation.
-extern NativeInstruction *AddFallThroughJump(Fragment *frag,
-                                             Fragment *fall_through_frag);
+extern void AddFallThroughJump(Fragment *frag, Fragment *fall_through_frag);
 
 // Returns true if the target of a jump must be encoded in a nearby location.
 //
 // Note: This has an architecture-specific implementation.
 extern bool IsNearRelativeJump(NativeInstruction *instr);
+
+// Try to negate the branch condition. Returns `false` if the branch condition
+// was not merged.
+//
+// Note: This has an architecture-specific implementation.
+extern bool TryNegateBranchCondition(NativeInstruction *instr);
 
 // Catches erroneous fall-throughs off the end of the basic block.
 GRANARY_IF_DEBUG( extern void AddFallThroughTrap(Fragment *frag); )
@@ -34,6 +34,7 @@ GRANARY_IF_DEBUG( extern void AddFallThroughTrap(Fragment *frag); )
 }  // namespace arch
 namespace {
 
+#if 0
 // Try to remove useless direct jump instructions that will only have a zero
 // displacement.
 static void TryElideBranches(NativeInstruction *branch_instr) {
@@ -47,9 +48,10 @@ static void TryElideBranches(NativeInstruction *branch_instr) {
       !ainstr.HasIndirectTarget() &&
       (IsA<BranchInstruction *>(branch_instr) ||
        IsA<ControlFlowInstruction *>(branch_instr))) {
-    arch::ElideInstruction(&ainstr);
+    ainstr.DontEncode();
   }
 }
+#endif
 
 struct FragmentWorkList {
   // First fragment on the work list.
@@ -75,32 +77,44 @@ struct FragmentWorkList {
 // and it also tries to make sure that specialized call/return/jump lookup
 // fragments are executed before anything else.
 static void OrderFragment(FragmentWorkList *work_list, Fragment *frag) {
-  // Special case: want (specialized) indirect branch targets to be ordered
-  // before the fall-through (if any). This affects the determination on
-  // whether or not a fall-through branch needs to be added.
-  auto swap_successors = false;
-  auto visit_branch_first = false;
-  if (auto cfi = DynamicCast<ControlFlowInstruction *>(frag->branch_instr)) {
-    auto target_block = cfi->TargetBlock();
-    swap_successors = IsA<IndirectBlock *>(target_block) ||
-                      IsA<ReturnBlock *>(target_block);
-    visit_branch_first = swap_successors || arch::IsNearRelativeJump(cfi);
+  auto frag_fall_through = frag->successors[kFragSuccFallThrough];
+  auto frag_branch = frag->successors[kFragSuccBranch];
 
-  } else if (auto br = DynamicCast<BranchInstruction *>(frag->branch_instr)) {
-    visit_branch_first = arch::IsNearRelativeJump(br);
-  }
+  if (!frag_branch && !frag_fall_through) return;
 
-  if (visit_branch_first) {
-    work_list->Enqueue(frag->successors[kFragSuccFallThrough]);
-    work_list->Enqueue(frag->successors[kFragSuccBranch]);
+  if (frag_branch && !frag_fall_through) {
+    work_list->Enqueue(frag_branch);
+
+  } else if (frag_fall_through && !frag_branch) {
+    work_list->Enqueue(frag_fall_through);
+
+  // Branch is hotter than fall-through.
+  } else if (frag_branch->cache < frag_fall_through->cache) {
+
+    // Branch keeps us in our tier, but fall-through goes to a colder tier.
+    // Lets swap the two and negate the branch.
+    if (frag->cache == frag_branch->cache &&
+        arch::TryNegateBranchCondition(frag->branch_instr)) {
+      frag->successors[kFragSuccFallThrough] = frag_branch;
+      frag->successors[kFragSuccBranch] = frag_fall_through;
+    }
+
+    work_list->Enqueue(frag_fall_through);
+    work_list->Enqueue(frag_branch);
+
+  // Fall-through is hotter than branch.
+  } else if (frag_fall_through->cache < frag_branch->cache) {
+    work_list->Enqueue(frag_branch);
+    work_list->Enqueue(frag_fall_through);
+
+  // Same hotness, branch uses short jump.
+  } else if (arch::IsNearRelativeJump(frag->branch_instr)) {
+    work_list->Enqueue(frag_fall_through);
+    work_list->Enqueue(frag_branch);
+
   } else {
-    work_list->Enqueue(frag->successors[kFragSuccBranch]);
-    work_list->Enqueue(frag->successors[kFragSuccFallThrough]);
-  }
-
-  if (swap_successors) {
-    std::swap(frag->successors[kFragSuccBranch],
-              frag->successors[kFragSuccFallThrough]);
+    work_list->Enqueue(frag_branch);
+    work_list->Enqueue(frag_fall_through);
   }
 }
 
@@ -144,37 +158,22 @@ void AddConnectingJumps(FragmentList *frags) {
   OrderFragments(&work_list);
 
   for (auto frag : EncodeOrderedFragmentIterator(first)) {
+    auto frag_next = frag->next;
     auto frag_fall_through = frag->successors[kFragSuccFallThrough];
     auto frag_branch = frag->successors[kFragSuccBranch];
-    auto frag_next = frag->next;
 
-    if (frag_branch && frag_branch == frag_next && !frag_branch->encoded_pc) {
-      TryElideBranches(frag->branch_instr);
-    }
-
-    // No fall-through.
     if (!frag_fall_through) {
 
-      // Not sure if this can happen: we've got a direct jump that behaves like
-      // a fall-through, but the next fragment isn't the jump's target, and the
-      // jump itself won't be encoded.
-      GRANARY_ASSERT(!(frag->branch_instr && frag_next != frag_branch &&
-                       !frag->branch_instr->instruction.WillBeEncoded()));
+      // TODO(pag): Does it matter if it's conditional?
+      if (frag_branch && frag_next == frag_branch && frag->branch_instr &&
+          frag->cache == frag_branch->cache &&
+          !frag_branch->encoded_pc) {
+        frag->branch_instr->instruction.DontEncode();
+      }
 
-      // TODO(pag): Does this handle issues with `NonLocalEntryFragment`s?
-      continue;
-
-    // Last fragment in the list, but it has a fall-through.
-    } else if (!frag_next) {
-      arch::AddFallThroughJump(frag, frag_fall_through);
-
-    // Has a fall-through that's not the next fragment.
-    } else if (frag_fall_through != frag_next) {
-      arch::AddFallThroughJump(frag, frag_fall_through);
-
-    // Has a fall-through that's an exit fragment.
-    } else if (IsA<ExitFragment *>(frag_fall_through) &&
-               frag_fall_through->encoded_pc) {
+    } else if (frag_fall_through != frag_next ||
+               frag_fall_through->encoded_pc ||
+               frag->cache != frag_fall_through->cache) {
       arch::AddFallThroughJump(frag, frag_fall_through);
     }
   }

@@ -107,7 +107,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
                                                 loc.module->Name(), loc.offset,
                                                 address, value));
 
-    asm_.InlineBefore(instr, "LABEL %3:"_x86_64);
+    asm_.InlineBefore(instr, "@LABEL %3:"_x86_64);
   }
 
   // Writing the value of a register to memory.
@@ -137,7 +137,7 @@ class MemoryWriteInstrumenter : public InstrumentationTool {
     instr->InsertBefore(lir::InlineFunctionCall(block, GetWriteReporter(mloc),
                                                 loc.module->Name(), loc.offset,
                                                 address, value));
-    asm_.InlineBefore(instr, "LABEL %4:");
+    asm_.InlineBefore(instr, "@LABEL %4:");
   }
 
   // Instrument every memory write instruction.

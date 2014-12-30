@@ -10,7 +10,7 @@
 
 #include "granary/code/fragment.h"
 
-#include "granary/context.h"
+#include "granary/cache.h"
 
 #define APP(...) \
   do { \
@@ -64,7 +64,7 @@ void SwitchOnStack(InstructionList *instrs, granary::Instruction *instr) {
 void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
-      CALL_NEAR_RELBRd(&ni, GlobalContext()->DisableInterruptCode())));
+      CALL_NEAR_RELBRd(&ni, DisableInterruptsFunction())));
 }
 
 // Returns a new instruction that will "allocate" the spill slots by enabling
@@ -72,7 +72,7 @@ void AllocateDisableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
 void AllocateEnableInterrupts(InstructionList *GRANARY_IF_KERNEL(instrs)) {
   arch::Instruction ni;
   GRANARY_IF_KERNEL(APP(
-      CALL_NEAR_RELBRd(&ni, GlobalContext()->EnableInterruptCode())));
+      CALL_NEAR_RELBRd(&ni, EnableInterruptsFunction())));
 }
 
 #endif  // GRANARY_WHERE_kernel
@@ -316,11 +316,6 @@ static void MangleArith(NativeInstruction *instr, int adjusted_offset) {
   ainstr.effective_operand_width = GPR_WIDTH_BITS;
 }
 
-// Mangle an indirect call into a NOP, as it will fall-through to edge code.
-static void MangleIndirectCFI(NativeInstruction *instr) {
-  instr->instruction.dont_encode = true;
-}
-
 }  // namespace
 
 // Adjusts / mangles an instruction (potentially more than one) so that the
@@ -389,21 +384,6 @@ void AdjustStackInstruction(Fragment *frag, NativeInstruction *instr,
       break;
   }
 }
-
-// Mangle all indirect calls and jumps into NOPs.
-void RemoveIndirectCallsAndJumps(Fragment *frag) {
-  for (auto instr : InstructionListIterator(frag->instrs)) {
-    if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      if (!(ninstr->IsUnconditionalJump() || ninstr->IsFunctionCall())) {
-        continue;
-      }
-      if (ninstr->HasIndirectTarget() && !ninstr->instruction.is_sticky) {
-        MangleIndirectCFI(ninstr);  // Convert to a NO-OP.
-      }
-    }
-  }
-}
-
 namespace {
 
 static void AllocateSlot(Operand &op) {
