@@ -56,6 +56,11 @@ namespace arch {
 //          fragments at label instructions based on this assumption.
 
 
+// Generates the direct edge code for a given `DirectEdge` structure.
+//
+// Note: This function has an architecture-specific implementation.
+Fragment *GenerateDirectEdgeCode(DirectEdge *edge);
+
 // Generates some indirect edge code that is used to look up the target of an
 // indirect jump.
 //
@@ -131,7 +136,7 @@ struct FragmentBuilder {
 // represents the tail of a basic block.
 static void AddBlockTailToWorkList(
     FragmentBuilder *builder, CodeFragment *predecessor,
-    LabelInstruction *label, Instruction *first_instr, StackUsageInfo stack,
+    LabelInstruction *label, Instruction *first_instr,
     FragmentSuccessorSelector succ_sel=kFragSuccFallThrough) {
   Fragment *tail_frag(nullptr);
 
@@ -143,7 +148,6 @@ static void AddBlockTailToWorkList(
   } else {
     auto frag = new CodeFragment;
     frag->block_meta = predecessor->block_meta;
-    frag->stack = stack;
 
     auto elm = new FragmentInProgress;
     elm->frag = frag;
@@ -215,68 +219,12 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     // not also a `LabelInstruction`.
     case kAnnotationLabel: GRANARY_ASSERT(false); return true;
 
-    // An upcoming instruction makes this stack valid.
-    case kAnnotValidStack:
-      if (kStackStatusInvalid == frag->stack.status) {
-        AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                               StackUsageInfo(kStackStatusValid));
-        return false;
-      } else {
-        frag->stack.status = kStackStatusValid;
-        return true;
-      }
-
     // The stack pointer is changed by an indeterminate amount, e.g. replaced
     // by the value stored in a register, or displaced by the value stored in
     // a register.
     case kAnnotInvalidStack:
-      if (kStackStatusValid == frag->stack.status || frag->attr.has_native_instrs) {
-        frag->attr.can_add_succ_to_partition = false;
-        AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                               StackUsageInfo(kStackStatusInvalid));
-        return false;
-      } else {
-        frag->stack.status = kStackStatusInvalid;
-        return true;
-      }
-
-    // This annotation is added by the block factory. It enables us to be a bit
-    // more aggressive with fragment splitting, where if we have some code that
-    // operates on an invalid stack, then we will assume it is localized, and
-    // that execution will return to a valid stack soon. Therefore, we want to
-    // arrange for the fragment following the current fragment (whose stack
-    // should be invalid) to potentially have the opportunity to be marked as
-    // valid. For example:
-    //          <kAnnotInvalidStack> -----------.
-    //          MOV RSP, [X]    <-- caused by --+
-    //          <kAnnotUnknownStackAbove> ------'
-    //          MOV Y, [Z]
-    //          POP [Y]
-    // Then we'll split that into two fragments:
-    //      1:  MOV RSP, [X]
-    //          ------------
-    //      2:  MOV Y, [Z]
-    //          POP [Y]
-    // Where the `MOV Y, [Z]` is grouped with the `POP` and so isn't penalized
-    // by the stack undefinedness of the `MOV RSP, [X]`.
-    case kAnnotUnknownStackAbove:
-      frag->attr.can_add_succ_to_partition = false;
-      frag->stack.status = kStackStatusInvalid;
-      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
-      return false;
-
-    // Here we've got something like:
-    //          <kAnnotValidStack> -------.
-    //          PUSH RBP <--- cause by ---'
-    //          <kAnnotUnknownStackBelow> ------.
-    //          MOV RBP, RSP   <-- caused by ---'
-    //          MOV [RBP - 8], RDI   <-- accesses redzone (below RSP).
-    case kAnnotUnknownStackBelow:
-      frag->stack.inherit_constraint = STACK_STATUS_INHERIT_PRED;
-      AddBlockTailToWorkList(builder, frag, nullptr, next_instr,
-                             StackUsageInfo(STACK_STATUS_INHERIT_SUCC));
-      return false;
+      frag->stack_status = kStackStatusInvalid;
+      return true;
 
     // An annotation where, when encoded, will update a pointer to contain the
     // address at which this annotation is encoded.
@@ -290,9 +238,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     //       to be valid.
     case kAnnotInterruptDeliveryStateChange:
       frag->attr.can_add_succ_to_partition = false;
-      AddBlockTailToWorkList(
-          builder, frag, nullptr, next_instr,
-          StackUsageInfo(GRANARY_IF_KERNEL(kStackStatusValid)));
+      AddBlockTailToWorkList(builder, frag, nullptr, next_instr);
       return false;
 
     // Calls out to some client code. This creates a new fragment that cannot
@@ -300,8 +246,7 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case kAnnotContextFunctionCall: {
       auto context_frag = arch::CreateContextCallFragment(
           builder->context, builder->frags, frag, instr->Data<AppPC>());
-      AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr,
-                             StackUsageInfo());
+      AddBlockTailToWorkList(builder, context_frag, nullptr, next_instr);
       return false;
     }
 
@@ -319,8 +264,8 @@ static bool ProcessAnnotation(FragmentBuilder *builder, CodeFragment *frag,
     case kAnnotCondLeaveNativeStack:
     case kAnnotCondEnterNativeStack:
       frag->instrs.Append(Instruction::Unlink(instr).release());
+      return true;
 
-    [[clang::fallthrough]];
     default: return true;
   }
 }
@@ -352,7 +297,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
 
   // Add the branch target.
   AddBlockTailToWorkList(builder, frag, target_label, target_label->Next(),
-                         StackUsageInfo(), kFragSuccBranch);
+                         kFragSuccBranch);
 
   // Handle the fall-through.
   if (instr->IsFunctionCall() || instr->IsConditionalJump()) {
@@ -362,8 +307,7 @@ static void ProcessBranch(FragmentBuilder *builder, CodeFragment *frag,
       fall_through_label->DataRef<uintptr_t>() += 1; // Hold a refcount.
       next_instr = fall_through_label->Next();
     }
-    AddBlockTailToWorkList(builder, frag, fall_through_label,
-                           next_instr, StackUsageInfo());
+    AddBlockTailToWorkList(builder, frag, fall_through_label, next_instr);
   }
   // Append the branch to the fragment.
   frag->instrs.Append(Instruction::Unlink(instr).release());
@@ -388,7 +332,7 @@ static void ProcessExceptionalCFI(FragmentBuilder *builder, CodeFragment *frag,
     GRANARY_ASSERT(ret);
   }
   frag = arch::ProcessExceptionalCFI(builder->frags, frag, instr);
-  AddBlockTailToWorkList(builder, frag, nullptr, next_instr, frag->stack);
+  AddBlockTailToWorkList(builder, frag, nullptr, next_instr);
 }
 
 // Add an indirect edge. This is used for specialized returns (which by now
@@ -457,8 +401,7 @@ static void ProcessTwoWayCFITail(FragmentBuilder *builder,
   if (cfi && cfi->IsJump() && cfi->IsUnconditionalJump()) {
     ProcessJump(builder, pred_frag, cfi);
   } else {
-    AddBlockTailToWorkList(builder, pred_frag, nullptr, next_instr,
-                           pred_frag->stack);
+    AddBlockTailToWorkList(builder, pred_frag, nullptr, next_instr);
   }
 }
 
@@ -529,14 +472,14 @@ static bool ProcessNativeInstr(FragmentBuilder *builder, CodeFragment *frag,
   // Instrumentation instructions in an application fragment are allowed to
   // read but not write the flags.
   } else if (kFragmentKindApp == frag->kind && !is_app && writes_flags) {
-    AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
+    AddBlockTailToWorkList(builder, frag, nullptr, instr);
     return false;
 
   // Application instructions in an instrumentation fragment are not allowed
   // to read or write the flags, or to change the stack pointer.
   } else if (kFragmentKindInst == frag->kind && is_app &&
              (reads_flags || writes_flags || writes_stack_ptr)) {
-    AddBlockTailToWorkList(builder, frag, nullptr, instr, frag->stack);
+    AddBlockTailToWorkList(builder, frag, nullptr, instr);
     return false;
   }
 
@@ -560,8 +503,7 @@ static bool ProcessLabel(FragmentBuilder *builder, CodeFragment *frag,
       !frag->attr.can_add_pred_to_partition) {
     frag->attr.can_add_succ_to_partition = false;
   }
-
-  AddBlockTailToWorkList(builder, frag, label, next_instr, StackUsageInfo());
+  AddBlockTailToWorkList(builder, frag, label, next_instr);
   return false;
 }
 
@@ -665,16 +607,8 @@ static void AddDecodedBlockToWorkList(FragmentBuilder *builder,
 static void AddDirectBlockToFragList(FragmentBuilder *builder,
                                      DirectBlock *block) {
   auto meta = block->MetaData();
-  auto frag = new ExitFragment;
   auto edge = builder->context->AllocateDirectEdge(meta);
-
-  frag->cache = kCodeCacheKindEdge;
-  frag->encoded_pc = edge->edge_code_pc;
-  frag->block_meta = meta;
-  frag->direct_edge = edge;
-
-  GRANARY_ASSERT(nullptr != frag->encoded_pc);
-
+  auto frag = arch::GenerateDirectEdgeCode(edge);
   block->fragment = frag;
   builder->frags->Append(frag);  // To tail of fragment list.
 }

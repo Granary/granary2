@@ -368,7 +368,12 @@ static Fragment *MakeFragment(Fragment *inherit, Fragment *succ) {
 
   frag->block_meta = inherit->block_meta;
   frag->kind = kFragmentKindInst;
+
+  // TODO(pag): Should `cache` inheritance be special, as with compensation
+  //            fragments?
   frag->cache = inherit->cache;
+
+  frag->stack_status = inherit->stack_status;
   frag->successors[kFragSuccFallThrough] = succ;
   frag->partition.Union(inherit->partition);
   if (!TypesAreEqual<T,PartitionEntryFragment>() &&

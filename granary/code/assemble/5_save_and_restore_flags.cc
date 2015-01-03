@@ -5,7 +5,6 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
-#include "granary/code/metadata.h"
 
 #include "granary/code/assemble/5_save_and_restore_flags.h"
 

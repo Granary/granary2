@@ -10,17 +10,16 @@
 
 namespace granary {
 
-DirectEdge::DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_,
-                       DirectEdge *next_)
+DirectEdge::DirectEdge(BlockMetaData *dest_meta_, DirectEdge *next_)
     : entry_target_pc(nullptr),
       next(next_),
-      dest_meta(dest_meta_),
-      edge_code_pc(edge_code_),
+      dest_block_meta(dest_meta_),
+      edge_code_pc(nullptr),
       patch_instruction_pc(nullptr),
       lock() {}
 
 DirectEdge::~DirectEdge(void) {
-  if (dest_meta) delete dest_meta;
+  if (dest_block_meta) delete dest_block_meta;
 }
 
 IndirectEdge::IndirectEdge(const BlockMetaData *source_meta_,

@@ -157,6 +157,14 @@ enum FragmentKind {
 
 typedef DisjointSet<FlagZone> FlagZoneId;
 
+// By default, the stack status is considered valid, *unless* we see that any
+// fragment has an invalid status, in which case all fragments are considered
+// invalid.
+enum StackStatus {
+  kStackStatusValid,
+  kStackStatusInvalid
+};
+
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
 // useful properties as well.
@@ -198,6 +206,10 @@ class Fragment {
   // fragments as application fragments.
   FragmentKind kind;
   CodeCacheKind cache;
+
+  // Tells us whether or not the stack pointer in this block appears to
+  // reference a valid thread (user or kernel space) stack.
+  StackStatus stack_status;
 
   // List of instructions in the fragment.
   LabelInstruction *entry_label;
@@ -278,53 +290,6 @@ void Log(LogLevel level, FragmentList *frags);
 // Free all fragments, their instructions, etc.
 void FreeFragments(FragmentList *frags);
 
-enum StackStatus {
-  kStackStatusUnknown,
-  kStackStatusValid,
-  kStackStatusInvalid
-};
-
-enum StackStatusInheritanceConstraint {
-  STACK_STATUS_DONT_INHERIT = 0,  // Don't inherit.
-
-  // Only inherit the status from successor fragments.
-  STACK_STATUS_INHERIT_SUCC = (1 << 0),
-
-  // Only inherit the status from predecessor fragments.
-  STACK_STATUS_INHERIT_PRED = (1 << 1),
-
-  // Inherit from either the successors or predecessors.
-  STACK_STATUS_INHERIT_UNI  = (1 << 0) | (1 << 1)
-};
-
-// Tracks stack usage info.
-struct StackUsageInfo {
-  inline StackUsageInfo(void)
-      : status(kStackStatusUnknown),
-        inherit_constraint(STACK_STATUS_INHERIT_UNI) {}
-
-  inline explicit StackUsageInfo(StackStatus status_)
-      : status(status_),
-        inherit_constraint(STACK_STATUS_DONT_INHERIT) {
-    GRANARY_ASSERT(kStackStatusUnknown != status_);
-  }
-
-  inline explicit StackUsageInfo(
-      StackStatusInheritanceConstraint inherit_constraint_)
-      : status(kStackStatusUnknown),
-        inherit_constraint(inherit_constraint_) {
-    GRANARY_ASSERT(STACK_STATUS_DONT_INHERIT != inherit_constraint_);
-  }
-
-  // Tells us whether or not the stack pointer in this block appears to
-  // reference a valid thread (user or kernel space) stack.
-  StackStatus status;
-
-  // Should forward propagation of stack validity be disallowed into this
-  // block?
-  StackStatusInheritanceConstraint inherit_constraint;
-};
-
 // Attributes about a block of code.
 class alignas(alignof(void *)) CodeAttributes {
  public:
@@ -400,9 +365,6 @@ class CodeFragment : public Fragment {
 
   // Attributes relates to the code in this fragment.
   CodeAttributes attr;
-
-  // Tracks the stack usage in this code fragment.
-  StackUsageInfo stack;
 
   // Set of live *virtual* registers on entry. We assume that all native
   // registers are live on entry.

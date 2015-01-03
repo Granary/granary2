@@ -27,8 +27,7 @@ class Context;
 // Granary.
 class DirectEdge {
  public:
-  DirectEdge(BlockMetaData *dest_meta_, CachePC edge_code_,
-             DirectEdge *next_=nullptr);
+  DirectEdge(BlockMetaData *dest_meta_, DirectEdge *next_);
 
   ~DirectEdge(void);
 
@@ -42,7 +41,7 @@ class DirectEdge {
 
   union {
     // Meta-data associated with the block that must be translated.
-    BlockMetaData *dest_meta;
+    BlockMetaData *dest_block_meta;
 
     // When the edge has been translated, we add it to a list of edges that
     // can be patched.
@@ -57,7 +56,7 @@ class DirectEdge {
   // The stub code in an edge code cache that is used to context switch
   // into Granary and find/decode/instrument the block associated with
   // `dest_meta`.
-  const CachePC edge_code_pc;
+  CachePC edge_code_pc;
 
   // Instruction that is patched by this direct edge.
   CachePC patch_instruction_pc;

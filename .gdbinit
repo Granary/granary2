@@ -748,7 +748,7 @@ define print-frag
     printf "head=%d, ", $__cf->attr.is_block_head
     printf "app=%d, ", granary::kFragmentKindApp == $__cf->type ? 1 : 0
     printf "addsucc2p=%d, ", $__cf->attr.can_add_succ_to_partition
-    printf "stack=%d, ", granary::STACK_VALID == $__cf->stack.status ? 1 : 0
+    printf "stack=%d, ", granary::kStackStatusValid == $__cf->stack_status ? 1 : 0
     printf "meta=%p", $__cf->block_meta
     if $__p
       printf ", part=%d", $__p->id

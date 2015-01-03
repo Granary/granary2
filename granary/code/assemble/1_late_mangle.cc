@@ -18,7 +18,6 @@
 #include "granary/cfg/operand.h"
 
 #include "granary/code/assemble/1_late_mangle.h"
-#include "granary/code/metadata.h"
 
 #include "granary/cache.h"  // For `CacheMetaData`.
 #include "granary/util.h"  // For `GetMetaData`.
@@ -118,23 +117,11 @@ class BlockMangler {
     }
   }
 
-  // Ensure that targets of function calls have valid stack meta-data.
-  void MangleFunctionCallTarget(ControlFlowInstruction *cfi) {
-    auto target_generic = cfi->TargetBlock();
-    if (auto target = DynamicCast<InstrumentedBlock *>(target_generic)) {
-      if (auto target_meta = target->UnsafeMetaData()) {
-        auto stack_meta = MetaDataCast<StackMetaData *>(target_meta);
-        stack_meta->MarkStackAsValid();
-      }
-    }
-  }
-
   void MangleFunctionCall(ControlFlowInstruction *cfi) {
     if (FLAG_transparent_returns && cfi->IsAppInstruction()) {
       lir::ConvertFunctionCallToJump(cfi);
       arch::MangleTailCall(block, cfi);
     }
-    MangleFunctionCallTarget(cfi);
   }
 
   // Relativize a control-flow instruction.

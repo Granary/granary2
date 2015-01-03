@@ -18,7 +18,6 @@
 
 #include "granary/code/edge.h"
 #include "granary/code/fragment.h"
-#include "granary/code/metadata.h"
 
 #include "granary/breakpoint.h"
 #include "granary/cache.h"
@@ -49,16 +48,6 @@ extern const unsigned char granary_arch_enter_indirect_edge;
 
 namespace granary {
 namespace arch {
-namespace {
-
-// Helps us distinguish call going through an edge from an un/conditional
-// jump.
-static bool TargetStackIsValid(const DirectEdge *edge) {
-  const auto target_meta = MetaDataCast<StackMetaData *>(edge->dest_meta);
-  return target_meta->has_stack_hint && target_meta->behaves_like_callstack;
-}
-
-}  // namespace
 
 // Generates the direct edge entry code for getting onto a Granary private
 // stack, disabling interrupts, etc.
@@ -100,17 +89,15 @@ void GenerateDirectEdgeEntryCode(CachePC pc) {
 }
 
 // Generates the direct edge code for a given `DirectEdge` structure.
-void GenerateDirectEdgeCode(DirectEdge *edge) {
+Fragment *GenerateDirectEdgeCode(DirectEdge *edge) {
+  auto frag = new ExitFragment;
+  frag->cache = kCodeCacheKindEdge;
+  frag->direct_edge = edge;
+  frag->block_meta = edge->dest_block_meta;
+
   Instruction ni;
-  InstructionEncoder stage_enc(InstructionEncodeKind::STAGED);
-  InstructionEncoder commit_enc(InstructionEncodeKind::COMMIT);
-  auto pc = edge->edge_code_pc;
-  auto target_stack_valid = TargetStackIsValid(edge);
-  GRANARY_IF_DEBUG( const auto start_pc = pc; )
-
-  // Clear the memory with `INT3`s.
-  memset(pc, 0xCC, arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-
+  frag->instrs.Append(new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
+                                                &(edge->edge_code_pc)));
   // The first time this is executed, it will jump to the next instruction,
   // which also agrees with prefetching and predicting of unknown branches.
   // After the target block is translated, we will update `entry_target_pc`
@@ -120,35 +107,36 @@ void GenerateDirectEdgeCode(DirectEdge *edge) {
   // Another benefit to this approach is that if patching is not enabled, then
   // Granary's code cache is append-only, meaning that it can (in theory)
   // instrument itself without having to support SMC.
-  ENC(JMP_MEMv(&ni, &(edge->entry_target_pc)));
-  edge->entry_target_pc = pc;  // `pc` is the address of the next instruction.
+  auto label = new LabelInstruction;
+  label->DataRef<uintptr_t>()++;
 
-  if (REDZONE_SIZE_BYTES && !target_stack_valid) {
-    ENC(SHIFT_REDZONE(&ni));
-  }
+  frag->instrs.Append(label);
+  APP(frag, JMP_MEMv(&ni, &(edge->entry_target_pc)));
+
+  frag->instrs.Append(new AnnotationInstruction(kAnnotUpdateAddressWhenEncoded,
+                                                &(edge->entry_target_pc)));
+  frag->instrs.Append(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
 
   // Steal `RDI` (arg1 on Itanium C++ ABI) to hold the address of the
   // `DirectEdge` data structure.
-  ENC(PUSH_GPRv_50(&ni, XED_REG_RDI));
-  ENC(MOV_GPRv_IMMv(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(edge)));
+  APP(frag, PUSH_GPRv_50(&ni, XED_REG_RDI); ni.is_stack_blind = true; );
+  APP(frag, MOV_GPRv_IMMv(&ni, XED_REG_RDI, reinterpret_cast<uintptr_t>(edge)));
 
   // Call into the direct edge entry code, which might disable interrupts, and
   // will transfer control to a private stack.
-  ENC(CALL_NEAR_RELBRd(&ni, DirectExitFunction()));
+  APP(frag, CALL_NEAR_RELBRd(&ni, DirectExitFunction()));
 
   // Restore the stolen `RDI`.
-  ENC(POP_GPRv_51(&ni, XED_REG_RDI));
+  APP(frag, POP_GPRv_51(&ni, XED_REG_RDI); ni.is_stack_blind = true; );
 
   // Restore back to the native stack.
-  if (REDZONE_SIZE_BYTES && !target_stack_valid) {
-    ENC(UNSHIFT_REDZONE(&ni));
-  }
+  frag->instrs.Append(new AnnotationInstruction(kAnnotCondEnterNativeStack));
 
   // Jump back to the edge entrypoint. The `entry_target_pc` should now be
   // resolved.
-  ENC(JMP_RELBRd(&ni, edge->edge_code_pc));
+  APP(frag, JMP_RELBRd(&ni, label));
 
-  GRANARY_ASSERT(arch::DIRECT_EDGE_CODE_SIZE_BYTES >= (pc - start_pc));
+  return frag;
 }
 
 // Generates the indirect edge entry code for getting onto a Granary private

@@ -221,7 +221,7 @@ static void MakeCompensatingFrag(FragmentList *frags, CodeFragment *pred,
   comp->entry_regs.Union(entry_regs);
   comp->exit_regs.Union(exit_regs);
   comp->block_meta = pred->block_meta;
-  comp->stack.status = pred->stack.status;
+  comp->stack_status = pred->stack_status;
 
   // Might be at the end of a partition, so need `pred`s partition info.
   comp->partition.Union(pred->partition);

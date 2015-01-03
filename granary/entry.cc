@@ -63,8 +63,8 @@ GRANARY_ENTRYPOINT void granary_enter_direct_edge(DirectEdge *edge) {
     os::LockedRegion locker(&edge->lock);
     if (!EdgeHasTranslation(edge)) {
       auto context = GlobalContext();
-      edge->entry_target_pc = Translate(context, edge->dest_meta);
-      edge->dest_meta = nullptr;
+      edge->entry_target_pc = Translate(context, edge->dest_block_meta);
+      edge->dest_block_meta = nullptr;
       if (!FLAG_unsafe_patch_edges || !arch::TryAtomicPatchEdge(edge)) {
         context->PreparePatchDirectEdge(edge);
       }

@@ -6,7 +6,6 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
-#include "granary/code/metadata.h"
 
 #include "granary/code/assemble/9_allocate_slots.h"
 
@@ -66,23 +65,9 @@ namespace {
 // pointer behaves like it's on a C-style call stack.
 static void InitStackFrameAnalysis(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (IsA<PartitionEntryFragment *>(frag)) {
-      auto partition = frag->partition.Value();
-      GRANARY_ASSERT(nullptr != partition);
-      partition->analyze_stack_frame = true;
-    }
-  }
-
-  // TODO(pag): What about initialization of fragments without partition
-  //            entry/exit? They might have `kAnnotCondLeaveNativeStack` or
-  //            `kAnnotCondEnterNativeStack` annotations.
-
-  for (auto frag : FragmentListIterator(frags)) {
-    if (auto code_frag = DynamicCast<CodeFragment *>(frag)) {
-      if (kStackStatusValid != code_frag->stack.status) {
-        if (auto partition = frag->partition.Value()) {
-          partition->analyze_stack_frame = false;
-        }
+    if (kStackStatusInvalid == frag->stack_status) {
+      if (auto partition = frag->partition.Value()) {
+        partition->analyze_stack_frame = false;
       }
     }
 #if defined(GRANARY_TARGET_debug) || defined(GRANARY_TARGET_test)

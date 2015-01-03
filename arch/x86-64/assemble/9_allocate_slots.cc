@@ -427,6 +427,17 @@ void AllocateSlots(FragmentList *frags) {
           AllocateSlots(ninstr);
         }
       }
+
+    } else if (IsA<ExitFragment *>(frag)) {
+      for (auto instr : InstructionListIterator(frag->instrs)) {
+        if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+          if (kAnnotCondLeaveNativeStack == ainstr->annotation) {
+            SwitchOffStack(&(frag->instrs), instr);
+          } else if (kAnnotCondEnterNativeStack == ainstr->annotation) {
+            SwitchOnStack(&(frag->instrs), instr);
+          }
+        }
+      }
     }
   }
 }

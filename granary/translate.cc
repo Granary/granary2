@@ -7,7 +7,6 @@
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
-#include "granary/code/metadata.h"
 
 #include "granary/app.h"
 #include "granary/breakpoint.h"
@@ -52,21 +51,11 @@ static CachePC CompileAndIndex(Context *context, Trace *trace,
   }
 }
 
-// Mark the stack as being valid, i.e. behaving like a C-style call stack with
-// call/return and push/pop semantics, or as being unknown.
-static void MarkStack(BlockMetaData *meta, TargetStackValidity stack_valid) {
-  if (kTargetStackValid == stack_valid) {
-    auto stack_meta = MetaDataCast<StackMetaData *>(meta);
-    stack_meta->MarkStackAsValid();
-  }
-}
-
 }  // namespace
 
 // Instrument, compile, and index some basic blocks.
-CachePC Translate(Context *context, AppPC pc, TargetStackValidity stack_valid) {
+CachePC Translate(Context *context, AppPC pc) {
   auto meta = context->AllocateBlockMetaData(pc);
-  MarkStack(meta, stack_valid);
   return Translate(context, meta);
 }
 
@@ -102,11 +91,9 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
-                            EntryPointKind kind, int category,
-                            TargetStackValidity stack_valid) {
+                            EntryPointKind kind, int category) {
   Trace cfg(context);
   BinaryInstrumenter inst(context, &cfg, &meta);
-  MarkStack(meta, stack_valid);
   inst.InstrumentEntryPoint(kind, category);
   return CompileAndIndex(context, &cfg, meta);
 }
@@ -114,10 +101,9 @@ CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
-                            EntryPointKind kind, int category,
-                            TargetStackValidity stack_valid) {
+                            EntryPointKind kind, int category) {
   auto meta = context->AllocateBlockMetaData(target_pc);
-  return TranslateEntryPoint(context, meta, kind, category, stack_valid);
+  return TranslateEntryPoint(context, meta, kind, category);
 }
 
 }  // namespace granary

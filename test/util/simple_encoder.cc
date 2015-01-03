@@ -11,7 +11,6 @@
 
 #include "granary/code/compile.h"
 #include "granary/code/edge.h"
-#include "granary/code/metadata.h"
 
 #include "granary/context.h"
 #include "granary/exit.h"

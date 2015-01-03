@@ -60,7 +60,7 @@ PartitionInfo::PartitionInfo(int id_)
       id(id_),
       GRANARY_IF_DEBUG_( num_partition_entry_frags(0) )
       min_frame_offset(0),
-      analyze_stack_frame(false) {}
+      analyze_stack_frame(true) {}
 
 RegisterUsageCounter::RegisterUsageCounter(void) {
   ClearGPRUseCounters();
@@ -142,6 +142,7 @@ Fragment::Fragment(void)
       block_meta(nullptr),
       kind(kFragmentKindInvalid),
       cache(kCodeCacheKindHot),
+      stack_status(kStackStatusValid),
       entry_label(nullptr),
       instrs(),
       partition(nullptr),
@@ -157,7 +158,6 @@ Fragment::Fragment(void)
 CodeFragment::CodeFragment(void)
     : Fragment(),
       attr(),
-      stack(),
       entry_regs(),
       exit_regs(),
       def_regs() {}
@@ -370,7 +370,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
     if (code->attr.modifies_flags) Log(level, "mflags ");
     if (!code->attr.can_add_succ_to_partition) Log(level, "!addsucc2p ");
     if (!code->attr.can_add_pred_to_partition) Log(level, "!add2predp ");
-    if (kStackStatusInvalid == code->stack.status) Log(level, "badstack ");
+    if (kStackStatusInvalid == code->stack_status) Log(level, "badstack ");
     if (code->encoded_size) Log(level, "size=%lu ", code->encoded_size);
     if (code->branch_instr) {
       Log(level, "binstr=%s ", code->branch_instr->OpCodeName());

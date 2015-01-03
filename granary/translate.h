@@ -19,14 +19,8 @@ class Context;
 class BlockMetaData;
 class IndirectEdge;
 
-enum TargetStackValidity {
-  kTargetStackValid,
-  kTargetStackUnknown
-};
-
 // Instrument, compile, and index some basic blocks.
-CachePC Translate(Context *context, AppPC pc,
-                  TargetStackValidity stack_valid=kTargetStackUnknown);
+CachePC Translate(Context *context, AppPC pc);
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(Context *context, BlockMetaData *meta);
@@ -38,20 +32,18 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta);
 // Instrument, compile, and index some basic blocks.
 template <typename T>
 static inline CachePC Translate(Context *context, T func_ptr) {
-  return Translate(context, UnsafeCast<AppPC>(func_ptr), kTargetStackValid);
+  return Translate(context, UnsafeCast<AppPC>(func_ptr));
 }
 
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
-                            EntryPointKind kind, int entry_category=-1,
-                            TargetStackValidity stack_valid=kTargetStackUnknown);
+                            EntryPointKind kind, int entry_category=-1);
 
 // Instrument, compile, and index some basic blocks that are the entrypoints
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
-                            EntryPointKind kind, int entry_category=-1,
-                            TargetStackValidity stack_valid=kTargetStackUnknown);
+                            EntryPointKind kind, int entry_category=-1);
 
 // Instrument, compile, and index some basic blocks.
 template <typename T>
@@ -59,7 +51,7 @@ static inline CachePC TranslateEntryPoint(Context *context, T func_ptr,
                                           EntryPointKind kind,
                                           int entry_category=-1) {
   return TranslateEntryPoint(context, UnsafeCast<AppPC>(func_ptr), kind,
-                             entry_category, kTargetStackValid);
+                             entry_category);
 }
 
 }  // namespace granary

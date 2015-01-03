@@ -7,8 +7,6 @@
 #include "granary/base/option.h"
 #include "granary/base/string.h"
 
-#include "granary/code/metadata.h"  // For `StackMetaData`.
-
 #include "granary/app.h"  // For `AppMetaData`.
 #include "granary/breakpoint.h"
 #include "granary/cache.h"  // For `CacheMetaData`.
@@ -329,7 +327,6 @@ void InitMetaData(void) {
   gMetaManager->Register<AppMetaData>();
   gMetaManager->Register<CacheMetaData>();
   gMetaManager->Register<IndexMetaData>();
-  gMetaManager->Register<StackMetaData>();
   InitMetaDataTracer();
 }
 

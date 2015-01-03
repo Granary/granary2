@@ -54,7 +54,7 @@ static CodeFragment *MakeCodeSuccessor(FragmentList *frags, CodeFragment *frag,
   auto succ = new CodeFragment;
   succ->block_meta = frag->block_meta;
   succ->attr.has_native_instrs = true;
-  succ->stack = frag->stack;
+  succ->stack_status = frag->stack_status;
   succ->kind = kFragmentKindInst;
   succ->partition.Union(succ, frag);
   frag->successors[sel] = succ;

@@ -37,8 +37,7 @@ std::unique_ptr<Instruction> FunctionCall(BlockFactory *factory,
 CachePC TranslationContext::TranslateEntryPoint(AppPC target_pc,
                                                 EntryPointKind kind,
                                                 int category) {
-  return granary::TranslateEntryPoint(context, target_pc, kind, category,
-                                      kTargetStackUnknown);
+  return granary::TranslateEntryPoint(context, target_pc, kind, category);
 }
 
 // Call to a client function that takes in an argument to a granary context and

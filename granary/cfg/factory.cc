@@ -191,33 +191,25 @@ NativeInstruction *BlockFactory::MakeInstruction(
 void BlockFactory::AddFallThroughInstruction(DecodedBlock *block,
                                              Instruction *last_instr,
                                              AppPC pc) {
-
   auto cfi = DynamicCast<ControlFlowInstruction *>(last_instr);
-
-  // Add in a fall-through block.
-  const auto is_exceptional = IsA<ExceptionalControlFlowInstruction *>(cfi);
-  if (!cfi || (cfi->IsFunctionCall() && !FLAG_transparent_returns)) {
-    auto meta = context->AllocateBlockMetaData(pc);
-    auto fall_through_block = new DirectBlock(cfg, meta);
-    block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
-
-  // Auto-request the fall-through if it's a straight jump.
-  } else if (cfi->IsUnconditionalJump()) {
-    RequestBlock(cfi->TargetBlock(), kRequestBlockFromIndexOrTrace);
-
-  // CFIs that have special fall-through behavior.
-  } else if (cfi->IsSystemCall() || cfi->IsInterruptCall() ||
-             cfi->IsConditionalJump() || is_exceptional) {
-    auto meta = context->AllocateBlockMetaData(pc);
-    auto fall_through_block = new DirectBlock(cfg, meta);
-    block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
-
-    if (is_exceptional) {
-      RequestBlock(fall_through_block, kRequestBlockDecodeNow);
-
-    } else if (cfi->IsSystemCall() || cfi->IsInterruptCall()) {
-      RequestBlock(fall_through_block, kRequestBlockInFuture);
+  if (cfi) {
+    if (FLAG_transparent_returns && cfi->IsFunctionCall()) return;
+    if (cfi->IsUnconditionalJump() || cfi->IsFunctionReturn() ||
+        cfi->IsSystemReturn() || cfi->IsInterruptReturn()) {
+      return;
     }
+  }
+
+  auto meta = context->AllocateBlockMetaData(pc);
+  auto fall_through_block = new DirectBlock(cfg, meta);
+  block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
+
+  if (!cfi) return;
+  if (cfi->IsFunctionCall() || cfi->IsSystemCall() || cfi->IsInterruptCall()) {
+    RequestBlock(fall_through_block, kRequestBlockInFuture);
+  } else if (IsA<ExceptionalControlFlowInstruction *>(cfi)) {
+    RequestBlock(fall_through_block, kRequestBlockDecodeNow);
+    RequestBlock(cfi->TargetBlock(), kRequestBlockDecodeNow);
   }
 }
 

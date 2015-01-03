@@ -26,17 +26,6 @@
 namespace granary {
 namespace arch {
 
-// Generates the direct edge code for a given `DirectEdge` structure.
-//
-// Note: This has an architecture-specific implementation.
-void GenerateDirectEdgeCode(DirectEdge *edge);
-
-// Generates the indirect edge entry code for getting onto a Granary private
-// stack, disabling interrupts, etc.
-//
-// Note: This has an architecture-specific implementation.
-void GenerateIndirectEdgeEntryCode(CachePC pc);
-
 // Generates the wrapper code for a context callback.
 //
 // Note: This has an architecture-specific implementation.
@@ -66,7 +55,7 @@ static void UnlinkEdgeList(EdgeT *edge) {
   EdgeT *next_edge = nullptr;
   for (; edge; edge = next_edge) {
     next_edge = edge->next_patchable;
-    edge->dest_meta = nullptr;
+    edge->dest_block_meta = nullptr;
   }
 }
 
@@ -120,31 +109,9 @@ BlockMetaData *Context::InstantiateBlockMetaData(
 // Allocates a direct edge data structure, as well as the code needed to
 // back the direct edge.
 DirectEdge *Context::AllocateDirectEdge(BlockMetaData *dest_block_meta) {
-  DirectEdge *edge(nullptr);
-
-  // Try to re-use an existing `DirectEdge` data structure, along with its
-  // associated edge code.
-  if (patched_edge_list) {  // Racy read.
-    SpinLockedRegion locker(&edge_list_lock);
-    if ((edge = patched_edge_list)) {
-      patched_edge_list = edge->next_patched;
-      new (edge) DirectEdge(dest_block_meta, edge->edge_code_pc, edge->next);
-    }
-  }
-
-  // Allocate a new edge and chain it into the global list of edges.
-  if (!edge) {
-    auto edge_code = AllocateCode(kCodeCacheKindFrozen,
-                                  arch::DIRECT_EDGE_CODE_SIZE_BYTES);
-    edge = new DirectEdge(dest_block_meta, edge_code);
-    SpinLockedRegion locker(&edge_list_lock);
-    edge->next = edge_list;
-    edge_list = edge;
-  }
-
-  // Generate a small stub of code specific to this `DirectEdge`.
-  CodeCacheTransaction transaction;
-  arch::GenerateDirectEdgeCode(edge);
+  SpinLockedRegion locker(&edge_list_lock);
+  auto edge = new DirectEdge(dest_block_meta, edge_list);
+  edge_list = edge;
   return edge;
 }
 
