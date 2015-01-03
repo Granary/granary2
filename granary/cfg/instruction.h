@@ -151,23 +151,11 @@ enum InstructionAnnotation {
   // is a `CodeCacheKind`.
   kAnnotationCodeCacheKind,
 
-  // The code that follows this code is "frozen".
-  kAnnotationFrozenCode,
-
   // Target of a branch instruction.
   kAnnotationLabel,
 
   // Marks the stack as changing to a valid or undefined stack pointer value.
   kAnnotInvalidStack,
-  kAnnotUnknownStackAbove,
-  kAnnotUnknownStackBelow,
-  kAnnotValidStack,
-
-  // An kill of a node that appears in a compensating fragment.
-  // See `granary/code/assemble/6_track_ssa_vars.cc`.
-  //
-  // The data associated with this annotation is a 16-bit virtual register id.
-  kAnnotRegisterKill,
 
   // Save and restore instructions for a register into a slot. The data
   // associated with this annotation is a `VirtualRegister`.

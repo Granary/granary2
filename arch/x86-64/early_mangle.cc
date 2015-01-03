@@ -114,7 +114,9 @@ static void MangleExplicitMemOp(EarlyMangler *mangler, Operand &op) {
 // This plays nicer with later slot allocation.
 static void MoveStackPointerToGPR(Instruction *instr) {
   auto decoded_pc = instr->decoded_pc;
-  LEA_GPRv_AGEN(instr, instr->ops[0].reg,
+  auto reg = instr->ops[0].reg;
+  reg.MarkAsStackPointerAlias();
+  LEA_GPRv_AGEN(instr, reg,
                 BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS));
   instr->decoded_pc = decoded_pc;
 }
@@ -134,10 +136,6 @@ static void MangleExplicitStackPointerRegOp(EarlyMangler *mangler,
     if (XED_IFORM_MOV_GPRv_GPRv_89 == instr->iform &&
         arch::GPR_WIDTH_BITS == instr->effective_operand_width) {
       MoveStackPointerToGPR(instr);
-      if (REDZONE_SIZE_BYTES) {
-        mangler->block->AppendInstruction(
-            new AnnotationInstruction(kAnnotUnknownStackBelow));
-      }
     } else if (XED_ICLASS_LEA == instr->iclass) {
       return;  // Mangling would be redundant.
     } else {
@@ -430,8 +428,6 @@ static void MangleLeave(EarlyMangler *mangler, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
-  mangler->block->AppendInstruction(
-      new AnnotationInstruction(kAnnotValidStack));
   POP_GPRv_51(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
   instr->effective_operand_width = arch::GPR_WIDTH_BITS;
@@ -477,44 +473,27 @@ void EarlyMangler::MangleDecodedInstruction(Instruction *instr,
   //                MOV RSP, [%0];
   // That both instructions (and therefore all related virtual registers)
   // appear in the same fragment partition during assembly.
-  if (!rec && instr->WritesToStackPointer()) {
-    if (instr->ShiftsStackPointer()) {
-      if (XED_ICLASS_ADD != instr->iclass && XED_ICLASS_SUB != instr->iclass) {
-        block->AppendInstruction(new AnnotationInstruction(kAnnotValidStack));
-      }
-    } else {
-      switch (instr->iclass) {
-        // These instruction's don't shift the stack pointer by a constant
-        // amount, but still signal that it's valid.
-        case XED_ICLASS_RET_FAR:
-        case XED_ICLASS_CALL_FAR:
-        case XED_ICLASS_IRET:
-          block->AppendInstruction(
-             new AnnotationInstruction(kAnnotValidStack));
-          break;
+  if (!rec && instr->WritesToStackPointer() && !instr->ShiftsStackPointer()) {
+    switch (instr->iclass) {
+      // These instruction's don't shift the stack pointer by a constant
+      // amount, but still signal that it's valid.
+      case XED_ICLASS_RET_FAR:
+      case XED_ICLASS_CALL_FAR:
+      case XED_ICLASS_IRET:
+        break;
 
-        // An instruction like `LEAVE` is first caught here, then later mangled
-        // so that the end result is:
-        //      `<unknown stack>; MOV RSP, RBP; <valid stack>; POP RBP`
-        default:
-          block->AppendInstruction(
-              new AnnotationInstruction(kAnnotInvalidStack));
-      }
+      // An instruction like `LEAVE` is first caught here, then later mangled
+      // so that the end result is:
+      //      `<unknown stack>; MOV RSP, RBP; <valid stack>; POP RBP`
+      default:
+        block->AppendInstruction(
+            new AnnotationInstruction(kAnnotInvalidStack));
     }
   }
   switch (instr->iclass) {
     case XED_ICLASS_CALL_NEAR:
     case XED_ICLASS_JMP:
       MangleIndirectCFI(this, instr);
-      break;
-    case XED_ICLASS_LEA:
-      if (REDZONE_SIZE_BYTES && instr->ReadsFromStackPointer()) {
-        // The application copies the stack pointer into a register. After
-        // this point the copied stack pointer might be used to access
-        // memory in the redzone.
-        block->AppendInstruction(
-            new AnnotationInstruction(kAnnotUnknownStackBelow));
-      }
       break;
     case XED_ICLASS_PUSH:
       ManglePush(this, instr);
@@ -544,6 +523,12 @@ void EarlyMangler::MangleDecodedInstruction(Instruction *instr,
     case XED_ICLASS_STI:
       block->AppendInstruction(
           new AnnotationInstruction(kAnnotInterruptDeliveryStateChange));
+      break;
+
+    case XED_ICLASS_LEA:
+      if (instr->ReadsFromStackPointer()) {
+        instr->ops[0].reg.MarkAsStackPointerAlias();
+      }
       break;
 
     default:

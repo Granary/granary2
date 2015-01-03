@@ -234,14 +234,13 @@ bool DecodedBlock::IsColdCode(void) const {
 // can't be removed.
 std::unique_ptr<Instruction> DecodedBlock::Unlink(Instruction *instr) {
   if (auto annot_instr = DynamicCast<AnnotationInstruction *>(instr)) {
+
+    // Don't allow removal of these instructions.
     switch (annot_instr->annotation) {
       case kAnnotBeginBlock:
       case kAnnotEndBlock:
       case kAnnotationLabel:
       case kAnnotInvalidStack:
-      case kAnnotUnknownStackAbove:
-      case kAnnotUnknownStackBelow:
-      case kAnnotValidStack:
         return std::unique_ptr<Instruction>(nullptr);
       default:
         break;

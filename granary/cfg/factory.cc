@@ -227,7 +227,6 @@ namespace {
 // stack undefinedness to only a single instruction.
 static void AnnotateInstruction(BlockFactory *factory, DecodedBlock *block,
                                 Instruction *begin, AppPC next_pc) {
-  auto in_undefined_state = false;
   auto changes_interrupt_state = false;
   for (auto instr : InstructionListIterator(begin)) {
 
@@ -239,18 +238,10 @@ static void AnnotateInstruction(BlockFactory *factory, DecodedBlock *block,
     // Use the existing annotations added by the early mangler to generate new
     // annotations.
     } else if (auto annot = DynamicCast<AnnotationInstruction *>(instr)) {
-      if (kAnnotInvalidStack == annot->annotation) {
-        in_undefined_state = true;
-      } else if (kAnnotValidStack == annot->annotation) {
-        in_undefined_state = false;
-      } else if (kAnnotInterruptDeliveryStateChange == annot->annotation) {
+      if (kAnnotInterruptDeliveryStateChange == annot->annotation) {
         changes_interrupt_state = true;
       }
     }
-  }
-  if (in_undefined_state) {
-    block->AppendInstruction(
-        new AnnotationInstruction(kAnnotUnknownStackAbove));
   }
   if (changes_interrupt_state) {
     block->AppendInstruction(AsApp(lir::Jump(factory, next_pc), next_pc));

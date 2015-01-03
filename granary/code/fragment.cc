@@ -308,6 +308,9 @@ static void LogInstruction(LogLevel level, AnnotationInstruction *instr) {
     kind = "@swap_restore";
   } else if (kAnnotReviveRegisters == instr->annotation) {
     return LogUsedRegs(level, instr);
+  } else if (kAnnotInvalidStack == instr->annotation) {
+    Log(level, FONT_BLUE "@invalid_stack" END_FONT NEW_LINE);
+    return;
   } else if (kAnnotCondLeaveNativeStack == instr->annotation) {
     Log(level, FONT_BLUE "@offstack" END_FONT NEW_LINE);
     return;
