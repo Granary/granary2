@@ -20,7 +20,6 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/register.h"
-#include "granary/code/ssa.h"
 
 #include "granary/cache.h"
 
@@ -31,9 +30,7 @@ namespace granary {
 // Forward declarations.
 class BlockMetaData;
 
-class SSASpillStorage;
 class Fragment;
-class SSAFragment;
 class PartitionEntryFragment;
 class PartitionExitFragment;
 class FlagEntryFragment;
@@ -92,6 +89,9 @@ class PartitionInfo {
   // `PartitionEntryFragment` or a `CodeFragment`.
   Fragment *entry_frag;
 
+  // Does this fragment use any virtual registers?
+  bool uses_vrs;
+
   // The number of slots allocated in this partition. This includes fragment-
   // local and partition-local slots.
   size_t num_slots;
@@ -110,36 +110,7 @@ class PartitionInfo {
   PartitionInfo(void) = delete;
 };
 
-// Temporary data stored in a code fragment that's used by different stages
-// of the assembly.
-union TempData {
- public:
-  inline TempData(void)
-      : _(0) {}
-
-  uint64_t _;
-
-  Fragment *entry_exit_frag;
-};
-
-// Used to count the number of uses of each GPR within one or more fragments.
-class RegisterUsageCounter {
- public:
-  RegisterUsageCounter(void);
-
-  // Clear out the number of usage count of registers in this fragment.
-  void ClearGPRUseCounters(void);
-
-  // Count the number of uses of the arch GPRs in this fragment.
-  void CountGPRUses(Fragment *frag);
-
-  // Count the number of uses of the arch GPRs in a particular instruction.
-  //
-  // Note: This function has an architecture-specific implementation.
-  void CountGPRUses(const NativeInstruction *instr);
-
-  size_t num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
-};
+typedef DisjointSet<PartitionInfo *> PartitionId;
 
 // Tracks flag usage within a code fragment.
 class FlagUsageInfo {
@@ -183,6 +154,8 @@ enum FragmentKind {
   //       state is super important!
   kFragmentKindInst
 };
+
+typedef DisjointSet<FlagZone> FlagZoneId;
 
 // Represents a fragment of instructions. Fragments are like basic blocks.
 // Fragments are slightly more restricted than basic blocks, and track other
@@ -231,17 +204,17 @@ class Fragment {
   InstructionList instrs;
 
   // The partition to which this fragment belongs.
-  DisjointSet<PartitionInfo *> partition;
+  PartitionId partition;
 
   // The "flag zone" to which this fragment belongs.
-  DisjointSet<FlagZone> flag_zone;
+  FlagZoneId flag_zone;
 
   // Tracks flag use within this fragment.
   FlagUsageInfo app_flags;
   FlagUsageInfo inst_flags;
 
   // Temporary, pass-specific data.
-  TempData temp;
+  Fragment *entry_exit_frag;
 
   // Tracks the successor fragments.
   Fragment *successors[2];
@@ -260,6 +233,41 @@ typedef ListOfListHead<Fragment> FragmentList;
 typedef ListHeadIterator<Fragment> FragmentListIterator;
 typedef ReverseListHeadIterator<Fragment> ReverseFragmentListIterator;
 typedef LinkedListIterator<Fragment> EncodeOrderedFragmentIterator;
+
+
+// Used to count the number of uses of each GPR within one or more fragments.
+class RegisterUsageCounter {
+ public:
+  RegisterUsageCounter(void);
+
+  // Clear out the number of usage count of registers in this fragment.
+  void ClearGPRUseCounters(void);
+
+  // Count the number of uses of the arch GPRs in all fragments.
+  void CountGPRUses(FragmentList *frags);
+
+  // Count the number of uses of the arch GPRs in this fragment.
+  void CountGPRUses(Fragment *frag);
+
+  void CountGPRUse(VirtualRegister reg);
+
+  // Returns the number of uses of a particular GPR.
+  size_t NumUses(VirtualRegister reg) const;
+
+  // Returns the number of uses of a particular GPR.
+  size_t NumUses(size_t reg_num) const;
+
+  // Count the number of uses of the arch GPRs in a particular instruction.
+  //
+  // Note: This function has an architecture-specific implementation.
+  void CountGPRUses(const NativeInstruction *instr);
+
+  // Count the number of uses of the arch GPRs in a particular instruction.
+  void CountGPRUses(const AnnotationInstruction *instr);
+
+ private:
+  size_t num_uses_of_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+};
 
 namespace os {
 
@@ -369,47 +377,23 @@ class alignas(alignof(void *)) CodeAttributes {
   // Does this fragment represent the beginning of a basic block?
   bool is_block_head:1;
 
+  // Is this a compensation fragment?
+  bool is_compensation_frag:1;
+
 } __attribute__((packed));
-
-// Mapping of virtual registers to `SSARegisterWeb`s.
-//
-// TODO(pag): Need a better data structure.
-typedef TinyMap<VirtualRegister, SSARegisterWeb *,
-                arch::NUM_GENERAL_PURPOSE_REGISTERS + 7> SSARegisterWebMap;
-
-// Using a vector is deliberate so that the *first* added entries relate to
-// later definitions in a fragment.
-typedef TinyVector<SSARegisterWeb *, arch::NUM_GENERAL_PURPOSE_REGISTERS>
-        SSARegisterWebList;
 
 // Set of spill slots.
 typedef BitSet<arch::MAX_NUM_SPILL_SLOTS> SpillSlotSet;
 
-// A fragment with associated SSA vars.
-class SSAFragment : public Fragment {
- public:
-  SSAFragment(void);
-  virtual ~SSAFragment(void);
+// Set of virtual registers.
+typedef TinySet<uint16_t, arch::NUM_GENERAL_PURPOSE_REGISTERS> VRIdSet;
 
-  GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, SSAFragment)
-
-  struct SSAInfo {
-    inline SSAInfo(void)
-        : entry_reg_webs(),
-          exit_reg_webs(),
-          internal_reg_webs() {}
-
-    SSARegisterWebMap entry_reg_webs;
-    SSARegisterWebMap exit_reg_webs;
-
-    // Webs for definitions are in reverse order of the instructions in a
-    // fragment (last def to first def).
-    SSARegisterWebList internal_reg_webs;
-  } ssa;
-};
+// Count of how many times some register is used / updated / etc.
+typedef TinyMap<uint16_t, uint16_t, arch::NUM_GENERAL_PURPOSE_REGISTERS>
+        VRIdCountSet;
 
 // A fragment of native or instrumentation instructions.
-class CodeFragment : public SSAFragment {
+class CodeFragment : public Fragment {
  public:
   CodeFragment(void);
   virtual ~CodeFragment(void);
@@ -419,6 +403,15 @@ class CodeFragment : public SSAFragment {
 
   // Tracks the stack usage in this code fragment.
   StackUsageInfo stack;
+
+  // Set of live *virtual* registers on entry. We assume that all native
+  // registers are live on entry.
+  VRIdSet entry_regs;
+  VRIdSet exit_regs;
+
+  // Number of times virtual registers are defined in this fragment. This
+  // includes read/write operations that modify the value in-place.
+  VRIdCountSet def_regs;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {
@@ -463,7 +456,7 @@ class PartitionExitFragment : public Fragment {
 };
 
 // A fragment where the native flags state might need to be save.
-class FlagEntryFragment : public SSAFragment {
+class FlagEntryFragment : public CodeFragment {
  public:
   FlagEntryFragment(void) = default;
   virtual ~FlagEntryFragment(void);
@@ -479,7 +472,7 @@ class FlagEntryFragment : public SSAFragment {
 };
 
 // A fragment where the native flags state might need to be restored.
-class FlagExitFragment : public SSAFragment {
+class FlagExitFragment : public CodeFragment {
  public:
   FlagExitFragment(void) = default;
   virtual ~FlagExitFragment(void);

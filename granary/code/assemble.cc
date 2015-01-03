@@ -14,7 +14,7 @@
 #include "granary/code/assemble/3_partition_fragments.h"
 #include "granary/code/assemble/4_add_entry_exit_fragments.h"
 #include "granary/code/assemble/5_save_and_restore_flags.h"
-#include "granary/code/assemble/6_track_ssa_vars.h"
+#include "granary/code/assemble/6_track_virtual_regs.h"
 #include "granary/code/assemble/7_propagate_copies.h"
 #include "granary/code/assemble/8_schedule_registers.h"
 #include "granary/code/assemble/9_allocate_slots.h"
@@ -66,9 +66,8 @@ FragmentList Assemble(Context *context, Trace *cfg) {
   // instructions.
   SaveAndRestoreFlags(&frags);
 
-  // Build an SSA-like representation for all definitions and uses of general-
-  // purpose registers.
-  TrackSSAVars(&frags);
+  // Figure out the live VRs on entry/exit from each frag.
+  TrackVirtualRegs(&frags);
 
   // Perform a single step of copy propagation. The purpose of this is to
   // allow us to get rid of redundant defs/uses of registers that are created

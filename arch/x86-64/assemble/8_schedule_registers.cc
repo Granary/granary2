@@ -68,5 +68,52 @@ NativeInstruction *SwapGPRWithSlot(VirtualRegister gpr,
   return new NativeInstruction(&ninstr);
 }
 
+namespace {
+
+static bool TryReplaceReg(VirtualRegister &curr_reg, VirtualRegister old_reg,
+                          VirtualRegister new_reg) {
+  if (curr_reg == old_reg) {
+    curr_reg = new_reg.WidenedTo(curr_reg.ByteWidth());
+    return true;
+  }
+  return false;
+}
+
+// Replace the virtual register `old_reg` with the virtual register `new_reg`
+// in the operand `op`.
+bool TryReplaceRegInOperand(Operand *op, VirtualRegister old_reg,
+                            VirtualRegister new_reg) {
+  if (op->IsRegister()) {
+    return TryReplaceReg(op->reg, old_reg, new_reg);
+  } else if (op->IsMemory() && !op->IsPointer()) {
+    if (op->is_compound) {
+      auto ret = TryReplaceReg(op->mem.base, old_reg, new_reg);
+      ret = TryReplaceReg(op->mem.index, old_reg, new_reg) || ret;
+      return ret;
+    } else {
+      return TryReplaceReg(op->reg, old_reg, new_reg);
+    }
+  } else {
+    return false;
+  }
+}
+
+}  // namespace
+
+// Replace the virtual register `old_reg` with the virtual register `new_reg`
+// in the instruction `instr`.
+bool TryReplaceRegInInstruction(NativeInstruction *instr,
+                                VirtualRegister old_reg,
+                                VirtualRegister new_reg) {
+  auto &ainstr(instr->instruction);
+  auto changed = false;
+  for (auto &aop : ainstr.ops) {
+    if (!aop.IsValid() || !aop.IsExplicit()) break;
+    changed = TryReplaceRegInOperand(&aop, old_reg, new_reg) || changed;
+  }
+  return changed;
+}
+
+
 }  // namespace arch
 }  // namespace granary

@@ -24,7 +24,6 @@ class ControlFlowInstruction;
 class BlockFactory;
 class Operand;
 GRANARY_INTERNAL_DEFINITION class Fragment;
-GRANARY_INTERNAL_DEFINITION class SSAInstruction;
 GRANARY_INTERNAL_DEFINITION enum alignas(16) UntypedData : uint64_t {
 };
 
@@ -164,39 +163,26 @@ enum InstructionAnnotation {
   kAnnotUnknownStackBelow,
   kAnnotValidStack,
 
-  // Represents the definition of some `SSARegisterWeb`, used in later assembly
-  // stages so that all nodes are owned by some `Fragment`.
-  //
-  // The meta-data associated with this annotation is an owned
-  // `SSARegisterWeb *`.
-  kAnnotSSARegisterWebOwner,
-
   // An kill of a node that appears in a compensating fragment.
   // See `granary/code/assemble/6_track_ssa_vars.cc`.
   //
-  // The data associated with this annotation is a `VirtualRegister`. The meta-
-  // data associated with this annotation is an un-owned `SSARegisterWeb *`.
-  kAnnotSSARegisterKill,
-
-  // Used when spilling/filling. This annotation marks a specific point where
-  // spilling/filling at the beginning of a fragment should be placed.
-  kAnnotSSARegisterSpillAnchor,
+  // The data associated with this annotation is a 16-bit virtual register id.
+  kAnnotRegisterKill,
 
   // Save and restore instructions for a register into a slot. The data
-  // associated with this annotation is a `VirtualRegister`. The meta-data
-  // associated with these annotations are owned `SSARegisterWeb *`.
+  // associated with this annotation is a `VirtualRegister`.
   //
   // Note: Saves and restores only operate on architectural GPRs.
-  kAnnotSSASaveRegister,
-  kAnnotSSARestoreRegister,
-  kAnnotSSASwapRestoreRegister,
+  kAnnotSaveRegister,
+  kAnnotRestoreRegister,
+  kAnnotSwapRestoreRegister,
 
   // Force some registers to be live. This is useful for specifying that the
   // native values of some arch GPRs *must* be passed to something like an
   // inline call.
   //
   // The data associated with this annotation is a `UsedRegisterSet`.
-  kAnnotSSAReviveRegisters,
+  kAnnotReviveRegisters,
 
   // Inject a "late" stack switch instruction if the stack is not safe. Before
   // we do the stack analysis, we can realize that some things (e.g. inline/
@@ -448,8 +434,10 @@ class NativeInstruction : public Instruction {
   // Mid-level IR that represents the instruction.
   GRANARY_INTERNAL_DEFINITION arch::Instruction instruction;
 
-  // High-level SSA form for this instruction. Focuses only on register usage.
-  GRANARY_INTERNAL_DEFINITION SSAInstruction *ssa;
+  // IDs of VRs defined and used by this instruction.
+  GRANARY_INTERNAL_DEFINITION unsigned num_used_vrs;
+  GRANARY_INTERNAL_DEFINITION uint16_t defined_vr;
+  GRANARY_INTERNAL_DEFINITION uint16_t used_vrs[4];
 
   // OS-specific annotation for this instruction. For example, in the Linux
   // kernel, this would be an exception table entry.

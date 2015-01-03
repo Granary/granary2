@@ -14,7 +14,7 @@ namespace granary {
 // for very small maps as the lookup mechanism is a linear search through all
 // entries. Tiny maps guarantee at least enough space for `kMinMapSize` entries
 // without requiring dynamic allocation.
-template <typename K, typename V, unsigned long kMinMapSize>
+template <typename K, typename V, size_t kMinMapSize>
 class TinyMap {
  public:
   struct MapPair {
@@ -47,6 +47,8 @@ class TinyMap {
   class IteratorImpl {
    public:
     typedef IteratorImpl<VecIteratorType> IteratorImplType;
+    typedef typename VecIteratorType::ElementType U;
+
     inline IteratorImpl(void)
         : it() {}
 
@@ -62,11 +64,11 @@ class TinyMap {
       return it != that.it;
     }
 
-    inline MapPair operator*(void) const {
+    inline U operator*(void) const {
       return *it;
     }
 
-    inline MapPair &operator*(void) {
+    inline U &operator*(void) {
       return *it;
     }
 
@@ -223,12 +225,12 @@ class TinyMap {
     }
   }
 
-  unsigned long Size(void) const {
+  size_t Size(void) const {
     return size;
   }
 
  private:
-  unsigned long size;
+  size_t size;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(TinyMap, (K, V, kMinMapSize));
 };

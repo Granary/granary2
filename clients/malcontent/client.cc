@@ -327,12 +327,14 @@ static void ReportSamplePoints(void) {
     }
 
     // Different cache lines.
-    auto cl0 = reinterpret_cast<uintptr_t>(sample.accesses[0].address) >> 6UL;
-    auto cl1 = reinterpret_cast<uintptr_t>(sample.accesses[1].address) >> 6UL;
-    if (cl0 != cl1) continue;
+    const auto shadow_mask = ~(FLAG_shadow_granularity - 1UL);
+    auto a0 = reinterpret_cast<uintptr_t>(sample.accesses[0].address);
+    auto a1 = reinterpret_cast<uintptr_t>(sample.accesses[1].address);
+    if ((a0 & shadow_mask) != (a1 & shadow_mask)) continue;
 
     os::Log("\nContention detected in watched range [%p,%p)\n",
-            sample.native_address, sample.native_address + FLAG_shadow_granularity);
+            sample.native_address,
+            sample.native_address + FLAG_shadow_granularity);
     LogTypeInfo(sample);
     LogMemoryAccess(sample.accesses[0]);
     LogMemoryAccess(sample.accesses[1]);
@@ -522,8 +524,9 @@ class Malcontent : public InstrumentationTool {
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<Malcontent>("malcontent", {"wrap_func", "stack_trace",
-                                                    "shadow_memory"});
+  AddInstrumentationTool<Malcontent>(
+      "malcontent",
+      {"wrap_func", "stack_trace", "shadow_memory"});
 }
 
 #endif  // GRANARY_WHERE_user

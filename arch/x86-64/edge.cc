@@ -182,10 +182,7 @@ void GenerateIndirectEdgeEntryCode(CachePC pc) {
   ENC(POPFQ(&ni); ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
 
   // Return back into the in-edge code.
-  ENC(JMP_MEMv(&ni, BaseDispMemOp(offsetof(IndirectEdge, out_edge_pc),
-                                  XED_REG_RDI, arch::ADDRESS_WIDTH_BITS)));
-
-  ENC(UD2(&ni));
+  ENC(RET_NEAR(&ni); ni.effective_operand_width = arch::ADDRESS_WIDTH_BITS; );
 
   GRANARY_ASSERT(arch::INDIRECT_EDGE_ENTRY_CODE_SIZE_BYTES >= (pc - start_pc));
 }
@@ -232,13 +229,11 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto in_edge = new CodeFragment;
   auto go_to_granary = new CodeFragment;
   auto compare_target = new CodeFragment;
-  auto about_to_exit = new CodeFragment;
   auto exit_to_block = new ExitFragment;
 
   // Set the code cache types.
   go_to_granary->cache = kCodeCacheKindEdge;
   compare_target->cache = kCodeCacheKindEdge;
-  about_to_exit->cache = kCodeCacheKindEdge;
   exit_to_block->cache = kCodeCacheKindEdge;
 
   // Set up the edges. Some of these are "sort of" lies, in the sense that
@@ -247,23 +242,19 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   // fragments in the desired order.
   in_edge->successors[kFragSuccBranch] = go_to_granary;
   go_to_granary->successors[kFragSuccFallThrough] = compare_target;
-  compare_target->successors[kFragSuccFallThrough] = about_to_exit;
+  compare_target->successors[kFragSuccFallThrough] = exit_to_block;
   compare_target->successors[kFragSuccBranch] = go_to_granary;
-  about_to_exit->successors[kFragSuccFallThrough] = exit_to_block;
-
   exit_to_block->block_meta = dest_block_meta;
 
   // Add the fragments, and set some of their attributes.
   frags->Append(in_edge);
   frags->Append(go_to_granary);
   frags->Append(compare_target);
-  frags->Append(about_to_exit);
   frags->Append(exit_to_block);
 
   UpdateIndirectEdgeFrag(in_edge, pred_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(go_to_granary, pred_frag, dest_block_meta);
   UpdateIndirectEdgeFrag(compare_target, pred_frag, dest_block_meta);
-  UpdateIndirectEdgeFrag(about_to_exit, pred_frag, dest_block_meta);
 
   Instruction ni;
 
@@ -273,13 +264,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
 
   // --------------------- in_edge --------------------------------
 
-  in_edge->instrs.Append(
-      new AnnotationInstruction(kAnnotCondLeaveNativeStack));
-
-  auto save_rdi = new AnnotationInstruction(kAnnotSSASaveRegister, REG_RDI);
-  auto save_rsi = new AnnotationInstruction(kAnnotSSASaveRegister, REG_RSI);
-  in_edge->instrs.Append(save_rdi);
-  in_edge->instrs.Append(save_rsi);
+  in_edge->instrs.Append(new AnnotationInstruction(
+      kAnnotSaveRegister, REG_RSI));
 
   if (cfi->IsFunctionCall()) {
     APP(in_edge, CALL_NEAR_MEMv(&ni, &(edge->out_edge_pc));
@@ -310,11 +296,24 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   auto cfi_target = target_op.reg;
   GRANARY_ASSERT(cfi_target.IsVirtual());
 
+  go_to_granary->instrs.Append(new AnnotationInstruction(
+      kAnnotSaveRegister, REG_RDI));
   APP(go_to_granary, MOV_GPRv_IMMv(&ni, XED_REG_RDI, edge));
   APP(go_to_granary, MOV_GPRv_GPRv_89(&ni, XED_REG_RSI, cfi_target); );
-  APP(go_to_granary, JMP_RELBRd(&ni, IndirectExitFunction());
+
+  // Call into the indirect edge entry code.
+  go_to_granary->instrs.Append(
+      new AnnotationInstruction(kAnnotCondLeaveNativeStack));
+  APP(go_to_granary, CALL_NEAR_RELBRd(&ni, IndirectExitFunction());
+                     ni.is_sticky = true;
+                     ni.is_stack_blind = true; );
+  go_to_granary->instrs.Append(
+      new AnnotationInstruction(kAnnotCondEnterNativeStack));
+
+  go_to_granary->instrs.Append(new AnnotationInstruction(
+      kAnnotRestoreRegister, REG_RDI));
+  APP(go_to_granary, JMP_MEMv(&ni, &(edge->out_edge_pc));
                      ni.is_sticky = true; );
-  APP(go_to_granary, UD2(&ni));
 
   auto begin_template = new AnnotationInstruction(
       kAnnotUpdateAddressWhenEncoded, &(edge->out_edge_template));
@@ -336,19 +335,8 @@ CodeFragment *GenerateIndirectEdgeCode(FragmentList *frags, IndirectEdge *edge,
   compare_target->branch_instr = DynamicCast<NativeInstruction *>(
       compare_target->instrs.Last());
 
-  // --------------------- about_to_exit --------------------------------
-
-  auto restore_rdi = new AnnotationInstruction(kAnnotSSARestoreRegister,
-                                               REG_RDI);
-  auto restore_rsi = new AnnotationInstruction(kAnnotSSARestoreRegister,
-                                               REG_RSI);
-  about_to_exit->instrs.Append(restore_rdi);
-  about_to_exit->instrs.Append(restore_rsi);
-
-  // We separate this off so that if a compensation fragment needs to be
-  // added, then it won't be added *after* the enter stack annotation.
-  about_to_exit->instrs.Append(
-      new AnnotationInstruction(kAnnotCondEnterNativeStack));
+  compare_target->instrs.Append(new AnnotationInstruction(
+      kAnnotRestoreRegister, REG_RSI));
 
   // --------------------- exit_to_block --------------------------------
 
@@ -379,6 +367,7 @@ void InstantiateIndirectEdge(IndirectEdge *edge, FragmentList *frags,
   auto frag = new Fragment;
   frags->Prepend(frag);
   frag->next = first_frag;
+  frag->cache = first_frag->cache;
   frag->successors[kFragSuccFallThrough] = first_frag;
 
   GRANARY_IF_DEBUG( auto added_mov_addr = false; )

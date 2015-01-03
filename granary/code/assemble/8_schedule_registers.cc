@@ -6,15 +6,10 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/fragment.h"
-#include "granary/code/ssa.h"
 
 #include "granary/code/assemble/8_schedule_registers.h"
 
 #include "granary/util.h"
-
-enum : bool {
-  SHARE_SPILL_SLOTS = true
-};
 
 namespace granary {
 namespace arch {
@@ -44,17 +39,12 @@ extern granary::Instruction *SwapGPRWithSlot(VirtualRegister gpr1,
                                              VirtualRegister slot);
 
 // Replace the virtual register `old_reg` with the virtual register `new_reg`
-// in the operand `op`.
-extern bool ReplaceRegInOperand(Operand *op, VirtualRegister old_reg,
-                                VirtualRegister new_reg);
-
-// Returns true of `instr` makes a copy of `use0` and `use1` and stores it into
-// `def`.
-extern bool GetCopiedOperand(const NativeInstruction *instr,
-                             SSAInstruction *ssa_instr,
-                             SSAOperand **def, SSAOperand **use0,
-                             SSAOperand **use1);
-
+// in the instruction `instr`.
+//
+// Note: This has an architecture-specific implementation.
+extern bool TryReplaceRegInInstruction(NativeInstruction *instr,
+                                       VirtualRegister old_reg,
+                                       VirtualRegister new_reg);
 }  // namespace arch
 namespace {
 
@@ -66,802 +56,419 @@ static VirtualRegister NthArchGPR(size_t n) {
 
 // Return the Nth spill slot.
 static VirtualRegister NthSpillSlot(size_t n) {
+  GRANARY_ASSERT(arch::MAX_NUM_SPILL_SLOTS > n);
   return VirtualRegister(kVirtualRegisterKindSlot, arch::GPR_WIDTH_BYTES,
                          static_cast<uint16_t>(n));
 }
 
-// Register scheduling is a bottom-to-top process, therefore everything should
-// be observed from the perspective of where we are now, what we've previously
-// done (which corresponds to later instructions), and how we're going to adapt
-// our current state to handle the current instruction or earlier instructions.
-//
-// The first part of register scheduling is to schedule the partition-local
-// registers. Partition-local registers are registers that are used in two or
-// more fragments. When scheduling a VR, the partition-local scheduler attempts
-// to maintain invariants about where the VR's value is located between
-// fragments. This invariants-based approach works because earlier steps ensure
-// that if a VR is live on exit from a fragment F, then the VR will be live
-// on entry to all of F's successors. The key to maintaining this liveness
-// property is the compensation fragments added in by step 6.
-//
-// The second step is to schedule fragment-local registers, which is treated
-// as a special case of partition-local.
-//
-// Algorithm SchedulePartitionLocalRegisters:
-// ------------------------------------------
-//    While there are still partition local registers to be scheduled:
-//      Choose a spill slot number `SLOT`.
-//      For each partition P:
-//        Find an unscheduled partition-local virtual register VR in P.
-//        Find a preferred GPR for VR.
-//          Note: A preferred GPR for VR will be a GPR that will ideally store
-//                VR in all fragments using VR. This GPR will represent the
-//                canonical way of "communicating" VR when VR is live across
-//                two fragments. If no preferred GPR exists, then VR must be
-//                homed to a slot between fragments.
-//
-//        For each fragment F in P:
-//          Let Loc(VR) = SLOT
-//          Let Loc(PGPR) = PGPR
-//
-//          If VR is live on exit from F:
-//            If VR has a PGPR:
-//              Let Loc(VR) = PGPR
-//              Let Loc(PGPR) = SLOT
-//            Else:
-//              Let Loc(VR) = LIVE_SLOT
-//
-//          For each instruction I in F in reverse order:
-//            If Loc(VR) is used or defined in I:
-//              Find an alternative GPR, AGPR, for VR.
-//              Apply Case 1.
-//              Let Loc(Loc(VR)) = Loc(VR).
-//              Let Loc(VR) = AGPR.
-//              Let Loc(AGPR) = SLOT.
-//
-//            If VR is used or defined in I:
-//              If Loc(VR) is SLOT or Loc(VR) is LIVE_SLOT:
-//                Find a usable GPR, UGPR, for VR in I.
-//                  Note: We give preference to UGPR == PGPR if PGPR is not
-//                        used in I.
-//                If Loc(VR) is SLOT:
-//                  Apply Case 2.1.
-//                Else:  # LIVE_SLOT
-//                  Apply Case 2.2.
-//                Let Loc(UGPR) = SLOT
-//                Let Loc(VR) = UGPR
-//
-//              Replace all instances of VR in I with Loc(VR).
-//
-//            If VR was defined by I:
-//              Assert1 Loc(VR) is a GPR
-//              Assert2 VR is not live on entry to F.
-//              Apply Case 3.
-//              Let Loc(Loc(VR)) = Loc(VR).
-//              Let Loc(VR) = SLOT.
-//
-//          If VR is live on entry to F:
-//            If PGPR is valid:
-//              Assert3 Loc(VR) != SLOT
-//                Note: Failure of this assertion most likely indicates a
-//                      missing compensation fragment, as otherwise `Assert1`
-//                      would have triggered the issue in advance. This
-//                      shouldn't be possible because compensation fragments
-//                      have `kAnnotSSANodeKill` instructions to kill VRs.
-//              If Loc(VR) != PGPR:
-//                Apply Case 4.
-//                Let Loc(Loc(VR)) = Loc(VR).
-//                Let Loc(VR) = PGPR.
-//                Let Loc(PGPR) = SLOT.
-//
-//            Else If Loc(VR) != LIVE_SLOT:
-//              Assert4 Loc(VR) != SLOT
-//                Note: Failure of this assertion most likely means a later
-//                      instruction killed VR (by defining it).
-//              Apply Case 2.2.
-//              Let Loc(Loc(VR)) = Loc(VR).
-//              Let Lov(VR) LIVE_SLOT.
-//          Else:
-//            Assert5 VR is live on exit from F
-//            Assert6 Loc(VR) != LIVE_SLOT
-//            If Loc(VR) != SLOT:
-//              Apply Case 5.
-//              Let Loc(Loc(VR)) = Loc(VR).
-//              Let Loc(VR) = SLOT.
-//
-// Case 1:  Scheduling a VR where PGPR == r1. When going through the instruction
-//          list in reverse order, we see a native use of PGPR, so we need to
-//          change where the register is located. We'll change it to be stored
-//          in r2.
-//
-//          save r2 --> slot  (assumed)
-//          ...
-//          native use of r1  (current position)
-//          swap r2 <-> r1  # Move the VR's value (stored in r2) to r1,
-//                          # and save r1's value to r2.
-//          swap r2 <-> slot  # Restore r2 and save r1 (stored in r2) to
-//                            # the slot.
-//
-//            Note: This is equivalent to:
-//              swap r2 <-> slot  # Restore r2, but keep VR's value in slot.
-//              swap r1 <-> slot  # Save r1 to slot, and put VR's value into r1.
-//          ...
-//          restore slot --> r1 (assumed)
-//
-// Case 2.1:Scheduling a VR where the VR has not previously been spilled in
-//          this fragment. We will use r1 as the register that is scheduled to
-//          hold VR, and we'll inject a restore of r1.
-//
-//          save r1 --> slot  (assumed)
-//          ...
-//          native use of VR  (current position)
-//          restore slot --> r1  # Restore r1.
-//
-// Case 2.2:Scheduling a VR where the VR has not previously been spilled in
-//          this fragment, but where it is assumed to be live, and where the
-//          normal invariant could not be maintained, and so VR's value is
-//          actually located in the slot. We will use r1 as the register that
-//          is scheduled to hold VR, and we'll inject a restore of r1.
-//
-//          save r1 --> slot  (assumed)
-//          ...
-//          native use of VR  (current position)
-//          swap slot <-> r1  # Restore r1, but keep the value of the VR alive.
-//
-// Case 3:  We've found the definition of a VR, so we just need to spill its
-//          GPR before the instruction defining the GPR.
-//
-//          save r1 --> slot  # Save r1.
-//          native def of VR  (current position)
-//          ...
-//          restore slot --> r1  (assumed)
-//
-// Case 4:  We're at the entrypoint to a fragment, VR is live on entry to the
-//          fragment (and therefore live on exit from F's predecessor), and
-//          PGPR is valid, but the VR is not homed to its PGPR. Therefore, we
-//          want to maintain the invariant that across these boundaries, VR is
-//          homed to PGPR. We will assume that VR is currently homed to r1.
-//
-//          This case is fundamentally very similar to Case 1.
-//
-//          <VR live on entry>
-//          swap PGPR <-> r1  # Move the VR's value (stored in PGPR) to r1,
-//                            # and save r1's value to PGRP.
-//          swap PGPR <-> slot  # Restore PGPR and save r1 (stored in PGPR) to
-//                              # the slot.
-//          ...
-//          native use of VR homed to r1  (assumed)
-//          ...
-//          restore slot --> r1  (assumed)
-//
-// Case 5:  We're at the entrypoint to a fragment, VR is not live on entry
-//          to the fragment, and is currently homed to a register. Therefore
-//          we need to add in the original save of the register to the spill
-//          slot.
-//
-//          save r1 --> slot  # Save the GPR used by VR to a slot.
-//          ...
-//          restore slot --> r1  (assumed)
-
-enum RegLocationType {
-  kRegLocationTypeGpr,
-  kRegLocationTypeSlot,
-  kRegLocationTypeLiveSlot
-};
-
-struct RegLocation {
-  VirtualRegister loc;
-  RegLocationType type;
-};
-
-// Used for scheduling registers in a partition.
-struct PartitionScheduler {
-  PartitionScheduler(VirtualRegister vr_, SSARegisterWeb *reg_web_,
-                     size_t slot_, VirtualRegister preferred_gpr_)
-    : vr(vr_),
-      spill_slot(NthSpillSlot(slot_)),
-      reg_web(UnsafeCast<const SSARegisterWeb *>(reg_web_->Find())),
-      vr_location{spill_slot, kRegLocationTypeSlot},
-      invalid_location{VirtualRegister(), kRegLocationTypeGpr},
-      preferred_gpr(preferred_gpr_) {
-    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
-      gpr_locations[i] = {NthArchGPR(i), kRegLocationTypeGpr};
-    }
-  }
-
-  // Current location of a register.
-  RegLocation &Loc(VirtualRegister reg) {
-    if (reg.IsNative()) {
-      if (reg.IsGeneralPurpose()) {
-        return gpr_locations[reg.Number()];
-      }
-    } else if (reg.IsVirtual()) {
-      if (reg == vr) {
-        return vr_location;
-      }
-    }
-
-    GRANARY_ASSERT(false);
-    // Fallback case for arch regs that aren't GPRs, and for virtual registers
-    // that we aren't looking at.
-    return invalid_location;
-  }
-
-  // Virtual register being scheduled in this partition.
-  const VirtualRegister vr;
-  const VirtualRegister spill_slot;
-  const SSARegisterWeb *reg_web;
-
-  // Current locations of arch GPRs.
-  RegLocation gpr_locations[arch::NUM_GENERAL_PURPOSE_REGISTERS];
-
-  // Current location of the VR.
-  RegLocation vr_location;
-
-  // Dummy.
-  RegLocation invalid_location;
-
-  // Should we try to enforce the invariant that if a VR is live on entry/exit
-  // from a fragment then it should be located in its preferred GPR?
-  VirtualRegister preferred_gpr;
-};
-
-// Get an unscheduled VR. This works on VRs *and* shadow GPRs. Shadow GPRs are
-// used for efficient save/restore of individual GPRs.
-static bool GetUnscheduledVR(SSARegisterWeb *web, VirtualRegister *found_reg,
-                             SSARegisterWeb **found_web) {
-  auto &reg(web->Value());
-  if (!reg.IsVirtual()) return false;
-  if (reg.IsScheduled()) return false;
-  reg.MarkAsScheduled();
-  *found_reg = reg;
-  *found_web = web;
-  return true;
+// Mark the partition containing a fragment as using VRs, and therefore
+// requiring spill/fill allocation.
+static void MarkPartitionAsUsingVRs(CodeFragment *frag) {
+  auto partition = frag->partition.Value();
+  partition->uses_vrs = true;
 }
 
-struct WebMerger {
-  SSARegisterWeb *web;
-  size_t num_uses;
-};
-
-struct GPRScheduler {
-  GPRScheduler(void)
-      : reg_counts(),
-        used_regs() {}
-
-  // Recounts the number of times each arch GPR is used within a partition.
-  void RecountGPRUsage(const PartitionInfo *partition,
-                       Fragment *first, Fragment *last) {
-    reg_counts.ClearGPRUseCounters();
-    for (auto frag : FragmentListIterator(first)) {
-      if (partition != frag->partition.Value()) continue;
-      reg_counts.CountGPRUses(frag);
-      if (frag == last) break;
+// Get the set of all VRs to schedule.
+static void GetSchedulableVRs(FragmentList *frags, VRIdSet *vrs) {
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      vrs->Union(cfrag->entry_regs);
+      vrs->Union(cfrag->exit_regs);
     }
   }
+}
 
-  // Get the least used GPR for use that's not also used in `used_regs`, and
-  // store it in `*gpr`. Return the number of times that `*gpr` is used in
-  // the partition.
-  size_t GetGPR(VirtualRegister *gpr) {
-    GRANARY_IF_DEBUG( auto found_reg = false; )
+struct RegisterScheduler {
+  RegisterScheduler(void)
+      : num_slots(0),
+        is_in_slot{false},
+        slot_for_gpr{0},
+        gpr_has_slot(),
+        gpr_counts() {}
+
+  // Recounts the uses of GPRs across all frags.
+  void ResetGlobal(FragmentList *frags) {
+    gpr_counts.ClearGPRUseCounters();
+    gpr_counts.CountGPRUses(frags);
+  }
+
+  // Recounts the uses of GPRs within a specific frag.
+  void ResetLocal(Fragment *frag) {
+    gpr_counts.ClearGPRUseCounters();
+    gpr_counts.CountGPRUses(frag);
+  }
+
+  // Resets the GPR slots. We put `kAnnotRegisterSave/Restore/SwapRestore` in a
+  // different "namespace" of slots than normal GPR save/restores because
+  // otherwise we'd have to deal with unusual issues that come about due to
+  // `kAnnotRegisterSwapRestore` containing a "live" value in the slot.
+  void ResetGPRSlots(void) {
+    gpr_has_slot.KillAll();
+  }
+
+  // Returns `true` if a register GPR has a non-zero count.
+  inline size_t NumUsesOfGPR(VirtualRegister gpr) {
+    return gpr_counts.NumUses(gpr);
+  }
+
+  // Returns the spill slot register associated with an arch GPR.
+  VirtualRegister SlotForGPR(VirtualRegister gpr) {
+    GRANARY_ASSERT(gpr.IsNative() && gpr.IsGeneralPurpose());
+    auto gpr_num = gpr.Number();
+    if (!gpr_has_slot.IsLive(gpr_num)) {
+      slot_for_gpr[gpr_num] = num_slots++;
+      gpr_has_slot.Revive(gpr_num);
+    }
+    return NthSpillSlot(slot_for_gpr[gpr_num]);
+  }
+
+  // Return an unused GPR for use as a preferred GPR.
+  VirtualRegister GetPreferredGPR(const UsedRegisterSet &used_regs) {
+    for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
+      if (used_regs.IsLive(i)) continue;
+      if (!gpr_counts.NumUses(i)) return NthArchGPR(i);
+    }
+    return VirtualRegister();
+  }
+
+  // Return the least used GPR for use that's not also used in `used_regs`.
+  VirtualRegister GetGPR(const UsedRegisterSet &used_regs) {
+    auto found_reg = false;
     auto min_gpr_num = static_cast<size_t>(arch::NUM_GENERAL_PURPOSE_REGISTERS);
     auto min_num_uses = std::numeric_limits<size_t>::max();
     for (auto i = 0UL; i < arch::NUM_GENERAL_PURPOSE_REGISTERS; ++i) {
       if (used_regs.IsLive(i)) continue;
-      if (reg_counts.num_uses_of_gpr[i] < min_num_uses) {
-        GRANARY_IF_DEBUG( found_reg = true; )
+      auto num_uses = gpr_counts.NumUses(i);
+      if (num_uses < min_num_uses) {
+        found_reg = true;
         min_gpr_num = i;
-        min_num_uses = reg_counts.num_uses_of_gpr[i];
+        min_num_uses = num_uses;
       }
     }
-    GRANARY_ASSERT(found_reg);
-    *gpr = NthArchGPR(min_gpr_num);
-    return min_num_uses;
+    if (found_reg) return NthArchGPR(min_gpr_num);
+    return VirtualRegister();
   }
 
-  // Get some GPR for use, so long as the GPR is not part of the
-  // `avoid_reg_set`.
-  VirtualRegister GetPreferredGPRForVR(VirtualRegister vr) {
-    VirtualRegister pgpr;
-    if (0 == GetGPR(&pgpr)) {
+  // Number of slots allocated.
+  size_t num_slots;
 
-      // TODO(pag): Eventually, try to make the web live in more areas.
-      GRANARY_UNUSED(vr);
-    }
-    return pgpr;
-  }
+  // Tells us whether or not the GPR is currently located in its slot.
+  bool is_in_slot[arch::NUM_GENERAL_PURPOSE_REGISTERS];
 
-  // Try to find an as-of-yet unscheduled SSA register web in an iterable.
-  //
-  // This gives minor preference to VR register webs that have been merged, but
-  // it could do better if we could sort the `vr_web_mergers` by counts, and
-  // then include a fragment count and a merge count.
-  bool GetUnscheduledVR(VirtualRegister *found_reg,
-                        SSARegisterWeb **found_web) {
-    for (const auto &merger : vr_web_mergers.Values()) {
-      if (!merger.num_uses) continue;
-      if (::granary::GetUnscheduledVR(merger.web, found_reg, found_web)) {
-        return true;
-      }
-    }
-    for (const auto &merger : vr_web_mergers.Values()) {
-      if (merger.num_uses) continue;
-      if (::granary::GetUnscheduledVR(merger.web, found_reg, found_web)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Merge (potentially) distinct register webs, so long as the VR associated
-  // with the web is the same.
-  template <typename Iterable>
-  void MergeWebs(const Iterable &it) {
-    for (auto web : it) {
-      auto reg = web->Value();
-      if (!reg.IsVirtual()) continue;
-      auto &vr_web_merger(vr_web_mergers[reg]);
-
-      if (vr_web_merger.web) {
-        if (*(vr_web_merger.web) != *web) {
-          web->Union(vr_web_merger.web);
-          vr_web_merger.num_uses++;
-        }
-      } else {
-        vr_web_merger.web = web;
-        vr_web_merger.num_uses = 0;
-      }
-    }
-  }
-
-  // Merge (potentially) distinct register webs, so long as the VR associated
-  // with the web is the same.
-  void MergeWebs(Fragment *first, Fragment *last, PartitionInfo *partition) {
-    for (auto frag : ReverseFragmentListIterator(last)) {
-      if (frag == first) break;
-      if (frag->partition.Value() != partition) continue;
-      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
-      if (!ssa_frag) continue;
-
-      auto entry_webs(ssa_frag->ssa.entry_reg_webs.Values());
-      auto exit_webs(ssa_frag->ssa.exit_reg_webs.Values());
-      MergeWebs(entry_webs);
-      MergeWebs(exit_webs);
-      MergeWebs(ssa_frag->ssa.internal_reg_webs);
-    }
-
-    for (auto frag : ReverseFragmentListIterator(last)) {
-      if (frag == first) break;
-      if (frag->partition.Value() != partition) continue;
-      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
-      if (!ssa_frag) continue;
-
-      for (const auto &merger : vr_web_mergers) {
-        GRANARY_UNUSED(merger);
-      }
-    }
-  }
+  // The slot associated with a GPR.
+  size_t slot_for_gpr[arch::NUM_GENERAL_PURPOSE_REGISTERS];
+  UsedRegisterSet gpr_has_slot;
 
   // Counts of the number of uses of each register.
-  RegisterUsageCounter reg_counts;
-
-  // Registers being used by an instruction.
-  UsedRegisterSet used_regs;
-
-  // Tracks the mergable register webs on a per-VR basis.
-  TinyMap<VirtualRegister, WebMerger,
-          arch::NUM_GENERAL_PURPOSE_REGISTERS * 2> vr_web_mergers;
+  RegisterUsageCounter gpr_counts;
 };
 
-// Returns true if the virtual register associated with a particular SSA node
-// is live within a node map.
-static bool IsLive(SSARegisterWebMap &mapped_webs, VirtualRegister reg,
-                   const SSARegisterWeb *web) {
-  if (mapped_webs.Exists(reg)) {
-    const auto mapped_web = mapped_webs[reg];
-    return mapped_web->Find() == web;
+// Returns `true` if `vr_id` is used in or defined by `instr`.
+static bool IsUsedOrDefined(const NativeInstruction *instr, uint16_t vr_id) {
+  if (instr->defined_vr == vr_id) return true;
+  for (auto used_vr_id : instr->used_vrs) {
+    if (used_vr_id == vr_id) return true;
   }
   return false;
 }
 
-// Try to get a GPR for use by an instruction.
-static VirtualRegister GetGPR(GPRScheduler *reg_sched, VirtualRegister pgpr) {
-  VirtualRegister agpr;
-  if (pgpr.IsValid() && reg_sched->used_regs.IsDead(pgpr)) {
-    return pgpr;  // Try to use the preferred GPR if possible.
+// Updates `used_regs` based on registers specifically marked by `ainstr`.
+static bool UpdateUseRegs(AnnotationInstruction *instr,
+                          UsedRegisterSet *used_regs) {
+  if (kAnnotSaveRegister == instr->annotation ||
+      kAnnotRestoreRegister == instr->annotation ||
+      kAnnotSwapRestoreRegister == instr->annotation) {
+    used_regs->Revive(instr->Data<VirtualRegister>());
+    return true;
+  } else if (kAnnotReviveRegisters == instr->annotation) {
+    used_regs->Union(instr->DataRef<UsedRegisterSet>());
+    return true;
   } else {
-    reg_sched->GetGPR(&agpr);
-    return agpr;
+    return false;
   }
 }
 
-// Looks through an instruction to see if some node is defined or used.
-static void FindDefUse(const SSAInstruction *instr, const SSARegisterWeb *web,
-                       bool *is_defined, bool *is_used) {
-  for (const auto &op : instr->ops) {
-    if (kSSAOperandActionInvalid == op.action) return;
-    if (op.reg_web.Find() != web) continue;
+// Arrange for a label to be *just* before any useful VR-related instructions.
+static Instruction *AddSchedLabel(CodeFragment *frag,
+                                  Instruction *first_vr_instr) {
+  if (first_vr_instr && first_vr_instr->Previous()) {
+    return first_vr_instr->Previous();
+  }
+  auto sched_label = new LabelInstruction;
+  if (first_vr_instr) {
+    frag->instrs.InsertBefore(first_vr_instr, sched_label);
+  } else {
+    frag->instrs.Prepend(sched_label);
+  }
+  return sched_label;
+}
 
-    if (kSSAOperandActionWrite == op.action ||
-        kSSAOperandActionCleared == op.action) {
-      *is_defined = true;
-    } else {
-      *is_used = true;
+// Re-homes a virtual register.
+//
+// Example: A is `new_vr_home`, B is `old_home`.
+//      slot(A) <- A
+//      ...
+//      <homed on A>
+//      <instr using B>
+//      slot(B) <- B
+//      swap A, B
+//      A <- slot(A)
+//      <homed on B>
+//      ...
+//      B <- slot(B)
+static void ChangeVRHome(RegisterScheduler *sched, CodeFragment *frag,
+                         Instruction *instr, VirtualRegister old_home,
+                         VirtualRegister new_home) {
+  frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(
+      new_home, sched->SlotForGPR(new_home)));
+
+  frag->instrs.InsertAfter(instr, arch::SwapGPRWithGPR(
+      old_home, new_home));
+
+  frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(
+      old_home, sched->SlotForGPR(old_home)));
+}
+
+// Schedule the virtual register with id `vr_id`, where the VR will be stored
+// in `preferred_gpr` across control-flow edges where it's live.
+static void ScheduleRegisters(RegisterScheduler *sched, CodeFragment *frag,
+                              const uint16_t vr_id,
+                              const VirtualRegister preferred_gpr) {
+  // Nothing to do. This fragment isn't in the live range of this VR.
+  if (!frag->exit_regs.Contains(vr_id)) return;
+
+  auto vr_is_used_in_later_instr = false;
+  const auto vr_is_live_on_entry = frag->entry_regs.Contains(vr_id);
+  const auto vr_reg = VirtualRegister(kVirtualRegisterKindVirtualGpr,
+                                      arch::GPR_WIDTH_BYTES, vr_id);
+  sched->ResetLocal(frag);
+
+  // In which GPR is `vr` homed at the end of the fragment?
+  VirtualRegister vr_home(preferred_gpr);
+
+  // The first instruction that is potentially sensitive to VR scheduling.
+  Instruction *first_vr_instr(nullptr);
+
+  for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
+    UsedRegisterSet used_regs;
+    UsedRegisterSet restricted_regs;
+    NativeInstruction *ninstr(nullptr);
+    auto vr_is_used_or_defined_in_instr = false;
+
+    if ((ninstr = DynamicCast<NativeInstruction *>(instr))) {
+      first_vr_instr = instr;
+      used_regs.Visit(ninstr);
+      vr_is_used_or_defined_in_instr = IsUsedOrDefined(ninstr, vr_id);
+      if (vr_is_used_or_defined_in_instr) {
+        used_regs.ReviveRestrictedRegisters(ninstr);
+      }
+    } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (UpdateUseRegs(ainstr, &used_regs)) first_vr_instr = instr;
+    }
+
+    // The GPR `vr_home` is used in `instr`, so we need to re-home the VR and
+    // make sure we inject the initial spill for `vr_home`.
+    //
+    // This will only really happen in one of three cases:
+    //    1)  The preferred GPR is restricted for this particular instruction.
+    //    2)  A later instruction caused case 1, and so we re-homed, and the
+    //        current home is live in this instruction.
+    //    3)  A different VR hit case 1 and was re-homed to the preferred GPR
+    //        of our VR.
+    if (used_regs.IsLive(vr_home)) {
+      auto new_vr_home = preferred_gpr;
+      if (used_regs.IsLive(preferred_gpr)) {
+        new_vr_home = sched->GetGPR(used_regs);
+      }
+      GRANARY_ASSERT(vr_home != new_vr_home);
+      GRANARY_ASSERT(new_vr_home.IsNative());
+
+      ChangeVRHome(sched, frag, instr, vr_home, new_vr_home);
+      vr_home = new_vr_home;
+    }
+
+    if (vr_is_used_or_defined_in_instr) {
+      vr_is_used_in_later_instr = true;
+
+      // Replace all uses of this VR in the instruction with `vr_home`.
+      GRANARY_ASSERT(vr_home.IsNative() && vr_home.IsGeneralPurpose());
+      GRANARY_IF_DEBUG( auto replaced = ) arch::TryReplaceRegInInstruction(
+          ninstr, vr_reg, vr_home);
+      GRANARY_ASSERT(replaced);
     }
   }
-}
 
-// Replace a use of a virtual register
-static void ReplaceOperandReg(SSAOperand &op, VirtualRegister replacement_reg) {
-  const auto &web(op.reg_web);
-  auto reg = web.Value();
-  GRANARY_ASSERT(reg.IsVirtual());
-  GRANARY_ASSERT(replacement_reg.IsNative());
-  if (!arch::ReplaceRegInOperand(op.operand, reg, replacement_reg)) {
-    GRANARY_ASSERT(false);
+  if (vr_is_used_in_later_instr) MarkPartitionAsUsingVRs(frag);
+
+  // Live on entry, need to make sure that the VR is homed to its preferred
+  // GPR across control-transfers.
+  if (vr_is_live_on_entry) {
+    if (preferred_gpr != vr_home) {
+      auto sched_label = AddSchedLabel(frag, first_vr_instr);
+      ChangeVRHome(sched, frag, sched_label, vr_home, preferred_gpr);
+    }
+
+  // Not live on entry, need to set up an initial spill.
+  } else {
+    auto sched_label = AddSchedLabel(frag, first_vr_instr);
+    frag->instrs.InsertAfter(sched_label, arch::SaveGPRToSlot(
+        vr_home, sched->SlotForGPR(vr_home)));
   }
 }
 
-// Replace all uses of a virtual register associated with a specific SSA node
-// with a GPR.
-static void ReplaceUsesOfVR(SSAInstruction *instr, const SSARegisterWeb *web,
-                            VirtualRegister replacement_reg) {
-  for (auto &op : instr->ops) {
-    if (kSSAOperandActionInvalid == op.action) return;
-    if (op.reg_web.Find() != web) continue;
-    ReplaceOperandReg(op, replacement_reg);
-  }
-}
+// Tells us if the VR with id `vr_id` is *really* live on exit.
+static bool VRIsLiveOnExit(CodeFragment *frag, const uint16_t vr_id) {
+  for (auto succ : frag->successors) {
+    if (!succ) continue;
+    auto succ_cfrag = DynamicCast<CodeFragment *>(succ);
+    if (!succ_cfrag) continue;
 
-// The register we want to use for scheduling `vr` is used in this instruction,
-// therefore we need to re-home the register.
-static void HomeUsedReg(PartitionScheduler *part_sched,
-                        GPRScheduler *reg_sched,
-                        SSAFragment *frag,
-                        Instruction *instr,
-                        RegLocation *vr_home) {
-  if (!vr_home->loc.IsNative() || !reg_sched->used_regs.IsLive(vr_home->loc)) {
-    return; // Not used in this instruction.
-  }
-
-  const auto slot = part_sched->spill_slot;
-  const auto pgpr = part_sched->preferred_gpr;
-
-  GRANARY_ASSERT(kRegLocationTypeGpr == vr_home->type);
-  auto agpr = GetGPR(reg_sched, pgpr);
-  GRANARY_ASSERT(vr_home->loc != agpr);
-
-  frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(agpr, slot));
-  frag->instrs.InsertAfter(instr, arch::SwapGPRWithGPR(vr_home->loc, agpr));
-
-  part_sched->Loc(vr_home->loc) = {vr_home->loc, kRegLocationTypeGpr};
-  part_sched->Loc(agpr) = {slot, kRegLocationTypeSlot};
-
-  vr_home->loc = agpr;  // Updates `Loc` by ref.
-}
-
-// Schedule all a partition-local register within a specific fragment of the
-// partition.
-static void ScheduleRegs(PartitionScheduler *part_sched,
-                         GPRScheduler *reg_sched, SSAFragment *frag) {
-  const auto vr = part_sched->vr;
-  const auto reg_web = part_sched->reg_web;
-  const auto slot = part_sched->spill_slot;
-  const auto pgpr = part_sched->preferred_gpr;
-  const auto is_live_on_exit = IsLive(frag->ssa.exit_reg_webs, vr, reg_web);
-  const auto is_live_on_entry = IsLive(frag->ssa.entry_reg_webs, vr, reg_web);
-
-  if (is_live_on_exit) {
-    if (pgpr.IsValid()) {
-      part_sched->Loc(vr) = {pgpr, kRegLocationTypeGpr};
-      part_sched->Loc(pgpr) = {slot, kRegLocationTypeSlot};
+    if (succ_cfrag->attr.is_compensation_frag) {
+      if (succ_cfrag->exit_regs.Contains(vr_id)) return true;
     } else {
-      part_sched->Loc(vr) = {slot, kRegLocationTypeLiveSlot};
+      return true;
     }
   }
+  return false;
+}
 
-  Instruction *first_instr(nullptr);
+// Schedule the virtual register with id `vr_id`, where the VR will be stored
+// in slot across control-flow edges where it's live.
+static void ScheduleRegisters(RegisterScheduler *sched, CodeFragment *frag,
+                              const uint16_t vr_id, const size_t slot) {
+  // Nothing to do. This fragment isn't in the live range of this VR.
+  if (!frag->exit_regs.Contains(vr_id)) return;
 
-  auto instr = frag->instrs.Last();
-  for (Instruction *prev_instr(nullptr); instr; instr = prev_instr) {
-    prev_instr = instr->Previous();
+  auto vr_is_used_in_later_instr = VRIsLiveOnExit(frag, vr_id);
+  const auto vr_is_defined_in_frag = frag->def_regs.Exists(vr_id);
+  const auto vr_is_live_on_entry = frag->entry_regs.Contains(vr_id);
+  const auto slot_reg = NthSpillSlot(slot);
+  const auto vr_reg = VirtualRegister(kVirtualRegisterKindVirtualGpr,
+                                      arch::GPR_WIDTH_BYTES, vr_id);
+  sched->ResetLocal(frag);
 
-    SSAInstruction *ssa_instr(nullptr);
-    auto is_defined = false;
-    auto is_used = false;
-    auto &vr_home(part_sched->Loc(vr));
+  // The first instruction that is potentially sensitive to VR scheduling.
+  Instruction *first_vr_instr(nullptr);
 
-    reg_sched->used_regs.KillAll();
+  // The current home of the VR with id `vr_id`. Might be a GPR or a
+  // spill slot.
+  VirtualRegister vr_home(slot_reg);
 
-    // Annotation instructions can define/kill VRs.
-    if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
-      auto web = GetMetaData<const SSARegisterWeb *>(ainstr);
+  for (auto instr : ReverseInstructionListIterator(frag->instrs)) {
+    UsedRegisterSet used_regs;
+    UsedRegisterSet restricted_regs;
+    NativeInstruction *ninstr(nullptr);
+    auto vr_is_used_or_defined_in_instr = false;
 
-      // Note: `kAnnotSSANodeOwner` is not considered a definition because it
-      //       is added by the local value numbering stage of SSA construction
-      //       for the sake of making it easier to reclaim `SSANode` objects.
-      if (kAnnotSSARegisterKill == ainstr->annotation) {
-        if (web->Find() == reg_web) {
-          // This node can't be homed to a register because the meaning of
-          // this is to say that the node was live in a predecessor, but is not
-          // live in a successor (of this compensation fragment), and therefore
-          // we should not expect and uses of the node to follow this
-          // instruction.
-          GRANARY_ASSERT(kRegLocationTypeGpr != vr_home.type);
+    if ((ninstr = DynamicCast<NativeInstruction *>(instr))) {
+      first_vr_instr = instr;
+      used_regs.Visit(ninstr);
+      vr_is_used_or_defined_in_instr = IsUsedOrDefined(ninstr, vr_id);
+      if (vr_is_used_or_defined_in_instr) {
+        used_regs.ReviveRestrictedRegisters(ninstr);
+      }
+    } else if (auto ainstr = DynamicCast<AnnotationInstruction *>(instr)) {
+      if (UpdateUseRegs(ainstr, &used_regs)) first_vr_instr = instr;
+    }
 
-          // Fake a kill as a use. The meaning here is that we expect that this
-          // register will start being used, and in fact it's exported from
-          // a predecessor fragment's `exit_nodes` into this frag's
-          // `entry_nodes`, so we need to have it as a use so that the slot
-          // matching happens.
-          is_used = true;
-        } else {
-          continue;
+    // The GPR `vr_home` is used in `instr`, so we'll conservatively re-home
+    // on the slot.
+    if (vr_home.IsNative() && used_regs.IsLive(vr_home)) {
+      GRANARY_ASSERT(vr_is_used_in_later_instr);
+      frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(
+          vr_home, slot_reg));
+      frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(
+          vr_home, sched->SlotForGPR(vr_home)));
+      vr_home = slot_reg;
+    }
+
+    if (vr_is_used_or_defined_in_instr) {
+      if (slot_reg == vr_home) {
+        vr_home = sched->GetGPR(used_regs);
+        frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(
+            vr_home, sched->SlotForGPR(vr_home)));
+        if (vr_is_used_in_later_instr && vr_is_defined_in_frag) {
+          frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(
+              vr_home, slot_reg));
         }
-
-      // Handle a save/restore of a register.
-      } else if (kAnnotSSASaveRegister == ainstr->annotation ||
-                 kAnnotSSARestoreRegister == ainstr->annotation ||
-                 kAnnotSSASwapRestoreRegister == ainstr->annotation) {
-        reg_sched->used_regs.Revive(ainstr->Data<VirtualRegister>());
-
-      // Mark that a number of registers need to be live at a specific point.
-      } else if (kAnnotSSAReviveRegisters == ainstr->annotation) {
-        reg_sched->used_regs = ainstr->Data<UsedRegisterSet>();
-
-      // We can stop here.
-      } else if (kAnnotSSARegisterSpillAnchor == ainstr->annotation) {
-        first_instr = instr;
-        break;
-
-      } else {
-        continue;
       }
 
-    // Its a native instruction, need to look to see if the VR is used and/or
-    // defined. We also need to see if the current location of the VR is used.
-    } else if (auto ninstr = DynamicCast<NativeInstruction *>(instr)) {
-      ssa_instr = ninstr->ssa;
-      if (!ssa_instr) continue;
+      // Replace all uses of this VR in the instruction with `vr_home`.
+      GRANARY_ASSERT(vr_home.IsNative() && vr_home.IsGeneralPurpose());
+      GRANARY_IF_DEBUG( auto replaced = ) arch::TryReplaceRegInInstruction(
+          ninstr, vr_reg, vr_home);
+      GRANARY_ASSERT(replaced);
 
-      reg_sched->used_regs.Visit(ninstr);
-
-      // If this instruction has no explicit operands, then we can't possibly
-      // schedule a VR in, and so we don't need to add the constraint to the
-      // system that restricted registers should not be used.
-      if (ninstr->NumExplicitOperands()) {
-        reg_sched->used_regs.ReviveRestrictedRegisters(ninstr);
-      }
-
-      // Figure out if this instruction is defined or used.
-      FindDefUse(ssa_instr, reg_web, &is_defined, &is_used);
-    }
-
-    HomeUsedReg(part_sched, reg_sched, frag, instr, &vr_home);
-    if (!is_used && !is_defined) continue;
-
-    // Inject a fill for this instruction. Filling might restore a GPR if this
-    // VR has a preferred GPR, or if there is no preferred GPR, then filling
-    // will swap the VR value modified and/or read by this instruction into the
-    // spill slot.
-    if (kRegLocationTypeSlot == vr_home.type ||
-        kRegLocationTypeLiveSlot == vr_home.type) {
-
-      auto agpr = GetGPR(reg_sched, pgpr);
-      if (kRegLocationTypeSlot == vr_home.type) {
-        frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(agpr, slot));
-
-      } else {  // `LIVE_SLOT`.
-        frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(agpr, slot));
-      }
-
-      part_sched->Loc(agpr) = {slot, kRegLocationTypeSlot};
-      vr_home.loc = agpr;  // Updates `Loc` by ref.
-      vr_home.type = kRegLocationTypeGpr;
-    }
-
-    if (ssa_instr) ReplaceUsesOfVR(ssa_instr, reg_web, vr_home.loc);
-
-    // Inject the spill for this definition.
-    if (is_defined && !is_live_on_entry) {
-      GRANARY_ASSERT(kRegLocationTypeGpr == vr_home.type);
-      frag->instrs.InsertBefore(instr, arch::SaveGPRToSlot(vr_home.loc, slot));
-      part_sched->Loc(vr_home.loc) = {vr_home.loc, kRegLocationTypeGpr};
-      vr_home.loc = slot;
-      vr_home.type = kRegLocationTypeSlot;
+      vr_is_used_in_later_instr = true;
     }
   }
 
-  auto &vr_home(part_sched->Loc(vr));
-  if (is_live_on_entry) {
-    GRANARY_ASSERT(kRegLocationTypeSlot != vr_home.type);
+  if (vr_is_used_in_later_instr) MarkPartitionAsUsingVRs(frag);
 
-    // Need to make sure that the VR is homed to its preferred GPR for
-    // transitions between fragments.
-    if (pgpr.IsValid()) {
-      GRANARY_ASSERT(vr_home.loc.IsNative());
-      if (vr_home.loc != pgpr) {
-        frag->instrs.InsertBefore(first_instr,
-                                  arch::SwapGPRWithGPR(vr_home.loc, pgpr));
-        frag->instrs.InsertBefore(first_instr,
-                                  arch::SwapGPRWithSlot(pgpr, slot));
-      }
+  if (slot_reg != vr_home) {
+    GRANARY_ASSERT(vr_is_used_in_later_instr);
 
-    // Need to put the VR into its spill slot for transitions between fragments.
-    } else if (kRegLocationTypeLiveSlot != vr_home.type) {
-      GRANARY_ASSERT(vr_home.loc.IsNative());
-      frag->instrs.InsertBefore(first_instr,
-                                arch::SwapGPRWithSlot(vr_home.loc, slot));
-    } else {
-      GRANARY_ASSERT(vr_home.loc == slot);
+    auto sched_label = AddSchedLabel(frag, first_vr_instr);
+
+    // Only restore the VR's value if its got an incoming value.
+    if (vr_is_live_on_entry) {
+      frag->instrs.InsertAfter(sched_label,
+                               arch::RestoreGPRFromSlot(vr_home, slot_reg));
     }
-
-  // Not live on entry, i.e. this is one of the first defs of this VR, so we
-  // need to add the initial reg spill.
-  } else {
-    if (kRegLocationTypeGpr == vr_home.type) {
-      frag->instrs.InsertBefore(first_instr,
-                                arch::SaveGPRToSlot(vr_home.loc, slot));
-    } else {
-      GRANARY_ASSERT(kRegLocationTypeLiveSlot != vr_home.type);
-      GRANARY_ASSERT(vr_home.loc == slot);
-    }
+    frag->instrs.InsertAfter(sched_label, arch::SaveGPRToSlot(
+        vr_home, sched->SlotForGPR(vr_home)));
   }
 }
-
-// Find the bounds of a partition in the fragment list.
-static void FindPartitionBounds(FragmentList *frags, PartitionInfo *partition,
-                                Fragment **first_frag, Fragment **last_frag) {
-  for (auto frag : ReverseFragmentListIterator(frags)) {
-    if (frag->partition.Value() == partition) {
-      if (!*last_frag) *last_frag = frag;
-      *first_frag = frag;
-    }
-  }
-}
-
-// Used for scheduling slots for native GPR saves/restores.
-struct SaveRestoreScheduler {
- public:
-  explicit SaveRestoreScheduler(PartitionInfo *partition_)
-      : partition(partition_) {
-    memset(&(gpr_slots[0]), 0, sizeof gpr_slots);
-  }
-
-  VirtualRegister SlotForGPR(VirtualRegister gpr) {
-    GRANARY_ASSERT(gpr.IsNative() && gpr.IsGeneralPurpose());
-    auto &slot(gpr_slots[gpr.Number()]);
-    if (!slot.IsValid()) {
-      slot = NthSpillSlot(partition->num_slots++);
-    }
-    return slot;
-  }
-
- protected:
-  PartitionInfo *partition;
-
-  VirtualRegister gpr_slots[arch::NUM_GENERAL_PURPOSE_REGISTERS];
-
- private:
-  SaveRestoreScheduler(void) = delete;
-};
 
 // Schedule the saves/restores of arch GPRs.
-static void ScheduleSaveRestores(SaveRestoreScheduler *slot_sched,
-                                 SSAFragment *frag) {
+static void ScheduleSaveRestores(RegisterScheduler *sched,
+                                 CodeFragment *frag) {
   for (auto instr : InstructionListIterator(frag->instrs)) {
     auto ainstr = DynamicCast<AnnotationInstruction *>(instr);
     if (!ainstr) continue;
 
-    if (kAnnotSSASaveRegister == ainstr->annotation) {
+    if (kAnnotSaveRegister == ainstr->annotation) {
       auto gpr = ainstr->Data<VirtualRegister>();
-      auto slot = slot_sched->SlotForGPR(gpr);
+      auto slot = sched->SlotForGPR(gpr);
       frag->instrs.InsertAfter(instr, arch::SaveGPRToSlot(gpr, slot));
 
-    } else if (kAnnotSSARestoreRegister == ainstr->annotation) {
+    } else if (kAnnotRestoreRegister == ainstr->annotation) {
       auto gpr = ainstr->Data<VirtualRegister>();
-      auto slot = slot_sched->SlotForGPR(gpr);
+      auto slot = sched->SlotForGPR(gpr);
       frag->instrs.InsertAfter(instr, arch::RestoreGPRFromSlot(gpr, slot));
 
-    } else if (kAnnotSSASwapRestoreRegister == ainstr->annotation) {
+    } else if (kAnnotSwapRestoreRegister == ainstr->annotation) {
       auto gpr = ainstr->Data<VirtualRegister>();
-      auto slot = slot_sched->SlotForGPR(gpr);
+      auto slot = sched->SlotForGPR(gpr);
       frag->instrs.InsertAfter(instr, arch::SwapGPRWithSlot(gpr, slot));
+    } else {
+      continue;
     }
+
+    // If we fell through, then this partition uses VRs.
+    MarkPartitionAsUsingVRs(frag);
   }
 }
 
-// Schedule all partition-local virtual registers within the fragments of a
-// given partition.
-static void ScheduleRegs(FragmentList *frags, PartitionInfo *partition) {
-  GPRScheduler gpr_sched;
-  VirtualRegister reg;
-  VirtualRegister preferred_gpr;
-  SSARegisterWeb *reg_web(nullptr);
-
-  // Used to bound the iterating through the fragment list after the first
-  // register has been scheduled.
-  Fragment *first_frag(frags->First());
-  Fragment *last_frag(nullptr);
-  FindPartitionBounds(frags, partition, &first_frag, &last_frag);
-  gpr_sched.MergeWebs(first_frag, last_frag, partition);
-
-  auto slot_num = 0UL;
-  auto orig_last_frag = last_frag;
-
-  // Schedule the virtual registers.
-  for (; gpr_sched.GetUnscheduledVR(&reg, &reg_web); ) {
-    gpr_sched.RecountGPRUsage(partition, first_frag, last_frag);
-    gpr_sched.used_regs.KillAll();
-    preferred_gpr = gpr_sched.GetPreferredGPRForVR(reg);
-    slot_num = partition->num_slots++;
-
-    for (auto frag : ReverseFragmentListIterator(last_frag)) {
-      // Filter on only a specific partition.
-      if (frag->partition.Value() != partition) continue;
-
-      auto ssa_frag = DynamicCast<SSAFragment *>(frag);
-      if (!ssa_frag) continue;
-
-      PartitionScheduler sched(reg, reg_web, slot_num, preferred_gpr);
-      ScheduleRegs(&sched, &gpr_sched, ssa_frag);
-
-      if (frag == first_frag) break;
-    }
-  }
-
+// Schedule the saves/restores of arch GPRs.
+static void ScheduleSaveRestores(RegisterScheduler *sched,
+                                 FragmentList *frags) {
   // Schedule the save/restores.
-  SaveRestoreScheduler slot_sched(partition);
-  for (auto frag : ReverseFragmentListIterator(orig_last_frag)) {
-    if (frag->partition.Value() == partition) {
-      if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-        ScheduleSaveRestores(&slot_sched, ssa_frag);
-      }
-    } else if (frag == first_frag) {
-      break;
+  for (auto frag : FragmentListIterator(frags)) {
+    if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+      ScheduleSaveRestores(sched, cfrag);
     }
   }
 }
 
-// Schedule fragment-local registers. We start by doing things one partition at
-// at time. Identifying partitions is simple because every partition has a
-// single entrypoint: its PartitionEntryFragment. There are technically some
-// partitions with no such fragment, but those don't use virtual registers.
-static void ScheduleRegs(FragmentList *frags) {
+// Assign the slots to the partitions for later slot allocation.
+static void MarkPartitionUseCounts(RegisterScheduler *sched,
+                                   FragmentList *frags) {
+  if (!sched->num_slots) return;
   for (auto frag : FragmentListIterator(frags)) {
-    if (auto part_frag = DynamicCast<PartitionEntryFragment *>(frag)) {
-      auto partition = part_frag->partition.Value();
-      GRANARY_ASSERT(nullptr != partition);
-      ScheduleRegs(frags, partition);
+    if (auto partition = frag->partition.Value()) {
+      if (partition->uses_vrs) partition->num_slots = sched->num_slots;
     }
-  }
-}
-
-// Add annotations to the fragment that marks the "beginning" of the fragment
-// to the register scheduler. This is so that we order the spills in a
-// meaningful way.
-//
-// Note: We want to be sensitive about not placing the "begin" instruction too
-//       soon because there might be labels that are targeted by branches in
-//       other fragments.
-static void AddFragBeginAnnotations(FragmentList *frags) {
-  for (auto frag : FragmentListIterator(frags)) {
-    if (auto ssa_frag = DynamicCast<SSAFragment *>(frag)) {
-      auto global_annot = new AnnotationInstruction(
-          kAnnotSSARegisterSpillAnchor);
-      for (auto instr : InstructionListIterator(frag->instrs)) {
-        if (IsA<NativeInstruction *>(instr) ||
-            !IsA<LabelInstruction *>(instr)) {
-          ssa_frag->instrs.InsertBefore(instr, global_annot);
-          goto next;
-        }
-      }
-      ssa_frag->instrs.Append(global_annot);
-    }
-
-  next:
-    continue;
   }
 }
 
@@ -869,8 +476,64 @@ static void AddFragBeginAnnotations(FragmentList *frags) {
 
 // Schedule virtual registers.
 void ScheduleRegisters(FragmentList *frags) {
-  AddFragBeginAnnotations(frags);
-  ScheduleRegs(frags);
+  VRIdSet vrs;
+  RegisterScheduler sched;
+  UsedRegisterSet preferred_gprs;
+
+  // TODO(pag): Weighted sorting of VRs by number of uses, where the number of
+  //            uses is weighted to favor hot code.
+  GetSchedulableVRs(frags, &vrs);
+
+  for (auto vr_id : vrs) {
+    sched.ResetGlobal(frags);
+
+    // Allocate a slot for the VR, and try to find a preferred GPR for the VR.
+    // The idea with the preferred GPRs is that we ideally want the VR to be
+    // homed to a specific GPR over the entire live range of the VR.
+    // Specifically, we also want the GPR to be homed to its preferred GPR
+    // across control-flow edges. Otherwise, we say the VR is always in its
+    // slot across control-flow edges.
+    auto preferred_gpr = sched.GetPreferredGPR(preferred_gprs);
+    auto slot = 0UL;
+    if (preferred_gpr.IsValid()) {
+      preferred_gprs.Revive(preferred_gpr);
+    } else {
+      slot = sched.num_slots++;
+    }
+
+    for (auto frag : FragmentListIterator(frags)) {
+      if (auto cfrag = DynamicCast<CodeFragment *>(frag)) {
+
+        // This VR has a preferred GPR, and so it will be homed to that GPR
+        // across control-flow transfers.
+        if (preferred_gpr.IsValid()) {
+
+          // Only thing in compensation fragments are implicit register
+          // kills for VRs that are homed to preferred GPRs.
+          if (cfrag->attr.is_compensation_frag) {
+            if (cfrag->entry_regs.Contains(vr_id) &&
+                !cfrag->exit_regs.Contains(vr_id)) {
+              cfrag->instrs.Prepend(arch::RestoreGPRFromSlot(
+                  preferred_gpr, sched.SlotForGPR(preferred_gpr)));
+            }
+
+          } else {
+            ScheduleRegisters(&sched, cfrag, vr_id, preferred_gpr);
+          }
+
+        // Without preferred GRPs, all transfers will end up going through
+        // spill slots anyway, so there is no interference with compensation
+        // code.
+        } else if (!cfrag->attr.is_compensation_frag) {
+          ScheduleRegisters(&sched, cfrag, vr_id, slot);
+        }
+      }
+    }
+  }
+
+  sched.ResetGPRSlots();
+  ScheduleSaveRestores(&sched, frags);
+  MarkPartitionUseCounts(&sched, frags);
 }
 
 }  // namespace granary

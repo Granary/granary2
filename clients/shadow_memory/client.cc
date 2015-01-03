@@ -13,7 +13,7 @@ GRANARY_DEFINE_positive_uint(shadow_granularity, 64,
     "The default value is `64`, which means: 1 page of physical memory "
     "maps to one unit of shadow memory.",
 
-    "direct_shadow_memory");
+    "shadow_memory");
 
 namespace {
 enum : uint64_t {

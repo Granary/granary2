@@ -23,16 +23,18 @@ DirectEdge::~DirectEdge(void) {
   if (dest_meta) delete dest_meta;
 }
 
-IndirectEdge::IndirectEdge(const BlockMetaData *dest_meta_)
+IndirectEdge::IndirectEdge(const BlockMetaData *source_meta_,
+                           const BlockMetaData *dest_meta_)
     : out_edge_pc(nullptr),
-      meta_template(dest_meta_),
+      source_block_meta(source_meta_),
+      dest_block_meta_template(dest_meta_),
       next(nullptr),
       out_edge_template(nullptr),
       out_edges(),
       lock() {}
 
 IndirectEdge::~IndirectEdge(void) {
-  delete meta_template;
+  delete dest_block_meta_template;
 }
 
 }  // namespace granary

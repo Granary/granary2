@@ -20,14 +20,7 @@ namespace arch {
 // Adds a fall-through jump, if needed, to this fragment.
 void AddFallThroughJump(Fragment *frag, Fragment *fall_through_frag) {
   Instruction ni;
-  if (fall_through_frag->encoded_pc) {
-    JMP_RELBRd(&ni, fall_through_frag->encoded_pc);
-  } else {
-    auto &label(frag->entry_label);
-    if (!label) label = new LabelInstruction;
-    fall_through_frag->instrs.Prepend(label);
-    JMP_RELBRd(&ni, label);
-  }
+  JMP_RELBRd(&ni, fall_through_frag->encoded_pc);  // Doesn't matter if null.
   frag->fall_through_instr = new NativeInstruction(&ni);
   frag->instrs.Append(frag->fall_through_instr);
 }

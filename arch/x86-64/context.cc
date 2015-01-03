@@ -143,7 +143,7 @@ CodeFragment *CreateContextCallFragment(Context *context,
   all_regs.ReviveAll();
 
   APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));
-  APP_INSTR(new AnnotationInstruction(kAnnotSSAReviveRegisters, all_regs));
+  APP_INSTR(new AnnotationInstruction(kAnnotReviveRegisters, all_regs));
   APP(CALL_NEAR_RELBRd(&ni, cc->wrapped_callback);
       ni.is_stack_blind = true);
   APP_INSTR(new AnnotationInstruction(kAnnotCondEnterNativeStack));

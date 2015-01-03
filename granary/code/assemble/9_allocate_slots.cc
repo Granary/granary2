@@ -215,7 +215,7 @@ static void AllocateStackSlotsStackValid(PartitionInfo *partition,
   } else if (IsA<PartitionExitFragment *>(frag)) {
     frag->instrs.Append(arch::FreeStackSpace(
         -(frame_space - frag->stack_frame.entry_offset)));
-  } else if (IsA<SSAFragment *>(frag)) {
+  } else if (IsA<CodeFragment *>(frag)) {
     AdjustStackInstructions(frag, frame_space);
   }
 }
@@ -232,8 +232,8 @@ static void VerifyAllSlotsScheduled(Fragment *frag) {
           auto mem_op = UnsafeCast<MemoryOperand *>(op);
           VirtualRegister r1, r2;
           if (mem_op->CountMatchedRegisters(r1, r2)) {
-            GRANARY_ASSERT(!r1.IsVirtualSlot());
-            GRANARY_ASSERT(!r2.IsVirtualSlot());
+            GRANARY_ASSERT(!r1.IsVirtual());
+            GRANARY_ASSERT(!r2.IsVirtual());
           }
         } else if (op->IsRegister()) {
           auto reg_op = UnsafeCast<RegisterOperand *>(op);

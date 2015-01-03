@@ -400,7 +400,8 @@ static CodeFragment *AddIndirectEdge(FragmentBuilder *builder,
   auto target_block = cfi->TargetBlock();
   auto inst_target = DynamicCast<InstrumentedBlock *>(target_block);
   auto target_meta = inst_target->UnsafeMetaData();
-  auto edge = builder->context->AllocateIndirectEdge(target_meta);
+  auto edge = builder->context->AllocateIndirectEdge(
+      pred_frag->block_meta, target_meta);
   auto frag = arch::GenerateIndirectEdgeCode(builder->frags, edge, cfi,
                                              pred_frag, target_meta);
   return frag;
@@ -511,67 +512,6 @@ static void ProcessCFI(FragmentBuilder *builder, CodeFragment *pred_frag,
   } else {
     GRANARY_ASSERT(false);
   }
-
-#if 0
-
-
-  auto pred_frag = frag;
-  frag = new CodeFragment;
-
-
-
-
-
-  // Update stack validity.
-  if (instr->IsFunctionCall() || instr->IsFunctionReturn() ||
-      instr->IsInterruptReturn()
-      GRANARY_IF_KERNEL( || instr->IsInterruptCall() )) {
-    frag->stack.status = kStackStatusValid;
-  }
-
-  // Specialized return, indirect call/jump.
-  if (!target_frag) {
-    GRANARY_ASSERT(IsA<ReturnBlock *>(target_block) ||
-                   IsA<IndirectBlock *>(target_block));
-    auto inst_target = DynamicCast<InstrumentedBlock *>(target_block);
-    auto target_meta = inst_target->UnsafeMetaData();
-    auto edge = builder->context->AllocateIndirectEdge(target_meta);
-
-    target_frag = arch::GenerateIndirectEdgeCode(builder->frags, edge, instr,
-                                                 frag, target_meta);
-    target_block->fragment = target_frag;
-
-    // Force the predecessor to be in the same partition, because the
-    // predecessor likely defines the virtual register that contains the
-    // target of this CFI.
-    if (pred_frag) frag->partition.Union(frag, pred_frag);
-
-    // We force the in-edge code to be in the same partition. At the same time,
-    // we have `attr.can_add_succ_to_partition == false`, so that we don't add
-    // fall-throughs into the same partition.
-    frag->partition.Union(reinterpret_cast<Fragment *>(frag), target_frag);
-
-  // Going to a decoded basic block or native/cached/direct edge code.
-  } else {
-    frag->attr.can_add_succ_to_partition = false;
-  }
-
-  frag->successors[kFragSuccBranch] = target_frag;
-
-  // Add in a fall-through successor.
-  if (instr->IsFunctionCall() || instr->IsConditionalJump() ||
-      instr->IsSystemCall() || instr->IsInterruptCall()) {
-    AddBlockTailToWorkList(builder, frag, nullptr, instr->Next(), frag->stack);
-
-    auto fall_through_frag = DynamicCast<CodeFragment *>(
-        frag->successors[kFragSuccFallThrough]);
-
-    fall_through_frag->attr.can_add_pred_to_partition = false;
-    fall_through_frag->attr.follows_cfi = true;
-  }
-
-
-#endif
 }
 
 // Process a native instruction. Returns `true` if the instruction is added

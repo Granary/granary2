@@ -87,7 +87,8 @@ static_assert(arch::CACHE_LINE_SIZE_BYTES >= sizeof(DirectEdge),
 // Granary.
 class IndirectEdge {
  public:
-  explicit IndirectEdge(const BlockMetaData *dest_meta_);
+  explicit IndirectEdge(const BlockMetaData *source_meta_,
+                        const BlockMetaData *dest_meta_);
   ~IndirectEdge(void);
 
   // The entrypoint to the in-edge code. The value changes as follows:
@@ -108,8 +109,11 @@ class IndirectEdge {
   //        to (1).
   CachePC out_edge_pc;
 
+  // Meta-data associated with the block containing the indirect CFI.
+  const BlockMetaData * const source_block_meta;
+
   // Meta-data template associated with targets of this indirect CFI.
-  const BlockMetaData * const meta_template;
+  const BlockMetaData * const dest_block_meta_template;
 
   // Next edge in a linked list of all indirect edges in some context.
   IndirectEdge *next;

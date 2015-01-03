@@ -81,7 +81,7 @@ GRANARY_ENTRYPOINT void granary_enter_indirect_edge(IndirectEdge *edge,
     auto &encoded_pc(edge->out_edges[target_app_pc]);
     if (!encoded_pc) {
       auto context = GlobalContext();
-      auto meta = context->InstantiateBlockMetaData(edge->meta_template,
+      auto meta = context->InstantiateBlockMetaData(edge->dest_block_meta_template,
                                                     target_app_pc);
       encoded_pc = Translate(context, edge, meta);
       edge->out_edge_pc = encoded_pc;

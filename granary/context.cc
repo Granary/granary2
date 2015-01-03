@@ -156,8 +156,10 @@ void Context::PreparePatchDirectEdge(DirectEdge *edge) {
 }
 
 // Allocates an indirect edge data structure.
-IndirectEdge *Context::AllocateIndirectEdge(const BlockMetaData *meta) {
-  auto edge = new IndirectEdge(meta);
+IndirectEdge *Context::AllocateIndirectEdge(
+    const BlockMetaData *source_block_meta,
+    const BlockMetaData *dest_block_meta) {
+  auto edge = new IndirectEdge(source_block_meta, dest_block_meta);
   SpinLockedRegion locker(&indirect_edge_list_lock);
   edge->next = indirect_edge_list;
   indirect_edge_list = edge;

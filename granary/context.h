@@ -61,7 +61,8 @@ class Context {
   void PreparePatchDirectEdge(DirectEdge *edge);
 
   // Allocates an indirect edge data structure.
-  IndirectEdge *AllocateIndirectEdge(const BlockMetaData *dest_block_meta);
+  IndirectEdge *AllocateIndirectEdge(const BlockMetaData *source_block_meta,
+                                     const BlockMetaData *dest_block_meta);
 
   // Get a pointer to this context's code cache index.
   Index *CodeCacheIndex(void);

@@ -167,7 +167,7 @@ Callback *GenerateInlineCallback(InlineFunctionCall *call) {
 
 #define SAVE_ARG(arg) \
   if (arg < num_args) { \
-    APP_INSTR(new AnnotationInstruction(kAnnotSSASaveRegister, r ## arg)); \
+    APP_INSTR(new AnnotationInstruction(kAnnotSaveRegister, r ## arg)); \
     arg_regs.Revive(r ## arg); \
   }
 
@@ -183,7 +183,7 @@ Callback *GenerateInlineCallback(InlineFunctionCall *call) {
 
 #define RESTORE_ARG(arg) \
   if (arg < num_args) \
-    APP_INSTR(new AnnotationInstruction(kAnnotSSARestoreRegister, r ## arg))
+    APP_INSTR(new AnnotationInstruction(kAnnotRestoreRegister, r ## arg))
 
 // Generates some code to target some client function. The generated code tries
 // to minimize the amount of saved/restored machine state, and punts on the
@@ -231,8 +231,11 @@ void ExtendFragmentWithInlineCall(Context *context,
   MOVE_ARG(4);
   MOVE_ARG(5);
 
+  // By this point, we will have moved new values into `arg_regs`, and so
+  // we want to make sure they those values are all live by the time we get
+  // to here.
   if (num_args) {
-    APP_INSTR(new AnnotationInstruction(kAnnotSSAReviveRegisters, arg_regs));
+    APP_INSTR(new AnnotationInstruction(kAnnotReviveRegisters, arg_regs));
   }
 
   APP_INSTR(new AnnotationInstruction(kAnnotCondLeaveNativeStack));

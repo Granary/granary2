@@ -409,7 +409,7 @@ static void AllocateSlots(NativeInstruction *instr) {
 // potentially mode (e.g. kernel/user) specific way.
 void AllocateSlots(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    if (IsA<SSAFragment *>(frag)) {
+    if (IsA<CodeFragment *>(frag)) {
       auto partition = frag->partition.Value();
 
       // Only do stack switching if the stack isn't valid. Same thing with

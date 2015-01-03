@@ -18,12 +18,15 @@ class TinySet {
   typedef TinySet<T, kMinSize> SelfType;
 
   TinySet(void)
-      : elems() {}
+      : elems(),
+        size(0) {}
 
   TinySet(const TinySet<T, kMinSize> &that)
-      : elems(that.elems) {}
+      : elems(that.elems),
+        size(that.size) {}
 
   bool Contains(T elem) const {
+    GRANARY_ASSERT(T() != elem);
     for (const auto e : elems) {
       if (e == elem) return true;
     }
@@ -32,49 +35,124 @@ class TinySet {
 
   inline SelfType &operator=(const SelfType &that) {
     elems = that.elems;
+    size = that.size;
     return *this;
   }
 
-  unsigned long Size(void) const {
-    return elems.Size();
+  size_t Size(void) const {
+    return size;
   }
 
-  void Add(T elem) {
+  bool Add(T elem) {
+    GRANARY_ASSERT(T() != elem);
     if (!Contains(elem)) {
       elems.Append(elem);
+      ++size;
+      return true;
     }
+    return false;
   }
 
-  void Remove(T elem) {
+  bool Remove(T elem) {
+    GRANARY_ASSERT(T() != elem);
     for (auto &e : elems) {
       if (e == elem) {
         e = T();
+        --size;
+        return true;
       }
+    }
+    return false;
+  }
+
+  void Union(const SelfType &that) {
+    if (&that == this) return;
+    for (auto elem : that) {
+      Add(elem);
     }
   }
 
+ private:
   typedef TinyVector<T, kMinSize> VecT;
-  typedef decltype(static_cast<VecT *>(nullptr)->begin()) Iterator;
-  typedef decltype(static_cast<const VecT *>(nullptr)->begin()) ConstIterator;
+
+  VecT elems;
+  size_t size;
+
+  typedef decltype(elems.begin()) VecIterator;
+  typedef decltype(const_cast<const decltype(elems) *>(&elems)->begin())
+      ConstVecIterator;
+
+  // Iterator over the entries of the `TinyMap`.
+  template <typename VecIteratorType>
+  class IteratorImpl {
+   public:
+    typedef IteratorImpl<VecIteratorType> IteratorImplType;
+    typedef typename VecIteratorType::ElementType U;
+
+    inline IteratorImpl(void)
+        : it() {}
+
+    inline IteratorImpl(const IteratorImplType &that)  // NOLINT
+        : it(that.it) {}
+
+    inline explicit IteratorImpl(VecIteratorType it_)
+          : it(it_) {
+      Advance();
+    }
+
+    inline bool operator!=(const IteratorImplType &that) const {
+      return it != that.it;
+    }
+
+    inline U operator*(void) const {
+      return *it;
+    }
+
+    inline U &operator*(void) {
+      return *it;
+    }
+
+    void operator++(void) {
+      ++it;
+      Advance();
+    }
+
+   private:
+    void Advance(void) {
+      while (it != VecIteratorType()) {
+        if (T() == *it) {
+          ++it;  // Skip over empty keys.
+        } else {
+          break;
+        }
+      }
+    }
+
+    VecIteratorType it;
+  };
+
+ public:
+
+  typedef IteratorImpl<VecIterator> Iterator;
+  typedef IteratorImpl<ConstVecIterator> ConstIterator;
 
   Iterator begin(void) {
-    return elems.begin();
+    return Iterator(elems.begin());
   }
 
   Iterator end(void) {
-    return elems.end();
+    return Iterator();
   }
 
   ConstIterator begin(void) const {
-    return elems.begin();
+    return ConstIterator(elems.begin());
   }
 
   ConstIterator end(void) const {
-    return elems.end();
+    return ConstIterator();
   }
 
- private:
-  VecT elems;
+
 };
 
 }  // namespace granary

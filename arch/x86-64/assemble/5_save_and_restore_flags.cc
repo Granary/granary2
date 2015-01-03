@@ -57,8 +57,9 @@ void InjectSaveFlags(Fragment *frag) {
   GRANARY_ASSERT(!killed_flags.s.df);
 
   // Step 4: Restore RAX.
-  frag->instrs.Prepend(new AnnotationInstruction(kAnnotSSASwapRestoreRegister,
-                                                 REG_RAX));
+  frag->instrs.Prepend(new AnnotationInstruction(
+      kAnnotSwapRestoreRegister, REG_RAX));
+
   // Step 3: Save the overflow flag.
   if (flags.s.of) PREP(SETO_GPR8(&ni, XED_REG_AL));
 
@@ -66,8 +67,7 @@ void InjectSaveFlags(Fragment *frag) {
   PREP(LAHF(&ni));
 
   // Step 1: Save the native version of `flag_killed_reg` into `flag_save_reg`.
-  frag->instrs.Prepend(new AnnotationInstruction(kAnnotSSASaveRegister,
-                                                 REG_RAX));
+  frag->instrs.Prepend(new AnnotationInstruction(kAnnotSaveRegister, REG_RAX));
 }
 
 // Inserts instructions that restore the flags within the fragment `frag`.
@@ -81,7 +81,7 @@ void InjectRestoreFlags(Fragment *frag) {
 
   // Step 1: Extract the saved flags from `flag_save_reg`, while keeping
   // the value of `flag_killed_reg` alive.
-  frag->instrs.Prepend(new AnnotationInstruction(kAnnotSSASwapRestoreRegister,
+  frag->instrs.Prepend(new AnnotationInstruction(kAnnotSwapRestoreRegister,
                                                  REG_RAX));
   // Step 2: Restore the overflow flag.
   if (flags.s.of) {
@@ -92,7 +92,7 @@ void InjectRestoreFlags(Fragment *frag) {
   APP(SAHF(&ni));
 
   // Step 4: Restore the native value of `flag_killed_reg`
-  frag->instrs.Append(new AnnotationInstruction(kAnnotSSARestoreRegister,
+  frag->instrs.Append(new AnnotationInstruction(kAnnotRestoreRegister,
                                                 REG_RAX));
 }
 

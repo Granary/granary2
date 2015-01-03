@@ -7,7 +7,6 @@
 #include "granary/cfg/instruction.h"
 
 #include "granary/code/inline_assembly.h"
-#include "granary/code/ssa.h"
 
 #include "granary/breakpoint.h"
 #include "granary/util.h"
@@ -74,14 +73,6 @@ std::unique_ptr<Instruction> Instruction::Unlink(Instruction *instr) {
 AnnotationInstruction::~AnnotationInstruction(void) {
   if (!data) return;
   switch (annotation) {
-    case kAnnotSSARegisterWebOwner:
-    case kAnnotSSASaveRegister:
-    case kAnnotSSARestoreRegister:
-    case kAnnotSSASwapRestoreRegister:
-      delete GetMetaData<SSARegisterWeb *>(this);
-      ClearMetaData();
-      break;
-
     case kAnnotInlineAssembly:
       delete reinterpret_cast<InlineAssemblyBlock *>(data);
       break;
@@ -151,17 +142,14 @@ LabelInstruction::LabelInstruction(void)
 
 NativeInstruction::NativeInstruction(const arch::Instruction *instruction_)
     : instruction(*instruction_),
-      ssa(nullptr),
+      num_used_vrs(0),
+      defined_vr(0),
+      used_vrs{0},
       os_annotation(nullptr) {
   GRANARY_IF_DEBUG( instruction.note_create = __builtin_return_address(0); )
 }
 
-NativeInstruction::~NativeInstruction(void) {
-  if (ssa) {
-    delete ssa;
-    ssa = nullptr;
-  }
-}
+NativeInstruction::~NativeInstruction(void) {}
 
 // Return the address in the native code from which this instruction was
 // decoded.

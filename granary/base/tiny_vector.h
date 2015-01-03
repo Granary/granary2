@@ -28,6 +28,8 @@ class TinyVector {
   template <typename S, typename U>
   class Iterator {
    public:
+    typedef U ElementType;
+
     inline Iterator(void)
         : vec(nullptr),
           i(0) {}

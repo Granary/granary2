@@ -34,25 +34,6 @@ GRANARY_IF_DEBUG( extern void AddFallThroughTrap(Fragment *frag); )
 }  // namespace arch
 namespace {
 
-#if 0
-// Try to remove useless direct jump instructions that will only have a zero
-// displacement.
-static void TryElideBranches(NativeInstruction *branch_instr) {
-  auto &ainstr(branch_instr->instruction);
-
-  // Note: Using the `ainstr` instead of `branch_instr` for checks as some
-  //       direct jumps to native code are mangled into indirect jumps (because
-  //       the target is too far away), but this is hidden, except from the
-  //       `arch::Instruction` interface.
-  if (ainstr.IsJump() && !ainstr.IsConditionalJump() &&
-      !ainstr.HasIndirectTarget() &&
-      (IsA<BranchInstruction *>(branch_instr) ||
-       IsA<ControlFlowInstruction *>(branch_instr))) {
-    ainstr.DontEncode();
-  }
-}
-#endif
-
 struct FragmentWorkList {
   // First fragment on the work list.
   Fragment *next;
@@ -129,9 +110,11 @@ static void EnqueueStragglerFragments(FragmentList *frags,
 }
 
 static void OrderFragments(FragmentWorkList *work_list) {
+  auto encoded_order = 1;
   while (auto curr = work_list->next) {
     work_list->next = curr->next;
     curr->next = nullptr;
+    curr->encoded_order = encoded_order++;
     *(work_list->next_ptr) = curr;
     work_list->next_ptr = &(curr->next);
 

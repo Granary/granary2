@@ -295,9 +295,9 @@ static bool IsPartitionExit(Fragment * const curr, Fragment * const next) {
 
 // Reset the pass-specific "back link" pointer that is used to re-use entry and
 // exit fragments.
-static void ResetTempData(FragmentList *frags) {
+static void ResetEntryExitFrag(FragmentList *frags) {
   for (auto frag : FragmentListIterator(frags)) {
-    frag->temp.entry_exit_frag = nullptr;
+    frag->entry_exit_frag = nullptr;
   }
 }
 
@@ -312,7 +312,7 @@ static void AddExitFragment(FragmentList *frags,
     // Try to merge some of the exit fragments using the `entry_exit_frag`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
-    auto &back_link(succ->temp.entry_exit_frag);
+    auto &back_link(succ->entry_exit_frag);
     if (back_link && curr->partition == back_link->partition) {
       *succ_ptr = back_link;
     } else {
@@ -328,7 +328,7 @@ static void AddExitFragment(FragmentList *frags,
 static void AddExitFragments(FragmentList * const frags,
                              bool (*is_end)(Fragment *, Fragment *),
                              Fragment *(*make_frag)(Fragment *, Fragment *)) {
-  ResetTempData(frags);
+  ResetEntryExitFrag(frags);
   for (auto frag : FragmentListIterator(frags)) {
     for (auto &succ : frag->successors) {
       if (succ) {
@@ -349,7 +349,7 @@ static void AddEntryFragment(FragmentList *frags,
     // Try to merge some of the entry fragments using the `entry_exit_frag`
     // pointer in fragment. This will allow us to generate slightly tighter
     // code.
-    auto &back_link(succ->temp.entry_exit_frag);
+    auto &back_link(succ->entry_exit_frag);
     if (back_link && succ->partition == back_link->partition) {
       *succ_ptr = back_link;
     } else {
@@ -442,13 +442,13 @@ void AddEntryAndExitFragments(FragmentList *frags) {
   // against this entry fragment is that the first instruction of the first
   // fragment is a function call / return / something else that can't be
   // added to a partition.
-  ResetTempData(frags);
+  ResetEntryExitFrag(frags);
   auto first_frag = frags->First();
   if (!IsA<ControlFlowInstruction *>(first_frag->branch_instr)) {
     auto first_entry = MakeFragment<PartitionEntryFragment>(first_frag,
                                                             first_frag);
     frags->Prepend(first_entry);
-    first_frag->temp.entry_exit_frag = first_entry;
+    first_frag->entry_exit_frag = first_entry;
   }
 
   AddEntryFragments(frags, IsPartitionEntry,
@@ -457,9 +457,9 @@ void AddEntryAndExitFragments(FragmentList *frags) {
   AddExitFragments(frags, IsPartitionExit,
                    MakeFragment<PartitionExitFragment>);
 
-  ResetTempData(frags);
+  ResetEntryExitFrag(frags);
   AddEntryFragments(frags, IsFlagEntry, MakeFragment<FlagEntryFragment>);
-  ResetTempData(frags);
+  ResetEntryExitFrag(frags);
   AddExitFragments(frags, IsFlagExit, MakeFragment<FlagExitFragment>);
   LabelPartitions(frags);
   PropagateCodeCacheKinds(frags);

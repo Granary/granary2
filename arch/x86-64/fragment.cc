@@ -12,26 +12,18 @@
 
 namespace granary {
 
-namespace {
-static void CountGPRUse(RegisterUsageCounter *counter, VirtualRegister reg) {
-  if (reg.IsNative() && reg.IsGeneralPurpose()) {
-    counter->num_uses_of_gpr[reg.Number()] += 1;
-  }
-}
-}  // namespace
-
 // Count the number of uses of the arch GPRs in a particular instruction.
 void RegisterUsageCounter::CountGPRUses(const NativeInstruction *instr) {
   auto &ainstr(instr->instruction);
   for (auto &aop : ainstr.ops) {
     if (aop.IsRegister()) {
-      CountGPRUse(this, aop.reg);
+      CountGPRUse(aop.reg);
     } else if (aop.IsMemory() && !aop.IsPointer()) {
       if (aop.is_compound) {
-        CountGPRUse(this, aop.mem.base);
-        CountGPRUse(this, aop.mem.index);
+        CountGPRUse(aop.mem.base);
+        CountGPRUse(aop.mem.index);
       } else {
-        CountGPRUse(this, aop.reg);
+        CountGPRUse(aop.reg);
       }
     } else if (!aop.IsValid()) {
       return;
