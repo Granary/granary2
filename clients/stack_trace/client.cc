@@ -21,6 +21,7 @@ static __thread size_t tThreadStackIndex = kInitialThreadStackIndex;
 // Copy up to `buff_size` of the most recent program counters from the stack
 // trace into `buff`, and return the number of copied
 size_t CopyStackTrace(AppPC *buff, size_t buff_size) {
+  memset(buff, 0, buff_size);
   for (auto i = 0UL; i < buff_size; ++i) {
     auto index = tThreadStackIndex - i;
     if (!index) return i;

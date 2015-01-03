@@ -158,7 +158,6 @@ static uint64_t TypeId(AllocatorTrace &trace, size_t size) {
   auto name = WRAPPED_FUNCTION; \
   auto ret_address = NATIVE_RETURN_ADDRESS; \
   AllocatorTrace trace; \
-  memset(&trace, 0, sizeof trace); \
   trace.allocator = reinterpret_cast<AppPC>(name); \
   trace.ret_address = ret_address
 
