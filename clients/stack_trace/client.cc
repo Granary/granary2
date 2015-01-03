@@ -46,6 +46,8 @@ class CallStackTracer : public InstrumentationTool {
 
       // Push the return address on the stack.
       if (succ.cfi->IsFunctionCall()) {
+        if (IsA<NativeBlock *>(succ.block)) continue;
+
         auto return_address = succ.cfi->DecodedPC() + succ.cfi->DecodedLength();
         succ.cfi->InsertBefore(
             lir::InlineFunctionCall(block, EnterFunction, return_address));

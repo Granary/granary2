@@ -31,11 +31,9 @@ namespace os {
 namespace {
 
 enum : size_t {
-  kBlockCacheNumPages = 20480UL,  // 80mb
-  kBlockCacheNumBytes = kBlockCacheNumPages * arch::PAGE_SIZE_BYTES,
-  kEdgeCacheNumPages = 2560,  // 10mb
-  kEdgeCacheNumBytes = kEdgeCacheNumPages * arch::PAGE_SIZE_BYTES,
-  kCodeCacheNumBytes = kBlockCacheNumBytes + kEdgeCacheNumBytes,
+  kCodeCacheNumPages = 40960UL,  // 160mb
+  kCodeCacheNumBytes = kCodeCacheNumPages * arch::PAGE_SIZE_BYTES,
+
   kHeapNumPages = 40960UL,  // 160mb
   kHeapNumBytes = kHeapNumPages * arch::PAGE_SIZE_BYTES,
   kMmapNumBytes = kCodeCacheNumBytes + kHeapNumBytes
@@ -47,7 +45,7 @@ struct code_cache_tag {};
 struct heap_memory_tag {};
 
 // Slab allocators for block and edge cache code.
-static StaticPageAllocator<kBlockCacheNumPages, code_cache_tag, kMemoryTypeRWX>
+static StaticPageAllocator<kCodeCacheNumPages, code_cache_tag, kMemoryTypeRWX>
     gBlockMemory GRANARY_EARLY_GLOBAL;
 
 static StaticPageAllocator<kHeapNumPages, heap_memory_tag, kMemoryTypeRW>

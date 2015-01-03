@@ -6,8 +6,6 @@
 
 #ifdef GRANARY_WHERE_user
 
-#include "dependencies/fasthash/fasthash.h"
-
 #include "clients/watchpoints/client.h"  // For type ID stuff.
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
@@ -48,17 +46,17 @@ GRANARY_DECLARE_positive_uint(shadow_granularity);
 namespace {
 enum : size_t {
   // Stack size of monitor thread.
-  kStackSize = arch::PAGE_SIZE_BYTES * 2,
+  kStackSize = arch::PAGE_SIZE_BYTES * 2UL,
 
-  // Maximum number of sample points tha
-  kNumSamplePoints = kMaxWatchpointTypeId + 1,
+  // Maximum number of sample points that can be watched.
+  kNumSamplePoints = kMaxWatchpointTypeId + 1UL,
 
   // Not all of the sample points are usable because we reserve type id = 0 to
   // represent "unwatched" memory.
-  kNumUsableSamplePoints = kNumSamplePoints - 1,
+  kNumUsableSamplePoints = kNumSamplePoints - 1UL,
 
   // How big of a stack trace should be recorder per sample?
-  kSampleStackTraceSize = 5
+  kSampleStackTraceSize = 5UL
 };
 
 // Shadow memory for ownership tracking.
@@ -107,8 +105,14 @@ struct SamplePoint {
   MemoryAccess accesses[2];
 };
 
+struct AllocatorTrace {
+  AppPC allocator;
+  AppPC ret_address;
+  StackTrace stack_trace;
+};
+
 // Stack traces per type.
-static StackTrace gTypeTraces[kNumUsableSamplePoints] = {{nullptr}};
+static AllocatorTrace gTypeTraces[kNumUsableSamplePoints];
 
 // The stack on which the monitor thread executes.
 alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
@@ -140,13 +144,12 @@ static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
 
 // Returns the type id for an allocation size. This is also responsible for
 // initializing the stack trace for the type information.
-static uint64_t TypeId(StackTrace trace, size_t size) {
-  CopyStackTrace(&(trace[2]), sizeof(StackTrace) - 2 * sizeof trace[0]);
-  auto trace_hash = fasthash64(trace, sizeof(StackTrace), 0);
-  auto type_id = TypeIdFor(trace_hash, size);
+static uint64_t TypeId(AllocatorTrace &trace, size_t size) {
+  auto type_id = TypeIdFor(trace.ret_address, size);
   if (kMaxWatchpointTypeId <= type_id) return 0;
   if (!gRecentAllocations[type_id]) {
-    memcpy(gTypeTraces[type_id], trace, sizeof(StackTrace));
+    CopyStackTrace(trace.stack_trace);
+    memcpy(&(gTypeTraces[type_id]), &trace, sizeof trace);
   }
   return type_id;
 }
@@ -154,10 +157,10 @@ static uint64_t TypeId(StackTrace trace, size_t size) {
 #define GET_ALLOCATOR(name) \
   auto name = WRAPPED_FUNCTION; \
   auto ret_address = NATIVE_RETURN_ADDRESS; \
-  StackTrace trace; \
-  memset(trace, 0, sizeof trace); \
-  trace[0] = reinterpret_cast<AppPC>(name); \
-  trace[1] = ret_address
+  AllocatorTrace trace; \
+  memset(&trace, 0, sizeof trace); \
+  trace.allocator = reinterpret_cast<AppPC>(name); \
+  trace.ret_address = ret_address
 
 #define SAMPLE_AND_RETURN_ADDRESS \
   if (addr) AddRecentAllocation(TypeId(trace, size), addr); \
@@ -309,7 +312,10 @@ static void LogTypeInfo(const SamplePoint &sample) {
           sample.offset_in_object,
           sample.offset_in_object + FLAG_shadow_granularity,
           SizeOfType(sample.type_id));
-  LogStackTrace(gTypeTraces[sample.type_id]);
+  const auto &type_trace(gTypeTraces[sample.type_id]);
+  LogPC(type_trace.allocator);
+  LogPC(type_trace.ret_address);
+  LogStackTrace(type_trace.stack_trace);
 }
 
 // Reports stack reports for found issues.
@@ -323,6 +329,12 @@ static void ReportSamplePoints(void) {
     // Read/read, assume no contention.
     if (!sample.accesses[0].location.is_write &&
         !sample.accesses[1].location.is_write) {
+      continue;
+    }
+
+    // Atomic/atomic, assume no contention.
+    if (sample.accesses[0].location.is_atomic &&
+        sample.accesses[1].location.is_atomic) {
       continue;
     }
 
