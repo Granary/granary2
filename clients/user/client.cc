@@ -56,6 +56,24 @@ static void RemoveAllHooks(void) {
   gExitHooks.Reset();
 }
 
+// Trigger an exit when the program is killed.
+static void ExitOnSignal(int) {
+  exit(1);
+}
+
+// Try to handle a signal, assuming no handler is already present.
+static void TryHandleSignal(int signum, void (*handler)(int)) {
+  struct kernel_sigaction new_sigaction;
+  rt_sigaction(signum, nullptr, &new_sigaction, _NSIG / 8);
+  if (new_sigaction.k_sa_handler) return;
+  memset(&new_sigaction, 0, sizeof new_sigaction);
+  memset(&(new_sigaction.sa_mask), 0xFF, sizeof new_sigaction.sa_mask);
+  new_sigaction.k_sa_handler = handler;
+  GRANARY_IF_DEBUG( auto ret = ) rt_sigaction(signum, &new_sigaction, nullptr,
+                                              _NSIG / 8);
+  GRANARY_ASSERT(!ret);
+}
+
 }  // namespace
 
 // Handle a system call entrypoint.
@@ -105,11 +123,16 @@ class UserSpaceInstrumenter : public InstrumentationTool {
  public:
   virtual ~UserSpaceInstrumenter(void) = default;
 
+  static void Init(InitReason reason) {
+    if (kInitProgram == reason || kInitAttach == reason) {
+      TryHandleSignal(SIGTERM, ExitOnSignal);
+      TryHandleSignal(SIGINT, ExitOnSignal);
+    }
+  }
+
   static void Exit(ExitReason reason) {
     if (kExitThread == reason) return;
-    if (FLAG_hook_syscalls) {
-      RemoveAllHooks();
-    }
+    if (FLAG_hook_syscalls) RemoveAllHooks();
   }
 
   virtual void InstrumentEntrypoint(BlockFactory *factory,

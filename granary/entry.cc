@@ -21,6 +21,9 @@ GRANARY_DEFINE_bool(unsafe_patch_edges, false,
 // TODO(pag): Only do profiling on conditional edges?
 
 namespace granary {
+
+extern ReaderWriterLock gExitGranaryLock;
+
 namespace arch {
 
 // Patch a direct edge.
@@ -60,7 +63,8 @@ extern "C" {
 GRANARY_ENTRYPOINT void granary_enter_direct_edge(DirectEdge *edge) {
   VALGRIND_ENABLE_ERROR_REPORTING; {
     GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    os::LockedRegion locker(&edge->lock);
+    ReadLockedRegion exit_locker(&gExitGranaryLock);
+    os::LockedRegion edge_locker(&edge->lock);
     if (!EdgeHasTranslation(edge)) {
       auto context = GlobalContext();
       edge->entry_target_pc = Translate(context, edge->dest_block_meta);
@@ -77,7 +81,8 @@ GRANARY_ENTRYPOINT void granary_enter_indirect_edge(IndirectEdge *edge,
                                                     AppPC target_app_pc) {
   VALGRIND_ENABLE_ERROR_REPORTING; {
     GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    os::LockedRegion locker(&(edge->lock));
+    ReadLockedRegion exit_locker(&gExitGranaryLock);
+    os::LockedRegion edge_locker(&(edge->lock));
     auto &encoded_pc(edge->out_edges[target_app_pc]);
     if (!encoded_pc) {
       auto context = GlobalContext();

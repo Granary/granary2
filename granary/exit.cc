@@ -14,10 +14,15 @@
 #include "os/module.h"
 
 namespace granary {
+
+ReaderWriterLock gExitGranaryLock;
+
 extern "C" {
 // Exported to assembly code. This is the "fast" version of Granary's exit,
 // where almost all resources are *not* cleaned up.
 void granary_exit(ExitReason reason) {
+  gExitGranaryLock.WriteAcquire();  // Don't unlock.
+
 #ifdef GRANARY_WITH_VALGRIND
   // If we're debugging with Valgrind then try to clean everything up. This
   // helps track down memory leaks.

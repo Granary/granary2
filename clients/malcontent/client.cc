@@ -41,6 +41,12 @@ GRANARY_DEFINE_positive_uint(sample_pause_time, 0,
 
     "malcontent");
 
+GRANARY_DEFINE_string(sample_instructions, "",
+    "Path of the file that contains information about what blocks to "
+    "instrument.",
+
+    "malcontent");
+
 GRANARY_DECLARE_positive_uint(shadow_granularity);
 
 namespace {
