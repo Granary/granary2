@@ -102,7 +102,7 @@ struct MemoryAccess {
   StackTrace stack_trace;
 };
 
-// Represents
+// Information about a sampled chunk of shadow memory.
 struct SamplePoint {
   uint64_t type_id;
   OwnershipTracker *tracker;
@@ -111,6 +111,7 @@ struct SamplePoint {
   MemoryAccess accesses[2];
 };
 
+// Approximate information about an allocation site.
 struct AllocatorTrace {
   AppPC allocator;
   AppPC ret_address;

@@ -367,6 +367,9 @@ static void ConvertDecodedPrefixes(Instruction *instr,
   // in the repeat prefixes for those instructions and passed them through to
   // then encoder then it will barf.
   if (xed_operand_values_has_real_rep(xedd)) {
+    instr->has_prefix_xacquire = xed_decoded_inst_is_xacquire(xedd);
+    instr->has_prefix_xrelease = xed_decoded_inst_is_xrelease(xedd);
+    instr->has_prefix_mpx = xed_decoded_inst_has_mpx_prefix(xedd);
     instr->has_prefix_rep = xed_operand_values_has_rep_prefix(xedd);
     instr->has_prefix_repne = xed_operand_values_has_repne_prefix(xedd);
   }

@@ -274,6 +274,9 @@ class Instruction : public InstructionInterface {
     //
     // TODO(pag): Remove branch hints? Might be needed for special non-
     //            control-flow instructions.
+    bool has_prefix_xacquire:1;
+    bool has_prefix_xrelease:1;
+    bool has_prefix_mpx:1;
     bool has_prefix_rep:1;
     bool has_prefix_repne:1;
     bool has_prefix_lock:1;
