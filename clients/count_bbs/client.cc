@@ -103,7 +103,7 @@ class BBCount : public InstrumentationTool {
       }
       gAllBlocks = nullptr;
     }
-    os::Log("# %lu blocks were translated.\n", NUM_BBS.load());
+    os::Log("#count_bbs %lu blocks were translated.\n", NUM_BBS.load());
   }
 
   virtual ~BBCount(void) = default;

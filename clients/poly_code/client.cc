@@ -8,16 +8,23 @@
 
 GRANARY_USING_NAMESPACE granary;
 
+GRANARY_DEFINE_bool(record_block_types, true,
+    "Should we record the specific types accessed by each basic block? If not, "
+    "then all that will be recorded is that a particular block accessed data "
+    "of any type. The default value is `yes`.");
+
 // Track the set of types accessed by each basic block.
 class TypeMetaData : public MutableMetaData<TypeMetaData> {
  public:
   TypeMetaData(void)
       : type_ids(),
         type_ids_lock(),
+        accesses_typed_data(false),
         next(nullptr) {}
 
   TypeMetaData(const TypeMetaData &that)
-      : next(nullptr) {
+      : accesses_typed_data(that.accesses_typed_data),
+        next(nullptr) {
     ReadLockedRegion locker(&(that.type_ids_lock));
     type_ids = that.type_ids;
   }
@@ -27,11 +34,22 @@ class TypeMetaData : public MutableMetaData<TypeMetaData> {
   TinySet<uint16_t, 4> type_ids;
   mutable ReaderWriterLock type_ids_lock;
 
+  // Does this block access typed data? This is only used if
+  // `--record_block_types` is `false`.
+  bool accesses_typed_data;
+
   // Next block meta-data.
   BlockMetaData *next;
 };
 
 namespace {
+
+// If we care about reporting specific types, then use a different type id per
+// allocation. Otherwise, use the same type id for all allocations.
+static uintptr_t GetTypeId(AppPC ret_address, size_t size) {
+  if (FLAG_record_block_types) return TypeIdFor(ret_address, size);
+  return ~0UL;
+}
 
 #define GET_ALLOCATOR(name) \
   auto name = WRAPPED_FUNCTION; \
@@ -40,7 +58,7 @@ namespace {
 // Return a tainted allocated address.
 #define RETURN_TAINTED_ADDRESS \
     if (addr) { \
-      auto type_id = TypeIdFor(ret_address, size); \
+      auto type_id = GetTypeId(ret_address, size); \
       addr = TaintAddress(addr, type_id); \
     } \
     return addr \
@@ -140,41 +158,41 @@ class PolyCode : public InstrumentationTool {
   virtual ~PolyCode(void) = default;
 
   static void Init(InitReason reason) {
-    if (kInitThread == reason) return;
-
+    if (kInitProgram == reason || kInitAttach == reason) {
 #ifdef GRANARY_WHERE_user
-    // Wrap libc.
-    AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_pvalloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_aligned_alloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_memalign);
-    AddFunctionWrapper(&WRAP_FUNC_libc_posix_memalign);
-    AddFunctionWrapper(&WRAP_FUNC_libc_calloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_realloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_free);
+      // Wrap libc.
+      AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_pvalloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_aligned_alloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_memalign);
+      AddFunctionWrapper(&WRAP_FUNC_libc_posix_memalign);
+      AddFunctionWrapper(&WRAP_FUNC_libc_calloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_realloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_free);
 
-    // Wrap GNU's C++ standard library.
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znwm);
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znam);
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdlPv);
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdaPv);
+      // Wrap GNU's C++ standard library.
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znwm);
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znam);
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdlPv);
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__ZdaPv);
 
-    // Wrap clang's C++ standard library.
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdlPv);
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdaPv);
+      // Wrap clang's C++ standard library.
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdlPv);
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__ZdaPv);
 #endif  // GRANARY_WHERE_user
 
-    AddWatchpointInstrumenter(CallTaintBlock);
-    AddMetaData<TypeMetaData>();
+      AddWatchpointInstrumenter(CallTaintBlock);
+      AddMetaData<TypeMetaData>();
+    }
   }
 
   static void Exit(ExitReason reason) {
     if (kExitThread == reason) return;
 
-    ForEachType(LogTypeInfo);
+    if (FLAG_record_block_types) ForEachType(LogTypeInfo);
     SpinLockedRegion locker(&gAllBlocksLock);
     for (auto meta : BlockTypeInfoIterator(gAllBlocks)) {
       LogMetaInfo(meta);
@@ -215,8 +233,14 @@ class PolyCode : public InstrumentationTool {
   static void CallTaintBlock(const WatchedMemoryOperand &op) {
     auto meta = GetMetaData<TypeMetaData>(op.block);
     if (!meta) return;
-    op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
-        TaintBlock, meta, op.watched_reg_op));
+    if (FLAG_record_block_types) {
+      op.instr->InsertBefore(lir::InlineFunctionCall(op.block,
+          TaintBlock, meta, op.watched_reg_op));
+    } else {
+      MemoryOperand is_typed(&(meta->accesses_typed_data));
+      lir::InlineAssembly asm_(is_typed);
+      asm_.InlineBefore(op.instr, "OR m8 %0, i8 1;");
+    }
   }
 
   // Log info about what block (i.e. return address into a block) defines
@@ -239,9 +263,13 @@ class PolyCode : public InstrumentationTool {
     auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
     os::Log("B %s %lx", offset.module->Name(), offset.offset);
     auto sep = " Ts ";
-    for (auto type_id : type_meta->type_ids) {
-      os::Log("%s%lu", sep, static_cast<uint64_t>(type_id - 1));
-      sep = ",";
+    if (FLAG_record_block_types) {
+      for (auto type_id : type_meta->type_ids) {
+        os::Log("%s%lu", sep, static_cast<uint64_t>(type_id - 1));
+        sep = ",";
+      }
+    } else if (type_meta->accesses_typed_data) {
+      os::Log("%s*", sep);
     }
     os::Log("\n");
   }

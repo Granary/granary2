@@ -76,31 +76,31 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
 
   // Reset all globals to their initial state.
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
+    if (kExitDetach == reason) {
+      while (gDescriptions) {
+        auto desc = gDescriptions;
+        gDescriptions = desc->next;
+        desc->next = nullptr;
+        desc->instrumenter = nullptr;
+        desc->is_registered = false;
+        desc->offset_asm_instruction[0] = '\0';
+      }
 
-    while (gDescriptions) {
-      auto desc = gDescriptions;
-      gDescriptions = desc->next;
-      desc->next = nullptr;
-      desc->instrumenter = nullptr;
-      desc->is_registered = false;
-      desc->offset_asm_instruction[0] = '\0';
+      gNextDescription = &gDescriptions;
+      gNumDescriptions = 0;
+      gUnalignedSize = 0;
+      gAlignedSize = 1;
+      gPrevOffset = 0;
+      gScaleAmountLong = 0;
+      gScaleAmount = 0;
+      gShiftAmountLong = 0;
+      gShiftAmount = 0;
+      ExitShadowMemory();
+      gShadowMemSize = 0;
+      gShadowMemNumPages = 0;
+      gShadowMem = nullptr;
+      GRANARY_IF_USER( gShadowFd = -1; )
     }
-
-    gNextDescription = &gDescriptions;
-    gNumDescriptions = 0;
-    gUnalignedSize = 0;
-    gAlignedSize = 1;
-    gPrevOffset = 0;
-    gScaleAmountLong = 0;
-    gScaleAmount = 0;
-    gShiftAmountLong = 0;
-    gShiftAmount = 0;
-    ExitShadowMemory();
-    gShadowMemSize = 0;
-    gShadowMemNumPages = 0;
-    gShadowMem = nullptr;
-    GRANARY_IF_USER( gShadowFd = -1; )
   }
 
   virtual void InstrumentBlocks(Trace *trace) override {

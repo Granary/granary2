@@ -102,17 +102,19 @@ class FunctionWrapperInstrumenter : public InstrumentationTool {
   virtual ~FunctionWrapperInstrumenter(void) = default;
 
   static void Init(InitReason reason) {
-    if (kInitThread == reason) return;
-    AddMetaData<NextWrapperId>();
+    if (kInitProgram == reason || kInitAttach == reason) {
+      AddMetaData<NextWrapperId>();
+    }
   }
 
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
-    WriteLockedRegion locker(&wrappers_lock);
-    for (; wrappers; ) {
-      auto next_wrapper = wrappers->next;
-      wrappers->next = nullptr;
-      wrappers = next_wrapper;
+    if (kExitDetach == reason) {
+      WriteLockedRegion locker(&wrappers_lock);
+      for (; wrappers; ) {
+        auto next_wrapper = wrappers->next;
+        wrappers->next = nullptr;
+        wrappers = next_wrapper;
+      }
     }
   }
 

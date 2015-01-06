@@ -20,6 +20,13 @@ START_FILE_INTEL
 // functions. Without this explicit prefix, a new developer of Granary might
 // get confused into thinking that *any* `libc` function can be used.
 
+DEFINE_FUNC(fstat)
+    mov    r10,rcx
+    mov    eax, 5  // `__NR_fstat`.
+    syscall
+    ret
+END_FUNC(fstat)
+
 DEFINE_FUNC(mmap)
     mov    r10,rcx
     mov    eax, 9  // `__NR_mmap`.

@@ -7,31 +7,24 @@
 
 namespace granary {
 
-// Implements a simple atomic spin lock. Spin locks should be used sparingly
-// and for fine-grained locking.
+// Implements a simple ticket spin lock. Spin locks should be used sparingly
+// and only for fine-grained locking.
 class SpinLock {
  public:
   inline SpinLock(void)
-      : is_locked(ATOMIC_VAR_INIT(false)) {}
+      : serving_ticket(ATOMIC_VAR_INIT(0)),
+        next_ticket(ATOMIC_VAR_INIT(0)) {}
 
   // Blocks execution by spinning until the lock has been acquired.
-  bool TryAcquire(void);
-
-  // Blocks execution by spinning until the lock has been acquired.
-  inline void Acquire(void) {
-    if (TryAcquire()) return;
-    ContendedAcquire();
-  }
+  void Acquire(void);
 
   // Release the lock. Assumes that the lock is acquired.
   void Release(void);
 
  private:
 
-  // Acquires the lock, knowing that the lock is currently contended.
-  void ContendedAcquire(void);
-
-  std::atomic<bool> is_locked;
+  std::atomic<int> serving_ticket;
+  std::atomic<int> next_ticket;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN(SpinLock);
 };

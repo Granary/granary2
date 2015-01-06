@@ -14,7 +14,7 @@ class Closure {
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Closure, {
     SHARED = true,
-    ALIGNMENT = 32
+    ALIGNMENT = 1
   })
 
   Closure *next;

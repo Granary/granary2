@@ -131,8 +131,9 @@ class UserSpaceInstrumenter : public InstrumentationTool {
   }
 
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
-    if (FLAG_hook_syscalls) RemoveAllHooks();
+    if (kExitDetach == reason) {
+      if (FLAG_hook_syscalls) RemoveAllHooks();
+    }
   }
 
   virtual void InstrumentEntrypoint(BlockFactory *factory,

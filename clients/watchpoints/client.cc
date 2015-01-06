@@ -38,13 +38,15 @@ class Watchpoints : public MemOpInstrumentationTool {
   virtual ~Watchpoints(void) = default;
 
   static void Init(InitReason reason) {
-    if (kInitThread == reason) return;
-    InitUserWatchpoints();
+    if (kInitProgram == reason || kInitAttach == reason) {
+      InitUserWatchpoints();
+    }
   }
 
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
-    watchpoint_hooks.Reset();
+    if (kExitDetach == reason) {
+      watchpoint_hooks.Reset();
+    }
   }
 
   virtual void InstrumentBlocks(Trace *trace) override {

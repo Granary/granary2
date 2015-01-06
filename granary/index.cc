@@ -20,6 +20,14 @@ namespace {
 static BlockMetaData * const kMetaArrayEnd = \
     reinterpret_cast<BlockMetaData *>(1ULL);
 
+#if 0
+// Linked list of un-indexed meta-data.
+static BlockMetaData *gUnindexedMeta = nullptr;
+
+// Linked list of invalidated block meta-data.
+static BlockMetaData *gInvalidatedMeta = nullptr;
+#endif
+
 enum {
   DEALLOCATED_MEMORY_POISON = 0xFA
 };

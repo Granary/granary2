@@ -8,23 +8,15 @@
 
 namespace granary {
 
-// Acquires the lock, knowing that the lock is currently contended.
-void SpinLock::ContendedAcquire(void) {
-  for (; is_locked.load(std::memory_order_relaxed) || !TryAcquire(); ) {}
-}
-
 // Returns true if the lock was acquired.
-bool SpinLock::TryAcquire(void) {
-  if (is_locked.exchange(true, std::memory_order_acquire)) {
-    arch::Relax();
-    return false;
-  }
-  return true;
+void SpinLock::Acquire(void) {
+  auto ticket = next_ticket.fetch_add(1, std::memory_order_acquire);
+  while (ticket != serving_ticket.load(std::memory_order_acq_rel)) {}
 }
 
 // Release the lock. Assumes that the lock is acquired.
 void SpinLock::Release(void) {
-  is_locked.store(false, std::memory_order_release);
+  serving_ticket.fetch_add(1, std::memory_order_release);
 }
 
 // Read-side acquire.

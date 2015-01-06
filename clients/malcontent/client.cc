@@ -41,13 +41,46 @@ GRANARY_DEFINE_positive_uint(sample_pause_time, 0,
 
     "malcontent");
 
-GRANARY_DEFINE_string(sample_instructions, "",
+GRANARY_DEFINE_string(sample_training_file, "",
     "Path of the file that contains information about what blocks to "
-    "instrument.",
+    "instrument. This file is created using the `generate_training_file.py` "
+    "script.",
+
+    "malcontent");
+
+GRANARY_DEFINE_bool(collect_memop_stats, false,
+    "Should we collect and report statistics about Malcontent? This will "
+    "collect statistics about:\n"
+    "   1)  Static count: Number of heavily instrumented memory operands.\n"
+    "   2)  Static count: Number of ignored memory operands (due to\n"
+    "       training).\n"
+    "   3)  Dynamic counts of (1) and (2).\n"
+    "   4)  Total number of samples taken.",
 
     "malcontent");
 
 GRANARY_DECLARE_positive_uint(shadow_granularity);
+
+// Statistics counters that allow us to measure the effectiveness and runtime
+// impact of training.
+struct MalcontentStats : public MutableMetaData<MalcontentStats> {
+  // Number of times this block was executed.
+  uint64_t num_execs;
+
+  // Number of times a sample point was hit somewhere in this block.
+  uint32_t num_hit_samples_watched;
+
+  // Number of times a sample point was hit somewhere in this block, where
+  // the current thread owns the sample point.
+  uint32_t num_hit_samples_contended;
+
+  // Number of memory operands (excluding stack pointer aliasing mem ops) in
+  // this block.
+  uint16_t num_memops;
+
+  // Are the memory operands of this block being heavily instrumented?
+  bool is_instrumented;
+};
 
 namespace {
 enum : size_t {
@@ -104,19 +137,132 @@ struct MemoryAccess {
 
 // Information about a sampled chunk of shadow memory.
 struct SamplePoint {
+  // Type ID associated with the memory being sampled.
   uint64_t type_id;
+
+  // Structure stored in shadow memory.
   OwnershipTracker *tracker;
+
+  // Byte offset within the sampled object. For example, some objects span
+  // multiple cache lines, so this will tell us where in the object `tracker`
+  // is sampling.
   size_t offset_in_object;
+
+  // Native address associated with the sampled memory.
   uintptr_t native_address;
+
+  // Access information for two contending threads.
   MemoryAccess accesses[2];
 };
 
 // Approximate information about an allocation site.
 struct AllocatorTrace {
-  AppPC allocator;
-  AppPC ret_address;
-  StackTrace stack_trace;
+  AppPC allocator;  // Allocator address (e.g. `malloc`).
+  AppPC ret_address;  // Immediate return address of allocator call.
+  StackTrace stack_trace;  // Call stack leading to caller of allocator.
 };
+
+// Information about a learned offset (stored in a binary file format).
+struct TrainedOffsetDesc {
+  const uint32_t offset;
+  const uint32_t accesses_shared_data;
+};
+
+// Learned information about a module (stored in a binary file format).
+struct TrainedModuleDesc {
+  const char name[256];
+  const uint64_t num_offsets;
+  const uint64_t is_last_desc;
+};
+
+// Information about a learned module.
+struct TrainedModuleInfo {
+  explicit TrainedModuleInfo(const TrainedModuleDesc *desc)
+      : next(nullptr),
+        module(os::ModuleByName(desc->name)),
+        module_name(desc->name),
+        begin_offsets(UnsafeCast<const TrainedOffsetDesc *>(desc + 1)),
+        end_offsets(&(begin_offsets[desc->num_offsets])) {}
+
+  // Returns true if this `LeanedModuleInfo` corresponds to an `os::Module`.
+  bool ModuleMatches(const os::Module *mod) const;
+
+  // Returns `true` if a particular block, as represented by a `os::ModuleOffset`
+  // of its entrypoint, will access any shared data.
+  bool BlockAccessesSharedData(uintptr_t mod_offset) const;
+
+  GRANARY_DEFINE_NEW_ALLOCATOR(TrainedModuleInfo, {
+    SHARED = true,
+    ALIGNMENT = 1
+  })
+
+  TrainedModuleInfo *next;
+  mutable const os::Module *module;
+  const char * const module_name;
+  const TrainedOffsetDesc * const begin_offsets;
+  const TrainedOffsetDesc * const end_offsets;
+};
+
+typedef LinkedListIterator<TrainedModuleInfo> TrainedModuleInfoIterator;
+
+static TrainedModuleInfo *gTrainedModules = nullptr;
+static int gTrainingFileFd = -1;
+static TrainedModuleDesc *gModuleDesc = nullptr;
+static size_t gModuleDescMapSize = 0;
+
+// Initialize the training file.
+static void InitTrainingFile(void) {
+  if (!HAS_FLAG_sample_training_file) return;
+  gTrainingFileFd = open(FLAG_sample_training_file, O_RDONLY);
+  if (0 >= gTrainingFileFd) {
+    FLAG_collect_memop_stats = false;
+    return;
+  }
+
+  struct stat training_file_info;
+  if (fstat(gTrainingFileFd, &training_file_info)) {
+    close(gTrainingFileFd);
+    gTrainingFileFd = -1;
+    FLAG_collect_memop_stats = false;
+    return;
+  }
+
+  gModuleDescMapSize = static_cast<size_t>(training_file_info.st_size);
+  GRANARY_ASSERT(sizeof(TrainedModuleDesc) <= gModuleDescMapSize);
+  gModuleDesc = reinterpret_cast<TrainedModuleDesc *>(mmap(
+      nullptr, gModuleDescMapSize,
+      PROT_READ, MAP_PRIVATE, gTrainingFileFd, 0));
+
+  for (auto desc = gModuleDesc;;) {
+    auto mod = new TrainedModuleInfo(desc);
+    mod->next = gTrainedModules;
+    gTrainedModules = mod;
+
+    if (desc->is_last_desc) break;
+    desc = reinterpret_cast<TrainedModuleDesc *>(
+        &(reinterpret_cast<uint8_t *>(desc + 1)[
+            desc->num_offsets * sizeof(TrainedOffsetDesc)]));
+  }
+}
+
+// Exit the training file.
+static void ExitTrainingFile(void) {
+  if (!FLAG_collect_memop_stats) return;
+
+  munmap(gModuleDesc, gModuleDescMapSize);
+  close(gTrainingFileFd);
+
+  for (auto mod = gTrainedModules; mod; ) {
+    auto next_mod = mod->next;
+    delete mod;
+    mod = next_mod;
+  }
+
+  gTrainingFileFd = -1;
+  gModuleDesc = nullptr;
+  gModuleDescMapSize = 0;
+  gTrainedModules = nullptr;
+}
 
 // Stack traces per type.
 static AllocatorTrace gTypeTraces[kNumUsableSamplePoints];
@@ -126,7 +272,8 @@ alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
 // Set of all shadow locations that can be sampled. This corresponds to recent
 // memory allocations.
-static void *gRecentAllocations[kNumSamplePoints] = {nullptr};
+static std::atomic<void *> gRecentAllocations[kNumSamplePoints] \
+    = {ATOMIC_VAR_INIT(nullptr)};
 
 // Set of active sample points.
 static SamplePoint gSamplePoints[kNumSamplePoints];
@@ -144,9 +291,38 @@ static size_t gCurrSourceIndex = 0;
 // Pause time (in microseconds).
 static long gPauseTime = 0;
 
+// Returns true if this `LeanedModuleInfo` corresponds to an `os::Module`.
+bool TrainedModuleInfo::ModuleMatches(const os::Module *mod) const {
+  if (GRANARY_UNLIKELY(!module && StringsMatch(module_name, mod->Name()))) {
+    module = mod;
+    return true;
+  } else {
+    return module == mod;
+  }
+}
+
+// Returns `true` if a particular block, as represented by a `os::ModuleOffset`
+// of its entrypoint, will access any shared data.
+bool TrainedModuleInfo::BlockAccessesSharedData(uintptr_t mod_offset) const {
+  auto first = begin_offsets;
+  auto last = end_offsets;
+  while (first <= last) {
+    auto offset_desc = first + ((last - first) / 2);
+    if (offset_desc->offset < mod_offset) {
+      first = offset_desc + 1;
+    } else if (offset_desc->offset > mod_offset) {
+      last = offset_desc - 1;
+    } else {
+      return !!offset_desc->accesses_shared_data;
+    }
+  }
+
+  return true;  // Be conservative; our learning never saw this block.
+}
+
 // Add an address to our potential sample population.
 static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
-  if (type_id) gRecentAllocations[type_id] = ptr;
+  if (type_id) gRecentAllocations[type_id].store(ptr);
 }
 
 // Returns the type id for an allocation size. This is also responsible for
@@ -154,7 +330,7 @@ static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
 static uint64_t TypeId(AllocatorTrace &trace, size_t size) {
   auto type_id = TypeIdFor(trace.ret_address, size);
   if (kMaxWatchpointTypeId <= type_id) return 0;
-  if (!gRecentAllocations[type_id]) {
+  if (!gRecentAllocations[type_id].load(std::memory_order_relaxed)) {
     CopyStackTrace(trace.stack_trace);
     memcpy(&(gTypeTraces[type_id]), &trace, sizeof trace);
   }
@@ -226,8 +402,11 @@ static void ClearActiveSamplePoints(void) {
   memset(&(gSamplePoints[0]), 0, sizeof gSamplePoints);
 }
 
+// Populates the sample point structures for each sampled address. This does
+// *not* activate the sample points (i.e. add watchpoints) until after all
+// sample points have been chosen.
 static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
-  auto alloc_addr = gRecentAllocations[type_id];
+  auto alloc_addr = gRecentAllocations[type_id].exchange(nullptr);
   if (!alloc_addr) return;
 
   auto tracker = ShadowOf<OwnershipTracker>(alloc_addr);
@@ -411,6 +590,8 @@ class Malcontent : public InstrumentationTool {
       FLAG_num_sample_points = kNumUsableSamplePoints;
     }
 
+    if (FLAG_collect_memop_stats) AddMetaData<MalcontentStats>();
+
     // Wrap libc.
     AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
     AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
@@ -428,6 +609,7 @@ class Malcontent : public InstrumentationTool {
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
     AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
 
+    InitTrainingFile();
     CreateMonitorThread();
     AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
                                          ShouldInstrumentMemOp);
@@ -438,14 +620,30 @@ class Malcontent : public InstrumentationTool {
   // Exit; this kills off the monitor thread.
   static void Exit(ExitReason reason) {
     if (kExitThread == reason) return;
-    if (kExitProgram != reason && -1 != gMonitorThread) {
-      kill(gMonitorThread, SIGKILL);
+
+    // Heavy weight tear-down because we're detaching (but might
+    // re-attach later).
+    if (kExitDetach == reason) {
+      if (-1 != gMonitorThread) kill(gMonitorThread, SIGKILL);
+      gMonitorThread = -1;
+      gCurrSourceIndex = 0;
+      gPauseTime = 0;
+      memset(gRecentAllocations, 0, sizeof gRecentAllocations);
+      ClearActiveSamplePoints();
+      ExitTrainingFile();
     }
-    gMonitorThread = -1;
-    gCurrSourceIndex = 0;
-    gPauseTime = 0;
-    memset(gRecentAllocations, 0, sizeof gRecentAllocations);
-    ClearActiveSamplePoints();
+  }
+
+  // Instrument a basic block. This is used only when we're recording
+  // statistics, and counts the number of executions of a particular block.
+  virtual void InstrumentBlock(DecodedBlock *block) {
+    if (!FLAG_collect_memop_stats) return;
+    auto meta = GetMetaData<MalcontentStats>(block);
+
+    MemoryOperand exec_count(&meta->num_execs);
+    lir::InlineAssembly asm_(exec_count);
+    asm_.InlineAfter(block->FirstInstruction(),
+         "INC m64 %0;"_x86_64);
   }
 
  protected:
@@ -486,8 +684,28 @@ class Malcontent : public InstrumentationTool {
     CopyStackTrace(access.stack_trace);
   }
 
+  // Returns `true` if a particular memory operand should or should not be
+  // instrumented.
   static bool ShouldInstrumentMemOp(const InstrumentedMemoryOperand &op) {
-    return !op.native_addr_op.IsStackPointerAlias();
+    if (op.native_addr_op.IsStackPointerAlias()) return false;
+
+    auto is_instrumented = true;
+    auto offs = os::ModuleOffsetOfPC(op.block->StartAppPC());
+    for (auto mod : TrainedModuleInfoIterator(gTrainedModules)) {
+      if (mod->ModuleMatches(offs.module)) {
+        is_instrumented = mod->BlockAccessesSharedData(offs.offset);
+        break;
+      }
+    }
+
+    if (FLAG_collect_memop_stats) {
+      auto meta = GetMetaData<MalcontentStats>(op.block);
+      meta->is_instrumented = is_instrumented;
+      meta->num_memops++;
+    }
+
+    // Be conservative: we've never seen this module before.
+    return is_instrumented;
   }
 
   static void InstrumentMemOp(const ShadowedMemoryOperand &op) {
@@ -501,23 +719,37 @@ class Malcontent : public InstrumentationTool {
       reinterpret_cast<uintptr_t>(op.instr->DecodedPC())
     }};
 
+    MalcontentStats *meta(nullptr);
+    if (FLAG_collect_memop_stats) meta = GetMetaData<MalcontentStats>(op.block);
+
     ImmediateOperand mem_access_op(mem_access.value);
     RegisterOperand tracker(op.block->AllocateVirtualRegister());
-    lir::InlineAssembly asm_(op.shadow_addr_op, tracker);
+    MemoryOperand num_hit_samples_watched(&(meta->num_hit_samples_watched));
+    MemoryOperand num_hit_samples_contended(&(meta->num_hit_samples_contended));
+
+    lir::InlineAssembly asm_(op.shadow_addr_op,
+                             tracker,
+                             num_hit_samples_watched,
+                             num_hit_samples_contended);
 
     asm_.InlineBefore(op.instr,
         // Start with a racy read of `OwnershipTracker::sample_id`.
         // This allows us to optimize the common case, which is that
         // sample_id = 0 (which is reserved for unwatched memory).
         "CMP m16 [%0 + 6], i8 0;"
-        "JZ l %2;"
+        "JZ l %4;"
+        "@COLD;"_x86_64);
 
+    // Increment the `num_hit_samples_watched` counter for this block.
+    asm_.InlineBeforeIf(op.instr, FLAG_collect_memop_stats,
+        "INC m32 %2;"_x86_64);
+
+    asm_.InlineBefore(op.instr,
         // Racy check that we don't own the cache line. Compare only
         // the low order 32 bits.
-        "@COLD;"
         "MOV r64 %1, m64 FS:[0];"
         "CMP m32 [%0], r32 %1;"
-        "JZ l %2;"
+        "JZ l %4;"
 
         // Okay, we might be taking ownership, or detecting contention.
         // So, we'll add ourselves to the shadow and pull out the old
@@ -525,7 +757,13 @@ class Malcontent : public InstrumentationTool {
         // bits as 0, we'll end up marking the shadow as unwatched. If in
         // `InstrumentContention` we detect that we should take ownership,
         // then we'll re-watch the memory.
-        "@FROZEN;"
+        "@FROZEN;"_x86_64);
+
+    // Increment the `num_hit_samples_contended` counter for this block.
+    asm_.InlineBeforeIf(op.instr, FLAG_collect_memop_stats,
+        "INC m32 %3;"_x86_64);
+
+    asm_.InlineBefore(op.instr,
         "XCHG m64 [%0], r64 %1;"_x86_64);
 
     op.instr->InsertBefore(
@@ -536,7 +774,7 @@ class Malcontent : public InstrumentationTool {
 
     asm_.InlineBefore(op.instr,
         // Done, fall-through to instruction.
-        "@LABEL %2:"_x86_64);
+        "@LABEL %4:"_x86_64);
   }
 };
 
