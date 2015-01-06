@@ -38,8 +38,10 @@ class IndexMetaData : public MutableMetaData<IndexMetaData> {
   // Note: If this is non-null, then this block is stored in the code cache
   //       index. This works because some of the `next` pointers will be
   //       tombstones.
-  BlockMetaData *next;
+  mutable const BlockMetaData *next;
 };
+
+typedef MetaDataLinkedListIterator<IndexMetaData> IndexMetaDataIterator;
 
 // Response returned from a lookup request in the code cache index.
 struct IndexFindResponse {
@@ -54,57 +56,23 @@ struct IndexFindResponse {
   UnificationStatus status;
 
   // Meta-data that we found for our query.
-  BlockMetaData *meta;
+  const BlockMetaData *meta;
 };
 
-namespace internal {
-enum {
-  NUM_POINTERS_PER_PAGE = arch::PAGE_SIZE_BYTES / sizeof(void *)
-};
-class MetaDataArray;
-}  // namespace internal
+// Initialize the code cache index.
+void InitIndex(void);
 
-// Implements Granary's code cache.
-//
-// Note: This class does allows readers to execute concurrently with respect
-class Index {
- public:
-  Index(void) = default;
+// Exit the code cache index.
+void ExitIndex(void);
 
-  // Deletes all meta-data arrays and the various stored meta-data.
-  ~Index(void);
+// Perform a lookup operation in the code cache index. Lookup operations might
+// not return exact matches, as hinted at by the `status` field of the
+// `IndexFindResponse` structure. This has to do with block unification.
+IndexFindResponse FindMetaDataInIndex(const BlockMetaData *meta);
 
-  // Perform a lookup operation in the code cache index. Lookup operations might
-  // not return exact matches, as hinted at by the `status` field of the
-  // `IndexFindResponse` structure. This has to do with block unification.
-  IndexFindResponse Request(BlockMetaData *meta);
+// Insert a block into the code cache index.
+void AddMetaDataToIndex(BlockMetaData *meta);
 
-  // Insert a block into the code cache index.
-  void Insert(BlockMetaData *meta);
-
-  // Remove all meta-data (from the index) associated with any application
-  // code falling in the address range `[begin, end)`. Returns a pointer to
-  // a linked list (via `IndexMetaData`) of all removed block meta-data.
-  BlockMetaData *RemoveRange(AppPC begin, AppPC end);
-
-  static void *operator new(std::size_t);
-  static void operator delete(void *address);
-
-  static void *operator new[](std::size_t) = delete;
-  static void operator delete[](void *) = delete;
-
- private:
-  // Array of arrays of lists of meta-data.
-  internal::MetaDataArray *arrays[internal::NUM_POINTERS_PER_PAGE];
-
-  // Array of locks for *modifying* the last-level lists of meta-data.
-  os::Lock second_level_locks[internal::NUM_POINTERS_PER_PAGE];
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(Index);
-};
-
-static_assert(sizeof(Index) <= 2 * arch::PAGE_SIZE_BYTES,
-              "The size of `Index` must be exactly one page.");
 }  // namespace granary
 
 #endif  // GRANARY_INDEX_H_

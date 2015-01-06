@@ -20,7 +20,7 @@ namespace granary {
 namespace {
 
 // Add the trace entrypoint to the index.
-static void IndexEntryBlock(Index *index, Trace *cfg) {
+static void IndexEntryBlock(Trace *cfg) {
   const auto entry_block = cfg->EntryBlock();
   GRANARY_ASSERT(nullptr != entry_block);
 
@@ -29,9 +29,9 @@ static void IndexEntryBlock(Index *index, Trace *cfg) {
 
   // Only index the meta-data if there's not already some suitable meta-data in
   // the index.
-  auto response = index->Request(meta);
+  const auto response = FindMetaDataInIndex(meta);
   if (kUnificationStatusAccept != response.status) {
-    index->Insert(meta);
+    AddMetaDataToIndex(meta);
   }
 }
 
@@ -41,9 +41,7 @@ static CachePC CompileAndIndex(Context *context, Trace *trace,
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
     auto encoded_pc = Compile(context, trace);
-
-    auto index = context->CodeCacheIndex();
-    IndexEntryBlock(index, trace);
+    IndexEntryBlock(trace);
     GRANARY_ASSERT(nullptr != cache_meta->start_pc);
     return encoded_pc;
   } else {
@@ -55,14 +53,13 @@ static CachePC CompileAndIndex(Context *context, Trace *trace,
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(Context *context, AppPC pc) {
-  auto meta = context->AllocateBlockMetaData(pc);
-  return Translate(context, meta);
+  return Translate(context, new BlockMetaData(pc));
 }
 
 // Instrument, compile, and index some basic blocks.
 CachePC Translate(Context *context, BlockMetaData *meta) {
   Trace cfg(context);
-  BinaryInstrumenter inst(context, &cfg, &meta);
+  BinaryInstrumenter inst(&cfg, &meta);
   inst.InstrumentDirect();
   return CompileAndIndex(context, &cfg, meta);
 }
@@ -80,11 +77,10 @@ CachePC Translate(Context *context, BlockMetaData *meta) {
 //         "instantiating" the out edge into a fragment).
 CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
   Trace cfg(context);
-  BinaryInstrumenter inst(context, &cfg, &meta);
+  BinaryInstrumenter inst(&cfg, &meta);
   inst.InstrumentIndirect();
   auto encoded_pc = Compile(context, &cfg, edge, meta);
-  auto index = context->CodeCacheIndex();
-  IndexEntryBlock(index, &cfg);
+  IndexEntryBlock(&cfg);
   return encoded_pc;
 }
 
@@ -93,7 +89,7 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
 CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
                             EntryPointKind kind, int category) {
   Trace cfg(context);
-  BinaryInstrumenter inst(context, &cfg, &meta);
+  BinaryInstrumenter inst(&cfg, &meta);
   inst.InstrumentEntryPoint(kind, category);
   return CompileAndIndex(context, &cfg, meta);
 }
@@ -102,8 +98,8 @@ CachePC TranslateEntryPoint(Context *context, BlockMetaData *meta,
 // to some native code.
 CachePC TranslateEntryPoint(Context *context, AppPC target_pc,
                             EntryPointKind kind, int category) {
-  auto meta = context->AllocateBlockMetaData(target_pc);
-  return TranslateEntryPoint(context, meta, kind, category);
+  return TranslateEntryPoint(context, new BlockMetaData(target_pc),
+                             kind, category);
 }
 
 }  // namespace granary

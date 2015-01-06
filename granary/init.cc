@@ -9,6 +9,7 @@
 #include "granary/cache.h"
 #include "granary/client.h"
 #include "granary/context.h"
+#include "granary/index.h"
 #include "granary/init.h"
 #include "granary/metadata.h"
 
@@ -58,6 +59,7 @@ void Init(InitReason reason) {
 
   InitMetaData();
   InitCodeCache();
+  InitIndex();
   InitClients();
   InitContext();
   InitToolManager();

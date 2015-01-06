@@ -24,14 +24,11 @@ GRANARY_DEFINE_positive_int(max_num_control_flow_iterations, 8,
 namespace granary {
 
 // Initialize a binary instrumenter.
-BinaryInstrumenter::BinaryInstrumenter(Context *context_,
-                                       Trace *cfg_,
-                                       BlockMetaData **meta_)
-    : context(context_),
-      tools(AllocateTools()),
+BinaryInstrumenter::BinaryInstrumenter(Trace *cfg_, BlockMetaData **meta_)
+    : tools(AllocateTools()),
       meta(meta_),
-      cfg(cfg_),
-      factory(context, cfg) {}
+      trace(cfg_),
+      factory(trace) {}
 
 BinaryInstrumenter::~BinaryInstrumenter(void) {
   FreeTools(tools);
@@ -70,7 +67,7 @@ void BinaryInstrumenter::InstrumentIndirect(void) {
 void BinaryInstrumenter::InstrumentEntryPoint(EntryPointKind kind,
                                               int category) {
   factory.MaterializeIndirectEntryBlock(*meta);
-  auto entry_block = DynamicCast<CompensationBlock *>(cfg->EntryBlock());
+  auto entry_block = DynamicCast<CompensationBlock *>(trace->EntryBlock());
   for (auto tool : ToolIterator(tools)) {
     tool->InstrumentEntryPoint(&factory, entry_block, kind, category);
   }
@@ -105,18 +102,18 @@ void BinaryInstrumenter::InstrumentControlFlow(void) {
   auto stop = false;
   for (auto num_iterations = 1; ; factory.MaterializeRequestedBlocks()) {
     for (auto tool : ToolIterator(tools)) {
-      tool->InstrumentControlFlow(&factory, cfg);
+      tool->InstrumentControlFlow(&factory, trace);
     }
     if (stop) break;
     if (!factory.HasPendingMaterializationRequest()) {
-      if (FinalizeControlFlow(&factory, cfg)) {
+      if (FinalizeControlFlow(&factory, trace)) {
         factory.MaterializeRequestedBlocks();
         stop = true;
       } else {
         break;
       }
     } else if (++num_iterations >= FLAG_max_num_control_flow_iterations) {
-      FinalizeControlFlow(&factory, cfg);
+      FinalizeControlFlow(&factory, trace);
       stop = true;
     }
   }
@@ -125,7 +122,7 @@ void BinaryInstrumenter::InstrumentControlFlow(void) {
 // Apply trace-wide instrumentation for every tool.
 void BinaryInstrumenter::InstrumentBlocks(void) {
   for (auto tool : ToolIterator(tools)) {
-    tool->InstrumentBlocks(cfg);
+    tool->InstrumentBlocks(trace);
   }
 }
 
@@ -134,7 +131,7 @@ void BinaryInstrumenter::InstrumentBlocks(void) {
 // Note: This applies tool-specific instrumentation for all tools to a single
 //       block before moving on to the next block in the trace.
 void BinaryInstrumenter::InstrumentBlock(void) {
-  for (auto block : cfg->Blocks()) {
+  for (auto block : trace->Blocks()) {
     for (auto tool : ToolIterator(tools)) {
       if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
         tool->InstrumentBlock(decoded_block);

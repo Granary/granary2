@@ -156,6 +156,15 @@ struct RemoveConst<const T> {
   typedef T Type;
 };
 
+template <typename T>
+struct IsConst : public FalseType {};
+
+template <typename T>
+struct IsConst<const T> : public TrueType {};
+
+template <typename T>
+struct IsConst<const volatile T> : public TrueType {};
+
 #undef GRANARY_DEFINE_TRAIT_REFERENCES
 
 }  // namespace granary

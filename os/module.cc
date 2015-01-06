@@ -386,26 +386,5 @@ ConstModuleIterator LoadedModules(void) {
   return gModuleManager->Modules();
 }
 
-// Invalidate all cache code related belonging to some module code. Returns
-// true if any module code was invalidated as a result of this operation.
-//
-// TODO(pag): This is the wrong way of going about this I think. This all needs
-//            to be re-thought out.
-bool InvalidateModuleCode(Context *context, AppPC start_pc,
-                          uintptr_t num_bytes_) {
-  auto num_bytes = ROUND_DOWN_TO_PAGE(static_cast<uintptr_t>(num_bytes_) +
-                                      arch::PAGE_SIZE_BYTES - 1UL);
-  auto begin_addr = ROUND_DOWN_TO_PAGE(reinterpret_cast<uintptr_t>(start_pc));
-  auto end_addr = begin_addr + num_bytes;
-
-  if (gModuleManager->RemoveRange(begin_addr, end_addr)) {
-    context->InvalidateIndexedBlocks(
-        reinterpret_cast<AppPC>(begin_addr),
-        reinterpret_cast<AppPC>(end_addr));
-    return true;
-  }
-  return false;
-}
-
 }  // namespace os
 }  // namespace granary

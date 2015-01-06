@@ -196,6 +196,19 @@ BlockMetaData::BlockMetaData(void) {
   }
 }
 
+// Initialize a new meta-data instance. This initializes the `AppMetaData`
+// as well.
+BlockMetaData::BlockMetaData(AppPC app_pc) {
+  auto this_ptr = reinterpret_cast<uintptr_t>(this);
+  for (auto desc : gMetaManager->descriptions) {
+    if (desc) {
+      GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
+      desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
+    }
+  }
+  MetaDataCast<AppMetaData *>(this)->start_pc = app_pc;
+}
+
 // Destroy a meta-data instance. This involves separately destroying the
 // contained meta-data within this generic meta-data.
 BlockMetaData::~BlockMetaData(void) {
@@ -223,7 +236,7 @@ BlockMetaData *BlockMetaData::Copy(void) const {
   return that;
 }
 
-// Compare the serializable components of two generic meta-data instances for
+// Compare the indexable components of two generic meta-data instances for
 // strict equality.
 bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);

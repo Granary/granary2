@@ -73,7 +73,7 @@ class BlockFactory {
   // graph. The environment is needed for lookups in the code cache index, and
   // the trace is needed so that blocks can be added.
   GRANARY_INTERNAL_DEFINITION
-  BlockFactory(Context *context_, Trace *cfg_);
+  explicit BlockFactory(Trace *cfg_);
 
   // Request that a block be materialized. This does nothing if the block is
   // not a `DirectBlock`.
@@ -165,11 +165,8 @@ class BlockFactory {
   GRANARY_INTERNAL_DEFINITION
   bool MaterializeBlock(DirectBlock *block);
 
-  // Then environment in which we're decoding.
-  GRANARY_INTERNAL_DEFINITION Context *context;
-
   // The trace into which blocks are materialized.
-  GRANARY_INTERNAL_DEFINITION Trace *cfg;
+  GRANARY_INTERNAL_DEFINITION Trace *trace;
 
   GRANARY_INTERNAL_DEFINITION bool has_pending_request;
 

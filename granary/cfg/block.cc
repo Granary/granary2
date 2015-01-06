@@ -127,6 +127,9 @@ CachePC InstrumentedBlock::StartCachePC(void) const {
   return cache_meta->start_pc;
 }
 
+CachedBlock::CachedBlock(Trace *cfg_, const BlockMetaData *meta_)
+    : InstrumentedBlock(cfg_, const_cast<BlockMetaData *>(meta_)) {}
+
 DecodedBlock::~DecodedBlock(void) {
   for (Instruction *instr(first), *next_instr(nullptr); instr;) {
     next_instr = instr->Next();

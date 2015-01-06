@@ -215,10 +215,10 @@ class InstrumentedBlock : public Block {
 // A basic block that has already been committed to the code cache.
 class CachedBlock final : public InstrumentedBlock {
  public:
-  virtual ~CachedBlock(void) = default;
-
   GRANARY_INTERNAL_DEFINITION
-  using InstrumentedBlock::InstrumentedBlock;
+  CachedBlock(Trace *cfg_, const BlockMetaData *meta_);
+
+  virtual ~CachedBlock(void) = default;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CachedBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CachedBlock, {
@@ -238,7 +238,7 @@ class DecodedBlock : public InstrumentedBlock {
   virtual ~DecodedBlock(void);
 
   GRANARY_INTERNAL_DEFINITION
-  explicit DecodedBlock(Trace *cfg_, BlockMetaData *meta_);
+  DecodedBlock(Trace *cfg_, BlockMetaData *meta_);
 
   // Return an iterator of the successor blocks of this basic block.
   virtual detail::SuccessorBlockIterator Successors(void) const override;

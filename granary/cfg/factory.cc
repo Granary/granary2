@@ -16,7 +16,6 @@
 
 #include "granary/app.h"
 #include "granary/cache.h"
-#include "granary/context.h"
 #include "granary/index.h"
 #include "granary/util.h"
 
@@ -88,10 +87,8 @@ void SaveStateForExceptionCFI(DecodedBlock *block,
 // Initialize the factory with an environment and a local control-flow graph.
 // The environment is needed for lookups in the code cache index, and the trace
 // is needed so that blocks can be added.
-BlockFactory::BlockFactory(Context *context_,
-                           Trace *cfg_)
-    : context(context_),
-      cfg(cfg_),
+BlockFactory::BlockFactory(Trace *cfg_)
+    : trace(cfg_),
       has_pending_request(false) {}
 
 // Request that a block be materialized. This does nothing if the block is
@@ -139,9 +136,8 @@ static Instruction *AsApp(std::unique_ptr<Instruction> instr,
 
 // Create an intermediate basic block that adapts one version of a block to
 // another version.
-static CompensationBlock *AdaptToBlock(Trace *cfg,
-                                            BlockMetaData *meta,
-                                            Block *existing_block) {
+static CompensationBlock *AdaptToBlock(Trace *cfg, BlockMetaData *meta,
+                                       Block *existing_block) {
   auto adapt_block = new CompensationBlock(cfg, meta);
   adapt_block->AppendInstruction(AsApp(lir::Jump(existing_block), meta));
   return adapt_block;
@@ -157,11 +153,11 @@ NativeInstruction *BlockFactory::MakeInstruction(
   AppPC emulation_pc(nullptr);
   if (instr->HasIndirectTarget()) {
     if (instr->IsFunctionCall() || instr->IsJump()) {  // Indirect jump/call.
-      target_block = new IndirectBlock(cfg, new BlockMetaData);
+      target_block = new IndirectBlock(trace, new BlockMetaData);
 
     // Return, with default empty meta-data.
     } else if (instr->IsFunctionReturn()) {
-      target_block = new ReturnBlock(cfg, new BlockMetaData);
+      target_block = new ReturnBlock(trace, new BlockMetaData);
 
     // System call/return, interrupt call/return.
     } else {
@@ -170,13 +166,13 @@ NativeInstruction *BlockFactory::MakeInstruction(
 
   // Direct jump or call.
   } else if (instr->IsJump() || instr->IsFunctionCall()) {
-    auto meta = context->AllocateBlockMetaData(instr->BranchTargetPC());
-    target_block = new DirectBlock(cfg, meta);
+    auto meta = new BlockMetaData(instr->BranchTargetPC());
+    target_block = new DirectBlock(trace, meta);
 
   // Instruction that can trigger a recoverable exception.
   } else if (os::GetExceptionInfo(orig_instr, &recovery_pc, &emulation_pc)) {
-    auto meta = context->AllocateBlockMetaData(recovery_pc);
-    auto block = new DirectBlock(cfg, meta);
+    auto meta = new BlockMetaData(recovery_pc);
+    auto block = new DirectBlock(trace, meta);
     RequestBlock(block, kRequestBlockInFuture);
     return new ExceptionalControlFlowInstruction(instr, orig_instr, block,
                                                  emulation_pc);
@@ -200,8 +196,8 @@ void BlockFactory::AddFallThroughInstruction(DecodedBlock *block,
     }
   }
 
-  auto meta = context->AllocateBlockMetaData(pc);
-  auto fall_through_block = new DirectBlock(cfg, meta);
+  auto meta = new BlockMetaData(pc);
+  auto fall_through_block = new DirectBlock(trace, meta);
   block->AppendInstruction(AsApp(lir::Jump(fall_through_block), pc));
 
   if (!cfi) return;
@@ -294,7 +290,7 @@ void BlockFactory::DecodeInstructionList(DecodedBlock *block) {
 // Returns `true` if any changes were made to the trace.
 bool BlockFactory::MaterializeDirectBlocks(void) {
   auto materialized_a_block = false;
-  for (auto block : cfg->Blocks()) {
+  for (auto block : trace->Blocks()) {
     auto direct_block = DynamicCast<DirectBlock *>(block);
     if (direct_block && MaterializeBlock(direct_block)) {
       materialized_a_block = true;
@@ -306,7 +302,7 @@ bool BlockFactory::MaterializeDirectBlocks(void) {
 // Unlink old blocks from the control-flow graph by changing the targets of
 // CTIs going to now-materialized `DirectBlock`s.
 void BlockFactory::RelinkCFIs(void) {
-  for (auto block : cfg->Blocks()) {
+  for (auto block : trace->Blocks()) {
     for (auto succ : block->Successors()) {
       if (auto direct_block = DynamicCast<DirectBlock *>(succ.block)) {
         if (auto materialized_block = direct_block->materialized_block) {
@@ -322,27 +318,27 @@ void BlockFactory::RelinkCFIs(void) {
 void BlockFactory::RemoveUnreachableBlocks(void) {
 
   // First, make sure all blocks are added to the trace.
-  for (auto block : cfg->Blocks()) {
+  for (auto block : trace->Blocks()) {
     for (auto succ : block->Successors()) {
-      cfg->AddBlock(succ.block);
+      trace->AddBlock(succ.block);
     }
   }
 
   // Then, mark all blocks as unreachable.
-  for (auto block : cfg->Blocks()) {
+  for (auto block : trace->Blocks()) {
     block->is_reachable = false;
   }
 
   // Make sure the entry block remains reachable.
-  cfg->entry_block->is_reachable = true;
+  trace->entry_block->is_reachable = true;
 
   ListOfListHead<Block> old_blocks;
   ListOfListHead<Block> new_blocks;
   ListOfListHead<Block> work_list;
 
-  cfg->blocks.Remove(cfg->entry_block);
-  work_list.Append(cfg->entry_block);
-  auto new_gen = cfg->generation;
+  trace->blocks.Remove(trace->entry_block);
+  work_list.Append(trace->entry_block);
+  auto new_gen = trace->generation;
 
   while (auto block = work_list.First()) {
     work_list.Remove(block);
@@ -358,23 +354,23 @@ void BlockFactory::RemoveUnreachableBlocks(void) {
     for (auto succ : block->Successors()) {
       if (succ.block->is_reachable) continue;
       succ.block->is_reachable = true;
-      cfg->blocks.Remove(succ.block);
+      trace->blocks.Remove(succ.block);
       work_list.Append(succ.block);
     }
   }
 
   // Any remaining blocks are unreachable.
-  while (auto block = cfg->blocks.First()) {
-    cfg->blocks.Remove(block);
+  while (auto block = trace->blocks.First()) {
+    trace->blocks.Remove(block);
     if (auto inst_block = DynamicCast<InstrumentedBlock *>(block)) {
       auto meta = inst_block->UnsafeMetaData();
       if (meta && !IsA<CachedBlock *>(block)) delete meta;
     }
     delete block;
   }
-  cfg->blocks = old_blocks;
-  cfg->first_new_block = new_blocks.First();
-  cfg->blocks.Extend(new_blocks);
+  trace->blocks = old_blocks;
+  trace->first_new_block = new_blocks.First();
+  trace->blocks.Extend(new_blocks);
 }
 
 // Search an trace for a block whose meta-data matches the meta-data of
@@ -384,7 +380,7 @@ InstrumentedBlock *BlockFactory::MaterializeFromTrace(
     DirectBlock *exclude) {
   InstrumentedBlock *adapt_block(nullptr);
   const auto exclude_meta = exclude->meta;
-  for (auto block : cfg->ReverseBlocks()) {
+  for (auto block : trace->ReverseBlocks()) {
     if (block == exclude) continue;
 
     // Allow us to materialize with a block that hasn't been added to the trace
@@ -425,7 +421,7 @@ InstrumentedBlock *BlockFactory::MaterializeFromTrace(
   }
   if (adapt_block) {  // Need to create some compensation code.
     exclude->meta = nullptr;  // Steal.
-    return AdaptToBlock(cfg, exclude_meta, adapt_block);
+    return AdaptToBlock(trace, exclude_meta, adapt_block);
   }
   return nullptr;
 }
@@ -443,18 +439,17 @@ bool BlockFactory::CanMaterializeBlock(DirectBlock *block) {
 InstrumentedBlock *BlockFactory::RequestIndexedBlock(
     BlockMetaData **meta_ptr) {
   auto meta = *meta_ptr;
-  auto index = context->CodeCacheIndex();
-  const auto response = index->Request(meta);
+  const auto response = FindMetaDataInIndex(meta);
   switch (response.status) {
     case kUnificationStatusAccept: {
-      auto new_block = new CachedBlock(cfg, response.meta);
+      auto new_block = new CachedBlock(trace, response.meta);
       if (response.meta != meta) delete meta;  // No longer needed.
       *meta_ptr = nullptr;
       return new_block;
     }
     case kUnificationStatusAdapt: {
-      auto cached_block = new CachedBlock(cfg, response.meta);
-      auto adapt_block = AdaptToBlock(cfg, meta, cached_block);
+      auto cached_block = new CachedBlock(trace, response.meta);
+      auto adapt_block = AdaptToBlock(trace, meta, cached_block);
       *meta_ptr = nullptr;  // Steal.
       return adapt_block;
     }
@@ -541,17 +536,17 @@ InstrumentedBlock *BlockFactory::MaterializeIndirectEntryBlock(
   if (kRequestBlockExecuteNatively == request_kind) {
     target_block = new NativeBlock(start_pc);
   } else {
-    auto dest_meta = context->AllocateBlockMetaData(start_pc);
-    target_block = new DirectBlock(cfg, dest_meta);
+    auto dest_meta = new BlockMetaData(start_pc);
+    target_block = new DirectBlock(trace, dest_meta);
     RequestBlock(target_block, request_kind);
     GRANARY_ASSERT(has_pending_request);
   }
 
   // Default to having a materialization strategy, and make it so that no one
   // can materialize against this block.
-  auto adapt_block = AdaptToBlock(cfg, meta, target_block);
+  auto adapt_block = AdaptToBlock(trace, meta, target_block);
   adapt_block->is_comparable = false;
-  cfg->AddEntryBlock(adapt_block);
+  trace->AddEntryBlock(adapt_block);
   return adapt_block;
 }
 
@@ -583,7 +578,7 @@ bool BlockFactory::MaterializeBlock(DirectBlock *block) {
       }
     [[clang::fallthrough]];
     case kRequestBlockDecodeNow: {
-      auto decoded_block = new DecodedBlock(cfg, block->meta);
+      auto decoded_block = new DecodedBlock(trace, block->meta);
       block->meta = nullptr;  // Steal.
       block->materialized_block = decoded_block;
       DecodeInstructionList(decoded_block);
@@ -604,7 +599,7 @@ bool BlockFactory::MaterializeBlock(DirectBlock *block) {
     // Inherit the block id.
     if (-1 == materialized_block->id) materialized_block->id = block->id;
 
-    cfg->AddBlock(materialized_block);
+    trace->AddBlock(materialized_block);
     return true;
   } else {
     return false;
@@ -614,12 +609,12 @@ bool BlockFactory::MaterializeBlock(DirectBlock *block) {
 // Satisfy all materialization requests.
 void BlockFactory::MaterializeRequestedBlocks(void) {
   has_pending_request = false;
-  cfg->first_new_block = nullptr;
+  trace->first_new_block = nullptr;
   if (MaterializeDirectBlocks()) {
     RelinkCFIs();
     RemoveUnreachableBlocks();
   }
-  ++cfg->generation;
+  ++trace->generation;
 }
 
 // Returns true if there are any pending materialization requests.
@@ -638,20 +633,20 @@ DecodedBlock *BlockFactory::MaterializeDirectEntryBlock(
 
   // Double check that we should indeed be decoding this block.
   if (kRequestBlockDecodeNow == request_kind) {
-    entry_block = new DecodedBlock(cfg, meta);
+    entry_block = new DecodedBlock(trace, meta);
     DecodeInstructionList(entry_block);
 
   // Okay, we're not supposed to go there; we'll punt on the client and give
   // them a compensation basic block.
   } else if (kRequestBlockExecuteNatively == request_kind) {
     auto requested_block = new NativeBlock(start_pc);
-    entry_block = AdaptToBlock(cfg, meta, requested_block);
+    entry_block = AdaptToBlock(trace, meta, requested_block);
 
   } else {
     GRANARY_ASSERT(false);
   }
 
-  cfg->AddEntryBlock(entry_block);
+  trace->AddEntryBlock(entry_block);
   has_pending_request = false;
   return entry_block;
 }
@@ -660,24 +655,24 @@ DecodedBlock *BlockFactory::MaterializeDirectEntryBlock(
 InstrumentedBlock *BlockFactory::RequestDirectEntryBlock(
     BlockMetaData **meta) {
   auto entry_block = RequestIndexedBlock(meta);
-  if (entry_block) cfg->AddEntryBlock(entry_block);
+  if (entry_block) trace->AddEntryBlock(entry_block);
   return entry_block;
 }
 
 // Create a new (future) basic block.
 DirectBlock *BlockFactory::Materialize(AppPC start_pc) {
-  auto meta = context->AllocateBlockMetaData(start_pc);
-  auto block = new DirectBlock(cfg, meta);
-  cfg->AddBlock(block);
+  auto meta = new BlockMetaData(start_pc);
+  auto block = new DirectBlock(trace, meta);
+  trace->AddBlock(block);
   return block;
 }
 
 // Request that an empty basic block be created and added to the trace.
 CompensationBlock *BlockFactory::MaterializeEmptyBlock(AppPC start_pc) {
-  auto meta = context->AllocateBlockMetaData(start_pc);
-  auto block = new CompensationBlock(cfg, meta);
+  auto meta = new BlockMetaData(start_pc);
+  auto block = new CompensationBlock(trace, meta);
   has_pending_request = true;
-  cfg->AddBlock(block);
+  trace->AddBlock(block);
   return block;
 }
 

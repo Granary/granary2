@@ -28,8 +28,7 @@ class InstrumentationTool;
 //       meta-data hereafter.
 class BinaryInstrumenter {
  public:
-  BinaryInstrumenter(Context *context_, Trace *cfg_,
-                     BlockMetaData **meta_);
+  BinaryInstrumenter(Trace *cfg_, BlockMetaData **meta_);
   ~BinaryInstrumenter(void);
 
   // Instrument some code as-if it is targeted by a direct CFI.
@@ -57,11 +56,10 @@ class BinaryInstrumenter {
   //       block before moving on to the next block in the trace.
   void InstrumentBlock(void);
 
-  Context *context;
   InstrumentationTool *tools;
   BlockMetaData **meta;
 
-  Trace *cfg;
+  Trace *trace;
   BlockFactory factory;
 };
 

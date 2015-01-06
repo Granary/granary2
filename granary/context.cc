@@ -75,7 +75,6 @@ Context::Context(void)
       patched_edge_list(nullptr),
       indirect_edge_list_lock(),
       indirect_edge_list(nullptr),
-      code_cache_index(new Index),
       context_callbacks_lock(),
       context_callbacks(),
       inline_callbacks_lock(),
@@ -87,23 +86,6 @@ Context::~Context(void) {
   FreeEdgeList(edge_list);
   FreeCallbacks(context_callbacks);
   FreeCallbacks(inline_callbacks);
-}
-
-// Allocate and initialize some `BlockMetaData`. This will also set-up the
-// `AppMetaData` within the `BlockMetaData`.
-BlockMetaData *Context::AllocateBlockMetaData(AppPC start_pc) {
-  auto meta = new BlockMetaData;
-  MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
-  return meta;
-}
-
-// Allocate and initialize some `BlockMetaData`, based on some existing
-// meta-data `meta`.
-BlockMetaData *Context::InstantiateBlockMetaData(
-    const BlockMetaData *meta_template, AppPC start_pc) {
-  auto meta = meta_template->Copy();
-  MetaDataCast<AppMetaData *>(meta)->start_pc = start_pc;
-  return meta;
 }
 
 // Allocates a direct edge data structure, as well as the code needed to
@@ -133,26 +115,6 @@ IndirectEdge *Context::AllocateIndirectEdge(
   return edge;
 }
 
-// Get a pointer to this context's code cache index.
-Index *Context::CodeCacheIndex(void) {
-  return code_cache_index;
-}
-
-// Invalidate blocks that have been committed to the code cache index. This
-// invalidates all blocks in the range `[begin_addr, end_addr)`.
-void Context::InvalidateIndexedBlocks(AppPC begin_addr, AppPC end_addr) {
-  BlockMetaData *meta(nullptr);
-  meta = code_cache_index->RemoveRange(begin_addr, end_addr);
-
-  // TODO(pag): Do something with `meta`!! This is a major memory leak at the
-  //            moment.
-  //
-  // TODO(pag): Need to remove the block meta-data from IndirectEdge targets.
-  //
-  // TODO(pag): Should we intersect block that have code that logically
-  //            intersects code in the range `[begin_addr, end_addr)`?
-}
-
 // Returns a pointer to the `CachePC` associated with the context-callable
 // function at `func_addr`.
 const arch::Callback *Context::ContextCallback(AppPC func_pc) {
@@ -170,18 +132,6 @@ const arch::Callback *Context::InlineCallback(InlineFunctionCall *call) {
   if (!cb) cb = arch::GenerateInlineCallback(call);
   return cb;
 }
-
-#ifdef GRANARY_WHERE_kernel
-// Returns a pointer to the code that can disable interrupts.
-CachePC Context::DisableInterruptCode(void) const {
-  return disable_interrupts_code;
-}
-
-// Returns a pointer to the code that can enable interrupts.
-CachePC Context::EnableInterruptCode(void) const {
-  return enable_interrupts_code;
-}
-#endif  // GRANARY_WHERE_kernel
 
 namespace {
 #pragma clang diagnostic push

@@ -248,6 +248,10 @@ class BlockMetaData {
   // the contained meta-data within this generic meta-data.
   GRANARY_INTERNAL_DEFINITION BlockMetaData(void);
 
+  // Initialize a new meta-data instance. This initializes the `AppMetaData`
+  // as well.
+  GRANARY_INTERNAL_DEFINITION explicit BlockMetaData(AppPC app_pc);
+
   // Destroy a meta-data instance. This involves separately destroying the
   // contained meta-data within this generic meta-data.
   ~BlockMetaData(void) GRANARY_EXTERNAL_DELETE;
@@ -281,10 +285,21 @@ class BlockMetaData {
 // Cast some generic meta-data into some specific meta-data.
 template <typename T>
 inline static T MetaDataCast(BlockMetaData *meta) {
-  typedef typename RemovePointer<T>::Type M;
+  typedef typename RemoveConst<typename RemovePointer<T>::Type>::Type M;
   return reinterpret_cast<T>(reinterpret_cast<uintptr_t>(meta) +
                              GetMetaDataDescription<M>::Get()->offset);
 }
+
+// Cast some generic meta-data into some specific meta-data.
+template <typename T>
+inline static
+const typename RemoveConst<typename RemovePointer<T>::Type>::Type *
+MetaDataCast(const BlockMetaData *meta) {
+  typedef typename RemoveConst<typename RemovePointer<T>::Type>::Type M;
+  return reinterpret_cast<const M *>(reinterpret_cast<uintptr_t>(meta) +
+                                     GetMetaDataDescription<M>::Get()->offset);
+}
+
 
 // Initialize the global meta-data manager.
 GRANARY_INTERNAL_DEFINITION
@@ -315,6 +330,14 @@ class MetaDataLinkedListIterator {
  public:
   typedef MetaDataLinkedListIterator<T> Iterator;
 
+  typedef decltype(reinterpret_cast<T *>(0UL)->next) NextPointerType;
+  typedef typename RemovePointer<NextPointerType>::Type NextType;
+
+  typedef typename EnableIf<
+      IsConst<NextType>::RESULT,
+      const BlockMetaData,
+      BlockMetaData>::Type M;
+
   MetaDataLinkedListIterator(void)
       : curr(nullptr) {}
 
@@ -324,7 +347,7 @@ class MetaDataLinkedListIterator {
   MetaDataLinkedListIterator(const Iterator &&that)  // NOLINT
       : curr(that.curr) {}
 
-  explicit MetaDataLinkedListIterator(BlockMetaData *first)
+  explicit MetaDataLinkedListIterator(M *first)
       : curr(first) {}
 
   inline Iterator begin(void) const {
@@ -332,24 +355,24 @@ class MetaDataLinkedListIterator {
   }
 
   inline Iterator end(void) const {
-    return Iterator(static_cast<BlockMetaData *>(nullptr));
+    return Iterator();
   }
 
   inline void operator++(void) {
-    curr = MetaDataCast<T *>(curr)->next;
+    curr = MetaDataCast<const T *>(curr)->next;
   }
 
   inline bool operator!=(const Iterator &that) const {
     return curr != that.curr;
   }
 
-  inline BlockMetaData *operator*(void) const {
+  inline M *operator*(void) const {
     return curr;
   }
 
   // Returns the last valid element from an iterator.
-  static BlockMetaData *Last(Iterator elems) {
-    BlockMetaData *last(nullptr);
+  static M *Last(Iterator elems) {
+    M *last(nullptr);
     for (auto elem : elems) {
       last = elem;
     }
@@ -357,12 +380,12 @@ class MetaDataLinkedListIterator {
   }
 
   // Returns the last valid element from an iterator.
-  static inline BlockMetaData *Last(BlockMetaData *elems_ptr) {
+  static inline M *Last(M *elems_ptr) {
     return Last(Iterator(elems_ptr));
   }
 
  private:
-  BlockMetaData *curr;
+  M *curr;
 };
 
 }  // namespace granary
