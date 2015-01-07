@@ -28,19 +28,15 @@ GRANARY_DEFINE_bool(count_per_condition, false,
 // overestimate of the total number of *distinct* basic blocks instrumented
 // (because of race conditions when two threads simultaneously instrument the
 // same basic block).
-std::atomic<uint64_t> NUM_BBS(ATOMIC_VAR_INIT(0));
+std::atomic<uint64_t> gNumBlocks(ATOMIC_VAR_INIT(0));
 
 // Runtime block execution counter.
 class CounterMetaData : public MutableMetaData<CounterMetaData> {
  public:
   CounterMetaData(void)
-      : count(0),
-        next(nullptr) {}
+      : count(0) {}
 
   uint64_t count;
-
-  // Next block meta-data.
-  BlockMetaData *next;
 };
 
 // Function and conditional arc context meta-data.
@@ -56,18 +52,6 @@ class CondArcMetaData : public IndexableMetaData<CondArcMetaData> {
   uint16_t branch_pc_low16;
 };
 
-namespace {
-
-// Linked list of block meta-datas.
-static BlockMetaData *gAllBlocks = nullptr;
-static SpinLock gAllBlocksLock;
-
-// Meta-data iterator, where the meta-data is chained together via the
-// `BlockTypeInfo` type.
-typedef MetaDataLinkedListIterator<CounterMetaData> BlockCounterMetaIterator;
-
-}  // namespace
-
 // Simple tool for static and dynamic basic block counting.
 class BBCount : public InstrumentationTool {
  public:
@@ -79,63 +63,32 @@ class BBCount : public InstrumentationTool {
     }
   }
 
-  static void LogMetaInfo(BlockMetaData *meta) {
-    auto app_meta = MetaDataCast<AppMetaData *>(meta);
-    auto count_meta = MetaDataCast<CounterMetaData *>(meta);
-    auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
-    if (FLAG_count_per_condition) {
-      auto arc_meta = MetaDataCast<CondArcMetaData *>(meta);
-      os::Log("B %s %lx A %x C %lu\n", offset.module->Name(), offset.offset,
-              arc_meta->branch_pc_low16, count_meta->count);
-    } else {
-      os::Log("B %s %lx C %lu\n", offset.module->Name(), offset.offset,
-              count_meta->count);
-    }
-  }
-
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
-
-    if (FLAG_count_execs) {
-      SpinLockedRegion locker(&gAllBlocksLock);
-      for (auto meta : BlockCounterMetaIterator(gAllBlocks)) {
-        LogMetaInfo(meta);
-      }
-      gAllBlocks = nullptr;
+    if (kExitProgram == reason || kExitDetach == reason) {
+      if (FLAG_count_execs) ForEachMetaData(LogMetaInfo);
+      os::Log("#count_bbs %lu blocks were translated.\n", gNumBlocks.load());
     }
-    os::Log("#count_bbs %lu blocks were translated.\n", NUM_BBS.load());
   }
 
   virtual ~BBCount(void) = default;
 
-  // Chain the meta-data into the global list.
-  static void ChainBlockMeta(BlockMetaData *meta, CounterMetaData *count_meta) {
-    SpinLockedRegion locker(&gAllBlocksLock);
-    count_meta->next = gAllBlocks;
-    gAllBlocks = meta;
-  }
-
-  // Add an execution counter to each block.
-  static void AddExecCounter(DecodedBlock *block,
-                             CounterMetaData *count_meta) {
-    MemoryOperand counter_addr(&(count_meta->count));
-    lir::InlineAssembly asm_(counter_addr);
-    asm_.InlineAfter(block->FirstInstruction(), "INC m64 %0;"_x86_64);
-  }
-
+  // Instrument an individual decoded block.
   virtual void InstrumentBlock(DecodedBlock *block) {
     if (IsA<CompensationBlock *>(block)) return;
 
-    NUM_BBS.fetch_add(1);
+    gNumBlocks.fetch_add(1);
 
+    // Add an execution counter to each block.
     if (FLAG_count_execs) {
-      auto meta = block->MetaData();
-      auto count_meta = MetaDataCast<CounterMetaData *>(meta);
-      ChainBlockMeta(meta, count_meta);
-      AddExecCounter(block, count_meta);
+      auto count_meta = GetMetaData<CounterMetaData>(block);
+      MemoryOperand counter_addr(&(count_meta->count));
+      lir::InlineAssembly asm_(counter_addr);
+      asm_.InlineAfter(block->FirstInstruction(), "INC m64 %0;"_x86_64);
     }
   }
 
+  // If we're doing arc-specific counters, then propagate arc context to
+  // successor blocks.
   virtual void InstrumentControlFlow(BlockFactory *, Trace *trace) {
     if (!FLAG_count_execs) return;
     if (!FLAG_count_per_condition) return;
@@ -154,6 +107,22 @@ class BBCount : public InstrumentationTool {
   }
 
  private:
+
+  // Log the execution counter for each block.
+  static void LogMetaInfo(const BlockMetaData *meta, IndexedStatus) {
+    auto app_meta = MetaDataCast<const AppMetaData *>(meta);
+    auto count_meta = MetaDataCast<const CounterMetaData *>(meta);
+    auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
+    if (FLAG_count_per_condition) {
+      auto arc_meta = MetaDataCast<CondArcMetaData *>(meta);
+      os::Log("B %s %lx A %x C %lu\n", offset.module->Name(), offset.offset,
+              arc_meta->branch_pc_low16, count_meta->count);
+    } else {
+      os::Log("B %s %lx C %lu\n", offset.module->Name(), offset.offset,
+              count_meta->count);
+    }
+  }
+
   static void ResetConditionalTarget(Block *target_block) {
     if (auto meta = GetMetaData<CondArcMetaData>(target_block)) {
       meta->branch_pc_low16 = 0;

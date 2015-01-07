@@ -20,7 +20,7 @@ namespace granary {
 namespace {
 
 // Add the trace entrypoint to the index.
-static void IndexEntryBlock(Trace *cfg) {
+static void Index(Trace *cfg) {
   const auto entry_block = cfg->EntryBlock();
   GRANARY_ASSERT(nullptr != entry_block);
 
@@ -32,6 +32,17 @@ static void IndexEntryBlock(Trace *cfg) {
   const auto response = FindMetaDataInIndex(meta);
   if (kUnificationStatusAccept != response.status) {
     AddMetaDataToIndex(meta);
+  } else {
+    meta = nullptr;
+  }
+
+  // Log all other meta-data.
+  for (auto block : cfg->Blocks()) {
+    if (auto dblock = DynamicCast<DecodedBlock *>(block)) {
+      if (auto iblock_meta = dblock->UnsafeMetaData()) {
+        if (iblock_meta != meta) AddMetaDataToLog(iblock_meta);
+      }
+    }
   }
 }
 
@@ -41,7 +52,7 @@ static CachePC CompileAndIndex(Context *context, Trace *trace,
   auto cache_meta = MetaDataCast<CacheMetaData *>(meta);
   if (!cache_meta->start_pc) {  // Only compile if we decoded the first block.
     auto encoded_pc = Compile(context, trace);
-    IndexEntryBlock(trace);
+    Index(trace);
     GRANARY_ASSERT(nullptr != cache_meta->start_pc);
     return encoded_pc;
   } else {
@@ -80,7 +91,7 @@ CachePC Translate(Context *context, IndirectEdge *edge, BlockMetaData *meta) {
   BinaryInstrumenter inst(&cfg, &meta);
   inst.InstrumentIndirect();
   auto encoded_pc = Compile(context, &cfg, edge, meta);
-  IndexEntryBlock(&cfg);
+  Index(&cfg);
   return encoded_pc;
 }
 
