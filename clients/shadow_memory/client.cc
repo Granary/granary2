@@ -57,9 +57,9 @@ static SpinLock gShadowMemLock GRANARY_GLOBAL;
 }  // namespace
 
 // Simple tool for direct-mapped shadow memory.
-class DirectMappedShadowMemory : public MemOpInstrumentationTool {
+class ShadowMemory : public InstrumentationTool {
  public:
-  virtual ~DirectMappedShadowMemory(void) = default;
+  virtual ~ShadowMemory(void) = default;
 
   // Initialize the few things that we can. We can't initialize the shadow
   // memory up-front because dependent tools won't yet be initialized, and
@@ -67,11 +67,18 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   // need those shadow structure descriptions to determine the size of shadow
   // memory.
   static void Init(InitReason reason) {
-    if (kInitThread == reason) return;
-    gShiftAmountLong = static_cast<size_t>(
-        __builtin_ctz(FLAG_shadow_granularity));
-    gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
-    GRANARY_ASSERT(0 != gShiftAmount);
+    if (kInitProgram == reason || kInitAttach == reason) {
+      gShiftAmountLong = static_cast<size_t>(
+          __builtin_ctz(FLAG_shadow_granularity));
+      gShiftAmount = static_cast<uint8_t>(gShiftAmountLong);
+      GRANARY_ASSERT(0 != gShiftAmount);
+
+      AddMemOpInstrumenter(InstrumentMemOp);
+
+      shadow_addr_reg[0] = AllocateVirtualRegister();
+      shadow_addr_reg[1] = AllocateVirtualRegister();
+      shadow_base_reg = AllocateVirtualRegister();
+    }
   }
 
   // Reset all globals to their initial state.
@@ -103,23 +110,14 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
     }
   }
 
-  virtual void InstrumentBlocks(Trace *trace) override {
-    shadow_addr_reg[0] = trace->AllocateVirtualRegister();
-    shadow_addr_reg[1] = trace->AllocateVirtualRegister();
-    shadow_base_reg = trace->AllocateVirtualRegister();
-    this->MemOpInstrumentationTool::InstrumentBlocks(trace);
-  }
-
-  // Instrument all of the instructions in a basic block.
-  virtual void InstrumentBlock(DecodedBlock *bb) override {
+  virtual void InstrumentBlocks(Trace *) override {
     if (GRANARY_UNLIKELY(!gShadowMemSize)) return;
     if (GRANARY_UNLIKELY(!gDescriptions)) return;
     if (GRANARY_UNLIKELY(!gShadowMem)) InitShadowMemory();
-    this->MemOpInstrumentationTool::InstrumentBlock(bb);
   }
 
- protected:
-  virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) {
+ private:
+  static void InstrumentMemOp(const InstrumentedMemoryOperand &op) {
 
     // Should we instrument this memory operand?
     auto i = 0;
@@ -220,9 +218,12 @@ class DirectMappedShadowMemory : public MemOpInstrumentationTool {
   }
 #endif  // GRANARY_WHERE_user
 
-  VirtualRegister shadow_addr_reg[2];
-  VirtualRegister shadow_base_reg;
+  static VirtualRegister shadow_addr_reg[2];
+  static VirtualRegister shadow_base_reg;
 };
+
+VirtualRegister ShadowMemory::shadow_addr_reg[2];
+VirtualRegister ShadowMemory::shadow_base_reg;
 
 // Tells the shadow memory tool about a structure to be stored in shadow
 // memory.
@@ -297,5 +298,5 @@ bool AlwaysInstrumentMemOpPredicate(const InstrumentedMemoryOperand &) {
 
 // Add the `shadow_memory` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<DirectMappedShadowMemory>("shadow_memory");
+  AddInstrumentationTool<ShadowMemory>("shadow_memory", {"memop"});
 }

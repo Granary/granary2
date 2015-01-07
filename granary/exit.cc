@@ -10,6 +10,8 @@
 #include "granary/index.h"
 #include "granary/metadata.h"
 
+#include "code/register.h"
+
 #include "os/logging.h"
 #include "os/memory.h"
 #include "os/module.h"
@@ -61,6 +63,9 @@ void Exit(ExitReason reason) {
   ExitIndex();
   ExitMetaData();
   ExitCodeCache();
+
+  FreeAllVirtualRegisters();
+
   arch::Exit();
   os::ExitLog();
   os::ExitModuleManager();

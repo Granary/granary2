@@ -3,11 +3,9 @@
 #ifndef CLIENTS_SHADOW_MEMORY_CLIENT_H_
 #define CLIENTS_SHADOW_MEMORY_CLIENT_H_
 
-#include "clients/util/instrument_memop.h"
+#include "clients/memop/client.h"
 
-// Forward declaration.
-class DirectMappedShadowMemory;
-
+// Operand that contains all the information we need about shadow memory.
 class ShadowedMemoryOperand {
  public:
   // Block that contains `instr`.

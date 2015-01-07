@@ -10,7 +10,7 @@
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
 #include "clients/stack_trace/client.h"
-#include "clients/util/instrument_memop.h"
+#include "clients/memop/client.h"
 
 #include "generated/clients/malcontent/offsets.h"
 
@@ -619,6 +619,9 @@ class Malcontent : public InstrumentationTool {
       AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
                                            ShouldInstrumentMemOp);
 
+      tracker_reg[0] = AllocateVirtualRegister();
+      tracker_reg[1] = AllocateVirtualRegister();
+
       gPauseTime = 1000 * FLAG_sample_pause_time;
     }
   }
@@ -762,7 +765,7 @@ class Malcontent : public InstrumentationTool {
     if (FLAG_collect_memop_stats) meta = GetMetaData<MalcontentStats>(op.block);
 
     ImmediateOperand mem_access_op(mem_access.value);
-    RegisterOperand tracker(op.block->AllocateVirtualRegister());
+    RegisterOperand tracker(tracker_reg[op.operand_number]);
     MemoryOperand num_hit_samples_watched(&(meta->num_hit_samples_watched));
     MemoryOperand num_hit_samples_contended(&(meta->num_hit_samples_contended));
 
@@ -817,7 +820,11 @@ class Malcontent : public InstrumentationTool {
         // Done, fall-through to instruction.
         "@LABEL %4:"_x86_64);
   }
+
+  static VirtualRegister tracker_reg[2];
 };
+
+VirtualRegister Malcontent::tracker_reg[2];
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {

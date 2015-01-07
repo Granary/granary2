@@ -8,6 +8,26 @@
 #include "granary/breakpoint.h"
 
 namespace granary {
+namespace {
+
+static std::atomic<uint16_t> gNextVirtualRegister \
+    = ATOMIC_VAR_INIT(kMinGlobalVirtualRegister);
+
+}  // namespace
+
+// Allocate a new virtual register.
+VirtualRegister AllocateVirtualRegister(size_t num_bytes) {
+  auto reg_num = gNextVirtualRegister.fetch_add(1);
+  GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
+  GRANARY_ASSERT(kMinGlobalVirtualRegister <= reg_num);
+  return VirtualRegister(
+      kVirtualRegisterKindVirtualGpr, static_cast<uint8_t>(num_bytes), reg_num);
+}
+
+// Frees all virtual registers.
+void FreeAllVirtualRegisters(void) {
+  gNextVirtualRegister.store(kMinGlobalVirtualRegister);
+}
 
 // Kill a specific register.
 void RegisterSet::Kill(VirtualRegister reg) {
