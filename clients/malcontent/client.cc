@@ -187,8 +187,8 @@ struct TrainedModuleInfo {
   // Returns true if this `LeanedModuleInfo` corresponds to an `os::Module`.
   bool ModuleMatches(const os::Module *mod) const;
 
-  // Returns `true` if a particular block, as represented by a `os::ModuleOffset`
-  // of its entrypoint, will access any shared data.
+  // Returns `true` if a particular block, as represented by an
+  // `os::ModuleOffset` of its entrypoint, will access any shared data.
   bool BlockAccessesSharedData(uintptr_t mod_offset) const;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(TrainedModuleInfo, {
