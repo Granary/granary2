@@ -11,7 +11,9 @@ GRANARY_USING_NAMESPACE granary;
 GRANARY_DEFINE_bool(record_block_types, true,
     "Should we record the specific types accessed by each basic block? If not, "
     "then all that will be recorded is that a particular block accessed data "
-    "of any type. The default value is `yes`.");
+    "of any type. The default value is `yes`.",
+
+    "poly_code");
 
 // Track the set of types accessed by each basic block.
 class TypeMetaData : public MutableMetaData<TypeMetaData> {
@@ -19,12 +21,10 @@ class TypeMetaData : public MutableMetaData<TypeMetaData> {
   TypeMetaData(void)
       : type_ids(),
         type_ids_lock(),
-        accesses_typed_data(false),
-        next(nullptr) {}
+        accesses_typed_data(false) {}
 
   TypeMetaData(const TypeMetaData &that)
-      : accesses_typed_data(that.accesses_typed_data),
-        next(nullptr) {
+      : accesses_typed_data(that.accesses_typed_data) {
     ReadLockedRegion locker(&(that.type_ids_lock));
     type_ids = that.type_ids;
   }
@@ -37,9 +37,6 @@ class TypeMetaData : public MutableMetaData<TypeMetaData> {
   // Does this block access typed data? This is only used if
   // `--record_block_types` is `false`.
   bool accesses_typed_data;
-
-  // Next block meta-data.
-  BlockMetaData *next;
 };
 
 namespace {
@@ -142,14 +139,6 @@ FREE_WRAPPER(libcxx, _ZdaPv)
 
 #endif  // GRANARY_WHERE_user
 
-// Linked list of block meta-datas.
-static BlockMetaData *gAllBlocks = nullptr;
-static SpinLock gAllBlocksLock;
-
-// Meta-data iterator, where the meta-data is chained together via the
-// `BlockTypeInfo` type.
-typedef MetaDataLinkedListIterator<TypeMetaData> BlockTypeInfoIterator;
-
 }  // namespace
 
 // Simple tool for static and dynamic basic block counting.
@@ -190,25 +179,10 @@ class PolyCode : public InstrumentationTool {
   }
 
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
-
-    if (FLAG_record_block_types) ForEachType(LogTypeInfo);
-    SpinLockedRegion locker(&gAllBlocksLock);
-    for (auto meta : BlockTypeInfoIterator(gAllBlocks)) {
-      LogMetaInfo(meta);
+    if (kExitProgram == reason || kExitDetach == reason) {
+      if (FLAG_record_block_types) ForEachType(LogTypeInfo);
+      ForEachMetaData(LogMetaInfo);
     }
-    gAllBlocks = nullptr;
-  }
-
-  // Build a global chain of all basic block meta-data.
-  virtual void InstrumentBlock(DecodedBlock *block) {
-    if (IsA<CompensationBlock *>(block)) return;
-
-    auto meta = block->MetaData();
-    auto type_meta = MetaDataCast<TypeMetaData *>(meta);
-    SpinLockedRegion locker(&gAllBlocksLock);
-    type_meta->next = gAllBlocks;
-    gAllBlocks = meta;
   }
 
  private:
@@ -257,9 +231,9 @@ class PolyCode : public InstrumentationTool {
   }
 
   // Log the types of data accessed by each block.
-  static void LogMetaInfo(BlockMetaData *meta) {
-    auto app_meta = MetaDataCast<AppMetaData *>(meta);
-    auto type_meta = MetaDataCast<TypeMetaData *>(meta);
+  static void LogMetaInfo(const BlockMetaData *meta, IndexedStatus) {
+    auto app_meta = MetaDataCast<const AppMetaData *>(meta);
+    auto type_meta = MetaDataCast<const TypeMetaData *>(meta);
     auto offset = os::ModuleOffsetOfPC(app_meta->start_pc);
     os::Log("B %s %lx", offset.module->Name(), offset.offset);
     auto sep = " Ts ";

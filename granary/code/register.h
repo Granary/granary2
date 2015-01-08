@@ -42,6 +42,12 @@ enum VirtualRegisterKind : uint8_t {
   _GRANARY_IF_INTERNAL( kVirtualRegisterKindSlot )
 };
 
+#ifdef GRANARY_INTERNAL
+enum : uint16_t {
+  kMinGlobalVirtualRegister = 1024
+};
+#endif
+
 // Defines the different types of virtual registers.
 union alignas(alignof(void *)) VirtualRegister {
  public:
@@ -290,6 +296,13 @@ union alignas(alignof(void *)) VirtualRegister {
 
 static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
     "Invalid packing of union `VirtualRegister`.");
+
+// Allocate a new virtual register.
+VirtualRegister AllocateVirtualRegister(size_t num_bytes=arch::GPR_WIDTH_BYTES);
+
+// Frees all virtual registers.
+GRANARY_INTERNAL_DEFINITION
+void FreeAllVirtualRegisters(void);
 
 // Forward declaration.
 class RegisterSet;

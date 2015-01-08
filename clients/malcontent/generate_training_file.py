@@ -32,24 +32,24 @@ if "__main__" == __name__:
     num_mods -= 1
 
     mod_name_bytes = bytes(mod)
+
+    # char name[255]
     ba.extend(mod_name_bytes)
     ba.extend([b'\0'] * (256 - len(mod_name_bytes)))
 
-    offset_ba = bytearray()
     offsets = sorted(list(MODULES[mod]), key=lambda x: x[0])
-    for offset, accesses_shared_data in offsets:
-      offset_ba.extend(struct.pack('<L', offset))
-      offset_ba.extend(struct.pack('<L', accesses_shared_data))
-    curr = len(ba)
+
+    # uint64_t num_offsets
     ba.extend(struct.pack('<Q', len(offsets)))
+
+    # uint64_t is_last_desc
+    ba.extend(struct.pack('<Q', int(not num_mods)))
+
+    # trailing TrainedOffsetDesc structures.
+    for offset, accesses_shared_data in offsets:
+      ba.extend(struct.pack('<L', offset))
+      ba.extend(struct.pack('<L', accesses_shared_data))
     
-    if num_mods:
-      ba.extend(struct.pack('<Q', 0))
-    else:
-      ba.extend(struct.pack('<Q', 1))
-
-    ba.extend(offset_ba)
-
   with open(sys.argv[2], "wb") as f:
     f.write(ba)
 

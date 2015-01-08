@@ -10,7 +10,7 @@
 #include "clients/wrap_func/client.h"
 #include "clients/shadow_memory/client.h"
 #include "clients/stack_trace/client.h"
-#include "clients/util/instrument_memop.h"
+#include "clients/memop/client.h"
 
 #include "generated/clients/malcontent/offsets.h"
 
@@ -492,6 +492,7 @@ static void LogMemoryAccess(const MemoryAccess &access) {
   LogStackTrace(access.stack_trace);
 }
 
+// Log the type info for a sample point.
 static void LogTypeInfo(const SamplePoint &sample) {
   os::Log("  Watched offsets [%lu,%lu) of object of size %lu allocated at:\n",
           sample.offset_in_object,
@@ -503,10 +504,20 @@ static void LogTypeInfo(const SamplePoint &sample) {
   LogStackTrace(type_trace.stack_trace);
 }
 
-// Reports stack reports for found issues.
-static void ReportSamplePoints(void) {
-  for (auto &sample : gSamplePoints) {
-    if (!sample.tracker) continue;
+// Logs all information associated with a sample point.
+static void LogSamplePoint(const SamplePoint &sample) {
+  os::Log("\nContention detected in watched range [%p,%p)\n",
+          sample.native_address,
+          sample.native_address + FLAG_shadow_granularity);
+  LogTypeInfo(sample);
+  LogMemoryAccess(sample.accesses[0]);
+  LogMemoryAccess(sample.accesses[1]);
+}
+
+// Logs memory access information for detected sources of contention.
+static void LogSamplePoints(void) {
+  for (const auto &sample : gSamplePoints) {
+    if (!sample.tracker) continue;  // Not activated.
 
     // Incomplete.
     if (!sample.accesses[0].address || !sample.accesses[1].address) continue;
@@ -529,12 +540,7 @@ static void ReportSamplePoints(void) {
     auto a1 = reinterpret_cast<uintptr_t>(sample.accesses[1].address);
     if ((a0 & shadow_mask) != (a1 & shadow_mask)) continue;
 
-    os::Log("\nContention detected in watched range [%p,%p)\n",
-            sample.native_address,
-            sample.native_address + FLAG_shadow_granularity);
-    LogTypeInfo(sample);
-    LogMemoryAccess(sample.accesses[0]);
-    LogMemoryAccess(sample.accesses[1]);
+    LogSamplePoint(sample);
   }
 }
 
@@ -549,7 +555,7 @@ static void Monitor(void) {
     while (!gSamplePointsLock.TryWriteAcquire()) {
       nanosleep(&pause_time, nullptr);
     }
-    ReportSamplePoints();
+    LogSamplePoints();
     ClearActiveSamplePoints();
     gSamplePointsLock.WriteRelease();
     ActivateSamplePoints();
@@ -582,55 +588,60 @@ class Malcontent : public InstrumentationTool {
   // need those shadow structure descriptions to determine the size of shadow
   // memory.
   static void Init(InitReason reason) {
-    if (kInitThread == reason) return;
+    if (kInitProgram == reason || kInitAttach == reason) {
+      if (FLAG_num_sample_points > kNumUsableSamplePoints) {
+        os::Log("Error: Too many sample points. The maximum is %lu\n.",
+                kNumUsableSamplePoints);
+        FLAG_num_sample_points = kNumUsableSamplePoints;
+      }
 
-    if (FLAG_num_sample_points > kNumUsableSamplePoints) {
-      os::Log("Error: Too many sample points. The maximum is %lu\n.",
-              kNumUsableSamplePoints);
-      FLAG_num_sample_points = kNumUsableSamplePoints;
+      if (FLAG_collect_memop_stats) AddMetaData<MalcontentStats>();
+
+      // Wrap libc.
+      AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_pvalloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_aligned_alloc);
+      AddFunctionWrapper(&WRAP_FUNC_libc_memalign);
+      AddFunctionWrapper(&WRAP_FUNC_libc_posix_memalign);
+      AddFunctionWrapper(&WRAP_FUNC_libc_calloc);
+
+      // Wrap GNU's C++ standard library.
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znwm);
+      AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znam);
+
+      // Wrap clang's C++ standard library.
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
+      AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
+
+      InitTrainingFile();
+      CreateMonitorThread();
+      AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
+                                           ShouldInstrumentMemOp);
+
+      tracker_reg[0] = AllocateVirtualRegister();
+      tracker_reg[1] = AllocateVirtualRegister();
+
+      gPauseTime = 1000 * FLAG_sample_pause_time;
     }
-
-    if (FLAG_collect_memop_stats) AddMetaData<MalcontentStats>();
-
-    // Wrap libc.
-    AddFunctionWrapper(&WRAP_FUNC_libc_malloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_valloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_pvalloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_aligned_alloc);
-    AddFunctionWrapper(&WRAP_FUNC_libc_memalign);
-    AddFunctionWrapper(&WRAP_FUNC_libc_posix_memalign);
-    AddFunctionWrapper(&WRAP_FUNC_libc_calloc);
-
-    // Wrap GNU's C++ standard library.
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znwm);
-    AddFunctionWrapper(&WRAP_FUNC_libstdcxx__Znam);
-
-    // Wrap clang's C++ standard library.
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znwm);
-    AddFunctionWrapper(&WRAP_FUNC_libcxx__Znam);
-
-    InitTrainingFile();
-    CreateMonitorThread();
-    AddShadowStructure<OwnershipTracker>(InstrumentMemOp,
-                                         ShouldInstrumentMemOp);
-
-    gPauseTime = 1000 * FLAG_sample_pause_time;
   }
 
   // Exit; this kills off the monitor thread.
   static void Exit(ExitReason reason) {
-    if (kExitThread == reason) return;
+    if (kExitProgram == reason || kExitDetach == reason) {
+      if (FLAG_collect_memop_stats) ForEachMetaData(LogMemOpStats);
 
-    // Heavy weight tear-down because we're detaching (but might
-    // re-attach later).
-    if (kExitDetach == reason) {
-      if (-1 != gMonitorThread) kill(gMonitorThread, SIGKILL);
-      gMonitorThread = -1;
-      gCurrSourceIndex = 0;
-      gPauseTime = 0;
-      memset(gRecentAllocations, 0, sizeof gRecentAllocations);
-      ClearActiveSamplePoints();
-      ExitTrainingFile();
+      // Heavy weight tear-down because we're detaching (but might
+      // re-attach later).
+      if (kExitDetach == reason) {
+        if (-1 != gMonitorThread) kill(gMonitorThread, SIGKILL);
+        gMonitorThread = -1;
+        gCurrSourceIndex = 0;
+        gPauseTime = 0;
+        memset(gRecentAllocations, 0, sizeof gRecentAllocations);
+        ClearActiveSamplePoints();
+        ExitTrainingFile();
+      }
     }
   }
 
@@ -640,6 +651,8 @@ class Malcontent : public InstrumentationTool {
     if (!FLAG_collect_memop_stats) return;
     auto meta = GetMetaData<MalcontentStats>(block);
 
+    // If we're recording stats then count how many times each block is
+    // executed. This is very similar to the `count_bbs` tool.
     MemoryOperand exec_count(&meta->num_execs);
     lir::InlineAssembly asm_(exec_count);
     asm_.InlineAfter(block->FirstInstruction(),
@@ -647,6 +660,28 @@ class Malcontent : public InstrumentationTool {
   }
 
  protected:
+  // Log statistics about each block.
+  static void LogMemOpStats(const BlockMetaData *meta, IndexedStatus) {
+    auto stats = MetaDataCast<const MalcontentStats *>(meta);
+    auto app = MetaDataCast<const AppMetaData *>(meta);
+
+    auto offset = os::ModuleOffsetOfPC(app->start_pc);
+    if (offset.module) {
+      os::Log("%p %s:%lx\n", app->start_pc, offset.module->Path(), offset.offset);
+    } else {
+      os::Log("%p\n", app->start_pc);
+    }
+
+    os::Log("  %ld executions\n  %d memory operands\n  %s instrumented\n"
+            "  %d watched hits\n  %d contended hits\n\n",
+            stats->num_execs, stats->num_memops,
+            stats->is_instrumented ? "heavily" : "lightly",
+            stats->num_hit_samples_watched, stats->num_hit_samples_contended);
+  }
+
+  // Called from instrumentation code when we either want to take ownership of
+  // shadow memory (associated with a cache line), or when we have detected an
+  // ownership transfer of said cache line.
   static void InstrumentContention(const OwnershipTracker tracker,
                                    const MemoryOperandDescriptor location,
                                    const void *address) {
@@ -666,6 +701,10 @@ class Malcontent : public InstrumentationTool {
     // We just took ownership; re-add the watchpoint.
     if (!trace) {
       sample_point.tracker->sample_id = tracker.sample_id;
+
+      // Potentially wait for some period of time. If enabled, this allows us
+      // to detect data-races on the cache line, i.e. where neither access
+      // happens-before the other.
       if (gPauseTime) {
         const timespec pause_time = {0, gPauseTime};
         nanosleep(&pause_time, nullptr);
@@ -677,7 +716,7 @@ class Malcontent : public InstrumentationTool {
       sample_point.tracker->value = 0;
     }
 
-    // Copy our stack trace.
+    // Copy our memory access info and stack trace.
     auto &access(sample_point.accesses[trace]);
     access.address = address;
     access.location = location;
@@ -708,8 +747,11 @@ class Malcontent : public InstrumentationTool {
     return is_instrumented;
   }
 
+  // Instrument a memory operand.
   static void InstrumentMemOp(const ShadowedMemoryOperand &op) {
-    // Summary of this particular memory operand.
+
+    // Summary of this particular memory operand. This is passed as an
+    // immediate constant to `InstrumentContention`.
     MemoryOperandDescriptor mem_access{{
       static_cast<uint16_t>(op.native_mem_op.ByteWidth()),
       static_cast<uint16_t>(op.operand_number),
@@ -723,7 +765,7 @@ class Malcontent : public InstrumentationTool {
     if (FLAG_collect_memop_stats) meta = GetMetaData<MalcontentStats>(op.block);
 
     ImmediateOperand mem_access_op(mem_access.value);
-    RegisterOperand tracker(op.block->AllocateVirtualRegister());
+    RegisterOperand tracker(tracker_reg[op.operand_number]);
     MemoryOperand num_hit_samples_watched(&(meta->num_hit_samples_watched));
     MemoryOperand num_hit_samples_contended(&(meta->num_hit_samples_contended));
 
@@ -740,7 +782,8 @@ class Malcontent : public InstrumentationTool {
         "JZ l %4;"
         "@COLD;"_x86_64);
 
-    // Increment the `num_hit_samples_watched` counter for this block.
+    // Increment the `num_hit_samples_watched` counter for this block if we're
+    // recording statistics.
     asm_.InlineBeforeIf(op.instr, FLAG_collect_memop_stats,
         "INC m32 %2;"_x86_64);
 
@@ -759,7 +802,8 @@ class Malcontent : public InstrumentationTool {
         // then we'll re-watch the memory.
         "@FROZEN;"_x86_64);
 
-    // Increment the `num_hit_samples_contended` counter for this block.
+    // Increment the `num_hit_samples_contended` counter for this block if
+    // we're recording statistics.
     asm_.InlineBeforeIf(op.instr, FLAG_collect_memop_stats,
         "INC m32 %3;"_x86_64);
 
@@ -776,7 +820,11 @@ class Malcontent : public InstrumentationTool {
         // Done, fall-through to instruction.
         "@LABEL %4:"_x86_64);
   }
+
+  static VirtualRegister tracker_reg[2];
 };
+
+VirtualRegister Malcontent::tracker_reg[2];
 
 // Initialize the `data_collider` tool.
 GRANARY_ON_CLIENT_INIT() {

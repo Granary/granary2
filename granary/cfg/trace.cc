@@ -88,7 +88,7 @@ void Trace::AddEntryBlock(Block *block) {
 VirtualRegister Trace::AllocateVirtualRegister(
     size_t num_bytes) {
   GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
-  GRANARY_ASSERT((1 << 16) > num_virtual_regs);
+  GRANARY_ASSERT(kMinGlobalVirtualRegister > num_virtual_regs);
   return VirtualRegister(kVirtualRegisterKindVirtualGpr,
                          static_cast<uint8_t>(num_bytes),
                          static_cast<uint16_t>(num_virtual_regs++));

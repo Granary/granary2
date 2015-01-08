@@ -19,14 +19,6 @@ namespace {
 // Forward declaration.
 class MetaDataArray;
 
-#if 0
-// Linked list of un-indexed meta-data.
-static BlockMetaData *gUnindexedMeta = nullptr;
-
-// Linked list of invalidated block meta-data.
-static BlockMetaData *gInvalidatedMeta = nullptr;
-#endif
-
 enum : uintptr_t {
   kDeallocatedMemoryPoison = 0xFA,
 
@@ -45,6 +37,11 @@ static MetaDataArray * volatile gIndex[kMaxFirstIndex] = {nullptr};
 
 // Top-level locks of code cache sub-levels.
 static os::Lock gSecondLevelLocks[kMaxSecondIndex];
+
+// Linked list of un-indexed meta-data.
+static const BlockMetaData * volatile gUnindexedMeta[kMaxFirstIndex] \
+    = {nullptr};
+static SpinLock gUnindexedMetaLock[kMaxFirstIndex];
 
 // Represents the index levels for some meta-data.
 struct MetaDataIndex {
@@ -146,6 +143,15 @@ void ExitIndex(void) {
       array = nullptr;
     }
   }
+  for (auto &metas : gUnindexedMeta) {
+    for (auto meta = metas; meta; ) {
+      auto index_meta = MetaDataCast<IndexMetaData *>(meta);
+      auto next_meta = index_meta->next;
+      delete meta;
+      meta = next_meta;
+    }
+    metas = nullptr;
+  }
 }
 
 // Perform a lookup operation in the code cache index. Lookup operations might
@@ -154,7 +160,8 @@ void ExitIndex(void) {
 IndexFindResponse FindMetaDataInIndex(const BlockMetaData *meta) {
   if (GRANARY_UNLIKELY(!meta)) return {kUnificationStatusReject, nullptr};
 
-  auto index_meta = MetaDataCast<const IndexMetaData *>(meta);
+  GRANARY_IF_DEBUG( auto index_meta =
+      MetaDataCast<const IndexMetaData *>(meta); )
   GRANARY_ASSERT(!index_meta->next);
 
   auto pc = AppPCOf(meta);
@@ -169,11 +176,11 @@ IndexFindResponse FindMetaDataInIndex(const BlockMetaData *meta) {
   return {kUnificationStatusReject, nullptr};  // Not in the index
 }
 
-// Insert a block into the code cache index.
+// Insert a block's meta-data into the code cache index.
 void AddMetaDataToIndex(BlockMetaData *meta) {
   GRANARY_ASSERT(nullptr != meta);
 
-  auto index_meta = MetaDataCast<const IndexMetaData *>(meta);
+  auto index_meta = MetaDataCast<IndexMetaData *>(meta);
   GRANARY_ASSERT(nullptr == index_meta->next);
 
   auto pc = AppPCOf(meta);
@@ -190,5 +197,44 @@ void AddMetaDataToIndex(BlockMetaData *meta) {
   index_meta->next = metas;
   metas = meta;
 }
+
+// Insert a block's meta-data into the global list of all meta-data.
+void AddMetaDataToLog(BlockMetaData *meta) {
+  GRANARY_ASSERT(nullptr != meta);
+
+  auto index_meta = MetaDataCast<IndexMetaData *>(meta);
+  GRANARY_ASSERT(nullptr == index_meta->next);
+
+  auto pc = AppPCOf(meta);
+  GRANARY_ASSERT(nullptr != pc);
+
+  auto indices = IndexOf(pc);
+
+  SpinLockedRegion locker(&(gUnindexedMetaLock[indices.first]));
+  index_meta->next = gUnindexedMeta[indices.first];
+  gUnindexedMeta[indices.first] = meta;
+}
+
+namespace detail {
+
+// Iterates over all meta-data.
+void ForEachMetaData(
+    const std::function<void(const BlockMetaData *, IndexedStatus)> &func) {
+  for (auto meta_array : gIndex) {
+    if (!meta_array) continue;
+    for (auto metas : meta_array->metas) {
+      for (auto meta : IndexMetaDataIterator(metas)) {
+        func(meta, kMetaDataIndexed);
+      }
+    }
+  }
+  for (auto meta_array : gUnindexedMeta) {
+    for (auto meta : IndexMetaDataIterator(meta_array)) {
+      func(meta, kMetaDataUnindexed);
+    }
+  }
+}
+
+}  // namespace detail
 
 }  // namespace granary

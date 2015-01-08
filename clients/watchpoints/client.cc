@@ -3,7 +3,7 @@
 #include <granary.h>
 
 #include "clients/util/closure.h"
-#include "clients/util/instrument_memop.h"
+#include "clients/memop/client.h"
 #include "clients/watchpoints/client.h"
 
 GRANARY_USING_NAMESPACE granary;
@@ -15,14 +15,14 @@ namespace {
 // Hooks that other tools can use for interposing on memory operands that will
 // be instrumented for watchpoints.
 static ClosureList<const WatchedMemoryOperand &>
-    watchpoint_hooks GRANARY_GLOBAL;
+    gWatchpointHooks GRANARY_GLOBAL;
 
 }  // namespace
 
 // Registers a function that can hook into the watchpoints system to instrument
 // code.
 void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &)) {
-  watchpoint_hooks.Add(func);
+  gWatchpointHooks.Add(func);
 }
 
 // Implements the instrumentation needed to do address watchpoints.
@@ -33,38 +33,38 @@ void AddWatchpointInstrumenter(void (*func)(const WatchedMemoryOperand &)) {
 // watchpoints instrumentation injects instructions to detect dereferences of
 // tainted addresses and ensures that memory instructions don't raise faults
 // when they are accessed.
-class Watchpoints : public MemOpInstrumentationTool {
+class Watchpoints : public InstrumentationTool {
  public:
   virtual ~Watchpoints(void) = default;
 
   static void Init(InitReason reason) {
     if (kInitProgram == reason || kInitAttach == reason) {
       InitUserWatchpoints();
+      AddMemOpInstrumenter(InstrumentMemOp);
+
+      unwatched_addr[0] = AllocateVirtualRegister();
+      unwatched_addr[1] = AllocateVirtualRegister();
     }
   }
 
   static void Exit(ExitReason reason) {
     if (kExitDetach == reason) {
-      watchpoint_hooks.Reset();
+      gWatchpointHooks.Reset();
     }
   }
 
-  virtual void InstrumentBlocks(Trace *trace) override {
-    this->MemOpInstrumentationTool::InstrumentBlocks(trace);
-    unwatched_addr[0] = trace->AllocateVirtualRegister();
-    unwatched_addr[1] = trace->AllocateVirtualRegister();
-  }
+ private:
 
   // Instrument an individual memory operand.
-  virtual void InstrumentMemOp(InstrumentedMemoryOperand &op) override {
+  static void InstrumentMemOp(const InstrumentedMemoryOperand &op) {
     // Ignore addresses stored in non-GPRs (e.g. accesses to the stack).
     auto watched_addr = op.native_addr_op.Register();
     if (watched_addr.IsStackPointerAlias()) return;
 
     RegisterOperand unwatched_addr_reg(unwatched_addr[op.operand_number]);
     RegisterOperand watched_addr_reg(op.native_addr_op);
-    WatchedMemoryOperand client_op(op.block, op.instr, op.native_mem_op,
-                                   unwatched_addr_reg, watched_addr_reg);
+    WatchedMemoryOperand client_op = {op.block, op.instr, op.native_mem_op,
+                                      unwatched_addr_reg, watched_addr_reg};
 
     lir::InlineAssembly asm_(unwatched_addr_reg, watched_addr_reg);
 
@@ -87,7 +87,7 @@ class Watchpoints : public MemOpInstrumentationTool {
 
     // Allow all hooked tools to see the watched (%1) and unwatched (%0)
     // address.
-    watchpoint_hooks.ApplyAll(client_op);
+    gWatchpointHooks.ApplyAll(client_op);
 
     asm_.InlineBefore(op.instr,
         "@LABEL %2:"_x86_64);
@@ -118,9 +118,10 @@ class Watchpoints : public MemOpInstrumentationTool {
     }
   }
 
- private:
-  VirtualRegister unwatched_addr[2];
+  static VirtualRegister unwatched_addr[2];
 };
+
+VirtualRegister Watchpoints::unwatched_addr[2];
 
 namespace {
 enum : uintptr_t {
@@ -159,5 +160,5 @@ uint16_t ExtractTaint(uintptr_t addr) {
 
 // Initialize the `watchpoints` tool.
 GRANARY_ON_CLIENT_INIT() {
-  AddInstrumentationTool<Watchpoints>("watchpoints");
+  AddInstrumentationTool<Watchpoints>("watchpoints", {"memop"});
 }

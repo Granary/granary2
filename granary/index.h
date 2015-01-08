@@ -3,10 +3,6 @@
 #ifndef GRANARY_INDEX_H_
 #define GRANARY_INDEX_H_
 
-#ifndef GRANARY_INTERNAL
-# error "This code is internal to Granary."
-#endif
-
 #include "arch/base.h"
 
 #include "granary/base/base.h"
@@ -17,6 +13,8 @@
 #include "os/lock.h"
 
 namespace granary {
+
+#ifdef GRANARY_INTERNAL
 
 // Code cache index-specific meta-data.
 class IndexMetaData : public MutableMetaData<IndexMetaData> {
@@ -72,6 +70,30 @@ IndexFindResponse FindMetaDataInIndex(const BlockMetaData *meta);
 
 // Insert a block into the code cache index.
 void AddMetaDataToIndex(BlockMetaData *meta);
+
+// Insert a block's meta-data into the global list of all meta-data.
+void AddMetaDataToLog(BlockMetaData *meta);
+
+#endif  // GRANARY_INTERNAL
+
+enum IndexedStatus {
+  kMetaDataIndexed,
+  kMetaDataUnindexed
+};
+
+namespace detail {
+
+// Iterates over all meta-data.
+void ForEachMetaData(
+    const std::function<void(const BlockMetaData *, IndexedStatus)> &func);
+
+}  // namespace detail
+
+// Iterates over all meta-data.
+template <typename FuncT>
+inline static void ForEachMetaData(FuncT func) {
+  detail::ForEachMetaData(std::cref(func));
+}
 
 }  // namespace granary
 
