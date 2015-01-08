@@ -112,8 +112,7 @@ class Module {
   GRANARY_INTERNAL_DEFINITION void RemoveRanges(void);
 
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(Module, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+    kAlignment = arch::CACHE_LINE_SIZE_BYTES
   })
 
   GRANARY_CONST Module * GRANARY_CONST next;

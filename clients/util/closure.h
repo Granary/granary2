@@ -13,8 +13,7 @@ class Closure {
   ~Closure(void);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Closure, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   Closure *next;

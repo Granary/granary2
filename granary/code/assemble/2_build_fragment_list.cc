@@ -119,8 +119,7 @@ struct FragmentInProgress {
   Instruction *instr;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(FragmentInProgress, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 };
 

@@ -15,7 +15,7 @@
 #include "granary/util.h"
 
 #ifdef GRANARY_WHERE_user
-GRANARY_DEFINE_bool(try_spill_VRs_to_stack, true,
+GRANARY_DEFINE_bool(try_spill_VRs_to_stack, GRANARY_IF_TEST_ELSE(false, true),
     "Should Granary try to spill virtual registers onto the call stack? The "
     "default is `yes`.\n"
     "\n"
@@ -28,7 +28,7 @@ namespace {
 
 // Initializes the stack validity analysis.
 static void InitStackValidity(FragmentList *frags) {
-  auto valid = true;
+  auto valid = GRANARY_IF_USER_ELSE(FLAG_try_spill_VRs_to_stack, true);
   for (auto frag : FragmentListIterator(frags)) {
     if (kStackStatusInvalid == frag->stack_status) {
       valid = false;

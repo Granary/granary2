@@ -65,8 +65,7 @@ class DirectEdge {
   os::Lock lock;
 
   GRANARY_DECLARE_NEW_ALLOCATOR(DirectEdge, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -134,8 +133,7 @@ class IndirectEdge {
   os::Lock lock;
 
   GRANARY_DECLARE_NEW_ALLOCATOR(IndirectEdge, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:

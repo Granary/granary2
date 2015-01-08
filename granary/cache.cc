@@ -77,8 +77,7 @@ class CodeSlab {
   const CodeSlab *next;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(CodeSlab, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:

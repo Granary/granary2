@@ -190,8 +190,7 @@ class TinyVector {
   }
 
   GRANARY_DEFINE_NEW_ALLOCATOR(SelfType, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:

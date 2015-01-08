@@ -109,8 +109,7 @@ class NativeAddress {
   NativeAddress *next;
 
   GRANARY_DECLARE_NEW_ALLOCATOR(NativeAddress, {
-    SHARED = true,
-    ALIGNMENT = 16
+    kAlignment = 16
   })
 
  private:

@@ -222,8 +222,7 @@ class CachedBlock final : public InstrumentedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CachedBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(CachedBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -256,8 +255,7 @@ class DecodedBlock : public InstrumentedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DecodedBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(DecodedBlock, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+    kAlignment = arch::CACHE_LINE_SIZE_BYTES
   })
 
   // Return the first instruction in the basic block.
@@ -343,8 +341,7 @@ class CompensationBlock : public DecodedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CompensationBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(CompensationBlock, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+    kAlignment = arch::CACHE_LINE_SIZE_BYTES
   })
 
  protected:
@@ -366,8 +363,7 @@ class DirectBlock final : public InstrumentedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DirectBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(DirectBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -401,8 +397,7 @@ class IndirectBlock final : public InstrumentedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, IndirectBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(IndirectBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -436,8 +431,7 @@ class ReturnBlock final : public InstrumentedBlock {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, ReturnBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(ReturnBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -470,8 +464,7 @@ class NativeBlock final : public Block {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, NativeBlock)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(NativeBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:

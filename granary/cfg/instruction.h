@@ -256,8 +256,7 @@ class AnnotationInstruction : public Instruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, AnnotationInstruction)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(AnnotationInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   GRANARY_INTERNAL_DEFINITION
@@ -306,8 +305,7 @@ class LabelInstruction final : public AnnotationInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, LabelInstruction)
   GRANARY_DECLARE_NEW_ALLOCATOR(LabelInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   GRANARY_INTERNAL_DEFINITION Fragment *fragment;
@@ -414,8 +412,7 @@ class NativeInstruction : public Instruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(NativeInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  GRANARY_ARCH_PUBLIC:
@@ -466,8 +463,7 @@ class BranchInstruction final : public NativeInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(BranchInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -500,8 +496,7 @@ class ControlFlowInstruction : public NativeInstruction {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(ControlFlowInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -532,8 +527,7 @@ class ExceptionalControlFlowInstruction : public ControlFlowInstruction {
   GRANARY_DECLARE_DERIVED_CLASS_OF(Instruction,
                                    ExceptionalControlFlowInstruction)
   GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(ExceptionalControlFlowInstruction, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  GRANARY_PROTECTED:

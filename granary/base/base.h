@@ -97,10 +97,12 @@ typedef long int ssize_t;
 
 #ifdef GRANARY_TARGET_test
 # define GRANARY_IF_TEST(...) __VA_ARGS__
+# define GRANARY_IF_TEST_ELSE(a, b) a
 # define GRANARY_IF_NOT_TEST(...)
 # define _GRANARY_IF_TEST(...) , __VA_ARGS__
 #else
 # define GRANARY_IF_TEST(...)
+# define GRANARY_IF_TEST_ELSE(a, b) b
 # define GRANARY_IF_NOT_TEST(...) __VA_ARGS__
 # define _GRANARY_IF_TEST(...)
 #endif  // GRANARY_TARGET_test

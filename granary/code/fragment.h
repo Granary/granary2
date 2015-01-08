@@ -81,8 +81,7 @@ class PartitionInfo {
   explicit PartitionInfo(int id_);
 
   GRANARY_DECLARE_NEW_ALLOCATOR(PartitionInfo, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   // The first fragment in this partition. This will either be a
@@ -176,8 +175,7 @@ class Fragment {
 
   GRANARY_DECLARE_BASE_CLASS(Fragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(Fragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   // Connects together fragments into a `FragmentList`.
@@ -377,8 +375,7 @@ class CodeFragment : public Fragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(CodeFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -393,8 +390,7 @@ class PartitionEntryFragment : public Fragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(PartitionEntryFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -409,8 +405,7 @@ class PartitionExitFragment : public Fragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(PartitionExitFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -425,8 +420,7 @@ class FlagEntryFragment : public CodeFragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(FlagEntryFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -441,8 +435,7 @@ class FlagExitFragment : public CodeFragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(FlagExitFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -457,8 +450,7 @@ class NonLocalEntryFragment : public Fragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(NonLocalEntryFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
@@ -481,8 +473,7 @@ class ExitFragment : public Fragment {
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, ExitFragment)
   GRANARY_DECLARE_NEW_ALLOCATOR(ExitFragment, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   // Pointer to one of the edge structures associated with this fragment.

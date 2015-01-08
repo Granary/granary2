@@ -53,8 +53,7 @@ class ModuleAddressRange {
   unsigned perms;
 
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ModuleAddressRange, {
-    SHARED = true,
-    ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
+    kAlignment = arch::CACHE_LINE_SIZE_BYTES
   })
 
  private:

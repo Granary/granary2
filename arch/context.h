@@ -46,8 +46,7 @@ class Callback {
         wrapped_callback(wrapped_callback_) {}
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Callback, {
-    SHARED = true,
-    ALIGNMENT = 16
+    kAlignment = 16
   })
 
    // Native target of the callback.

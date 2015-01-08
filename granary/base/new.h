@@ -141,9 +141,6 @@ class OperatorNewAllocator {
   // Accesses the properties used to configure the allocator. Supported
   // properties include:
   //
-  //    SHARED:     Should all CPUs/threads share this allocator, or should
-  //                memory be divided into CPU- or thread-private slabs.
-  //
   //    ALIGNMENT:  What should be the minimum alignment of the allocated
   //                objects? The allocator ensures that all objects are
   //                aligned to `MINIMUM_ALIGNMENT` bytes.
@@ -151,7 +148,7 @@ class OperatorNewAllocator {
 
   enum : size_t {
     OBJECT_SIZE = GRANARY_MAX(sizeof(T), sizeof(internal::FreeList *)),
-    REQUESTED_ALIGNMENT = static_cast<size_t>(Properties::ALIGNMENT),
+    REQUESTED_ALIGNMENT = static_cast<size_t>(Properties::kAlignment),
     OBJECT_ALIGNMENT = alignof(T),
     MINIMUM_ALIGNMENT = GRANARY_MAX(REQUESTED_ALIGNMENT, OBJECT_ALIGNMENT),
     ALIGNED_SIZE = GRANARY_ALIGN_TO(sizeof(T), MINIMUM_ALIGNMENT),

@@ -41,8 +41,7 @@ class InlineAssemblyScope : public UnownedCountedObject {
   virtual ~InlineAssemblyScope(void);
 
   GRANARY_DECLARE_NEW_ALLOCATOR(InlineAssemblyScope, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   // Variables used/referenced/created within the scope.
@@ -72,8 +71,7 @@ class InlineAssemblyBlock {
   ~InlineAssemblyBlock(void);
 
   GRANARY_DECLARE_NEW_ALLOCATOR(InlineAssemblyBlock, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   InlineAssemblyScope * const scope;
@@ -98,8 +96,7 @@ class InlineFunctionCall {
   }
 
   GRANARY_DECLARE_NEW_ALLOCATOR(InlineFunctionCall, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   AppPC target_app_pc;

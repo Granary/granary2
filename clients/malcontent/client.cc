@@ -192,8 +192,7 @@ struct TrainedModuleInfo {
   bool BlockAccessesSharedData(uintptr_t mod_offset) const;
 
   GRANARY_DEFINE_NEW_ALLOCATOR(TrainedModuleInfo, {
-    SHARED = true,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
   TrainedModuleInfo *next;

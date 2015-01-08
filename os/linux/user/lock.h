@@ -21,8 +21,7 @@ class alignas(sizeof(uint32_t)) Lock {
   void Release(void);
 
   GRANARY_DEFINE_NEW_ALLOCATOR(Lock, {
-    SHARED = false,
-    ALIGNMENT = 1
+    kAlignment = 1
   })
 
  private:
