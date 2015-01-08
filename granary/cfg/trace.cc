@@ -20,7 +20,8 @@ Trace::Trace(Context *context_)
       entry_block(nullptr),
       blocks(),
       first_new_block(nullptr),
-      num_virtual_regs(512),
+      num_temporary_regs(kMinTemporaryVirtualRegister),
+      num_virtual_regs(kMinTraceVirtualRegister),
       num_basic_blocks(0),
       generation(0) {}
 
@@ -84,14 +85,30 @@ void Trace::AddEntryBlock(Block *block) {
   ++generation;
 }
 
-// Allocate a new virtual register.
-VirtualRegister Trace::AllocateVirtualRegister(
-    size_t num_bytes) {
+// Allocate a new virtual register that is local to the trace.
+VirtualRegister Trace::AllocateVirtualRegister(size_t num_bytes) {
   GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
+  auto reg_num = num_virtual_regs++;
+  GRANARY_ASSERT(kMinTraceVirtualRegister <= num_virtual_regs);
   GRANARY_ASSERT(kMinGlobalVirtualRegister > num_virtual_regs);
   return VirtualRegister(kVirtualRegisterKindVirtualGpr,
-                         static_cast<uint8_t>(num_bytes),
-                         static_cast<uint16_t>(num_virtual_regs++));
+                         static_cast<uint8_t>(num_bytes), reg_num);
+}
+
+// Allocate a new "temporary" virtual register. These VRs are meant for use
+// in instruction mangling/processing, and are re-used across instructions.
+VirtualRegister Trace::AllocateTemporaryRegister(size_t num_bytes) {
+  GRANARY_ASSERT(0 < num_bytes && arch::GPR_WIDTH_BYTES >= num_bytes);
+  auto reg_num = num_temporary_regs++;
+  GRANARY_ASSERT(kMinTemporaryVirtualRegister <= reg_num);
+  GRANARY_ASSERT(kMinTraceVirtualRegister > reg_num);
+  return VirtualRegister(kVirtualRegisterKindVirtualGpr,
+                         static_cast<uint8_t>(num_bytes), reg_num);
+}
+
+// Free all temporary virtual registers.
+void Trace::FreeTemporaryRegisters(void) {
+  num_temporary_regs = kMinTemporaryVirtualRegister;
 }
 
 }  // namespace granary

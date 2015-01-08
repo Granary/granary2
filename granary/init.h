@@ -18,10 +18,7 @@ enum InitReason {
   // if `kInitThread` triggers something, then `kInitAttach` should also trigger
   // the same behavior.
   kInitAttach = 1,
-  kInitThread = 2,
-
-  // This says we're initializing Granary to run a test case.
-  kInitTestCase
+  kInitThread = 2
 };
 
 // Runs the constructors from the initialization array.

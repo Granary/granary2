@@ -39,7 +39,7 @@
 
 // Make a test for a conditional branch opcode.
 #define MAKE_CBR_TEST_FUNC(opcode, or_flag, and_flag) \
-    BEGIN_FUNC(jcc_ ## opcode ## _true) \
+    BEGIN_TEST_FUNC(jcc_ ## opcode ## _true) \
         xor     %eax, %eax; \
         pushf; \
         movq    $or_flag, %rax; \
@@ -54,7 +54,7 @@
     2:  ret; \
     END_FUNC \
    ; \
-    BEGIN_FUNC(jcc_ ## opcode ## _false) \
+    BEGIN_TEST_FUNC(jcc_ ## opcode ## _false) \
         xor     %eax, %eax; \
         pushf; \
         movq    $~and_flag, %rax; \
@@ -71,7 +71,7 @@
 
 FOR_EACH_CBR(MAKE_CBR_TEST_FUNC)
 
-BEGIN_FUNC(jcc_jecxz_true)
+BEGIN_TEST_FUNC(jcc_jecxz_true)
     xor     %eax, %eax;
     mov     $0, %rcx;
     jecxz   1f;
@@ -81,7 +81,7 @@ BEGIN_FUNC(jcc_jecxz_true)
 2:  ret;
 END_FUNC
 
-BEGIN_FUNC(jcc_jecxz_false)
+BEGIN_TEST_FUNC(jcc_jecxz_false)
     mov     $1, %rcx;
     jecxz   1f;
     mov     $1, %rax;
@@ -90,7 +90,7 @@ BEGIN_FUNC(jcc_jecxz_false)
 2:  ret;
 END_FUNC
 
-BEGIN_FUNC(jcc_jrcxz_true)
+BEGIN_TEST_FUNC(jcc_jrcxz_true)
     xor     %eax, %eax;
     mov     $0, %rcx;
     jrcxz   1f;
@@ -100,7 +100,7 @@ BEGIN_FUNC(jcc_jrcxz_true)
 2:  ret;
 END_FUNC
 
-BEGIN_FUNC(jcc_jrcxz_false)
+BEGIN_TEST_FUNC(jcc_jrcxz_false)
     mov     $1, %rcx;
     jrcxz   1f;
     mov     $1, %rax;
@@ -109,7 +109,7 @@ BEGIN_FUNC(jcc_jrcxz_false)
 2:  ret;
 END_FUNC
 
-BEGIN_FUNC(loop_return_5)
+BEGIN_TEST_FUNC(loop_return_5)
     mov     $0, %rax;
     mov     $5, %rcx;
 1:  inc     %rax;
@@ -119,7 +119,7 @@ BEGIN_FUNC(loop_return_5)
 3:  ret;
 END_FUNC
 
-BEGIN_FUNC(loope_return_5)
+BEGIN_TEST_FUNC(loope_return_5)
     mov     $0, %rax;
     mov     $5, %rcx;
 1:  inc     %rax;
@@ -130,7 +130,7 @@ BEGIN_FUNC(loope_return_5)
 3:  ret;
 END_FUNC
 
-BEGIN_FUNC(loopne_return_5)
+BEGIN_TEST_FUNC(loopne_return_5)
     mov     $0, %rax;
     mov     $5, %rcx;
 1:  inc     %rax;

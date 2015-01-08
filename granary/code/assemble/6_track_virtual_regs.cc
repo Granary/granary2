@@ -174,16 +174,20 @@ static void GetDefSet(CodeFragment *frag, VRIdSet *def_set) {
 // fragment. The idea is that we want to minimize the number of spills/fills,
 // but only within a given code cache tier. Specifically, we don't want to
 // extend the live range of a variable defined in cold code to be in hot code.
+//
+// TODO(pag): Should we try to propagate hot registers to all fragments to
+//            reduce the number of compensation fragments?
 static void ExtendLiveRanges(FragmentList *frags) {
 
-  // Step 1: Propagate the definitions through.
+  // Step 1: Find the definitions in the successors that are at least as hot
+  // as us, and back-propagate those definitions into our frag's `exit_regs.`
   for (auto frag : ReverseFragmentListIterator(frags)) {
     auto cfrag = DynamicCast<CodeFragment *>(frag);
     if (!cfrag) continue;
     VRIdSet def_set;
     for (auto succ_frag : frag->successors) {
       if (!succ_frag) continue;
-      if (frag->cache != succ_frag->cache) continue;
+      if (frag->cache < succ_frag->cache) continue;
       if (frag->partition != succ_frag->partition) continue;
       if (auto succ_cfrag = DynamicCast<CodeFragment *>(succ_frag)) {
         GetDefSet(succ_cfrag, &def_set);
@@ -194,12 +198,15 @@ static void ExtendLiveRanges(FragmentList *frags) {
 
   // Step 2: For those fragments where we found definitions, make the
   //         definitions live on entry.
+  //
+  // Note: This is a separate step just in case a given fragment has many
+  //       predecessors.
   for (auto frag : ReverseFragmentListIterator(frags)) {
     auto cfrag = DynamicCast<CodeFragment *>(frag);
     if (!cfrag) continue;
     for (auto succ_frag : frag->successors) {
       if (!succ_frag) continue;
-      if (frag->cache != succ_frag->cache) continue;
+      if (frag->cache < succ_frag->cache) continue;
       if (frag->partition != succ_frag->partition) continue;
       auto succ_cfrag = DynamicCast<CodeFragment *>(succ_frag);
       if (!succ_cfrag) continue;

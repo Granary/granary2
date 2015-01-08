@@ -67,9 +67,18 @@ class Trace final {
   GRANARY_INTERNAL_DEFINITION void AddBlock(Block *block);
   GRANARY_INTERNAL_DEFINITION void AddEntryBlock(Block *block);
 
-  // Allocate a new virtual register.
+  // Allocate a new virtual register for this trace.
   VirtualRegister AllocateVirtualRegister(
       size_t num_bytes=arch::GPR_WIDTH_BYTES);
+
+  // Allocate a new "temporary" virtual register. These VRs are meant for use
+  // in instruction mangling/processing, and are re-used across instructions.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister AllocateTemporaryRegister(
+      size_t num_bytes=arch::GPR_WIDTH_BYTES);
+
+  // Free all temporary virtual registers.
+  GRANARY_INTERNAL_DEFINITION void FreeTemporaryRegisters(void);
 
  private:
   friend class BlockFactory;  // For `first_new_block`.
@@ -90,7 +99,8 @@ class Trace final {
   // We default this to a fairly large number so that virtual register numbers
   // never conflict with actual register numbers. This is convenient for
   // virtual register save/restore slots.
-  GRANARY_INTERNAL_DEFINITION int num_virtual_regs;
+  GRANARY_INTERNAL_DEFINITION uint16_t num_temporary_regs;
+  GRANARY_INTERNAL_DEFINITION uint16_t num_virtual_regs;
 
   // Counter of how many basic blocks were added to this trace. This does not
   // necessarily track the exact number of blocks present at any one time.

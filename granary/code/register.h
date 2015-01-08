@@ -44,7 +44,9 @@ enum VirtualRegisterKind : uint8_t {
 
 #ifdef GRANARY_INTERNAL
 enum : uint16_t {
-  kMinGlobalVirtualRegister = 1024
+  kMinTemporaryVirtualRegister = 1024,
+  kMinTraceVirtualRegister = 2048,
+  kMinGlobalVirtualRegister = 3072
 };
 #endif
 

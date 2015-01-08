@@ -248,6 +248,12 @@ class DecodedBlock : public InstrumentedBlock {
   VirtualRegister AllocateVirtualRegister(
       size_t num_bytes=arch::GPR_WIDTH_BYTES);
 
+  // Allocates a new temporary virtual register for use by instructions within
+  // this basic block.
+  GRANARY_INTERNAL_DEFINITION
+  VirtualRegister AllocateTemporaryRegister(
+      size_t num_bytes=arch::GPR_WIDTH_BYTES);
+
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DecodedBlock)
   GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DecodedBlock, {
     SHARED = true,

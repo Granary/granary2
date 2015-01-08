@@ -10,6 +10,7 @@ GRANARY_TEST_SRC_FILES = $(shell find $(GRANARY_TEST_SRC_DIR) -type f -name '*.c
 GRANARY_TEST_OBJ_FILES = $(subst $(GRANARY_TEST_SRC_DIR),$(GRANARY_TEST_BIN_DIR),$(GRANARY_TEST_SRC_FILES:.cc=.o))
 GRANARY_TEST_ASM_FILES = $(shell find $(GRANARY_TEST_SRC_DIR) -type f -name '*.S')
 GRANARY_TEST_ASM_OBJ_FILES = $(subst $(GRANARY_TEST_SRC_DIR),$(GRANARY_TEST_BIN_DIR),$(GRANARY_TEST_ASM_FILES:.S=.o))
+GRANARY_TEST_OBJ = $(GRANARY_BIN_DIR)/$(GRANARY_NAME)_test.o
 GRANARY_EXE = $(GRANARY_BIN_DIR)/$(GRANARY_NAME).out
 
 # Flags passed to the C++ compiler.
@@ -77,7 +78,16 @@ $(GRANARY_EXE): $(GRANARY_TEST_OBJ_FILES) \
                 $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o
 	@echo "Compiling $@"
 	@mkdir -p $(@D)
-	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl $^ -o $@
+	$(GRANARY_LD) -r -T $(GRANARY_TEST_SRC_DIR)/linker.lds \
+		$(GRANARY_TEST_OBJ_FILES) \
+        $(GRANARY_TEST_ASM_OBJ_FILES) \
+        -o $(GRANARY_TEST_OBJ)
+	$(GRANARY_CXX) $(GRANARY_GMOCK_CXX_FLAGS) -lpthread -ldl \
+		$(GRANARY_BIN_DIR)/libgranary.o \
+        $(GRANARY_GTEST_BIN_DIR)/gtest-all.o \
+        $(GRANARY_GMOCK_BIN_DIR)/gmock-all.o \
+        $(GRANARY_TEST_OBJ) \
+        -o $@
 
 # Build all test targets.
 all: $(GRANARY_EXE)

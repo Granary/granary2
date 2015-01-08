@@ -202,7 +202,7 @@ void MangleTailCall(DecodedBlock *block, ControlFlowInstruction *cfi) {
     ni.effective_operand_width = ADDRESS_WIDTH_BITS;
     cfi->InsertBefore(new NativeInstruction(&ni));
   } else {
-    auto ret_addr_reg = block->AllocateVirtualRegister();
+    auto ret_addr_reg = block->AllocateTemporaryRegister();
     MOV_GPRv_IMMz(&ni, ret_addr_reg, ret_addr);
     cfi->InsertBefore(new NativeInstruction(&ni));
     PUSH_GPRv_50(&ni, ret_addr_reg);
@@ -214,7 +214,7 @@ void MangleTailCall(DecodedBlock *block, ControlFlowInstruction *cfi) {
 // Mangle a specialized indirect return into an indirect jump.
 void MangleIndirectReturn(DecodedBlock *block,
                           ControlFlowInstruction *cfi) {
-  auto target = block->AllocateVirtualRegister();
+  auto target = block->AllocateTemporaryRegister();
   Instruction ni;
 
   auto shift = cfi->instruction.StackPointerShiftAmount();
@@ -236,6 +236,9 @@ void MangleIndirectReturn(DecodedBlock *block,
 
 // Performs mangling of an indirect CFI instruction. This ensures that the
 // target of any specialized indirect CFI instruction is stored in a register.
+//
+// Note: We *don't* use temporary virtual registers below, as we might reset
+//       those later.
 void MangleIndirectCFI(DecodedBlock *block, ControlFlowInstruction *cfi) {
   if (cfi->IsFunctionReturn()) {
     auto target_block = cfi->TargetBlock();
@@ -303,7 +306,7 @@ void RelativizeMemOp(DecodedBlock *block, NativeInstruction *ninstr,
   // Load the address into a VR for later scheduling.
   } else {
     Instruction ni;
-    auto addr_reg = block->AllocateVirtualRegister(ADDRESS_WIDTH_BYTES);
+    auto addr_reg = block->AllocateTemporaryRegister(ADDRESS_WIDTH_BYTES);
     MOV_GPRv_IMMv(&ni, addr_reg, reinterpret_cast<uintptr_t>(mem_addr));
     ni.effective_operand_width = ADDRESS_WIDTH_BITS;
     ninstr->InsertBefore(new NativeInstruction(&ni));

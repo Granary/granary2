@@ -4,7 +4,7 @@
 
     .text
 
-BEGIN_FUNC(RunFunctionInContext)
+BEGIN_INST_FUNC(RunFunctionInContext)
 
     /* Copy over new regs state */
     xchg (%rsi), %rsp;      /* Swap stacks. */

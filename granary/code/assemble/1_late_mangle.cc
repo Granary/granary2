@@ -75,9 +75,26 @@ namespace {
 // Manages simple relativization checks / tasks.
 class BlockMangler {
  public:
-  BlockMangler(DecodedBlock *block_, PC estimated_encode_loc)
-      : block(block_),
+  BlockMangler(Trace *trace_, PC estimated_encode_loc)
+      : trace(trace_),
+        block(nullptr),
         cache_pc(estimated_encode_loc) {}
+
+  // Relativizes instructions that use PC-relative operands that are too far
+  // away from our estimate of where this block will be encoded.
+  void Mangle(DecodedBlock *block_) {
+    block = block_;
+    Instruction *next_instr(nullptr);
+    for (auto instr = block->FirstInstruction(); instr; instr = next_instr) {
+      next_instr = instr->Next();
+      if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
+        trace->FreeTemporaryRegisters();
+        RelativizeInstruction(native_instr);
+      }
+    }
+  }
+
+ private:
 
   inline bool AddressNeedsRelativizing(const void *ptr) const {
     return AddressNeedsRelativizing(reinterpret_cast<PC>(ptr));
@@ -191,21 +208,9 @@ class BlockMangler {
     }
   }
 
-  // Relativizes instructions that use PC-relative operands that are too far
-  // away from our estimate of where this block will be encoded.
-  void Mangle(void) {
-    Instruction *next_instr(nullptr);
-    for (auto instr = block->FirstInstruction(); instr; instr = next_instr) {
-      next_instr = instr->Next();
-      if (auto native_instr = DynamicCast<NativeInstruction *>(instr)) {
-        RelativizeInstruction(native_instr);
-      }
-    }
-  }
-
- private:
   BlockMangler(void) = delete;
 
+  Trace *trace;
   DecodedBlock *block;
   PC cache_pc;
 };
@@ -213,11 +218,11 @@ class BlockMangler {
 }  // namespace
 
 // Relativize the native instructions within a trace.
-void MangleInstructions(Trace* cfg) {
-  for (auto block : cfg->Blocks()) {
+void MangleInstructions(Trace *trace) {
+  BlockMangler mangler(trace, EstimatedCachePC());
+  for (auto block : trace->Blocks()) {
     if (auto decoded_block = DynamicCast<DecodedBlock *>(block)) {
-      BlockMangler mangler(decoded_block, EstimatedCachePC());
-      mangler.Mangle();
+      mangler.Mangle(decoded_block);
     }
   }
 }

@@ -81,7 +81,7 @@ static int sum_3_3_3_3(void) {
 // Hopefully this will go through the PLT and GOT.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-extra-args"
-GRANARY_TEST_CASE __attribute__((noinline))
+GRANARY_TEST_CASE
 static int do_fprintf(void) {
   asm("":::"memory");
   return fprintf(fopen("/dev/null", "w"),
@@ -91,34 +91,52 @@ static int do_fprintf(void) {
 }
 #pragma clang diagnostic pop
 
+
+template <typename RetT, typename... Args>
+GRANARY_EXPORT_TO_INSTRUMENTATION
+RetT CallInstrumentedTest(RetT (*func)(...), Args... args) {
+  RetT ret(func(args...));
+  asm("":::"memory");
+  return ret;
+}
+
+template <typename RetT>
+GRANARY_EXPORT_TO_INSTRUMENTATION
+RetT CallInstrumentedTest(RetT (*func)(void)) {
+  RetT ret(func());
+  asm("":::"memory");
+  return ret;
+}
+
 TEST_F(VariadicArgsTest, TestDirectVariadic) {
   auto inst_va_sum = TranslateEntryPoint(context, va_sum, kEntryPointTestCase);
   auto va_summer = UnsafeCast<int(*)(...)>(inst_va_sum);
-  EXPECT_EQ(0, va_summer(0));
-  EXPECT_EQ(0, va_summer(1, 0));
-  EXPECT_EQ(10, va_summer(1, 10));
-  EXPECT_EQ(10, va_summer(2, 10, 0));
-  EXPECT_EQ(10, va_summer(2, 0, 10));
-  EXPECT_EQ(9, va_summer(3, 3, 3, 3));
-  EXPECT_EQ(12, va_summer(4, 3, 3, 3, 3));
-  EXPECT_EQ(12, va_summer(4, 3, 3, 3, 3, 3));  // Passes extra args!
-  EXPECT_EQ(15, va_summer(5, 3, 3, 3, 3, 3));
-  EXPECT_EQ(18, va_summer(6, 3, 3, 3, 3, 3, 3));
+  EXPECT_EQ(0, CallInstrumentedTest(va_summer, 0));
+  EXPECT_EQ(0, CallInstrumentedTest(va_summer, 1, 0));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 1, 10));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 2, 10, 0));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 2, 0, 10));
+  EXPECT_EQ(9, CallInstrumentedTest(va_summer, 3, 3, 3, 3));
+  EXPECT_EQ(12, CallInstrumentedTest(va_summer, 4, 3, 3, 3, 3));
+  // Passes extra args!
+  EXPECT_EQ(12, CallInstrumentedTest(va_summer, 4, 3, 3, 3, 3, 3));
+  EXPECT_EQ(15, CallInstrumentedTest(va_summer, 5, 3, 3, 3, 3, 3));
+  EXPECT_EQ(18, CallInstrumentedTest(va_summer, 6, 3, 3, 3, 3, 3, 3));
 }
 
 TEST_F(VariadicArgsTest, TestDirectRecursiveVariadic) {
   auto inst_va_sum = TranslateEntryPoint(context, va_sum2, kEntryPointTestCase);
   auto va_summer = UnsafeCast<int(*)(...)>(inst_va_sum);
-  EXPECT_EQ(0, va_summer(0));
-  EXPECT_EQ(0, va_summer(1, 0));
-  EXPECT_EQ(10, va_summer(1, 10));
-  EXPECT_EQ(10, va_summer(2, 10, 0));
-  EXPECT_EQ(10, va_summer(2, 0, 10));
-  EXPECT_EQ(9, va_summer(3, 3, 3, 3));
-  EXPECT_EQ(12, va_summer(4, 3, 3, 3, 3));
-  EXPECT_EQ(12, va_summer(4, 3, 3, 3, 3, 3));  // Passes extra args!
-  EXPECT_EQ(15, va_summer(5, 3, 3, 3, 3, 3));
-  EXPECT_EQ(18, va_summer(6, 3, 3, 3, 3, 3, 3));
+  EXPECT_EQ(0, CallInstrumentedTest(va_summer, 0));
+  EXPECT_EQ(0, CallInstrumentedTest(va_summer, 1, 0));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 1, 10));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 2, 10, 0));
+  EXPECT_EQ(10, CallInstrumentedTest(va_summer, 2, 0, 10));
+  EXPECT_EQ(9, CallInstrumentedTest(va_summer, 3, 3, 3, 3));
+  EXPECT_EQ(12, CallInstrumentedTest(va_summer, 4, 3, 3, 3, 3));
+  EXPECT_EQ(12, CallInstrumentedTest(va_summer, 4, 3, 3, 3, 3, 3));  // Passes extra args!
+  EXPECT_EQ(15, CallInstrumentedTest(va_summer, 5, 3, 3, 3, 3, 3));
+  EXPECT_EQ(18, CallInstrumentedTest(va_summer, 6, 3, 3, 3, 3, 3, 3));
 }
 
 TEST_F(VariadicArgsTest, TestIndirectVariadic) {
@@ -128,7 +146,7 @@ TEST_F(VariadicArgsTest, TestIndirectVariadic) {
                                            kEntryPointTestCase);
     auto va_summer = UnsafeCast<int(*)(void)>(inst_summer);
     auto expected_result = summer();
-    EXPECT_EQ(expected_result, va_summer());
+    EXPECT_EQ(expected_result, CallInstrumentedTest(va_summer));
   }
 }
 
@@ -136,5 +154,5 @@ TEST_F(VariadicArgsTest, TestPLTAndGOT) {
   auto inst_do_fprintf = TranslateEntryPoint(context, do_fprintf,
                                              kEntryPointTestCase);
   auto inst_fprintf = UnsafeCast<int(*)(void)>(inst_do_fprintf);
-  EXPECT_EQ(49, inst_fprintf());
+  EXPECT_EQ(49, CallInstrumentedTest(inst_fprintf));
 }

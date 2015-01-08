@@ -77,6 +77,14 @@ extern int loope_return_5(void);
 extern int loopne_return_5(void);
 }
 
+template <typename RetT>
+GRANARY_EXPORT_TO_INSTRUMENTATION
+RetT CallInstrumentedTest(RetT (*func)(void)) {
+  RetT ret(func());
+  asm("":::"memory");
+  return ret;
+}
+
 // Decodes all blocks in the function, but doesn't look in the cache for them.
 class AllFuncBlocks : public InstrumentationTool {
  public:
@@ -85,7 +93,8 @@ class AllFuncBlocks : public InstrumentationTool {
                                      Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
-        factory->RequestBlock(succ.block, BlockRequestKind::kRequestBlockFromTrace);
+        factory->RequestBlock(succ.block,
+                              BlockRequestKind::kRequestBlockFromTrace);
       }
     }
   }
@@ -112,8 +121,8 @@ class ConditionalBranchTest : public SimpleEncoderTest {
       EXPECT_TRUE(jcc_ ## opcode ## _false()); \
       auto inst_true_func = UnsafeCast<bool(*)(void)>(inst_true); \
       auto inst_false_func = UnsafeCast<bool(*)(void)>(inst_false); \
-      EXPECT_TRUE(inst_true_func()); \
-      EXPECT_TRUE(inst_false_func()); \
+      EXPECT_TRUE(CallInstrumentedTest(inst_true_func)); \
+      EXPECT_TRUE(CallInstrumentedTest(inst_false_func)); \
     }
 
 FOR_EACH_CBR(JCC_TEST)
@@ -127,7 +136,7 @@ JCC_TEST(jrcxz)
                                       kEntryPointTestCase); \
       EXPECT_EQ(5, opcode ## _return_5()); \
       auto inst_func = UnsafeCast<int(*)(void)>(inst); \
-      EXPECT_EQ(5, inst_func()); \
+      EXPECT_EQ(5, CallInstrumentedTest(inst_func)); \
     }
 
 LOOP_TEST(loop)

@@ -191,6 +191,13 @@ static int last_val_iterative(int n, int *nums) {
   return last;
 }
 
+template <typename RetT, typename... Args>
+GRANARY_EXPORT_TO_INSTRUMENTATION
+RetT CallInstrumentedTest(RetT (*func)(Args...), Args... args) {
+  RetT ret(func(args...));
+  asm("":::"memory");
+  return ret;
+}
 }  // namespace
 
 #define TEST_WITH_TOOLS(test_name, ...) \
@@ -206,7 +213,8 @@ TEST_WITH_TOOLS(RecursiveFibonacci, {
                                   kEntryPointTestCase);
   auto fibonacci_rec_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
-    EXPECT_EQ(fibonacci_rec(i), fibonacci_rec_inst(i));
+    auto ret = CallInstrumentedTest(fibonacci_rec_inst, i);
+    EXPECT_EQ(fibonacci_rec(i), ret);
   }
 })
 
@@ -215,7 +223,8 @@ TEST_WITH_TOOLS(IterativeFibonacci, {
                                   kEntryPointTestCase);
   auto fibonacci_iter_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
-    EXPECT_EQ(fibonacci_iter(i), fibonacci_iter_inst(i));
+    auto ret = CallInstrumentedTest(fibonacci_iter_inst, i);
+    EXPECT_EQ(fibonacci_iter(i), ret);
   }
 })
 
@@ -224,7 +233,8 @@ TEST_WITH_TOOLS(RecursiveFactorial, {
                                   kEntryPointTestCase);
   auto factorial_rec_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
-    EXPECT_EQ(factorial_rec(i), factorial_rec_inst(i));
+    auto ret = CallInstrumentedTest(factorial_rec_inst, i);
+    EXPECT_EQ(factorial_rec(i), ret);
   }
 })
 
@@ -233,7 +243,8 @@ TEST_WITH_TOOLS(IterativeFactorial, {
                                   kEntryPointTestCase);
   auto factorial_iter_inst = UnsafeCast<int(*)(int)>(inst);
   for (auto i = 0; i < 10; ++i) {
-    EXPECT_EQ(factorial_iter(i), factorial_iter_inst(i));
+    auto ret = CallInstrumentedTest(factorial_iter_inst, i);
+    EXPECT_EQ(factorial_iter(i), ret);
   }
 })
 
@@ -243,6 +254,7 @@ TEST_WITH_TOOLS(LastValueIterative, {
   auto last_val_iterative_inst = UnsafeCast<int(*)(int, int *)>(inst);
   int vals[] = {0, 1, 2, 3, 4, 5};
   for (auto i = 0; i < 10; ++i) {
-    EXPECT_EQ(last_val_iterative(5, vals), last_val_iterative_inst(5, vals));
+    auto ret = CallInstrumentedTest(last_val_iterative_inst, 5, vals);
+    EXPECT_EQ(last_val_iterative(5, vals), ret);
   }
 })

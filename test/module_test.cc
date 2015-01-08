@@ -26,11 +26,11 @@ class ModuleManagerTest : public Test {
   }
 
   static void SetUpTestCase(void) {
-    Init(kInitTestCase);
+    Init(kInitAttach);
   }
 
   static void TearDownTestCase(void) {
-    Exit(kExitTestCase);
+    Exit(kExitDetach);
   }
 
   os::ModuleManager m1;

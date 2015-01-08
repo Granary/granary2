@@ -170,6 +170,13 @@ VirtualRegister DecodedBlock::AllocateVirtualRegister(size_t num_bytes) {
   return cfg->AllocateVirtualRegister(num_bytes);
 }
 
+// Allocates a new temporary virtual register for use by instructions within
+// this basic block.
+VirtualRegister DecodedBlock::AllocateTemporaryRegister(
+    size_t num_bytes) {
+  return cfg->AllocateTemporaryRegister(num_bytes);
+}
+
 // Return the first instruction in the basic block.
 Instruction *DecodedBlock::FirstInstruction(void) const {
   return first;

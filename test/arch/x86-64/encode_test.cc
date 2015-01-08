@@ -20,7 +20,7 @@ extern "C" {
 
 TEST(EncodeTest, EncodeCommonInstructions) {
   using namespace granary;
-  Init(kInitTestCase);
+  Init(kInitAttach);
 
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);
@@ -42,5 +42,5 @@ TEST(EncodeTest, EncodeCommonInstructions) {
     EXPECT_TRUE(ret);
     if (!ret) break;
   }
-  Exit(kExitTestCase);
+  Exit(kExitDetach);
 }

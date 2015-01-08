@@ -26,9 +26,9 @@ SimpleEncoderTest::SimpleEncoderTest(void)
     : context(GlobalContext()) {}
 
 void SimpleEncoderTest::SetUpTestCase(void) {
-  Init(kInitTestCase);
+  Init(kInitAttach);
 }
 
 void SimpleEncoderTest::TearDownTestCase(void) {
-  Exit(kExitTestCase);
+  Exit(kExitDetach);
 }

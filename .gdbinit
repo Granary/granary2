@@ -870,6 +870,15 @@ define trace-meta
 end
 
 
+# trace-all
+#
+# Enable meta-data and execution tracing.
+define trace-all
+  trace-meta
+  trace-exec
+end
+
+
 # print-kernel-modules
 #
 # Prints out all kernel modules.

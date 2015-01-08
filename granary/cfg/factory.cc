@@ -62,6 +62,19 @@ extern const uint8_t granary_end_text;
 extern const uint8_t granary_begin_inst_exports;
 extern const uint8_t granary_end_inst_exports;
 
+#ifdef GRANARY_TARGET_test
+// Address range of Granary exported routines by test cases. These are handled
+// separately because test cases are compiled at a different time, and so
+// don't see the main `linker.lds` script that the rest of the code sees.
+extern const uint8_t granary_begin_test_exports;
+extern const uint8_t granary_end_test_exports;
+
+// Address range of test cases.
+extern const uint8_t granary_begin_test_cases;
+extern const uint8_t granary_end_test_cases;
+#endif  // GRANARY_TARGET_test
+
+// Address range of the code cache.
 extern const AppPC granary_code_cache_begin;
 extern const AppPC granary_code_cache_end;
 
@@ -479,6 +492,7 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
   // natively.
   } else if (&granary_begin_inst_exports <= target_pc &&
              target_pc < &granary_end_inst_exports) {
+    // Execute natively.
 
 #ifdef GRANARY_WHERE_user
   // If we try to go to `_fini`, then redirect execution to `exit_group`.
@@ -491,6 +505,17 @@ static BlockRequestKind RequestKindForTargetPC(AppPC &target_pc,
              target_pc < &granary_end_text) {
     granary_unreachable("Fatal error: Trying to jump into "
                         "non-exported Granary function.");
+
+#ifdef GRANARY_TARGET_test
+  } else if (&granary_begin_test_exports <= target_pc &&
+             target_pc < &granary_end_test_exports) {
+    // Execute natively.
+
+  // This is a test case that can be instrumented.
+  } else if (&granary_begin_test_cases <= target_pc &&
+             target_pc < &granary_end_test_cases) {
+    request_kind = default_kind;
+#endif  // GRANARY_TARGET_test
 
   // All remaining targets should always be associated with valid module code.
   } else if (nullptr != os::ModuleContainingPC(target_pc)) {

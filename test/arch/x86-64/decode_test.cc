@@ -20,7 +20,7 @@ extern "C" {
 
 TEST(DecodeTest, DecodeCommonInstructions) {
   using namespace granary;
-  Init(kInitTestCase);
+  Init(kInitAttach);
 
   auto begin = UnsafeCast<AppPC>(TestDecode_Instructions);
   auto end = UnsafeCast<AppPC>(TestDecode_Instructions_End);
@@ -40,5 +40,5 @@ TEST(DecodeTest, DecodeCommonInstructions) {
     if (XED_IFORM_INVALID == instr.iform) break;
   }
 
-  Exit(kExitTestCase);
+  Exit(kExitDetach);
 }
