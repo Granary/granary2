@@ -32,8 +32,10 @@ namespace granary {
 // symbols are deleted.
 #ifdef GRANARY_INTERNAL
 # define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR GRANARY_DEFINE_NEW_ALLOCATOR
+# define GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR GRANARY_DECLARE_NEW_ALLOCATOR
 #else
 # define GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(...)
+# define GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(...)
 #endif
 
 // Declares an out-of-line global new allocator for a specific class. This

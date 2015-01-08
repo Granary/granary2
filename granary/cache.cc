@@ -23,6 +23,9 @@ extern const granary::CachePC granary_code_cache_begin;
 extern const granary::CachePC granary_code_cache_end;
 }  // extern C
 namespace granary {
+
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(NativeAddress)
+
 namespace arch {
 
 // Generates the direct edge entry code for getting onto a Granary private

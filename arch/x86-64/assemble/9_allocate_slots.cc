@@ -168,17 +168,19 @@ static void ManglePushFlags(Fragment *frag, NativeInstruction *instr,
   arch::Instruction ni;
   auto &ainstr(instr->instruction);
   auto flag_access_reg = ainstr.ops[0].reg;
-  auto op_width = instr->instruction.effective_operand_width;
-  GRANARY_ASSERT(0 < op_width);
+  auto op_width_bits = instr->instruction.effective_operand_width;
+  flag_access_reg.Widen(instr->instruction.effective_operand_width /
+                        arch::BYTE_WIDTH_BITS);
+  GRANARY_ASSERT(0 < op_width_bits);
   arch::MOV_MEMv_GPRv(
       &ni,
-      arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, op_width),
+      arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, op_width_bits),
       flag_access_reg);
-  ni.effective_operand_width = op_width;
+  ni.effective_operand_width = op_width_bits;
   frag->instrs.InsertAfter(instr, new NativeInstruction(&ni));
 
   arch::POP_GPRv_51(&ni, flag_access_reg);
-  ni.effective_operand_width = op_width;
+  ni.effective_operand_width = op_width_bits;
   frag->instrs.InsertAfter(instr, new NativeInstruction(&ni));
 
   ainstr.ops[0].type = XED_ENCODER_OPERAND_TYPE_INVALID;

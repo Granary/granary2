@@ -10,6 +10,9 @@
 
 namespace granary {
 
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(DirectEdge)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(IndirectEdge)
+
 DirectEdge::DirectEdge(BlockMetaData *dest_meta_, DirectEdge *next_)
     : entry_target_pc(nullptr),
       next(next_),

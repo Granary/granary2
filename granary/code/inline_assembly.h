@@ -40,7 +40,7 @@ class InlineAssemblyScope : public UnownedCountedObject {
   explicit InlineAssemblyScope(std::initializer_list<const Operand *> inputs);
   virtual ~InlineAssemblyScope(void);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(InlineAssemblyScope, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -71,7 +71,7 @@ class InlineAssemblyBlock {
   //       to it.
   ~InlineAssemblyBlock(void);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(InlineAssemblyScope, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(InlineAssemblyBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -97,7 +97,7 @@ class InlineFunctionCall {
     return num_args;
   }
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(InlineFunctionCall, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(InlineFunctionCall, {
     SHARED = true,
     ALIGNMENT = 1
   })

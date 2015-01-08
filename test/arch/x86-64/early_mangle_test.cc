@@ -3,6 +3,7 @@
 #include <gmock/gmock.h>
 
 #define GRANARY_INTERNAL
+#define GRANARY_TEST
 
 #include "test/util/isolated_function.h"
 #include "test/util/simple_encoder.h"

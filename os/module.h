@@ -111,7 +111,7 @@ class Module {
   // Remove all ranges from this module.
   GRANARY_INTERNAL_DEFINITION void RemoveRanges(void);
 
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(Module, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(Module, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })

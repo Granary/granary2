@@ -288,7 +288,7 @@ inline static void BNDMK_BND_AGEN(Instruction *instr, A0 a0, Operand a1) {
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    size_t width=0) {
+                                    size_t bit_width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
@@ -299,13 +299,13 @@ inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
     op.is_compound = false;
     op.reg.DecodeFromNative(base_reg);
   }
-  op.width = static_cast<uint16_t>(width);
+  op.width = static_cast<uint16_t>(bit_width);
   return op;
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
-                                    size_t width=0) {
+                                    size_t bit_width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   if (disp) {
@@ -316,33 +316,35 @@ inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
     op.is_compound = false;
     op.reg = base_reg;
   }
-  op.width = static_cast<uint16_t>(width);
+  op.width = static_cast<uint16_t>(bit_width);
   return op;
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, xed_reg_enum_t base_reg,
-                                    xed_reg_enum_t index_reg, size_t width=0) {
+                                    xed_reg_enum_t index_reg,
+                                    size_t bit_width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
   op.mem.disp = disp;
   op.mem.base.DecodeFromNative(base_reg);
   op.mem.index.DecodeFromNative(index_reg);
-  op.width = static_cast<uint16_t>(width);
+  op.width = static_cast<uint16_t>(bit_width);
   return op;
 }
 
 // Make a simple base/displacement memory operand.
 inline static Operand BaseDispMemOp(int32_t disp, VirtualRegister base_reg,
-                                    VirtualRegister index_reg, size_t width=0) {
+                                    VirtualRegister index_reg,
+                                    size_t bit_width=0) {
   Operand op;
   op.type = XED_ENCODER_OPERAND_TYPE_MEM;
   op.is_compound = true;
   op.mem.disp = disp;
   op.mem.base = base_reg;
   op.mem.index = index_reg;
-  op.width = static_cast<uint16_t>(width);
+  op.width = static_cast<uint16_t>(bit_width);
   return op;
 }
 

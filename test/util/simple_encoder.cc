@@ -4,6 +4,7 @@
 
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
+#define GRANARY_TEST
 
 #include "test/util/simple_encoder.h"
 

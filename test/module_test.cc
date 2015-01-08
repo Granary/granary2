@@ -3,6 +3,7 @@
 #include <gmock/gmock.h>
 
 #define GRANARY_INTERNAL
+#define GRANARY_TEST
 
 #include "granary/base/base.h"
 #include "granary/base/cast.h"

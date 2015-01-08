@@ -64,7 +64,7 @@ class DirectEdge {
   // Lock that guards the modification of `dest_meta` and this structure.
   os::Lock lock;
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(DirectEdge, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(DirectEdge, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -133,7 +133,7 @@ class IndirectEdge {
   // Lock guarding `out_edge_pc` and the rest of the structure.
   os::Lock lock;
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(IndirectEdge, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(IndirectEdge, {
     SHARED = true,
     ALIGNMENT = 1
   })

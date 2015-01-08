@@ -16,7 +16,7 @@ class Instruction;
 struct EarlyMangler {
  public:
   enum {
-    kMaxNumVirtRegs = 4
+    kMaxNumVirtRegs = 64  // Maximum number of values to `ENTER` times two.
   };
 
   // Initialize the early mangler.

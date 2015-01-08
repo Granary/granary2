@@ -221,7 +221,7 @@ class CachedBlock final : public InstrumentedBlock {
   virtual ~CachedBlock(void) = default;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CachedBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CachedBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(CachedBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -255,7 +255,7 @@ class DecodedBlock : public InstrumentedBlock {
       size_t num_bytes=arch::GPR_WIDTH_BYTES);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DecodedBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DecodedBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(DecodedBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -342,7 +342,7 @@ class CompensationBlock : public DecodedBlock {
 
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, CompensationBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(CompensationBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(CompensationBlock, {
     SHARED = true,
     ALIGNMENT = arch::CACHE_LINE_SIZE_BYTES
   })
@@ -365,7 +365,7 @@ class DirectBlock final : public InstrumentedBlock {
       Trace *cfg_, BlockMetaData *meta_);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, DirectBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(DirectBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(DirectBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -400,7 +400,7 @@ class IndirectBlock final : public InstrumentedBlock {
   virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, IndirectBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(IndirectBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(IndirectBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -435,7 +435,7 @@ class ReturnBlock final : public InstrumentedBlock {
   virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, ReturnBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(ReturnBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(ReturnBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })
@@ -469,7 +469,7 @@ class NativeBlock final : public Block {
   virtual CachePC StartCachePC(void) const override final;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Block, NativeBlock)
-  GRANARY_DEFINE_INTERNAL_NEW_ALLOCATOR(NativeBlock, {
+  GRANARY_DECLARE_INTERNAL_NEW_ALLOCATOR(NativeBlock, {
     SHARED = true,
     ALIGNMENT = 1
   })

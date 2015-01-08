@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #define GRANARY_INTERNAL
+#define GRANARY_TEST
 
 #include "granary/base/base.h"
 #include "granary/base/string.h"

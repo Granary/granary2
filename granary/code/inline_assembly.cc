@@ -15,6 +15,10 @@
 
 namespace granary {
 
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(InlineAssemblyScope)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(InlineAssemblyBlock)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(InlineFunctionCall)
+
 // Initialize this inline assembly scope.
 InlineAssemblyScope::InlineAssemblyScope(
     std::initializer_list<const Operand *> inputs)

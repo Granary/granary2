@@ -13,6 +13,8 @@
 namespace granary {
 namespace os {
 
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(Module)
+
 // Represents a range of code/data within a module.
 class ModuleAddressRange {
  public:

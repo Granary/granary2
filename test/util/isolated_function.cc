@@ -4,6 +4,7 @@
 
 #define GRANARY_INTERNAL
 #define GRANARY_ARCH_INTERNAL
+#define GRANARY_TEST
 
 #include "granary/base/lock.h"
 

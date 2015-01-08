@@ -80,7 +80,7 @@ class PartitionInfo {
  public:
   explicit PartitionInfo(int id_);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionInfo, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(PartitionInfo, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -175,7 +175,7 @@ class Fragment {
   virtual ~Fragment(void) = default;
 
   GRANARY_DECLARE_BASE_CLASS(Fragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(Fragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(Fragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -376,7 +376,7 @@ class CodeFragment : public Fragment {
   VRIdCountSet def_regs;
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, CodeFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(CodeFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(CodeFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -392,7 +392,7 @@ class PartitionEntryFragment : public Fragment {
   virtual ~PartitionEntryFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionEntryFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionEntryFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(PartitionEntryFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -408,7 +408,7 @@ class PartitionExitFragment : public Fragment {
   virtual ~PartitionExitFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, PartitionExitFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(PartitionExitFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(PartitionExitFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -424,7 +424,7 @@ class FlagEntryFragment : public CodeFragment {
   virtual ~FlagEntryFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagEntryFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(FlagEntryFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(FlagEntryFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -440,7 +440,7 @@ class FlagExitFragment : public CodeFragment {
   virtual ~FlagExitFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, FlagExitFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(FlagExitFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(FlagExitFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -456,7 +456,7 @@ class NonLocalEntryFragment : public Fragment {
   virtual ~NonLocalEntryFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, NonLocalEntryFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(NonLocalEntryFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(NonLocalEntryFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })
@@ -480,7 +480,7 @@ class ExitFragment : public Fragment {
   virtual ~ExitFragment(void);
 
   GRANARY_DECLARE_DERIVED_CLASS_OF(Fragment, ExitFragment)
-  GRANARY_DEFINE_NEW_ALLOCATOR(ExitFragment, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(ExitFragment, {
     SHARED = false,
     ALIGNMENT = 1
   })

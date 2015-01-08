@@ -141,7 +141,7 @@ static bool BackPropagateEntryDefs(CodeFragment *pred, CodeFragment *succ) {
     // Inherit it.
     GRANARY_ASSERT(!pred->entry_regs.Contains(vr_id));
     pred->exit_regs.Add(vr_id);
-    pred->entry_regs.Add(vr_id);
+    //pred->entry_regs.Add(vr_id);
     changed = true;
   }
   return changed;

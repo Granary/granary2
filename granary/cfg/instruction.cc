@@ -13,6 +13,13 @@
 
 namespace granary {
 
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(AnnotationInstruction)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(NativeInstruction)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(BranchInstruction)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(ControlFlowInstruction)
+GRANARY_IMPLEMENT_NEW_ALLOCATOR(ExceptionalControlFlowInstruction)
+
 GRANARY_DECLARE_CLASS_HEIRARCHY(
     (Instruction, 2),
       (AnnotationInstruction, 2 * 3),
@@ -29,8 +36,6 @@ GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, NativeInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, BranchInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ControlFlowInstruction)
 GRANARY_DEFINE_DERIVED_CLASS_OF(Instruction, ExceptionalControlFlowInstruction)
-
-GRANARY_IMPLEMENT_NEW_ALLOCATOR(LabelInstruction)
 
 Instruction *Instruction::Next(void) {
   GRANARY_ASSERT(nullptr != this);

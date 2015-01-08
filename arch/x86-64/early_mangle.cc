@@ -437,9 +437,8 @@ static void MangleLeave(EarlyMangler *mangler, Instruction *instr) {
 // This is a big hack: it is our way of ensuring that during late mangling, we
 // have access to some kind of virtual register for `PUSHF` and `PUSHFQ`.
 static void ManglePushFlags(EarlyMangler *mangler, Instruction *instr) {
-  auto flag_size = instr->effective_operand_width / 8UL;
   instr->ops[0].type = XED_ENCODER_OPERAND_TYPE_REG;
-  instr->ops[0].reg = mangler->AllocateVirtualRegister(flag_size);
+  instr->ops[0].reg = mangler->AllocateVirtualRegister();
   instr->ops[0].rw = XED_OPERAND_ACTION_W;
   instr->ops[0].width = instr->effective_operand_width;
 

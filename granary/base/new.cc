@@ -29,6 +29,7 @@ SlabAllocator::SlabAllocator(size_t start_offset_, size_t max_offset_,
       slab_list(nullptr),
       free_list_lock(),
       free_list(nullptr) {
+  asm("":::"memory");
   GRANARY_UNUSED(object_size);
   GRANARY_UNUSED(offset);
   GRANARY_UNUSED(start_offset);

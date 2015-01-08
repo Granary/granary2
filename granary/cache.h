@@ -108,7 +108,7 @@ class NativeAddress {
   // Next far away address in this block.
   NativeAddress *next;
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(NativeAddress, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(NativeAddress, {
     SHARED = true,
     ALIGNMENT = 16
   })
