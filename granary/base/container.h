@@ -19,7 +19,7 @@ class Container {
   // Destroy the contained object.
   void Destroy(void) {
     operator->()->~T();
-    memset(storage, 0x7A, sizeof(T));
+    GRANARY_IF_DEBUG( memset(storage, 0x7A, sizeof(T)); )
     VALGRIND_MAKE_MEM_UNDEFINED(storage, sizeof(T));
   }
 

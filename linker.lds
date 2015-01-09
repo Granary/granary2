@@ -59,10 +59,10 @@ SECTIONS
   {
     /* Defines boundaries for arrays of destructor functions. */
     granary_begin_fini_array = .;
-    KEEP (*(SORT(.fini_array.*)))
-    KEEP (*(.fini_array))
     KEEP (*(SORT(.dtors.*)))
     KEEP (*(.dtors))
+    KEEP (*(SORT(.fini_array.*)))
+    KEEP (*(.fini_array))
     granary_end_fini_array = .;
   }
 }

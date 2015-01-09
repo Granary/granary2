@@ -6,7 +6,11 @@
 #include "arch/base.h"
 
 #include "granary/base/base.h"
+#include "granary/base/constructor.h"
+#include "granary/base/container.h"
 #include "granary/base/lock.h"
+
+#include "granary/breakpoint.h"
 
 namespace granary {
 
@@ -130,11 +134,11 @@ template <typename T>
 class OperatorNewAllocator {
  public:
   inline static void *Allocate(void) {
-    return allocator.Allocate();
+    return gAllocator->Allocate();
   }
 
   inline static void Free(void *address) {
-    allocator.Free(address);
+    gAllocator->Free(address);
   }
 
  private:
@@ -170,7 +174,36 @@ class OperatorNewAllocator {
 
   OperatorNewAllocator(void) = delete;
 
-  static internal::SlabAllocator allocator GRANARY_EARLY_GLOBAL;
+#ifndef GRANARY_TEST
+  // Initializes the allocator.
+  //
+  // Note: This does not require a guard variable.
+  __attribute__((noinline, used))
+  static void Init(void) {
+    kAllocatorConstructor.PreserveSymbols();
+    gAllocator.Construct(OperatorNewAllocator<T>::START_OFFSET,
+                        OperatorNewAllocator<T>::END_OFFSET,
+                        OperatorNewAllocator<T>::ALIGNED_SIZE,
+                        sizeof(T));
+  }
+
+  // Destroys the allocator.
+  //
+  // Note: This does not require a guard variable.
+  __attribute__((noinline, used))
+  static void Exit(void) {
+    kAllocatorConstructor.PreserveSymbols();
+    gAllocator.Destroy();
+  }
+
+ public:
+  // Statically allocated and initialized allocator.
+  static Constructor<Init, Exit> kAllocatorConstructor;
+
+ private:
+#endif  // !GRANARY_TEST
+
+  static Container<internal::SlabAllocator> gAllocator;
 
   GRANARY_DISALLOW_COPY_AND_ASSIGN_TEMPLATE(OperatorNewAllocator, (T));
 };
@@ -180,11 +213,16 @@ class OperatorNewAllocator {
 
 // Static initialization of the (typeless) internal slab allocator.
 template <typename T>
-internal::SlabAllocator OperatorNewAllocator<T>::allocator(
-    OperatorNewAllocator<T>::START_OFFSET,
-    OperatorNewAllocator<T>::END_OFFSET,
-    OperatorNewAllocator<T>::ALIGNED_SIZE,
-    sizeof(T));
+Container<internal::SlabAllocator> OperatorNewAllocator<T>::gAllocator;
+
+#ifndef GRANARY_TEST
+// Static initialization of the class that allows to to construct/destroy the
+// allocators in `PreInit` and `PostExit`.
+template <typename T>
+Constructor<OperatorNewAllocator<T>::Init, OperatorNewAllocator<T>::Exit>
+OperatorNewAllocator<T>::kAllocatorConstructor __attribute__((used));
+
+#endif  // !GRANARY_TEST
 
 #pragma clang diagnostic pop
 

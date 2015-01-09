@@ -20,10 +20,6 @@ class alignas(sizeof(uint32_t)) Lock {
   // Release the lock. Assumes that the lock is acquired.
   void Release(void);
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(Lock, {
-    kAlignment = 1
-  })
-
  private:
   // States of the lock.
   enum alignas(sizeof(uint32_t)) LockState : uint32_t {

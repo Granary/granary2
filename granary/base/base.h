@@ -33,7 +33,7 @@ typedef long int ssize_t;
   __attribute__((section(".bss.granary_unprotected")))
 
 // Useful for Valgrind-based debugging.
-#if !defined(GRANARY_EXTERNAL) && !defined(GRANARY_ASSEMBLY)
+#if !defined(GRANARY_ASSEMBLY)
 # ifdef GRANARY_WITH_VALGRIND
 #   include <valgrind/valgrind.h>
 #   include <valgrind/memcheck.h>

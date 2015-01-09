@@ -173,11 +173,17 @@ GRANARY_COMMON_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
 GRANARY_LD_FLAGS += $(GRANARY_OPT_FLAGS) $(GRANARY_DEBUG_FLAGS)
 
 # Make sure certain architectural features are disabled.
-GRANARY_COMMON_ARCH_FLAGS += -fno-common -fno-builtin
-GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -m64 -mtune=generic -msoft-float
+GRANARY_COMMON_ARCH_FLAGS += -fno-common -fno-builtin 
+GRANARY_COMMON_ARCH_FLAGS += -mno-red-zone -Xclang -disable-red-zone 
+GRANARY_COMMON_ARCH_FLAGS += -m64 -mtune=generic
+GRANARY_COMMON_ARCH_FLAGS += -msoft-float -Xclang -no-implicit-float
 GRANARY_COMMON_ARCH_FLAGS += -fno-stack-protector -fno-math-errno
 GRANARY_COMMON_ARCH_FLAGS += -minline-all-stringops
 GRANARY_COMMON_ARCH_FLAGS += -fno-assume-sane-operator-new
+
+# Kernel has no strong concept of guard variables, and we also manually handle
+# init/exit so that we can attach+detach+reattach.
+GRANARY_COMMON_ARCH_FLAGS += -fno-threadsafe-statics -Xclang -fforbid-guard-variables
 
 ifeq ("x86-64","$(GRANARY_ARCH)")
 	GRANARY_COMMON_ARCH_FLAGS += -mno-mmx -mno-sse -mno-sse2 -mno-sse3
