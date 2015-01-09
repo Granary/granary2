@@ -147,25 +147,25 @@ class OperatorNewAllocator {
   typedef typename T::OperatorNewProperties Properties;
 
   enum : size_t {
-    OBJECT_SIZE = GRANARY_MAX(sizeof(T), sizeof(internal::FreeList *)),
-    REQUESTED_ALIGNMENT = static_cast<size_t>(Properties::kAlignment),
-    OBJECT_ALIGNMENT = alignof(T),
-    MINIMUM_ALIGNMENT = GRANARY_MAX(REQUESTED_ALIGNMENT, OBJECT_ALIGNMENT),
-    ALIGNED_SIZE = GRANARY_ALIGN_TO(sizeof(T), MINIMUM_ALIGNMENT),
-    START_OFFSET = GRANARY_ALIGN_TO(sizeof(internal::SlabList),
-                                    MINIMUM_ALIGNMENT),
-    NUM_OBJS_PER_SLAB = (internal::kNewAllocatorNumBytesPerSlab -
-                         START_OFFSET - (ALIGNED_SIZE - 1)) / ALIGNED_SIZE,
-    END_OFFSET = START_OFFSET + (NUM_OBJS_PER_SLAB * ALIGNED_SIZE)
+    kObjectSize = GRANARY_MAX(sizeof(T), sizeof(internal::FreeList *)),
+    kRequestedAlignment = static_cast<size_t>(Properties::kAlignment),
+    kObjectAlignment = alignof(T),
+    kMinimumAlignment = GRANARY_MAX(kRequestedAlignment, kObjectAlignment),
+    kAlignedSize = GRANARY_ALIGN_TO(sizeof(T), kMinimumAlignment),
+    kStartOffset = GRANARY_ALIGN_TO(sizeof(internal::SlabList),
+                                    kMinimumAlignment),
+    kNumObjsPerSlab = (internal::kNewAllocatorNumBytesPerSlab -
+                       kStartOffset - (kAlignedSize - 1)) / kAlignedSize,
+    kEndOffset = kStartOffset + (kNumObjsPerSlab * kAlignedSize)
   };
 
-  static_assert(alignof(T) <= MINIMUM_ALIGNMENT,
+  static_assert(alignof(T) <= kMinimumAlignment,
       "Error computing the alignment of the object.");
 
-  static_assert(sizeof(T) <= ALIGNED_SIZE,
+  static_assert(sizeof(T) <= kAlignedSize,
       "Error computing the aligned object size.");
 
-  static_assert(END_OFFSET <= internal::kNewAllocatorNumBytesPerSlab,
+  static_assert(kEndOffset <= internal::kNewAllocatorNumBytesPerSlab,
       "Error computing the layout of meta-data and objects on page frames.");
 
   OperatorNewAllocator(void) = delete;
