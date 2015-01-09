@@ -36,151 +36,53 @@ GRANARY_DEFINE_bool(debug_trace_meta, false,
 namespace granary {
 namespace {
 
+enum {
+  // Upper bound on the number of registerable meta-data instances.
+  kMaxNumManagedMetaData = 32
+};
+
 // The next meta-data description ID that we can assign. Every meta-data
 // description has a unique, global ID.
 static int gNextDescriptionId = 0;
 
-}  // namespace
+// Size and alignment of the overall meta-data structure managed by this
+// manager.
+static size_t gAlign = 0;
+static size_t gSize = 0;
 
-// Manages all block meta-data for the lifetime of an instrumentation session.
-class MetaDataManager {
- public:
-  // Initialize an empty meta-data manager.
-  MetaDataManager(void);
+// Whether or not this meta-data has been finalized.
+static bool gIsFinalized = false;
 
-  ~MetaDataManager(void);
+// Info on all registered meta-data within this manager. These are indexed
+// by the `MetaDataDescription::id` field.
+static MetaDataDescription *gDescriptions[kMaxNumManagedMetaData];
 
-  // Register some meta-data with Granary. This is a convenience method around
-  // the `Register` method that operates directly on a meta-data description.
-  template <typename T>
-  inline void Register(void) {
-    Add(const_cast<MetaDataDescription *>(
-        GetMetaDataDescription<T>::Get()));
-  }
-
-  // Register some meta-data with Granary.
-  void Add(MetaDataDescription *desc);
-
-  // Allocate some meta-data. This lazily finalizes the meta-data allocator.
-  void *Allocate(void);
-
-  // Free some meta-data.
-  void Free(BlockMetaData *meta);
-
-  inline size_t Size(void) const {
-    return size;
-  }
-
-  enum {
-    // Upper bound on the number of registerable meta-data instances.
-    MAX_NUM_MANAGED_METADATAS = 32
-  };
-
-  // Finalizes the meta-data structures, which determines the runtime layout
-  // of the packed meta-data structure. Once
-  void Finalize(void);
-
-  // Initialize the allocator for meta-data managed by this manager.
-  void InitAllocator(void);
-
-  // Size and alignment of the overall meta-data structure managed by this
-  // manager.
-  size_t align;
-  size_t size;
-
-  // Whether or not this meta-data has been finalized.
-  bool is_finalized;
-
-  // Info on all registered meta-data within this manager. These are indexed
-  // by the `MetaDataDescription::id` field.
-  MetaDataDescription *descriptions[MAX_NUM_MANAGED_METADATAS];
-
-  // Slab allocator for allocating meta-data objects.
-  Container<internal::SlabAllocator> allocator;
-
-  GRANARY_DISALLOW_COPY_AND_ASSIGN(MetaDataManager);
-};
-
-// Initialize an empty meta-data manager.
-MetaDataManager::MetaDataManager(void)
-    : align(0),
-      size(0),
-      is_finalized(false),
-      allocator() {
-  gNextDescriptionId = 0;
-  for (auto &desc : descriptions) {
-    desc = nullptr;
-  }
-}
-
-MetaDataManager::~MetaDataManager(void) {
-  for (auto desc : descriptions) {
-    if (desc) {
-      desc->id = -1;
-      desc->offset = std::numeric_limits<uintptr_t>::max();
-    }
-  }
-  allocator.Destroy();
-}
-
-// Register some meta-data with the meta-data manager.
-void MetaDataManager::Add(MetaDataDescription *desc) {
-  GRANARY_ASSERT(!is_finalized);
-  GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() == desc->offset);
-  if (-1 == desc->id) {
-    desc->id = gNextDescriptionId++;
-    GRANARY_ASSERT(MAX_NUM_MANAGED_METADATAS > desc->id);
-  }
-  descriptions[desc->id] = desc;
-}
-
-// Allocate some meta-data. If the manager hasn't been finalized then this
-// returns `nullptr`.
-void *MetaDataManager::Allocate(void) {
-  if (GRANARY_UNLIKELY(!is_finalized)) {
-    Finalize();
-    InitAllocator();
-  }
-  auto meta_mem = allocator->Allocate();
-  memset(meta_mem, 0, size);
-  return meta_mem;
-}
-
-// Free some meta-data. This is a no-op if the manager hasn't been finalized.
-void MetaDataManager::Free(BlockMetaData *meta) {
-  GRANARY_ASSERT(is_finalized);
-  allocator->Free(meta);
-}
+// Slab allocator for allocating meta-data objects.
+static Container<internal::SlabAllocator> gAllocator;
 
 // Finalizes the meta-data structures, which determines the runtime layout
 // of the packed meta-data structure.
-void MetaDataManager::Finalize(void) {
-  is_finalized = true;
-  for (auto desc : descriptions) {
-    if (desc) {
-      align = std::max(desc->align, align);
-      size += GRANARY_ALIGN_FACTOR(size, desc->align);
-      desc->offset = size;
-      size += desc->size;
-    }
+static void Finalize(void) {
+  gIsFinalized = true;
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    gAlign = std::max(desc->align, gAlign);
+    gSize += GRANARY_ALIGN_FACTOR(gSize, desc->align);
+    desc->offset = gSize;
+    gSize += desc->size;
   }
-  size += GRANARY_ALIGN_FACTOR(size, align);
+  gSize += GRANARY_ALIGN_FACTOR(gSize, gAlign);
 }
 
 // Initialize the allocator for meta-data managed by this manager.
-void MetaDataManager::InitAllocator(void) {
-  auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), size);
+static void InitAllocator(void) {
+  auto offset = GRANARY_ALIGN_TO(sizeof(internal::SlabList), gSize);
   auto remaining_size = internal::kNewAllocatorNumBytesPerSlab - offset;
-  auto max_num_allocs = (remaining_size - size + 1) / size;
-  auto max_offset = offset + max_num_allocs * size;
+  auto max_num_allocs = (remaining_size - gSize + 1) / gSize;
+  auto max_offset = offset + max_num_allocs * gSize;
   GRANARY_ASSERT(internal::kNewAllocatorNumBytesPerSlab >= max_offset);
-  allocator.Construct(offset, max_offset, size, size);
+  gAllocator.Construct(offset, max_offset, gSize, gSize);
 }
-
-namespace {
-
-// The global meta-data manager instance.
-GRANARY_EARLY_GLOBAL static Container<MetaDataManager> gMetaManager;
 
 }  // namespace
 
@@ -188,11 +90,10 @@ GRANARY_EARLY_GLOBAL static Container<MetaDataManager> gMetaManager;
 // the contained meta-data within this generic meta-data.
 BlockMetaData::BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc) {
-      GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
-      desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
+    desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
   }
 }
 
@@ -200,11 +101,10 @@ BlockMetaData::BlockMetaData(void) {
 // as well.
 BlockMetaData::BlockMetaData(AppPC app_pc) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc) {
-      GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
-      desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() != desc->offset);
+    desc->initialize(reinterpret_cast<void *>(this_ptr + desc->offset));
   }
   MetaDataCast<AppMetaData *>(this)->start_pc = app_pc;
 }
@@ -213,10 +113,9 @@ BlockMetaData::BlockMetaData(AppPC app_pc) {
 // contained meta-data within this generic meta-data.
 BlockMetaData::~BlockMetaData(void) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc) {
-      desc->destroy(reinterpret_cast<void *>(this_ptr + desc->offset));
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    desc->destroy(reinterpret_cast<void *>(this_ptr + desc->offset));
   }
 }
 
@@ -226,12 +125,11 @@ BlockMetaData *BlockMetaData::Copy(void) const {
   auto that = new BlockMetaData;
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc) {
-      const auto offset = desc->offset;
-      desc->copy_initialize(reinterpret_cast<void *>(that_ptr + offset),
-                            reinterpret_cast<const void *>(this_ptr + offset));
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    const auto offset = desc->offset;
+    desc->copy_initialize(reinterpret_cast<void *>(that_ptr + offset),
+                          reinterpret_cast<const void *>(this_ptr + offset));
   }
   return that;
 }
@@ -241,15 +139,14 @@ BlockMetaData *BlockMetaData::Copy(void) const {
 bool BlockMetaData::Equals(const BlockMetaData *that) const {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc && desc->compare_equals) {  // Indexable.
-      const auto offset = desc->offset;
-      auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
-      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
-      if (!desc->compare_equals(this_meta, that_meta)) {
-        return false;
-      }
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    if (!desc->compare_equals) continue;  // Not indexable.
+
+    const auto offset = desc->offset;
+    auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
+    auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+    if (!desc->compare_equals(this_meta, that_meta)) return false;
   }
   return true;
 }
@@ -260,14 +157,15 @@ UnificationStatus BlockMetaData::CanUnifyWith(
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
   auto can_unify = kUnificationStatusAccept;
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc && desc->can_unify) {  // Unifiable.
-      const auto offset = desc->offset;
-      auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
-      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
-      auto local_can_unify = desc->can_unify(this_meta, that_meta);
-      can_unify = GRANARY_MAX(can_unify, local_can_unify);
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    if (!desc->can_unify) continue;  // Not unifiable.
+
+    const auto offset = desc->offset;
+    auto this_meta = reinterpret_cast<const void *>(this_ptr + offset);
+    auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+    auto local_can_unify = desc->can_unify(this_meta, that_meta);
+    can_unify = GRANARY_MAX(can_unify, local_can_unify);
   }
   return can_unify;
 }
@@ -276,24 +174,30 @@ UnificationStatus BlockMetaData::CanUnifyWith(
 void BlockMetaData::JoinWith(const BlockMetaData *that) {
   auto this_ptr = reinterpret_cast<uintptr_t>(this);
   auto that_ptr = reinterpret_cast<uintptr_t>(that);
-  for (auto desc : gMetaManager->descriptions) {
-    if (desc) {
-      const auto offset = desc->offset;
-      auto this_meta = reinterpret_cast<void *>(this_ptr + offset);
-      auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
-      desc->join(this_meta, that_meta);
-    }
+  for (auto desc : gDescriptions) {
+    if (!desc) break;
+    const auto offset = desc->offset;
+    auto this_meta = reinterpret_cast<void *>(this_ptr + offset);
+    auto that_meta = reinterpret_cast<const void *>(that_ptr + offset);
+    desc->join(this_meta, that_meta);
   }
 }
 
 // Dynamically free meta-data.
 void *BlockMetaData::operator new(size_t) {
-  return gMetaManager->Allocate();
+  if (GRANARY_UNLIKELY(!gIsFinalized)) {
+    Finalize();
+    InitAllocator();
+  }
+  auto meta_mem = gAllocator->Allocate();
+  memset(meta_mem, 0, gSize);
+  return meta_mem;
 }
 
 // Dynamically free meta-data.
 void BlockMetaData::operator delete(void *address) {
-  gMetaManager->Free(reinterpret_cast<BlockMetaData *>(address));
+  GRANARY_ASSERT(gIsFinalized);
+  gAllocator->Free(address);
 }
 
 #ifndef GRANARY_RECURSIVE
@@ -336,21 +240,38 @@ void TraceMetaData(uint64_t, const BlockMetaData *) {}
 // Initialize the global meta-data manager.
 void InitMetaData(void) {
   gNextDescriptionId = 0;
-  gMetaManager.Construct();
-  gMetaManager->Register<AppMetaData>();
-  gMetaManager->Register<CacheMetaData>();
-  gMetaManager->Register<IndexMetaData>();
+  gAlign = 0;
+  gSize = 0;
+  gIsFinalized = false;
+  AddMetaData<AppMetaData>();
+  AddMetaData<CacheMetaData>();
+  AddMetaData<IndexMetaData>();
   InitMetaDataTracer();
 }
 
 // Destroy the global meta-data manager.
 void ExitMetaData(void) {
-  gMetaManager.Destroy();
+  for (auto &desc : gDescriptions) {
+    if (desc) {
+      desc->id = -1;
+      desc->offset = std::numeric_limits<uintptr_t>::max();
+      desc = nullptr;
+    }
+  }
+  if (gIsFinalized) {
+    gAllocator.Destroy();
+  }
 }
 
 // Register some meta-data with the meta-data manager.
 void AddMetaData(MetaDataDescription *desc) {
-  gMetaManager->Add(desc);
+  GRANARY_ASSERT(!gIsFinalized);
+  GRANARY_ASSERT(std::numeric_limits<uintptr_t>::max() == desc->offset);
+  if (-1 == desc->id) {
+    desc->id = gNextDescriptionId++;
+    GRANARY_ASSERT(kMaxNumManagedMetaData > desc->id);
+  }
+  gDescriptions[desc->id] = desc;
 }
 
 }  // namespace granary

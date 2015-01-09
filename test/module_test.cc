@@ -110,6 +110,14 @@ class ModuleRangeTest : public Test {
     mod.AddRange(100, 200, 0, 0);
   }
 
+  static void SetUpTestCase(void) {
+    Init(kInitAttach);
+  }
+
+  static void TearDownTestCase(void) {
+    Exit(kExitDetach);
+  }
+
   void TestPCMembership(void) {
     for (auto addr = 0UL; addr < 300UL; ++addr) {
       if (100 > addr || 200 <= addr) {

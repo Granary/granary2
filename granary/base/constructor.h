@@ -35,7 +35,6 @@ namespace granary {
 //
 //      static Container<Bar> gBar;  // Will end up placing `gBar` in `.bss`.
 //      static Constructor<Init, Exit> kBarConstructor;
-//
 //    };
 //
 // Note: This very unusual seeming setup is needed because we use the following

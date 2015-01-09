@@ -47,7 +47,7 @@ struct PageAllocator {
   }
 
   void *AllocatePages(size_t num);
-  void FreePages(void *addr, size_t num);
+  void FreePages(void *mem, size_t num);
 
   void *BeginAddress(void) const {
     return heap;
@@ -135,8 +135,9 @@ allocate:
 template <size_t kNumPages>
 void PageAllocator<kNumPages>::FreePage(uintptr_t addr) {
   auto base = reinterpret_cast<uintptr_t>(&(heap[0]));
-  auto slot = (addr - base) / kNumBitsPerFreeSetSlot;
-  auto bit = (addr - base) % kNumBitsPerFreeSetSlot;
+  auto page = (addr - base) / arch::PAGE_SIZE_BYTES;
+  auto slot = page / kNumBitsPerFreeSetSlot;
+  auto bit = page % kNumBitsPerFreeSetSlot;
   free_pages[slot] |= (1UL << bit);
 }
 
@@ -151,16 +152,25 @@ void *PageAllocator<kNumPages>::AllocatePages(size_t num) {
   } else {
     mem = AllocatePagesSlow(num);
   }
+  GRANARY_IF_DEBUG( auto addr = reinterpret_cast<uint8_t *>(mem); );
+  GRANARY_IF_DEBUG( auto heap_addr = reinterpret_cast<uint8_t *>(&(heap[0])));
+  GRANARY_ASSERT(&(heap_addr[0]) <= addr &&
+                 (&(heap_addr[kNumPages * arch::PAGE_SIZE_BYTES]) >=
+                  &(addr[num * arch::PAGE_SIZE_BYTES])));
   return mem;
 }
 
 // Frees `num` pages back to the OS.
 template <size_t kNumPages>
-void PageAllocator<kNumPages>::FreePages(void *addr, size_t num) {
-  auto addr_uint = reinterpret_cast<uintptr_t>(addr);
-  auto num_pages = static_cast<uintptr_t>(num);
+void PageAllocator<kNumPages>::FreePages(void *mem, size_t num) {
+  GRANARY_IF_DEBUG( auto addr = reinterpret_cast<uint8_t *>(mem); );
+  GRANARY_IF_DEBUG( auto heap_addr = reinterpret_cast<uint8_t *>(&(heap[0])));
+  GRANARY_ASSERT(&(heap_addr[0]) <= addr &&
+                 (&(heap_addr[kNumPages * arch::PAGE_SIZE_BYTES]) >=
+                  &(addr[num * arch::PAGE_SIZE_BYTES])));
+  auto addr_uint = reinterpret_cast<uintptr_t>(mem);
   SpinLockedRegion locker(&free_pages_lock);
-  for (auto i(0UL); i < num_pages; ++i) {
+  for (auto i = 0UL; i < num; ++i) {
     FreePage(addr_uint + (i * arch::PAGE_SIZE_BYTES));
   }
 }

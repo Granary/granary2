@@ -88,7 +88,7 @@ class SlabList {
 };
 
 enum {
-  kNewAllocatorNumPagesPerSlab = 2,
+  kNewAllocatorNumPagesPerSlab = 4,
   kNewAllocatorNumBytesPerSlab = arch::PAGE_SIZE_BYTES *
                                  kNewAllocatorNumPagesPerSlab
 };
@@ -181,10 +181,10 @@ class OperatorNewAllocator {
   __attribute__((noinline, used))
   static void Init(void) {
     kAllocatorConstructor.PreserveSymbols();
-    gAllocator.Construct(OperatorNewAllocator<T>::START_OFFSET,
-                        OperatorNewAllocator<T>::END_OFFSET,
-                        OperatorNewAllocator<T>::ALIGNED_SIZE,
-                        sizeof(T));
+    gAllocator.Construct(OperatorNewAllocator<T>::kStartOffset,
+                         OperatorNewAllocator<T>::kEndOffset,
+                         OperatorNewAllocator<T>::kAlignedSize,
+                         sizeof(T));
   }
 
   // Destroys the allocator.
