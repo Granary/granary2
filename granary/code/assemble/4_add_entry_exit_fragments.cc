@@ -416,6 +416,11 @@ static void LabelPartitions(FragmentList *frags) {
     for (auto succ : frag->successors) {
       if (succ) succ->num_predecessors++;
     }
+    if (IsA<PartitionEntryFragment *>(frag)) {
+      auto cfrag_succ = DynamicCast<CodeFragment *>(
+          frag->successors[kFragSuccFallThrough]);
+      if (cfrag_succ) cfrag_succ->attr.follows_partition_entrypoint = true;
+    }
   }
 }
 

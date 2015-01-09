@@ -281,8 +281,7 @@ python None ; \
 define print-block-meta
   set language c++
   set $__m = (granary::BlockMetaData *) $arg0
-  set $__man = (granary::MetaDataManager *) &_ZN7granary12_GLOBAL__N_1L12gMetaManagerE
-  set $__descs = &($__man->descriptions[0])
+  set $__descs = &(_ZN7granary12_GLOBAL__N_1L13gDescriptionsE[0])
   set $__i = 0
   while $__descs[$__i]
     set $__desc = $__descs[$__i]

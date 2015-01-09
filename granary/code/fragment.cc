@@ -133,7 +133,8 @@ void RegisterUsageCounter::CountGPRUses(const AnnotationInstruction *instr) {
 }
 
 CodeAttributes::CodeAttributes(void)
-    : branch_is_function_call(false),
+    : follows_partition_entrypoint(false),
+      branch_is_function_call(false),
       can_add_succ_to_partition(true),
       can_add_pred_to_partition(true),
       has_native_instrs(false),

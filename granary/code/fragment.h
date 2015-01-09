@@ -293,6 +293,9 @@ class alignas(alignof(void *)) CodeAttributes {
  public:
   CodeAttributes(void);
 
+  // Does this fragment follow a partition entry fragment?
+  bool follows_partition_entrypoint:1;
+
   // Is the branch instruction a function call or a jump (direct or indirect)?
   bool branch_is_function_call:1;
 
