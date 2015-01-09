@@ -45,7 +45,7 @@ class Callback {
       : callback(callback_),
         wrapped_callback(wrapped_callback_) {}
 
-  GRANARY_DEFINE_NEW_ALLOCATOR(Callback, {
+  GRANARY_DECLARE_NEW_ALLOCATOR(Callback, {
     kAlignment = 16
   })
 
