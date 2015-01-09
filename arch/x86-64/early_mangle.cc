@@ -384,18 +384,37 @@ static void MangleEnter(EarlyMangler *mangler, Instruction *instr) {
       &ni, temp_rbp, BaseDispMemOp(0, XED_REG_RSP, arch::ADDRESS_WIDTH_BITS)));
 
   if (num_args) {
-    for (auto i = 1UL; i < num_args; ++i) {
-      auto offset = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
+    auto disp = -static_cast<int>(num_args - 1) * arch::ADDRESS_WIDTH_BYTES;
+    APP_NATIVE(LEA_GPRv_AGEN(&ni, XED_REG_RSP,
+                             BaseDispMemOp(disp, XED_REG_RSP,
+                                           arch::ADDRESS_WIDTH_BITS)));
 
+    auto copied_addr = mangler->AllocateVirtualRegister();
+    auto dest_addr = mangler->AllocateVirtualRegister();
+    auto copied_val = mangler->AllocateVirtualRegister();
+
+    dest_addr.MarkAsStackPointerAlias();
+
+    for (auto i = 1UL; i < num_args; ++i) {
+      auto rbp_disp = -static_cast<int32_t>(i * arch::ADDRESS_WIDTH_BYTES);
+      auto rsp_disp = static_cast<int32_t>((num_args - i - 1) *
+                                           arch::ADDRESS_WIDTH_BYTES);
       // In the case of something like watchpoints, where `RBP` is being
       // tracked, and where the application is doing something funky with
       // `RBP` (e.g. it's somehow watched), then we want to see these memory
       // writes.
-      APP_NATIVE_MANGLED(
-          PUSH_MEMv(&ni, BaseDispMemOp(offset, XED_REG_RBP,
-                                       arch::GPR_WIDTH_BITS));
-          ni.effective_operand_width = arch::GPR_WIDTH_BITS; );
+      APP(LEA_GPRv_AGEN(&ni, copied_addr, BaseDispMemOp(rbp_disp, XED_REG_RBP,
+                                                        arch::GPR_WIDTH_BITS)));
+      APP(LEA_GPRv_AGEN(&ni, dest_addr, BaseDispMemOp(rsp_disp, XED_REG_RSP,
+                                                      arch::GPR_WIDTH_BITS)));
+      APP_NATIVE(MOV_GPRv_MEMv(&ni, copied_val,
+                               BaseDispMemOp(0, copied_addr,
+                                             arch::GPR_WIDTH_BITS)));
+      APP_NATIVE(MOV_MEMv_GPRv(&ni, BaseDispMemOp(0, dest_addr,
+                                                  arch::GPR_WIDTH_BITS),
+                               copied_val));
     }
+
     APP_NATIVE(
         PUSH_GPRv_50(&ni, temp_rbp);
         ni.effective_operand_width = arch::GPR_WIDTH_BITS; );

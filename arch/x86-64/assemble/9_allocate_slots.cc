@@ -100,50 +100,48 @@ namespace {
 // Mangle `PUSH_GPRv_*` into a `MOV_MEMv_GPRv` that simulates the `PUSH`
 // instruction. We don't need to simulate changes to the stack pointer.
 static void ManglePush(NativeInstruction *instr, int adjusted_offset) {
-  auto op = instr->instruction.ops[0];
-  auto mem_width = instr->instruction.effective_operand_width;
+  auto &ainstr(instr->instruction);
+  auto op = ainstr.ops[0];
+  auto mem_width = ainstr.effective_operand_width;
   GRANARY_ASSERT(0 < mem_width);
   auto mem_op(arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width));
 
   if (op.IsRegister()) {
-    MOV_MEMv_GPRv(&(instr->instruction), mem_op, op.reg);
-    instr->instruction.effective_operand_width = mem_width;
+    MOV_MEMv_GPRv(&ainstr, mem_op, op.reg);
 
   } else if (op.IsImmediate()) {
-
     // Note: Templated `ImmediateBuilder` in `MOV_MEMv_IMMz` uses the type of
     //       `imm` as a hint about the true width of `imm`.
     if (16 == mem_width) {
       const auto imm = static_cast<uint16_t>(op.imm.as_uint);
       GRANARY_ASSERT(imm == op.imm.as_uint);
-      MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+      MOV_MEMv_IMMz(&ainstr, mem_op, imm);
     } else {
       const auto imm = static_cast<uint32_t>(op.imm.as_uint);
       GRANARY_ASSERT(imm == op.imm.as_uint);
-      MOV_MEMv_IMMz(&(instr->instruction), mem_op, imm);
+      MOV_MEMv_IMMz(&ainstr, mem_op, imm);
     }
-
-    instr->instruction.effective_operand_width = mem_width;
-
   // Things like `PUSH_FS/GS`, and `PUSH_MEMv` should have already
   // been early mangled.
   } else {
     GRANARY_ASSERT(false);
   }
+
+  ainstr.effective_operand_width = mem_width;
 }
 
 // Mangle `POP_GPRv_*` into a `MOV_GPRv_MEMv` that simulates the `PUSH`
 // instruction. We don't need to simulate changes to the stack pointer.
 static void ManglePop(NativeInstruction *instr, int adjusted_offset) {
-  auto op = instr->instruction.ops[0];
+  auto &ainstr(instr->instruction);
+  auto op = ainstr.ops[0];
   if (op.IsRegister()) {
-    auto mem_width = instr->instruction.effective_operand_width;
+    auto mem_width = ainstr.effective_operand_width;
     GRANARY_ASSERT(0 < mem_width);
-    arch::MOV_GPRv_MEMv(
-        &(instr->instruction),
-        op.reg,
-        arch::BaseDispMemOp(adjusted_offset, XED_REG_RSP, mem_width));
-    instr->instruction.effective_operand_width = mem_width;
+    arch::MOV_GPRv_MEMv(&ainstr, op.reg, arch::BaseDispMemOp(adjusted_offset,
+                                                             XED_REG_RSP,
+                                                             mem_width));
+    ainstr.effective_operand_width = mem_width;
 
   // Things like `POP_FS/GS` and `POP_MEMv` should have already been
   // early mangled.
@@ -168,8 +166,8 @@ static void ManglePushFlags(Fragment *frag, NativeInstruction *instr,
   arch::Instruction ni;
   auto &ainstr(instr->instruction);
   auto flag_access_reg = ainstr.ops[0].reg;
-  auto op_width_bits = instr->instruction.effective_operand_width;
-  flag_access_reg.Widen(instr->instruction.effective_operand_width /
+  auto op_width_bits = ainstr.effective_operand_width;
+  flag_access_reg.Widen(ainstr.effective_operand_width /
                         arch::BYTE_WIDTH_BITS);
   GRANARY_ASSERT(0 < op_width_bits);
   arch::MOV_MEMv_GPRv(
