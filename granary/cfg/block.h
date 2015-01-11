@@ -105,6 +105,11 @@ class SuccessorBlockIterator {
 
 }  // namespace detail
 
+enum {
+  kBlockSuccessorFallThrough = 1,
+  kBlockSuccessorBranch = 1
+};
+
 // Abstract basic block of instructions.
 class Block {
  public:
@@ -159,6 +164,9 @@ class Block {
 
   // Is this block reachable from the entry node of the trace?
   GRANARY_INTERNAL_DEFINITION bool is_reachable;
+
+  // Successor blocks.
+  Block *successors[2];
 
  GRANARY_PROTECTED:
 

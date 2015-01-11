@@ -145,18 +145,14 @@ void *SlabAllocator::AllocateFromFreeList(void) {
 
 #else
 
-const SlabList *SlabAllocator::AllocateSlab(const SlabList *) {
-  return nullptr;
-}
-
-const SlabList *SlabAllocator::SlabForAllocation(void) {
-  return nullptr;
-}
-
 extern "C" {
 void *malloc(size_t size);
 void free(void *);
 }  // extern C
+
+const SlabList *SlabAllocator::SlabForAllocation(void) {
+  return nullptr;
+}
 
 // Allocate some memory from the slab allocator.
 void *SlabAllocator::Allocate(void) {
@@ -168,11 +164,9 @@ void SlabAllocator::Free(void *address) {
   free(address);
 }
 
-void SlabAllocator::Destroy(void) {}
 void *SlabAllocator::AllocateFromFreeList(void) {
   return nullptr;
 }
-
 
 #endif  // GRANARY_WITH_VALGRIND
 

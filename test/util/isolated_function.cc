@@ -36,9 +36,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   memset(&regs1, 0, sizeof regs1);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
-  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
-  VALGRIND_ENABLE_ERROR_REPORTING;
   VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
   memcpy(&regs2, &regs1, sizeof regs1);
 
@@ -48,9 +46,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   memset(&(regs1.stack), 0xAB, sizeof regs1.stack);
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
-  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(func), &regs1);
-  VALGRIND_ENABLE_ERROR_REPORTING;
   VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
   memcpy(&regs3, &regs1, sizeof regs1);
 
@@ -58,9 +54,7 @@ void RunIsolatedFunction(std::function<void(IsolatedRegState *)> &setup_state,
   regs1.RSP = reinterpret_cast<uintptr_t>(&(regs1.redzone_high));
   setup_state(&regs1);
   watchpoint = 1;
-  VALGRIND_DISABLE_ERROR_REPORTING;
   RunFunctionInContext(reinterpret_cast<void *>(instrumented_func), &regs1);
-  VALGRIND_ENABLE_ERROR_REPORTING;
   VALGRIND_MAKE_MEM_DEFINED(&regs1, sizeof regs1);
 
   // Compare bytes that are the same across the two native runs. This ensures

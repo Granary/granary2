@@ -170,7 +170,7 @@ static void RequestTools(void) {
   // Auto-registered so that `aligned_alloc` and `free` are always wrapped to
   // execute natively (and so are ideally instrumented by Valgrind to help
   // catch memory access bugs).
-  RequestTool("valgrind", prev_tool);
+  RequestTool("valgrind");
 #endif  // GRANARY_WITH_VALGRIND
 
   // Register tools specified at the command-line.

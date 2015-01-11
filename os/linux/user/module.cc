@@ -112,6 +112,8 @@ class Lexer {
   GRANARY_DISALLOW_COPY_AND_ASSIGN(Lexer);
 };
 
+static char kAnonModuleName[] = {'[', 'a', 'n', 'o', 'n', ']', '\0'};
+
 // Parse the `/proc/self/maps` file for information about mapped modules.
 static void ParseMapsFile(ModuleManager *manager) {
   Lexer lexer;
@@ -139,16 +141,18 @@ static void ParseMapsFile(ModuleManager *manager) {
     lexer.NextToken();  // inode.
     token = lexer.NextToken();
     if ('\n' == token[0]) {
-      continue;
+      token = kAnonModuleName;
     }
 
-    auto module = manager->FindByPath(token);
+    auto module = manager->FindByPath(token);;
     if (!module) {
       module = new Module(token);
       manager->Register(module);
     }
 
     module->AddRange(module_base, module_limit, module_offset, module_perms);
+
+    if (kAnonModuleName == token) continue;  // It was a `\n`.
 
     do {
       token = lexer.NextToken();  // Skip things like `(deleted)`.

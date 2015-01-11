@@ -62,38 +62,34 @@ extern "C" {
 
 // Enter into Granary to begin the translation process for a direct edge.
 GRANARY_ENTRYPOINT void granary_enter_direct_edge(DirectEdge *edge) {
-  VALGRIND_ENABLE_ERROR_REPORTING; {
-    GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    ReadLockedRegion exit_locker(&gExitGranaryLock);
-    os::LockedRegion edge_locker(&edge->lock);
-    if (!EdgeHasTranslation(edge)) {
-      auto context = GlobalContext();
-      edge->entry_target_pc = Translate(context, edge->dest_block_meta);
-      edge->dest_block_meta = nullptr;
-      if (!FLAG_unsafe_patch_edges || !arch::TryAtomicPatchEdge(edge)) {
-        context->PreparePatchDirectEdge(edge);
-      }
+  GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
+  ReadLockedRegion exit_locker(&gExitGranaryLock);
+  os::LockedRegion edge_locker(&edge->lock);
+  if (!EdgeHasTranslation(edge)) {
+    auto context = GlobalContext();
+    edge->entry_target_pc = Translate(context, edge->dest_block_meta);
+    edge->dest_block_meta = nullptr;
+    if (!FLAG_unsafe_patch_edges || !arch::TryAtomicPatchEdge(edge)) {
+      context->PreparePatchDirectEdge(edge);
     }
-  } VALGRIND_DISABLE_ERROR_REPORTING;
+  }
 }
 
 // Enter into Granary to begin the translation process for an indirect edge.
 GRANARY_ENTRYPOINT void granary_enter_indirect_edge(IndirectEdge *edge,
                                                     AppPC target_app_pc) {
-  VALGRIND_ENABLE_ERROR_REPORTING; {
-    GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
-    ReadLockedRegion exit_locker(&gExitGranaryLock);
-    os::LockedRegion edge_locker(&(edge->lock));
-    auto &encoded_pc(edge->out_edges[target_app_pc]);
-    if (!encoded_pc) {
-      auto context = GlobalContext();
-      auto meta = edge->dest_block_meta_template->Copy();
-      auto app_meta = MetaDataCast<AppMetaData *>(meta);
-      app_meta->start_pc = target_app_pc;
-      encoded_pc = Translate(context, edge, meta);
-      edge->out_edge_pc = encoded_pc;
-    }
-  } VALGRIND_DISABLE_ERROR_REPORTING;
+  GRANARY_IF_KERNEL(GRANARY_ASSERT(OnGranaryStack()));
+  ReadLockedRegion exit_locker(&gExitGranaryLock);
+  os::LockedRegion edge_locker(&(edge->lock));
+  auto &encoded_pc(edge->out_edges[target_app_pc]);
+  if (!encoded_pc) {
+    auto context = GlobalContext();
+    auto meta = edge->dest_block_meta_template->Copy();
+    auto app_meta = MetaDataCast<AppMetaData *>(meta);
+    app_meta->start_pc = target_app_pc;
+    encoded_pc = Translate(context, edge, meta);
+    edge->out_edge_pc = encoded_pc;
+  }
 }
 }  // extern C
 }  // namespace granary

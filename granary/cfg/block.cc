@@ -94,6 +94,7 @@ Block::Block(void)
       id(-1),
       generation(0),
       is_reachable(false),
+      successors{nullptr, nullptr},
       fragment(nullptr) {}
 
 detail::SuccessorBlockIterator Block::Successors(void) const {
