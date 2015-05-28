@@ -269,8 +269,19 @@ static AllocatorTrace gTypeTraces[kNumUsableSamplePoints];
 // The stack on which the monitor thread executes.
 alignas(arch::PAGE_SIZE_BYTES) static char gMonitorStack[kStackSize];
 
+union Allocation {
+  struct {
+    uintptr_t addr:48;
+    size_t type_id:16;
+  } __attribute__((packed));
+
+  void *pointer;
+
+} __attribute__((packed));
+
 // Set of all shadow locations that can be sampled. This corresponds to recent
 // memory allocations.
+static std::atomic<size_t> gNextAllocationIndex = ATOMIC_VAR_INIT(0);
 static std::atomic<void *> gRecentAllocations[kNumSamplePoints] \
     = {ATOMIC_VAR_INIT(nullptr)};
 
@@ -321,7 +332,11 @@ bool TrainedModuleInfo::BlockAccessesSharedData(uintptr_t mod_offset) const {
 
 // Add an address to our potential sample population.
 static void AddRecentAllocation(uintptr_t type_id, void *ptr) {
-  if (type_id) gRecentAllocations[type_id].store(ptr);
+  Allocation alloc;
+  alloc.pointer = ptr;
+  alloc.type_id = type_id;
+  auto offs = gNextAllocationIndex.fetch_add(1) % FLAG_num_sample_points;
+  gRecentAllocations[offs].store(alloc.pointer);
 }
 
 // Returns the type id for an allocation size. This is also responsible for
@@ -404,13 +419,13 @@ static void ClearActiveSamplePoints(void) {
 // Populates the sample point structures for each sampled address. This does
 // *not* activate the sample points (i.e. add watchpoints) until after all
 // sample points have been chosen.
-static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
-  auto alloc_addr = gRecentAllocations[type_id].exchange(nullptr);
+static void AddSamplesForAlloc(Allocation alloc, size_t &num_sample_points) {
+  auto alloc_addr = alloc.pointer;
   if (!alloc_addr) return;
 
   auto tracker = ShadowOf<OwnershipTracker>(alloc_addr);
   const auto base_address = reinterpret_cast<uintptr_t>(alloc_addr);
-  const auto limit_address = base_address + SizeOfType(type_id);
+  const auto limit_address = base_address + SizeOfType(alloc.type_id);
 
   for (auto offset_in_object = 0UL;
        num_sample_points < FLAG_num_sample_points;
@@ -423,7 +438,7 @@ static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
     auto sample_id = num_sample_points++;
     auto &sample(gSamplePoints[sample_id]);
 
-    sample.type_id = type_id;
+    sample.type_id = alloc.type_id;
     sample.tracker = sample_tracker;
     sample.offset_in_object = offset_in_object;
     sample.native_address = native_address;
@@ -437,16 +452,14 @@ static void AddSamplesForType(uint64_t type_id, size_t &num_sample_points) {
 
 // Samples up to `FLAG_num_sample_points` object trackers.
 static void ActivateSamplePoints(void) {
-
-  // Figure out where the "end" of the sampling should be.
-  auto end_id = (gCurrSourceIndex + kNumSamplePoints - 1) % kNumSamplePoints;
-
   // Add the sample points.
   auto num_samples = 1UL;
-  for (; num_samples <= FLAG_num_sample_points; ) {
-    auto type_id = gCurrSourceIndex++ % kNumSamplePoints;
-    AddSamplesForType(type_id, num_samples);
-    if (type_id == end_id) break;
+  for (auto i = 0UL;
+       i < FLAG_num_sample_points && num_samples <= FLAG_num_sample_points;
+       ++i) {
+    Allocation alloc;
+    alloc.pointer = gRecentAllocations[i].load();
+    AddSamplesForAlloc(alloc, num_samples);
   }
 
   // Activate the sample points.

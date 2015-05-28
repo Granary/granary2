@@ -1,8 +1,8 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_CC ?= clang
+GRANARY_CC ?= clang-3.5
 GRANARY_CC_STD ?= gnu99
-GRANARY_CXX ?= clang++
+GRANARY_CXX ?= clang++-3.5
 GRANARY_CXX_LIB ?= libc++
 GRANARY_CXX_STD ?= c++11
 GRANARY_LD ?= gold

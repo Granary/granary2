@@ -143,27 +143,15 @@ class GDBDebuggerHelper : public InstrumentationTool {
     DecodedBlock::Unlink(cfi);
   }
 
-  void DontInstrumentUndoDB(BlockFactory *factory, DirectBlock *block) {
-    auto module = os::ModuleContainingPC(block->StartAppPC());
-    if (StringsMatch("libundodb_autotracer_preload_x64", module->Name())) {
-      factory->RequestBlock(block, kRequestBlockExecuteNatively);
-    }
-  }
-
-  virtual void InstrumentControlFlow(BlockFactory *factory,
-                                     Trace *cfg) {
+  virtual void InstrumentControlFlow(BlockFactory *factory, Trace *cfg) {
     for (auto block : cfg->NewBlocks()) {
       for (auto succ : block->Successors()) {
         if (succ.cfi->HasIndirectTarget()) continue;
         auto direct_block = DynamicCast<DirectBlock *>(succ.block);
         if (!direct_block) continue;
+        if (!IsInternalBreakpointLocation(direct_block)) continue;
 
-        if (IsInternalBreakpointLocation(direct_block)) {
-          FixInternalBreakpoint(factory, succ.cfi);
-          break;
-        }
-
-        DontInstrumentUndoDB(factory, direct_block);
+        FixInternalBreakpoint(factory, succ.cfi);
       }
     }
   }

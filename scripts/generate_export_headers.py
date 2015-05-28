@@ -82,11 +82,11 @@ def combine_output_files(source_dir):
 def preprocess_combined_files(source_dir, lines, extra_flags):
   open("/tmp/granary_export0.h", "w").write("\n".join(lines))
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
+      "clang++-3.5 -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -x c++ /tmp/granary_export0.h "
       "> /tmp/granary_export1.h" % (source_dir, extra_flags))
   os.system(
-      "clang++ -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
+      "clang++-3.5 -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -dM -x c++ /tmp/granary_export0.h"
       " > /tmp/granary_export2.h" % (source_dir, extra_flags))
   os.system(
