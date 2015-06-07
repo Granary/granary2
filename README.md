@@ -1,9 +1,6 @@
 Granary
 =======
 
-Check out the [Wiki](https://github.com/Granary/granary2/wiki)! It describes
-in more detail how to build the Linux kernel, set up a VM, and more.
-
 Setup
 -----
 
@@ -30,17 +27,7 @@ Setup
 
 ### Step 1: Initial setup.
 
-This step creates some convenient symbolic links to your current Linux kernel
-build and virtual machine image. This initial setup is only needed if Granary
-will be used for kernel space instrumentation.
-
-```
-./scripts/make_linux_build_link.sh /path/to/kernel
-./scripts/make_vmlinux_link.sh /path/to/kernel/vmlinux
-./scripts/make_qemu_img_link.sh /path/to/qmeu/vm.img
-```
-
-Finally, make sure everything is set up for Granary. This does things like fetch dependencies.
+This does things like fetch dependencies.
 
 ```
 make setup
@@ -86,18 +73,38 @@ The list of available command-line arguments can be seen by invoking:
 Granary's injector doesn't actually understand Granary arguments, hence the
 requirement of specificying *some* executable to instrument.
 
-#### Kernel Space
+### Step 3: Run Granary.
 
-**NOTE:** Kernel support has fallen into disarray.
-
-If you are compiling Granary against your running kernel, run:
-
-```
-make clean all GRANARY_WHERE=kernel
-```
-
-If you are compiling Granary against a custom kernel, run:
+Start by taking a look at what options are available. Some options have a tool
+name, shown in green, listed beside them. That means that those options are
+tool-specific and are ignored when that tool is not used.
 
 ```
-make clean all GRANARY_WHERE=kernel
+./bin/debug_linux_user/grr --help -- ls
 ```
+
+Next, lets use a simple system call tracing tool:
+
+```
+./bin/debug_linux_user/grr --tools=strace -- ls
+```
+
+You'll need to press enter to get past the "debug GDB prompt". This is a
+convenience feature for Granary developers. It enables GDB-based debugging of
+Granary by pausing the program and waiting for the user to press Enter, thus
+giving the developer plenty of time to attach GDB to the running process.
+Granary comes with its own `.gdbinit` file to improve the GDB-based debugging
+experience.
+
+Here's an example where we disable the prompt:
+
+```
+./bin/debug_linux_user/grr --tools=strace --no_debug_gdb_prompt -- ls
+```
+
+Some Granary tools, e.g. `memop`, don't provide any kind of user interface.
+Instead, they implement common functionality (e.g. generic memory operand
+interposition) and hooks for other tools to use to achieve common tasks. For
+example, the `poly_code` tool uses the `watchpoints` tool, which then uses
+the `memop` tool.
+
