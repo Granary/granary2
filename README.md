@@ -88,7 +88,7 @@ requirement of specificying *some* executable to instrument.
 
 #### Kernel Space
 
-*NOTE:* Kernel support has fallen into disarray.
+**NOTE:** Kernel support has fallen into disarray.
 
 If you are compiling Granary against your running kernel, run:
 
