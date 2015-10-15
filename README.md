@@ -42,7 +42,9 @@ exhaustive, but can help to determine if things are generally in working order:
 make clean test
 ```
 
-Or
+#### Building
+
+For debug builds, run:
 
 ```
 make clean all
