@@ -42,12 +42,19 @@ exhaustive, but can help to determine if things are generally in working order:
 make clean test
 ```
 
-#### User Space
-If you are compiling Granary for user space, run:
+Or
 
 ```
 make clean all
 ```
+
+For release builds, run:
+
+```
+make clean all GRANARY_TARGET=release
+```
+
+### Step 3: Run Granary.
 
 You can use Granary's "injector" (called `grr`) to inject Granary into a
 process. Below is an example where Granary is injected into `ls` using `grr`.
@@ -70,20 +77,12 @@ The list of available command-line arguments can be seen by invoking:
 ./bin/debug_linux_user/grr --help -- ls
 ```
 
-Granary's injector doesn't actually understand Granary arguments, hence the
-requirement of specificying *some* executable to instrument.
+Notice that some options have a tool name, shown in green, listed beside them.
+That means that those options are tool-specific and are ignored when that tool
+is not used.
 
-### Step 3: Run Granary.
-
-Start by taking a look at what options are available. Some options have a tool
-name, shown in green, listed beside them. That means that those options are
-tool-specific and are ignored when that tool is not used.
-
-```
-./bin/debug_linux_user/grr --help -- ls
-```
-
-Next, lets use a simple system call tracing tool:
+Okay, time to actually do something. Lets see what system calls are executed by
+a program. To do this, tell Granary to use the system call tracing tool:
 
 ```
 ./bin/debug_linux_user/grr --tools=strace -- ls
@@ -102,7 +101,7 @@ Here's an example where we disable the prompt:
 ./bin/debug_linux_user/grr --tools=strace --no_debug_gdb_prompt -- ls
 ```
 
-Some Granary tools, e.g. `memop`, don't provide any kind of user interface.
+Many Granary tools, e.g. `memop`, don't provide any kind of user interface.
 Instead, they implement common functionality (e.g. generic memory operand
 interposition) and hooks for other tools to use to achieve common tasks. For
 example, the `poly_code` tool uses the `watchpoints` tool, which then uses
