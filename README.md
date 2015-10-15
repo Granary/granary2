@@ -7,7 +7,7 @@ programs. It is permissively licensed (MIT license).
 Granary has several novelties. The instrumentation model is unique in that it
 allows instrumentation tools to take control of the just-in-time basic block
 decoder. This feature enables tools to implement things like tracing (typically
-imlpemented as a core optimization in DBT systems).
+implemented as a core optimization in DBT systems).
 
 Granary also has a flexible virtual register and inline assembly system.
 Instrumentation tools can specify what assembly instructions they want to inject
