@@ -70,7 +70,6 @@ void *checked_memset(void *dest, int val_, unsigned long num_bytes) {
 }
 
 void *memset(void *dest, int val_, unsigned long num_bytes) {
-  GRANARY_ASSERT(nullptr != dest);
   auto dest_bytes = reinterpret_cast<uint8_t *>(dest);
   auto val = static_cast<uint8_t>(val_);
   for (auto i = 0UL; i < num_bytes; ++i) {
@@ -141,7 +140,7 @@ char *strncpy(char *dest, const char *source, unsigned long max_len) {
 
 unsigned long strlen(const char *str) {
   auto len = 0UL;
-  if (GRANARY_LIKELY(nullptr != str)) {
+  if (reinterpret_cast<uintptr_t>(str)) {
     for (; ACCESS_ONCE(*str); ++str, ++len) {}
   }
   return len;

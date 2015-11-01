@@ -51,7 +51,7 @@ enum {
 };
 
 GRANARY_IF_USER( static __thread uint64_t thread_id = 0; )
-GRANARY_IF_USER( static std::atomic<uint64_t> num_threads(ATOMIC_VAR_INIT(1)); )
+GRANARY_IF_USER( static std::atomic<uint64_t> num_threads = ATOMIC_VAR_INIT(1); )
 
 void InitThreadId(RegisterState *regs) {
 #ifdef GRANARY_WHERE_user

@@ -184,7 +184,7 @@ inline bool IsA(const BaseT *ptr) {
 #define GRANARY_DECLARE_DERIVED_CLASS_OF(base_type, derived_type) \
   static bool IsDerivedFrom(const derived_type *); \
   static bool IsDerivedFrom(const base_type *base); \
-  virtual int TypeId(void) const;
+  virtual int TypeId(void) const override;
 
 }  // namespace granary
 

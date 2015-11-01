@@ -40,7 +40,7 @@ template <size_t kNumPages>
 struct PageAllocator {
  public:
   explicit PageAllocator(void *heap_)
-      : num_allocated_pages(ATOMIC_VAR_INIT(0U)),
+      : num_allocated_pages(0U),
         free_pages_lock(),
         heap(reinterpret_cast<PageFrame *>(heap_)) {
     memset(free_pages, 0, sizeof free_pages);

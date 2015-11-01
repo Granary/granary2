@@ -398,7 +398,7 @@ static void LogBlockHeader(LogLevel level, const Fragment *frag) {
 
     if (code->block_meta && code->attr.is_block_head) {
       auto meta = MetaDataCast<AppMetaData *>(code->block_meta);
-      Log(level, "|%p", meta->start_pc);
+      Log(level, "|%lx", reinterpret_cast<uintptr_t>(meta->start_pc));
     }
   }
 }

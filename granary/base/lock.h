@@ -12,8 +12,8 @@ namespace granary {
 class SpinLock {
  public:
   inline SpinLock(void)
-      : serving_ticket(ATOMIC_VAR_INIT(0)),
-        next_ticket(ATOMIC_VAR_INIT(0)) {}
+      : serving_ticket(0),
+        next_ticket(0) {}
 
   // Blocks execution by spinning until the lock has been acquired.
   void Acquire(void);
@@ -59,7 +59,7 @@ class SpinLockedRegion {
 class ReaderWriterLock {
  public:
   inline ReaderWriterLock(void)
-      : lock(ATOMIC_VAR_INIT(0)) {}
+      : lock(0) {}
 
   bool TryReadAcquire(void);
   void ReadAcquire(void);

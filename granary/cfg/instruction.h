@@ -489,7 +489,7 @@ class ControlFlowInstruction : public NativeInstruction {
   ControlFlowInstruction(const arch::Instruction *instruction_,
                          Block *target_);
 
-  virtual bool HasIndirectTarget(void) const;
+  virtual bool HasIndirectTarget(void) const override;
 
   // Return the target block of this CFI.
   Block *TargetBlock(void) const;

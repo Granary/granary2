@@ -28,7 +28,7 @@ GRANARY_DEFINE_bool(count_per_condition, false,
 // overestimate of the total number of *distinct* basic blocks instrumented
 // (because of race conditions when two threads simultaneously instrument the
 // same basic block).
-std::atomic<uint64_t> gNumBlocks(ATOMIC_VAR_INIT(0));
+std::atomic<uint64_t> gNumBlocks = ATOMIC_VAR_INIT(0);
 
 // Runtime block execution counter.
 class CounterMetaData : public MutableMetaData<CounterMetaData> {
