@@ -1,6 +1,28 @@
 Granary
 =======
 
+Granary is a dynamic binary translation (DBT) framework for 64-bit user space Linux
+programs. It is permissively licensed (MIT license).
+
+Granary has several novelties. The instrumentation model is unique in that it
+allows instrumentation tools to take control of the just-in-time basic block
+decoder. This feature enables tools to implement things like tracing (typically
+implemented as a core optimization in DBT systems).
+
+Granary also has a flexible virtual register and inline assembly system.
+Instrumentation tools can specify what assembly instructions they want to inject
+into a program and where, and they can write this assembly without concerning
+themselves with register allocation/saving/restoring.
+
+Granary has some other cool stuff too. It is a big melting pot of experimental
+ideas. Some have panned out, some haven't. In retrospect, the instrumentation
+model is overly complex. I think virtual registers are a big win, but I originally
+designed them so that they would work for kernel-space instrumentation as well.
+This put huge constraints on how they work and complicated the implementation. I
+eventually abandoned the kernel-side of things, but the complicated code persists...
+
+Anyway, enjoy!
+
 Setup
 -----
 
@@ -42,7 +64,9 @@ exhaustive, but can help to determine if things are generally in working order:
 make clean test
 ```
 
-Or
+#### Building
+
+For debug builds, run:
 
 ```
 make clean all
