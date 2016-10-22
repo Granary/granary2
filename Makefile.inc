@@ -4,7 +4,7 @@ GRANARY_CC ?= clang-3.5
 GRANARY_CC_STD ?= gnu99
 GRANARY_CXX ?= clang++-3.5
 GRANARY_CXX_LIB ?= libc++
-GRANARY_CXX_STD ?= c++11
+GRANARY_CXX_STD ?= gnu++11
 GRANARY_LD ?= gold
 GRANARY_LLVM_LINK ?= llvm-link-3.5
 GRANARY_AR ?= ar
@@ -226,7 +226,8 @@ GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
 GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast -Wnull-conversion
-GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
+GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096 -Wno-macro-redefined
+GRANARY_COMMON_WARN_FLAGS += -Wno-missing-declarations -Wno-unused-function
 
 # Disable various warnings and errors.
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros

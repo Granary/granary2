@@ -1,13 +1,13 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
-#include "generated/linux_user/types.h"
-
 #include "arch/cpu.h"
 
 #include "os/linux/user/lock.h"
 
 extern "C" {
-
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+struct timespec;
 int sys_futex(uint32_t *uaddr, int op, uint32_t val,
               const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3);
 

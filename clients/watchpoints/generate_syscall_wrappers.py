@@ -184,11 +184,11 @@ def main(types_file_name):
 
   tokens = CTokenizer(line_buff)
   parser = CParser()
-  parser.parse(tokens)
-  for var, ctype in parser.vars():
-    if var in syscall_names:
-      wrap_syscall(var, ctype)
-      syscall_names.remove(var)
+  for decls, _, _ in parser.parse_units(tokens):
+    for ctype, var in parser.vars():
+      if var in syscall_names:
+        wrap_syscall(var, ctype)
+        syscall_names.remove(var)
 
   for var in syscall_names:
     generic_wrap_syscall(var)

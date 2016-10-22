@@ -13,4 +13,6 @@
 # error "Unrecognized operating system."
 #endif
 
+#undef I  // Complex I.
+
 #endif  // CLIENTS_UTIL_TYPES_H_

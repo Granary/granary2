@@ -4,10 +4,14 @@
 #define OS_LINUX_USER_TYPES_H_
 
 #define __restrict
+#define __extension__
 
-#ifndef _GNU_SOURCE
+#ifdef _GNU_SOURCE
 # define _GNU_SOURCE
 #endif
+
+#define __gwchar_t wchar_t
+#define _Static_assert(...)
 
 #include <fcntl.h>
 
@@ -69,7 +73,7 @@
 #include <ftw.h>
 #include <glob.h>
 #include <inttypes.h>
-#include <iso646.h>
+//#include <iso646.h>
 #include <langinfo.h>
 #include <libgen.h>
 #include <limits.h>
@@ -93,7 +97,7 @@
 #include <signal.h>
 #include <spawn.h>
 #include <stdarg.h>
-#include <stdbool.h>
+//#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>

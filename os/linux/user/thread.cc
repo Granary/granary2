@@ -2,12 +2,14 @@
 
 #define GRANARY_INTERNAL
 
-#include "generated/linux_user/types.h"
-
 #include "os/thread.h"
 
 #include "granary/init.h"
 #include "granary/tool.h"
+
+extern "C" {
+extern int sched_yield(void);
+}
 
 namespace granary {
 namespace os {

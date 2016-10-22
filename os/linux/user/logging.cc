@@ -1,7 +1,6 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
 
 // TODO(pag): Issue #1: Refactor this code to use an output stream.
-#include "generated/linux_user/types.h"
 
 #define GRANARY_INTERNAL
 
@@ -30,6 +29,13 @@ enum {
 
 char granary_log_buffer[kLogBufferSize] = {'\0'};
 unsigned long granary_log_buffer_index = 0;
+
+extern int open(const char * __file, int __oflag, ...);
+extern ssize_t write(int __fd, const void * __buf, size_t __n);
+
+#define O_WRONLY 01
+#define O_CREAT 0100
+#define O_APPEND 02000
 
 }  // extern C
 namespace granary {

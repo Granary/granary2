@@ -296,9 +296,6 @@ union alignas(alignof(void *)) VirtualRegister {
   uint64_t value;
 };
 
-static_assert(sizeof(uint64_t) >= sizeof(VirtualRegister),
-    "Invalid packing of union `VirtualRegister`.");
-
 // Allocate a new virtual register.
 VirtualRegister AllocateVirtualRegister(size_t num_bytes=arch::GPR_WIDTH_BYTES);
 
