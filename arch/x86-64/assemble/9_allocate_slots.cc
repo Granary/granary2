@@ -177,7 +177,7 @@ static void ManglePushFlags(Fragment *frag, NativeInstruction *instr,
   ni.effective_operand_width = op_width_bits;
   frag->instrs.InsertAfter(instr, new NativeInstruction(&ni));
 
-  arch::POP_GPRv_51(&ni, flag_access_reg);
+  arch::POP_GPRv_58(&ni, flag_access_reg);
   ni.effective_operand_width = op_width_bits;
   frag->instrs.InsertAfter(instr, new NativeInstruction(&ni));
 

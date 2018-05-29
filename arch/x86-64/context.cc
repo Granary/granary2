@@ -83,21 +83,21 @@ void GenerateContextCallCode(Callback *callback) {
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
 
   // Restore the GPRs.
-  ENC(POP_GPRv_51(&ni, XED_REG_R15); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R14); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R13); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R12); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R11); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R10); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R9); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R8); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RDI); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RSI); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RBP); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RBX); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RDX); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RCX); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RAX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R15); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R14); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R13); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R12); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R11); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R10); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R9); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R8); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RDI); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RSI); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RBP); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RBX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RDX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RCX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RAX); );
 
   // Swap back to the application stack.
   if (GRANARY_IF_USER_ELSE(false, true)) {

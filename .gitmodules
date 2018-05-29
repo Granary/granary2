@@ -1,9 +1,0 @@
-[submodule "dependencies/googletest"]
-	path = dependencies/googletest
-	url = git@github.com:Granary/googletest.git
-[submodule "dependencies/googlemock"]
-	path = dependencies/googlemock
-	url = git@github.com:Granary/googlemock.git
-[submodule "dependencies/cparser"]
-	path = dependencies/cparser
-	url = git@github.com:pgoodman/cparser.git

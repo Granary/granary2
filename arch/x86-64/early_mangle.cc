@@ -330,7 +330,7 @@ static void ManglePopSegReg(EarlyMangler *mangler, Instruction *instr) {
   instr->ops[0].reg = vr;
   instr->ops[0].width = instr->effective_operand_width;
   instr->ops[0].is_sticky = false;
-  instr->iform = XED_IFORM_POP_GPRv_51;
+  instr->iform = XED_IFORM_POP_GPRv_58;
   mangler->block->AppendInstruction(new NativeInstruction(instr));
 
   // Replace `instr` with a `MOV` into the segment reg with the value that was
@@ -447,7 +447,7 @@ static void MangleLeave(EarlyMangler *mangler, Instruction *instr) {
   Instruction ni;
   auto decoded_pc = instr->decoded_pc;
   APP_NATIVE(MOV_GPRv_GPRv_89(&ni, XED_REG_RSP, XED_REG_RBP));
-  POP_GPRv_51(instr, XED_REG_RBP);
+  POP_GPRv_58(instr, XED_REG_RBP);
   instr->decoded_pc = decoded_pc;
   instr->effective_operand_width = arch::GPR_WIDTH_BITS;
   AnalyzedStackUsage(instr, true, true);

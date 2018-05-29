@@ -376,6 +376,98 @@ static void ConvertDecodedPrefixes(Instruction *instr,
   instr->has_prefix_lock = xed_operand_values_has_lock_prefix(xedd);
 }
 
+static xed_iclass_enum_t RemoveLock(xed_iclass_enum_t iclass) {
+  switch (iclass) {
+    case XED_ICLASS_ADC_LOCK: return XED_ICLASS_ADC;
+    case XED_ICLASS_ADD_LOCK: return XED_ICLASS_ADD;
+    case XED_ICLASS_AND_LOCK: return XED_ICLASS_AND;
+    case XED_ICLASS_BTC_LOCK: return XED_ICLASS_BTC;
+    case XED_ICLASS_BTR_LOCK: return XED_ICLASS_BTR;
+    case XED_ICLASS_BTS_LOCK: return XED_ICLASS_BTS;
+    case XED_ICLASS_CMPXCHG16B_LOCK: return XED_ICLASS_CMPXCHG16B;
+    case XED_ICLASS_CMPXCHG8B_LOCK: return XED_ICLASS_CMPXCHG8B;
+    case XED_ICLASS_CMPXCHG_LOCK: return XED_ICLASS_CMPXCHG;
+    case XED_ICLASS_DEC_LOCK: return XED_ICLASS_DEC;
+    case XED_ICLASS_INC_LOCK: return XED_ICLASS_INC;
+    case XED_ICLASS_NEG_LOCK: return XED_ICLASS_NEG;
+    case XED_ICLASS_NOT_LOCK: return XED_ICLASS_NOT;
+    case XED_ICLASS_OR_LOCK: return XED_ICLASS_OR;
+    case XED_ICLASS_SBB_LOCK: return XED_ICLASS_SBB;
+    case XED_ICLASS_SUB_LOCK: return XED_ICLASS_SUB;
+    case XED_ICLASS_XADD_LOCK: return XED_ICLASS_XADD;
+    case XED_ICLASS_XOR_LOCK: return XED_ICLASS_XOR;
+    default: return iclass;
+  }
+}
+
+static xed_iform_enum_t RemoveLock(xed_iform_enum_t iform) {
+  switch (iform) {
+    case XED_IFORM_ADC_LOCK_MEMb_GPR8: return XED_IFORM_ADC_MEMb_GPR8;
+    case XED_IFORM_ADC_LOCK_MEMb_IMMb_80r2: return XED_IFORM_ADC_MEMb_IMMb_80r2;
+    case XED_IFORM_ADC_LOCK_MEMb_IMMb_82r2: return XED_IFORM_ADC_MEMb_IMMb_82r2;
+    case XED_IFORM_ADC_LOCK_MEMv_GPRv: return XED_IFORM_ADC_MEMv_GPRv;
+    case XED_IFORM_ADC_LOCK_MEMv_IMMb: return XED_IFORM_ADC_MEMv_IMMb;
+    case XED_IFORM_ADC_LOCK_MEMv_IMMz: return XED_IFORM_ADC_MEMv_IMMz;
+    case XED_IFORM_ADD_LOCK_MEMb_GPR8: return XED_IFORM_ADD_MEMb_GPR8;
+    case XED_IFORM_ADD_LOCK_MEMb_IMMb_80r0: return XED_IFORM_ADD_MEMb_IMMb_80r0;
+    case XED_IFORM_ADD_LOCK_MEMb_IMMb_82r0: return XED_IFORM_ADD_MEMb_IMMb_82r0;
+    case XED_IFORM_ADD_LOCK_MEMv_GPRv: return XED_IFORM_ADD_MEMv_GPRv;
+    case XED_IFORM_ADD_LOCK_MEMv_IMMb: return XED_IFORM_ADD_MEMv_IMMb;
+    case XED_IFORM_ADD_LOCK_MEMv_IMMz: return XED_IFORM_ADD_MEMv_IMMz;
+    case XED_IFORM_AND_LOCK_MEMb_GPR8: return XED_IFORM_AND_MEMb_GPR8;
+    case XED_IFORM_AND_LOCK_MEMb_IMMb_80r4: return XED_IFORM_AND_MEMb_IMMb_80r4;
+    case XED_IFORM_AND_LOCK_MEMb_IMMb_82r4: return XED_IFORM_AND_MEMb_IMMb_82r4;
+    case XED_IFORM_AND_LOCK_MEMv_GPRv: return XED_IFORM_AND_MEMv_GPRv;
+    case XED_IFORM_AND_LOCK_MEMv_IMMb: return XED_IFORM_AND_MEMv_IMMb;
+    case XED_IFORM_AND_LOCK_MEMv_IMMz: return XED_IFORM_AND_MEMv_IMMz;
+    case XED_IFORM_BTC_LOCK_MEMv_GPRv: return XED_IFORM_BTC_MEMv_GPRv;
+    case XED_IFORM_BTC_LOCK_MEMv_IMMb: return XED_IFORM_BTC_MEMv_IMMb;
+    case XED_IFORM_BTR_LOCK_MEMv_GPRv: return XED_IFORM_BTR_MEMv_GPRv;
+    case XED_IFORM_BTR_LOCK_MEMv_IMMb: return XED_IFORM_BTR_MEMv_IMMb;
+    case XED_IFORM_BTS_LOCK_MEMv_GPRv: return XED_IFORM_BTS_MEMv_GPRv;
+    case XED_IFORM_BTS_LOCK_MEMv_IMMb: return XED_IFORM_BTS_MEMv_IMMb;
+    case XED_IFORM_CMPXCHG16B_LOCK_MEMdq: return XED_IFORM_CMPXCHG16B_MEMdq;
+    case XED_IFORM_CMPXCHG8B_LOCK_MEMq: return XED_IFORM_CMPXCHG8B_MEMq;
+    case XED_IFORM_CMPXCHG_LOCK_MEMb_GPR8: return XED_IFORM_CMPXCHG_MEMb_GPR8;
+    case XED_IFORM_CMPXCHG_LOCK_MEMv_GPRv: return XED_IFORM_CMPXCHG_MEMv_GPRv;
+    case XED_IFORM_DEC_LOCK_MEMb: return XED_IFORM_DEC_MEMb;
+    case XED_IFORM_DEC_LOCK_MEMv: return XED_IFORM_DEC_MEMv;
+    case XED_IFORM_INC_LOCK_MEMb: return XED_IFORM_INC_MEMb;
+    case XED_IFORM_INC_LOCK_MEMv: return XED_IFORM_INC_MEMv;
+    case XED_IFORM_NEG_LOCK_MEMb: return XED_IFORM_NEG_MEMb;
+    case XED_IFORM_NEG_LOCK_MEMv: return XED_IFORM_NEG_MEMv;
+    case XED_IFORM_NOT_LOCK_MEMb: return XED_IFORM_NOT_MEMb;
+    case XED_IFORM_NOT_LOCK_MEMv: return XED_IFORM_NOT_MEMv;
+    case XED_IFORM_OR_LOCK_MEMb_GPR8: return XED_IFORM_OR_MEMb_GPR8;
+    case XED_IFORM_OR_LOCK_MEMb_IMMb_80r1: return XED_IFORM_OR_MEMb_IMMb_80r1;
+    case XED_IFORM_OR_LOCK_MEMb_IMMb_82r1: return XED_IFORM_OR_MEMb_IMMb_82r1;
+    case XED_IFORM_OR_LOCK_MEMv_GPRv: return XED_IFORM_OR_MEMv_GPRv;
+    case XED_IFORM_OR_LOCK_MEMv_IMMb: return XED_IFORM_OR_MEMv_IMMb;
+    case XED_IFORM_OR_LOCK_MEMv_IMMz: return XED_IFORM_OR_MEMv_IMMz;
+    case XED_IFORM_SBB_LOCK_MEMb_GPR8: return XED_IFORM_SBB_MEMb_GPR8;
+    case XED_IFORM_SBB_LOCK_MEMb_IMMb_80r3: return XED_IFORM_SBB_MEMb_IMMb_80r3;
+    case XED_IFORM_SBB_LOCK_MEMb_IMMb_82r3: return XED_IFORM_SBB_MEMb_IMMb_82r3;
+    case XED_IFORM_SBB_LOCK_MEMv_GPRv: return XED_IFORM_SBB_MEMv_GPRv;
+    case XED_IFORM_SBB_LOCK_MEMv_IMMb: return XED_IFORM_SBB_MEMv_IMMb;
+    case XED_IFORM_SBB_LOCK_MEMv_IMMz: return XED_IFORM_SBB_MEMv_IMMz;
+    case XED_IFORM_SUB_LOCK_MEMb_GPR8: return XED_IFORM_SUB_MEMb_GPR8;
+    case XED_IFORM_SUB_LOCK_MEMb_IMMb_80r5: return XED_IFORM_SUB_MEMb_IMMb_80r5;
+    case XED_IFORM_SUB_LOCK_MEMb_IMMb_82r5: return XED_IFORM_SUB_MEMb_IMMb_82r5;
+    case XED_IFORM_SUB_LOCK_MEMv_GPRv: return XED_IFORM_SUB_MEMv_GPRv;
+    case XED_IFORM_SUB_LOCK_MEMv_IMMb: return XED_IFORM_SUB_MEMv_IMMb;
+    case XED_IFORM_SUB_LOCK_MEMv_IMMz: return XED_IFORM_SUB_MEMv_IMMz;
+    case XED_IFORM_XADD_LOCK_MEMb_GPR8: return XED_IFORM_XADD_MEMb_GPR8;
+    case XED_IFORM_XADD_LOCK_MEMv_GPRv: return XED_IFORM_XADD_MEMv_GPRv;
+    case XED_IFORM_XOR_LOCK_MEMb_GPR8: return XED_IFORM_XOR_MEMb_GPR8;
+    case XED_IFORM_XOR_LOCK_MEMb_IMMb_80r6: return XED_IFORM_XOR_MEMb_IMMb_80r6;
+    case XED_IFORM_XOR_LOCK_MEMb_IMMb_82r6: return XED_IFORM_XOR_MEMb_IMMb_82r6;
+    case XED_IFORM_XOR_LOCK_MEMv_GPRv: return XED_IFORM_XOR_MEMv_GPRv;
+    case XED_IFORM_XOR_LOCK_MEMv_IMMb: return XED_IFORM_XOR_MEMv_IMMb;
+    case XED_IFORM_XOR_LOCK_MEMv_IMMz: return XED_IFORM_XOR_MEMv_IMMz;
+    default: return iform;
+  }
+}
+
 // Convert a `xed_decoded_inst_t` into an `Instruction`.
 static void ConvertDecodedInstruction(Instruction *instr,
                                       const xed_decoded_inst_t *xedd,
@@ -383,8 +475,8 @@ static void ConvertDecodedInstruction(Instruction *instr,
   auto xedi = xed_decoded_inst_inst(xedd);
   memset(instr, 0, sizeof *instr);
   instr->decoded_pc = pc;
-  instr->iclass = xed_decoded_inst_get_iclass(xedd);
-  instr->iform = xed_decoded_inst_get_iform_enum(xedd);
+  instr->iclass = RemoveLock(xed_decoded_inst_get_iclass(xedd));
+  instr->iform = RemoveLock(xed_decoded_inst_get_iform_enum(xedd));
   instr->isel = static_cast<unsigned>(xed_decoded_inst_inst(xedd) -
                                       xed_inst_table_base());
   instr->category = xed_decoded_inst_get_category(xedd);

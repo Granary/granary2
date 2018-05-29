@@ -130,7 +130,12 @@ static std::set<xed_category_enum_t> ignore_categories = {
   XED_CATEGORY_AVX,
   XED_CATEGORY_AVX2,
   XED_CATEGORY_AVX2GATHER,
-  XED_CATEGORY_BDW,
+  XED_CATEGORY_AVX512,
+  XED_CATEGORY_AVX512_4FMAPS,
+  XED_CATEGORY_AVX512_4VNNIW,
+  XED_CATEGORY_AVX512_BITALG,
+  XED_CATEGORY_AVX512_VBMI,
+//  XED_CATEGORY_BDW,
   XED_CATEGORY_CONVERT,
   XED_CATEGORY_DECIMAL,
   XED_CATEGORY_FMA4,
@@ -190,6 +195,7 @@ int main(void) {
   InitIclassTable(nullptr);
   std::cout << "#ifndef DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
             << "#define DEPENDENCIES_XED2_INTEL64_INSTRUCTION_BUILDER_CC_\n"
+            << "#define XED_REG_st(i) XED_REG_ST##i\n"
             << "namespace granary {\n"
             << "namespace arch {\n"
             << "class Instruction;\n";

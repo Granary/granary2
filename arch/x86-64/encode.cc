@@ -34,6 +34,30 @@ bool InstructionEncoder::Encode(Instruction *instr, CachePC pc) {
 
 namespace {
 
+static xed_iclass_enum_t AddLock(xed_iclass_enum_t iclass) {
+  switch (iclass) {
+    case XED_ICLASS_ADC: return XED_ICLASS_ADC_LOCK;
+    case XED_ICLASS_ADD: return XED_ICLASS_ADD_LOCK;
+    case XED_ICLASS_AND: return XED_ICLASS_AND_LOCK;
+    case XED_ICLASS_BTC: return XED_ICLASS_BTC_LOCK;
+    case XED_ICLASS_BTR: return XED_ICLASS_BTR_LOCK;
+    case XED_ICLASS_BTS: return XED_ICLASS_BTS_LOCK;
+    case XED_ICLASS_CMPXCHG16B: return XED_ICLASS_CMPXCHG16B_LOCK;
+    case XED_ICLASS_CMPXCHG8B: return XED_ICLASS_CMPXCHG8B_LOCK;
+    case XED_ICLASS_CMPXCHG: return XED_ICLASS_CMPXCHG_LOCK;
+    case XED_ICLASS_DEC: return XED_ICLASS_DEC_LOCK;
+    case XED_ICLASS_INC: return XED_ICLASS_INC_LOCK;
+    case XED_ICLASS_NEG: return XED_ICLASS_NEG_LOCK;
+    case XED_ICLASS_NOT: return XED_ICLASS_NOT_LOCK;
+    case XED_ICLASS_OR: return XED_ICLASS_OR_LOCK;
+    case XED_ICLASS_SBB: return XED_ICLASS_SBB_LOCK;
+    case XED_ICLASS_SUB: return XED_ICLASS_SUB_LOCK;
+    case XED_ICLASS_XADD: return XED_ICLASS_XADD_LOCK;
+    case XED_ICLASS_XOR: return XED_ICLASS_XOR_LOCK;
+    default: return iclass;
+  }
+}
+
 // Initialize the XED encoding IR from some of the basic info stored in
 // Granary's instruction IR.
 static void InitEncoderInstruction(const Instruction *instr,
@@ -41,6 +65,9 @@ static void InitEncoderInstruction(const Instruction *instr,
   memset(xede, 0, sizeof *xede);
   xede->mode = XED_STATE;
   xede->iclass = instr->iclass;
+  if (instr->has_prefix_lock) {
+    xede->iclass = AddLock(instr->iclass);
+  }
   xede->effective_operand_width = 0;
   if (instr->effective_operand_width) {
     xede->effective_operand_width = static_cast<uint32_t>(
@@ -64,7 +91,6 @@ static void InitEncoderInstruction(const Instruction *instr,
   xede->effective_address_width = arch::ADDRESS_WIDTH_BITS;
   xede->noperands = instr->num_explicit_ops;
   xede->prefixes.i = 0;
-  xede->prefixes.s.lock = instr->has_prefix_lock;
   xede->prefixes.s.rep = instr->has_prefix_rep;
   xede->prefixes.s.repne = instr->has_prefix_repne;
 }
@@ -92,13 +118,13 @@ static void EncodeBrDisp(const Operand &op, xed_encoder_operand_t *xedo,
     case XED_ICLASS_LOOP:
     case XED_ICLASS_LOOPE:
     case XED_ICLASS_LOOPNE:
-      xedo->width = 8;
+      xedo->width_bits = 8;
       xedo->u.brdisp = static_cast<int8_t>(brdisp_32);
       GRANARY_ASSERT(!check_reachable || xedo->u.brdisp == brdisp_32);
       break;
 
     default:
-      xedo->width = 32;
+      xedo->width_bits = 32;
       xedo->u.brdisp = brdisp_32;
       break;
   }
@@ -120,9 +146,10 @@ static void EncodeImm(const Operand &op, xed_encoder_operand_t *xedo,
     xedo->u.imm0 = op.imm.as_uint;
   }
   if (XED_ICLASS_PUSH == iclass) {
-    xedo->width = static_cast<uint32_t>(ImmediateWidthBits(op.imm.as_uint));
-    if (16 == xedo->width) {
-      xedo->width = 32;
+    xedo->width_bits = static_cast<uint32_t>(
+        ImmediateWidthBits(op.imm.as_uint));
+    if (16 == xedo->width_bits) {
+      xedo->width_bits = 32;
     }
   }
 }
@@ -148,7 +175,7 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
       xedo->u.mem.disp.displacement = static_cast<uint64_t>(op.mem.disp);
       auto width = ImmediateWidthBits(op.mem.disp);
       width = 16 == width ? 32 : std::min(32, width);
-      xedo->u.mem.disp.displacement_width = static_cast<uint32_t>(width);
+      xedo->u.mem.disp.displacement_bits = static_cast<uint32_t>(width);
     }
 
     if (!xedo->u.mem.base && xedo->u.mem.index && 1 == xedo->u.mem.scale) {
@@ -158,10 +185,10 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
 
     if (!xedo->u.mem.index) {
       if (!xedo->u.mem.disp.displacement) {
-        xedo->u.mem.disp.displacement_width = 0;
+        xedo->u.mem.disp.displacement_bits = 0;
       }
     } else if (!xedo->u.mem.base) {
-      xedo->u.mem.disp.displacement_width = 32;
+      xedo->u.mem.disp.displacement_bits = 32;
     }
 
   } else {
@@ -169,9 +196,9 @@ static void EncodeMem(const Operand &op, xed_encoder_operand_t *xedo,
   }
   if (op.is_effective_address) {
     if (XED_ICLASS_LEA == iclass) {
-      xedo->width = arch::ADDRESS_WIDTH_BITS;
-    } else if (!xedo->width) {
-      xedo->width = 8;
+      xedo->width_bits = arch::ADDRESS_WIDTH_BITS;
+    } else if (!xedo->width_bits) {
+      xedo->width_bits = 8;
     }
   }
 }
@@ -190,47 +217,47 @@ static void EncodePtr(const Operand &op, xed_encoder_operand_t *xedo,
     if (op.addr.as_int >= 0) { // Unsigned, apply a 31-bit mask.
       xedo->u.mem.disp.displacement &= 0x7FFFFFFFULL;
     }
-    xedo->u.mem.disp.displacement_width = 32;
+    xedo->u.mem.disp.displacement_bits = 32;
     xedo->u.mem.seg = op.segment;
 
   // RIP-relative address.
   } else if (op.is_annotation_instr) {
     auto addr = op.annotation_instr->Data<intptr_t>();
     xedo->u.mem.disp.displacement = static_cast<uint32_t>(addr - next_addr);
-    xedo->u.mem.disp.displacement_width = 32;
+    xedo->u.mem.disp.displacement_bits = 32;
     xedo->u.mem.base = XED_REG_RIP;
 
   // Hard-coded address.
   } else {
     auto mem_addr = op.addr.as_uint;
     xedo->u.mem.disp.displacement = mem_addr;
-    xedo->u.mem.disp.displacement_width = ADDRESS_WIDTH_BITS;
+    xedo->u.mem.disp.displacement_bits = ADDRESS_WIDTH_BITS;
 
     auto high_32 = mem_addr >> 32;
     auto sign_bit_32 = 1UL & (mem_addr >> 31);
 
     // Make sure we can sign-extend it.
     if (0x0FFFFFFFFULL == high_32) {
-      if (sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
+      if (sign_bit_32) xedo->u.mem.disp.displacement_bits = 32;
     } else if (!high_32) {
-      if (!sign_bit_32) xedo->u.mem.disp.displacement_width = 32;
+      if (!sign_bit_32) xedo->u.mem.disp.displacement_bits = 32;
     }
 
     // Convert into a RIP-relative displacement when it fits.
     //
     // TODO(pag): Mask high order bits if 32 bits? For segment offsets, this
     //            doesn't seem to matter.
-    if (ADDRESS_WIDTH_BITS == xedo->u.mem.disp.displacement_width &&
+    if (ADDRESS_WIDTH_BITS == xedo->u.mem.disp.displacement_bits &&
       AddrIsOffsetReachable(next_addr, op.addr.as_int)) {
       auto diff = op.addr.as_int - next_addr;
       xedo->u.mem.disp.displacement = static_cast<uint32_t>(diff);
-      xedo->u.mem.disp.displacement_width = 32;
+      xedo->u.mem.disp.displacement_bits = 32;
       xedo->u.mem.base = XED_REG_RIP;
     }
   }
   if (op.is_effective_address) {
-    xedo->width = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
-                           xedo->width);
+    xedo->width_bits = std::min(static_cast<uint32_t>(arch::ADDRESS_WIDTH_BITS),
+                                xedo->width_bits);
   }
 }
 
@@ -242,7 +269,7 @@ static void EncodeOperands(const Instruction *instr,
   for (uint16_t op_index = 0; op_index < instr->num_explicit_ops; ++op_index) {
     const auto &op(instr->ops[op_index]);
     auto &xedo(xede->operands[op_index]);
-    xedo.width = static_cast<uint32_t>(std::max(0UL, op.BitWidth()));
+    xedo.width_bits = static_cast<uint32_t>(op.BitWidth());
 
     switch (op.type) {
       case XED_ENCODER_OPERAND_TYPE_BRDISP:
@@ -269,7 +296,7 @@ static void EncodeOperands(const Instruction *instr,
       default:
         break;
     }
-    op_width = std::max(op_width, xedo.width);
+    op_width = std::max(op_width, xedo.width_bits);
   }
 
   // Make sure that we've got an effective operand width.

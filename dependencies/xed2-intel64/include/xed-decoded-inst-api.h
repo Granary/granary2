@@ -1,39 +1,25 @@
 /*BEGIN_LEGAL 
-Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
+Copyright (c) 2018 Intel Corporation
 
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
+      http://www.apache.org/licenses/LICENSE-2.0
 
-    * Neither the name of Intel Corporation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  
 END_LEGAL */
 /// @file xed-decoded-inst-api.h
 /// 
 
-#if !defined(_XED_DECODED_INST_API_H_)
-# define _XED_DECODED_INST_API_H_
+#if !defined(XED_DECODED_INST_API_H)
+# define XED_DECODED_INST_API_H
 
 #include "xed-decoded-inst.h"
 #include "xed-operand-accessors.h"
@@ -91,7 +77,7 @@ xed_decoded_inst_get_iclass( const xed_decoded_inst_t* p){
     return xed_inst_iclass(p->_inst);
 }
 
-/// @name xed_decoded_inst_t Attirbutes and properties
+/// @name xed_decoded_inst_t Attributes and properties
 //@{
 /// @ingroup DEC
 /// Returns 1 if the attribute is defined for this instruction.
@@ -333,7 +319,10 @@ xed_decoded_inst_get_stack_address_mode_bits(const xed_decoded_inst_t* p) {
 /// Returns the operand width in bits: 8/16/32/64. This is different than
 /// the #xed_operand_values_get_effective_operand_width() which only
 /// returns 16/32/64. This factors in the BYTEOP attribute when computing
-/// its return value. This is a convenience function.
+/// its return value. This function provides a information for that is only
+/// useful for (scalable) GPR-operations. Individual operands have more
+/// specific information available from
+/// #xed_decoded_inst_operand_element_size_bits()
 /// @ingroup DEC
 XED_DLL_EXPORT xed_uint32_t
 xed_decoded_inst_get_operand_width(const xed_decoded_inst_t* p);
@@ -560,6 +549,7 @@ xed_decoded_inst_mem_written_only(const xed_decoded_inst_t* p,
 /// @ingroup DEC
 XED_DLL_EXPORT xed_bool_t
 xed_decoded_inst_conditionally_writes_registers(const xed_decoded_inst_t* p);
+/// returns bytes
 /// @ingroup DEC
 XED_DLL_EXPORT unsigned int
 xed_decoded_inst_get_memory_operand_length(const xed_decoded_inst_t* p, 
@@ -569,7 +559,6 @@ xed_decoded_inst_get_memory_operand_length(const xed_decoded_inst_t* p,
 /// or MEM1 (memop_idx==1). This factors in things like whether or not the
 /// reference is an implicit stack push/pop reference, the machine mode and
 // 67 prefixes if present.
-
 /// @ingroup DEC
 XED_DLL_EXPORT unsigned int 
 xed_decoded_inst_get_memop_address_width(const xed_decoded_inst_t* p,
@@ -581,6 +570,25 @@ xed_decoded_inst_get_memop_address_width(const xed_decoded_inst_t* p,
 /// Returns true if the instruction is a prefetch
 XED_DLL_EXPORT xed_bool_t
 xed_decoded_inst_is_prefetch(const xed_decoded_inst_t* p);
+
+/// @ingroup DEC
+/// Return 1 for broadcast instructions or AVX512 load-op instructions using the broadcast feature
+/// 0 otherwise.  Logical OR of
+/// #xed_decoded_inst_is_broadcast_instruction() and
+/// #xed_decoded_inst_uses_embedded_broadcast().
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_is_broadcast(const xed_decoded_inst_t* p);
+/// @ingroup DEC
+/// Return 1 for broadcast instruction. (NOT including AVX512 load-op instructions)
+/// 0 otherwise. Just a category check. 
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_is_broadcast_instruction(const xed_decoded_inst_t* p);
+/// @ingroup DEC
+/// Return 1 for AVX512 load-op instructions using the broadcast feature,
+/// 0 otherwise. 
+XED_DLL_EXPORT xed_bool_t
+xed_decoded_inst_uses_embedded_broadcast(const xed_decoded_inst_t* p);
+
 //@}
 
                   
@@ -658,9 +666,26 @@ xed_decoded_inst_set_user_data(xed_decoded_inst_t* p,
                                xed_uint64_t new_value) {
     p->u.user_data = new_value;
 }
+//@}
 
-
-
+/// @name xed_decoded_inst_t Classifiers
+//@{
+/// @ingroup DEC
+/// True for AVX512 (EVEX-encoded) SIMD and (VEX encoded) K-mask instructions
+XED_DLL_EXPORT xed_bool_t
+xed_classify_avx512(const xed_decoded_inst_t* d);
+/// @ingroup DEC
+/// True for AVX512 (VEX-encoded) K-mask operations
+XED_DLL_EXPORT xed_bool_t
+xed_classify_avx512_maskop(const xed_decoded_inst_t* d);
+/// @ingroup DEC
+/// True for AVX/AVX2 SIMD VEX-encoded operations. Does not include BMI/BMI2 instructions.
+XED_DLL_EXPORT xed_bool_t
+xed_classify_avx(const xed_decoded_inst_t* d);
+/// @ingroup DEC
+/// True for SSE/SSE2/etc. SIMD operations.  Includes AES and PCLMULQDQ
+XED_DLL_EXPORT xed_bool_t
+xed_classify_sse(const xed_decoded_inst_t* d);
 
 //@}
 #endif

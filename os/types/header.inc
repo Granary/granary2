@@ -1,17 +1,15 @@
 
-// Automatically generated file based on os/GRANARY_OS/GRANARY_WHERE/types.h.
-
 #ifndef GRANARY_OS_TYPE_INCLUDES
 # define GRANARY_OS_TYPE_INCLUDES
 #endif
 
 #ifdef __cplusplus
 extern "C" {
-#endif  // __cplusplus
+#endif
 
 #ifdef _GNU_SOURCE
 # undef _GNU_SOURCE
-#endif  // _GNU_SOURCE
+#endif
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wshadow"
@@ -23,4 +21,4 @@ extern "C" {
 
 #ifdef GRANARY_WHERE_kernel
 typedef bool K_Bool;
-#endif  // GRANARY_WHERE_kernel
+#endif

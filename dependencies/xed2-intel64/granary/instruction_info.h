@@ -161,9 +161,9 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
 
   // Special cases.
   instr_table[XED_ICLASS_FSCALE].has_ambigiuous_ops = true;
-  has_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1] = true;
-  is_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1][0] = true;
-  is_ambiguous_arg[XED_IFORM_FSCALE_ST0_ST1][1] = true;
+  has_ambiguous_arg[XED_IFORM_FSCALE] = true;
+  is_ambiguous_arg[XED_IFORM_FSCALE][0] = true;
+  is_ambiguous_arg[XED_IFORM_FSCALE][1] = true;
 
   instr_table[XED_ICLASS_FSTP].has_ambigiuous_ops = true;
   instr_table[XED_ICLASS_FSTP].num_explicit_args = 2;
@@ -228,13 +228,14 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
 
   // FPREM, FPREM1
   instr_table[XED_ICLASS_FPREM].has_ambigiuous_ops = true;
+  has_ambiguous_arg[XED_IFORM_FPREM] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM][0] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM][1] = true;
+
   instr_table[XED_ICLASS_FPREM1].has_ambigiuous_ops = true;
-  has_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1] = true;
-  has_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1] = true;
-  is_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1][0] = true;
-  is_ambiguous_arg[XED_IFORM_FPREM_ST0_ST1][1] = true;
-  is_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1][0] = true;
-  is_ambiguous_arg[XED_IFORM_FPREM1_ST0_ST1][1] = true;
+  has_ambiguous_arg[XED_IFORM_FPREM1] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM1][0] = true;
+  is_ambiguous_arg[XED_IFORM_FPREM1][1] = true;
 
   // FISTP, FISTTP
   instr_table[XED_ICLASS_FISTP].has_ambigiuous_ops = true;
@@ -244,7 +245,6 @@ static void InitIclassTable(ignored_iclass_set_t *ignored_iclasses_set) {
     has_ambiguous_arg[iform] = true;
     is_ambiguous_arg[iform][1] = true;
   }
-
 }
 
 #endif  // DEPENDENCIES_XED2_INTEL64_GRANARY_INSTRUCTION_INFO_H_

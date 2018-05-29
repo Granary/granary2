@@ -1,12 +1,12 @@
 # Copyright 2014 Peter Goodman, all rights reserved.
 
-GRANARY_CC ?= clang-3.5
-GRANARY_CC_STD ?= gnu99
-GRANARY_CXX ?= clang++-3.5
-GRANARY_CXX_LIB ?= libc++
+GRANARY_CC ?= clang-3.8
+GRANARY_CC_STD ?= gnu11
+GRANARY_CXX ?= clang++-3.8
+GRANARY_CXX_LIB ?= libstdc++
 GRANARY_CXX_STD ?= gnu++11
 GRANARY_LD ?= gold
-GRANARY_LLVM_LINK ?= llvm-link-3.5
+GRANARY_LLVM_LINK ?= llvm-link-3.8
 GRANARY_AR ?= ar
 GRANARY_PYTHON ?= python2.7
 GRANARY_SH ?= sh
@@ -226,13 +226,15 @@ GRANARY_COMMON_WARN_FLAGS += -Wmissing-declarations -Wwrite-strings
 GRANARY_COMMON_WARN_FLAGS += -fstrict-aliasing -Wstrict-aliasing=2 -Wstrict-overflow=2
 GRANARY_COMMON_WARN_FLAGS += -Wcast-align -Wredundant-decls -Wvolatile-register-var
 GRANARY_COMMON_WARN_FLAGS += -Wstack-protector -Wold-style-cast -Wnull-conversion
-GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096 -Wno-macro-redefined
-GRANARY_COMMON_WARN_FLAGS += -Wno-missing-declarations -Wno-unused-function
+GRANARY_COMMON_WARN_FLAGS += -Wframe-larger-than=4096
 
 # Disable various warnings and errors.
+GRANARY_COMMON_WARN_FLAGS += -Wno-macro-redefined -Wno-address-of-packed-member
+GRANARY_COMMON_WARN_FLAGS += -Wno-missing-declarations -Wno-unused-function
 GRANARY_COMMON_WARN_FLAGS += -Wno-nested-anon-types -Wno-variadic-macros
 GRANARY_COMMON_WARN_FLAGS += -Wno-extended-offsetof -Wno-gnu -Wno-long-long
 GRANARY_COMMON_WARN_FLAGS += -Wno-c11-extensions -Wno-c99-extensions
+GRANARY_COMMON_WARN_FLAGS += -Wno-unknown-warning-option -Wno-ignored-attributes
 
 # Add the common flags to both the C++ and C compiler flags.
 GRANARY_CXX_FLAGS += $(GRANARY_COMMON_CXX_FLAGS) $(GRANARY_COMMON_FLAGS)
@@ -317,6 +319,7 @@ $(GRANARY_BIN_DIR)/%_client.bc :: $(GRANARY_CLIENTS_SRC_DIR)/%/client.cc
 $(GRANARY_BIN_DIR)/%.bc :: $(GRANARY_SRC_DIR)/%.cc
 	@echo "Building CXX object $@"
 	@mkdir -p $(@D)
+	@echo $(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 	@$(GRANARY_CXX) $(GRANARY_CXX_FLAGS) -emit-llvm -flto -c $< -o $@
 
 # Compile a LLVM bitcode file to an object file.

@@ -84,21 +84,21 @@ void GenerateInlineCallCode(Callback *callback, size_t num_args) {
   ENC(CALL_NEAR(&ni, pc, callback->callback, &(callback->callback)));
 
   // Restore the GPRs.
-  ENC(POP_GPRv_51(&ni, XED_REG_R15); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R14); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R13); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R12); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R11); );
-  ENC(POP_GPRv_51(&ni, XED_REG_R10); );
-  if (6 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R9); );
-  if (5 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_R8); );
-  if (1 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RDI); );
-  if (2 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RSI); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RBP); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RBX); );
-  if (3 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RDX); );
-  if (4 > num_args) ENC(POP_GPRv_51(&ni, XED_REG_RCX); );
-  ENC(POP_GPRv_51(&ni, XED_REG_RAX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R15); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R14); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R13); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R12); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R11); );
+  ENC(POP_GPRv_58(&ni, XED_REG_R10); );
+  if (6 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_R9); );
+  if (5 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_R8); );
+  if (1 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_RDI); );
+  if (2 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_RSI); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RBP); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RBX); );
+  if (3 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_RDX); );
+  if (4 > num_args) ENC(POP_GPRv_58(&ni, XED_REG_RCX); );
+  ENC(POP_GPRv_58(&ni, XED_REG_RAX); );
 
   // Swap back to the application stack.
   if (GRANARY_IF_USER_ELSE(false, true)) {

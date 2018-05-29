@@ -1,61 +1,52 @@
 /*BEGIN_LEGAL 
-Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
+Copyright (c) 2018 Intel Corporation
 
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
+      http://www.apache.org/licenses/LICENSE-2.0
 
-    * Neither the name of Intel Corporation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  
 END_LEGAL */
 /// @file xed-util.h 
 /// 
 
 
 
-#ifndef _XED_UTIL_H_
-# define _XED_UTIL_H_
+#ifndef XED_UTIL_H
+# define XED_UTIL_H
 
 #include "xed-common-hdrs.h"
 #include "xed-types.h"
 #include "xed-portability.h"
 
-  
-////////////////////////////////////////////////////////////////////////////
-// DEFINES
-////////////////////////////////////////////////////////////////////////////
+
+
 extern int xed_verbose;
-#if XED_MESSAGES==1
+#if defined(XED_MESSAGES)
 # include <stdio.h> 
 extern  FILE* xed_log_file;
+# define XED_EMIT_MESSAGES  (xed_verbose >= 1)
+# define XED_INFO_VERBOSE   (xed_verbose >= 2)
+# define XED_INFO2_VERBOSE  (xed_verbose >= 3)
+# define XED_VERBOSE        (xed_verbose >= 4)
+# define XED_MORE_VERBOSE   (xed_verbose >= 5)
+# define XED_VERY_VERBOSE   (xed_verbose >= 6)
+#else
+# define XED_EMIT_MESSAGES  (0)
+# define XED_INFO_VERBOSE   (0)
+# define XED_INFO2_VERBOSE  (0)
+# define XED_VERBOSE        (0)
+# define XED_MORE_VERBOSE   (0)
+# define XED_VERY_VERBOSE   (0)
 #endif
-#define XED_EMIT_MESSAGES  (XED_MESSAGES==1 && xed_verbose >= 1)
-#define XED_INFO_VERBOSE   (XED_MESSAGES==1 && xed_verbose >= 2)
-#define XED_INFO2_VERBOSE  (XED_MESSAGES==1 && xed_verbose >= 3)
-#define XED_VERBOSE        (XED_MESSAGES==1 && xed_verbose >= 4)
-#define XED_MORE_VERBOSE   (XED_MESSAGES==1 && xed_verbose >= 5)
-#define XED_VERY_VERBOSE   (XED_MESSAGES==1 && xed_verbose >= 6)
 
 #if defined(__GNUC__)
 # define XED_FUNCNAME __func__
@@ -63,7 +54,7 @@ extern  FILE* xed_log_file;
 # define XED_FUNCNAME ""
 #endif
 
-#if XED_MESSAGES==1
+#if defined(XED_MESSAGES)
 #define XED2IMSG(x)                                             \
     do {                                                        \
         if (XED_EMIT_MESSAGES) {                                \
@@ -153,46 +144,30 @@ XED_DLL_EXPORT void xed_register_abort_function(xed_user_abort_function_t fn,
                                                 void* other);
 
 
-////////////////////////////////////////////////////////////////////////////
-// PROTOTYPES
-////////////////////////////////////////////////////////////////////////////
-char* xed_downcase_buf(char* s);
-
-/* copy from src to dst, downcasing bytes as the copy proceeds. len is the
- * available space in the buffer*/
-int xed_strncat_lower(char* dst, const char* src, int len);
-
 XED_DLL_EXPORT int xed_itoa(char* buf,
                             xed_uint64_t f,
                             int buflen);
 
-int xed_itoa_hex_zeros(char* buf,
-                       xed_uint64_t f,
-                       xed_uint_t xed_bits_to_print,
-                       xed_bool_t leading_zeros,
-                       int buflen);
+/// defaults to lowercase
+XED_DLL_EXPORT int xed_itoa_hex_zeros(char* buf,
+                                      xed_uint64_t f,
+                                      xed_uint_t bits_to_print,
+                                      xed_bool_t leading_zeros,
+                                      int buflen);
 
+/// defaults to lowercase
 XED_DLL_EXPORT int xed_itoa_hex(char* buf,
                                 xed_uint64_t f,
-                                xed_uint_t xed_bits_to_print,
+                                xed_uint_t bits_to_print,
                                 int buflen);
 
-int xed_itoa_signed(char* buf, xed_int64_t f, int buflen);
+XED_DLL_EXPORT int xed_itoa_hex_ul(char* buf, 
+                                   xed_uint64_t f, 
+                                   xed_uint_t bits_to_print,
+                                   xed_bool_t leading_zeros,                            
+                                   int buflen,
+                                   xed_bool_t lowercase);
 
-char xed_to_ascii_hex_nibble(xed_uint_t x);
-
-int xed_sprintf_uint8_hex(char* buf, xed_uint8_t x, int buflen);
-int xed_sprintf_uint16_hex(char* buf, xed_uint16_t x, int buflen);
-int xed_sprintf_uint32_hex(char* buf, xed_uint32_t x, int buflen);
-int xed_sprintf_uint64_hex(char* buf, xed_uint64_t x, int buflen);
-int xed_sprintf_uint8(char* buf, xed_uint8_t x, int buflen);
-int xed_sprintf_uint16(char* buf, xed_uint16_t x, int buflen);
-int xed_sprintf_uint32(char* buf, xed_uint32_t x, int buflen);
-int xed_sprintf_uint64(char* buf, xed_uint64_t x, int buflen);
-int xed_sprintf_int8(char* buf, xed_int8_t x, int buflen);
-int xed_sprintf_int16(char* buf, xed_int16_t x, int buflen);
-int xed_sprintf_int32(char* buf, xed_int32_t x, int buflen);
-int xed_sprintf_int64(char* buf, xed_int64_t x, int buflen);
 
 /// Set the FILE* for XED's log msgs. This takes a FILE* as a void* because
 /// some software defines their own FILE* types creating conflicts.
@@ -201,9 +176,6 @@ XED_DLL_EXPORT void xed_set_log_file(void* o);
 
 /// Set the verbosity level for XED
 XED_DLL_EXPORT void xed_set_verbosity(int v);
-
-void xed_derror(const char* s);
-void xed_dwarn(const char* s);
 
 XED_DLL_EXPORT xed_int64_t xed_sign_extend32_64(xed_int32_t x);
 XED_DLL_EXPORT xed_int64_t xed_sign_extend16_64(xed_int16_t x);
@@ -276,9 +248,4 @@ XED_DLL_EXPORT xed_uint_t xed_shortest_width_unsigned(xed_uint64_t x, xed_uint8_
 /// returns 8 (indicating 8B) if none of the provided legal widths applies.
 XED_DLL_EXPORT xed_uint_t xed_shortest_width_signed(xed_int64_t x, xed_uint8_t legal_widths);
 
-////////////////////////////////////////////////////////////////////////////
-// GLOBALS
-////////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////////
 #endif

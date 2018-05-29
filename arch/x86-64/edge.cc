@@ -127,7 +127,7 @@ Fragment *GenerateDirectEdgeCode(DirectEdge *edge) {
   APP(frag, CALL_NEAR_RELBRd(&ni, DirectExitFunction()));
 
   // Restore the stolen `RDI`.
-  APP(frag, POP_GPRv_51(&ni, XED_REG_RDI); ni.is_stack_blind = true; );
+  APP(frag, POP_GPRv_58(&ni, XED_REG_RDI); ni.is_stack_blind = true; );
 
   // Restore back to the native stack.
   frag->instrs.Append(new AnnotationInstruction(kAnnotCondEnterNativeStack));

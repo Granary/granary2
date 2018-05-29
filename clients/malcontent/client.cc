@@ -1,5 +1,5 @@
 // Copyright 2014 Peter Goodman, all rights reserved.
-
+#if 0
 #include "clients/util/types.h"  // Needs to go first.
 
 #include <granary.h>
@@ -879,3 +879,4 @@ GRANARY_ON_CLIENT_INIT() {
 }
 
 #endif  // GRANARY_WHERE_user
+#endif

@@ -10,10 +10,12 @@ include Makefile.inc
 
 # Make a header file that external clients can use to define clients. This
 # happens before `build_clients`.
-$(GRANARY_HEADERS):
+build_headers:
+	@echo "Making $(GRANARY_HEADERS_DIR)/granary.h for clients"
 	@mkdir -p $(GRANARY_HEADERS_DIR)
 	# Make the combined C++ header file (granary.h) used by clients.
-	@$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
+	GRANARY_CC=$(GRANARY_CC) GRANARY_CXX=$(GRANARY_CXX) \
+	$(GRANARY_PYTHON) $(GRANARY_SRC_DIR)/scripts/generate_export_headers.py \
 		$(GRANARY_WHERE) $(GRANARY_SRC_DIR) $(GRANARY_HEADERS_DIR) \
 		"$(GRANARY_HEADER_MACRO_DEFS)"
 	
@@ -49,7 +51,6 @@ build_os: build_deps $(GRANARY_OS_TYPES)
 	$(MAKE) -C $(GRANARY_WHERE_SRC_DIR) \
 		$(MFLAGS) GRANARY_SRC_DIR=$(GRANARY_SRC_DIR) all
 
-build_headers: $(GRANARY_HEADERS)
 
 # Compile and link all main components into `.o` files that can then be linked
 # together into a final executable.

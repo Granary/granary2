@@ -1,37 +1,23 @@
 /*BEGIN_LEGAL 
-Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
+Copyright (c) 2018 Intel Corporation
 
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
+      http://www.apache.org/licenses/LICENSE-2.0
 
-    * Neither the name of Intel Corporation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  
 END_LEGAL */
 
-#ifndef _XED_ENCODER_HL_H_
-# define _XED_ENCODER_HL_H_
+#ifndef XED_ENCODER_HL_H
+# define XED_ENCODER_HL_H
 #include "xed-types.h"
 #include "xed-reg-enum.h"
 #include "xed-state.h"
@@ -42,19 +28,22 @@ END_LEGAL */
 
 typedef struct {
     xed_uint64_t   displacement; 
-    xed_uint32_t   displacement_width;
+    xed_uint32_t   displacement_bits;
 } xed_enc_displacement_t; /* fixme bad name */
 
 /// @name Memory Displacement
 //@{
 /// @ingroup ENCHL
 /// a memory displacement (not for branches)
+/// @param displacement The value of the displacement
+/// @param displacement_bits The width of the displacement in bits. Typically 8 or 32.
+/// @returns #xed_enc_displacement_t
 static XED_INLINE
 xed_enc_displacement_t xed_disp(xed_uint64_t   displacement,
-                                xed_uint32_t   displacement_width   ) {
+                                xed_uint32_t   displacement_bits   ) {
     xed_enc_displacement_t x;
     x.displacement = displacement;
-    x.displacement_width = displacement_width;
+    x.displacement_bits = displacement_bits;
     return x;
 }
 //@}
@@ -101,19 +90,22 @@ typedef struct {
         } s;
         xed_memop_t mem;
     } u;
-    xed_uint32_t width;
+    xed_uint32_t width_bits;
 } xed_encoder_operand_t;
 
 /// @name Branch Displacement
 //@{
 /// @ingroup ENCHL
 /// a relative branch displacement operand
+/// @param brdisp The branch displacement
+/// @param width_bits The width of the displacement in bits. Typically 8 or 32.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_relbr(xed_int32_t brdisp,
-                                                   xed_uint_t width) {
+                                                   xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_BRDISP;
     o.u.brdisp = brdisp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 //@}
@@ -123,60 +115,73 @@ static XED_INLINE  xed_encoder_operand_t xed_relbr(xed_int32_t brdisp,
 /// @ingroup ENCHL
 /// a relative displacement for a PTR operand -- the subsequent imm0 holds
 ///the 16b selector
+/// @param brdisp The displacement for a far pointer operand
+/// @param width_bits The width of the far pointr displacement in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_ptr(xed_int32_t brdisp,
-                                                 xed_uint_t width) {
+                                                 xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_PTR;
     o.u.brdisp = brdisp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 //@}
 
-/// @name Register and Immmediate Operands
+/// @name Register and Immediate Operands
 //@{
 /// @ingroup ENCHL
 /// a register operand
+/// @param reg A #xed_reg_enum_t register operand
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_reg(xed_reg_enum_t reg) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_REG;
     o.u.reg = reg;
-    o.width = 0;
+    o.width_bits = 0;
     return o;
 }
 
 /// @ingroup ENCHL
 /// a first immediate operand (known as IMM0)
+/// @param v An immdediate operand.
+/// @param width_bits The immediate width in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_imm0(xed_uint64_t v,
-                                                  xed_uint_t width) {
+                                                  xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_IMM0;
     o.u.imm0 = v;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 /// @ingroup ENCHL
 /// an 32b signed immediate operand
+/// @param v An signed immdediate operand.
+/// @param width_bits The immediate width in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_simm0(xed_int32_t v,
-                                                   xed_uint_t width) {
+                                                   xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_SIMM0;
     /* sign conversion: we store the int32 in an uint64. It gets sign
-    extended.  Later we convert it to the right width for the
-    instruction. The maximum width of a signed immediate is currently
+    extended.  Later we convert it to the right width_bits for the
+    instruction. The maximum width_bits of a signed immediate is currently
     32b. */
     o.u.imm0 = v;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
-/// an second immediate operand (known as IMM1)
+/// The 2nd immediate operand (known as IMM1) for rare instructions that require it.
+/// @param v The 2nd immdediate (byte-width) operand
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_imm1(xed_uint8_t v) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_IMM1;
     o.u.imm1 = v; 
-    o.width = 8;
+    o.width_bits = 8;
     return o;
 }
 
@@ -190,7 +195,7 @@ static XED_INLINE  xed_encoder_operand_t xed_other(
     o.type = XED_ENCODER_OPERAND_TYPE_OTHER;
     o.u.s.operand_name = operand_name;
     o.u.s.value = value;
-    o.width = 0;
+    o.width_bits = 0;
     return o;
 }
 //@}
@@ -221,8 +226,11 @@ static XED_INLINE  xed_encoder_operand_t xed_seg1(xed_reg_enum_t seg1) {
 
 /// @ingroup ENCHL
 /// memory operand - base only 
+/// @param base The base register
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_b(xed_reg_enum_t base,
-                                                   xed_uint_t width) {
+                                                   xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -230,16 +238,20 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_b(xed_reg_enum_t base,
     o.u.mem.index= XED_REG_INVALID;
     o.u.mem.scale = 0;
     o.u.mem.disp.displacement = 0;
-    o.u.mem.disp.displacement_width = 0;
-    o.width = width;
+    o.u.mem.disp.displacement_bits = 0;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
-/// memory operand - base and displacement only 
+/// memory operand - base and displacement only
+/// @param base The base register
+/// @param disp The displacement
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_bd(xed_reg_enum_t base, 
                               xed_enc_displacement_t disp,
-                              xed_uint_t width) {
+                              xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -247,17 +259,23 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_bd(xed_reg_enum_t base,
     o.u.mem.index= XED_REG_INVALID;
     o.u.mem.scale = 0;
     o.u.mem.disp =disp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
 /// memory operand - base, index, scale, displacement
+/// @param base The base register
+/// @param index The index register
+/// @param scale The scale for the index register value
+/// @param disp The displacement
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_bisd(xed_reg_enum_t base, 
                                 xed_reg_enum_t index, 
                                 xed_uint_t scale,
                                 xed_enc_displacement_t disp,
-                                xed_uint_t width) {
+                                xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -265,16 +283,20 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_bisd(xed_reg_enum_t base,
     o.u.mem.index= index;
     o.u.mem.scale = scale;
     o.u.mem.disp = disp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 
 
 /// @ingroup ENCHL
 /// memory operand - segment and base only
+/// @param seg The segment override register
+/// @param base The base register
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_gb(xed_reg_enum_t seg,
                                                     xed_reg_enum_t base,
-                                                    xed_uint_t width) {
+                                                    xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -282,17 +304,22 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_gb(xed_reg_enum_t seg,
     o.u.mem.index= XED_REG_INVALID;
     o.u.mem.scale = 0;
     o.u.mem.disp.displacement = 0;
-    o.u.mem.disp.displacement_width = 0;
-    o.width = width;
+    o.u.mem.disp.displacement_bits = 0;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
 /// memory operand - segment, base and displacement only
+/// @param seg The segment override register
+/// @param base The base register
+/// @param disp The displacement
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_gbd(xed_reg_enum_t seg,
                                                   xed_reg_enum_t base, 
                                                   xed_enc_displacement_t disp,
-                                                  xed_uint_t width) {
+                                                  xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -300,15 +327,19 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_gbd(xed_reg_enum_t seg,
     o.u.mem.index= XED_REG_INVALID;
     o.u.mem.scale = 0;
     o.u.mem.disp = disp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
 /// memory operand - segment and displacement only
+/// @param seg The segment override register
+/// @param disp The displacement
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_gd(xed_reg_enum_t seg,
                                xed_enc_displacement_t disp,
-                               xed_uint_t width) {
+                               xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = XED_REG_INVALID;
@@ -316,18 +347,25 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_gd(xed_reg_enum_t seg,
     o.u.mem.index= XED_REG_INVALID;
     o.u.mem.scale = 0;
     o.u.mem.disp = disp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 
 /// @ingroup ENCHL
 /// memory operand - segment, base, index, scale, and displacement
+/// @param seg The segment override register
+/// @param base The base register
+/// @param index The index register
+/// @param scale The scale for the index register value
+/// @param disp The displacement
+/// @param width_bits The length of the memory reference in bits.
+/// @returns xed_encoder_operand_t An operand.
 static XED_INLINE  xed_encoder_operand_t xed_mem_gbisd(xed_reg_enum_t seg, 
                                  xed_reg_enum_t base, 
                                  xed_reg_enum_t index, 
                                  xed_uint_t scale,
                                  xed_enc_displacement_t disp, 
-                                 xed_uint_t width) {
+                                 xed_uint_t width_bits) {
     xed_encoder_operand_t o;
     o.type = XED_ENCODER_OPERAND_TYPE_MEM;
     o.u.mem.base = base;
@@ -335,7 +373,7 @@ static XED_INLINE  xed_encoder_operand_t xed_mem_gbisd(xed_reg_enum_t seg,
     o.u.mem.index= index;
     o.u.mem.scale = scale;
     o.u.mem.disp = disp;
-    o.width = width;
+    o.width_bits = width_bits;
     return o;
 }
 //@}
@@ -344,7 +382,6 @@ typedef union {
     struct {
         xed_uint32_t rep               :1;
         xed_uint32_t repne             :1;
-        xed_uint32_t lock              :1;
         xed_uint32_t br_hint_taken     :1;
         xed_uint32_t br_hint_not_taken :1;
     } s;
@@ -377,26 +414,27 @@ typedef struct {
 /// This is to specify effective address size different than the
 /// default. For things with base or index regs, XED picks it up from the
 /// registers. But for things that have implicit memops, or no base or index
-/// reg, we must allow the user to set the address width directly.
+/// reg, we must allow the user to set the address width directly. 
+/// @param x The #xed_encoder_instruction_t being filled in.
+/// @param width_bits The intended effective address size in bits.  Values: 16, 32 or 64.
 static XED_INLINE void xed_addr(xed_encoder_instruction_t* x, 
-                                xed_uint_t width) {
-    x->effective_address_width = width;
+                                xed_uint_t width_bits) {
+    x->effective_address_width = width_bits;
 }
 
 
 /// @ingroup ENCHL
+/// To add a REP (0xF3) prefix.
+/// @param x The #xed_encoder_instruction_t being filled in.
 static XED_INLINE  void xed_rep(xed_encoder_instruction_t* x) { 
     x->prefixes.s.rep=1;
 }
 
 /// @ingroup ENCHL
+/// To add a REPNE (0xF2) prefix.
+/// @param x The #xed_encoder_instruction_t being filled in.
 static XED_INLINE  void xed_repne(xed_encoder_instruction_t* x) { 
     x->prefixes.s.repne=1;
-}
-
-/// @ingroup ENCHL
-static XED_INLINE  void xed_lock(xed_encoder_instruction_t* x) { 
-    x->prefixes.s.lock=1;
 }
 
 
@@ -411,17 +449,15 @@ xed_convert_to_encoder_request(xed_encoder_request_t* out,
 
 //@}
 
-////////////////////////////////////////////////////////////////////////////
-/* FIXME: rather than return the xed_encoder_instruction_t I can make
- * another version that returns a xed_encoder_request_t. Saves silly
- * copying. Although the xed_encoder_instruction_t might be handy for
- * having code templates that get customized & passed to encoder later. */
-////////////////////////////////////////////////////////////////////////////
 /// @name Creating instructions from operands
 //@{
 
 /// @ingroup ENCHL
 /// instruction with no operands
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits 
 static XED_INLINE  void xed_inst0(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -438,6 +474,11 @@ static XED_INLINE  void xed_inst0(
 
 /// @ingroup ENCHL
 /// instruction with one operand
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param op0 the operand
 static XED_INLINE  void xed_inst1(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -456,6 +497,12 @@ static XED_INLINE  void xed_inst1(
 
 /// @ingroup ENCHL
 /// instruction with two operands
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param op0 the 1st operand
+/// @param op1 the 2nd operand
 static XED_INLINE  void xed_inst2(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -476,6 +523,13 @@ static XED_INLINE  void xed_inst2(
 
 /// @ingroup ENCHL
 /// instruction with three operands
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param op0 the 1st operand
+/// @param op1 the 2nd operand
+/// @param op2 the 3rd operand
 static XED_INLINE  void xed_inst3(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -499,6 +553,14 @@ static XED_INLINE  void xed_inst3(
 
 /// @ingroup ENCHL
 /// instruction with four operands
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param op0 the 1st operand
+/// @param op1 the 2nd operand
+/// @param op2 the 3rd operand
+/// @param op3 the 4th operand
 static XED_INLINE  void xed_inst4(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -523,6 +585,15 @@ static XED_INLINE  void xed_inst4(
 
 /// @ingroup ENCHL
 /// instruction with five operands
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param op0 the 1st operand
+/// @param op1 the 2nd operand
+/// @param op2 the 3rd operand
+/// @param op3 the 4th operand
+/// @param op4 the 5th operand
 static XED_INLINE  void xed_inst5(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,
@@ -551,6 +622,12 @@ static XED_INLINE  void xed_inst5(
 /// @ingroup ENCHL
 /// instruction with an array of operands. The maximum number is
 /// XED_ENCODER_OPERANDS_MAX. The array's contents are copied.
+/// @param inst The #xed_encoder_instruction_t to be filled in
+/// @param mode  The xed_state_t including the machine mode and stack address width.
+/// @param iclass The #xed_iclass_enum_t
+/// @param effective_operand_width in bits
+/// @param number_of_operands length of the subsequent array
+/// @param operand_array An array of #xed_encoder_operand_t objects
 static XED_INLINE  void xed_inst(
     xed_encoder_instruction_t* inst,
     xed_state_t mode,

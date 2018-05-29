@@ -1,7 +1,8 @@
 /* Copyright 2014 Peter Goodman, all rights reserved. */
-
+#if 0
 #include "clients/util/types.h"  // Needs to go first.
 
+#include <cstdlib>
 #include <granary.h>
 
 #ifdef GRANARY_WHERE_user
@@ -172,3 +173,4 @@ GRANARY_ON_CLIENT_INIT() {
 #endif  // GRANARY_WITH_VALGRIND
 #endif  // GRANARY_TARGET_test
 #endif  // GRANARY_WHERE_user
+#endif

@@ -196,7 +196,7 @@ static void UnspillRegsOnSuccess(CodeFragment *frag, Instruction &ni,
                                  int num_pushed_ops) {
   for (auto i = num_pushed_ops; i-- > 0; ) {
     if (pop_on_sucess[i].IsValid()) {
-      APP_NOSTACK(frag, POP_GPRv_51(&ni, pop_on_sucess[i]);
+      APP_NOSTACK(frag, POP_GPRv_58(&ni, pop_on_sucess[i]);
                         ni.effective_operand_width = GPR_WIDTH_BITS;);
     } else {
       APP_NOSTACK(frag, LEA_GPRv_AGEN(&ni, XED_REG_RSP,

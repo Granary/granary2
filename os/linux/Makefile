@@ -16,17 +16,15 @@ ifeq (kernel,$(GRANARY_WHERE))
 	GRANARY_OS_TYPE_FLAGS += -isystem $(GRANARY_KERNEL_DIR)/arch/x86/include/uapi
 endif
 
-GRANARY_CPARSER_DIR := /home/pag/Code/cparser
-
 $(GRANARY_OS_TYPES): Makefile
 	@echo "Generating OS-specific header files."
 	@mkdir -p $(@D)
 	
 	# Pre-process the files to get the types.
-	@$(GRANARY_CC) $(GRANARY_OS_TYPE_FLAGS)  -std=gnu90 -E -w $(GRANARY_WHERE_SRC_DIR)/types.h \
+	@$(GRANARY_CC) $(GRANARY_OS_TYPE_FLAGS)  -std=gnu11 -E -w $(GRANARY_WHERE_SRC_DIR)/types.h \
 		> /tmp/1.h
 		
-	@$(GRANARY_CC) $(GRANARY_OS_TYPE_FLAGS)  -std=gnu90 -dM -E -w $(GRANARY_WHERE_SRC_DIR)/types.h \
+	@$(GRANARY_CC) $(GRANARY_OS_TYPE_FLAGS)  -std=gnu11 -dM -E -w $(GRANARY_WHERE_SRC_DIR)/types.h \
 		> /tmp/macros.h
 	
 	# Clean up the pre-processed file.

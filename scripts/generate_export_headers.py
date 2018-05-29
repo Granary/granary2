@@ -78,19 +78,24 @@ def combine_output_files(source_dir):
   combined_lines.append("")
   return (system_headers, combined_lines)
 
+def system(cmd, *args):
+  cmd = cmd % args
+  #print cmd
+  os.system(cmd)
+
 # Run the C pre-processor the combined lines.
 def preprocess_combined_files(source_dir, lines, extra_flags):
   open("/tmp/granary_export0.h", "w").write("\n".join(lines))
-  os.system(
-      "clang++-3.5 -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
+  system(
+      "%s -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -x c++ /tmp/granary_export0.h "
-      "> /tmp/granary_export1.h" % (source_dir, extra_flags))
-  os.system(
-      "clang++-3.5 -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
+      "> /tmp/granary_export1.h", os.environ['GRANARY_CXX'], source_dir, extra_flags)
+  system(
+      "%s -std=c++11 -I%s -DGRANARY_EXTERNAL %s "
       "-E -dM -x c++ /tmp/granary_export0.h"
-      " > /tmp/granary_export2.h" % (source_dir, extra_flags))
-  os.system(
-      "clang++ -std=c++11 -dM -E -x c++ /dev/null > /tmp/granary_export3.h")
+      " > /tmp/granary_export2.h", os.environ['GRANARY_CXX'], source_dir, extra_flags)
+  system(
+      "%s -std=c++11 -dM -E -x c++ /dev/null > /tmp/granary_export3.h", os.environ['GRANARY_CXX'])
 
 # Filter the macro definitions that we want to export to exclude compiler-
 # defined macros and include guards.

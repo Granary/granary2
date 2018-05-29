@@ -1,41 +1,27 @@
 /*BEGIN_LEGAL 
-Copyright (c) 2004-2014, Intel Corporation. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
+Copyright (c) 2018 Intel Corporation
 
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
 
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
+      http://www.apache.org/licenses/LICENSE-2.0
 
-    * Neither the name of Intel Corporation nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  
 END_LEGAL */
 /// @file xed-state.h
 /// 
 
 
 
-#ifndef _XED_STATE_H_
-# define _XED_STATE_H_
+#ifndef XED_STATE_H
+# define XED_STATE_H
 #include "xed-types.h"
 #include "xed-portability.h"
 #include "xed-address-width-enum.h" // generated
@@ -149,17 +135,12 @@ static XED_INLINE void  xed_state_set_machine_mode( xed_state_t* p,
 
 /// @name Address width
 //@{
-/// Set the address width
-/// @ingroup INIT
-static XED_INLINE void xed_state_set_address_width(xed_state_t* p,
-                                                   xed_address_width_enum_t arg_addr_width) {
-    (void)p;
-    (void)arg_addr_width;
-}
 
 /// return the address width
 /// @ingroup INIT
-static XED_INLINE xed_address_width_enum_t  xed_state_get_address_width(const xed_state_t* p) {
+static XED_INLINE xed_address_width_enum_t
+xed_state_get_address_width(const xed_state_t* p)
+{
     switch(xed_state_get_machine_mode(p)) {
       case XED_MACHINE_MODE_LONG_64:
         return XED_ADDRESS_WIDTH_64b;
@@ -187,8 +168,10 @@ static XED_INLINE xed_address_width_enum_t  xed_state_get_address_width(const xe
 //@{
 /// set the STACK address width
 /// @ingroup INIT
-static XED_INLINE void  xed_state_set_stack_address_width(xed_state_t* p,
-                              xed_address_width_enum_t arg_addr_width) {
+static XED_INLINE void
+xed_state_set_stack_address_width(xed_state_t* p,
+                                  xed_address_width_enum_t arg_addr_width)
+{
     p->stack_addr_width = arg_addr_width;
 }
 
